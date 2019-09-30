@@ -14,10 +14,11 @@ jobs:
     - uses: actions/checkout@v1
     - name: Deploy docker image
       run: |
-        tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+        export tag=$(git describe --tags `git rev-list --tags --max-count=1`)
         docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
-        docker build . --file Dockerfile --tag docker.pkg.github.com/goreng/golang-cross:${{ tag }}
-        docker tag docker.pkg.github.com/goreng/golang-cross:${{ tag }} docker.pkg.github.com/goreng/golang-cross:latest
-        docker push docker.pkg.github.com/goreng/golang-cross:${{ tag }}
-        docker push docker.pkg.github.com/goreng/golang-cross:latest
+        docker build . --file Dockerfile --tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
+        docker image ls 
+        docker tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
+        docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
+        docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
         docker logout
