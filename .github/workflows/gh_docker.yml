@@ -1,0 +1,22 @@
+name: Docker Image CI
+
+on: 
+  release:
+    types: [published]
+
+jobs:
+
+  build:
+ 
+    runs-on: ubuntu-18.04
+ 
+    steps:
+    - uses: actions/checkout@v1
+    - name: Deploy docker image
+      run: |
+        docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
+        docker build . --file Dockerfile --tag docker.pkg.github.com/goreng/golang-cross:${{ github.ref }}
+        docker tag docker.pkg.github.com/goreng/golang-cross:${{ github.ref }} docker.pkg.github.com/goreng/golang-cross:latest
+        docker push docker.pkg.github.com/goreng/golang-cross:${{ github.ref }}
+        docker push docker.pkg.github.com/goreng/golang-cross:latest
+        docker logout

@@ -1,6 +1,6 @@
 name: Docker Image CI
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
 
@@ -11,4 +11,4 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag goreng/golang-cross:$(date +%s)
+      run: docker build . --file Dockerfile --tag goreng/golang-cross:${{ github.sha }}
