@@ -2,7 +2,7 @@ name: Docker Image CI
 
 on: 
   release:
-    types: [published]
+    types: [published, edited]
 
 jobs:
 
@@ -14,9 +14,10 @@ jobs:
     - uses: actions/checkout@v1
     - name: Deploy docker image
       run: |
+        tag=$(git describe --tags `git rev-list --tags --max-count=1`)
         docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
-        docker build . --file Dockerfile --tag docker.pkg.github.com/goreng/golang-cross:${{ github.ref }}
-        docker tag docker.pkg.github.com/goreng/golang-cross:${{ github.ref }} docker.pkg.github.com/goreng/golang-cross:latest
-        docker push docker.pkg.github.com/goreng/golang-cross:${{ github.ref }}
+        docker build . --file Dockerfile --tag docker.pkg.github.com/goreng/golang-cross:${{ tag }}
+        docker tag docker.pkg.github.com/goreng/golang-cross:${{ tag }} docker.pkg.github.com/goreng/golang-cross:latest
+        docker push docker.pkg.github.com/goreng/golang-cross:${{ tag }}
         docker push docker.pkg.github.com/goreng/golang-cross:latest
         docker logout
