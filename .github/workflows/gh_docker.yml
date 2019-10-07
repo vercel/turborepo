@@ -1,4 +1,4 @@
-name: GitHub Packages
+name: Release docker images
 
 on: 
   release:
@@ -7,25 +7,25 @@ on:
 jobs:
 
   build:
- 
     runs-on: ubuntu-18.04
  
     steps:
     - uses: actions/checkout@v1
-    - name: Deploy docker image
+    - name: Publish to GitHub Packages
       run: |
         export tag=$(git describe --tags `git rev-list --tags --max-count=1`)
-        docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
-        docker build . --file Dockerfile --tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
+        docker build . --file Dockerfile -t goreng/golang-cross:latest
+        docker tag goreng/golang-cross:latest goreng/golang-cross:$tag
+        docker tag goreng/golang-cross:latest docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
+        docker tag goreng/golang-cross:latest docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
         docker image ls 
-        docker tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
+        echo "push images to DockerHub"
+        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker push goreng/golang-cross:$tag
+        docker push goreng/golang-cross:latest
+        docker logout
+        echo "push images to GitHub packages"
+        docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
         docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
         docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
         docker logout
-    # - name: Publish Docker
-    #   uses: elgohr/Publish-Docker-Github-Action@2.2
-    #   with:
-    #     name: golang-cross/xcgo
-    #     username: gythialy
-    #     password: ${{ secrets.DEPLOY_TOKEN }}
-    #     registry: docker.pkg.github.com
