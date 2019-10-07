@@ -8,7 +8,7 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y aptitude && \
 	  gcc-arm-linux-gnueabi g++-arm-linux-gnueabi gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
 	  libc6-dev-armel-cross libc6-dev-armel-cross binutils-arm-linux-gnueabi libncurses5-dev \
 	  gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-	  gcc-mingw-w64 g++-mingw-w64 gcc-multilib && \
+	  gcc-mingw-w64 g++-mingw-w64 && \
 	  apt -y autoremove && \
       apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
 
