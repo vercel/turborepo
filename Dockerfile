@@ -2,14 +2,14 @@ FROM dockercore/golang-cross
 
 LABEL maintainer="Goren G<gythialy.koo+github@gmail.com>"
 
-# install mips and arm gcc
-RUN apt-get update && apt-get upgrade &&\
-      apt-get install -y \
-	  gcc-mips-linux-gnu g++-mips-linux-gnu binutils-mips-linux-gnu \
-	  libc6-dev-mips-cross libc6-dev-mipsel-cross linux-libc-dev-mips-cross \ 
+# install arm gcc
+RUN apt-get update && apt-get -y upgrade && apt-get install -y aptitude && \
+      aptitude install -y -f build-essential \
 	  gcc-arm-linux-gnueabi g++-arm-linux-gnueabi gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
 	  libc6-dev-armel-cross libc6-dev-armel-cross binutils-arm-linux-gnueabi libncurses5-dev \
-	  gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-multilib g++-multilib && \
+	  gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+	  gcc-mingw-w64 g++-mingw-w64 gcc-multilib && \
+	  apt -y autoremove && \
       apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
 
 # install goreleaser
