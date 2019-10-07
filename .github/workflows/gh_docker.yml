@@ -12,20 +12,20 @@ jobs:
  
     steps:
     - uses: actions/checkout@v1
-    # - name: Deploy docker image
-    #   run: |
-    #     export tag=$(git describe --tags `git rev-list --tags --max-count=1`)
-    #     docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
-    #     docker build . --file Dockerfile --tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
-    #     docker image ls 
-    #     docker tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
-    #     docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
-    #     docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
-    #     docker logout
-    - name: Publish to Registry
-      uses: elgohr/Publish-Docker-Github-Action@master
-      with:
-        name: golang-cross/xcgo
-        username: gythialy
-        password: ${{ secrets.DEPLOY_TOKEN }}
-        registry: docker.pkg.github.com
+    - name: Deploy docker image
+      run: |
+        export tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+        docker login docker.pkg.github.com -u gythialy -p ${{ secrets.DEPLOY_TOKEN }}
+        docker build . --file Dockerfile --tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
+        docker image ls 
+        docker tag docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
+        docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:$tag
+        docker push docker.pkg.github.com/gythialy/golang-cross/xcgo:latest
+        docker logout
+    # - name: Publish Docker
+    #   uses: elgohr/Publish-Docker-Github-Action@2.2
+    #   with:
+    #     name: golang-cross/xcgo
+    #     username: gythialy
+    #     password: ${{ secrets.DEPLOY_TOKEN }}
+    #     registry: docker.pkg.github.com
