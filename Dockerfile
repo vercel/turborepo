@@ -24,14 +24,14 @@ RUN  \
 			rm $GORELEASER_DOWNLOAD_FILE;
 
 # update golang
-# RUN \
-# 	GOLANG_VERSION=1.13.1 && \
-# 	GOLANG_DIST=https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz \
-# 	GOLANG_DIST_SHA=94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124 && \
-# 	wget -O go.tgz "$GOLANG_DIST"; \
-# 	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
-# 	rm -rf /usr/local/go; \
-# 	tar -C /usr/local -xzf go.tgz; \
-# 	rm go.tgz; 
+RUN \
+	GOLANG_VERSION=1.13.1 && \
+	GOLANG_DIST=https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz \
+	GOLANG_DIST_SHA=94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124 && \
+	wget -O go.tgz "$GOLANG_DIST"; \
+	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
+	rm -rf /usr/local/go; \
+	tar -C /usr/local -xzf go.tgz; \
+	rm go.tgz; 
 
 CMD ["goreleaser", "-v"]
