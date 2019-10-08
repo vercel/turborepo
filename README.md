@@ -1,6 +1,6 @@
 # golang-cross
 
-Docker container to do cross compilation (linux, windows, OSX) of go packages including support for cgo. 
+Docker container to do cross compilation (Linux, windows, macOS, ARM, ARM64) of go packages including support for cgo. 
 
 ## Docker
 
