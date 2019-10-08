@@ -10,7 +10,17 @@ jobs:
  
     steps:
     - uses: actions/checkout@v1
-    - name: Build the Docker image
-      run: | 
-        docker --version
-        docker build . --file Dockerfile --tag goreng/golang-cross:${{ github.sha }}
+    - name: Build and Publish the Docker image to DockerHub
+      uses: gythialy/Publish-Docker-Github-Action@master
+      with:
+        name: goreng/golang-cross
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Build and Publish the Docker image to GitHub Packages
+      uses: gythialy/Publish-Docker-Github-Action@master
+      with:
+        name: docker.pkg.github.com/gythialy/golang-cross/xcgo
+        username: gythialy
+        password: ${{ secrets.DEPLOY_TOKEN }}
+        registry: docker.pkg.github.com
+      if: success()
