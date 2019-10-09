@@ -34,4 +34,6 @@ RUN \
 	tar -C /usr/local -xzf go.tgz; \
 	rm go.tgz; 
 
+RUN go get -u github.com/git-chglog/git-chglog/cmd/git-chglog
+
 CMD ["goreleaser", "-v"]
