@@ -3,7 +3,7 @@ FROM dockercore/golang-cross
 LABEL maintainer="Goren G<gythialy.koo+github@gmail.com>"
 
 # install arm gcc
-RUN apt-get update -qq && apt-get -y upgrade && apt-get install -y aptitude && \
+RUN apt-get update -qq && apt-get install -y aptitude && \
       aptitude install -y -q build-essential \
 	  gcc-arm-linux-gnueabi g++-arm-linux-gnueabi gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
 	  libc6-dev-armel-cross libc6-dev-armel-cross binutils-arm-linux-gnueabi libncurses5-dev \
