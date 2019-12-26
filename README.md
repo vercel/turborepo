@@ -6,10 +6,19 @@ Docker container to do cross compilation (Linux, windows, macOS, ARM, ARM64) of 
 
 Find it on docker hub https://hub.docker.com/r/goreng/golang-cross or run 
 
-```
-docker run --rm --privileged \
-  -v $PWD:/go/src/github.com/qlcchain/go-qlc \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -w /go/src/github.com/qlcchain/go-qlc \
-  goreng/golang-cross goreleaser --snapshot --rm-dist
-```
+- generate evn var from file
+  
+  ```bash
+  export PRIVATE_KEY=$(cat ~/private_key.gpg | base64)
+  ```
+
+- run docker container
+  
+  ```bash
+  docker run --rm --privileged \
+    -e PRIVATE_KEY=${PRIVATE_KEY} \
+    -v $PWD:/go/src/github.com/qlcchain/go-qlc \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -w /go/src/github.com/qlcchain/go-qlc \
+    goreng/golang-cross:latest --snapshot --rm-dist
+  ```
