@@ -2,9 +2,10 @@ FROM dockercore/golang-cross
 
 LABEL maintainer="Goren G<gythialy.koo+github@gmail.com>"
 
+COPY entrypoint.sh /
+
 # install arm gcc
-RUN apt-get update -qq && apt-get install -y aptitude && \
-      aptitude install -y -q build-essential \
+RUN apt-get update -qq && apt-get install -y -q build-essential \
 	  gcc-arm-linux-gnueabi g++-arm-linux-gnueabi gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
 	  libc6-dev-armel-cross libc6-dev-armel-cross binutils-arm-linux-gnueabi libncurses5-dev \
 	  gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
@@ -34,6 +35,9 @@ RUN \
 	tar -C /usr/local -xzf go.tgz; \
 	rm go.tgz; 
 
-RUN go get -u github.com/git-chglog/git-chglog/cmd/git-chglog
+RUN go get -u github.com/git-chglog/git-chglog/cmd/git-chglog && \
+	chmod +x /entrypoint.sh
 
-CMD ["goreleaser", "-v"]
+ENTRYPOINT ["bash", "/entrypoint.sh"]
+
+# CMD ["goreleaser", "-v"]
