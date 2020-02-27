@@ -15,8 +15,8 @@ RUN apt-get update -qq && apt-get install -y -q build-essential \
 
 # install goreleaser
 RUN  \
-	GORELEASER_VERSION=0.123.3 && \
-	GORELEASER_SHA=cad997014e5c6a462488757087db4145c2ae7d7d73a29cb62bbfd41f18ccea30 && \
+	GORELEASER_VERSION=0.127.0 && \
+	GORELEASER_SHA=bf7e0f34d1d46041f302a0dd773a5c70ff7476c147d3a30659a5a11e823bccbd && \
 	GORELEASER_DOWNLOAD_FILE=goreleaser_Linux_x86_64.tar.gz && \
 	GORELEASER_DOWNLOAD_URL=https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/${GORELEASER_DOWNLOAD_FILE} && \
 	wget ${GORELEASER_DOWNLOAD_URL}; \
@@ -26,9 +26,9 @@ RUN  \
 
 # update golang
 RUN \
-	GOLANG_VERSION=1.13.5 && \
+	GOLANG_VERSION=1.14 && \
 	GOLANG_DIST=https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz \
-	GOLANG_DIST_SHA=512103d7ad296467814a6e3f635631bd35574cab3369a97a323c9a585ccaa569 && \
+	GOLANG_DIST_SHA=08df79b46b0adf498ea9f320a0f23d6ec59e9003660b4c9c1ce8e5e2c6f823ca && \
 	wget -O go.tgz "$GOLANG_DIST"; \
 	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
 	rm -rf /usr/local/go; \
