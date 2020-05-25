@@ -11,12 +11,12 @@ RUN apt-get update -qq && apt-get install -y -q build-essential \
 	  gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
 	  gcc-mingw-w64 g++-mingw-w64 && \
 	  apt -y autoremove && \
-      apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
 
 # install goreleaser
 RUN  \
-	GORELEASER_VERSION=0.131.1 && \
-	GORELEASER_SHA=47fefac2e449ec7bae741986fceb1fbd04ed135e14a72898d702de6b889d3a0d && \
+	GORELEASER_VERSION=0.136.0 && \
+	GORELEASER_SHA=4f97546d728467a2e81171cf70f3f5785284b28dd11d7a7e7de3b7b1837f5ac3 && \
 	GORELEASER_DOWNLOAD_FILE=goreleaser_Linux_x86_64.tar.gz && \
 	GORELEASER_DOWNLOAD_URL=https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/${GORELEASER_DOWNLOAD_FILE} && \
 	wget ${GORELEASER_DOWNLOAD_URL}; \
@@ -26,9 +26,9 @@ RUN  \
 
 # update golang
 RUN \
-	GOLANG_VERSION=1.14.2 && \
+	GOLANG_VERSION=1.14.3 && \
 	GOLANG_DIST=https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz \
-	GOLANG_DIST_SHA=6272d6e940ecb71ea5636ddb5fab3933e087c1356173c61f4a803895e947ebb3 && \
+	GOLANG_DIST_SHA=1c39eac4ae95781b066c144c58e45d6859652247f7515f0d2cba7be7d57d2226 && \
 	wget -O go.tgz "$GOLANG_DIST"; \
 	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
 	rm -rf /usr/local/go; \
