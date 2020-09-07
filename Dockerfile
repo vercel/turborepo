@@ -1,22 +1,25 @@
-FROM dockercore/golang-cross
+FROM goreng/golang-cross-builder:v1.15.1
 
 LABEL maintainer="Goren G<gythialy.koo+github@gmail.com>"
 
 COPY entrypoint.sh /
 
-# install arm gcc
-RUN apt-get update -qq && apt-get install -y -q build-essential \
-	  gcc-arm-linux-gnueabi g++-arm-linux-gnueabi gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
-	  libc6-dev-armel-cross libc6-dev-armel-cross binutils-arm-linux-gnueabi libncurses5-dev \
-	  gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-	  gcc-mingw-w64 g++-mingw-w64 && \
-	  apt -y autoremove && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
+ARG GOLANG_VERSION=1.15.1 
+ARG GOLANG_DIST_SHA=70ac0dbf60a8ee9236f337ed0daa7a4c3b98f6186d4497826f68e97c0c0413f6
+
+# update golang
+RUN \
+	GOLANG_DIST=https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz && \
+	wget -O go.tgz "$GOLANG_DIST"; \
+	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
+	rm -rf /usr/local/go; \
+	tar -C /usr/local -xzf go.tgz; \
+	rm go.tgz; 
 
 # install goreleaser
+ARG GORELEASER_VERSION=0.143.0
+ARG GORELEASER_SHA=cc435eb337889d41414de80fd8474806187a3e908754cbf4599aa0a7604a3134
 RUN  \
-	GORELEASER_VERSION=0.141.0 && \
-	GORELEASER_SHA=00a00e7e7ea72c2bc44d1f1e50eccfac361e0a1332ee0fcde8107da442c3a4d8 && \
 	GORELEASER_DOWNLOAD_FILE=goreleaser_Linux_x86_64.tar.gz && \
 	GORELEASER_DOWNLOAD_URL=https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/${GORELEASER_DOWNLOAD_FILE} && \
 	wget ${GORELEASER_DOWNLOAD_URL}; \
@@ -24,17 +27,7 @@ RUN  \
 			tar -xzf $GORELEASER_DOWNLOAD_FILE -C /usr/bin/ goreleaser; \
 			rm $GORELEASER_DOWNLOAD_FILE;
 
-# update golang
-RUN \
-	GOLANG_VERSION=1.15 && \
-	GOLANG_DIST=https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz \
-	GOLANG_DIST_SHA=2d75848ac606061efe52a8068d0e647b35ce487a15bb52272c427df485193602 && \
-	wget -O go.tgz "$GOLANG_DIST"; \
-	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
-	rm -rf /usr/local/go; \
-	tar -C /usr/local -xzf go.tgz; \
-	rm go.tgz; 
-
+# install git-chglog
 RUN go get -u github.com/git-chglog/git-chglog/cmd/git-chglog && \
 	chmod +x /entrypoint.sh
 
