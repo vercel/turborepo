@@ -14,7 +14,13 @@ RUN \
 	echo "${GOLANG_DIST_SHA} *go.tgz" | sha256sum -c -; \
 	rm -rf /usr/local/go; \
 	tar -C /usr/local -xzf go.tgz; \
-	rm go.tgz; 
+	rm go.tgz \
+	&& apt update \
+	&& curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - \
+	&& add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
+	&& apt-get update \
+	&& apt-get -y install docker-ce docker-ce-cli \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # install goreleaser
 ARG GORELEASER_VERSION=0.143.0
