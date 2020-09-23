@@ -1,0 +1,283 @@
+For detailed information about the changes below, please see the git log or
+visit: http://log.libusb.info
+
+2019-08-28: v1.0.23
+* Add German translation (#446)
+* Add Hungarian translation (#493)
+* Android: Improved support for Android
+* BSD: Remove infinite recursion in OpenBSD backend
+* configure.ac: Fix detection of clock_gettime library (#439)
+* Core: abandon synchronous transfers when device closure is detected.
+* Core: fix error in handling the removal of file descriptors while handling
+  events.
+* Darwin(macOS): Switch from using ResetDevice to USBDeviceReEnumerate (#455)
+* Darwin(macOS): Remove code that changed the device class used (#428)
+* Darwin(macOS): Reduce hotplug timeout to 1ms (from 5s)
+* New API libusb_set_log_cb() to redirect global and per context log
+  messages to the provided log handling function
+* New API libusb_wrap_sys_device to allow the user to specify the
+  usb device to use.
+* Solaris: Break infinite recursion in backend clock_gettime
+* Solaris: Enable timerfd on sunos when available
+* Windows: Add support for isochronous transfers with WinUSB
+* Various other bug fixes and improvements
+
+2018-03-24: v1.0.22:
+* New libusb_set_option() API
+* Fix transfer timeout not being cleared upon resubmission
+* Report super speed plus devices on modern Linux and macOS
+* Darwin: Improve support for macOS Sierra and High Sierra
+* Darwin: SDK fixes and improvements
+* Linux: Let initialization succeed when no devices are present
+* Linux: Mark internal file descriptors with CLOEXEC flag
+* Solaris: Add support for attach/detach kernel driver
+* Windows: Add dynamic UsbDk backend selection
+* Windows: Add isochronous transfer support via libusbK
+* Windows: Add Visual Studio 2017 support
+* Windows: Fix enumeration problems on Windows 8 and later
+* Windows: Major rework of poll() emulation
+* Windows: Numerous HID API fixes
+* Windows: Support cancelation of individual transfers (Vista and later)
+* Various other bug fixes and improvements
+
+2016-10-01: v1.0.21:
+* Core: Refactor code related to transfer flags and timeout handling
+* Darwin: Ignore root hub simulation devices
+* Darwin: Improved support for OS X El Capitan
+* Darwin: Work around devices with buggy endpoint descriptors
+* Darwin: Do not use objc_registerThreadWithCollector after its deprecation
+* Darwin: Use C11 atomics on 10.12+ as the OS atomics are now deprecated
+* Linux: Support preallocating kernel memory for zerocopy USB
+* Linux: Deal with receiving POLLERR before all transfers have completed
+* Solaris: Add solaris backend
+* Windows: Add Visual Studio 2015 support
+* Windows: Add usbdk backend
+* Prevent attempts to recursively handle events
+* Fix race condition in handle_timeout()
+* Allow transferred argument to be optional in bulk APIs
+* Various other bug fixes and improvements
+
+2015-09-13: v1.0.20
+* Add Haiku support
+* Fix multiple memory and resource leaks (#16, #52, #76, #81)
+* Fix possible deadlock when executing transfer callback
+* New libusb_free_pollfds() API
+* Darwin: Fix devices not being detected on OS X 10.8 (#48)
+* Linux: Allow larger isochronous transfer submission (#23)
+* Windows: Fix broken builds Cygwin/MinGW builds and compiler warnings
+* Windows: Fix broken bus number lookup
+* Windows: Improve submission of control requests for composite devices
+* Examples: Add two-stage load support to fxload (#12)
+* Correctly report cancellations due to timeouts
+* Improve efficiency of event handling
+* Improve speed of transfer submission in multi-threaded environments
+* Various other bug fixes and improvements
+The (#xx) numbers are libusb issue numbers, see ie:
+https://github.com/libusb/libusb/issues/16
+
+2014-05-30: v1.0.19
+* Add support for USB bulk streams on Linux and Mac OS X (#11)
+* Windows: Add AMD and Intel USB-3.0 root hub support
+* Windows: Fix USB 3.0 speed detection on Windows 8 or later (#10)
+* Added Russian translation for libusb_strerror strings
+* All: Various small fixes and cleanups
+
+2014-01-25: v1.0.18
+* Fix multiple memory leaks
+* Fix a crash when HID transfers return no data on Windows
+* Ensure all pending events are consumed
+* Improve Android and ucLinux support
+* Multiple Windows improvements (error logging, VS2013, VIA xHCI support)
+* Multiple OS X improvements (broken compilation, SIGFPE, 64bit support)
+
+2013-09-06: v1.0.17
+* Hotplug callbacks now always get passed a libusb_context, even if it is
+  the default context. Previously NULL would be passed for the default context,
+  but since the first context created is the default context, and most apps
+  use only 1 context, this meant that apps explicitly creating a context would
+  still get passed NULL
+* Android: Add .mk files to build with the Android NDK
+* Darwin: Add Xcode project
+* Darwin: Fix crash on unplug (#121)
+* Linux: Fix hang (deadlock) on libusb_exit
+* Linux: Fix libusb build failure with --disable-udev (#124)
+* Linux: Fix libusb_get_device_list() hang with --disable-udev (#130)
+* OpenBSD: Update OpenBSD backend with support for control transfers to
+  non-ugen(4) devices and make get_configuration() no longer generate I/O.
+  Note that using this libusb version on OpenBSD requires using
+  OpenBSD 5.3-current or later. Users of older OpenBSD versions are advised
+  to stay with the libusb shipped with OpenBSD (mpi)
+* Windows: fix libusb_dll_2010.vcxproj link errors (#129)
+* Various other bug fixes and improvements
+
+2013-07-11: v1.0.16
+* Add hotplug support for Darwin and Linux (#9)
+* Add superspeed endpoint companion descriptor support (#15)
+* Add BOS descriptor support (#15)
+* Make descriptor parsing code more robust
+* New libusb_get_port_numbers API, this is libusb_get_port_path without
+  the unnecessary context parameter, libusb_get_port_path is now deprecated
+* New libusb_strerror API (#14)
+* New libusb_set_auto_detach_kernel_driver API (#17)
+* Improve topology API docs (#95)
+* Logging now use a single write call per log-message, avoiding log-message
+  "interlacing" when using multiple threads.
+* Android: use Android logging when building on Android (#101)
+* Darwin: make libusb_reset reenumerate device on descriptors change (#89)
+* Darwin: add support for the LIBUSB_TRANSFER_ADD_ZERO_PACKET flag (#91)
+* Darwin: add a device cache (#112, #114)
+* Examples: Add sam3u_benchmark isochronous example by Harald Welte (#109)
+* Many other bug fixes and improvements
+The (#xx) numbers are libusbx issue numbers, see ie:
+https://github.com/libusbx/libusbx/issues/9
+
+2013-04-15: v1.0.15
+* Improve transfer cancellation and avoid short read failures on broken descriptors
+* Filter out 8-bit characters in libusb_get_string_descriptor_ascii()
+* Add WinCE support
+* Add library stress tests
+* Add Cypress FX3 firmware upload support for fxload sample
+* Add HID and kernel driver detach support capabilities detection
+* Add SuperSpeed detection on OS X
+* Fix bInterval value interpretation on OS X
+* Fix issues with autoclaim, composite HID devices, interface autoclaim and
+  early abort in libusb_close() on Windows. Also add VS2012 solution files.
+* Improve fd event handling on Linux
+* Other bug fixes and improvements
+
+2012-09-26: v1.0.14
+* Reverts the previous API change with regards to bMaxPower.
+  If this doesn't matter to you, you are encouraged to keep using v1.0.13,
+  as it will use the same attribute as v2.0, to be released soon.
+* Note that LIBUSB_API_VERSION is *decreased* to 0x010000FF and the previous
+  guidelines with regards to concurrent use of MaxPower/bMaxPower still apply.
+
+2012-09-20: v1.0.13
+* [MAJOR] Fix a typo in the API with struct libusb_config_descriptor where
+  MaxPower was used instead of bMaxPower, as defined in the specs. If your 
+  application was accessing the MaxPower attribute, and you need to maintain
+  compatibility with libusb or older versions, see APPENDIX A below.
+* Fix broken support for the 0.1 -> 1.0 libusb-compat layer
+* Fix unwanted cancellation of pending timeouts as well as major timeout related bugs
+* Fix handling of HID and composite devices on Windows
+* Introduce LIBUSB_API_VERSION macro
+* Add Cypress FX/FX2 firmware upload sample, based on fxload from
+  http://linux-hotplug.sourceforge.net
+* Add libusb0 (libusb-win32) and libusbK driver support on Windows. Note that while
+  the drivers allow it, isochronous transfers are not supported yet in libusb. Also
+  not supported yet is the use of libusb-win32 filter drivers on composite interfaces
+* Add support for the new get_capabilities ioctl on Linux and avoid unnecessary
+  splitting of bulk transfers
+* Improve support for newer Intel and Renesas USB 3.0 controllers on Windows
+* Harmonize the device number for root hubs across platforms
+* Other bug fixes and improvements
+
+2012-06-15: v1.0.12
+* Fix a potential major regression with pthread on Linux
+* Fix missing thread ID from debug log output on cygwin
+* Fix possible crash when using longjmp and MinGW's gcc 4.6
+* Add topology calls: libusb_get_port_number(), libusb_get_parent() & libusb_get_port_path()
+* Add toggleable debug, using libusb_set_debug() or the LIBUSB_DEBUG environment variable
+* Define log levels in libusb.h and set timestamp origin to first libusb_init() call
+* All logging is now sent to to stderr (info was sent to stdout previously)
+* Update log messages severity and avoid polluting log output on OS-X
+* Add HID driver support on Windows
+* Enable interchangeability of MSVC and MinGW DLLs
+* Additional bug fixes and improvements
+
+2012-05-08: v1.0.11
+* Revert removal of critical Windows event handling that was introduced in 1.0.10
+* Fix a possible deadlock in Windows when submitting transfers
+* Add timestamped logging
+* Add NetBSD support (experimental) and BSD libusb_get_device_speed() data
+* Add bootstrap.sh alongside autogen.sh (bootstrap.sh doesn't invoke configure)
+* Search for device nodes in /dev for Android support
+* Other bug fixes
+
+2012-04-17: v1.0.10
+* Public release
+* Add libusb_get_version
+* Add Visual Studio 2010 project files
+* Some Windows code cleanup
+* Fix xusb sample warnings 
+
+2012-04-02: v1.0.9
+* First libusbx release
+* Add libusb_get_device_speed (all, except BSD) and libusb_error_name
+* Add Windows support (WinUSB driver only)
+* Add OpenBSD support
+* Add xusb sample
+* Tons of bug fixes
+
+2010-05-07: v1.0.8
+* Bug fixes
+
+2010-04-19: v1.0.7
+* Bug fixes and documentation tweaks
+* Add more interface class definitions
+
+2009-11-22: v1.0.6
+* Bug fixes
+* Increase libusb_handle_events() timeout to 60s for powersaving
+
+2009-11-15: v1.0.5
+ * Use timerfd when available for timer management
+ * Small fixes/updates
+
+2009-11-06: v1.0.4 release
+ * Bug fixes including transfer locking to fix some potential threading races
+ * More flexibility with clock types on Linux
+ * Use new bulk continuation tracking in Linux 2.6.32 for improved handling
+   of short/failed transfers
+
+2009-08-27: v1.0.3 release
+ * Bug fixes
+ * Add libusb_get_max_iso_packet_size()
+
+2009-06-13: v1.0.2 release
+ * Bug fixes
+
+2009-05-12: v1.0.1 release
+ * Bug fixes
+ * Darwin backend
+
+2008-12-13: v1.0.0 release
+ * Bug fixes
+
+2008-11-21: v0.9.4 release
+ * Bug fixes
+ * Add libusb_attach_kernel_driver()
+
+2008-08-23: v0.9.3 release
+ * Bug fixes
+
+2008-07-19: v0.9.2 release
+ * Bug fixes
+
+2008-06-28: v0.9.1 release
+ * Bug fixes
+ * Introduce contexts to the API
+ * Compatibility with new Linux kernel features
+
+2008-05-25: v0.9.0 release
+ * First libusb-1.0 beta release
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+APPENDIX A - How to maintain code compatibility with versions of libusb and
+libusb that use MaxPower:
+
+If you must to maintain compatibility with versions of the library that aren't
+using the bMaxPower attribute in struct libusb_config_descriptor, the 
+recommended way is to use the new LIBUSB_API_VERSION macro with an #ifdef.
+For instance, if your code was written as follows:
+
+  if (dev->config[0].MaxPower < 250)
+
+Then you should modify it to have:
+
+#if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000100)
+  if (dev->config[0].bMaxPower < 250)
+#else
+  if (dev->config[0].MaxPower < 250)
+#endif

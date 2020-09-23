@@ -1,0 +1,11 @@
+prefix=/usr/local/Cellar/libusb/1.0.23
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libusb-1.0
+Description: C API for USB device access from Linux, Mac OS X, Windows, OpenBSD/NetBSD and Solaris userspace
+Version: 1.0.23
+Libs: -L${libdir} -lusb-1.0
+Libs.private: -lobjc -Wl,-framework,IOKit -Wl,-framework,CoreFoundation
+Cflags: -I${includedir}/libusb-1.0

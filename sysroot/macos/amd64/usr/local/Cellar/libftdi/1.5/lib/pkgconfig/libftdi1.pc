@@ -1,0 +1,11 @@
+prefix=/usr/local/Cellar/libftdi/1.5
+exec_prefix=${prefix}/bin
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: libftdi1
+Description: Library to program and control the FTDI USB controller
+Requires: libusb-1.0
+Version: 1.5
+Libs: -L${libdir} -lftdi1
+Cflags: -I${includedir}/libftdi1

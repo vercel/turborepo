@@ -1,0 +1,280 @@
+New in 1.5 - 2020-07-07
+-----------------------
+* Implement tc[io]flush methods & deprecate broken purge_buffers methods
+
+  Please check your code for ftdi_usb_purge_rx_buffer(),
+  ftdi_usb_purge_tx_buffer() and ftdi_usb_purge_buffers()
+  and migrate to the new ftdi_tc[io]flush() methods.
+
+  Old code will continue to function, but you'll get
+  a deprecation warning during compilation.
+
+* Add program to test buffer flush (purge) functionality
+* Add kernel driver auto attach/detach.
+  See new AUTO_DETACH_REATACH_SIO_MODULE option
+* Add ftdi_setflowctrl_xonxoff()
+* ftdi_eeprom / eeprom handling:
+  * Unify handling of all boolean eeprom flags
+  * Add device release number support
+  * Add channel_a_driver support for type xxR chips
+  * Add support for group0 drive levels on x232H chips
+  * Fix handling of high_current_drive parameter
+  * Fix inverted handling of VCP driver field for TYPE_R chips
+  * New --verbose option for eeprom decode operation
+* Add example code for async mode
+* Add SPDX license identifiers to the core library & ftdi_eeprom
+* Various python SWIG wrapper improvements
+* Various cmake file improvements
+* Fix small bugs in error code paths
+
+New in 1.4 - 2017-08-07
+-----------------------
+* New ftdi_usb_open_bus_addr() open function
+* Use BM/R series baud rate computation for FT230X
+* ftdi_get_error_string() now returns const char*
+* C++ API: Ability to open devices with empty descriptor strings
+* C++ API: Fix enumerations for buffer purge and modem controls
+* small build fixes and improvements in the python examples
+* ftdi_eeprom / eeprom handling:
+  * New API function: ftdi_eeprom_get_strings()
+  * Fix USE_SERIAL handling for 230X type chips
+  * Make ftdi_read_eeprom_location() endianness independent
+  * Fix flashing of FT245R
+
+New in 1.3 - 2016-05-20
+-----------------------
+* Added ftdi_usb_get_strings2() to prevent automatic device close (Fahrzin Hemmati)
+* Added ftdi_transfer_data_cancel() for cancellation of a submitted transfer,
+  avoided resubmittion of a canceled transfer in the callbacks,
+  replaced calls to libusb_handle_events with
+  libusb_handle_events_timeout_completed (Eugene Hutorny)
+* ftdi_eeprom / eeprom handling:
+  * Add support for arbitrary user data (Salvador Eduardo Tropea)
+  * Add --build-eeprom support (Salvador Eduardo Tropea)
+  * Fix use_usb_version config file option (Thilo Schulz)
+  * Ability to include other config files in EEPROM config file (Thilo Schulz)
+  * Add external oscillator enable bit (Raphael Assenat)
+  * Support channel configuration (Stephan Linz)
+  * Added --device option to ftdi_eeprom to specify FTDI device (Robin Haberkorn)
+  * Fixed EEPROM user-area space checks for FT232R and FT245R chips (Robin Haberkorn)
+* Various improvements to CBUS handling, including the EEPROM (Robin Haberkorn)
+* swig wrapper: Fix handling of binary strings in ftdi_write_data()
+  for python 3 (xantares09)
+* cbus python example code (Rodney Sinclair)
+* ftdi_stream: fix timeout setting (Ларионов Даниил)
+* Fixed typo in CBUS defines: CBUSG_DRIVE1 -> CBUSH_DRIVE1
+
+New in 1.2 - 2014-11-21
+-----------------------
+* Support for FT230X devices (Uwe Bonnes)
+* ftdi_usb_get_strings(): Don't try to open an already open device (Denis Sirotkin)
+* Support for finding devices bricked by the Windows driver (Forest Crossman)
+* cmake build system: New LibFTDI1ConfigVersion.cmake file (xantares09)
+* Fix a typo in the MPSSE command CLK_BYTES_OR_LOW (Benjamin Vanheuverzwijn)
+* Minor fixes for MSVC++ (Andrei Errapart)
+* Various small code improvements (Florian Preinstorfer, Jochen Sprickerhof, xantares09)
+
+New in 1.1 - 2014-02-05
+-----------------------
+* Fix FT232H eeprom suspend pulldown setting (Davide Michelizza)
+* Fix FT232H eeprom user area size (Davide Michelizza)
+* Improved mingw build (Paul Fertser and Michel Zou)
+* C++ wrapper: Get/set functions for USB timeouts (Jochen Sprickerhof)
+* Partial support for FT230X (Nathael Pajani)
+* New API function: ftdi_eeprom_set_strings() (Nathael Pajani)
+* Prevent possible segfault in ftdi_eeprom_decode() (Nathael Pajani)
+* Save device release number in eeprom (Jarkko Sonninen)
+* Fix "self powered" eeprom flag (Jarkko Sonninen)
+* Improved python wrapper (Michel Zou)
+* Many buildsystem improvements (Michel Zou and Mike Frysinger)
+* See the git history for more changes and fixes
+
+New in 1.0 - 2013-01-29
+-----------------------
+* Ported to libusb 1.x (initial work by Jie Zhang)
+* Many eeprom handling improvements (Uwe Bonnes, Anders Larsen)
+* Renamed pkconfig, library .so etc. files to "libftdi1" (Intra2net)
+* ftdi_eeprom is part of libftdi now (Intra2net)
+
+* New baudrate calculation code + unit tests (Uwe Bonnes and Intra2net)
+* Improved python bindings including python3 support (Michel Zou)
+* Switched completely to cmake build system (Intra2net)
+* cmake: Easy libftdi discovery via find_package() (Michel Zou)
+* eeprom handling now done via get()/set() functions (Uwe Bonnes)
+* C++ wrapper: Fixed use-after-free in List::find_all() (Intra2net)
+* Documentation updates (Xiaofan Chen)
+* See the git history for more changes and fixes
+
+New in 0.20 - 2012-03-19
+------------------------
+* Support for FT232H (Uwe Bonnes)
+* Fixed install location of header files (Uwe Bonnes and Intra2net)
+* Backported serial_test tool from libftdi 1.x (Uwe Bonnes)
+
+New in 0.19 - 2011-05-23
+------------------------
+* Make kernel driver detach configurable (Thomas Klose)
+* Correct ftdi_poll_modem_status() result code (Tom Saunders)
+* cmake build system improvements (Evgeny Sinelnikov)
+* Fix uninitialized memory access in async mode (Intra2net)
+* Support for FT232R eeprom features (Hermann Kraus)
+* Fix size returned by ftdi_read_data (Hermann Kraus)
+* C++ wrapper: Fix infinite recursion in set_bitmode (Intra2net)
+* Improvements to the python wrapper (Flynn Marquardt and Chris Zeh)
+
+New in 0.18 - 2010-06-25
+------------------------
+* Add ftdi_eeprom_free() to free allocated memory in eeprom (Wilfried Holzke)
+* More generic error message for the FTDI kernel driver (Intra2net)
+* Honor CPPFLAGS in python wrapper build (Alexander Lehmann)
+* cmake: Fix package creation on 32-bit machines (Uwe Bonnes)
+* Fix swig argument constraints (Intra2net)
+* Don't segfault if device is closed or ftdi context is invalid (Intra2net)
+* Ability to disable build of examples / documentation (Mike Frysinger and Intra2net)
+* Fix typo in python wrapper build (Mike Frysinger)
+* Autoconf build system improvements (Mike Frysinger)
+
+New in 0.17 - 2009-12-19
+------------------------
+* C++ wrapper: Reduced code duplication and small other changes (Intra2net)
+* Deprecated old ftdi_enable_bitbang() function (Intra2net)
+* New ftdi_usb_open_desc_index() function (Intra2net)
+* Added baud rate test example code (Intra2net)
+* New serial input example code (Jim Paris)
+* Fix modem status byte filtering for USB high speed chips (Intra2net and Jim Paris)
+* Add bitmode for synchronous fifo in FT2232H (Uwe Bonnes)
+* Fix usb_set_configuration() call on Windows 64 (NIL)
+* Fix usb index in ftdi_convert_baudrate() for FT2232H/FT4232H chips (Thimo Eichstaedt)
+* Set initial baudrate on correct interface instead of always the first one (Thimo Eichstaedt)
+* Call usb_set_configuration() on Windows only (Uwe Bonnes)
+* 64 bit and other buildsystem fixes (Uwe Bonnes)
+* Don't build --with-async-mode w/ libusb-compat-0.1 (Clifford Wolf)
+* Functions for read/write of a single eeprom location (Oleg Seiljus)
+* Protect against double close of usb device (Nathan Fraser)
+* Fix out-of-tree-build in python wrapper (Aurelien Jarno)
+* Autoconf and doxygen cleanup (Jim Paris)
+
+New in 0.16 - 2009-05-08
+------------------------
+* C++ wrapper: Reopen the device after calling get_strings() in Context::open() (Marek Vavruša and Intra2net)
+* C++ wrapper: Fixed an inheritance problem (Marek Vavruša and Intra2net)
+* C++ wrapper: Relicensed under GPLv2 + linking exception (Marek Vavruša and Intra2net)
+* Support for FT2232H and FT4232H (David Challis, Alex Harford and Intra2net)
+* Support for mingw cross compile (Uwe Bonnes)
+* Python bindings and minor autoconf cleanup (Tarek Heiland)
+* Code cleanup in various places (Intra2net)
+* Fixed ftdi_read_chipid in some cases (Matthias Richter)
+* eeprom decode function and small cleanups (Marius Kintel)
+* cmake system improvements (Marius Kintel and Intra2net)
+* Fix compilation in -ansi -pedantic mode (Matthias Janke)
+
+New in 0.15 - 2008-12-19
+------------------------
+* Full C++ wrapper. Needs boost (Marek Vavruša and Intra2net)
+* cmake rules (Marek Vavruša)
+
+New in 0.14 - 2008-09-09
+------------------------
+* Fixed flow control code for second FT2232 interface (Marek Vavruša)
+* Ability to set flow control via one USB call (Marek Vavruša)
+* 64 bit build support in the RPM spec file (Uwe Bonnes)
+* Small fix to the RPM spec file (Uwe Bonnes)
+* Ability to set RS232 break type (Intra2net)
+* Grouped flow control and modem status code together (Intra2net)
+
+New in 0.13 - 2008-06-13
+------------------------
+* Build .spec file via configure.in (Intra2net)
+* Fixed "libusb-config --cflags" call (Mike Frysinger and Intra2net)
+* Always set usb configuration (Mike Frysinger and Intra2net)
+* Improved libusb-win32 support (Mike Frysinger)
+
+New in 0.12 - 2008-04-16
+------------------------
+* Fix build of documentation for "out of tree" builds
+* Fix USB config descriptor in the eeprom (Juergen Beisert)
+* Ability to purge RX/TX buffers separately (Arnim Läuger)
+* Setting of event and error character (Arnim Läuger)
+* Poll modem status function (Arnim Läuger and Intra2net)
+* Updated documentation and created AUTHORS file
+
+New in 0.11 - 2008-03-01
+------------------------
+* Vala bindings helper functions (ftdi_new, ftdi_free, ftdi_list_free2) (Even Nermerson)
+* Support for different EEPROM sizes (Andrew John Rogers, andrew@rogerstech.co.uk)
+* Async write support. Linux only and no error handling.
+  You have to enable it via --with-async-mode.
+* Detection of R-type chips
+* FTDIChip-ID read support (Peter Holik)
+
+New in 0.10 - 2007-05-08
+------------------------
+* Examples for libftdi_usb_find_all and CBUS mode
+* Fixed ftdi_list_free
+* Small cosmetic changes
+
+New in 0.9 - 2007-02-09
+-----------------------
+* Fixed build without doxygen
+* Correct .so file library version
+
+New in 0.8 - 2007-02-08
+-----------------------
+* Complete doxygen documentation and examples
+* Extended FT2232C bitbang mode example code (Max)
+* ftdi_usb_get_strings function to get device ID strings (Matthijs ten Berge)
+* Fix ftdi_read_pins on PowerPC systems (Thomas Fischl)
+* Automatically detach ftdi_sio kernel driver (Uwe Bonnes and Intra2net)
+* Configurable flow control (Lorenz Moesenlechner and Matthias Kranz)
+
+New in 0.7 - 2005-10-11
+-----------------------
+* Baudrate calculation fix for FT2232C (Steven Turner/FTDI)
+* Find all devices by vendor/product id (Tim Ansell and Intra2net)
+* Documentation updates (Tim Ansell)
+
+New in 0.6 - 2005-04-24
+-----------------------
+* Set library version on .so file again
+* Configurable serial line parameters (Alain Abbas)
+* Improved filtering of status bytes (Evgeny Sinelnikov)
+* Extended FT2232C support (Uwe Bonnes)
+* Small improvement to the baudrate calculation code (Emil)
+* Error handling cleanup (Rogier Wolff and Intra2net)
+
+New in 0.5 - 2004-09-24
+-----------------------
+* New autoconf suite
+* pkgconfig support
+* Status byte filtering now works for "big" readbuffer sizes (Thanks Evgeny!)
+* Open device by description and/or serial (Evgeny Sinelnikov)
+* Improved error handling (Evgeny Sinelnikov)
+
+New in 0.4 - 2004-06-15
+-----------------------
+* Fixed filtering of status bytes (Readbuffer size is now 64 bytes)
+* FT2232C support (Steven Turner/FTDI)
+* New baudrate calculation code (Ian Abbott)
+* Automatic detection of chip type
+* Important: ftdi_write_data now returns the bytes written
+* Fixed defaults values in ftdi_eeprom_initdefaults (Jean-Daniel Merkli)
+* Reset internal readbuffer offsets for reset()/purge_buffers()
+* Small typo fixes (Mark Haemmerling)
+
+New in 0.3 - 2004-03-25
+-----------------------
+* Improved read function which takes arbitrary input buffer sizes
+  Attention: Call ftdi_deinit() on exit to free used memory
+* Vastly increased read/write performance (configurable chunksize, default is 4096)
+* Set/get latency timer function working (Thanks Steven Turner/FTDI)
+* Increased library version because the changes require recompilation
+
+New in 0.2 - 2004-01-03
+-----------------------
+* EEPROM build fix by Daniel Kirkham (Melbourne, Australia)
+* Implemented basic ftdi_read_data() function
+* EEPROM write fixes
+
+New in 0.1 - 2003-06-10
+-----------------------
+* First public release

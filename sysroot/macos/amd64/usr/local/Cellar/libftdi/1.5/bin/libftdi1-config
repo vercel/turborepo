@@ -1,0 +1,79 @@
+#!/bin/sh
+
+prefix=/usr/local/Cellar/libftdi/1.5
+exec_prefix=/usr/local/Cellar/libftdi/1.5/bin
+exec_prefix_set=no
+
+usage()
+{
+	cat <<EOF
+Usage: libftdi1-config [OPTIONS] [LIBRARIES]
+Options:
+	[--prefix[=DIR]]
+	[--exec-prefix[=DIR]]
+	[--version]
+	[--libs]
+	[--cflags]
+EOF
+	exit $1
+}
+
+if test $# -eq 0; then
+	usage 1 1>&2
+fi
+
+while test $# -gt 0; do
+  case "$1" in
+  -*=*) optarg=`echo "$1" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+  *) optarg= ;;
+  esac
+
+  case $1 in
+    --prefix=*)
+      prefix=$optarg
+      if test $exec_prefix_set = no ; then
+        exec_prefix=$optarg
+      fi
+      ;;
+    --prefix)
+      echo_prefix=yes
+      ;;
+    --exec-prefix=*)
+      exec_prefix=$optarg
+      exec_prefix_set=yes
+      ;;
+    --exec-prefix)
+      echo_exec_prefix=yes
+      ;;
+    --version)
+      echo 1.5
+      exit 0
+      ;;
+    --cflags)
+      if test "/usr/local/Cellar/libftdi/1.5/include/libftdi1" != /usr/include ; then
+        includes="-I/usr/local/Cellar/libftdi/1.5/include/libftdi1"
+      fi
+      echo_cflags=yes
+      ;;
+    --libs)
+      echo_libs=yes
+      ;;
+    *)
+      usage 1 1>&2
+      ;;
+  esac
+  shift
+done
+
+if test "$echo_prefix" = "yes"; then
+	echo $prefix
+fi
+if test "$echo_exec_prefix" = "yes"; then
+	echo $exec_prefix
+fi
+if test "$echo_cflags" = "yes"; then
+	echo $includes
+fi
+if test "$echo_libs" = "yes"; then
+	echo -L/usr/local/Cellar/libftdi/1.5/lib -lftdi1 
+fi

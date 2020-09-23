@@ -1,0 +1,11 @@
+prefix=/usr/local/Cellar/libftdi/1.5
+exec_prefix=/usr/local/Cellar/libftdi/1.5/bin
+libdir=/usr/local/Cellar/libftdi/1.5/lib
+includedir=/usr/local/Cellar/libftdi/1.5/include/libftdi1
+
+Name: libftdipp1
+Description: C++ wrapper for libftdi1
+Requires: libftdi1
+Version: 1.5
+Libs: -L${libdir} -lftdipp1
+Cflags: -I${includedir}

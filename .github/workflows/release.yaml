@@ -1,0 +1,16 @@
+name: release
+on:
+  push:
+    tags:
+      - v*
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v2
+      - run: git fetch --prune --unshallow
+      - name: setup dependencies
+        uses: actions/setup-go@v2
+      - name: release dry run
+        run: make release-dry-run

@@ -1,0 +1,48 @@
+builds:
+  - id: darwin-amd64
+    main: ./
+    binary: golang-cross
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - PKG_CONFIG_SYSROOT_DIR=/go/src/github.com/troian/golang-cross/sysroot/macos/amd64
+      - PKG_CONFIG_PATH=/go/src/github.com/troian/golang-cross/sysroot/macos/amd64/usr/local/lib/pkgconfig
+      - CC=o64-clang
+      - CXX=o64-clang++
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+  - id: linux-amd64
+    main: ./
+    binary: golang-cross
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - PKG_CONFIG_SYSROOT_DIR=/go/src/github.com/troian/golang-cross/sysroot/linux
+      - PKG_CONFIG_PATH=/go/src/github.com/troian/golang-cross/sysroot/linux/usr/lib/x86_64-linux-gnu/pkgconfig
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+archives:
+  - id: golang-cross
+    builds:
+      - darwin-amd64
+      - linux-amd64
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: zip
+    wrap_in_directory: true
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
