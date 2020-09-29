@@ -1,13 +1,11 @@
-# golang-cross [![Actions Status](https://github.com/troian/golang-cross/workflows/Docker%20Image%20CI/badge.svg)](https://github.com/troian/golang-cross/actions)
+# golang-cross
 
 Docker container to turn CGO cross-compilation pain into a pleasure on [variety of platforms](#supported-toolchains/platforms) including usage of custom sysroots. 
 Although cross-compilation without CGO works well too,
 it is probably better to call goreleaser directly as it saves time on downloading quite big Docker image, especially on CI environment
 
-{{box op="start" cssClass="boxed tipBox"}}
 **Tip!**
 Should you wish to see working [examples](#examples) instead of reading
-{{box op="end"}}
 
 ## Credits
 This project is rather cookbook. Actual work to create cross-compile environment is done by [osxcross](https://github.com/tpoechtrager/osxcross) and [golang-cross](https://github.com/gythialy/golang-cross)
