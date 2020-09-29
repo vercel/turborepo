@@ -6,7 +6,6 @@ it is probably better to call goreleaser directly as it saves time on downloadin
 
 **Tip!**
 Should you wish to see working [examples](#examples) instead of reading
-
 ## Credits
 This project is rather cookbook. Actual work to create cross-compile environment is done by [osxcross](https://github.com/tpoechtrager/osxcross) and [golang-cross](https://github.com/gythialy/golang-cross)
 
@@ -56,11 +55,20 @@ Window|amd64|x86_64-w64-mingw32-gcc|x86_64-w64-mingw32-g++|Verification required
 - DOCKER_FAIL_ON_LOGIN_ERROR - fail on docker login error
 - GITHUB_TOKEN - github auth token to deploy release
 
-## How to run
-See Makefile for examples 
-
 ## Sysroot
-TODO
+Most reasonable way to make a sysroot seem to be rsync and [this example](https://github.com/troian/golang-cross-example) is using it.
+This [script](https://github.com/troian/golang-cross/blob/master/scripts/sysroot-rsync.sh) can help you with creating sysroot.
+Lets consider creating sysroot for Raspberry Pi 4 running Debian Buster.
+- install all required dev packages. for this example we will install libftdi1-dev, libusb-1.0-0-dev and opencv4
+  ```bash
+  ./sysroot-rsync.sh pi@<ipaddress> <local destination>
+  ``` 
+
+### sshfs
+`sshfs` is a good way to test sysroot before running rsync with one minor issue.
+Some packages are creating absolute links and the become unusable or pointing to wrong files when mounted
+For example `/usr/lib/x86_x64-gnu-linux/libpthread.so` on RPI4 running Debian Buster is symlink to `/lib/x86_x64-gnu-linux/libpthread.so`
+ 
 
 ## Contributing
 Any contribution helping to make this project is welcome
