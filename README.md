@@ -9,6 +9,9 @@ Should you wish to see working [examples](#examples) instead of reading
 ## Credits
 This project is rather cookbook. Actual work to create cross-compile environment is done by [osxcross](https://github.com/tpoechtrager/osxcross) and [golang-cross](https://github.com/gythialy/golang-cross)
 
+## Docker
+[Docker image](https://hub.docker.com/repository/docker/troian/golang-cross)
+
 To run build with CGO each entry requires some environment variables
 
 Env variable | value | required | Notes
