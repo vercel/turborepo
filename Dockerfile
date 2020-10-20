@@ -1,11 +1,12 @@
-FROM troian/golang-cross-builder:v1.15.2
+ARG GO_VERSION
+FROM troian/golang-cross-builder:v${GO_VERSION}
 
 LABEL maintainer="Artur Troian <troian dot ap at gmail dot com>"
 
 COPY entrypoint.sh /
 
-ARG GORELEASER_VERSION=0.143.0
-ARG GORELEASER_SHA=cc435eb337889d41414de80fd8474806187a3e908754cbf4599aa0a7604a3134
+ARG GORELEASER_VERSION
+ARG GORELEASER_SHA
 
 RUN \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 apt-key add - \

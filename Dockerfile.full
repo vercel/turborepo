@@ -1,10 +1,10 @@
 # golang parameters
 ARG GO_VERSION
-FROM golang:${GO_VERSION}-buster AS base
+FROM troian/golang-cross:v${GO_VERSION}-base AS base
 
-ARG APT_MIRROR
-RUN sed -ri "s/(httpredir|deb).debian.org/${APT_MIRROR:-deb.debian.org}/g" /etc/apt/sources.list \
- && sed -ri "s/(security).debian.org/${APT_MIRROR:-security.debian.org}/g" /etc/apt/sources.list
+#ARG APT_MIRROR
+#RUN sed -ri "s/(httpredir|deb).debian.org/${APT_MIRROR:-deb.debian.org}/g" /etc/apt/sources.list \
+# && sed -ri "s/(security).debian.org/${APT_MIRROR:-security.debian.org}/g" /etc/apt/sources.list
 ENV OSX_CROSS_PATH=/osxcross
 
 FROM base AS osx-sdk
@@ -47,17 +47,11 @@ RUN \
         crossbuild-essential-mipsel \
         crossbuild-essential-ppc64el \
         devscripts \
-        git-core \
         libtool \
         llvm \
         multistrap \
         patch \
-        software-properties-common \
-        wget \
-        xz-utils \
-        cmake \
         qemu-user-static \
-        openssl \
  && apt -y autoremove \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
