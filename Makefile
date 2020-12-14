@@ -1,6 +1,6 @@
 CROSS_IMAGE_NAME   := troian/golang-cross-builder
 IMAGE_NAME         := troian/golang-cross
-GO_VERSION         ?= 1.15.3
+GO_VERSION         ?= 1.15.6
 TAG_VERSION        := v$(GO_VERSION)
 GORELEASER_VERSION := 0.143.0
 GORELEASER_SHA     := cc435eb337889d41414de80fd8474806187a3e908754cbf4599aa0a7604a3134
@@ -34,7 +34,7 @@ golang-cross-%: golang-cross-base
 		-f Dockerfile.$(@:golang-cross-%=%) .
 
 .PHONY: golang-cross
-golang-cross:
+golang-cross: golang-cross-base
 	@echo "building $(IMAGE_NAME):$(TAG_VERSION)"
 	docker build -t $(IMAGE_NAME):$(TAG_VERSION) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
