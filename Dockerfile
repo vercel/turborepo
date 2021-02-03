@@ -21,7 +21,6 @@ RUN \
  && echo "$GORELEASER_SHA $GORELEASER_DOWNLOAD_FILE" | sha256sum -c - || exit 1 \
  && tar -xzf $GORELEASER_DOWNLOAD_FILE -C /usr/bin/ goreleaser \
  && rm $GORELEASER_DOWNLOAD_FILE \
- && go get -u github.com/git-chglog/git-chglog/cmd/git-chglog \
  && chmod +x /entrypoint.sh
 
 ENTRYPOINT ["bash", "/entrypoint.sh"]

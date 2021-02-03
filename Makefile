@@ -1,9 +1,9 @@
 CROSS_IMAGE_NAME   := troian/golang-cross-builder
 IMAGE_NAME         := troian/golang-cross
-GO_VERSION         ?= 1.15.6
+GO_VERSION         ?= 1.15.7
 TAG_VERSION        := v$(GO_VERSION)
-GORELEASER_VERSION := 0.149.0
-GORELEASER_SHA     := a227362d734cda47f7ebed9762e6904edcd115a65084384ecfbad2baebc4c775
+GORELEASER_VERSION := 0.155.0
+GORELEASER_SHA     := 2a33aa15933cfd5bd2b714860c4876fa76f1fab8f46a7c6d29a8e32c7f9445f2
 OSX_SDK            := MacOSX10.15.sdk
 OSX_SDK_SUM        := 4051d210bf232ccb5eee863d6a4052afa800001810a2a42e354c9637ec78cd2c
 OSX_VERSION_MIN    := 10.12
