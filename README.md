@@ -37,6 +37,7 @@ for pkg-config and `datadir` is the datadir for pkg-config when it was installed
 Platform | Arch | CC | CXX | Verified
 ---|---|---|---|:---:|
 Darwin|amd64|o64-clang|o64-clang++|✅
+Darwin (M1)|arm64|oa64-clang|oa64-clang++|✅
 Linux|amd64|gcc|g++|✅
 Linux|arm64|aarch64-linux-gnu-gcc|aarch64-linux-gnu-g++|✅
 Linux|armhf (GOARM=5)|arm-linux-gnueabihf-gcc|arm-linux-gnueabihf-g++|Verification required
