@@ -11,7 +11,9 @@ jobs:
         uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
       - name: setup environment
-        run: echo "${{secrets.DOCKER_PASSWORD}}" | docker login -u "${{secrets.DOCKER_USERNAME}}" --password-stdin
+        run: |-
+          echo "${{secrets.DOCKER_PASSWORD}}" | docker login -u "${{secrets.DOCKER_USERNAME}}" --password-stdin
+          echo "${{secrets.GHCR_DOCKER_PASSWORD}}" | docker login -u "${{secrets.GHCR_DOCKER_USERNAME}}" --password-stdin
       - run: make golang-cross-base
       - run: make golang-cross
       - run: make subimages

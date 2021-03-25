@@ -1,5 +1,6 @@
 CROSS_IMAGE_NAME   := troian/golang-cross-builder
 IMAGE_NAME         := troian/golang-cross
+GHCR_IMAGE_NAME    ?= ghcr.io/$(IMAGE_NAME)
 GO_VERSION         ?= 1.16.2
 TAG_VERSION        := v$(GO_VERSION)
 GORELEASER_VERSION := 0.159.0
@@ -25,6 +26,7 @@ golang-cross-base:
 		--build-arg GORELEASER_VERSION=$(GORELEASER_VERSION) \
 		--build-arg GORELEASER_SHA=$(GORELEASER_SHA) \
 		-f Dockerfile.$(@:golang-cross-%=%) .
+	docker tag $(IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%) $(GHCR_IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%)
 
 .PHONY: golang-cross-%
 golang-cross-%: golang-cross-base
@@ -32,6 +34,7 @@ golang-cross-%: golang-cross-base
 	docker build -t $(IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-f Dockerfile.$(@:golang-cross-%=%) .
+	docker tag $(IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%) $(GHCR_IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%)
 
 .PHONY: golang-cross
 golang-cross: golang-cross-base
@@ -44,11 +47,14 @@ golang-cross: golang-cross-base
 		--build-arg OSX_CROSS_COMMIT=$(OSX_CROSS_COMMIT) \
 		--build-arg DEBIAN_FRONTEND=$(DEBIAN_FRONTEND) \
 		-f Dockerfile.full .
+	docker tag $(IMAGE_NAME):$(TAG_VERSION) $(GHCR_IMAGE_NAME):$(TAG_VERSION)
 
 .PHONY: docker-push-%
 docker-push-%:
 	docker push $(IMAGE_NAME):$(TAG_VERSION)-$(@:docker-push-%=%)
+	docker push $(GHCR_IMAGE_NAME):$(TAG_VERSION)-$(@:docker-push-%=%)
 
 .PHONY: docker-push
 docker-push: $(patsubst %, docker-push-%,$(PUSHIMAGES))
 	docker push $(IMAGE_NAME):$(TAG_VERSION)
+	docker push $(GHCR_IMAGE_NAME):$(TAG_VERSION)
