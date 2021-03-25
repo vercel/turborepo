@@ -13,7 +13,7 @@ jobs:
       - name: setup environment
         run: |-
           echo "${{secrets.DOCKER_PASSWORD}}" | docker login -u "${{secrets.DOCKER_USERNAME}}" --password-stdin
-          echo "${{secrets.GHCR_DOCKER_PASSWORD}}" | docker login -u "${{secrets.GHCR_DOCKER_USERNAME}}" --password-stdin
+          echo "${{secrets.GHCR_DOCKER_PASSWORD}}" | docker login ghcr.io -u "${{secrets.GHCR_DOCKER_USERNAME}}" --password-stdin
       - run: make golang-cross-base
       - run: make golang-cross
       - run: make subimages
