@@ -8,7 +8,7 @@ fi
 
 if [[ -f "${GPG_KEY}" ]]; then
 	echo "importing gpg key..."
-	if gpg --allow-secret-key-import --import "${GPG_KEY}"; then
+	if gpg --batch --import "${GPG_KEY}"; then
 		gpg --list-secret-keys --keyid-format long
 	fi
 fi
