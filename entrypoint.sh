@@ -37,4 +37,4 @@ else
 	fi
 fi
 
-goreleaser "$@"
+exec goreleaser "$@"

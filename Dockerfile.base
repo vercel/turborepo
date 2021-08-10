@@ -7,6 +7,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG GORELEASER_VERSION
 ARG GORELEASER_SHA
 ARG APT_MIRROR
+ARG TINI_VERSION
+
 LABEL maintainer="Artur Troian <troian dot ap at gmail dot com>"
 
 COPY entrypoint.sh /
@@ -14,6 +16,9 @@ COPY entrypoint.sh /
 # Install deps
 RUN \
     set -x \
+    # Run tini as PID 1 and avoid signal handling issues
+ && curl --fail -sSL -o /tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-amd64 \
+ && chmod +x /tini \
  && echo "Starting image build for Debian Stretch" \
  && sed -ri "s/(httpredir|deb).debian.org/${APT_MIRROR:-deb.debian.org}/g" /etc/apt/sources.list \
  && sed -ri "s/(security).debian.org/${APT_MIRROR:-security.debian.org}/g" /etc/apt/sources.list \
@@ -43,4 +48,4 @@ RUN \
  && rm $GORELEASER_DOWNLOAD_FILE \
  && chmod +x /entrypoint.sh
 
-ENTRYPOINT ["bash", "/entrypoint.sh"]
+ENTRYPOINT ["/tini", "--", "/entrypoint.sh"]

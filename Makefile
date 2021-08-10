@@ -10,6 +10,7 @@ OSX_SDK_SUM        := 0a9b0bae4623960483d882fb8b7c8fca66e8863ac69d9066bafe0a3d12
 OSX_VERSION_MIN    := 10.13
 OSX_CROSS_COMMIT   := 035cc170338b7b252e3f13b0e3ccbf4411bffc41
 DEBIAN_FRONTEND    := noninteractive
+TINI_VERSION       ?= v0.19.0
 
 SUBIMAGES = linux-amd64
 
@@ -25,6 +26,7 @@ golang-cross-base:
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		--build-arg GORELEASER_VERSION=$(GORELEASER_VERSION) \
 		--build-arg GORELEASER_SHA=$(GORELEASER_SHA) \
+		--build-arg TINI_VERSION=$(TINI_VERSION) \
 		-f Dockerfile.$(@:golang-cross-%=%) .
 	docker tag $(IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%) $(GHCR_IMAGE_NAME):$(TAG_VERSION)-$(@:golang-cross-%=%)
 
