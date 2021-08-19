@@ -1,7 +1,6 @@
-CROSS_IMAGE_NAME   := troian/golang-cross-builder
 IMAGE_NAME         := troian/golang-cross
 GHCR_IMAGE_NAME    ?= ghcr.io/$(IMAGE_NAME)
-GO_VERSION         ?= 1.16.7
+GO_VERSION         ?= 1.17
 TAG_VERSION        := v$(GO_VERSION)
 GORELEASER_VERSION := 0.174.2
 GORELEASER_SHA     := 38155642fb10a75205f20e390474f3bad9fbf61f2614500b02b179d05907348e
@@ -11,6 +10,7 @@ OSX_VERSION_MIN    := 10.13
 OSX_CROSS_COMMIT   := 035cc170338b7b252e3f13b0e3ccbf4411bffc41
 DEBIAN_FRONTEND    := noninteractive
 TINI_VERSION       ?= v0.19.0
+GORELEASER_TAG     ?= $(shell git describe --tags --abbrev=0)
 
 SUBIMAGES = linux-amd64
 
@@ -18,6 +18,11 @@ PUSHIMAGES = base \
 	$(SUBIMAGES)
 
 subimages: $(patsubst %, golang-cross-%,$(SUBIMAGES))
+
+.PHONY: gen-changelog
+gen-changelog:
+	@echo "generating changelog to changelog"
+	./scripts/genchangelog.sh "$(GORELEASER_TAG)" changelog.md
 
 .PHONY: golang-cross-base
 golang-cross-base:
@@ -50,13 +55,14 @@ golang-cross: golang-cross-base
 		--build-arg DEBIAN_FRONTEND=$(DEBIAN_FRONTEND) \
 		-f Dockerfile.full .
 	docker tag $(IMAGE_NAME):$(TAG_VERSION) $(GHCR_IMAGE_NAME):$(TAG_VERSION)
+	docker tag $(IMAGE_NAME):$(TAG_VERSION) $(GHCR_IMAGE_NAME):latest
 
 .PHONY: docker-push-%
 docker-push-%:
-	docker push $(IMAGE_NAME):$(TAG_VERSION)-$(@:docker-push-%=%)
+	docker push $(GHCR_IMAGE_NAME):$(TAG_VERSION)-$(@:docker-push-%=%)
 	docker push $(GHCR_IMAGE_NAME):$(TAG_VERSION)-$(@:docker-push-%=%)
 
 .PHONY: docker-push
 docker-push: $(patsubst %, docker-push-%,$(PUSHIMAGES))
-	docker push $(IMAGE_NAME):$(TAG_VERSION)
 	docker push $(GHCR_IMAGE_NAME):$(TAG_VERSION)
+	docker push $(GHCR_IMAGE_NAME):latest
