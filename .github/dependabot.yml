@@ -1,0 +1,11 @@
+# Once you push this code to a repo on GitHub, Dependabot will automatically start sending PRs to keep your dependencies up-to-date!
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'monthly'
+    ignore:
+      # Husky v5 is currently in early-access and not open source licensed (you'd have to pay for a commercial license)
+      - dependency-name: 'husky'
+        versions: ['5.x']

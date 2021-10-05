@@ -1,0 +1,151 @@
+# Configuration Options
+
+You can configure the behavior of `turbo` by adding a `turbo` object in the `package.json` in your workspace's root (i.e. where you specify your Yarn workspaces).
+
+## `baseBranch`
+
+`type: string`
+
+Defaults to `origin/master`. The base branch or your git repository. Git is used by `turbo` in its [hashing algorithm](../caching#hashing) and [`--since` CLI flag](./usage#--since).
+
+## `globalDependencies`
+
+`type: string[]`
+
+A list of globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm.
+This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts package tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslitrc`, etc.)).
+
+## `npmClient`
+
+`type: "yarn" | "npm"`
+
+Defaults to `yarn`. The NPM client in-use in your project.
+
+## `pipeline`
+
+An object representing the task dependency graph of your project. `turbo` interprets these conventions to properly schedule, execute, and cache the outputs of tasks in your project.
+
+Each key in the `pipeline` object is the name of a task that can be executed by `turbo run`. If `turbo` finds a workspace package with a `package.json` `scripts` object with a matching key, it will apply the pipline task configuration to that NPM script during execution. This allows you to use `pipeline` to set conventions across your entire Turborepo.
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        "outputs": ["coverage/**"],
+        "dependsOn": ["build"]
+      },
+      "dev": {
+        "cache": false
+      }
+    }
+  }
+}
+```
+
+### `dependsOn`
+
+`type: string[]`
+
+The list of tasks that this task depends on.
+
+Prefixing a task in `dependsOn` with a `^` tells `turbo` that this pipeline task depends on the package's topological dependencies completing the task with the `^` prefix first (e.g. "a package's `build` tasks should only run once all of its `dependencies` and `devDependencies` have completed their own `build` commands").
+
+Items in `dependsOn` without `^` prefix, express the relationships between tasks at the package level (e.g. "a package's `test` and `lint` commands depend on `build` being completed first").
+
+**Example**
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        // "A package's `build` command depends on its dependencies'
+        // or devDependencies' `build` command being completed first"
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        // "A package's `test` command depends on its own `lint` and
+        // `build` commands first being completed"
+        "dependsOn": ["lint", "build"]
+      },
+      "deploy": {
+        // "A package's `deploy` command, depends on its own `build`
+        // and `test` commands first being completed"
+        "dependsOn": ["build", "test"]
+      }
+      // A package's `lint` command has no dependencies
+      "lint": {},
+    }
+  }
+}
+```
+
+### `outputs`
+
+`type: string[]`
+
+Defaults to `["dist/**", "build/**"]`. The set of glob patterns of a task's cacheable filesystem outputs.
+
+Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. This file is _always_ treated as a cacheable artifact and never needs to be specified.
+
+Passing an empty array can be used to tell `turbo` that a task is a side-effect and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its logs (and treat them like an artifact).
+
+**Example**
+
+```json
+{
+  "pipeline": {
+    "build": {
+      // "Cache all files emitted to package's dist/** or .next
+      // directories by a `build` task"
+      "outputs": ["dist/**", ".next/**"],
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      // "Don't cache any artifacts of `test` tasks (aside from
+      // logs)"
+      "outputs": [],
+      "dependsOn": ["build"]
+    },
+    "test:ci": {
+      // "Cache the coverage report of a `test:ci` command"
+      "outputs": ["coverage/**"],
+      "dependsOn": ["build"]
+    },
+    "dev": {
+      // Never cache anything (including logs) emitted by a
+      // `dev` task
+      "cache": false
+    }
+  }
+}
+```
+
+### `cache`
+
+`type: boolean`
+
+Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Setting `cache` to false is useful for daemon or long-running "watch" or development mode tasks that you don't want to cache.
+
+**Example**
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "outputs": [],
+      "dependsOn": ["build"]
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```

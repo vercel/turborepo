@@ -1,0 +1,116 @@
+import Callout from '../nextra-theme/callout'
+
+# Caching
+
+Unlike other tools you may have used, `turbo` caches previously run commands unless you tell it not to. It does this so it can skip work that's already been done, yielding incredible time savings.
+
+```shell
+# Run `build` npm script in all packages and apps and cache the output.
+turbo run build
+```
+
+If you open up your `node_modules/.cache/turbo`, you should see the cached artifacts.
+
+## Remote computation caching
+
+`turbo` will cache the filesystem outputs and logs of your tasks both locally to disk and to the cloud (i.e. to your [turborepo.com](https://beta.turborepo.com/signup) account). You can think of remote caching like 'Dropbox' but for computations. Aside from saving space on your own machine, remote caching allows you, your teammates, and your CI/CD to share prevously completed computations, which results in even faster, more incremental builds.
+
+## Turn off cache
+
+Sometimes you really don't need or want this incremental behavior (such as when you're doing something with live reloading such as `next dev` or `react-scripts start`). To disable caching, simply append `--no-cache` to any command.
+
+```shell
+# Run `dev` npm script in all packages and apps in parallel,
+# but don't cache the output
+turbo run dev --parallel --no-cache
+```
+
+You can also always disable caching on a specific task by setting `cache` to `false` in your Turborepo [`pipeline`](./reference/configuration#pipeline)
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "dev": {
+        "cache": false
+      }
+    }
+  }
+}
+```
+
+## Force overwrite cache
+
+Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag.
+
+```shell
+# Run `build` npm script in all packages and apps,
+# ignoring cache hits.
+turbo run build --force
+```
+
+## Logs
+
+Not only does `turbo` cache the output of your tasks, it also records the terminal output (i.e. combined `stdout` and `stderr`) to (`<package>/.turbo/run-<command>.log`). When `turbo` encounters a cached task, it will replay the output as if it happened again, but instantly, with the package name slightly dimmed.
+
+## Configuring Cache Outputs
+
+By default, [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2) considers any files emitted in the `dist/**` or `build/**` folders of a package to be cacheable. In addition, `turbo run` treats task logs (`stderr`/`stdout`), which are automatically emitted to `.turbo/run-<command>.log`, as a cacheable artifact.
+
+Using [`pipeline`](./reference/configuration#pipeline), you can configure cache conventions across your Turborepo.
+
+To override the default cache folder behavior, pass an array of globs to a [`pipeline.<task>.outputs`](./reference/configuration#outputs) array. Any file that satifies the glob patterns for a task will be treated as artifact.
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        "outputs": [], // leave empty to only cache logs
+        "dependsOn": ["build"]
+      }
+    }
+  }
+}
+```
+
+If your task does not emit anything (e.g. unit tests with Jest) to the filesystem, you can still cache it because Turborepo treats logs as task artifacts. To do this, just set `outputs` to an empty array (i.e. `[]`)
+
+<Callout emoji="ℹ️">
+  Pro Tip for caching ESLint: You can get a cacheable pretty terminal output
+  (even for non-errors) by setting `TIMING=1` variable before `eslint`. Learn
+  more over at the [ESLint
+  docs](https://eslint.org/docs/1.0.0/developer-guide/working-with-rules#per-rule-performance)
+</Callout>
+
+## Hashing
+
+By now, you're probably wondering how `turbo` decides what constitutes a cache hit vs. miss for a given task. Good question!
+
+First `turbo` constructs a hash of the current global state of the monorepo:
+
+- The contents of any file that satifies the the glob patterns in [`globalDependencies`](./reference/configuration#globalDependencies)
+
+Then it adds on more factors relative to a given package's task:
+
+- Hash the contents of all not-gitignored files in the package folder
+- The hashes of all internal dependencies
+- The `outputs` option specified in the [`pipeline`](./reference/configuration#pipeline)
+- The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a package's `package.json` from the root lockfile
+- The package task's name
+
+Once `turbo` encounters a given package's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
+
+The hash of a given task is injected at execution time as an environment variable `TURBO_HASH`. This value can be useful in stamping outputs or tagging Dockerfile etc.
+
+<Callout emoji="ℹ️">
+  As of `turbo` v0.6.10, `turbo`'s hashing algorithm when using `npm` or `pnpm`
+  differs slightly from the above. When using either of these package managers,
+  `turbo` will simply include the hashed contents of the lockfile in its hash
+  algorithm for each package's task. It will _not_ parse/figure out the resolved
+  set of all dependencies like the current `yarn` implementation.
+</Callout>
