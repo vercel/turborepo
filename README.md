@@ -2,7 +2,7 @@
 
 ## Documentation
 
-Visit https://titan.vercel.app/docs to get started
+Visit https://titan.vercel.sh/docs to get started
 
 ## Author
 
