@@ -1,6 +1,8 @@
 # golang-cross
 
-Docker container to turn CGO cross-compilation pain into a pleasure on [variety of platforms](#supported-toolchains/platforms) including usage of custom sysroots. 
+Docker container to turn CGO cross-compilation pain into a pleasure. It tested on [variety of platforms](#supported-toolchains/platforms).
+[Custom sysroots](#Sysroot) also can be used.
+
 Although cross-compilation without CGO works well too,
 it is probably better to call goreleaser directly as it saves time on downloading quite big Docker image, especially on CI environment
 
@@ -10,7 +12,8 @@ Should you wish to see working [examples](#examples) instead of reading
 This project is rather cookbook. Actual work to create cross-compile environment is done by [osxcross](https://github.com/tpoechtrager/osxcross) and [golang-cross](https://github.com/gythialy/golang-cross)
 
 ## Docker
-[Docker image](https://hub.docker.com/repository/docker/troian/golang-cross)
+[Docker image](https://ghcr.io/troian/golang-cross) is placed on Github.
+I stopped deploying to Docker Hub due to insane (but probably fare) rate limits and more insane one api key only for free accounts. 
 
 To run build with CGO each entry requires some environment variables
 
@@ -43,7 +46,7 @@ Linux|arm64|aarch64-linux-gnu-gcc|aarch64-linux-gnu-g++|✅
 Linux|armhf (GOARM=5)|arm-linux-gnueabihf-gcc|arm-linux-gnueabihf-g++|Verification required
 Linux|armhf (GOARM=6)|arm-linux-gnueabihf-gcc|arm-linux-gnueabihf-g++|Verification required
 Linux|armhf (GOARM=7)|arm-linux-gnueabihf-gcc|arm-linux-gnueabihf-g++|✅
-Window|amd64|x86_64-w64-mingw32-gcc|x86_64-w64-mingw32-g++|Verification required
+Windows|amd64|x86_64-w64-mingw32-gcc|x86_64-w64-mingw32-g++|Verification required
 
 ## Docker
 ### Environment variables
@@ -60,8 +63,8 @@ Window|amd64|x86_64-w64-mingw32-gcc|x86_64-w64-mingw32-g++|Verification required
 - GITHUB_TOKEN - github auth token to deploy release
 
 ## Sysroot
-Most reasonable way to make a sysroot seem to be rsync and [this example](https://github.com/troian/golang-cross-example) is using it.
-This [script](https://github.com/troian/golang-cross/blob/master/scripts/sysroot-rsync.sh) can help you with creating sysroot.
+Most reasonable way to make a sysroot seem to be rsync and [the example](https://github.com/troian/golang-cross-example) is using it.
+You may want to use [the script](https://github.com/troian/golang-cross/blob/master/scripts/sysroot-rsync.sh) to create sysroot for your desired linux setup.
 Lets consider creating sysroot for Raspberry Pi 4 running Debian Buster.
 - install all required dev packages. for this example we will install libftdi1-dev, libusb-1.0-0-dev and opencv4
   ```bash
@@ -69,10 +72,10 @@ Lets consider creating sysroot for Raspberry Pi 4 running Debian Buster.
   ``` 
 
 ### sshfs
-`sshfs` is a good way to test sysroot before running rsync with one minor issue.
-Some packages are creating absolute links and the become unusable or pointing to wrong files when mounted
-For example `/usr/lib/x86_x64-gnu-linux/libpthread.so` on RPI4 running Debian Buster is symlink to `/lib/x86_x64-gnu-linux/libpthread.so`
- 
+Though `sshfs` is a good way to test sysroot before running rsync it unfortunately comes with one minor issue.
+Some packages are creating absolute links and thus pointing to wrong files when mounted (or appear as broken).
+For example RPI4 running Debian Buster this library `/usr/lib/x86_x64-gnu-linux/libpthread.so` is symlink to `/lib/x86_x64-gnu-linux/libpthread.so` instead of `../../../lib/x86_x64-gnu-linux/libpthread.so`.
+
 
 ## Contributing
 Any contribution helping to make this project is welcome
