@@ -1,0 +1,131 @@
+# Getting Started with Turborepo
+
+Welcome to Turborepo! Thank you so much for supporting us. We'll get you up and running in a few minutes.
+
+If you run into any trouble, ask for help through one of the support channels.
+
+## Adding to existing projects
+
+Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](https://npmjs.com), and [PNPM](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
+
+- macOS darwin 64-bit (Intel), Arm 64-bit (Apple Silicon)
+- Linux 32-bit, 64-bit, Arm, Arm 64-bit, mips64le, ppc64le
+- Windows 32-bit, 64-bit
+- FreeBSD 64-bit, FreeBSD Arm 64-bit
+
+### Create an account and team
+
+Signup for an Turborepo account here [beta.turborepo.com](https://beta.turborepo.com/signup) and create a Team.
+
+### Install `turbo`
+
+Add `turbo` as a dependency in the root of your project.
+
+### Yarn
+
+```bash
+yarn add turbo -W
+```
+
+### NPM
+
+```bash
+npm install turbo
+```
+
+### PNPM
+
+```bash
+pnpm add turbo
+```
+
+The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
+
+### Activate your CLI
+
+To associate your machine to your Turborepo account, run:
+
+```bash
+yarn turbo login
+```
+
+and follow the prompts. You'll be asked to activate your device with a device code.
+
+### Link to / or create a project
+
+From the root of your monorepo, run:
+
+```sh
+yarn turbo link
+```
+
+and follow the prompts. If your team has already created a project, you can link to it. A project should be 1:1 with each monorepo so that you and your team members and your CI/CD can recycle/share cached computation artifacts (more on that later).
+
+### Add `turbo` to `package.json`
+
+In your root `package.json`, add a key `turbo`. If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, our's is set to `origin/main`).
+
+```json
+{
+  "turbo": {
+    "baseBranch": "origin/main"
+  }
+}
+```
+
+### Create a `pipeline`
+
+In your `package.json`, add the commands you want to "turbocharge" to your pipeline. Your pipeline defines the way in which your NPM `package.json` scripts relate to each other. These relationships are applied to all packages across your entire monorepo.
+
+```json
+{
+  "turbo": {
+    "baseBranch": "origin/main",
+    "pipeline": {
+      "build": {
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        "outputs": []
+      },
+      "lint": {
+        "outputs": []
+      },
+      "dev": {
+        "cache": false
+      }
+    }
+  }
+}
+```
+
+### Edit `.gitignore`
+
+Next, add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
+
+```
++ .turbo
+```
+
+If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg.com/en/docs/workspaces/), be sure to also specify all `workspaces` in your `package.json`. The convention we follow is for applications to go into the `/apps` folder and packages to go in `/packages` folders.
+
+```diff
+{
++ "workspaces": [
++    "packages/*",
++    "apps/*"
++  ]
+}
+```
+
+Now re-run you NPM client's install command just to be sure. You should be good to go now.
+
+## Run stuff!
+
+To build with the freshly installed `turbo` runner, type the following:
+
+```sh
+yarn turbo run build
+```
+
+Now run it again. Depending on your monorepo setup, some stuff might already be caching properly. If not, no worries! In the next sections, we'll discuss how `turbo` works, how `scope` works, and then how to get caching working after that.

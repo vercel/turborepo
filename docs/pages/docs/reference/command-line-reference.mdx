@@ -1,0 +1,327 @@
+import Callout from "nextra-theme-docs/callout";
+
+# Command-Line Reference
+
+After [installing the `turbo`](../getting-started) package (or cloning a starter), you can start using Turborepo's command line interface (CLI) `turbo` to do all kinds of awesomeness in your monorepo.
+
+## Option Syntax
+
+Options can be passed to `turbo` in different ways. Options that require a value can be passed with an equals sign:
+
+```sh
+--<option>=<value>
+--<option>="<value with a space>"
+```
+
+Boolean options can be enabled as follows:
+
+```sh
+--no<option>
+--<option>=false
+```
+
+## `turbo run <task1> <task2>`
+
+Run NPM scripts across all packages in specified scope. Tasks must be specified in your `pipeline` configuration.
+
+### Options
+
+#### `--concurrency`
+
+`type: number`
+
+Defaults to `10`. Set/limit the max concurrency of task execution. This must be an integer greater than or equal to `1`. Use `1` to force serial (i.e. one task at a time) execution. This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
+
+```sh
+turbo run build --concurrency=10
+turbo run test --concurrency=1
+```
+
+#### `--continue`
+
+Defaults to `false`. This flag tells `turbo` whether or not to continue with execution in the presence of an error (i.e. non-zero exit code from a task).
+By default, specifying the `--parallel` flag will automatically set `--continue` to `true` unless explicitly set to `false`.
+When `--continue` is `true`, `turbo` will exit with the highest exit code value encountered during exection.
+
+```sh
+turbo run build --continue
+```
+
+#### `--cwd`
+
+Set the working directory of the command.
+
+```sh
+turbo run build --cwd ./somewhere/else
+```
+
+#### `--deps`
+
+Defaults to `true`. Include dependent packages/apps consumers in the execution.
+
+```sh
+turbo run build --deps
+turbo run build --no-deps
+```
+
+**Example**
+
+Let's say you have packages A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
+
+#### `--graph`
+
+`type: string`
+
+If [Graphviz](https://graphviz.org) is installed, this command will generate an svg, png, jpg, pdf, json, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
+The output file format can be controlled with the filename's extension if it is specified. If a filename is not specified, `graph-<timestamp>.jpg` is outputted.
+
+If Graphviz is not installed, this command prints the dot graph to `stdout`.
+
+```sh
+turbo run build --graph
+turbo run build test lint --graph=my-graph.svg
+turbo run build test lint --graph=my-json-graph.json
+turbo run build test lint --graph=my-graph.pdf
+turbo run build test lint --graph=my-graph.png
+```
+
+<Callout emoji="🚨">
+  **Known Limitation**: All possible pipeline task nodes will be added to the
+  graph at the moment, even if that pipeline task does not actually exist in a
+  given package.
+</Callout>
+
+#### `--force`
+
+Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting artifacts that overlap)
+
+```sh
+turbo run build --force
+```
+
+#### `--ignore`
+
+`type: string[]`
+
+Ignore **files or directories** from impacting scope. Uses glob patterns via [`multimatch`](https://github.com/sindresorhus/multimatch) under the hood.
+
+```
+turbo run build --ignore="apps/**/*"
+turbo run build --ignore="packages/**/*"
+turbo run build --ignore="packages/**/*" --ignore="\!/packages/not-this-one/**/*"
+```
+
+##### How multiple patterns work
+
+Positive patterns (e.g. `foo` or `*`) add to the results, while negative patterns (e.g. `!foo`) subtract from the results.
+
+Therefore a lone negation (e.g. `['!foo']`) will never match anything – use `['*', '!foo']` instead.
+
+##### Globbing patterns
+
+Just a quick overview.
+
+- `*` matches any number of characters, but not `/`
+- `?` matches a single character, but not `/`
+- `**` matches any number of characters, including `/`, as long as it's the only thing in a path part
+- `{}` allows for a comma-separated list of "or" expressions
+- `!` at the beginning of a pattern will negate the match
+
+#### `--includeDependencies`
+
+Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
+
+This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
+
+#### `--no-cache`
+
+Default false. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
+
+```shell
+turbo run build --no-cache
+turbo run dev --parallel --no-cache
+```
+
+#### `--parallel`
+
+Default `false`. Run commands in parallel across packages and apps and ignore the dependency graph. This is useful for developing with live reloading.
+
+```sh
+turbo run lint --parallel --no-cache
+turbo run dev --parallel --no-cache
+```
+
+#### `--project`
+
+Your turborepo.com project's slug. Useful for running in non-interactive shells in combination with `--token` and `--team` flags.
+
+```sh
+turbo run build --team=my-team --project=my-project
+turbo run build --team=my-team --project=my-project --token=xxxxxxxxxxxxxxxxx
+```
+
+You can also set the value of the current project by setting an environment variable named `TURBO_PROJECT`. The flag will take precendence over the environment variable if both are present.
+
+#### `--scope`
+
+`type: string[]`
+
+Specify/filter package(s)/apps to act as entry points for execution. Globs against package.json `name` field (and not the file system.)
+
+```sh
+turbo run lint --scope="@example/**"
+turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --no-deps
+```
+
+#### `--serial`
+
+**Deprecated in v0.5.3:** Use [`--concurrency=1`](#--concurrency) instead.
+
+Executes all tasks serially (i.e. one-at-a-time).
+
+```sh
+turbo run build --serial
+```
+
+#### `--since`
+
+Filter execution based on which packages have changed since a merge-base.
+
+```
+turbo run build --since=origin/main
+```
+
+<Callout emoji="🚨">
+  **Important**: This uses the `git diff ${target_branch}...` mechanism to
+  identify which packages have changed. There is an assumption that all the
+  input files for a package exist inside their respective package/app folders.
+</Callout>
+
+#### `--token`
+
+A turborepo.com personal access token. Useful for running in non-interactive shells (e.g. CI/CD) in combination with `--project` and `--team` flags.
+
+```sh
+turbo run build --team=my-team --project=my-project --token=xxxxxxxxxxxxxxxxx
+```
+
+You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precendence over the environment variable if both are present.
+
+#### `--team`
+
+The slug of the turborepo.com team. Useful for running in non-interactive shells in combination with `--token` and `--team` flags.
+
+```sh
+turbo run build --team=my-team --project=my-project
+turbo run build --team=my-team --project=my-project --token=xxxxxxxxxxxxxxxxx
+```
+
+You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precendence over the environment variable if both are present.
+
+## `turbo prune --scope=<target>`
+
+Generate a sparse/partial monorepo with a pruned lockfile for a target package.
+
+This command will generate folder called `out` with the following inside of it:
+
+- The full source code of all internal packages that are needed to build the target
+- A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
+- A copy of the root `package.json`
+
+```tree
+.                                 # Folder full source code for all package needed to build the target
+├── package.json                  # The root `package.json`
+├── packages
+│   ├── ui
+│   │   ├── package.json
+│   │   ├── src
+│   │   │   └── index.tsx
+│   │   └── tsconfig.json
+│   ├── shared
+│   │   ├── package.json
+│   │   ├── src
+│   │   │   ├── __tests__
+│   │   │   │   ├── sum.test.ts
+│   │   │   │   └── tsconfig.json
+│   │   │   ├── index.ts
+│   │   │   └── sum.ts
+│   │   └── tsconfig.json
+│   └── frontend
+│       ├── next-env.d.ts
+│       ├── next.config.js
+│       ├── package.json
+│       ├── src
+│       │   └── pages
+│       │       └── index.tsx
+│       └── tsconfig.json
+└── yarn.lock                            # The pruned lockfile for all targets in the subworkspace
+```
+
+### Options
+
+#### `--docker`
+
+`type: boolean`
+
+Default to `false`. Passing this flag will alter the outputted folder with the pruned workspace to make it easier to use with [Docker best practices / layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/).
+
+With the `--docker` flag. The `prune` command will generate folder called `out` with the following inside of it:
+
+- A folder `json` with the pruned workspace's package.jsons
+- A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
+- A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
+
+```tree
+.
+├── full                                # Folder full source code for all package needed to build the target
+│   ├── package.json
+│   └── packages
+│       ├── ui
+│       │   ├── package.json
+│       │   ├── src
+│       │   │   └── index.tsx
+│       │   └── tsconfig.json
+│       ├── shared
+│       │   ├── package.json
+│       │   ├── src
+│       │   │   ├── __tests__
+│       │   │   │   ├── sum.test.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── index.ts
+│       │   │   └── sum.ts
+│       │   └── tsconfig.json
+│       └── frontend
+│           ├── next-env.d.ts
+│           ├── next.config.js
+│           ├── package.json
+│           ├── src
+│           │   └── pages
+│           │       └── index.tsx
+│           └── tsconfig.json
+├── json                                # Folder containing just package.jsons for all targets in the subworkspace
+│   ├── package.json
+│   └── packages
+│       ├── ui
+│       │   └── package.json
+│       ├── shared
+│       │   └── package.json
+│       └── frontend
+│           └── package.json
+└── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
+```
+
+## `turbo link`
+
+Link the current directory to a new or existing turborepo.com project. A project is used to to share [cache artifacts](../caching).
+
+## `turbo login`
+
+Login to your turborepo.com account and activate the current machine. If you haven't done so, visit [https://beta.turborepo.com/signup](https://beta.turborepo.com/signup) to sign up before hand.
+
+## `turbo logout`
+
+Logout of your turborepo.com account.
+
+## `turbo me`
+
+Prints info about the currently logged in user.
