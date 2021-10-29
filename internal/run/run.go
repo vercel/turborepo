@@ -387,7 +387,11 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 	if runOptions.stream {
-		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(ctx.Targets.UnsafeListOfStrings(), ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
+		targetList := make([]string, ctx.Targets.Len())
+		for i, v := range ctx.Targets.List() {
+			targetList[i] = v.(string)
+		}
+		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(targetList, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
 	}
 	runState := NewRunState(runOptions)
 	runState.Listen(c.Ui, time.Now())
