@@ -9,7 +9,7 @@ import (
 	"github.com/pyr-sh/dag"
 )
 
-func TestPipelineAddTask(t *testing.T) {
+func TestEngineAddTask(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")
 	g.Add("b")
@@ -17,7 +17,7 @@ func TestPipelineAddTask(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "b"))
 	g.Connect(dag.BasicEdge("c", "a"))
 
-	p := New(&g)
+	p := NewEngine(&g)
 	topoDeps := make(util.Set)
 	topoDeps.Add("build")
 	deps := make(util.Set)
@@ -51,7 +51,12 @@ func TestPipelineAddTask(t *testing.T) {
 	if _, ok := p.Tasks["test"]; !ok {
 		t.Fatal("AddTask is not adding tasks (test)")
 	}
-	errs := p.Run(nil, []string{"test"})
+	errs := p.Run(&EngineRunOptions{
+		Packages:   nil,
+		TaskNames:  []string{"test"},
+		Concurreny: 10,
+		Parallel:   false,
+	})
 
 	for _, err := range errs {
 		t.Fatalf("%v", err)

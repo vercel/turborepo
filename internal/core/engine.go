@@ -2,28 +2,34 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"turbo/internal/util"
 
 	"github.com/pyr-sh/dag"
 )
 
+const ROOT_NODE_NAME = "___ROOT___"
+
 type Task struct {
 	Name     string
 	Deps     util.Set
 	TopoDeps util.Set
+	Cache    *bool
 	Run      func(cwd string) error
 }
 
-type pipeline struct {
-	TopologicGraph  *dag.AcyclicGraph
+type engine struct {
+	// TopologicGraph is a graph of workspaces
+	TopologicGraph *dag.AcyclicGraph
+	// TaskGraph is a graph of package-tasks
 	TaskGraph       *dag.AcyclicGraph
 	Tasks           map[string]*Task
 	taskDeps        [][]string
 	PackageTaskDeps [][]string
 }
 
-func New(topologicalGraph *dag.AcyclicGraph) *pipeline {
-	return &pipeline{
+func NewEngine(topologicalGraph *dag.AcyclicGraph) *engine {
+	return &engine{
 		Tasks:          make(map[string]*Task),
 		TopologicGraph: topologicalGraph,
 		TaskGraph:      &dag.AcyclicGraph{},
@@ -31,27 +37,39 @@ func New(topologicalGraph *dag.AcyclicGraph) *pipeline {
 	}
 }
 
-func (p *pipeline) Run(packages []string, taskNames []string) []error {
-	pkgs := packages
+type EngineRunOptions struct {
+	Packages   []string
+	TaskNames  []string
+	Concurreny int
+	Parallel   bool
+}
+
+// Run executes the pipeline, constructing an internal task graph and walking it accordlingly.
+func (p *engine) Run(options *EngineRunOptions) []error {
+	pkgs := options.Packages
 	if len(pkgs) == 0 {
 		for _, v := range p.TopologicGraph.Vertices() {
 			pkgs = append(pkgs, dag.VertexName(v))
 		}
 	}
 
-	tasks := taskNames
+	tasks := options.TaskNames
 	if len(tasks) == 0 {
 		for key := range p.Tasks {
 			tasks = append(tasks, key)
 		}
 	}
 
-	if err := p.generateTaskGraph(pkgs, tasks, true); err != nil {
+	if err := p.generateTaskGraph(pkgs, tasks, false); err != nil {
 		return []error{err}
 	}
-
+	var sema = util.NewSemaphore(options.Concurreny)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
-		if dag.VertexName(v) == "root" {
+		if !options.Parallel {
+			sema.Acquire()
+			defer sema.Release()
+		}
+		if strings.Contains(dag.VertexName(v), ROOT_NODE_NAME) {
 			return nil
 		}
 		_, taskName := GetPackageTaskFromId(dag.VertexName(v))
@@ -66,7 +84,7 @@ func (p *pipeline) Run(packages []string, taskNames []string) []error {
 	})
 }
 
-func (p *pipeline) generateTaskGraph(scope []string, targets []string, targetsOnly bool) error {
+func (p *engine) generateTaskGraph(scope []string, targets []string, targetsOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -137,6 +155,7 @@ func (p *pipeline) generateTaskGraph(scope []string, targets []string, targetsOn
 			}
 
 			if hasDeps {
+				fmt.Println("has deps")
 				for _, from := range deps.UnsafeListOfStrings() {
 					fromTaskId := GetTaskId(pkg, from)
 					taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
@@ -163,9 +182,9 @@ func (p *pipeline) generateTaskGraph(scope []string, targets []string, targetsOn
 				// TODO: this should change to ROOT_NODE_NAME
 				fromTaskId := GetTaskId(pkg, "")
 				taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
-				p.TaskGraph.Add("root")
+				p.TaskGraph.Add(ROOT_NODE_NAME)
 				p.TaskGraph.Add(toTaskId)
-				p.TaskGraph.Connect(dag.BasicEdge(toTaskId, "root"))
+				p.TaskGraph.Connect(dag.BasicEdge(toTaskId, ROOT_NODE_NAME))
 			}
 		}
 
@@ -187,12 +206,12 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
-func (p *pipeline) AddTask(task *Task) *pipeline {
+func (p *engine) AddTask(task *Task) *engine {
 	p.Tasks[task.Name] = task
 	return p
 }
 
-func (p *pipeline) AddDep(task *Task) *pipeline {
+func (p *engine) AddDep(task *Task) *engine {
 	p.Tasks[task.Name] = task
 	return p
 }

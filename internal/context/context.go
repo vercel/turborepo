@@ -11,7 +11,6 @@ import (
 	"turbo/internal/api"
 	"turbo/internal/backends"
 	"turbo/internal/config"
-	"turbo/internal/core"
 	"turbo/internal/fs"
 	"turbo/internal/util"
 
@@ -25,9 +24,8 @@ import (
 )
 
 const (
-	ROOT_NODE_NAME                = "root"
-	GLOBAL_CACHE_KEY              = "hello"
-	TOPOLOGICAL_PIPELINE_DELMITER = "^"
+	ROOT_NODE_NAME   = "___ROOT___"
+	GLOBAL_CACHE_KEY = "hello"
 )
 
 // A BuildResultStatus represents the status of a target when we log a build result.
@@ -67,7 +65,7 @@ type Context struct {
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
 	PendingTaskNodes dag.Set
-	Targets          dag.Set
+	Targets          util.Set
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -216,7 +214,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("error hashing global dependencies %w", err)
 		}
 		c.GlobalHash = globalHash
-		c.Targets = make(dag.Set)
+		c.Targets = make(util.Set)
 		if len(c.Args) > 0 {
 			for _, arg := range c.Args {
 				if !strings.HasPrefix(arg, "-") {
@@ -493,22 +491,6 @@ func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 
 		}(directDepName, unresolvedVersion)
 	}
-}
-
-func (ctx *Context) GetPipelineEntryForTask(v dag.Vertex) *fs.Pipeline {
-	_, task := core.GetPackageTaskFromId(fmt.Sprintf("%v", v))
-	pipeline, ok := ctx.RootPackageJSON.Turbo.Pipeline[fmt.Sprintf("%v", v)]
-	if !ok {
-		// then check for regular tasks
-		altpipe, notcool := ctx.RootPackageJSON.Turbo.Pipeline[task]
-		// if neither, then bail
-		if !notcool && !ok {
-			return nil
-		}
-		// override if we need to...
-		pipeline = altpipe
-	}
-	return &pipeline
 }
 
 func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
