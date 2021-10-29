@@ -70,7 +70,9 @@ turbo-linux
 .yalc`
     );
     if (fs.existsSync(root)) {
-      fs.rmdirSync(root + "/packages", { recursive: true });
+      try {
+        fs.rmdirSync(root + "/packages", { recursive: true });
+      } catch (error) {}
     }
 
     let deps =
