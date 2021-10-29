@@ -1,0 +1,160 @@
+import Callout from "nextra-theme-docs/callout";
+
+# Pipelining Package Tasks
+
+In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each NPM lifecycle script like `build` or `test` is run [topologically](./glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
+
+Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold.
+
+1. Incoming new developers can look at the Turborepo `pipeline` and understand how tasks are related.
+2. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
+
+To give you a sense of how powerful this can be, here's a small visual diagram comparing `turbo` vs `lerna` task execution timelines.
+
+![Turborepo vs. Lerna Task Execution](/docs/turbo-vs-lerna-execution.png)
+
+Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls--whereas `lerna` can only execute one task a time. The results speak for themselves.
+
+## Defining a `pipeline`
+
+To define your project's task dependency graph, use the [`pipeline`](./reference/configuration#pipeline) key in the root `package.json`'s `turbo` configuration. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your project.
+
+Each key in the [`pipeline`](./reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching) (but more on that later).
+
+Pipelines will make more sense once you see it, so here's an example configuration:
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        "dependsOn": ["build"]
+      },
+      "deploy": {
+        "dependsOn": ["build", "test", "lint"]
+      },
+      "lint": {}
+    }
+  }
+}
+```
+
+## Task Dependency Format
+
+What you are declaring here in the `pipeline` object of the `turbo` configuration is a dependency graph of tasks. In the above example, in plain english, the configuration translates to the following conventions:
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        // A package's `build` task depends on that package's
+        // topological dependencies' and devDependencies'
+        // `build` tasks  being completed
+        // (that's what the `^` symbol signifies).
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        // A package's `test` task depends on the `build`
+        // task of the same package being completed.
+        "dependsOn": ["build"]
+      },
+      "deploy": {
+        // A package's `deploy` task depends on the `build`,
+        // `test`, and `lint` tasks of the same package
+        // being completed.
+        "dependsOn": ["build", "test", "lint"]
+      },
+      // A package's `lint` task has no dependencies and
+      // can be run whenever.
+      "lint": {}
+    }
+  }
+}
+```
+
+### Topological Dependency
+
+The `^` symbol explicitly declares that the task has a [package-topological](./glossary#topological-order) dependency on another task.
+
+A common pattern in many TypeScript monorepos is to declare that a package's `build` task (e.g. `tsc`) should only run once the `build` tasks of all of its dependencies in the monorepo have run their own `build` tasks. This type of relationship can be expressed as follows:
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        // "A package's `build` command depends on its dependencies'
+        // and devDependencies' `build` commands being completed first"
+        "dependsOn": ["^build"]
+      }
+      // ... omitted for brevity
+    }
+  }
+}
+```
+
+### Empty Dependency List
+
+An empty dependency list (`dependsOn` is either undefined or `[]`) means that a task can start executing whenever it can! After all, it has NO dependencies.
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      // ... omitted for brevity
+
+      // A package's `lint` command has no dependencies and can be run at
+      // whenever.
+      "lint": {}
+    }
+  }
+}
+```
+
+### Tasks that are in the `pipeline` but not in SOME `package.json`
+
+Sometimes tasks declared in the `pipeline` are not present in all packages' `package.json` files. `turbo` will automatically and gracefully ignore those. No problem!
+
+### `pipeline` tasks are the only ones that `turbo` knows about
+
+`turbo` will only account for tasks declared in the `pipeline` configuration. If it's not listed there, `turbo` will not know how to run them.
+
+### Implicit Dependencies and Specific Package Tasks
+
+Sometimes you need to manually place a package-task dependency on another package-task. This can occur especially in repos that are just coming off of a `lerna` or `rush` repository where the tasks are traditionally run in separate phases. Sometimes assumptions were made those repositories that are not expressable in the simple task `pipeline` configuration as seen above. Additionally, you may need to express implicit dependencies or sequences between applications or microservices when using `turbo` in CI/CD.
+
+For these cases, you can express these relationships in your `pipeline` configuration like this:
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": ["^build"]
+      },
+      "test": {
+        "dependsOn": ["build"]
+      },
+      "deploy": {
+        "dependsOn": ["test"]
+      },
+      "frontend#deploy": {
+        "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"]
+      }
+    }
+  }
+}
+```
+
+In this example, we illustrate a `deploy` script of a `frontend` application depends on both the `deploy` and `health-check` NPM scripts of `backend` as well as the `test` script of a `ui` package. The syntax is `<package>#<task>`.
+
+This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"deploy": { "dependsOn": ["test"] }`, but it does not. Since `test` and `deploy` scripts do not have topological dependencies (e.g. `^<task>`), they theoretically can get triggered anytime once their own package's `build` and `test` scripts have finished! Unless they are being used for applications/services for deployment orchestration, the general guidance is to get rid of these specific package-task to package-task dependencies in the pipeline as quickly as possible (so the builds can be optimized better).
+
+<Callout emoji="🚨">
+  **Note: Package-tasks do not inherit cache configuration. You must redeclare
+  [`outputs`](./reference/configuration#outputs) at the moment.**
+</Callout>
