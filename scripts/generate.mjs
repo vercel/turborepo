@@ -19,7 +19,7 @@ const scope = `@${faker.hacker
 const type = process.argv[2];
 
 // TODO: algo should be customizable along with the size
-const packageGraph = graphGenerator.complete(50);
+const packageGraph = graphGenerator.complete(5);
 
 // Generate the package name & versions
 packageGraph.forEachNode((node) => {
