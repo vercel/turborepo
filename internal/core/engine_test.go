@@ -42,6 +42,10 @@ func TestEngineAddTask(t *testing.T) {
 	})
 	p.AddTask(&Task{
 		Name: "prepare",
+		Run: func(cwd string) error {
+			fmt.Println(cwd)
+			return nil
+		},
 	})
 
 	if _, ok := p.Tasks["build"]; !ok {
@@ -70,16 +74,16 @@ func TestEngineAddTask(t *testing.T) {
 }
 
 const leafString = `
+___ROOT___
 a#build
-  root
+  ___ROOT___
 a#test
-  root
+  ___ROOT___
 b#build
-  root
+  ___ROOT___
 b#test
-  root
+  ___ROOT___
 c#test
   a#build
   b#build
-root
 `

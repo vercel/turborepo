@@ -60,18 +60,21 @@ func (p *engine) Run(options *EngineRunOptions) []error {
 		}
 	}
 
-	if err := p.generateTaskGraph(pkgs, tasks, false); err != nil {
+	if err := p.generateTaskGraph(pkgs, tasks, true); err != nil {
 		return []error{err}
 	}
 	var sema = util.NewSemaphore(options.Concurreny)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
+		// Always return if it is the root node
+		if strings.Contains(dag.VertexName(v), ROOT_NODE_NAME) {
+			return nil
+		}
+		// Acquire the semaphore unless parallel
 		if !options.Parallel {
 			sema.Acquire()
 			defer sema.Release()
 		}
-		if strings.Contains(dag.VertexName(v), ROOT_NODE_NAME) {
-			return nil
-		}
+		// Find and run the task for the current vertex
 		_, taskName := GetPackageTaskFromId(dag.VertexName(v))
 		task, ok := p.Tasks[taskName]
 		if !ok {
