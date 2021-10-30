@@ -19,7 +19,7 @@ const basicPipeline = {
   },
 };
 
-for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "npm"] as const) {
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
   repo.install();
