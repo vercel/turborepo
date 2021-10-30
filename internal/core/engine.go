@@ -155,7 +155,6 @@ func (p *engine) generateTaskGraph(scope []string, targets []string, targetsOnly
 			}
 
 			if hasDeps {
-				fmt.Println("has deps")
 				for _, from := range deps.UnsafeListOfStrings() {
 					fromTaskId := GetTaskId(pkg, from)
 					taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
