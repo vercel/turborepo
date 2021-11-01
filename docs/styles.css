@@ -13,37 +13,6 @@
   max-width: calc(100vw - 50px);
 }
 
-[data-reach-skip-link] {
-  @apply sr-only;
-}
-
-[data-reach-skip-link]:focus {
-  @apply fixed top-0 z-50 px-6 py-2 mt-2 ml-6 text-lg bg-white outline-none not-sr-only focus:ring;
-}
-
 code {
   @apply text-sm;
-}
-
-.prism-code.language-diff .inserted.prefix,
-.prism-code.language-diff .deleted.prefix {
-  user-select: none;
-  @apply opacity-30;
-}
-
-.prism-code.language-diff .inserted.line {
-  @apply text-green-600;
-}
-.prism-code.language-diff .deleted.line {
-  @apply text-red-600;
-}
-
-/* Hack to make the TOC links look better by adjusting kerning */
-article > main + div a.font-semibold {
-  font-weight: 500;
-  letter-spacing: -0.01rem;
-}
-
-.dark .invert-on-dark {
-  filter: invert(1) brightness(1.8);
 }
