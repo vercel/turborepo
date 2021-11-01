@@ -37,6 +37,9 @@ export class Monorepo {
   [user]
     name = GitHub Actions
     email = actions@users.noreply.github.com
+  
+  [init]
+   defaultBranch = main
   `
     );
     execa.sync("git", ["init", "-q"], { cwd: this.root });
