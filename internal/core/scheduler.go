@@ -11,25 +11,29 @@ import (
 const ROOT_NODE_NAME = "___ROOT___"
 
 type Task struct {
-	Name     string
-	Deps     util.Set
+	Name string
+	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
+	Deps util.Set
+	// TopoDeps are dependencies across packages within the same topological graph (e.g. parent `build` -> child `build`) */
 	TopoDeps util.Set
 	Cache    *bool
 	Run      func(cwd string) error
 }
 
-type engine struct {
+type scheduler struct {
 	// TopologicGraph is a graph of workspaces
 	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
-	TaskGraph       *dag.AcyclicGraph
+	TaskGraph *dag.AcyclicGraph
+	// Tasks are a map of tasks in the scheduler
 	Tasks           map[string]*Task
 	taskDeps        [][]string
 	PackageTaskDeps [][]string
 }
 
-func NewEngine(topologicalGraph *dag.AcyclicGraph) *engine {
-	return &engine{
+// NewScheduler creates a new scheduler given a topologic graph of workspace package names
+func NewScheduler(topologicalGraph *dag.AcyclicGraph) *scheduler {
+	return &scheduler{
 		Tasks:          make(map[string]*Task),
 		TopologicGraph: topologicalGraph,
 		TaskGraph:      &dag.AcyclicGraph{},
@@ -37,15 +41,20 @@ func NewEngine(topologicalGraph *dag.AcyclicGraph) *engine {
 	}
 }
 
-type EngineRunOptions struct {
-	Packages   []string
-	TaskNames  []string
+// SchedulerExecutionOptions are options for a single scheduler execution
+type SchedulerExecutionOptions struct {
+	// Packages in the execution scope, if nil, all packages will be considered in scope
+	Packages []string
+	// TaskNames in the execution scope, if nil, all tasks will be executed
+	TaskNames []string
+	// Concurreny is the number of concurrent tasks that can be executed
 	Concurreny int
-	Parallel   bool
+	// Parallel is whether to run tasks in parallel
+	Parallel bool
 }
 
-// Run executes the pipeline, constructing an internal task graph and walking it accordlingly.
-func (p *engine) Run(options *EngineRunOptions) []error {
+// Execute executes the pipeline, constructing an internal task graph and walking it accordlingly.
+func (p *scheduler) Execute(options *SchedulerExecutionOptions) []error {
 	pkgs := options.Packages
 	if len(pkgs) == 0 {
 		for _, v := range p.TopologicGraph.Vertices() {
@@ -87,7 +96,7 @@ func (p *engine) Run(options *EngineRunOptions) []error {
 	})
 }
 
-func (p *engine) generateTaskGraph(scope []string, targets []string, targetsOnly bool) error {
+func (p *scheduler) generateTaskGraph(scope []string, targets []string, targetsOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -189,7 +198,6 @@ func (p *engine) generateTaskGraph(scope []string, targets []string, targetsOnly
 				p.TaskGraph.Connect(dag.BasicEdge(toTaskId, ROOT_NODE_NAME))
 			}
 		}
-
 	}
 	p.taskDeps = taskDeps
 	return nil
@@ -208,12 +216,12 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
-func (p *engine) AddTask(task *Task) *engine {
+func (p *scheduler) AddTask(task *Task) *scheduler {
 	p.Tasks[task.Name] = task
 	return p
 }
 
-func (p *engine) AddDep(task *Task) *engine {
-	p.Tasks[task.Name] = task
+func (p *scheduler) AddDep(fromTaskId string, toTaskId string) *scheduler {
+	p.taskDeps = append(p.taskDeps, []string{fromTaskId, toTaskId})
 	return p
 }
