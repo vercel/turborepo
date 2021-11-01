@@ -1,13 +1,4 @@
 import Link from "next/link";
-
-const Vercel = ({ height = 20 }) => (
-  <svg height={height} viewBox="0 0 283 64" fill="none">
-    <path
-      fill="currentColor"
-      d="M141.04 16c-11.04 0-19 7.2-19 18s8.96 18 20 18c6.67 0 12.55-2.64 16.19-7.09l-7.65-4.42c-2.02 2.21-5.09 3.5-8.54 3.5-4.79 0-8.86-2.5-10.37-6.5h28.02c.22-1.12.35-2.28.35-3.5 0-10.79-7.96-17.99-19-17.99zm-9.46 14.5c1.25-3.99 4.67-6.5 9.45-6.5 4.79 0 8.21 2.51 9.45 6.5h-18.9zM248.72 16c-11.04 0-19 7.2-19 18s8.96 18 20 18c6.67 0 12.55-2.64 16.19-7.09l-7.65-4.42c-2.02 2.21-5.09 3.5-8.54 3.5-4.79 0-8.86-2.5-10.37-6.5h28.02c.22-1.12.35-2.28.35-3.5 0-10.79-7.96-17.99-19-17.99zm-9.45 14.5c1.25-3.99 4.67-6.5 9.45-6.5 4.79 0 8.21 2.51 9.45 6.5h-18.9zM200.24 34c0 6 3.92 10 10 10 4.12 0 7.21-1.87 8.8-4.92l7.68 4.43c-3.18 5.3-9.14 8.49-16.48 8.49-11.05 0-19-7.2-19-18s7.96-18 19-18c7.34 0 13.29 3.19 16.48 8.49l-7.68 4.43c-1.59-3.05-4.68-4.92-8.8-4.92-6.07 0-10 4-10 10zm82.48-29v46h-9V5h9zM36.95 0L73.9 64H0L36.95 0zm92.38 5l-27.71 48L73.91 5H84.3l17.32 30 17.32-30h10.39zm58.91 12v9.69c-1-.29-2.06-.49-3.2-.49-5.81 0-10 4-10 10V51h-9V17h9v9.2c0-5.08 5.91-9.2 13.2-9.2z"
-    />
-  </svg>
-);
 // theme.config.js
 const Logo = ({ height, ...props }) => (
   <svg
@@ -128,29 +119,18 @@ const Logo = ({ height, ...props }) => (
 );
 
 const config = {
-  repository: "https://github.com/vercel/turbo", // project repo
-  docsRepository: "https://github.com/vercel/turbo", // docs repo
+  repository: "https://github.com/turborepo/turborepo", // project repo
+  docsRepository: "https://github.com/turborepo/turborepo", // docs repo
   branch: "main", // branch of docs
+  path: "/docs", // path of docs
   titleSuffix: " | Turborepo",
-  floatTOC: true,
+  nextLinks: true,
+  prevLinks: true,
   search: true,
-  unstable_stork: true,
+  customSearch: null, // customizable, you can use algolia for example
   darkMode: true,
-  footerText: function FooterText() {
-    return (
-      <a
-        href="https://vercel.com/?utm_source=turbo"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center font-semibold text-current no-underline"
-      >
-        <span className="mr-1">Powered by</span>
-        <span>
-          <Vercel />
-        </span>
-      </a>
-    );
-  },
+  footer: true,
+  footerText: "Copyright 2021 © SLP Media Productions LLC",
   footerEditOnGitHubLink: false, // will link to the docs repo
   logo: (
     <>
@@ -188,6 +168,73 @@ const config = {
       <meta name="msapplication-config" content="/favicon/browserconfig.xml" />
       <meta name="theme-color" content="#000" />
     </>
+  ),
+  sidebarHeader: (
+    <div className="z-20">
+      <ul>
+        <li>
+          <Link href="/">
+            <a className="flex items-center">
+              <span className="inline-flex items-center space-x-2">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-indigo-500">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    className={"text-white  h-4 w-4"}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                    />
+                  </svg>
+                </span>
+                <span
+                  className={
+                    "dark:text-white text-gray-900 font-medium text-sm duration-150 transition ease-in"
+                  }
+                >
+                  Documentation
+                </span>
+              </span>
+            </a>
+          </Link>
+        </li>
+        <li>
+          <a href="/blog" className="flex items-center ">
+            <span className="inline-flex items-center space-x-2">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-red-500 to-pink-500">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  className={"text-white h-4 w-4"}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                  />
+                </svg>
+              </span>
+              <span
+                className={
+                  "dark:text-gray-500 dark:hover:text-white duration-150 transition ease-in text-gray-600 font-medium text-sm"
+                }
+              >
+                Blog
+              </span>
+            </span>
+          </a>
+        </li>
+      </ul>
+      <hr className="my-4" />
+    </div>
   ),
 };
 export default config;
