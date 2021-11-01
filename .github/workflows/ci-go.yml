@@ -2,7 +2,7 @@ name: Go CI
 
 on:
   push:
-    branches: ['*']
+    branches: ["*"]
 
 jobs:
   build:
@@ -44,5 +44,4 @@ jobs:
 
       - name: run e2e
         run: |
-          npm install -g pnpm
           make e2e
