@@ -369,7 +369,7 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	runState := NewRunState(runOptions)
 	runState.Listen(c.Ui, time.Now())
-	engine := core.NewEngine(&ctx.TopologicalGraph)
+	engine := core.NewScheduler(&ctx.TopologicalGraph)
 	var logReplayWaitGroup sync.WaitGroup
 	for key, value := range ctx.RootPackageJSON.Turbo.Pipeline {
 		topoDeps := make(util.Set)
@@ -474,7 +474,17 @@ func (c *RunCommand) Run(args []string) int {
 						return nil
 					}
 				}
+				// Setup log file
 				fs.EnsureDir(logFileName)
+				output, err := os.Create(path.Join(runOptions.cwd, logFileName))
+				if err != nil {
+					tracer(TargetBuildFailed, err)
+					c.logError(targetLogger, actualPrefix, err)
+					if runOptions.bail {
+						os.Exit(1)
+					}
+				}
+				defer output.Close()
 				if runOptions.stream {
 					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 				}
@@ -485,28 +495,9 @@ func (c *RunCommand) Run(args []string) int {
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 				cmd.Env = append(os.Environ(), envs)
 
-				// Get a pipe to read from standard out
-				o, err := cmd.StdoutPipe()
-				if err != nil {
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-
-						os.Exit(1)
-					}
-				}
-				e, err := cmd.StderrPipe()
-				if err != nil {
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-
-						os.Exit(1)
-					}
-				}
-				r := io.MultiReader(o, e)
-
-				// Create a scanner which scans r in a line-by-line fashion
-				scanner := bufio.NewScanner(r)
-				output, err := os.Create(path.Join(runOptions.cwd, logFileName))
+				// Get a pipe to read from stdout and stderr
+				stdout, err := cmd.StdoutPipe()
+				defer stdout.Close()
 				if err != nil {
 					tracer(TargetBuildFailed, err)
 					c.logError(targetLogger, actualPrefix, err)
@@ -514,41 +505,40 @@ func (c *RunCommand) Run(args []string) int {
 						os.Exit(1)
 					}
 				}
-				defer output.Close()
-				writer := bufio.NewWriter(output)
-
-				// Use the scanner to scan the output line by line and log it
-				// It's running in a goroutine so that it doesn't block
-
-				err = cmd.Start()
-				// Execute command
-				// Failed to spawn?
+				stderr, err := cmd.StderrPipe()
+				defer stderr.Close()
 				if err != nil {
 					tracer(TargetBuildFailed, err)
+					c.logError(targetLogger, actualPrefix, err)
 					if runOptions.bail {
-						targetLogger.Error("Could not spawn command: %w", err)
-						targetUi.Error(fmt.Sprintf("Could not spawn command: %v", err))
 						os.Exit(1)
-					}
-					targetUi.Warn("could not spawn command, but continuing...")
-				}
-				// Read line by line and process it
-				for scanner.Scan() {
-					line := scanner.Text()
-					if runOptions.stream {
-						targetUi.Output(string(scanner.Bytes()))
-					}
-					if runOptions.cache {
-						writer.WriteString(fmt.Sprintf("%v\n", line))
 					}
 				}
 
-				// Failed to execute?
-				err = cmd.Wait()
-				if err != nil {
+				// If we are streaming the output, then we need efficiently
+				// read the output and write it to the terminal
+				if runOptions.stream {
+					go func() {
+						writer := bufio.NewWriter(output)
+						defer writer.Flush()
+
+						// Merge stdout and stderr and split with writer to the log file
+						merged := io.TeeReader(io.NopCloser(io.MultiReader(stderr, stdout)), writer)
+						// Create a scanner which scans the merged reader in a line-by-line fashion
+						scanner := bufio.NewScanner(merged)
+						// Use the scanner to scan the output line by line and log it
+						// Note: it's running in a goroutine so that it doesn't block
+
+						// Read line by line and process it
+						for scanner.Scan() {
+							targetUi.Output(scanner.Text())
+						}
+					}()
+				}
+				// Run the command
+				if err := cmd.Run(); err != nil {
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
-					writer.Flush() // make sure to flush the log write before we start saving it.
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
@@ -576,8 +566,6 @@ func (c *RunCommand) Run(args []string) int {
 
 					return nil
 				}
-
-				writer.Flush() // make sure to flush the log write before we start saving it.
 
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
@@ -607,7 +595,7 @@ func (c *RunCommand) Run(args []string) int {
 		})
 	}
 
-	errs := engine.Run(&core.EngineRunOptions{
+	errs := engine.Execute(&core.SchedulerExecutionOptions{
 		Packages:   nil,
 		TaskNames:  ctx.Targets.UnsafeListOfStrings(),
 		Concurreny: runOptions.concurrency,
