@@ -1806,14 +1806,6 @@
     native-url "^0.2.6"
     schema-utils "^2.6.5"
 
-"@reach/skip-nav@^0.10.5":
-  version "0.10.5"
-  resolved "https://registry.yarnpkg.com/@reach/skip-nav/-/skip-nav-0.10.5.tgz#83da28bcfd3ba0af05c7e82b0a5e2d4a0a0c6581"
-  integrity sha512-Cg/nGKmu73jdSf46J53Qs+tUat7UVH6zQfq0VYdBw+Xqg72U1mkN2NyMAvb3N8O0cc3nDGvZoq0MKWrC7+TeqQ==
-  dependencies:
-    "@reach/utils" "0.10.5"
-    tslib "^2.0.0"
-
 "@reach/skip-nav@^0.11.2":
   version "0.11.2"
   resolved "https://registry.yarnpkg.com/@reach/skip-nav/-/skip-nav-0.11.2.tgz#015498b2125ad8ef1e48cb8ab33dca93925fcbc8"
@@ -1822,14 +1814,13 @@
     "@reach/utils" "0.11.2"
     tslib "^2.0.0"
 
-"@reach/utils@0.10.5":
-  version "0.10.5"
-  resolved "https://registry.yarnpkg.com/@reach/utils/-/utils-0.10.5.tgz#fbac944d29565f6dd7abd0e1b13950e99b1e470b"
-  integrity sha512-5E/xxQnUbmpI/LrufBAOXjunl96DnqX6B4zC2MO2KH/dRzLug5gM5VuOwV26egsp0jvsSPxojwciOhS43px3qw==
+"@reach/skip-nav@^0.16.0":
+  version "0.16.0"
+  resolved "https://registry.yarnpkg.com/@reach/skip-nav/-/skip-nav-0.16.0.tgz#dec34f3a40a1e804e05647646aacab0ffd73b24d"
+  integrity sha512-SY4PdNx+hQHbeOr/+qLc+QXdRt9NTVlt0r737bOqY1WURGBIEN9sGgsmIsHluP1/bQuAe0JKdOJ/tXiwQ3Z3ug==
   dependencies:
-    "@types/warning" "^3.0.0"
-    tslib "^2.0.0"
-    warning "^4.0.3"
+    "@reach/utils" "0.16.0"
+    tslib "^2.3.0"
 
 "@reach/utils@0.11.2":
   version "0.11.2"
@@ -1839,6 +1830,14 @@
     "@types/warning" "^3.0.0"
     tslib "^2.0.0"
     warning "^4.0.3"
+
+"@reach/utils@0.16.0":
+  version "0.16.0"
+  resolved "https://registry.yarnpkg.com/@reach/utils/-/utils-0.16.0.tgz#5b0777cf16a7cab1ddd4728d5d02762df0ba84ce"
+  integrity sha512-PCggBet3qaQmwFNcmQ/GqHSefadAFyNCUekq9RrWoaU9hh/S4iaFgf2MBMdM47eQj5i/Bk0Mm07cP/XPFlkN+Q==
+  dependencies:
+    tiny-warning "^1.0.3"
+    tslib "^2.3.0"
 
 "@rushstack/eslint-patch@^1.0.6":
   version "1.0.6"
@@ -10704,6 +10703,11 @@ timsort@^0.3.0:
   resolved "https://registry.yarnpkg.com/timsort/-/timsort-0.3.0.tgz#405411a8e7e6339fe64db9a234de11dc31e02bd4"
   integrity sha1-QFQRqOfmM5/mTbmiNN4R3DHgK9Q=
 
+tiny-warning@^1.0.3:
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/tiny-warning/-/tiny-warning-1.0.3.tgz#94a30db453df4c643d0fd566060d60a875d84754"
+  integrity sha512-lBN9zLN/oAf68o3zNXYrdCt1kP8WsiGW8Oo2ka41b2IM5JL/S1CTyX1rW0mb/zSuJun0ZUrDxx4sqvYS2FWzPA==
+
 tinycolor2@^1.4.1:
   version "1.4.2"
   resolved "https://registry.yarnpkg.com/tinycolor2/-/tinycolor2-1.4.2.tgz#3f6a4d1071ad07676d7fa472e1fac40a719d8803"
@@ -10841,15 +10845,10 @@ tslib@^1.8.1, tslib@^1.9.0:
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-1.14.1.tgz#cf2d38bdc34a134bcaf1091c41f6619e2f672d00"
   integrity sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg==
 
-tslib@^2.0.0:
+tslib@^2.0.0, tslib@^2.0.3, tslib@^2.3.0:
   version "2.3.1"
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.3.1.tgz#e8a335add5ceae51aa261d32a490158ef042ef01"
   integrity sha512-77EbyPPpMz+FRFRuAFlWMtmgUWGe9UOG2Z25NqCwiIjRhOf5iKGuzSe5P2w1laq+FkRy4p+PCuVkJSGkzTEKVw==
-
-tslib@^2.0.3:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.2.0.tgz#fb2c475977e35e241311ede2693cee1ec6698f5c"
-  integrity sha512-gS9GVHRU+RGn5KQM2rllAlR3dU6m7AcpJKdtH8gFvQiC4Otgk98XnmMU+nZenHt/+VhnBPWwgrJsyrdcw6i23w==
 
 tsutils@^3.21.0:
   version "3.21.0"
