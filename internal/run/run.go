@@ -515,30 +515,44 @@ func (c *RunCommand) Run(args []string) int {
 					}
 				}
 
-				// If we are streaming the output, then we need efficiently
-				// read the output and write it to the terminal
-				if runOptions.stream {
-					go func() {
-						writer := bufio.NewWriter(output)
-						defer writer.Flush()
+				writer := bufio.NewWriter(output)
 
-						// Merge stdout and stderr and split with writer to the log file
-						merged := io.TeeReader(io.NopCloser(io.MultiReader(stderr, stdout)), writer)
-						// Create a scanner which scans the merged reader in a line-by-line fashion
-						scanner := bufio.NewScanner(merged)
-						// Use the scanner to scan the output line by line and log it
-						// Note: it's running in a goroutine so that it doesn't block
+				// Merge the streams together
+				merged := io.MultiReader(stdout, stderr)
 
-						// Read line by line and process it
-						for scanner.Scan() {
-							targetUi.Output(scanner.Text())
-						}
-					}()
+				// Create a scanner which scans r in a line-by-line fashion
+				scanner := bufio.NewScanner(merged)
+
+				// Execute command
+				// Failed to spawn?
+				if err := cmd.Start(); err != nil {
+					tracer(TargetBuildFailed, err)
+					writer.Flush()
+					if runOptions.bail {
+						targetLogger.Error("Could not spawn command: %w", err)
+						targetUi.Error(fmt.Sprintf("Could not spawn command: %v", err))
+						os.Exit(1)
+					}
+					targetUi.Warn("could not spawn command, but continuing...")
 				}
+				// Read line by line and process it
+				if runOptions.stream || runOptions.cache {
+					for scanner.Scan() {
+						line := scanner.Text()
+						if runOptions.stream {
+							targetUi.Output(string(scanner.Bytes()))
+						}
+						if runOptions.cache {
+							writer.WriteString(fmt.Sprintf("%v\n", line))
+						}
+					}
+				}
+
 				// Run the command
-				if err := cmd.Run(); err != nil {
+				if err := cmd.Wait(); err != nil {
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
+					writer.Flush()
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
@@ -566,6 +580,8 @@ func (c *RunCommand) Run(args []string) int {
 
 					return nil
 				}
+
+				writer.Flush()
 
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
