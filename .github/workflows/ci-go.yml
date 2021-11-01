@@ -27,6 +27,8 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
 
       - name: go test
         run: go test ./cmd/... ./internal/...
@@ -42,4 +44,5 @@ jobs:
 
       - name: run e2e
         run: |
+          npm install -g pnpm
           make e2e
