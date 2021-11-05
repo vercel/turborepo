@@ -55,12 +55,19 @@ func TestSchedulerAddTask(t *testing.T) {
 	if _, ok := p.Tasks["test"]; !ok {
 		t.Fatal("AddTask is not adding tasks (test)")
 	}
-	errs := p.Execute(&SchedulerExecutionOptions{
-		Packages:   nil,
-		TaskNames:  []string{"test"},
-		Concurreny: 10,
-		Parallel:   false,
+
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:    nil,
+		TaskNames:   []string{"test"},
+		Concurrency: 10,
+		Parallel:    false,
 	})
+
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	errs := p.Execute()
 
 	for _, err := range errs {
 		t.Fatalf("%v", err)

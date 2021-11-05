@@ -29,15 +29,20 @@ type scheduler struct {
 	Tasks           map[string]*Task
 	taskDeps        [][]string
 	PackageTaskDeps [][]string
+	// Concurrency is the number of concurrent tasks that can be executed
+	Concurrency int
+	// Parallel is whether to run tasks in parallel
+	Parallel bool
 }
 
 // NewScheduler creates a new scheduler given a topologic graph of workspace package names
 func NewScheduler(topologicalGraph *dag.AcyclicGraph) *scheduler {
 	return &scheduler{
-		Tasks:          make(map[string]*Task),
-		TopologicGraph: topologicalGraph,
-		TaskGraph:      &dag.AcyclicGraph{},
-		taskDeps:       [][]string{},
+		Tasks:           make(map[string]*Task),
+		TopologicGraph:  topologicalGraph,
+		TaskGraph:       &dag.AcyclicGraph{},
+		PackageTaskDeps: [][]string{},
+		taskDeps:        [][]string{},
 	}
 }
 
@@ -47,14 +52,14 @@ type SchedulerExecutionOptions struct {
 	Packages []string
 	// TaskNames in the execution scope, if nil, all tasks will be executed
 	TaskNames []string
-	// Concurreny is the number of concurrent tasks that can be executed
-	Concurreny int
+	// Concurrency is the number of concurrent tasks that can be executed
+	Concurrency int
 	// Parallel is whether to run tasks in parallel
 	Parallel bool
 }
 
 // Execute executes the pipeline, constructing an internal task graph and walking it accordlingly.
-func (p *scheduler) Execute(options *SchedulerExecutionOptions) []error {
+func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
 	if len(pkgs) == 0 {
 		for _, v := range p.TopologicGraph.Vertices() {
@@ -69,17 +74,26 @@ func (p *scheduler) Execute(options *SchedulerExecutionOptions) []error {
 		}
 	}
 
+	p.Concurrency = options.Concurrency
+
+	p.Parallel = options.Parallel
+
 	if err := p.generateTaskGraph(pkgs, tasks, true); err != nil {
-		return []error{err}
+		return err
 	}
-	var sema = util.NewSemaphore(options.Concurreny)
+
+	return nil
+}
+
+func (p *scheduler) Execute() []error {
+	var sema = util.NewSemaphore(p.Concurrency)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
 		// Always return if it is the root node
 		if strings.Contains(dag.VertexName(v), ROOT_NODE_NAME) {
 			return nil
 		}
 		// Acquire the semaphore unless parallel
-		if !options.Parallel {
+		if !p.Parallel {
 			sema.Acquire()
 			defer sema.Release()
 		}
@@ -222,6 +236,6 @@ func (p *scheduler) AddTask(task *Task) *scheduler {
 }
 
 func (p *scheduler) AddDep(fromTaskId string, toTaskId string) *scheduler {
-	p.taskDeps = append(p.taskDeps, []string{fromTaskId, toTaskId})
+	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
 	return p
 }

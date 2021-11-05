@@ -333,32 +333,6 @@ func (c *RunCommand) Run(args []string) int {
 			}
 		}
 	}
-	// var sema = util.NewSemaphore(runOptions.concurrency)
-	if runOptions.dotGraph != "" {
-		graphString := string(ctx.TopologicalGraph.Dot(&dag.DotOpts{
-			Verbose:    true,
-			DrawCycles: true,
-		}))
-		hasDot := hasGraphViz()
-		if hasDot {
-			dotArgs := []string{"-T" + path.Ext(runOptions.dotGraph)[1:], "-o", runOptions.dotGraph}
-			cmd := exec.Command("dot", dotArgs...)
-			cmd.Stdin = strings.NewReader(graphString)
-			if err := cmd.Run(); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("could not generate task graphfile %v:  %w", runOptions.dotGraph, err))
-				return 1
-			} else {
-				c.Ui.Output("")
-				c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
-			}
-		} else {
-			c.Ui.Output("")
-			c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
-			c.Ui.Output("")
-			c.Ui.Output(graphString)
-		}
-		return 0
-	}
 
 	if runOptions.stream {
 		targetList := make([]string, ctx.Targets.Len())
@@ -371,18 +345,33 @@ func (c *RunCommand) Run(args []string) int {
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&ctx.TopologicalGraph)
 	var logReplayWaitGroup sync.WaitGroup
-	for key, value := range ctx.RootPackageJSON.Turbo.Pipeline {
+	for taskName, value := range ctx.RootPackageJSON.Turbo.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
-		for _, value := range value.DependsOn {
-			if strings.Contains(value, TOPOLOGICAL_PIPELINE_DELMITER) {
-				topoDeps.Add(value[1:])
-			} else {
-				deps.Add(value)
+		if core.IsPackageTask(taskName) {
+			for _, from := range value.DependsOn {
+				if core.IsPackageTask(from) {
+					engine.AddDep(from, taskName)
+					continue
+				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+					topoDeps.Add(from[1:])
+				} else {
+					deps.Add(from)
+				}
+			}
+			_, id := core.GetPackageTaskFromId(taskName)
+			taskName = id
+		} else {
+			for _, from := range value.DependsOn {
+				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+					topoDeps.Add(from[1:])
+				} else {
+					deps.Add(from)
+				}
 			}
 		}
 		engine.AddTask(&core.Task{
-			Name:     key,
+			Name:     taskName,
 			TopoDeps: topoDeps,
 			Deps:     deps,
 			Cache:    value.Cache,
@@ -611,12 +600,44 @@ func (c *RunCommand) Run(args []string) int {
 		})
 	}
 
-	errs := engine.Execute(&core.SchedulerExecutionOptions{
-		Packages:   nil,
-		TaskNames:  ctx.Targets.UnsafeListOfStrings(),
-		Concurreny: runOptions.concurrency,
-		Parallel:   runOptions.parallel,
-	})
+	if err := engine.Prepare(&core.SchedulerExecutionOptions{
+		Packages:    filteredPkgs.UnsafeListOfStrings(),
+		TaskNames:   ctx.Targets.UnsafeListOfStrings(),
+		Concurrency: runOptions.concurrency,
+		Parallel:    runOptions.parallel,
+	}); err != nil {
+		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
+		return 1
+	}
+
+	if runOptions.dotGraph != "" {
+		graphString := string(engine.TaskGraph.Dot(&dag.DotOpts{
+			Verbose:    true,
+			DrawCycles: true,
+		}))
+		hasDot := hasGraphViz()
+		if hasDot {
+			dotArgs := []string{"-T" + path.Ext(runOptions.dotGraph)[1:], "-o", runOptions.dotGraph}
+			cmd := exec.Command("dot", dotArgs...)
+			cmd.Stdin = strings.NewReader(graphString)
+			if err := cmd.Run(); err != nil {
+				c.logError(c.Config.Logger, "", fmt.Errorf("could not generate task graphfile %v:  %w", runOptions.dotGraph, err))
+				return 1
+			} else {
+				c.Ui.Output("")
+				c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
+			}
+		} else {
+			c.Ui.Output("")
+			c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
+			c.Ui.Output("")
+			c.Ui.Output(graphString)
+		}
+		return 0
+	}
+
+	// run the thing
+	errs := engine.Execute()
 
 	for _, err := range errs {
 		c.Ui.Error(err.Error())
