@@ -119,8 +119,8 @@ const Logo = ({ height, ...props }) => (
 );
 
 const config = {
-  repository: "https://github.com/turborepo/turborepo", // project repo
-  docsRepository: "https://github.com/turborepo/turborepo", // docs repo
+  repository: "https://github.com/vercel/turborepo", // project repo
+  docsRepository: "https://github.com/vercel/turborepo", // docs repo
   branch: "main", // branch of docs
   path: "/docs", // path of docs
   titleSuffix: " | Turborepo",
@@ -130,7 +130,7 @@ const config = {
   customSearch: null, // customizable, you can use algolia for example
   darkMode: true,
   footer: true,
-  footerText: "Copyright 2021 © SLP Media Productions LLC",
+  footerText: "Copyright 2021 © Vercel, Inc.",
   footerEditOnGitHubLink: false, // will link to the docs repo
   logo: (
     <>
