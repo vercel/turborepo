@@ -1,8 +1,8 @@
-# Titan
+# Turborepo
 
 ## Documentation
 
-Visit https://titan.vercel.sh/docs to get started
+Visit https://turbo.vercel.app/docs to get started
 
 ## Author
 
