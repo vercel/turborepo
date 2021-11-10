@@ -31,7 +31,6 @@ func IsCI() bool {
 // Config is a struct that contains user inputs and our logger
 type Config struct {
 	Logger hclog.Logger
-
 	// Bearer token
 	Token string
 	// Turborepo.com team id
@@ -48,8 +47,7 @@ type Config struct {
 	ApiClient *client.ApiClient
 	// GraphQLClient is a graphql http client for the backend
 	GraphQLClient *graphql.Client
-
-	Cache *CacheConfig
+	Cache         *CacheConfig
 }
 
 // CacheConfig
