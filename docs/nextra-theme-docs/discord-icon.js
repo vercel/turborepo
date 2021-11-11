@@ -1,6 +1,6 @@
 import React from "react";
 
-export default ({ height = 40 }) => {
+const DiscordIcon = ({ height = 40 }) => {
   return (
     <svg
       height={height}
@@ -18,3 +18,5 @@ export default ({ height = 40 }) => {
     </svg>
   );
 };
+
+export default DiscordIcon;
