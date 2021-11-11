@@ -6,6 +6,11 @@ const withNextra = require("nextra")({
 });
 
 module.exports = withNextra({
+  reactStrictMode: true,
+  experiments: {
+    swcLoader: true,
+    swcMinify: true,
+  },
   async redirects() {
     return [
       {

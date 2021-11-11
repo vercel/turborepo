@@ -33,7 +33,6 @@ export default function Navbar({
           rel="noopener noreferrer"
           className="text-white dark:text-black"
           title="Go to the Vercel website"
-          class="jsx-3a64d1ae4f0f7fab"
         >
           <svg
             height="16"

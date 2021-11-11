@@ -54,14 +54,14 @@ hr {
   @apply border-gray-900;
 }
 code {
-  @apply text-gray-800 bg-gray-500 bg-opacity-25 rounded;
+  @apply text-gray-600 bg-gray-300 bg-opacity-25 rounded;
   box-decoration-break: clone;
 }
 .dark code {
   @apply text-gray-300 bg-gray-800;
 }
 pre {
-  @apply p-4 mt-6 mb-4 overflow-x-auto bg-gray-200 rounded-lg;
+  @apply p-4 mt-6 mb-4 overflow-x-auto bg-gray-100 rounded-lg;
   @apply dark:bg-gray-800;
 }
 pre code {
@@ -224,8 +224,17 @@ input[type="search"]::-webkit-search-results-decoration {
 }
 
 code {
-  font-size: 0.9em;
-  padding: 2px 0.25em;
+  font-size: 0.85em;
+  padding: 0.2em 0.3em;
+  @apply border;
+}
+
+.dark code {
+  @apply border-gray-700;
+}
+
+pre code {
+  @apply border-0;
 }
 
 /* Locale */

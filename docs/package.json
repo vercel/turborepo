@@ -1,12 +1,12 @@
 {
   "name": "docs",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "Turborepo docs",
   "scripts": {
     "dev": "next",
     "start": "next start",
-    "build": "STORK_PATH=$(pwd)/bin/stork.bin next build"
+    "build": "next build"
   },
   "author": "Jared Palmer",
   "license": "Apache-2.0",
@@ -17,16 +17,19 @@
     "focus-visible": "^5.1.0",
     "intersection-observer": "^0.10.0",
     "markdown-to-jsx": "^6.11.4",
-    "next": "^11.1.1",
+    "next": "^12.0.3",
     "nextra": "^1.1.0",
     "nextra-theme-docs": "^1.2.6",
-    "react": "^17.0.1",
-    "react-dom": "^17.0.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
     "react-intersection-observer": "^8.26.2"
   },
   "devDependencies": {
     "@types/react": "^17.0.34",
     "autoprefixer": "^10.2.6",
+    "eslint": "^8.2.0",
+    "eslint-config-next": "^12.0.3",
+    "eslint-config-prettier": "^8.3.0",
     "postcss": "^8.3.5",
     "tailwindcss": "^2.2.4",
     "typescript": "^4.4.4"
