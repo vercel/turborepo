@@ -667,7 +667,8 @@ type RunOptions struct {
 	// Cache folder
 	cacheFolder string
 	// Immediately exit on task failure
-	bail bool
+	bail            bool
+	passThroughArgs []string
 }
 
 func getDefaultRunOptions() *RunOptions {
@@ -694,8 +695,11 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 
 	unresolvedCacheFolder := "./node_modules/.cache/turbo"
 
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "--") {
+	for argIndex, arg := range args {
+		if arg == "--" {
+			runOptions.passThroughArgs = args[argIndex+1:]
+			break
+		} else if strings.HasPrefix(arg, "--") {
 			switch {
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 1 {
