@@ -39,13 +39,15 @@ function Body({ meta, config, toc, filepathWithName, navLinks, children }) {
   return (
     <React.Fragment>
       <SkipNavContent />
-      {meta.full ? (
-        <article className="relative w-full overflow-x-hidden">
+      {meta.noContainer ? (
+        <div className="relative w-full overflow-x-hidden">{children}</div>
+      ) : meta.full ? (
+        <article className="relative w-full overflow-x-hidden nextra-content">
           {children}
         </article>
       ) : (
         <article className="relative flex w-full max-w-full min-w-0 px-6 pb-16 docs-container md:px-8">
-          <main className="z-10 max-w-screen-md min-w-0 pt-4 mx-auto">
+          <main className="z-10 max-w-screen-md min-w-0 pt-4 mx-auto nextra-content">
             <Theme>{children}</Theme>
             <Footer config={config} filepathWithName={filepathWithName}>
               {navLinks}

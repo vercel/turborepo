@@ -10,13 +10,14 @@ import {
   RefreshIcon,
 } from "@heroicons/react/outline";
 import Image from "next/image";
-import { Layout } from "../components/Layout";
+import { Layout } from "./Layout";
 import edelman from "../images/edelman.jpeg";
 import elad from "../images/elad.jpeg";
 import flavio from "../images/flavio.jpeg";
 import jongold from "../images/jongold.jpeg";
 import ollermi from "../images/ollermi.jpeg";
 import paularmstrong from "../images/paularmstrong.jpeg";
+import Link from "next/link";
 
 const features = [
   {
@@ -84,7 +85,7 @@ function Page() {
           <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
             Monorepos that
             <br className="hidden lg:block" />
-            <span className="inline-block bg-clip-text text-transparent bg-gradient-to-r from-[#83FFD2] to-[#35ACDF] ">
+            <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-blue-500 ">
               make ship happen.
             </span>{" "}
           </h1>
@@ -93,12 +94,11 @@ function Page() {
           </p>
           <div className="max-w-sm mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
             <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
-              <a
-                href="#"
-                className="flex items-center justify-center px-4 py-3 border border-transparent text-lg font-medium rounded-md shadow-sm bg-gradient-to-r from-[#83FFD2] to-[#35ACDF] dark:text-gray-900 text-white hover:bg-gray-50 sm:px-8"
-              >
-                Start building →
-              </a>
+              <Link href="/docs/getting-started">
+                <a className="flex items-center justify-center px-4 py-3 text-lg font-medium text-white no-underline rounded-md bg-gradient-to-r from-red-500 to-blue-500 dark:text-gray-900 hover:bg-gray-50 sm:px-8">
+                  Start building →
+                </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -119,11 +119,12 @@ function Page() {
           </div>
         </div>
 
-        <div className="dark:bg-[#050b13] bg-gray-50 py-16">
+        {/* <div className="dark:bg-[#050b13] bg-gray-50 py-16">
           <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-            <p className="text-sm font-semibold tracking-wide text-center text-gray-500 uppercase">
+            <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
               Trusted in production
             </p>
+
             <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
                 <img
@@ -162,16 +163,15 @@ function Page() {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
 
-        <div className="relative bg-gradient-to-b dark:from-[#050b13] from-gray-100">
+        <div className="relative bg-gradient-to-b dark:from-[#050b13] dark:to-[#131820] from-gray-50 to-gray-100">
           <div className="max-w-4xl px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24 lg:px-8">
             <h2 className="text-4xl font-extrabold tracking-tight lg:text-5xl xl:text-6xl lg:text-center dark:text-white">
               Why Turborepo?
             </h2>
             <p className="mx-auto mt-4 text-lg font-medium text-gray-400 lg:max-w-3xl lg:text-xl lg:text-center">
-              You didn&apos;t get into business to build a build system. But we
-              did.
+              Turborepo has the tools you need to scale your codebase.
             </p>
             <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12">
               {features.map((feature) => (
@@ -181,7 +181,7 @@ function Page() {
                 >
                   <div>
                     <feature.icon
-                      className="h-8 w-8 dark:text-gray-900 rounded-full p-1.5 bg-gradient-to-r from-[#83FFD2] to-[#35ACDF] "
+                      className="h-8 w-8 text-white dark:text-gray-900 rounded-full p-1.5 bg-gradient-to-br from-blue-500 to-red-500 "
                       aria-hidden="true"
                     />
                   </div>
@@ -203,8 +203,8 @@ function Page() {
             <h2 className="mb-6 text-4xl font-extrabold leading-tight tracking-tight lg:text-5xl xl:text-6xl dark:text-white">
               Scaling your monorepo shouldn&apos;t be so difficult
             </h2>
-            <div className="max-w-4xl mx-auto prose md:prose-xl prose-blue-600 lg:mt-2 dark:text-gray-200">
-              <p>
+            <div className="max-w-4xl mx-auto lg:mt-2 dark:text-gray-200">
+              <p className="mb-6 text-xl text-current">
                 Monorepos are incredible for productivity, especially on the
                 frontend, but the tooling can be a nightmare. There&apos;s a lot
                 of stuff to do (and things to mess up). Nothing &ldquo;just
@@ -212,15 +212,17 @@ function Page() {
                 days or weeks on plumbing—tweaking configs, writing one-off
                 scripts, and stitching stuff together.
               </p>
-              <p>We need something else.</p>
-              <p>
+              <p className="mb-6 text-xl text-current">
+                We need something else.
+              </p>
+              <p className="mb-6 text-xl text-current">
                 A fresh take on the whole setup. Designed to glue everything
                 together. A toolchain that works for you and not against you.
                 With sensible defaults, but even better escape hatches. Built
                 with the same techniques used by the big guys, but in a way that
                 doesn&apos;t require PhD to learn or a staff to maintain.
               </p>
-              <p>
+              <p className="mb-6 text-xl text-current">
                 <b>With Turborepo, we&apos;re doing just that.</b> We&apos;re
                 abstracting the complex configuration needed for most monorepos
                 into a single cohesive build system—giving you a world class
@@ -262,8 +264,8 @@ function Page() {
             </div>
           </div>
         </div>
-        <div>
-          <div className="max-w-4xl px-4 pb-12 mx-auto sm:px-6 lg:px-8 sm:pt-20 lg:pt-24 ">
+        <div className="bg-gray-50 dark:bg-gradient-to-b dark:from-[#050b13] dark:to-[#131820] sm:py-20 lg:py-24">
+          <div className="max-w-4xl px-4 pb-12 mx-auto sm:px-6 lg:px-8 ">
             <h2 className="text-4xl font-extrabold leading-tight tracking-tight lg:text-5xl xl:text-6xl md:text-center dark:text-white">
               Loved by badass engineers
             </h2>
@@ -369,22 +371,12 @@ function Page() {
             </div>
           </div>
         </div>
-        <div>
-          <div className="max-w-4xl px-4 mx-auto space-y-16 sm:px-6 sm:py-20 lg:py-24 lg:px-8">
-            <h2 className="text-3xl font-extrabold text-center   dark:text-white text-gray-900 sm:text-4xl  relative tracking-tight leading-[1.4]">
-              <span className="relative inline-block bg-clip-text text-transparent bg-gradient-to-r from-[#83FFD2] to-[#35ACDF]">
-                Boost your developer productivity.
-              </span>
-            </h2>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-6 px-4 mx-auto max-w-7xl"></div>
       </Layout>
     </>
   );
 }
 
-function Mention({ children }: { children: any }) {
+function Mention({ children }) {
   return (
     <a
       href={`https://twitter.com/${children.replace("@", "")}`}
@@ -397,21 +389,7 @@ function Mention({ children }: { children: any }) {
   );
 }
 
-function Tweet({
-  url,
-  username,
-  name,
-  text,
-  avatar,
-  date,
-}: {
-  url: string;
-  username: string;
-  name: string;
-  avatar: StaticImageData;
-  text: JSX.Element;
-  date: string;
-}) {
+function Tweet({ url, username, name, text, avatar, date }) {
   return (
     <div className="flex p-4 bg-white rounded-md shadow-xl bg-opacity-10">
       <div className="flex-shrink-0 mr-4">

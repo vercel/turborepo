@@ -8,6 +8,7 @@ module.exports = {
     "./nextra-theme-docs/**/*.css",
     "./pages/**/*.md",
     "./pages/**/*.mdx",
+    "./pages/**/*.tsx",
     "./theme.config.js",
     "./styles.css",
   ],
@@ -27,8 +28,8 @@ module.exports = {
         ],
       },
       colors: {
-        dark: "#111",
-        gray: colors.trueGray,
+        dark: "#08090D",
+        gray: colors.blueGray,
         blue: colors.blue,
         orange: colors.orange,
         green: colors.green,

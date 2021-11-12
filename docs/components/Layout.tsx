@@ -1,6 +1,4 @@
 import { Footer2 } from "./Footer2";
-import { Header } from "./Header";
-import { Sticky } from "./Sticky";
 
 interface LayoutProps {
   preview?: boolean;
@@ -19,15 +17,9 @@ export const Layout = ({
 }: LayoutProps) => {
   return (
     <>
-      <div
-        className={"dark:bg-gray-900 dark:bg-opacity-50 bg-white min-h-screen"}
-      >
-        <Sticky>
-          <Header />
-        </Sticky>
-        <main>{children}</main>
-      </div>
-      <Footer2 showCta={showCta} />
+      <main className={"dark:bg-dark dark:bg-opacity-50 bg-white"}>
+        {children}
+      </main>
     </>
   );
 };

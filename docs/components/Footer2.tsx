@@ -1,28 +1,28 @@
-import { useTheme } from 'next-themes'
-import Link from 'next/link'
-import * as React from 'react'
+import { useTheme } from "next-themes";
+import Link from "next/link";
+import * as React from "react";
 
 export interface Footer2Props {
-  showCta: boolean
+  showCta: boolean;
 }
 
 export function Footer2({ showCta = true }: Footer2Props) {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme();
 
   return (
     <>
       {showCta ? (
-        <div className="dark:bg-gray-900 dark:bg-opacity-10 bg-gray-100 border-t border-b dark:border-gray-900">
-          <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 text-center lg:dark:py-16 lg:px-8 ">
-            <h2 className="text-3xl font-extrabold dark:text-white text-gray-900 sm:text-4xl">
+        <div className="bg-gray-100 border-t border-b dark:bg-opacity-10 dark:border-gray-900">
+          <div className="px-4 py-12 mx-auto text-center max-w-7xl sm:px-6 lg:dark:py-16 lg:px-8 ">
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white sm:text-4xl">
               <span className="block">Boost your productivity.</span>
               <span className="relative inline-block bg-clip-text text-transparent bg-gradient-to-r from-[#83FFD2] to-[#35ACDF]">
                 Start using Turborepo.
               </span>
             </h2>
-            <div className="text-center mt-8 ">
+            <div className="mt-8 text-center ">
               <Link href="/#demo">
-                <a className="cta w-auto px-5 py-3 font-medium">
+                <a className="w-auto px-5 py-3 font-medium cta">
                   Get a Live Demo
                 </a>
               </Link>
@@ -31,12 +31,12 @@ export function Footer2({ showCta = true }: Footer2Props) {
         </div>
       ) : null}
 
-      <footer className="dark:bg-black  bg-gray-100">
-        <div className="max-w-screen-xl mx-auto py-12 px-4 overflow-hidden space-y-8 sm:px-6 lg:px-8">
-          <nav className="-mx-5 -my-2 flex flex-wrap justify-center">
+      <footer className="bg-gray-100 dark:bg-black">
+        <div className="max-w-screen-xl px-4 py-12 mx-auto space-y-8 overflow-hidden sm:px-6 lg:px-8">
+          <nav className="flex flex-wrap justify-center -mx-5 -my-2">
             <div className="px-5 py-2">
               <Link href="/">
-                <a className="text-base leading-6 text-gray-500 betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600 duration-100 transition ease-in-out">
+                <a className="text-base leading-6 text-gray-500 transition duration-100 ease-in-out betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600">
                   About
                 </a>
               </Link>
@@ -46,7 +46,7 @@ export function Footer2({ showCta = true }: Footer2Props) {
                 href="https://www.notion.so/turborepo/cdd4178bc4e344d492cbe80fc9683af7"
                 rel="noopener noreferrer"
                 target="_blank"
-                className="text-base leading-6 text-gray-500 betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600 duration-100 transition ease-in-out"
+                className="text-base leading-6 text-gray-500 transition duration-100 ease-in-out betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600"
               >
                 Roadmap
               </a>
@@ -56,14 +56,14 @@ export function Footer2({ showCta = true }: Footer2Props) {
                 href="https://status.turborepo.com"
                 rel="noopener noreferrer"
                 target="_blank"
-                className="text-base leading-6 text-gray-500 betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600 duration-100 transition ease-in-out"
+                className="text-base leading-6 text-gray-500 transition duration-100 ease-in-out betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600"
               >
                 System Status
               </a>
             </div>
             <div className="px-5 py-2">
               <Link href="/blog">
-                <a className="text-base leading-6 text-gray-500 betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600 duration-100 transition ease-in-out">
+                <a className="text-base leading-6 text-gray-500 transition duration-100 ease-in-out betterhover:hover:text-gray-900 betterhover:dark:hover:text-gray-600">
                   Blog
                 </a>
               </Link>
@@ -77,11 +77,11 @@ export function Footer2({ showCta = true }: Footer2Props) {
               </Link>
             </div> */}
           </nav>
-          <div className="mt-8 flex justify-center space-x-6">
+          <div className="flex justify-center mt-8 space-x-6">
             {/* <a href="#" className="text-gray-400 betterhover:hover:text-gray-500">
             <span className="sr-only">Facebook</span>
             <svg
-              className="h-6 w-6"
+              className="w-6 h-6"
               aria-hidden="true"
               fill="currentColor"
               viewBox="0 0 24 24"
@@ -96,7 +96,7 @@ export function Footer2({ showCta = true }: Footer2Props) {
             {/* <a href="#" className="text-gray-400 betterhover:hover:text-gray-500">
             <span className="sr-only">Instagram</span>
             <svg
-              className="h-6 w-6"
+              className="w-6 h-6"
               aria-hidden="true"
               fill="currentColor"
               viewBox="0 0 24 24"
@@ -114,7 +114,7 @@ export function Footer2({ showCta = true }: Footer2Props) {
             >
               <span className="sr-only">Twitter</span>
               <svg
-                className="h-6 w-6"
+                className="w-6 h-6"
                 aria-hidden="true"
                 fill="currentColor"
                 viewBox="0 0 24 24"
@@ -128,7 +128,7 @@ export function Footer2({ showCta = true }: Footer2Props) {
             >
               <span className="sr-only">GitHub</span>
               <svg
-                className="h-6 w-6"
+                className="w-6 h-6"
                 aria-hidden="true"
                 fill="currentColor"
                 viewBox="0 0 24 24"
@@ -140,58 +140,15 @@ export function Footer2({ showCta = true }: Footer2Props) {
                 />
               </svg>
             </a>
-            {theme === 'dark' ? (
-              <button
-                aria-label="Set color theme to light"
-                className="text-gray-400 betterhover:hover:text-gray-500"
-                onClick={() => setTheme('light')}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  className="h-6 w-6"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                  />
-                </svg>
-              </button>
-            ) : (
-              <button
-                aria-label="Set color theme to dark"
-                className="text-gray-400 betterhover:hover:text-gray-500"
-                onClick={() => setTheme('dark')}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  className="h-6 w-6"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                  />
-                </svg>
-              </button>
-            )}
           </div>
 
-          <p className="mt-8 text-center text-sm leading-6 text-gray-600">
+          <p className="mt-8 text-sm leading-6 text-center text-gray-600">
             Copyright © 2021 Turborepo, Inc. All rights reserved.
           </p>
         </div>
       </footer>
     </>
-  )
+  );
 }
 
-Footer2.displayName = 'Footer2'
+Footer2.displayName = "Footer2";
