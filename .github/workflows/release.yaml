@@ -9,29 +9,59 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_DOCKER_TOKEN }}
-      - name: checkout code
+      - name: Checkout code
         uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
-      - uses: c-py/action-dotenv-to-setenv@v3
+      - name: Setup env
+        uses: c-py/action-dotenv-to-setenv@v3
         with:
-          env-file: .makerc
+          env-file: .env
+      - shell: bash
+        run: echo "RELEASE_TAG=$(make tag)" >> $GITHUB_ENV;
       - uses: actions/setup-go@v2
         with:
-          go-version: "${{ env.GOLANG_VERSION }}"
-      - name: install git-chglog
+          go-version: "${{ env.GO_VERSION }}"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v1.3.1
+      - name: Install git-chglog
         run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@${{ env.GIT_CHGLOG_VERSION }}
-      - run: make golang-cross-base
-      - run: make golang-cross
-      - run: make subimages
-      - run: make docker-push
-      - run: make gen-changelog
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
+          build-args: |
+            "GO_VERSION=${{env.GO_VERSION}}"
+            "GORELEASER_VERSION=${{env.GORELEASER_VERSION}}"
+            "TINI_VERSION=${{env.TINI_VERSION}}"
+            "COSIGN_VERSION=${{env.COSIGN_VERSION}}"
+            "COSIGN_SHA256=${{env.COSIGN_SHA256}}"
+            "OSX_SDK=${{env.OSX_SDK}}"
+            "OSX_SDK_SUM=${{env.OSX_SDK_SUM}}"
+            "OSX_VERSION_MIN=${{env.OSX_VERSION_MIN}}"
+            "OSX_CROSS_COMMIT=${{env.OSX_CROSS_COMMIT}}"
+            "DEBIAN_FRONTEND=${{env.DEBIAN_FRONTEND}}"
+      - name: Sign images
+        run: |
+          echo "${COSIGN_KEY}" | base64 -d > /tmp/cosign.key
+          cosign sign --key /tmp/cosign.key ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
+        env:
+          COSIGN_KEY: ${{secrets.COSIGN_PRIVATE_KEY}}
+          COSIGN_PASSWORD: ${{secrets.COSIGN_PASSWORD}}
+      - name: Generate changelog
+        run: make gen-changelog
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
