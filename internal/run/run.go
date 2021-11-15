@@ -696,17 +696,16 @@ type RunOptions struct {
 
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
-		bail:            true,
-		deps:            true,
-		parallel:        false,
-		concurrency:     10,
-		dotGraph:        "",
-		ancestors:       false,
-		cache:           true,
-		profile:         "", // empty string does no tracing
-		forceExecution:  false,
-		stream:          true,
-		passThroughArgs: []string{},
+		bail:           true,
+		deps:           true,
+		parallel:       false,
+		concurrency:    10,
+		dotGraph:       "",
+		ancestors:      false,
+		cache:          true,
+		profile:        "", // empty string does no tracing
+		forceExecution: false,
+		stream:         true,
 	}
 }
 
