@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next",
     "start": "next start",
-    "build": "next build"
+    "build": "STORK_PATH=$(pwd)/bin/stork.bin next build"
   },
   "author": "Jared Palmer",
   "license": "Apache-2.0",
