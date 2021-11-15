@@ -417,13 +417,15 @@ func (c *RunCommand) Run(args []string) int {
 					pipeline = altpipe
 				}
 				hashable := struct {
-					Hash    string
-					Task    string
-					Outputs []string
+					Hash         string
+					Task         string
+					Outputs      []string
+					PassThruArgs []string
 				}{
-					Hash:    pack.Hash,
-					Task:    task,
-					Outputs: pipeline.Outputs,
+					Hash:         pack.Hash,
+					Task:         task,
+					Outputs:      pipeline.Outputs,
+					PassThruArgs: runOptions.passThroughArgs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
@@ -478,6 +480,7 @@ func (c *RunCommand) Run(args []string) int {
 					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 				}
 				argsactual := append([]string{"run"}, task)
+				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
 				cmd.Dir = pack.Dir
@@ -693,16 +696,17 @@ type RunOptions struct {
 
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
-		bail:           true,
-		deps:           true,
-		parallel:       false,
-		concurrency:    10,
-		dotGraph:       "",
-		ancestors:      false,
-		cache:          true,
-		profile:        "", // empty string does no tracing
-		forceExecution: false,
-		stream:         true,
+		bail:            true,
+		deps:            true,
+		parallel:        false,
+		concurrency:     10,
+		dotGraph:        "",
+		ancestors:       false,
+		cache:           true,
+		profile:         "", // empty string does no tracing
+		forceExecution:  false,
+		stream:          true,
+		passThroughArgs: []string{},
 	}
 }
 
