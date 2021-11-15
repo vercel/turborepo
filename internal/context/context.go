@@ -14,20 +14,18 @@ import (
 	"turbo/internal/fs"
 	"turbo/internal/util"
 
-	"github.com/pyr-sh/dag"
-
 	"github.com/bmatcuk/doublestar"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/fatih/color"
 	"github.com/google/chrometracing"
+	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
-	ROOT_NODE_NAME                = "root"
-	GLOBAL_CACHE_KEY              = "hello"
-	TOPOLOGICAL_PIPELINE_DELMITER = "^"
+	ROOT_NODE_NAME   = "___ROOT___"
+	GLOBAL_CACHE_KEY = "hello"
 )
 
 // A BuildResultStatus represents the status of a target when we log a build result.
@@ -66,7 +64,7 @@ type Context struct {
 	TraceFilePath    string
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
-	PendingTaskNodes util.Set
+	PendingTaskNodes dag.Set
 	Targets          util.Set
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
@@ -149,7 +147,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			index: 0,
 		}
 		c.RootNode = ROOT_NODE_NAME
-		c.PendingTaskNodes = make(util.Set)
+		c.PendingTaskNodes = make(dag.Set)
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(ROOT_NODE_NAME)
 
@@ -261,7 +259,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
 			populateGraphWaitGroup.Go(func() error {
-				return c.populateGraph(pkg)
+				return c.populateTopologicGraphForPackageJson(pkg)
 			})
 			packageDepsHashGroup.Go(func() error {
 				return c.loadPackageDepsHash(pkg)
@@ -369,13 +367,13 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	return pkg, nil
 }
 
-func (c *Context) populateGraph(pkg *fs.PackageJSON) error {
+func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	internalDepsSet := make(util.Set)
-	depSet := make(util.Set)
-	pkg.UnresolvedExternalDeps = make(map[string]string)
+	internalDepsSet := make(dag.Set)
+	depSet := make(dag.Set)
 	externalDepSet := mapset.NewSet()
+	pkg.UnresolvedExternalDeps = make(map[string]string)
 	for dep := range pkg.Dependencies {
 		depSet.Add(dep)
 	}
@@ -392,57 +390,15 @@ func (c *Context) populateGraph(pkg *fs.PackageJSON) error {
 		depSet.Add(dep)
 	}
 
-	visited := make(util.Set)
+	// split out internal vs. external deps
 	for _, dependencyName := range depSet.List() {
-		for _, internalPackageName := range c.PackageNames {
-			if dependencyName == internalPackageName {
-				internalDepsSet.Add(internalPackageName)
-				c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, dependencyName))
-				// We now construct the Pipeline
-				// ...
-
-				// For each target in the root pipeline, add both inter-  and intra-package targets
-				// to a new task graph. A target is named <name>#<task>. We are careful to only
-				// add targets to the task graph that actually exist. Failure to do so, will result
-				// in extra go routines to be spun up and bail when we ulimately walk the graph later on.
-				for task, options := range c.RootPackageJSON.Turbo.Pipeline {
-					if IsPackageTask(task) {
-						_, realTask := GetPackageTaskFromId(task)
-						if !c.Targets.Include(realTask) {
-							continue
-						}
-					} else if !c.Targets.Include(task) {
-						continue
-					}
-					sourceTarget := GetTaskId(pkg.Name, task)
-					c.TaskGraph.Add(sourceTarget)
-					if options.DependsOn != nil && len(options.DependsOn) > 0 {
-						for _, pkgDepOrTopoDep := range options.DependsOn {
-							if strings.HasPrefix(pkgDepOrTopoDep, TOPOLOGICAL_PIPELINE_DELMITER) {
-								dependentTarget := GetTaskId(dependencyName, strings.TrimPrefix(pkgDepOrTopoDep, TOPOLOGICAL_PIPELINE_DELMITER))
-								c.TaskGraph.Add(dependentTarget)
-								// don't create circular deps
-								if sourceTarget != dependentTarget {
-									c.TaskGraph.Connect(dag.BasicEdge(sourceTarget, dependentTarget))
-								}
-							} else {
-								dependentTarget := GetTaskId(pkg.Name, pkgDepOrTopoDep)
-								c.TaskGraph.Add(dependentTarget)
-								// don't create circular deps
-								if sourceTarget != dependentTarget {
-									c.TaskGraph.Connect(dag.BasicEdge(sourceTarget, dependentTarget))
-								}
-							}
-						}
-					}
-					visited.Add(sourceTarget)
-				}
-			}
+		if item, ok := c.PackageInfos[dependencyName]; ok {
+			internalDepsSet.Add(item.Name)
+			c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, dependencyName))
 		}
 	}
 
 	externalUnresolvedDepsSet := depSet.Difference(internalDepsSet)
-
 	for _, name := range externalUnresolvedDepsSet.List() {
 		name := name.(string)
 		if item, ok := pkg.Dependencies[name]; ok {
@@ -467,37 +423,12 @@ func (c *Context) populateGraph(pkg *fs.PackageJSON) error {
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
 		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
-		for task, options := range c.RootPackageJSON.Turbo.Pipeline {
-			if IsPackageTask(task) {
-				_, realTask := GetPackageTaskFromId(task)
-				if !c.Targets.Include(realTask) {
-					continue
-				}
-			} else if !c.Targets.Include(task) {
-				continue
-			}
-			sourceTarget := GetTaskId(pkg.Name, task)
-			c.TaskGraph.Add(sourceTarget)
-			if options.DependsOn != nil && len(options.DependsOn) > 0 {
-				for _, pkgDepOrTopoDep := range options.DependsOn {
-					if !strings.HasPrefix(pkgDepOrTopoDep, TOPOLOGICAL_PIPELINE_DELMITER) {
-						dependentTarget := GetTaskId(pkg.Name, pkgDepOrTopoDep)
-						c.TaskGraph.Add(dependentTarget)
-						if sourceTarget != dependentTarget {
-							c.TaskGraph.Connect(dag.BasicEdge(sourceTarget, dependentTarget))
-						}
-					}
-				}
-			}
-		}
 	}
-
-	pkg.InternalDeps = internalDepsSet.UnsafeListOfStrings()
-	sort.Strings(pkg.InternalDeps)
 	pkg.ExternalDeps = make([]string, externalDepSet.Cardinality())
 	for i, v := range externalDepSet.ToSlice() {
 		pkg.ExternalDeps[i] = v.(string)
 	}
+	sort.Strings(pkg.InternalDeps)
 	sort.Strings(pkg.ExternalDeps)
 	hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
 	if err != nil {
@@ -560,22 +491,6 @@ func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 
 		}(directDepName, unresolvedVersion)
 	}
-}
-
-func (ctx *Context) GetPipelineEntryForTask(v dag.Vertex) *fs.Pipeline {
-	_, task := GetPackageTaskFromId(fmt.Sprintf("%v", v))
-	pipeline, ok := ctx.RootPackageJSON.Turbo.Pipeline[fmt.Sprintf("%v", v)]
-	if !ok {
-		// then check for regular tasks
-		altpipe, notcool := ctx.RootPackageJSON.Turbo.Pipeline[task]
-		// if neither, then bail
-		if !notcool && !ok {
-			return nil
-		}
-		// override if we need to...
-		pipeline = altpipe
-	}
-	return &pipeline
 }
 
 func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
