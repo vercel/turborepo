@@ -97,6 +97,40 @@ func TestParseConfig(t *testing.T) {
 				cacheFolder:    "node_modules/.cache/turbo",
 			},
 		},
+		{
+			"passThroughArgs",
+			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
+			&RunOptions{
+				deps:            true,
+				stream:          true,
+				bail:            true,
+				dotGraph:        "g.png",
+				concurrency:     10,
+				ancestors:       false,
+				cache:           true,
+				forceExecution:  false,
+				profile:         "",
+				cacheFolder:     "node_modules/.cache/turbo",
+				passThroughArgs: []string{"--boop", "zoop"},
+			},
+		},
+		{
+			"Empty passThroughArgs",
+			[]string{"foo", "--graph=g.png", "--"},
+			&RunOptions{
+				deps:            true,
+				stream:          true,
+				bail:            true,
+				dotGraph:        "g.png",
+				concurrency:     10,
+				ancestors:       false,
+				cache:           true,
+				forceExecution:  false,
+				profile:         "",
+				cacheFolder:     "node_modules/.cache/turbo",
+				passThroughArgs: []string{},
+			},
+		},
 	}
 
 	for i, tc := range cases {
