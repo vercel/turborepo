@@ -12,6 +12,7 @@ import (
 	prune "turbo/internal/prune"
 	"turbo/internal/run"
 	uiPkg "turbo/internal/ui"
+	"turbo/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
@@ -42,6 +43,7 @@ func main() {
 	args = args[:argsEnd]
 	c := cli.NewCLI("turbo", turboVersion)
 
+	util.InitPrintf()
 	ui := &cli.ColoredUi{
 		Ui: &cli.BasicUi{
 			Reader:      os.Stdin,
