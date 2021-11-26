@@ -51,6 +51,9 @@ func rgb(i int) (int, int, int) {
 
 // Rainbow function returns a formated colorized string ready to print it to the shell/terminal
 func Rainbow(text string) string {
+	if !IsTTY {
+		return text
+	}
 	var rainbowStr []string
 	for index, value := range text {
 		r, g, b := rgb(index)
