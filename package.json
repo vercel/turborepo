@@ -10,27 +10,27 @@
   },
   "scripts": {
     "postinstall": "patch-package",
-    "precommit": "lint-staged",
     "format": "prettier --write 'packages/**/*' 'app/**/*' 'docs/**/*' 'README.md'",
-    "lint": "./turbo run lint && cd app && yarn lint && yarn typecheck",
-    "deduplicate": "yarn-deduplicate -s fewer yarn.lock",
-    "deduplicate:check": "yarn-deduplicate -s fewer yarn.lock --list --fail",
+    "lint": "./turbo run lint",
+    "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
+    "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
     "docs": "./turbo run dev --scope='docs' --no-cache",
-    "play": "./turbo run build --scope='@sample/*' ",
     "build": "./turbo run build --scope=docs",
     "turbo": "./turbo"
   },
   "devDependencies": {
-    "husky": "^4.3.8",
-    "lint-staged": "^11.2.6",
     "patch-package": "^6.4.7",
-    "yarn-deduplicate": "^3.1.0"
+    "prettier": "^2.5.0",
+    "simple-git-hooks": "^2.7.0"
   },
   "lint-staged": {
     "**/*.{ts,tsx,md,mdx,js,jsx}": [
       "npm run format",
       "npm run lint"
     ]
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
   },
   "turbo": {
     "baseBranch": "origin/main",
