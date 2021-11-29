@@ -4,7 +4,9 @@ module.exports = {
   mode: "jit",
   purge: [
     "./components/**/*.js",
+    "./components/**/*.tsx",
     "./nextra-theme-docs/**/*.js",
+    "./nextra-theme-docs/**/*.tsx",
     "./nextra-theme-docs/**/*.css",
     "./pages/**/*.md",
     "./pages/**/*.mdx",
@@ -35,6 +37,12 @@ module.exports = {
         green: colors.green,
         red: colors.red,
         yellow: colors.yellow,
+      },
+      screens: {
+        sm: "640px",
+        md: "768px",
+        lg: "1024px",
+        betterhover: { raw: "(hover: hover)" },
       },
     },
   },

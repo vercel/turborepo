@@ -18,6 +18,8 @@ import jongold from "../images/jongold.jpeg";
 import ollermi from "../images/ollermi.jpeg";
 import paularmstrong from "../images/paularmstrong.jpeg";
 import Link from "next/link";
+import { Footer3 } from "./Footer3";
+import Head from "next/head";
 
 const features = [
   {
@@ -81,6 +83,9 @@ function Page() {
   return (
     <>
       <Layout showCta={false} stripe={false}>
+        <Head>
+          <title>Turborepo - Build your monorepo in seconds</title>
+        </Head>
         <div className="px-4 py-16 sm:px-6 sm:py-24  lg:px-8  dark:text-white dark:bg-gradient-to-b dark:from-[#08090D] dark:to-[#131820] ">
           <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
             Monorepos that
@@ -95,7 +100,7 @@ function Page() {
           <div className="max-w-sm mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
             <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
               <Link href="/docs/getting-started">
-                <a className="flex items-center justify-center px-4 py-3 text-lg font-medium text-white no-underline rounded-md bg-gradient-to-r from-red-500 to-blue-500 dark:text-gray-900 hover:bg-gray-50 sm:px-8">
+                <a className="flex items-center justify-center px-4 py-3 text-lg font-medium text-white no-underline rounded-md bg-gradient-to-r from-red-500 to-blue-500 betterhover:hover:bg-gray-50 sm:px-8">
                   Start building →
                 </a>
               </Link>
@@ -113,6 +118,7 @@ function Page() {
                 width={1152}
                 src="/thumbnail.png"
                 height={661}
+                alt="Turborepo screenshot"
                 className="block w-full mx-auto shadow-2xl "
               />
             </div>
@@ -372,6 +378,7 @@ function Page() {
           </div>
         </div>
       </Layout>
+      <Footer3 />
     </>
   );
 }

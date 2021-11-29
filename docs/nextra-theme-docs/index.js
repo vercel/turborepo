@@ -39,7 +39,7 @@ function Body({ meta, config, toc, filepathWithName, navLinks, children }) {
   return (
     <React.Fragment>
       <SkipNavContent />
-      {meta.noContainer ? (
+      {meta.headeronly ? (
         <div className="relative w-full overflow-x-hidden">{children}</div>
       ) : meta.full ? (
         <article className="relative w-full overflow-x-hidden nextra-content">

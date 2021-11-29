@@ -32,7 +32,7 @@ export default function Navbar({
       <nav className="flex items-center bg-white z-20 sticky top-0 left-0 right-0 h-16 border-b border-gray-200 px-6 dark:bg-dark dark:border-gray-900 bg-opacity-[.97] dark:bg-opacity-100">
         <div className="flex items-center w-full mr-2">
           <Link href="/">
-            <a className="inline-flex items-center text-current no-underline hover:opacity-75">
+            <a className="inline-flex items-center text-current no-underline betterhover:hover:opacity-75">
               {renderComponent(config.logo, { locale })}
             </a>
           </Link>
