@@ -207,7 +207,7 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
 
 export default (opts, config) => (props) => {
   return (
-    <ThemeProvider attribute="class">
+    <ThemeProvider attribute="class" defaultTheme="dark">
       <Layout config={config} {...opts} {...props} />
     </ThemeProvider>
   );
