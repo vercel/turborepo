@@ -130,7 +130,7 @@ const theme = {
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs/pages",
   titleSuffix: " – Turborepo",
   search: true,
-  unstable_stork: true,
+  unstable_stork: false,
   floatTOC: true,
   projectChatLink: "https://discord.com/invite/kdqcr7afEa",
   // banner: (
