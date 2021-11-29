@@ -4,7 +4,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"turbo/internal/ui"
 )
+
+// initPrintf sets up the replacements used by printf.
+func InitPrintf() {
+	if !ui.IsTTY {
+		replacements = map[string]string{}
+	}
+}
 
 // printf is used throughout this package to print something to stderr with some
 // replacements for pseudo-shell variables for ANSI formatting codes.

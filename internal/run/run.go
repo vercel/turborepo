@@ -417,13 +417,15 @@ func (c *RunCommand) Run(args []string) int {
 					pipeline = altpipe
 				}
 				hashable := struct {
-					Hash    string
-					Task    string
-					Outputs []string
+					Hash         string
+					Task         string
+					Outputs      []string
+					PassThruArgs []string
 				}{
-					Hash:    pack.Hash,
-					Task:    task,
-					Outputs: pipeline.Outputs,
+					Hash:         pack.Hash,
+					Task:         task,
+					Outputs:      pipeline.Outputs,
+					PassThruArgs: runOptions.passThroughArgs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
@@ -478,6 +480,7 @@ func (c *RunCommand) Run(args []string) int {
 					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 				}
 				argsactual := append([]string{"run"}, task)
+				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
 				cmd.Dir = pack.Dir
@@ -687,7 +690,8 @@ type RunOptions struct {
 	// Cache folder
 	cacheFolder string
 	// Immediately exit on task failure
-	bail bool
+	bail            bool
+	passThroughArgs []string
 }
 
 func getDefaultRunOptions() *RunOptions {
@@ -714,8 +718,11 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 
 	unresolvedCacheFolder := "./node_modules/.cache/turbo"
 
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "--") {
+	for argIndex, arg := range args {
+		if arg == "--" {
+			runOptions.passThroughArgs = args[argIndex+1:]
+			break
+		} else if strings.HasPrefix(arg, "--") {
 			switch {
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 1 {
