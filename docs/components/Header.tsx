@@ -1,16 +1,16 @@
-import { Popover, Transition } from '@headlessui/react'
-import { MenuIcon, XIcon } from '@heroicons/react/outline'
-import { useTheme } from 'next-themes'
-import Link from 'next/link'
-import * as React from 'react'
-import { Logo } from './Logo'
+import { Popover, Transition } from "@headlessui/react";
+import { MenuIcon, XIcon } from "@heroicons/react/outline";
+import { useTheme } from "next-themes";
+import Link from "next/link";
+import * as React from "react";
+import { Logo } from "./Logo";
 const navigation = [
-  { name: 'Documentation', href: '/docs' },
-  { name: 'Blog', href: '/blog' },
-  { name: 'Pricing', href: '/pricing' },
-]
+  { name: "Documentation", href: "/docs" },
+  { name: "Blog", href: "/blog" },
+  { name: "Pricing", href: "/pricing" },
+];
 export function Header() {
-  const { theme } = useTheme()
+  const { theme } = useTheme();
   return (
     <>
       <div className="relative  h-full">
@@ -31,7 +31,7 @@ export function Header() {
                         </a>
                       </Link>
                       <div className="-mr-2 flex items-center md:hidden">
-                        <Popover.Button className="bg-gray-900 rounded-md p-2 inline-flex items-center justify-center text-gray-400 hover:bg-gray-800 focus:outline-none focus:ring-2 focus-ring-inset focus:ring-white">
+                        <Popover.Button className="bg-gray-900 rounded-md p-2 inline-flex items-center justify-center text-gray-400 betterhover:hover:bg-gray-800 focus:outline-none focus:ring-2 focus-ring-inset focus:ring-white">
                           <span className="sr-only">Open main menu</span>
                           <MenuIcon className="h-6 w-6" aria-hidden="true" />
                         </Popover.Button>
@@ -52,13 +52,13 @@ export function Header() {
                   <div className="hidden md:flex md:items-center md:space-x-6">
                     <a
                       href="https://beta.turborepo.com/login"
-                      className="text-base font-medium text-white hover:text-gray-300"
+                      className="text-base font-medium text-white betterhover:hover:text-gray-300"
                     >
                       Log in
                     </a>
                     <a
                       href="https://beta.turborepo.com/signup"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700"
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-gray-600 betterhover:hover:bg-gray-700"
                     >
                       Start free trial
                     </a>
@@ -87,7 +87,7 @@ export function Header() {
                         <Logo />
                       </div>
                       <div className="-mr-2">
-                        <Popover.Button className="bg-white rounded-md p-2 inline-flex items-center justify-center text-gray-400 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-600">
+                        <Popover.Button className="bg-white rounded-md p-2 inline-flex items-center justify-center text-gray-400 betterhover:hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-600">
                           <span className="sr-only">Close menu</span>
                           <XIcon className="h-6 w-6" aria-hidden="true" />
                         </Popover.Button>
@@ -99,7 +99,7 @@ export function Header() {
                           <a
                             key={item.name}
                             href={item.href}
-                            className="block px-3 py-2 rounded-md text-base font-medium text-gray-900 hover:bg-gray-50"
+                            className="block px-3 py-2 rounded-md text-base font-medium text-gray-900 betterhover:hover:bg-gray-50"
                           >
                             {item.name}
                           </a>
@@ -108,17 +108,17 @@ export function Header() {
                       <div className="mt-6 px-5">
                         <a
                           href="https://beta.turborepo.com/signup"
-                          className="block text-center w-full py-3 px-4 rounded-md shadow bg-gradient-to-r from-[#83FFD2] to-[#35ACDF] text-white font-medium hover:from-blue-600 hover:to-red-700"
+                          className="block text-center w-full py-3 px-4 rounded-md shadow bg-gradient-to-r from-[#83FFD2] to-[#35ACDF] text-white font-medium betterhover:hover:from-blue-600 betterhover:hover:to-red-700"
                         >
                           Start free trial
                         </a>
                       </div>
                       <div className="mt-6 px-5">
                         <p className="text-center text-base font-medium text-gray-500">
-                          Existing customer?{' '}
+                          Existing customer?{" "}
                           <a
                             href="https://beta.turborepo.com/login"
-                            className="text-gray-900 hover:underline"
+                            className="text-gray-900 betterhover:hover:underline"
                           >
                             Login
                           </a>
@@ -133,7 +133,7 @@ export function Header() {
         </Popover>
       </div>
     </>
-  )
+  );
 }
 
-Header.displayName = 'Header'
+Header.displayName = "Header";

@@ -127,7 +127,7 @@ const Vercel = ({ height = 20 }) => (
 
 const theme = {
   github: "https://github.com/vercel/turbo",
-  docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs/pages",
+  docsRepositoryBase: "https://github.com/vercel/turbo/blob/next/docs/pages",
   titleSuffix: " – Turborepo",
   search: true,
   unstable_stork: false,
