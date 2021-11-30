@@ -24,7 +24,7 @@ type LinkCommand struct {
 
 // Synopsis of run command
 func (c *LinkCommand) Synopsis() string {
-	return "Link your local directory to a Vercel.com Organization"
+	return "Link your local directory to a Vercel organization"
 }
 
 // Help returns information about the `run` command
@@ -32,7 +32,7 @@ func (c *LinkCommand) Help() string {
 	helpText := `
 Usage: turbo link
 
-  Link your local directory to a Vercel.com Organization. This will enable remote caching.
+  Link your local directory to a Vercel organization. This will enable remote caching.
 
 Options:
   --help                 Show this screen.
