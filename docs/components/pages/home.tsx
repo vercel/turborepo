@@ -206,12 +206,12 @@ function Page() {
           </div>
         </div>
         <div className="dark:bg-[#050b13]">
-          <div className="max-w-4xl px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
-            <h2 className="mb-6 text-4xl font-extrabold leading-tight tracking-tight lg:text-5xl xl:text-6xl dark:text-white">
+          <div className="px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
+            <h2 className="max-w-4xl mx-auto pb-6 text-5xl font-extrabold  tracking-tight lg:text-6xl xl:text-7xl leading-[1.25!important] md:text-center dark:text-white">
               Scaling your monorepo shouldn&apos;t be so difficult
             </h2>
-            <div className="max-w-4xl mx-auto lg:mt-2 dark:text-gray-200">
-              <p className="mb-6 text-xl text-current">
+            <div className="max-w-2xl mx-auto lg:mt-2 dark:text-gray-400">
+              <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
                 Monorepos are incredible for productivity, especially on the
                 frontend, but the tooling can be a nightmare. There&apos;s a lot
                 of stuff to do (and things to mess up). Nothing &ldquo;just
@@ -219,24 +219,26 @@ function Page() {
                 days or weeks on plumbing—tweaking configs, writing one-off
                 scripts, and stitching stuff together.
               </p>
-              <p className="mb-6 text-xl text-current">
+              <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
                 We need something else.
               </p>
-              <p className="mb-6 text-xl text-current">
+              <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
                 A fresh take on the whole setup. Designed to glue everything
                 together. A toolchain that works for you and not against you.
                 With sensible defaults, but even better escape hatches. Built
                 with the same techniques used by the big guys, but in a way that
                 doesn&apos;t require PhD to learn or a staff to maintain.
               </p>
-              <p className="mb-6 text-xl text-current">
-                <b>With Turborepo, we&apos;re doing just that.</b> We&apos;re
-                abstracting the complex configuration needed for most monorepos
-                into a single cohesive build system—giving you a world class
-                development experience without the maintenance burden.
+              <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
+                <b className="relative inline-block text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-red-500">
+                  With Turborepo, we&apos;re doing just that.
+                </b>{" "}
+                We&apos;re abstracting the complex configuration needed for most
+                monorepos into a single cohesive build system—giving you a world
+                class development experience without the maintenance burden.
               </p>
             </div>
-            <div className="flex items-center py-4 space-x-4">
+            <div className="flex items-center max-w-2xl py-4 mx-auto space-x-4">
               <div className="mt-4">
                 <Image
                   src="/jaredpalmer_headshot.jpeg"
@@ -246,7 +248,7 @@ function Page() {
                   alt="Jared Palmer"
                 />
               </div>
-              <div className="flex flex-col h-full space-y-2">
+              <div className="flex flex-col h-full space-y-3">
                 <div className="-mb-4">
                   <Image
                     src="/jared_signature.png"
@@ -260,7 +262,7 @@ function Page() {
                   <a
                     href="https://twitter.com/jaredpalmer"
                     target="_blank"
-                    className="font-bold text-gray-400"
+                    className="font-bold text-gray-400 no-underline"
                     rel="noopener noreferrer"
                   >
                     Jared Palmer
@@ -390,45 +392,6 @@ function Page() {
           </Container>
         </div>
       </Layout>
-      {/* <div className="border-t dark:border-gray-800">
-        <Container>
-          <div className="py-16 mx-auto 4 lg:grid-cols-7 lg:grid xl:mt-0 lg:gap-24">
-            <div className="col-span-5">
-              <h3 className="text-4xl font-bold text-gray-900 dark:text-white">
-                Turborepo is getting better every day — don&apos;t miss out on
-                all the action.
-              </h3>
-              <p className="mt-2 text-lg text-gray-300">
-                Join the Turborepo newsletter and stay updated on new releases
-                and features, guides, and case studies.
-              </p>
-            </div>
-            <div className="lg:col-span-2">
-              <form className="w-full max-w-sm mt-4 lg:mt-0">
-                <label htmlFor="email-address" className="sr-only">
-                  Email address
-                </label>
-                <input
-                  type="email"
-                  name="email-address"
-                  autoComplete="email"
-                  required
-                  className="w-full min-w-0 px-4 py-2 text-base text-gray-900 placeholder-gray-500 bg-transparent border rounded-md appearance-none dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white focus:border-white focus:placeholder-gray-400 "
-                  placeholder="you@domain.com"
-                />
-                <div className="mt-3 rounded-md sm:flex-shrink-0">
-                  <button
-                    type="submit"
-                    className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-gray-500 border border-transparent rounded-md betterhover:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500"
-                  >
-                    Subscribe
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </Container>
-      </div> */}
       <Footer />
     </>
   );

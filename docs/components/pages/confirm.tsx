@@ -20,7 +20,7 @@ export default function Confirm() {
             <div className="max-w-md mx-auto rounded-lg shadow-xl dark:bg-gray-900 dark:bg-opacity-80">
               <div className="p-6 rounded-lg shadow-sm ">
                 {data && data?.fields?.job_title ? (
-                  <div className="mx-auto space-y-4 text-white">
+                  <div className="mx-auto space-y-4 dark:text-white">
                     <h2 className="text-xl font-bold">
                       Thanks so much! There's one last step.
                     </h2>
@@ -35,7 +35,7 @@ export default function Confirm() {
                     <p>
                       If you don't see the email after a few minutes, you might
                       check your spam folder or other filters and add{" "}
-                      <code className="p-1 text-sm rounded-sm dark:bg-gray-700 ">
+                      <code className="p-1 text-sm bg-gray-200 rounded-sm dark:bg-gray-700 ">
                         hello@turborepo.org
                       </code>{" "}
                       to your contacts.
@@ -47,7 +47,7 @@ export default function Confirm() {
                     </p>
                   </div>
                 ) : (
-                  <div className="mx-auto space-y-4 text-white">
+                  <div className="mx-auto space-y-4 dark:text-white">
                     <div className="text-2xl font-semibold leading-tight text-center">
                       How would you describe yourself?
                     </div>
@@ -66,7 +66,7 @@ export default function Confirm() {
                               job_title,
                             },
                           })
-                          .then((res) => mutate(`/api/user/${data.id}`, true))
+                          .then(() => mutate(`/api/user/${data.id}`, true))
                           .catch((err) => console.log(err));
                       }}
                     >

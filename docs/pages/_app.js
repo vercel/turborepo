@@ -1,10 +1,12 @@
 import "../styles.css";
 import "../nextra-theme-docs/styles.css";
-
+import { SSRProvider } from "@react-aria/ssr";
 export default function Nextra({ Component, pageProps }) {
   return (
     <>
-      <Component {...pageProps} />
+      <SSRProvider>
+        <Component {...pageProps} />
+      </SSRProvider>
     </>
   );
 }
