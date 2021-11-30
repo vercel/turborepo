@@ -10,8 +10,7 @@
   },
   "scripts": {
     "postinstall": "patch-package",
-    "format": "prettier --write  'docs/**/*.ts?x' 'docs/**/*.js?x''README.md'",
-    "lint": "./turbo run lint",
+    "format": "prettier --write  'docs/**/*.ts' 'docs/**/*.tsx' 'docs/**/*.js' 'README.md'",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
     "docs": "./turbo run dev --scope='docs' --no-cache",
@@ -26,8 +25,7 @@
   },
   "lint-staged": {
     "**/*.{ts,tsx,md,mdx,js,jsx}": [
-      "npm run format",
-      "npm run lint"
+      "npm run format"
     ]
   },
   "simple-git-hooks": {
