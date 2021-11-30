@@ -54,9 +54,7 @@
       "build": {
         "outputs": [
           "dist/**/*",
-          "!dist/.vercel/**/*",
-          ".next/**/*",
-          "!.next/cache/**/*"
+          ".next/**/*"
         ],
         "dependsOn": [
           "^build"
