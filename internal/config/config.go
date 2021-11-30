@@ -142,7 +142,7 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 			outArgs = append(outArgs, arg)
 		}
 	}
-	apiClient := client.NewClient(partialConfig.ApiUrl)
+
 	// Default output is nowhere unless we enable logging.
 	var output io.Writer = ioutil.Discard
 	color := hclog.ColorOff
@@ -157,6 +157,8 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		Color:  color,
 		Output: output,
 	})
+
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger)
 
 	c = &Config{
 		Logger:    logger,

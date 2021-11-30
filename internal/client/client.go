@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
 )
 
@@ -27,7 +28,7 @@ func (api *ApiClient) SetToken(token string) {
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string) *ApiClient {
+func NewClient(baseUrl string, logger hclog.Logger) *ApiClient {
 	return &ApiClient{
 		baseUrl: baseUrl,
 		HttpClient: &retryablehttp.Client{
@@ -39,6 +40,7 @@ func NewClient(baseUrl string) *ApiClient {
 			RetryMax:     5,
 			CheckRetry:   retryablehttp.DefaultRetryPolicy,
 			Backoff:      retryablehttp.DefaultBackoff,
+			Logger:       logger,
 		},
 	}
 }
@@ -69,7 +71,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, rawBody
 	if slug != "" {
 		params.Add("slug", slug)
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/artifact/"+hash+"?"+params.Encode()), rawBody)
+	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if err != nil {
@@ -91,7 +93,7 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 	if slug != "" {
 		params.Add("slug", slug)
 	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/artifact/"+hash+"?"+params.Encode()), nil)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
