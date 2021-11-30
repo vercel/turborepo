@@ -43,14 +43,6 @@
       "dev": {
         "cache": false
       },
-      "deploy": {
-        "dependsOn": [
-          "build",
-          "test",
-          "lint"
-        ],
-        "outputs": []
-      },
       "build": {
         "outputs": [
           "dist/**/*",
