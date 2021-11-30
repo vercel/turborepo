@@ -77,14 +77,8 @@ func main() {
 		"graph": func() (cli.Command, error) {
 			return &info.GraphCommand{Config: cf, Ui: ui}, nil
 		},
-		"login": func() (cli.Command, error) {
-			return &login.LoginCommand{Config: cf, Ui: ui}, nil
-		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
-		},
-		"me": func() (cli.Command, error) {
-			return &login.MeCommand{Config: cf, Ui: ui}, nil
 		},
 		"link": func() (cli.Command, error) {
 			return &login.LinkCommand{Config: cf, Ui: ui}, nil

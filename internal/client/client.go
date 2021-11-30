@@ -72,7 +72,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, projectId string, ra
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
 	if resp, err := c.HttpClient.Do(req); err != nil {
-		return fmt.Errorf("Failed to store files in HTTP cache: %w", err)
+		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
 		resp.Body.Close()
 	}
@@ -98,7 +98,7 @@ func (c *ApiClient) RequestDeviceToken() (*DeviceToken, error) {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", fmt.Sprintf("Turbo CLI"))
+	req.Header.Set("User-Agent", "Turbo CLI")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HttpClient.Do(req)
@@ -114,11 +114,11 @@ func (c *ApiClient) RequestDeviceToken() (*DeviceToken, error) {
 	}
 	body, readErr := ioutil.ReadAll(resp.Body)
 	if readErr != nil {
-		return nil, fmt.Errorf("Could not read JSON response: %s", string(body))
+		return nil, fmt.Errorf("could not read JSON response: %s", string(body))
 	}
 	marshalErr := json.Unmarshal(body, deviceToken)
 	if marshalErr != nil {
-		return nil, fmt.Errorf("Could not parse JSON response: %s", string(body))
+		return nil, fmt.Errorf("could not parse JSON response: %s", string(body))
 	}
 	return deviceToken, nil
 }
@@ -174,11 +174,11 @@ func (c *ApiClient) PollForAccessToken(deviceToken *DeviceToken) (*AccessToken, 
 	}
 	body, readErr := ioutil.ReadAll(resp.Body)
 	if readErr != nil {
-		return nil, fmt.Errorf("Could not read JSON response: %s", string(body))
+		return nil, fmt.Errorf("could not read JSON response: %s", string(body))
 	}
 	marshalErr := json.Unmarshal(body, &accessToken)
 	if marshalErr != nil {
-		return nil, fmt.Errorf("Could not parse JSON response: %s", string(body))
+		return nil, fmt.Errorf("could not parse JSON response: %s", string(body))
 	}
 	return accessToken, nil
 }
@@ -222,4 +222,59 @@ func retryPolicy(resp *http.Response, err error) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// Team is a Vercel Team object
+type Team struct {
+	ID        string `json:"id,omitempty"`
+	Slug      string `json:"slug,omitempty"`
+	Name      string `json:"name,omitempty"`
+	CreatedAt int    `json:"createdAt,omitempty"`
+	Created   string `json:"created,omitempty"`
+}
+
+// Pagination is a Vercel pagination object
+type Pagination struct {
+	Count int `json:"count,omitempty"`
+	Next  int `json:"next,omitempty"`
+	Prev  int `json:"prev,omitempty"`
+}
+
+// TeamsResponse is a Vercel object containing a list of teams and pagination info
+type TeamsResponse struct {
+	Teams      []Team     `json:"teams,omitempty"`
+	Pagination Pagination `json:"pagination,omitempty"`
+}
+
+// GetTeams returns a list of Vercel teams
+func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
+	teamsResponse := &TeamsResponse{}
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/teams?limit=100"), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "Turbo CLI")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("404 - Not found") // doesn't exist - not an error
+	} else if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("%s", string(b))
+	}
+	body, readErr := ioutil.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("could not read JSON response: %s", string(body))
+	}
+	marshalErr := json.Unmarshal(body, teamsResponse)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("could not parse JSON response: %s", string(body))
+	}
+	return teamsResponse, nil
 }

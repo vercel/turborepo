@@ -3,12 +3,10 @@ package config
 import (
 	"encoding/json"
 	"io/ioutil"
+	"path/filepath"
 
 	"github.com/adrg/xdg"
 )
-
-// ConfigFilePath is the path to the xdg configuration file
-const ConfigFilePath = "turborepo/config.json"
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
 type TurborepoConfig struct {
@@ -41,7 +39,7 @@ func WriteConfigFile(path string, config *TurborepoConfig) error {
 
 // WriteUserConfigFile writes a user config file
 func WriteUserConfigFile(config *TurborepoConfig) error {
-	path, err := xdg.ConfigFile(ConfigFilePath)
+	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return err
 	}
@@ -54,7 +52,7 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 		Token:       "",
 		ProjectId:   "",
 		TeamId:      "",
-		ApiUrl:      "https://beta.turborepo.com/api",
+		ApiUrl:      "https://api.vercel.com",
 		TeamSlug:    "",
 		ProjectSlug: "",
 	}
@@ -71,13 +69,13 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 
 // ReadUserConfigFile reads a user config file
 func ReadUserConfigFile() (*TurborepoConfig, error) {
-	path, err := xdg.ConfigFile(ConfigFilePath)
+	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return &TurborepoConfig{
 			Token:       "",
 			ProjectId:   "",
 			TeamId:      "",
-			ApiUrl:      "https://beta.turborepo.com/api",
+			ApiUrl:      "https://api.vercel.com",
 			TeamSlug:    "",
 			ProjectSlug: "",
 		}, err

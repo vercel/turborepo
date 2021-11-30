@@ -6,11 +6,10 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"turbo/internal/client"
-	"turbo/internal/graphql"
-	"turbo/internal/ui"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
@@ -45,9 +44,8 @@ type Config struct {
 	ApiUrl string
 	// Backend retryable http client
 	ApiClient *client.ApiClient
-	// GraphQLClient is a graphql http client for the backend
-	GraphQLClient *graphql.Client
-	Cache         *CacheConfig
+
+	Cache *CacheConfig
 }
 
 // CacheConfig
@@ -85,11 +83,11 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		return nil, nil
 	}
 	// Precendence is flags > env > config > default
-	userConfig, err := ReadUserConfigFile()
+	userConfig, err := GetVercelAuthConfig("")
 	if err != nil {
 		// not logged in
 	}
-	partialConfig, err := ReadConfigFile(".turbo/config.json")
+	partialConfig, err := ReadConfigFile(filepath.Join(".turbo", "config.json"))
 	if err != nil {
 		// not linked
 	}
@@ -112,7 +110,6 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 	}
 
 	shouldEnsureTeam := false
-	shouldEnsureProject := false
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
 	var outArgs []string
@@ -145,14 +142,10 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
 			shouldEnsureTeam = true
-		case strings.HasPrefix(arg, "--project="):
-			partialConfig.ProjectSlug = arg[len("--project="):]
-			shouldEnsureProject = true
 		default:
 			outArgs = append(outArgs, arg)
 		}
 	}
-	gqlClient := graphql.NewClient(partialConfig.ApiUrl)
 	apiClient := client.NewClient(partialConfig.ApiUrl)
 	// Default output is nowhere unless we enable logging.
 	var output io.Writer = ioutil.Discard
@@ -180,10 +173,8 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		ApiClient:   apiClient,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
-
-			Dir: "./node_modules/.cache/turbo",
+			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
-		GraphQLClient: gqlClient,
 	}
 
 	c.ApiClient.SetToken(partialConfig.Token)
@@ -194,72 +185,35 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		}
 	}
 
-	if shouldEnsureProject || partialConfig.ProjectSlug != "" {
-		if err := c.ensureProject(); err != nil {
-			return c, err
-		}
-	}
-
 	return c, nil
 }
 
 func (c *Config) ensureTeam() error {
-	if c.Token == "" {
-		if IsCI() {
-			fmt.Println(ui.Warn("no token has been provided, but you specified a Turborepo team and project. If this is intended (e.g. a pull request on an open source GitHub project from an outside contributor triggered this), you can ignore this warning. Otherwise, please run `turbo login`, pass `--token` flag, or set `TURBO_TOKEN` environment variable to enable remote caching. In the meantime, turbo will attempt to continue with local caching."))
-			return nil
-		}
-		return fmt.Errorf("no credentials found. Please run `turbo login`, pass `--token` flag, or set TURBO_TOKEN environment variable")
-	}
-	req, err := graphql.NewGetTeamRequest(c.ApiUrl, &graphql.GetTeamVariables{
-		Slug: (*graphql.String)(&c.TeamSlug),
-	})
-	if err != nil {
-		return fmt.Errorf("could not fetch team information: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-	res, resErr := req.Execute(c.GraphQLClient.Client)
-	if resErr != nil {
-		return fmt.Errorf("could not fetch team information: %w", resErr)
-	}
+	// if c.Token == "" {
+	// 	if IsCI() {
+	// 		fmt.Println(ui.Warn("no token has been provided, but you specified a Turborepo team and project. If this is intended (e.g. a pull request on an open source GitHub project from an outside contributor triggered this), you can ignore this warning. Otherwise, please run `turbo login`, pass `--token` flag, or set `TURBO_TOKEN` environment variable to enable remote caching. In the meantime, turbo will attempt to continue with local caching."))
+	// 		return nil
+	// 	}
+	// 	return fmt.Errorf("no credentials found. Please run `turbo login`, pass `--token` flag, or set TURBO_TOKEN environment variable")
+	// }
+	// req, err := graphql.NewGetTeamRequest(c.ApiUrl, &graphql.GetTeamVariables{
+	// 	Slug: (*graphql.String)(&c.TeamSlug),
+	// })
+	// if err != nil {
+	// 	return fmt.Errorf("could not fetch team information: %w", err)
+	// }
+	// req.Header.Set("Authorization", "Bearer "+c.Token)
+	// res, resErr := req.Execute(c.GraphQLClient.Client)
+	// if resErr != nil {
+	// 	return fmt.Errorf("could not fetch team information: %w", resErr)
+	// }
 
-	if res.Team.ID == "" {
-		return fmt.Errorf("could not fetch team information. Check the spelling of `%v` and make sure that the %v team exists on turborepo.com and that you have access to it", c.TeamSlug, c.TeamSlug)
-	}
+	// if res.Team.ID == "" {
+	// 	return fmt.Errorf("could not fetch team information. Check the spelling of `%v` and make sure that the %v team exists on turborepo.com and that you have access to it", c.TeamSlug, c.TeamSlug)
+	// }
 
-	c.TeamId = res.Team.ID
-	c.TeamSlug = res.Team.Slug
-
-	return nil
-}
-
-func (c *Config) ensureProject() error {
-	if c.Token == "" {
-		if IsCI() {
-			return nil
-		}
-		return fmt.Errorf("no credentials found. Please run `turbo login`, pass `--token`, or set TURBO_TOKEN environment variable")
-	}
-	req, err := graphql.NewGetProjectRequest(c.ApiUrl, &graphql.GetProjectVariables{
-		Slug:   (*graphql.String)(&c.ProjectSlug),
-		TeamId: (*graphql.String)(&c.TeamId),
-	})
-	if err != nil {
-		return fmt.Errorf("could not fetch project information: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-	res, resErr := req.Execute(c.GraphQLClient.Client)
-	if resErr != nil {
-		return fmt.Errorf("could not fetch project information: %w", resErr)
-	}
-
-	if res.Project.ID == "" {
-		return fmt.Errorf("could not fetch information for %v project. Check spelling or create a project with this name within this team by running `turbo link` and following the prompts", c.ProjectSlug)
-	}
-
-	c.ProjectId = res.Project.ID
-	c.ProjectSlug = res.Project.Slug
+	// c.TeamId = res.Team.ID
+	// c.TeamSlug = res.Team.Slug
 
 	return nil
 }
