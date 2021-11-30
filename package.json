@@ -9,9 +9,7 @@
     ]
   },
   "scripts": {
-    "postinstall": "patch-package",
-    "format": "prettier --write 'packages/**/*' 'app/**/*' 'docs/**/*' 'README.md'",
-    "lint": "./turbo run lint",
+    "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
     "docs": "./turbo run dev --scope='docs' --no-cache",
@@ -19,14 +17,12 @@
     "turbo": "./turbo"
   },
   "devDependencies": {
-    "patch-package": "^6.4.7",
     "prettier": "^2.5.0",
     "simple-git-hooks": "^2.7.0"
   },
   "lint-staged": {
     "**/*.{ts,tsx,md,mdx,js,jsx}": [
-      "npm run format",
-      "npm run lint"
+      "npm run format"
     ]
   },
   "simple-git-hooks": {
@@ -47,20 +43,10 @@
       "dev": {
         "cache": false
       },
-      "deploy": {
-        "dependsOn": [
-          "build",
-          "test",
-          "lint"
-        ],
-        "outputs": []
-      },
       "build": {
         "outputs": [
           "dist/**/*",
-          "!dist/.vercel/**/*",
-          ".next/**/*",
-          "!.next/cache/**/*"
+          ".next/**/*"
         ],
         "dependsOn": [
           "^build"
