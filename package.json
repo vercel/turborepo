@@ -10,7 +10,7 @@
   },
   "scripts": {
     "postinstall": "patch-package",
-    "format": "prettier --write  'docs/**/*.ts' 'docs/**/*.tsx' 'docs/**/*.js' 'README.md'",
+    "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
     "docs": "./turbo run dev --scope='docs' --no-cache",
