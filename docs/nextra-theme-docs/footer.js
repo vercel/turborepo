@@ -1,91 +1,91 @@
-import React from 'react'
-import cn from 'classnames'
-import Link from 'next/link'
-import { useRouter } from 'next/router'
-import parseGitUrl from 'parse-git-url'
+import React from "react";
+import cn from "classnames";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import parseGitUrl from "parse-git-url";
 
-import ArrowRight from './arrow-right'
-import renderComponent from './utils/render-component'
+import ArrowRight from "./arrow-right";
+import renderComponent from "./utils/render-component";
 
 const NextLink = ({ route, title, isRTL }) => {
   return (
     <Link href={route}>
       <a
         className={cn(
-          'text-lg font-medium p-4 -m-4 no-underline text-gray-600 hover:text-blue-600 flex items-center',
-          { 'ml-2': !isRTL, 'mr-2': isRTL }
+          "text-lg font-medium p-4 -m-4 no-underline text-gray-600 betterhover:hover:text-blue-600 flex items-center",
+          { "ml-2": !isRTL, "mr-2": isRTL }
         )}
         title={title}
       >
         {title}
         <ArrowRight
-          className={cn('transform inline flex-shrink-0', {
-            'rotate-180 mr-1': isRTL,
-            'ml-1': !isRTL
+          className={cn("transform inline flex-shrink-0", {
+            "rotate-180 mr-1": isRTL,
+            "ml-1": !isRTL,
           })}
         />
       </a>
     </Link>
-  )
-}
+  );
+};
 
 const PrevLink = ({ route, title, isRTL }) => {
   return (
     <Link href={route}>
       <a
         className={cn(
-          'text-lg font-medium p-4 -m-4 no-underline text-gray-600 hover:text-blue-600 flex items-center',
-          { 'mr-2': !isRTL, 'ml-2': isRTL }
+          "text-lg font-medium p-4 -m-4 no-underline text-gray-600 betterhover:hover:text-blue-600 flex items-center",
+          { "mr-2": !isRTL, "ml-2": isRTL }
         )}
         title={title}
       >
         <ArrowRight
-          className={cn('transform inline flex-shrink-0', {
-            'rotate-180 mr-1': !isRTL,
-            'ml-1': isRTL
+          className={cn("transform inline flex-shrink-0", {
+            "rotate-180 mr-1": !isRTL,
+            "ml-1": isRTL,
           })}
         />
         {title}
       </a>
     </Link>
-  )
-}
+  );
+};
 
 const createEditUrl = (repository, filepath) => {
-  const repo = parseGitUrl(repository)
-  if (!repo) throw new Error('Invalid `docsRepositoryBase` URL!')
+  const repo = parseGitUrl(repository);
+  if (!repo) throw new Error("Invalid `docsRepositoryBase` URL!");
 
   switch (repo.type) {
-    case 'github':
+    case "github":
       return `https://github.com/${repo.owner}/${repo.name}/blob/${
-        repo.branch || 'main'
-      }/${repo.subdir || 'pages'}${filepath}`
-    case 'gitlab':
+        repo.branch || "main"
+      }/${repo.subdir || "pages"}${filepath}`;
+    case "gitlab":
       return `https://gitlab.com/${repo.owner}/${repo.name}/-/blob/${
-        repo.branch || 'master'
-      }/${repo.subdir || 'pages'}${filepath}`
+        repo.branch || "master"
+      }/${repo.subdir || "pages"}${filepath}`;
   }
 
-  return '#'
-}
+  return "#";
+};
 
 const EditPageLink = ({ repository, text, filepath }) => {
-  const url = createEditUrl(repository, filepath)
-  const { locale } = useRouter()
+  const url = createEditUrl(repository, filepath);
+  const { locale } = useRouter();
   return (
     <a className="text-sm" href={url} target="_blank" rel="noreferrer">
       {text
         ? renderComponent(text, {
-            locale
+            locale,
           })
-        : 'Edit this page'}
+        : "Edit this page"}
     </a>
-  )
-}
+  );
+};
 
 export const NavLinks = ({ config, flatDirectories, currentIndex, isRTL }) => {
-  let prev = flatDirectories[currentIndex - 1]
-  let next = flatDirectories[currentIndex + 1]
+  let prev = flatDirectories[currentIndex - 1];
+  let next = flatDirectories[currentIndex + 1];
 
   return (
     <div className="flex flex-row items-center justify-between">
@@ -100,11 +100,11 @@ export const NavLinks = ({ config, flatDirectories, currentIndex, isRTL }) => {
         ) : null}
       </div>
     </div>
-  )
-}
+  );
+};
 
 const Footer = ({ config, filepathWithName, children }) => {
-  const { locale } = useRouter()
+  const { locale } = useRouter();
 
   return (
     <footer className="mt-24">
@@ -126,7 +126,7 @@ const Footer = ({ config, filepathWithName, children }) => {
         </div>
       ) : null}
     </footer>
-  )
-}
+  );
+};
 
-export default Footer
+export default Footer;
