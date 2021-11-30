@@ -17,15 +17,15 @@ type MeCommand struct {
 
 // Synopsis of run command
 func (c *MeCommand) Synopsis() string {
-	return "DEPRECATED - Logout to your Turborepo.com account"
+	return "DEPRECATED - Print user information about the current Turborepo.com account"
 }
 
 // Help returns information about the `run` command
 func (c *MeCommand) Help() string {
 	helpText := `
-Usage: turbo logout
+Usage: turbo me
 
-  Logout to your Turborepo.com account
+  Print user information about the current Turborepo.com account
 `
 	return strings.TrimSpace(helpText)
 }

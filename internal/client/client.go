@@ -278,3 +278,47 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 	}
 	return teamsResponse, nil
 }
+
+type User struct {
+	ID        string `json:"id,omitempty"`
+	Username  string `json:"username,omitempty"`
+	Email     string `json:"email,omitempty"`
+	Name      string `json:"name,omitempty"`
+	CreatedAt int    `json:"createdAt,omitempty"`
+}
+type UserResponse struct {
+	User User `json:"user,omitempty"`
+}
+
+// GetUser returns the current user
+func (c *ApiClient) GetUser() (*UserResponse, error) {
+	userResponse := &UserResponse{}
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/user"), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "Turbo CLI")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("404 - Not found") // doesn't exist - not an error
+	} else if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("%s", string(b))
+	}
+	body, readErr := ioutil.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("could not read JSON response: %s", string(body))
+	}
+	marshalErr := json.Unmarshal(body, userResponse)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("could not parse JSON response: %s", string(body))
+	}
+	return userResponse, nil
+}
