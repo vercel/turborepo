@@ -9,7 +9,6 @@
     ]
   },
   "scripts": {
-    "postinstall": "patch-package",
     "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
@@ -18,8 +17,6 @@
     "turbo": "./turbo"
   },
   "devDependencies": {
-    "lint-staged": "^12.1.2",
-    "patch-package": "^6.4.7",
     "prettier": "^2.5.0",
     "simple-git-hooks": "^2.7.0"
   },
@@ -29,7 +26,7 @@
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "npm run lint-staged"
+    "pre-commit": "npx lint-staged"
   },
   "turbo": {
     "baseBranch": "origin/main",
