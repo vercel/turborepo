@@ -27,7 +27,8 @@ type Arguments<F extends Function> = F extends (...args: infer A) => any
   ? A
   : never;
 type RadioProps = Arguments<typeof useRadio>[0];
-export function Radio(props: RadioAriaProps) {
+
+export function Radio(props: RadioProps) {
   let { children } = props;
   let state = React.useContext(RadioContext);
   let ref = React.useRef<HTMLElement>(null);
