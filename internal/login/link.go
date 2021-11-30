@@ -17,7 +17,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-// LinkCommand is a Command implementation allows the user to link your local directory to a Project
+// LinkCommand is a Command implementation allows the user to link your local directory to a Turbrepo
 type LinkCommand struct {
 	Config *config.Config
 	Ui     *cli.ColoredUi

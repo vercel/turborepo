@@ -61,10 +61,14 @@ func (c *ApiClient) makeUrl(endpoint string) string {
 	return fmt.Sprintf("%v%v", c.baseUrl, endpoint)
 }
 
-func (c *ApiClient) PutArtifact(hash string, teamId string, projectId string, rawBody interface{}) error {
+func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, rawBody interface{}) error {
 	params := url.Values{}
-	params.Add("projectId", projectId)
-	params.Add("teamId", teamId)
+	if teamId != "" && strings.HasPrefix(teamId, "team_") {
+		params.Add("teamId", teamId)
+	}
+	if slug != "" {
+		params.Add("slug", slug)
+	}
 	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/artifact/"+hash+"?"+params.Encode()), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -79,10 +83,14 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, projectId string, ra
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, teamId string, projectId string, rawBody interface{}) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBody interface{}) (*http.Response, error) {
 	params := url.Values{}
-	params.Add("projectId", projectId)
-	params.Add("teamId", teamId)
+	if teamId != "" && strings.HasPrefix(teamId, "team_") {
+		params.Add("teamId", teamId)
+	}
+	if slug != "" {
+		params.Add("slug", slug)
+	}
 	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/artifact/"+hash+"?"+params.Encode()), nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if err != nil {

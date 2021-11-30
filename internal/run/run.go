@@ -85,7 +85,6 @@ Options:
                          You can load the file up in chrome://tracing to see
                          which parts of your build were slow.
   --parallel             Execute all tasks in parallel. (default false)
-  --project              The slug of the turborepo.com project.
   --includeDependencies  Include the dependencies of tasks in execution.
                          (default false)
   --no-deps              Exclude affected/dependent task consumers from
@@ -790,7 +789,6 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				runOptions.ancestors = true
 			case strings.HasPrefix(arg, "--team"):
-			case strings.HasPrefix(arg, "--project"):
 			case strings.HasPrefix(arg, "--token"):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))

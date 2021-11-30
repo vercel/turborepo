@@ -36,10 +36,6 @@ type Config struct {
 	TeamId string
 	// Turborepo.com team id
 	TeamSlug string
-	// Turborepo.com project slug
-	ProjectSlug string
-	// Turborepo.com project id
-	ProjectId string
 	// Backend API URL
 	ApiUrl string
 	// Backend retryable http client
@@ -163,14 +159,12 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 	})
 
 	c = &Config{
-		Logger:      logger,
-		Token:       partialConfig.Token,
-		ProjectSlug: partialConfig.ProjectSlug,
-		TeamSlug:    partialConfig.TeamSlug,
-		ProjectId:   partialConfig.ProjectId,
-		TeamId:      partialConfig.TeamId,
-		ApiUrl:      partialConfig.ApiUrl,
-		ApiClient:   apiClient,
+		Logger:    logger,
+		Token:     partialConfig.Token,
+		TeamSlug:  partialConfig.TeamSlug,
+		TeamId:    partialConfig.TeamId,
+		ApiUrl:    partialConfig.ApiUrl,
+		ApiClient: apiClient,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
@@ -223,7 +217,7 @@ func (c *Config) IsLoggedIn() bool {
 	return c.Token != ""
 }
 
-// IsProjectLinked returns true if the project is linked (or has enough info to make API requests)
-func (c *Config) IsProjectLinked() bool {
-	return (c.ProjectId != "" || c.ProjectSlug != "") && (c.TeamId != "" || c.TeamSlug != "")
+// IsTurborepoLinked returns true if the project is linked (or has enough info to make API requests)
+func (c *Config) IsTurborepoLinked() bool {
+	return (c.TeamId != "" || c.TeamSlug != "")
 }
