@@ -33,6 +33,6 @@ Usage: turbo logout
 // Run executes tasks in the monorepo
 func (c *MeCommand) Run(args []string) int {
 	pref := color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
-	c.Ui.Output(fmt.Sprintf("%s%s", pref, color.RedString(" This command has been deprecated. Please use `turbo unlink` instead.")))
+	c.Ui.Output(fmt.Sprintf("%s%s", pref, color.RedString(" This command has been deprecated and is no longer relevant.")))
 	return 1
 }
