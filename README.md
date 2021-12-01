@@ -15,6 +15,13 @@ This project is rather cookbook. Actual work to create cross-compile environment
 [Docker image](https://ghcr.io/troian/golang-cross) is placed on Github.
 I stopped deploying to Docker Hub due to insane (but probably fare) rate limits and more insane one api key only for free accounts. 
 
+The image is multiarch and supports hosts below
+
+Host | Supported
+----|:---:|
+amd64| ✅
+arm64 (aka aarch64) | ✅
+
 To run build with CGO each entry requires some environment variables
 
 Env variable | value | required | Notes
