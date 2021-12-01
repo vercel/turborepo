@@ -225,10 +225,10 @@ bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo
-	cd demo/turbo && ../../turbo run build test
+	cd demo/turbo && ../../turbo run test --force
 
-bench/turbo-old: demo/turbo
-	cd demo/turbo-old && ./node_modules/.bin/turbo run build 
+bench/turbo-new: demo/turbo
+	cd demo/turbo && ../../turbo-new run build test 
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
