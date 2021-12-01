@@ -16,7 +16,6 @@ import (
 )
 
 type httpCache struct {
-	cwd            string
 	writable       bool
 	config         *config.Config
 	requestLimiter limiter
@@ -44,7 +43,7 @@ func (cache *httpCache) Put(target, hash string, files []string) error {
 	defer cache.requestLimiter.release()
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
-	return cache.config.ApiClient.PutArtifact(hash, cache.config.TeamId, cache.config.ProjectId, r)
+	return cache.config.ApiClient.PutArtifact(hash, cache.config.TeamId, cache.config.TeamSlug, r)
 }
 
 // write writes a series of files into the given Writer.
@@ -105,13 +104,16 @@ func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (
 	defer cache.requestLimiter.release()
 	m, files, err := cache.retrieve(key)
 	if err != nil {
-		return false, files, fmt.Errorf("Failed to retrieve files from HTTP cache: %w", err)
+		return false, files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
 	return m, files, err
 }
 
 func (cache *httpCache) retrieve(key string) (bool, []string, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(key, cache.config.TeamId, cache.config.ProjectId, nil)
+	resp, err := cache.config.ApiClient.FetchArtifact(key, cache.config.TeamId, cache.config.TeamSlug, nil)
+	if err != nil {
+		return false, nil, err
+	}
 	defer resp.Body.Close()
 	files := []string{}
 	if resp.StatusCode == http.StatusNotFound {

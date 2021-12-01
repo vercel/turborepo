@@ -12,6 +12,7 @@ import (
 	prune "turbo/internal/prune"
 	"turbo/internal/run"
 	uiPkg "turbo/internal/ui"
+	"turbo/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
@@ -42,6 +43,7 @@ func main() {
 	args = args[:argsEnd]
 	c := cli.NewCLI("turbo", turboVersion)
 
+	util.InitPrintf()
 	ui := &cli.ColoredUi{
 		Ui: &cli.BasicUi{
 			Reader:      os.Stdin,
@@ -63,7 +65,7 @@ func main() {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
 	}
-	c.HiddenCommands = []string{"graph"}
+	c.HiddenCommands = []string{"graph", "login", "logout", "me"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
 			return &run.RunCommand{Config: cf, Ui: ui},
@@ -72,20 +74,20 @@ func main() {
 		"prune": func() (cli.Command, error) {
 			return &prune.PruneCommand{Config: cf, Ui: ui}, nil
 		},
+		"link": func() (cli.Command, error) {
+			return &login.LinkCommand{Config: cf, Ui: ui}, nil
+		},
+		"unlink": func() (cli.Command, error) {
+			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
+		},
 		"graph": func() (cli.Command, error) {
 			return &info.GraphCommand{Config: cf, Ui: ui}, nil
-		},
-		"login": func() (cli.Command, error) {
-			return &login.LoginCommand{Config: cf, Ui: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
 		},
 		"me": func() (cli.Command, error) {
 			return &login.MeCommand{Config: cf, Ui: ui}, nil
-		},
-		"link": func() (cli.Command, error) {
-			return &login.LinkCommand{Config: cf, Ui: ui}, nil
 		},
 	}
 
