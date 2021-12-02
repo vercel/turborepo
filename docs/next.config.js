@@ -18,6 +18,11 @@ module.exports = withNextra({
         destination: "/reference/command-line-reference",
         permanent: true,
       },
+      {
+        source: "/discord{/}?",
+        permanent: true,
+        destination: "https://discord.gg/d6kXWZPWkW",
+      },
     ];
   },
 });
