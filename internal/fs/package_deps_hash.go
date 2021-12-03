@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"turbo/internal/util"
@@ -91,7 +91,7 @@ func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]strin
 		var input = []string{"hash-object"}
 
 		for _, filename := range filesToHash {
-			input = append(input, path.Join(PackagePath, filename))
+			input = append(input, filepath.Join(PackagePath, filename))
 		}
 		// fmt.Println(input)
 		cmd := exec.Command("git", input...)

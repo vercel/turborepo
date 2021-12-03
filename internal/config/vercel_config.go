@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path"
 	"path/filepath"
 	"turbo/internal/fs"
 
@@ -86,12 +85,12 @@ func GetVercelAuthConfig(customConfigPath string) (*VercelAuthConfig, error) {
 // for the original implementation. It tries to search find and then respect legacy
 // configuration directories
 func getConfigFilePath(filename string) (string, error) {
-	if vcDataDir, e := xdg.SearchDataFile(path.Join("com.vercel.cli", filename)); e != nil {
-		tempDir := path.Join(xdg.Home, ".now", filename)
+	if vcDataDir, e := xdg.SearchDataFile(filepath.Join("com.vercel.cli", filename)); e != nil {
+		tempDir := filepath.Join(xdg.Home, ".now", filename)
 		if fs.IsDirectory(tempDir) {
 			return tempDir, nil
 		} else {
-			if nowDataDir, f := xdg.SearchDataFile(path.Join("now", filename)); f != nil {
+			if nowDataDir, f := xdg.SearchDataFile(filepath.Join("now", filename)); f != nil {
 				return "", fmt.Errorf("config file %s found. Please login with `vercel login`", filename)
 			} else {
 				return nowDataDir, nil

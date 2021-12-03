@@ -5,7 +5,7 @@ package scm
 import (
 	"fmt"
 	"log"
-	"path"
+	"path/filepath"
 	"turbo/internal/fs"
 )
 
@@ -35,7 +35,7 @@ type SCM interface {
 // New returns a new SCM instance for this repo root.
 // It returns nil if there is no known implementation there.
 func New(repoRoot string) SCM {
-	if fs.PathExists(path.Join(repoRoot, ".git")) {
+	if fs.PathExists(filepath.Join(repoRoot, ".git")) {
 		return &git{repoRoot: repoRoot}
 	}
 	return nil

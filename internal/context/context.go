@@ -3,7 +3,6 @@ package context
 import (
 	"fmt"
 	"log"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -158,7 +157,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		}
 
 		// this should go into the bacend abstraction
-		if c.Backend.Name == "nodejs-yarn" {
+		if c.Backend.Name == "nodejs-yarn" && !fs.CheckIfWindows() {
 			lockfile, err := fs.ReadLockfile(config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
@@ -190,7 +189,8 @@ func WithGraph(rootpath string, config *config.Config) Option {
 					globalDeps.Add(val)
 				}
 			}
-		} else if c.Backend.Name != "nodejs-yarn" {
+		}
+		if c.Backend.Name != "nodejs-yarn" || fs.CheckIfWindows() {
 			// If we are not in Yarn, add the specfile and lockfile to global deps
 			globalDeps.Add(c.Backend.Specfile)
 			globalDeps.Add(c.Backend.Lockfile)
@@ -294,7 +294,7 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 			return err
 		}
 
-		ignorePkg, err := safeCompileIgnoreFile(path.Join(pkg.Dir, ".gitignore"))
+		ignorePkg, err := safeCompileIgnoreFile(filepath.Join(pkg.Dir, ".gitignore"))
 		if err != nil {
 			return err
 		}
@@ -345,7 +345,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	for dep, version := range pkg.PeerDependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if c.Backend.Name == "nodejs-yarn" {
+	if c.Backend.Name == "nodejs-yarn" && !fs.CheckIfWindows() {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
@@ -461,7 +461,7 @@ func (c *Context) parsePackageJSON(fileName string) error {
 }
 
 func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolveDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if c.Backend.Name != "nodejs-yarn" {
+	if fs.CheckIfWindows() || c.Backend.Name != "nodejs-yarn" {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {

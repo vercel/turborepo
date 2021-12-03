@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"turbo/internal/util"
 
@@ -20,7 +21,7 @@ const DirPermissions = os.ModeDir | 0775
 
 // EnsureDir ensures that the directory of the given file has been created.
 func EnsureDir(filename string) error {
-	dir := path.Dir(filename)
+	dir := filepath.Dir(filename)
 	err := os.MkdirAll(dir, DirPermissions)
 	if err != nil && FileExists(dir) {
 		// It looks like this is a file and not a directory. Attempt to remove it; this can
@@ -103,7 +104,7 @@ func IsDirectory(path string) bool {
 // IsPackage returns true if the given directory name is a package (i.e. contains a build file)
 func IsPackage(buildFileNames []string, name string) bool {
 	for _, buildFileName := range buildFileNames {
-		if FileExists(path.Join(name, buildFileName)) {
+		if FileExists(filepath.Join(name, buildFileName)) {
 			return true
 		}
 	}

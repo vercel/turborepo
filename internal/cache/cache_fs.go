@@ -2,7 +2,6 @@ package cache
 
 import (
 	"fmt"
-	"path"
 	"path/filepath"
 	"turbo/internal/config"
 	"turbo/internal/fs"
@@ -22,7 +21,7 @@ func newFsCache(config *config.Config) Cache {
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
 func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []string, error) {
-	cachedFolder := path.Join(f.cacheDirectory, hash)
+	cachedFolder := filepath.Join(f.cacheDirectory, hash)
 
 	// If it's not in the cache bail now
 	if !fs.PathExists(cachedFolder) {
@@ -48,11 +47,11 @@ func (f *fsCache) Put(target, hash string, files []string) error {
 				return fmt.Errorf("error constructing relative path from %v to %v: %w", target, file, err)
 			}
 			if !fs.IsDirectory(file) {
-				if err := fs.EnsureDir(path.Join(f.cacheDirectory, hash, rel)); err != nil {
+				if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, rel)); err != nil {
 					return fmt.Errorf("error ensuring directory file from cache: %w", err)
 				}
 
-				if err := fs.CopyOrLinkFile(file, path.Join(f.cacheDirectory, hash, rel), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
+				if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, rel), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
 					return fmt.Errorf("error copying file from cache: %w", err)
 				}
 			}

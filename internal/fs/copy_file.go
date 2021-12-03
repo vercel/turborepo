@@ -2,7 +2,7 @@ package fs
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/karrick/godirwalk"
 )
@@ -52,7 +52,7 @@ func RecursiveCopyOrLinkFile(from string, to string, mode os.FileMode, link, fal
 	}
 	if info.IsDir() {
 		return WalkMode(from, func(name string, isDir bool, fileMode os.FileMode) error {
-			dest := path.Join(to, name[len(from):])
+			dest := filepath.Join(to, name[len(from):])
 			if isDir {
 				return os.MkdirAll(dest, DirPermissions)
 			}

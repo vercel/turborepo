@@ -7,7 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -47,10 +47,12 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 	var prettyLockFile = YarnLockfile{}
 	hash, err := HashFile("yarn.lock")
 
-	contentsOfLock, err := ioutil.ReadFile(path.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
+	contentsOfLock, err := ioutil.ReadFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
 	if err != nil {
+
 		contentsB, err := ioutil.ReadFile("yarn.lock")
 		if err != nil {
+			fmt.Println("readfile")
 			return nil, fmt.Errorf("yarn.lock: %w", err)
 		}
 		lines := strings.Split(string(contentsB), "\n")
@@ -75,11 +77,12 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 
 		next := a.ReplaceAllStringFunc(output, func(m string) string {
 			parts := a.FindStringSubmatch(m)
-			return fmt.Sprintf("%v: %v", parts[1], parts[2])
+			return fmt.Sprintf("%s: %s", parts[1], parts[2])
 		})
 
 		err = yaml.Unmarshal([]byte(next), &lockfile)
 		if err != nil {
+			fmt.Println("unmarshal")
 			return &YarnLockfile{}, err
 		}
 		// This final step is important, it splits any deps with multiple-resolutions
@@ -102,15 +105,15 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 			fmt.Println(err.Error())
 			return &YarnLockfile{}, err
 		}
-		if err = EnsureDir(path.Join(cacheDir)); err != nil {
+		if err = EnsureDir(cacheDir); err != nil {
 			fmt.Println(err.Error())
 			return &YarnLockfile{}, err
 		}
-		if err = EnsureDir(path.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash))); err != nil {
+		if err = EnsureDir(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash))); err != nil {
 			fmt.Println(err.Error())
 			return &YarnLockfile{}, err
 		}
-		if err = ioutil.WriteFile(path.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)), []byte(better), 0644); err != nil {
+		if err = ioutil.WriteFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)), []byte(better), 0644); err != nil {
 			fmt.Println(err.Error())
 			return &YarnLockfile{}, err
 		}
@@ -118,7 +121,7 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 		if contentsOfLock != nil {
 			err = yaml.Unmarshal(contentsOfLock, &prettyLockFile)
 			if err != nil {
-				return &YarnLockfile{}, err
+				return &YarnLockfile{}, fmt.Errorf("could not unmarshal yaml: %w", err)
 			}
 		}
 	}
