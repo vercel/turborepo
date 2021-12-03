@@ -151,17 +151,6 @@ turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
 ```
 
-#### `--project`
-
-Your turborepo.com project's slug. Useful for running in non-interactive shells in combination with `--token` and `--team` flags.
-
-```sh
-turbo run build --team=my-team --project=my-project
-turbo run build --team=my-team --project=my-project --token=xxxxxxxxxxxxxxxxx
-```
-
-You can also set the value of the current project by setting an environment variable named `TURBO_PROJECT`. The flag will take precendence over the environment variable if both are present.
-
 #### `--scope`
 
 `type: string[]`
@@ -199,21 +188,21 @@ turbo run build --since=origin/main
 
 #### `--token`
 
-A turborepo.com personal access token. Useful for running in non-interactive shells (e.g. CI/CD) in combination with `--project` and `--team` flags.
+A bearer token for remote caching. Useful for running in non-interactive shells (e.g. CI/CD) in combination with `--team` flags.
 
 ```sh
-turbo run build --team=my-team --project=my-project --token=xxxxxxxxxxxxxxxxx
+turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
 You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precendence over the environment variable if both are present.
 
 #### `--team`
 
-The slug of the turborepo.com team. Useful for running in non-interactive shells in combination with `--token` and `--team` flags.
+The slug of the remote cache team. Useful for running in non-interactive shells in combination with `--token` and `--team` flags.
 
 ```sh
-turbo run build --team=my-team --project=my-project
-turbo run build --team=my-team --project=my-project --token=xxxxxxxxxxxxxxxxx
+turbo run build --team=my-team
+turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
 You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precendence over the environment variable if both are present.
@@ -312,16 +301,8 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 
 ## `turbo link`
 
-Link the current directory to a new or existing turborepo.com project. A project is used to to share [cache artifacts](../caching).
+Link the current directory to an existing Vercel organization or user. The selected owner (either a user or and organization) will be able to share [cache artifacts](../caching).
 
-## `turbo login`
+## `turbo unlink`
 
-Login to your turborepo.com account and activate the current machine. If you haven't done so, visit [https://beta.turborepo.com/signup](https://beta.turborepo.com/signup) to sign up before hand.
-
-## `turbo logout`
-
-Logout of your turborepo.com account.
-
-## `turbo me`
-
-Prints info about the currently logged in user.
+Unlink the current directory from a Vercel organization or user.

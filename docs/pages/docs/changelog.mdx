@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.5
+
+- Completely rewritten and revamped internal graph. Fixes long standing bug with construction. You no longer need to specify all possible tasks, turbo will figure out the transitive tasks necessary automatically.
+- Anything passed after a `--` to `turbo run` will be passed through to all build tasks. This is a temporary workaround for parameterized builds. The use case is for something like `turbo` or Next.js which has OS-specific builds and cache artifacts which would otherwise have an identical hash.
+- `turbo` CLI output is now color aware, which should make reading build logs on platforms like Vercel and Netlify (and any other non-interactive terminal) easier.
+
 ## v0.8.4
 
 - `turbo` is now much more friendly to OSS. In prior versions, a CI run triggered by a pull request by an outside contributor on a turborepo with remote caching would fail because `turbo` would bail in response to the unauthorized HTTP status code from our API (because the outside contributor doesn't have access to the original repo's secrets and thus TURBO_TOKEN). From now on though, `turbo` will show this warning message and fallback to local caching in this situation. This is a win for everyone as it allows core contributors with write access to get fastest builds, while still have fairly fast external contributions. In the future, we may explore public remote caches for OSS as well as read-only tokens.

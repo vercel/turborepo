@@ -3,36 +3,30 @@ package config
 import (
 	"encoding/json"
 	"io/ioutil"
+	"path/filepath"
 
 	"github.com/adrg/xdg"
 )
-
-// ConfigFilePath is the path to the xdg configuration file
-const ConfigFilePath = "turborepo/config.json"
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
 type TurborepoConfig struct {
 	// Token is a bearer token
 	Token string `json:"token,omitempty"`
-	// ProjectId is the turborepo.com project id
-	ProjectId string `json:"projectId,omitempty"`
-	// Team is the turborepo.com team id
+	// Team id
 	TeamId string `json:"teamId,omitempty"`
 	// ApiUrl is the backend url (defaults to turborepo.com)
-	ApiUrl string `json:"apiUrl,omitempty"`
-	// Turborepo.com team slug
+	ApiUrl string `json:"apiUrl,omitempty" envconfig:"api"`
+	// Owner slug
 	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
-	// Turborepo.com project slug
-	ProjectSlug string `json:"projectSlug,omitempty" envconfig:"project"`
 }
 
 // WriteUserConfigFile writes config file at a oath
 func WriteConfigFile(path string, config *TurborepoConfig) error {
-	yamlBytes, marhsallError := json.Marshal(config)
+	jsonBytes, marhsallError := json.Marshal(config)
 	if marhsallError != nil {
 		return marhsallError
 	}
-	writeFilErr := ioutil.WriteFile(path, yamlBytes, 0644)
+	writeFilErr := ioutil.WriteFile(path, jsonBytes, 0644)
 	if writeFilErr != nil {
 		return writeFilErr
 	}
@@ -41,7 +35,7 @@ func WriteConfigFile(path string, config *TurborepoConfig) error {
 
 // WriteUserConfigFile writes a user config file
 func WriteUserConfigFile(config *TurborepoConfig) error {
-	path, err := xdg.ConfigFile(ConfigFilePath)
+	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return err
 	}
@@ -51,12 +45,10 @@ func WriteUserConfigFile(config *TurborepoConfig) error {
 // ReadConfigFile reads a config file at a path
 func ReadConfigFile(path string) (*TurborepoConfig, error) {
 	var config = &TurborepoConfig{
-		Token:       "",
-		ProjectId:   "",
-		TeamId:      "",
-		ApiUrl:      "https://beta.turborepo.com/api",
-		TeamSlug:    "",
-		ProjectSlug: "",
+		Token:    "",
+		TeamId:   "",
+		ApiUrl:   "https://api.vercel.com",
+		TeamSlug: "",
 	}
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -71,15 +63,13 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 
 // ReadUserConfigFile reads a user config file
 func ReadUserConfigFile() (*TurborepoConfig, error) {
-	path, err := xdg.ConfigFile(ConfigFilePath)
+	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return &TurborepoConfig{
-			Token:       "",
-			ProjectId:   "",
-			TeamId:      "",
-			ApiUrl:      "https://beta.turborepo.com/api",
-			TeamSlug:    "",
-			ProjectSlug: "",
+			Token:    "",
+			TeamId:   "",
+			ApiUrl:   "https://api.vercel.com",
+			TeamSlug: "",
 		}, err
 	}
 	return ReadConfigFile(path)
