@@ -2,8 +2,10 @@ import React from 'react'
 import NextHead from 'next/head'
 
 import renderComponent from './utils/render-component'
+import { useConfig } from './config'
 
-export default function Head({ config, title, locale, meta }) {
+export default function Head({ title, locale, meta }) {
+  const config = useConfig()
   return (
     <NextHead>
       {config.font ? (

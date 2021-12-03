@@ -126,13 +126,14 @@ const Vercel = ({ height = 20 }) => (
 );
 
 const theme = {
-  github: "https://github.com/vercel/turbo",
-  docsRepositoryBase: "https://github.com/vercel/turbo/blob/next/docs/pages",
+  github: "https://github.com/vercel/turborepo",
+  docsRepositoryBase:
+    "https://github.com/vercel/turborepo/blob/next/docs/pages",
   titleSuffix: " – Turborepo",
   search: true,
   unstable_stork: false,
   floatTOC: true,
-  projectChatLink: "https://discord.com/invite/kdqcr7afEa",
+  projectChatLink: "https://turborepo.org/discord",
   // banner: (
   //   <div className="px-6 py-2 text-white bg-black dark:bg-white dark:text-black">
   //     <a

@@ -3,24 +3,23 @@ import cn from "classnames";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import renderComponent from "./utils/render-component";
-import { getFSRoute } from "./utils/get-fs-route";
-import useMenuContext from "./utils/menu-context";
+import renderComponent from "./nextra-theme-docs/utils/render-component";
+import { getFSRoute } from "./nextra-theme-docs/utils/get-fs-route";
+import useMenuContext from "./nextra-theme-docs/utils/menu-context";
 
-import { useConfig } from "./config";
-import Search from "./search";
-import StorkSearch from "./stork-search";
-import GitHubIcon from "./icons/github";
-import DiscordIcon from "./icons/discord";
-import ThemeSwitch from "./theme-switch";
-import LocaleSwitch from "./locale-switch";
+import Search from "./nextra-theme-docs/search";
+import StorkSearch from "./nextra-theme-docs/stork-search";
+import GitHubIcon from "./nextra-theme-docs/github-icon";
+import ThemeSwitch from "./nextra-theme-docs/theme-switch";
+import LocaleSwitch from "./nextra-theme-docs/locale-switch";
+import DiscordIcon from "./nextra-theme-docs/discord-icon";
 
 export default function Navbar({
+  config,
   isRTL,
   flatDirectories,
   flatPageDirectories,
 }) {
-  const config = useConfig();
   const { locale, asPath } = useRouter();
   const activeRoute = getFSRoute(asPath, locale).split("#")[0];
   const { menu, setMenu } = useMenuContext();
@@ -33,7 +32,7 @@ export default function Navbar({
       <nav className="flex items-center bg-white z-20 sticky top-0 left-0 right-0 h-16 border-b border-gray-200 px-6 dark:bg-dark dark:border-gray-900 bg-opacity-[.97] dark:bg-opacity-100">
         <div className="flex items-center w-full mr-2">
           <Link href="/">
-            <a className="inline-flex items-center text-current no-underline hover:opacity-75">
+            <a className="inline-flex items-center text-current no-underline betterhover:hover:opacity-75">
               {renderComponent(config.logo, { locale })}
             </a>
           </Link>
@@ -54,7 +53,7 @@ export default function Navbar({
                 <Link href={href} key={page.route}>
                   <a
                     className={cn(
-                      "no-underline whitespace-nowrap mr-4 hidden md:inline-block",
+                      "no-underline whitespace-nowrap mr-6 hidden md:inline-block font-medium",
                       page.route === activeRoute ||
                         activeRoute.startsWith(page.route + "/")
                         ? "text-current"
@@ -67,9 +66,17 @@ export default function Navbar({
               );
             })
           : null}
-
+        <a
+          href="https://vercel.com/contact/sales?"
+          className={cn(
+            "no-underline whitespace-nowrap mr-6 hidden md:inline-block font-medium",
+            "text-gray-500"
+          )}
+        >
+          Enterprise
+        </a>
         <div className="flex-1">
-          <div className="hidden mr-2 md:inline-block">
+          <div className="hidden mr-2 md:mr-4 md:inline-block">
             {config.customSearch ||
               (config.search ? (
                 config.unstable_stork ? (
@@ -97,13 +104,11 @@ export default function Navbar({
             {config.projectLinkIcon ? (
               renderComponent(config.projectLinkIcon, { locale })
             ) : (
-              <React.Fragment>
-                <GitHubIcon height={24} />
-                <span className="sr-only">GitHub</span>
-              </React.Fragment>
+              <GitHubIcon height={24} />
             )}
           </a>
         ) : null}
+
         {config.projectChatLink ? (
           <a
             className="p-2 text-current"
@@ -114,10 +119,7 @@ export default function Navbar({
             {config.projectChatLinkIcon ? (
               renderComponent(config.projectChatLinkIcon, { locale })
             ) : (
-              <React.Fragment>
-                <DiscordIcon height={24} />
-                <span className="sr-only">Discord</span>
-              </React.Fragment>
+              <DiscordIcon height={24} />
             )}
           </a>
         ) : null}
