@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"turbo/internal/context"
 	"turbo/internal/util"
@@ -28,7 +29,7 @@ func TestParseConfig(t *testing.T) {
 				cache:          true,
 				forceExecution: false,
 				profile:        "",
-				cacheFolder:    "node_modules/.cache/turbo",
+				cacheFolder:    filepath.FromSlash("node_modules/.cache/turbo"),
 			},
 		},
 		{
@@ -45,7 +46,7 @@ func TestParseConfig(t *testing.T) {
 				forceExecution: false,
 				profile:        "",
 				cwd:            "zop",
-				cacheFolder:    "zop/node_modules/.cache/turbo",
+				cacheFolder:    filepath.FromSlash("zop/node_modules/.cache/turbo"),
 			},
 		},
 		{
@@ -62,7 +63,7 @@ func TestParseConfig(t *testing.T) {
 				forceExecution: false,
 				profile:        "",
 				scope:          []string{"foo", "blah"},
-				cacheFolder:    "node_modules/.cache/turbo",
+				cacheFolder:    filepath.FromSlash("node_modules/.cache/turbo"),
 			},
 		},
 		{
@@ -78,7 +79,7 @@ func TestParseConfig(t *testing.T) {
 				cache:          true,
 				forceExecution: false,
 				profile:        "",
-				cacheFolder:    "node_modules/.cache/turbo",
+				cacheFolder:    filepath.FromSlash("node_modules/.cache/turbo"),
 			},
 		},
 		{
@@ -94,7 +95,7 @@ func TestParseConfig(t *testing.T) {
 				cache:          true,
 				forceExecution: false,
 				profile:        "",
-				cacheFolder:    "node_modules/.cache/turbo",
+				cacheFolder:    filepath.FromSlash("node_modules/.cache/turbo"),
 			},
 		},
 		{
@@ -110,7 +111,7 @@ func TestParseConfig(t *testing.T) {
 				cache:           true,
 				forceExecution:  false,
 				profile:         "",
-				cacheFolder:     "node_modules/.cache/turbo",
+				cacheFolder:     filepath.FromSlash("node_modules/.cache/turbo"),
 				passThroughArgs: []string{"--boop", "zoop"},
 			},
 		},
@@ -127,7 +128,7 @@ func TestParseConfig(t *testing.T) {
 				cache:           true,
 				forceExecution:  false,
 				profile:         "",
-				cacheFolder:     "node_modules/.cache/turbo",
+				cacheFolder:     filepath.FromSlash("node_modules/.cache/turbo"),
 				passThroughArgs: []string{},
 			},
 		},
