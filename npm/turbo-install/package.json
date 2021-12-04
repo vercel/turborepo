@@ -3,6 +3,9 @@
   "version": "0.9.0-next.1",
   "description": "The blazing fast monorepo build system.",
   "repository": "https://github.com/turborepo/turbo",
+  "scripts": {
+    "postinstall": "node install.js"
+  },
   "bin": {
     "turbo": "bin/turbo"
   },
