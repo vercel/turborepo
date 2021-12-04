@@ -148,13 +148,7 @@ func (c *RunCommand) Run(args []string) int {
 	hasRepoGlobalFileChanged := false
 	var changedFiles []string
 	if runOptions.since != "" {
-		changedFilesRelativeToGitRoot := git.ChangedFiles(runOptions.since, true, "")
-		// We need to convert relative path of changed files to git root, to relative path to cwd
-		for _, f := range changedFilesRelativeToGitRoot {
-			repoRoot := filepath.Dir(gitRepoRoot)
-			pathToTarget := filepath.Join(repoRoot, f)
-			changedFiles = append(changedFiles, strings.Replace(pathToTarget, cwd+"/", "", 1))
-		}
+		changedFiles = git.ChangedFiles(runOptions.since, true, cwd)
 	}
 
 	ignoreSet := make(util.Set)

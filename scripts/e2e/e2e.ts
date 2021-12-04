@@ -59,9 +59,15 @@ function runSmokeTests(
     assert.ok(!!chash, "No hash for c:test");
     const splitMessage = chash.split(" ");
     const hash = splitMessage[splitMessage.length - 1];
-    const logFilePath = `${
-      repo.subdir ? repo.subdir + "/" : ""
-    }node_modules/.cache/turbo/${hash}/.turbo/turbo-test.log`;
+    const logFilePath = path.join(
+      repo.subdir ? repo.subdir + "/" : "",
+      "node_modules",
+      ".cache",
+      "turbo",
+      hash,
+      ".turbo",
+      "turbo-test.log"
+    );
     let text = "";
     assert.not.throws(() => {
       text = repo.readFileSync(logFilePath);
@@ -70,7 +76,7 @@ function runSmokeTests(
     assert.ok(text.includes("testing c"), "Contains correct output");
     repo.newBranch("my-feature-branch");
     repo.commitFiles({
-      [`packages/a/test.js`]: `console.log('testingz a');`,
+      [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
     });
 
     const sinceResults = repo.turbo(

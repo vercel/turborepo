@@ -156,7 +156,20 @@ importers:
 
   addPackage(name, internalDeps = []) {
     return this.commitFiles({
-      [`packages/${name}/build.js`]: `console.log('building ${name}');`,
+      [`packages/${name}/build.js`]: `
+const fs = require('fs');
+const path = require('path');
+console.log('building ${name}');
+
+if (!fs.existsSync(path.join(__dirname, 'dist'))){
+   fs.mkdirSync(path.join(__dirname, 'dist'));
+}
+
+fs.copyFileSync(
+  path.join(__dirname, 'build.js'),
+  path.join(__dirname, 'dist', 'build.js')
+);
+`,
       [`packages/${name}/test.js`]: `console.log('testing ${name}');`,
       [`packages/${name}/lint.js`]: `console.log('linting ${name}');`,
       [`packages/${name}/package.json`]: {
@@ -164,8 +177,7 @@ importers:
         version: "0.1.0",
         license: "MIT",
         scripts: {
-          build:
-            "node ./build.js && mkdir -p dist && cp build.js dist/build.js;",
+          build: "node ./build.js",
           test: "node ./test.js",
           lint: "node ./lint.js",
         },
