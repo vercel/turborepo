@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -101,7 +100,7 @@ func (g *git) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo 
 }
 
 func (g *git) fixGitRelativePath(worktreePath, relativeTo string) string {
-	p, err := filepath.Rel(relativeTo, path.Join(g.repoRoot, worktreePath))
+	p, err := filepath.Rel(relativeTo, filepath.Join(g.repoRoot, worktreePath))
 	if err != nil {
 		log.Fatalf("unable to determine relative path for %s and %s", g.repoRoot, relativeTo)
 	}
