@@ -43,9 +43,9 @@ RUN \
  && apt -y autoremove \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
- && GORELEASER_DOWNLOAD_FILE=goreleaser_${dpkgArch}.deb \
+ && GORELEASER_DOWNLOAD_FILE=goreleaser_${GORELEASER_VERSION}_${dpkgArch}.deb \
  && GORELEASER_DOWNLOAD_DEB="${GORELEASER_DOWNLOAD_URL}/${GORELEASER_DOWNLOAD_FILE}" \
- && cosign verify-blob --key https://raw.githubusercontent.com/goreleaser/goreleaser/master/cosign.pub \
+ && cosign verify-blob --key ${GORELEASER_DOWNLOAD_URL}/cosign.pub \
     --signature "${GORELEASER_DOWNLOAD_URL}/checksums.txt.sig" "${GORELEASER_DOWNLOAD_URL}/checksums.txt" \
  && wget ${GORELEASER_DOWNLOAD_DEB} \
  && dpkg -i ${GORELEASER_DOWNLOAD_FILE} \

@@ -11,12 +11,12 @@ else
 	IMAGE_NAME := $(REGISTRY)/$(IMAGE_BASE_NAME)
 endif
 
-GORELEASER_VERSION := 0.184.0
 OSX_SDK            := MacOSX12.0.sdk
 OSX_SDK_SUM        := ac07f28c09e6a3b09a1c01f1535ee71abe8017beaedd09181c8f08936a510ffd
 OSX_VERSION_MIN    := 10.9
 OSX_CROSS_COMMIT   := e59a63461da2cbc20cb0a5bbfc954730e50a5472
 DEBIAN_FRONTEND    := noninteractive
+GORELEASER_VERSION ?= 1.1.0
 TINI_VERSION       ?= v0.19.0
 GORELEASER_TAG     ?= $(shell git describe --tags --abbrev=0)
 COSIGN_VERSION     ?= 1.3.0
