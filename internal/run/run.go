@@ -148,13 +148,7 @@ func (c *RunCommand) Run(args []string) int {
 	hasRepoGlobalFileChanged := false
 	var changedFiles []string
 	if runOptions.since != "" {
-		changedFilesRelativeToGitRoot := git.ChangedFiles(runOptions.since, true, "")
-		// We need to convert relative path of changed files to git root, to relative path to cwd
-		for _, f := range changedFilesRelativeToGitRoot {
-			repoRoot := filepath.Dir(gitRepoRoot)
-			pathToTarget := filepath.Join(repoRoot, f)
-			changedFiles = append(changedFiles, strings.Replace(pathToTarget, cwd+"/", "", 1))
-		}
+		changedFiles = git.ChangedFiles(runOptions.since, true, cwd)
 	}
 
 	ignoreSet := make(util.Set)
@@ -432,8 +426,8 @@ func (c *RunCommand) Run(args []string) int {
 					targetUi.Error(fmt.Sprintf("Hashing error: %v", err))
 					// @TODO probably should abort fatally???
 				}
-				logFileName := path.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
-				targetLogger.Debug("log file", "path", path.Join(runOptions.cwd, logFileName))
+				logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
+				targetLogger.Debug("log file", "path", filepath.Join(runOptions.cwd, logFileName))
 
 				// Cache ---------------------------------------------
 				// We create the real task outputs now so we can potentially use them to
@@ -454,7 +448,7 @@ func (c *RunCommand) Run(args []string) int {
 					if err != nil {
 						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 					} else if hit {
-						if runOptions.stream && fs.FileExists(path.Join(runOptions.cwd, logFileName)) {
+						if runOptions.stream && fs.FileExists(filepath.Join(runOptions.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
 							targetUi.Output(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(hash)))
 							go replayLogs(targetLogger, targetUi, runOptions, logFileName, hash, &logReplayWaitGroup, false)
@@ -465,9 +459,16 @@ func (c *RunCommand) Run(args []string) int {
 					}
 				}
 				// Setup log file
-				fs.EnsureDir(logFileName)
-				output, err := os.Create(path.Join(runOptions.cwd, logFileName))
+				if err := fs.EnsureDir(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))); err != nil {
+					tracer(TargetBuildFailed, err)
+					c.logError(targetLogger, actualPrefix, err)
+					if runOptions.bail {
+						os.Exit(1)
+					}
+				}
+				output, err := os.Create(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task)))
 				if err != nil {
+					fmt.Println("here")
 					tracer(TargetBuildFailed, err)
 					c.logError(targetLogger, actualPrefix, err)
 					if runOptions.bail {
@@ -549,7 +550,7 @@ func (c *RunCommand) Run(args []string) int {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
 							os.Exit(1)
 						} else {
-							f, err := os.Open(path.Join(runOptions.cwd, logFileName))
+							f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 							if err != nil {
 								targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
 							}
@@ -578,7 +579,7 @@ func (c *RunCommand) Run(args []string) int {
 					targetLogger.Debug("caching output", "outputs", outputs)
 					var filesToBeCached = make(util.Set)
 					for _, output := range outputs {
-						results, err := doublestar.Glob(path.Join(pack.Dir, strings.TrimPrefix(output, "!")))
+						results, err := doublestar.Glob(filepath.Join(pack.Dir, strings.TrimPrefix(output, "!")))
 						if err != nil {
 							targetUi.Error(fmt.Sprintf("Could not find output artifacts in %v, likely invalid glob %v: %s", pack.Dir, output, err))
 						}
@@ -802,7 +803,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 	}
 
 	// We can only set this cache folder after we know actual cwd
-	runOptions.cacheFolder = path.Join(runOptions.cwd, unresolvedCacheFolder)
+	runOptions.cacheFolder = filepath.Join(runOptions.cwd, unresolvedCacheFolder)
 
 	return runOptions, nil
 }
@@ -882,7 +883,7 @@ func hasGraphViz() bool {
 func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
-	f, err := os.Open(path.Join(runOptions.cwd, logFileName))
+	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 	if err != nil && !silent {
 		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
