@@ -18,9 +18,10 @@ type asyncCache struct {
 
 // A cacheRequest models an incoming cache request on our queue.
 type cacheRequest struct {
-	target string
-	key    string
-	files  []string
+	target   string
+	key      string
+	duration int
+	files    []string
 }
 
 func newAsyncCache(realCache Cache, config *config.Config) Cache {
@@ -35,11 +36,12 @@ func newAsyncCache(realCache Cache, config *config.Config) Cache {
 	return c
 }
 
-func (c *asyncCache) Put(target string, key string, files []string) error {
+func (c *asyncCache) Put(target string, key string, duration int, files []string) error {
 	c.requests <- cacheRequest{
-		target: target,
-		key:    key,
-		files:  files,
+		target:   target,
+		key:      key,
+		files:    files,
+		duration: duration,
 	}
 	return nil
 }
@@ -66,7 +68,7 @@ func (c *asyncCache) Shutdown() {
 // run implements the actual async logic.
 func (c *asyncCache) run() {
 	for r := range c.requests {
-		c.realCache.Put(r.target, r.key, r.files)
+		c.realCache.Put(r.target, r.key, r.duration, r.files)
 	}
 	c.wg.Done()
 }

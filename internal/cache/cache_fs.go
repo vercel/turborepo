@@ -36,7 +36,7 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	return true, nil, nil
 }
 
-func (f *fsCache) Put(target, hash string, files []string) error {
+func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	g := new(errgroup.Group)
 	for i, file := range files {
 		_, file := i, file // https://golang.org/doc/faq#closures_and_goroutines

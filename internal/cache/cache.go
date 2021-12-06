@@ -14,7 +14,7 @@ type Cache interface {
 	// into their correct position as a side effect
 	Fetch(target string, hash string, files []string) (bool, []string, error)
 	// Put caches files for a given hash
-	Put(target string, hash string, files []string) error
+	Put(target string, hash string, duration int, files []string) error
 	Clean(target string)
 	CleanAll()
 	Shutdown()
@@ -52,8 +52,8 @@ type cacheMultiplexer struct {
 	caches []Cache
 }
 
-func (mplex cacheMultiplexer) Put(target string, key string, files []string) error {
-	mplex.storeUntil(target, key, files, len(mplex.caches))
+func (mplex cacheMultiplexer) Put(target string, key string, duration int, files []string) error {
+	mplex.storeUntil(target, key, duration, files, len(mplex.caches))
 	return nil
 }
 
@@ -62,7 +62,7 @@ func (mplex cacheMultiplexer) Put(target string, key string, files []string) err
 // downloading from the RPC cache.
 // This is a little inefficient since we could write the file to plz-out then copy it to the dir cache,
 // but it's hard to fix that without breaking the cache abstraction.
-func (mplex cacheMultiplexer) storeUntil(target string, key string, outputGlobs []string, stopAt int) {
+func (mplex cacheMultiplexer) storeUntil(target string, key string, duration int, outputGlobs []string, stopAt int) {
 	// Attempt to store on all caches simultaneously.
 	var wg sync.WaitGroup
 	for i, cache := range mplex.caches {
@@ -71,7 +71,7 @@ func (mplex cacheMultiplexer) storeUntil(target string, key string, outputGlobs 
 		}
 		wg.Add(1)
 		go func(cache Cache) {
-			cache.Put(target, key, outputGlobs)
+			cache.Put(target, key, duration, outputGlobs)
 			wg.Done()
 		}(cache)
 	}
@@ -84,7 +84,7 @@ func (mplex cacheMultiplexer) Fetch(target string, key string, files []string) (
 	for i, cache := range mplex.caches {
 		if ok, actualFiles, _ := cache.Fetch(target, key, files); ok {
 			// Store this into other caches
-			mplex.storeUntil(target, key, actualFiles, i)
+			mplex.storeUntil(target, key, 0, actualFiles, i)
 			return ok, actualFiles, nil
 		}
 	}
