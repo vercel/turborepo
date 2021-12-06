@@ -1,0 +1,30 @@
+{
+  "name": "turborepo-basic",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "docs",
+    "web",
+    "ui",
+    "config"
+  ],
+  "devDependencies": {
+    "turbo": "latest"
+  },
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": [
+          "^build"
+        ],
+        "outputs": [
+          "dist/**",
+          ".next/**"
+        ]
+      },
+      "lint": {
+        "outputs": []
+      }
+    }
+  }
+}
