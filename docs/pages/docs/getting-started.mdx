@@ -68,7 +68,7 @@ In your root `package.json`, add a key `turbo`. If your git repo's base branch i
 
 ### Create a `pipeline`
 
-In your `package.json`, add the commands you want to "turbocharge" to your pipeline. Your pipeline defines the way in which your NPM `package.json` scripts relate to each other. These relationships are applied to all packages across your entire monorepo.
+In your `package.json`, add the commands you want to "turbocharge" to your pipeline. Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
 ```json
 {
@@ -93,8 +93,6 @@ In your `package.json`, add the commands you want to "turbocharge" to your pipel
   }
 }
 ```
-
-@TODO: highlight lines and explain pipeline configuration
 
 ### Edit `.gitignore`
 
