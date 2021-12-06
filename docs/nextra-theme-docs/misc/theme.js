@@ -1,7 +1,7 @@
 import { MDXProvider } from '@mdx-js/react'
 import Slugger from 'github-slugger'
 import Link from 'next/link'
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useContext, useEffect, useMemo, useRef } from 'react'
 import innerText from 'react-innertext'
 import Highlight, { defaultProps } from 'prism-react-renderer'
 import 'intersection-observer'
@@ -51,23 +51,26 @@ const THEME = {
 
 const ob = {}
 const obCallback = {}
-const createOrGetObserver = (rootMargin) => {
+const createOrGetObserver = rootMargin => {
   // Only create 1 instance for performance reasons
   if (!ob[rootMargin]) {
     obCallback[rootMargin] = []
-    ob[rootMargin] = new IntersectionObserver(e => {
-      obCallback[rootMargin].forEach(cb => cb(e))
-    }, {
-      rootMargin,
-      threshold: [0, 1]
-    })
+    ob[rootMargin] = new IntersectionObserver(
+      e => {
+        obCallback[rootMargin].forEach(cb => cb(e))
+      },
+      {
+        rootMargin,
+        threshold: [0, 1]
+      }
+    )
   }
   return ob[rootMargin]
 }
 
 function useIntersect(margin, ref, cb) {
   useEffect(() => {
-    const callback = (entries) => {
+    const callback = entries => {
       let e
       for (let i = 0; i < entries.length; i++) {
         if (entries[i].target === ref.current) {
@@ -85,7 +88,7 @@ function useIntersect(margin, ref, cb) {
     return () => {
       const idx = obCallback[margin].indexOf(callback)
       if (idx >= 0) obCallback[margin].splice(idx, 1)
-      if (ref.current) observer.unobserve(ref.current)  
+      if (ref.current) observer.unobserve(ref.current)
     }
   }, [])
 }
@@ -108,30 +111,39 @@ const HeaderLink = ({
   // separately, so we attach a mutable index property to slugger.
   const index = slugger.index++
 
-  useIntersect("0px 0px -50%", obRef, e => {
+  useIntersect('0px 0px -50%', obRef, e => {
     const aboveHalfViewport =
       e.boundingClientRect.y + e.boundingClientRect.height <=
       e.rootBounds.y + e.rootBounds.height
     const insideHalfViewport = e.intersectionRatio > 0
 
     setActiveAnchor(f => {
-      const ret = {...f,
+      const ret = {
+        ...f,
         [slug]: {
           index,
           aboveHalfViewport,
-          insideHalfViewport,
-        }}
-      
+          insideHalfViewport
+        }
+      }
+
       let activeSlug
       let smallestIndexInViewport = Infinity
       let largestIndexAboveViewport = -1
       for (let s in f) {
         ret[s].isActive = false
-        if (ret[s].insideHalfViewport && ret[s].index < smallestIndexInViewport) {
+        if (
+          ret[s].insideHalfViewport &&
+          ret[s].index < smallestIndexInViewport
+        ) {
           smallestIndexInViewport = ret[s].index
           activeSlug = s
         }
-        if (smallestIndexInViewport === Infinity && ret[s].aboveHalfViewport && ret[s].index > largestIndexAboveViewport) {
+        if (
+          smallestIndexInViewport === Infinity &&
+          ret[s].aboveHalfViewport &&
+          ret[s].index > largestIndexAboveViewport
+        ) {
           largestIndexAboveViewport = ret[s].index
           activeSlug = s
         }
@@ -211,7 +223,18 @@ const A = ({ children, ...props }) => {
   )
 }
 
-const Code = ({ children, className, highlight, ...props }) => {
+const PreContext = React.createContext({})
+const Pre = ({ children, ...props }) => {
+  return (
+    <PreContext.Provider value={props}>
+      <pre>{children}</pre>
+    </PreContext.Provider>
+  )
+}
+
+const Code = ({ children, className }) => {
+  const { highlight, ...props } = useContext(PreContext)
+
   const highlightedRanges = useMemo(() => {
     return highlight
       ? highlight.split(',').map(r => {
@@ -280,11 +303,12 @@ const getComponents = args => ({
   h5: H5(args),
   h6: H6(args),
   a: A,
+  pre: Pre,
   code: Code,
   table: Table
 })
 
-const Theme = ({ children }) => {
+export default ({ children }) => {
   const slugger = new Slugger()
   slugger.index = 0
   return (
@@ -292,6 +316,4 @@ const Theme = ({ children }) => {
       {children}
     </MDXProvider>
   )
-};
-
-export default Theme;
+}

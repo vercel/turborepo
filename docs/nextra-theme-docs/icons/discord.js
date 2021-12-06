@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react'
 
 const DiscordIcon = ({ height = 40 }) => {
   return (
@@ -16,7 +16,7 @@ const DiscordIcon = ({ height = 40 }) => {
         fill="currentColor"
       />
     </svg>
-  );
-};
+  )
+}
 
-export default DiscordIcon;
+export default DiscordIcon

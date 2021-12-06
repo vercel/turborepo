@@ -1,6 +1,6 @@
 import React from 'react'
 
-const ArrowRight = ({ height = 24, ...props }) => {
+export default ({ height = 24, ...props }) => {
   return (
     <svg
       height={height}
@@ -17,6 +17,4 @@ const ArrowRight = ({ height = 24, ...props }) => {
       />
     </svg>
   )
-};
-
-export default ArrowRight;
+}

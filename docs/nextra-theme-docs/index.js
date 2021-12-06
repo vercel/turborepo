@@ -3,10 +3,7 @@ import { useRouter } from "next/router";
 import "focus-visible";
 import { SkipNavContent } from "@reach/skip-nav";
 import { ThemeProvider } from "next-themes";
-import innerText from "react-innertext";
 import cn from "classnames";
-
-import normalizePages from "./utils/normalize-pages";
 
 import Head from "./head";
 import Navbar from "./navbar";
@@ -14,12 +11,14 @@ import Footer, { NavLinks } from "./footer";
 import Theme from "./misc/theme";
 import Sidebar from "./sidebar";
 import ToC from "./toc";
+import { ThemeConfigContext, useConfig } from "./config";
 import { ActiveAnchor } from "./misc/active-anchor";
 import defaultConfig from "./misc/default.config";
 import { getFSRoute } from "./utils/get-fs-route";
 import { MenuContext } from "./utils/menu-context";
-
-const titleType = ["h1", "h2", "h3", "h4", "h5", "h6"];
+import normalizePages from "./utils/normalize-pages";
+import { getHeadings } from "./utils/get-headings";
+import { getTitle } from "./utils/get-title";
 
 function useDirectoryInfo(pageMap) {
   const { locale, defaultLocale, asPath } = useRouter();
@@ -35,7 +34,8 @@ function useDirectoryInfo(pageMap) {
   }, [pageMap, locale, defaultLocale, asPath]);
 }
 
-function Body({ meta, config, toc, filepathWithName, navLinks, children }) {
+function Body({ meta, toc, filepathWithName, navLinks, children }) {
+  const config = useConfig();
   return (
     <React.Fragment>
       <SkipNavContent />
@@ -60,11 +60,9 @@ function Body({ meta, config, toc, filepathWithName, navLinks, children }) {
   );
 }
 
-const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
+const Layout = ({ filename, pageMap, meta, children }) => {
   const { route, locale } = useRouter();
-
-  // @TODO: config should be in a context.
-  const config = Object.assign({}, defaultConfig, _config);
+  const config = useConfig();
 
   const {
     activeType,
@@ -77,22 +75,11 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
     directories,
   } = useDirectoryInfo(pageMap);
 
+  const content = children.type();
   const filepath = route.slice(0, route.lastIndexOf("/") + 1);
   const filepathWithName = filepath + filename;
-  const titles = React.Children.toArray(children).filter(
-    (child) => child.props && titleType.includes(child.props.mdxType)
-  );
-  const titleEl = titles.find(
-    (child) => child.props && child.props.mdxType === "h1"
-  );
-  const title =
-    meta.title || (titleEl ? innerText(titleEl.props.children) : "Untitled");
-  const anchors = titles
-    .filter(
-      (child) =>
-        child.props && (config.floatTOC || child.props.mdxType === "h2")
-    )
-    .map((child) => child.props.children);
+  const headings = getHeadings(content.props.children);
+  const title = meta.title || getTitle(headings) || "Untitled";
 
   const isRTL = useMemo(() => {
     if (!config.i18n) return config.direction === "rtl" || null;
@@ -105,7 +92,7 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
   if (activeType === "nav") {
     return (
       <React.Fragment>
-        <Head config={config} title={title} locale={locale} meta={meta} />
+        <Head title={title} locale={locale} meta={meta} />
         <MenuContext.Provider
           value={{
             menu,
@@ -120,7 +107,6 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
             })}
           >
             <Navbar
-              config={config}
               isRTL={isRTL}
               flatDirectories={flatDirectories}
               flatPageDirectories={flatPageDirectories}
@@ -132,15 +118,14 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
                   flatDirectories={flatDirectories}
                   fullDirectories={directories}
                   mdShow={false}
-                  config={config}
+                  headings={headings}
                 />
                 <Body
                   meta={meta}
-                  config={config}
                   filepathWithName={filepathWithName}
                   navLinks={null}
                 >
-                  {children}
+                  {content}
                 </Body>
               </div>
             </ActiveAnchor>
@@ -153,7 +138,7 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
   // Docs layout
   return (
     <React.Fragment>
-      <Head config={config} title={title} locale={locale} meta={meta} />
+      <Head title={title} locale={locale} meta={meta} />
       <MenuContext.Provider
         value={{
           menu,
@@ -167,7 +152,6 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
           })}
         >
           <Navbar
-            config={config}
             isRTL={isRTL}
             flatDirectories={flatDirectories}
             flatPageDirectories={flatPageDirectories}
@@ -178,19 +162,16 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
                 directories={docsDirectories}
                 flatDirectories={flatDirectories}
                 fullDirectories={directories}
-                anchors={config.floatTOC ? [] : anchors}
-                config={config}
+                headings={headings}
               />
               <Body
                 meta={meta}
-                config={config}
                 filepathWithName={filepathWithName}
-                toc={<ToC titles={config.floatTOC ? titles : null} />}
+                toc={<ToC headings={config.floatTOC ? headings : null} />}
                 navLinks={
                   <NavLinks
                     flatDirectories={flatDocsDirectories}
                     currentIndex={activeIndex}
-                    config={config}
                     isRTL={isRTL}
                   />
                 }
@@ -205,10 +186,16 @@ const Layout = ({ filename, config: _config, pageMap, meta, children }) => {
   );
 };
 
-export default (opts, config) => (props) => {
-  return (
-    <ThemeProvider attribute="class" defaultTheme="dark">
-      <Layout config={config} {...opts} {...props} />
-    </ThemeProvider>
-  );
+export default (opts, config) => {
+  const extendedConfig = Object.assign({}, defaultConfig, config);
+
+  return (props) => {
+    return (
+      <ThemeConfigContext.Provider value={extendedConfig}>
+        <ThemeProvider attribute="class">
+          <Layout {...opts} {...props} />
+        </ThemeProvider>
+      </ThemeConfigContext.Provider>
+    );
+  };
 };
