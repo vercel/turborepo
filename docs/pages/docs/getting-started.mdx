@@ -1,4 +1,27 @@
-## Add Turborepo to existing projects
+---
+title: Getting Started 
+---
+
+import Callout from "../../components/callout";
+import Beta from "../../components/beta";
+
+# Getting Started with Turborepo
+
+## Clone an example or starter monorepo
+
+If you're starting a brand new monorepo, you can get started with a single command.
+
+```sh
+npx create-turborepo
+```
+
+Follow the prompts to bootstrap a brand new Turborepo.
+
+To see more examples and starters, have a look at the [example directory on GitHub](https://github.com/vercel/turborepo/blob/main/examples)
+
+## Add Turborepo to your existing monorepo
+
+Turborepo was designed to be incrementally adopted. Adding it to an existing monorepo takes just a few minutes.
 
 Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](https://npmjs.com), and [PNPM](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
 
@@ -7,53 +30,29 @@ Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](http
 - Windows 32-bit, 64-bit
 - FreeBSD 64-bit, FreeBSD Arm 64-bit
 
-### Create an account and team
-
-Signup for an [Vercel account](https://beta.turborepo.com/signup) and create a Team.
-
 ### Install `turbo`
 
-Add `turbo` as a dependency in the root of your project.
+Add `turbo` as a development dependency in the root of your project.
 
 ### Yarn
 
 ```bash
-yarn add turbo -W
+yarn add turbo -W --dev
 ```
 
 ### NPM
 
 ```bash
-npm install turbo
+npm install turbo -D
 ```
 
 ### PNPM
 
 ```bash
-pnpm add turbo
+pnpm add turbo -D
 ```
 
 The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
-
-### Activate your CLI
-
-To associate your machine to your Turborepo account, run:
-
-```bash
-yarn turbo login
-```
-
-and follow the prompts. You'll be asked to activate your device with a device code.
-
-### Link to / or create a project
-
-From the root of your monorepo, run:
-
-```sh
-yarn turbo link
-```
-
-and follow the prompts. If your team has already created a project, you can link to it. A project should be 1:1 with each monorepo so that you and your team members and your CI/CD can recycle/share cached computation artifacts (more on that later).
 
 ### Add `turbo` to `package.json`
 
@@ -77,9 +76,11 @@ In your `package.json`, add the commands you want to "turbocharge" to your pipel
     "baseBranch": "origin/main",
     "pipeline": {
       "build": {
-        "dependsOn": ["^build"]
+        "dependsOn": ["^build"],
+        "outputs": ["build/**", "dist/**"]
       },
       "test": {
+        "dependsOn": ["^build"],
         "outputs": []
       },
       "lint": {
@@ -92,6 +93,8 @@ In your `package.json`, add the commands you want to "turbocharge" to your pipel
   }
 }
 ```
+
+@TODO: highlight lines and explain pipeline configuration
 
 ### Edit `.gitignore`
 
@@ -116,10 +119,46 @@ Now re-run you NPM client's install command just to be sure. You should be good 
 
 ## Run stuff!
 
-To build with the freshly installed `turbo` runner, type the following:
+To build with your freshly installed `turbo`, type the following:
+
+### Yarn
 
 ```sh
 yarn turbo run build
 ```
 
 Now run it again. Depending on your monorepo setup, some stuff might already be caching properly. If not, no worries! In the next sections, we'll discuss how `turbo` works, how `scope` works, and then how to get caching working after that.
+
+## Setup Remote Caching <Beta/>
+
+A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
+At the moment, your Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
+
+> Remote Caching has entered the chat.
+
+Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost.
+
+<Callout> 
+  Remote Caching is an incredibly powerful feature of Turborepo but also a breathtakingly ["sharp knife"](https://m.signalvnoise.com/provide-sharp-knives/) that you can easily cut yourself with. Make sure that your are properly caching things correctly first and double check thate you are properly handling environment variables.
+</Callout>
+
+### Link Your Turborepo to Your Remote Cache
+
+As part of Turborepo's initial public launch, [Vercel](https://vercel.com) is offering **free remote caching** on all accounts with zero-configuration needed.
+
+#### Using Remote Caching for Local development
+
+If you want to link your local turborepo to your remote cache you do so by running:
+
+```sh
+yarn turbo link
+```
+
+Once enabled, make some changes to a package or application your are currently caching and run tasks against it with `turbo run`.
+Your cache artifacts will now be stored locally and in your remote cache. To verify that this worked, delete your local Turborepo cache:
+
+```sh
+rm -rf ./node_modules/.cache/turbo
+```
+
+Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your remote cache and replay them back to you.

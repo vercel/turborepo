@@ -27,9 +27,7 @@ export default function Navbar({
 
   return (
     <>
-      {config.banner
-        ? renderComponent(config.projectLinkIcon, { locale })
-        : null}
+      {config.banner ? renderComponent(config.banner, { locale }) : null}
       <nav className="flex items-center bg-white z-20 sticky top-0 left-0 right-0 h-16 border-b border-gray-200 px-6 dark:bg-dark dark:border-gray-900 bg-opacity-[.97] dark:bg-opacity-100">
         <div className="flex items-center w-full mr-2">
           <Link href="/">
@@ -67,6 +65,17 @@ export default function Navbar({
               );
             })
           : null}
+
+        {config.enterpriseLink ? (
+          <a
+            href={config.enterpriseLink}
+            className={cn(
+              "no-underline whitespace-nowrap mr-4 hidden md:inline-block text-gray-500"
+            )}
+          >
+            Enterprise
+          </a>
+        ) : null}
 
         <div className="flex-1">
           <div className="hidden mr-2 md:inline-block">

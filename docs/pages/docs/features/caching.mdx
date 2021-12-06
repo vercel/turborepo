@@ -1,4 +1,8 @@
-import Callout from "../../../nextra-theme-docs/callout";
+---
+title: Caching
+---
+
+import Callout from "../../../components/callout";
 
 # Caching
 
@@ -105,7 +109,7 @@ Once `turbo` encounters a given package's task in its execution, it checks the c
 
 The hash of a given task is injected at execution time as an environment variable `TURBO_HASH`. This value can be useful in stamping outputs or tagging Dockerfile etc.
 
-<Callout emoji="ℹ️">
+<Callout>
   As of `turbo` v0.6.10, `turbo`'s hashing algorithm when using `npm` or `pnpm`
   differs slightly from the above. When using either of these package managers,
   `turbo` will simply include the hashed contents of the lockfile in its hash

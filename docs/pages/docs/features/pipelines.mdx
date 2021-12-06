@@ -1,4 +1,8 @@
-import Callout from "../../../nextra-theme-docs/callout";
+---
+title: Pipelines
+---
+
+import Callout from "../../../components/callout";
 
 # Pipelining Package Tasks
 
@@ -154,7 +158,7 @@ In this example, we illustrate a `deploy` script of a `frontend` application dep
 
 This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"deploy": { "dependsOn": ["test"] }`, but it does not. Since `test` and `deploy` scripts do not have topological dependencies (e.g. `^<task>`), they theoretically can get triggered anytime once their own package's `build` and `test` scripts have finished! Unless they are being used for applications/services for deployment orchestration, the general guidance is to get rid of these specific package-task to package-task dependencies in the pipeline as quickly as possible (so the builds can be optimized better).
 
-<Callout emoji="🚨">
+<Callout>
   **Note: Package-tasks do not inherit cache configuration. You must redeclare
   [`outputs`](./reference/configuration#outputs) at the moment.**
 </Callout>

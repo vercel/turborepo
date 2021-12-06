@@ -1,4 +1,4 @@
-import Callout from '../../../nextra-theme-docs/callout'
+import Callout from '../../../components/callout'
 
 # Command-Line Reference
 
@@ -85,10 +85,13 @@ turbo run build test lint --graph=my-graph.pdf
 turbo run build test lint --graph=my-graph.png
 ```
 
-<Callout emoji="🚨">
-  **Known Limitation**: All possible pipeline task nodes will be added to the
+<Callout>
+  **Known Bug**: All possible pipeline task nodes will be added to the
   graph at the moment, even if that pipeline task does not actually exist in a
-  given package.
+  given package. This has no impact on execution, it just means that:
+  
+  - the terminal output may over state the number of packages in which a task is running.
+  - your dot viz graph may contain additional nodes that represents tasks that do not exist.
 </Callout>
 
 #### `--force`
