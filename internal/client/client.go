@@ -73,7 +73,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	}
 	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("x-artifact-duration", string(duration))
+	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
