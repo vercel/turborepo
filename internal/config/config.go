@@ -40,8 +40,9 @@ type Config struct {
 	ApiUrl string
 	// Backend retryable http client
 	ApiClient *client.ApiClient
-
-	Cache *CacheConfig
+	// Turborepo CLI Version
+	TurboVersion string
+	Cache        *CacheConfig
 }
 
 // CacheConfig
@@ -57,7 +58,7 @@ type CacheConfig struct {
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
-func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
+func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
 
 	// Special check for ./turbo invocation without any args
 	// Return the help message
@@ -163,15 +164,16 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		Output: output,
 	})
 
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger)
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion)
 
 	c = &Config{
-		Logger:    logger,
-		Token:     partialConfig.Token,
-		TeamSlug:  partialConfig.TeamSlug,
-		TeamId:    partialConfig.TeamId,
-		ApiUrl:    partialConfig.ApiUrl,
-		ApiClient: apiClient,
+		Logger:       logger,
+		Token:        partialConfig.Token,
+		TeamSlug:     partialConfig.TeamSlug,
+		TeamId:       partialConfig.TeamId,
+		ApiUrl:       partialConfig.ApiUrl,
+		ApiClient:    apiClient,
+		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
