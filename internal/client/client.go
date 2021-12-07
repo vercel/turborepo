@@ -67,7 +67,7 @@ func (c *ApiClient) makeUrl(endpoint string) string {
 }
 
 func (c *ApiClient) UserAgent() string {
-	return fmt.Sprintf("turbo %v %v %v", c.turboVersion, runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
