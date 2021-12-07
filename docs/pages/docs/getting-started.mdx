@@ -74,7 +74,10 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
 
 In the below example, the `build` and `test` tasks are dependant on their packages dependancies and devDependancies being built first, this is denoted with the `^` prefix.
 
-The [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folder(s) for a task. Finally, the `dev` task has it's chaching disabled.
+Turborepo will look for a `dist/**` or `build/**` folder in your projects root, and will use one of those as the default cache folder if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folder,
+like in the example below, where the `.next/**` folder is sected to be the default cache folder for the `build` task.
+
+Finally, the `dev` task has it's chaching disabled using the `cache` key with a value of `false`.
 
 See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
 
@@ -85,7 +88,7 @@ See the [`Pipelines`](./features/pipelines) documentation for more details on ho
     "pipeline": {
       "build": {
         "dependsOn": ["^build"],
-        "outputs": ["build/**", "dist/**"]
+        "outputs": [".next/**"]
       },
       "test": {
         "dependsOn": ["^build"],
