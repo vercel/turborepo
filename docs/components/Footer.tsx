@@ -41,7 +41,7 @@ const navigation = {
     { name: "FAQ", href: "/docs/faq" },
     {
       name: "Enterprise",
-      href: "https://vercel.com/contact/sales?utm_source=turbo-site&utm_medium=footer&utm_campaign=turbo-website",
+      href: "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-enterpriseLink",
     },
   ],
   support: [
@@ -57,7 +57,7 @@ const navigation = {
   company: [
     {
       name: "Open Source Software",
-      href: "https://vercel.com/oss?utm_source=turbo-site&utm_medium=footer&utm_campaign=turbo-website",
+      href: "https://vercel.com/oss?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-ossLink",
     },
     { name: "GitHub", href: "https://github.com/vercel" },
     { name: "Twitter", href: "https://twitter.com/vercel" },
@@ -140,7 +140,7 @@ export function Footer() {
               className="text-current"
               target="_blank"
               rel="noopener noreferrer"
-              href="https://vercel.com?utm_source=turbo-site&utm_medium=footer&utm_campaign=turbo-website"
+              href="https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-logoLink"
             >
               <Vercel />
             </a>
