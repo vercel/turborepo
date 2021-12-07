@@ -133,7 +133,8 @@ const theme = {
   search: true,
   unstable_stork: false,
   floatTOC: true,
-  enterpriseLink: "https://vercel.com/contact/turborepo", // @TODO
+  enterpriseLink:
+    "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink", // @TODO
   projectChatLink: "https://turborepo.org/discord",
   // banner: function Banner() {
   //   return (
@@ -210,7 +211,7 @@ const theme = {
   footerText: ({ locale }) => {
     return (
       <a
-        href="https://vercel.com/?utm_source=turbo"
+        href="https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink"
         target="_blank"
         rel="noopener"
         className="inline-flex items-center font-semibold text-current no-underline"
