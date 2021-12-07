@@ -72,15 +72,6 @@ In your `package.json`, add the commands you want to "turbocharge" to your pipel
 
 Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
-In the below example, the `build` and `test` tasks are dependant on their packages dependancies and devDependancies being built first, this is denoted with the `^` prefix.
-
-Turborepo will look for a `dist/**` or `build/**` folder in your projects root, and will use one of those as the default cache folder if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folder,
-like in the example below, where the `.next/**` folder is sected to be the default cache folder for the `build` task.
-
-Finally, the `dev` task has it's chaching disabled using the `cache` key with a value of `false`.
-
-See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
-
 ```json
 {
   "turbo": {
@@ -105,13 +96,33 @@ See the [`Pipelines`](./features/pipelines) documentation for more details on ho
 }
 ```
 
+In the above example, the `build` and `test` tasks are dependant on their packages dependancies and devDependancies being built first, this is denoted with the `^` prefix.
+
+For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folders,
+like in the example below, where the `.next/**` folder is sected to be the default cache folder for the `build` task. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array. 
+
+Finally, the `dev` task has it's chaching disabled using the `cache` key with a value of `false`.
+
+See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
+
+
 ### Edit `.gitignore`
 
-Next, add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
+Next, add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs. 
 
-```
+```diff
 + .turbo
 ```
+
+Make sure that your task artifacts (the files you want to be cached) are also ignored. As a rule, any files/folder that you want cached should be gitignored.
+
+```diff
++ build/**
++ dist/**
++ .next/**
+```
+
+### Ensure workspaces are configured
 
 If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg.com/en/docs/workspaces/), be sure to also specify all `workspaces` in your `package.json`. The convention we follow is for applications to go into the `/apps` folder and packages to go in `/packages` folders.
 
