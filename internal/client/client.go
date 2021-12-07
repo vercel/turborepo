@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,8 +18,9 @@ import (
 
 type ApiClient struct {
 	// The api's base URL
-	baseUrl string
-	Token   string
+	baseUrl      string
+	Token        string
+	turboVersion string
 	// An http client
 	HttpClient *retryablehttp.Client
 }
@@ -28,9 +30,10 @@ func (api *ApiClient) SetToken(token string) {
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger) *ApiClient {
+func NewClient(baseUrl string, logger hclog.Logger, turboVersion string) *ApiClient {
 	return &ApiClient{
-		baseUrl: baseUrl,
+		baseUrl:      baseUrl,
+		turboVersion: turboVersion,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
 				Timeout: time.Duration(60 * time.Second),
@@ -63,6 +66,10 @@ func (c *ApiClient) makeUrl(endpoint string) string {
 	return fmt.Sprintf("%v%v", c.baseUrl, endpoint)
 }
 
+func (c *ApiClient) UserAgent() string {
+	return fmt.Sprintf("turbo %v %v %v", c.turboVersion, runtime.GOOS, runtime.GOARCH)
+}
+
 func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
 	params := url.Values{}
 	if teamId != "" && strings.HasPrefix(teamId, "team_") {
@@ -75,6 +82,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
@@ -109,7 +117,7 @@ func (c *ApiClient) RequestDeviceToken() (*DeviceToken, error) {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "Turbo CLI")
+	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HttpClient.Do(req)
@@ -265,7 +273,7 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "Turbo CLI")
+	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	resp, err := c.HttpClient.Do(req)
@@ -309,7 +317,7 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "Turbo CLI")
+	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	resp, err := c.HttpClient.Do(req)

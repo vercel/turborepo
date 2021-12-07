@@ -60,7 +60,7 @@ func main() {
 	c.HelpWriter = os.Stdout
 	c.ErrorWriter = os.Stderr
 	// Parse and validate cmd line flags and env vars
-	cf, err := config.ParseAndValidate(c.Args, ui)
+	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion)
 	if err != nil {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
