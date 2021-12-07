@@ -591,7 +591,7 @@ func (c *RunCommand) Run(args []string) int {
 							}
 						}
 					}
-					if err := turboCache.Put(pack.Dir, hash, filesToBeCached.UnsafeListOfStrings()); err != nil {
+					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached.UnsafeListOfStrings()); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
 					}
 				}

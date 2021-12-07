@@ -63,7 +63,7 @@ func (c *ApiClient) makeUrl(endpoint string) string {
 	return fmt.Sprintf("%v%v", c.baseUrl, endpoint)
 }
 
-func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, rawBody interface{}) error {
+func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
 	params := url.Values{}
 	if teamId != "" && strings.HasPrefix(teamId, "team_") {
 		params.Add("teamId", teamId)
@@ -73,6 +73,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, rawBody
 	}
 	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("x-artifact-duration", string(duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
