@@ -68,7 +68,9 @@ In your root `package.json`, add a key `turbo`. If your git repo's base branch i
 
 ### Create a `pipeline`
 
-In your `package.json`, add the commands you want to "turbocharge" to your pipeline. Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
+In your `package.json`, add the commands you want to "turbocharge" to your pipeline.
+
+Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
 ```json
 {
@@ -77,7 +79,7 @@ In your `package.json`, add the commands you want to "turbocharge" to your pipel
     "pipeline": {
       "build": {
         "dependsOn": ["^build"],
-        "outputs": ["build/**", "dist/**"]
+        "outputs": [".next/**"]
       },
       "test": {
         "dependsOn": ["^build"],
@@ -94,13 +96,32 @@ In your `package.json`, add the commands you want to "turbocharge" to your pipel
 }
 ```
 
+In the above example, the `build` and `test` tasks are dependant on their packages dependancies and devDependancies being built first, this is denoted with the `^` prefix.
+
+For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folders,
+like in the example above, where the `.next/**` folder is selected to be the default cache folder for the `build` task. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
+
+Finally, the `dev` task has it's chaching disabled using the `cache` key with a value of `false`.
+
+See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
+
 ### Edit `.gitignore`
 
 Next, add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
 
-```
+```diff
 + .turbo
 ```
+
+Make sure that your task artifacts (the files you want to be cached) are also ignored. As a rule, any files/folder that you want cached should be gitignored.
+
+```diff
++ build/**
++ dist/**
++ .next/**
+```
+
+### Ensure workspaces are configured
 
 If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg.com/en/docs/workspaces/), be sure to also specify all `workspaces` in your `package.json`. The convention we follow is for applications to go into the `/apps` folder and packages to go in `/packages` folders.
 
@@ -130,7 +151,7 @@ Now run it again. Depending on your monorepo setup, some stuff might already be 
 ## Setup Remote Caching <Beta/>
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
-At the moment, your Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
+At the moment, Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
 
 > Remote Caching has entered the chat.
 
@@ -152,7 +173,7 @@ If you want to link your local turborepo to your remote cache you do so by runni
 yarn turbo link
 ```
 
-Once enabled, make some changes to a package or application your are currently caching and run tasks against it with `turbo run`.
+Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
 Your cache artifacts will now be stored locally and in your remote cache. To verify that this worked, delete your local Turborepo cache:
 
 ```sh
