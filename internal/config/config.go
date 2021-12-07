@@ -94,6 +94,11 @@ func ParseAndValidate(args []string, ui cli.Ui) (c *Config, err error) {
 		return nil, fmt.Errorf("invalid environment variable: %w", err)
 	}
 
+	if partialConfig.Token == "" && IsCI() {
+		partialConfig.Token = os.Getenv("VERCEL_ARTIFACTS_TOKEN")
+		partialConfig.TeamId = os.Getenv("VERCEL_ARTIFACTS_OWNER")
+	}
+
 	app := args[0]
 
 	// Determine our log level if we have any. First override we check if env var
