@@ -7,7 +7,10 @@ import Callout from "../../../components/callout";
 # Remote Caching
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
-At the moment, your Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
+
+At the moment, your Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")?
+
+What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
 
 > Remote Caching has entered the chat.
 
@@ -27,22 +30,24 @@ Install the [Vercel CLI](https://vercel.com/cli) and login to your Vercel accoun
 npx vercel login
 ```
 
-Link your Turborepo to your Vercel account or organization. Your remote cache will be shared across all of your organization's projects.
+Link your Turborepo to your Vercel account or organization. Your Remote Cache will be shared across all of your organization's projects.
 
 ```sh
 npx turbo link
 ```
 
 Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
-Your cache artifacts will now be stored locally and in your remote cache. To verify that this worked, delete your local Turborepo cache:
+Your cache artifacts will now be stored locally _and_ in your Remote Cache.
+
+To verify, delete your local Turborepo cache with:
 
 ```sh
 rm -rf ./node_modules/.cache/turbo
 ```
 
-Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your remote cache and replay them back to you.
+Then run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
 
-### Remote Caching on Vercel.com Builds
+### Remote Caching on Vercel Builds
 
 If you are building and hosting your apps on Vercel, then Remote Caching will be automatically setup for you on your behalf once you use `turbo`. You just need to update your build settings to build with `turbo`.
 
@@ -50,7 +55,7 @@ Please refer to the [Vercel documentation](https://vercel.com/docs/concepts/git/
 
 ## Custom Remote Caches
 
-You can self-host your own remote cache or use other remote cache service providers as long as they comply with Turborepo's Remote Caching Server API.
+You can self-host your own Remote Cache or use other remote caching service providers as long as they comply with Turborepo's Remote Caching Server API.
 
 You can set / control the remote caching domain by specifying the `--api` and `--token` flags, where `--api` is the hostname and `--token` is a bearer token.
 

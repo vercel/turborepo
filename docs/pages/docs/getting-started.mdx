@@ -68,7 +68,13 @@ In your root `package.json`, add a key `turbo`. If your git repo's base branch i
 
 ### Create a `pipeline`
 
-In your `package.json`, add the commands you want to "turbocharge" to your pipeline. Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
+In your `package.json`, add the commands you want to "turbocharge" to your pipeline.
+
+Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
+
+In the below example, the `build` and `test` tasks are dependant on their packages dependancies and devDependancies being built first, this is denoted with the `^` prefix.
+
+The [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folder(s) for a task. Finally, the `dev` task has it's chaching disabled.
 
 ```json
 {
@@ -130,7 +136,7 @@ Now run it again. Depending on your monorepo setup, some stuff might already be 
 ## Setup Remote Caching <Beta/>
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
-At the moment, your Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
+At the moment, Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
 
 > Remote Caching has entered the chat.
 
@@ -152,7 +158,7 @@ If you want to link your local turborepo to your remote cache you do so by runni
 yarn turbo link
 ```
 
-Once enabled, make some changes to a package or application your are currently caching and run tasks against it with `turbo run`.
+Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
 Your cache artifacts will now be stored locally and in your remote cache. To verify that this worked, delete your local Turborepo cache:
 
 ```sh

@@ -13,7 +13,7 @@ Turborepo gives developers a way to specify task relationships explicitly and co
 1. Incoming new developers can look at the Turborepo `pipeline` and understand how tasks are related.
 2. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
 
-To give you a sense of how powerful this can be, here's a small visual diagram comparing `turbo` vs `lerna` task execution timelines.
+To give you a sense of how powerful this can be, the below diagram compares the `turbo` vs `lerna` task execution timelines:
 
 ![Turborepo vs. Lerna Task Execution](/docs/turbo-vs-lerna-execution.png)
 
@@ -23,9 +23,9 @@ Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls
 
 To define your project's task dependency graph, use the [`pipeline`](./reference/configuration#pipeline) key in the root `package.json`'s `turbo` configuration. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your project.
 
-Each key in the [`pipeline`](./reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching) (but more on that later).
+Each key in the [`pipeline`](./reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
 
-Pipelines will make more sense once you see it, so here's an example configuration:
+An example Pipeline configuration:
 
 ```json
 {
@@ -45,6 +45,13 @@ Pipelines will make more sense once you see it, so here's an example configurati
   }
 }
 ```
+
+The running order based on the `dependsOn` key above is:
+
+1. `build`
+2. `test`
+3. `lint`
+4. `deploy`
 
 ## Task Dependency Format
 
@@ -129,7 +136,7 @@ Sometimes tasks declared in the `pipeline` are not present in all packages' `pac
 
 ### Implicit Dependencies and Specific Package Tasks
 
-Sometimes you need to manually place a package-task dependency on another package-task. This can occur especially in repos that are just coming off of a `lerna` or `rush` repository where the tasks are traditionally run in separate phases. Sometimes assumptions were made those repositories that are not expressable in the simple task `pipeline` configuration as seen above. Additionally, you may need to express implicit dependencies or sequences between applications or microservices when using `turbo` in CI/CD.
+Sometimes you need to manually place a package-task dependency on another package-task. This can occur especially in repos that are just coming off of a `lerna` or `rush` repository where the tasks are traditionally run in separate phases. Sometimes assumptions are made for those repositories that are not expressable in the simple task `pipeline` configuration as seen above. Additionally, you may need to express implicit dependencies or sequences between applications or microservices when using `turbo` in CI/CD.
 
 For these cases, you can express these relationships in your `pipeline` configuration like this:
 
