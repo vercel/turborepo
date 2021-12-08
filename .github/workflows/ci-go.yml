@@ -30,20 +30,19 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Build & Unit Test
-        run: yarn turbo run test --scope=cli
-        shell: bash
+      - name: go test
+        run: cd cli && go test ./cmd/... ./internal/...
 
-      - name: Lint
-        run: yarn turbo run lint --scope=cli
-        shell: bash
+      - name: go vet
+        run: cd cli && go vet ./cmd/... ./internal/...
+
+      - name: Build
+        run: cd cli && go build ./cmd/turbo/...
 
       - name: E2E Tests
         run: |
           npm install -g pnpm
           cd cli && make e2e
-        shell: bash
 
       - name: Benchmark and Smoke Tests
         run: cd cli && make bench/turbo
-        shell: bash
