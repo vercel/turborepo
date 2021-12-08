@@ -36,10 +36,10 @@ jobs:
       - name: Lint
         run: yarn turbo run lint
 
-      - name: run bench
-        run: cd cli && make bench/turbo
-
-      - name: run e2e
+      - name: E2E Tests
         run: |
           npm install -g pnpm
           cd cli && make e2e
+
+      - name: Benchmark and Smoke Tests
+        run: cd cli && make bench/turbo
