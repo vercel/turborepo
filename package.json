@@ -5,7 +5,8 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "docs"
+      "docs",
+      "cli"
     ]
   },
   "scripts": {
@@ -45,12 +46,18 @@
       },
       "build": {
         "outputs": [
-          "dist/**/*",
           ".next/**/*"
         ],
         "dependsOn": [
+          "cli#turbo",
           "^build"
         ]
+      },
+      "cli#build": {
+        "outputs": [
+          "turbo"
+        ],
+        "dependsOn": []
       }
     }
   }
