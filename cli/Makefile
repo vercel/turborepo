@@ -47,7 +47,7 @@ cmd/turbo/version.go: version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 platform-all: cmd/turbo/version.go
-	make -j13 \
+	make -j14 \
 		platform-windows \
 		platform-windows-32 \
 		platform-darwin \
@@ -60,7 +60,8 @@ platform-all: cmd/turbo/version.go
 		platform-linux-arm64 \
 		platform-linux-mips64le \
 		platform-linux-ppc64le \
-		platform-neutral
+		platform-neutral \
+		platform-create-turborepo
 
 
 platform-windows:

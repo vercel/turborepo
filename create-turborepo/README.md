@@ -1,13 +1,13 @@
-# Welcome to Remix!
+# Welcome to Turborepo
 
-[Remix](https://remix.run) is a web framework that helps you build better websites with React.
+[Turborepo](https://tureborepo.org) is a high-performance monorepo build-system for modern JavaScript and TypeScript codebases.
 
 To get started, open a new shell and run:
 
 ```sh
-$ npx create-remix@latest
+$ npx create-turborepo@latest
 ```
 
 Then follow the prompts you see in your terminal.
 
-For more information about Remix, [visit remix.run](https://remix.run)!
+For more information about Turborepo, [visit tuborepo.org](https://turborepo.org) and follow us on Twitter ([@turborepo](https://twitter.com/turborepo))!
