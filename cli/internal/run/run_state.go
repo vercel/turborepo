@@ -123,7 +123,6 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 	tracer := chrometracing.Event(label)
 	return func(outcome RunResultStatus, err error) {
 		defer tracer.Done()
-		fmt.Printf("%s: %v\n", label, outcome)
 		switch {
 		case outcome == TargetBuildFailed:
 			r.add(&RunResult{
