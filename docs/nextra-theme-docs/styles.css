@@ -18,11 +18,11 @@ article h1 {
 }
 article h2 {
   @apply mt-10 text-3xl font-semibold tracking-tight;
-  @apply pb-1 border-b;
+  @apply pb-1;
 }
-.dark article h2 {
+/* .dark article h2 {
   @apply border-gray-900;
-}
+} */
 article h3 {
   @apply mt-8 text-2xl font-semibold tracking-tight;
 }
@@ -349,4 +349,55 @@ article pre .prism-code .token.tag:not(.script) {
 .dark article pre .prism-code .token.function,
 .dark article pre .prism-code .token.tag:not(.script) {
   color: #1e86ff !important;
+}
+
+.post-item .post-item-date {
+  @apply text-sm text-gray-300;
+}
+.post-item .post-item-more {
+  @apply ml-1 text-gray-600;
+}
+.post-item .post-item-desc {
+  margin-bottom: 0.5em;
+  @apply text-gray-400;
+}
+.post-item .post-item-title {
+  @apply text-2xl no-underline;
+  color: unset;
+}
+.post-item .post-item-title:hover {
+  @apply underline;
+}
+
+.meta-line {
+  @apply flex items-center justify-end mb-8;
+}
+.meta {
+  @apply flex-1 mr-8 text-gray-400;
+}
+.meta .tag {
+  @apply inline-block px-1 mr-1 text-sm leading-5 text-gray-400 no-underline bg-gray-200 rounded-md select-none;
+}
+.dark .meta .tag {
+  @apply text-gray-100 bg-gray-400;
+}
+
+.meta .tag:hover {
+  @apply text-gray-800;
+}
+.meta .tag:active {
+  @apply bg-gray-400;
+}
+.meta-line .meta-back {
+  @apply text-gray-600;
+}
+
+.nav-line {
+  @apply flex flex-row items-center justify-end mb-8 text-right;
+}
+.nav-line .nav-link {
+  @apply ml-3 text-gray-600;
+}
+.nav-line span.nav-link {
+  @apply ml-3 text-gray-400 cursor-default;
 }
