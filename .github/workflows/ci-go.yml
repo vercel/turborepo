@@ -32,14 +32,18 @@ jobs:
 
       - name: Build & Unit Test
         run: yarn turbo run test --scope=cli
+        shell: bash
 
       - name: Lint
         run: yarn turbo run lint --scope=cli
+        shell: bash
 
       - name: E2E Tests
         run: |
           npm install -g pnpm
           cd cli && make e2e
+        shell: bash
 
       - name: Benchmark and Smoke Tests
         run: cd cli && make bench/turbo
+        shell: bash
