@@ -111,7 +111,7 @@ platform-linux-ppc64le:
 platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 
-create-turborepo: 
+platform-create-turborepo: 
 	cd ../create-turborepo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
@@ -190,8 +190,8 @@ publish-linux-ppc64le: platform-linux-ppc64le
 publish-neutral: platform-neutral
 	make test && cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
 
-publish-create-turborepo:
-	cd ../create-turborepo && npm run test && npm publish --tag $(TURBO_TAG)
+publish-create-turborepo: platform-create-turborepo
+	cd ../create-turborepo && npm publish --tag $(TURBO_TAG)
 
 demo/lage: | scripts/node_modules
 	node scripts/generate.mjs lage
