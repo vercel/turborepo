@@ -32,6 +32,9 @@ vet-go:
 fmt-go:
 	go fmt ./cmd/... ./internal/...
 
+scripts/node_modules:
+	cd scripts && yarn
+	
 scripts: | scripts/node_modules
 	cd scripts && yarn install
 
