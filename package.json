@@ -6,7 +6,8 @@
     "packages": [
       "packages/*",
       "docs",
-      "cli"
+      "cli",
+      "create-turborepo"
     ]
   },
   "scripts": {
@@ -49,6 +50,7 @@
       },
       "build": {
         "outputs": [
+          "dist/**/*",
           ".next/**/*"
         ],
         "dependsOn": [
