@@ -36,7 +36,7 @@ const navigation = {
   general: [
     { name: "Documentation", href: "/docs" },
     { name: "API Reference", href: "/docs/reference/command-line-reference" },
-    // { name: "Blog", href: "/blog" },
+    { name: "Blog", href: "/blog" },
     { name: "Releases", href: "/docs/changelog" },
     { name: "FAQ", href: "/docs/faq" },
     {

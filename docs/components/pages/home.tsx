@@ -134,35 +134,35 @@ function Page() {
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
                 <img
                   className="h-12 text-gray-500"
-                  src="/logos/aws.svg"
+                  src="/images/logos/aws.svg"
                   alt="Amazon Web Services"
                 />
               </div>
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
                 <img
                   className="h-10 text-gray-500"
-                  src="/logos/lattice.svg"
+                  src="/images/logos/lattice.svg"
                   alt="Lattice"
                 />
               </div>
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img className="h-10" src="/logos/marvel.svg" alt="Marvel" />
+                <img className="h-10" src="/images/logos/marvel.svg" alt="Marvel" />
               </div>
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
                 <img
                   className="h-10"
-                  src="/logos/makeswift.svg"
+                  src="/images/logos/makeswift.svg"
                   alt="Makeswift"
                 />
               </div>
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img className="h-10" src="/logos/ondeck.svg" alt="On Deck" />
+                <img className="h-10" src="/images/logos/ondeck.svg" alt="On Deck" />
               </div>
 
               <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
                 <img
                   className="h-12"
-                  src="/logos/youhodler.svg"
+                  src="/images/logos/youhodler.svg"
                   alt="YouHodler"
                 />
               </div>
@@ -239,7 +239,7 @@ function Page() {
           <div className="flex items-center max-w-2xl py-4 mx-auto space-x-4">
             <div className="mt-4">
               <Image
-                src="/jaredpalmer_headshot.jpeg"
+                src="/images/people/jaredpalmer_headshot.jpeg"
                 height={90}
                 width={90}
                 className="block mr-6 rounded-full"
@@ -249,7 +249,7 @@ function Page() {
             <div className="flex flex-col h-full space-y-3">
               <div className="-mb-4">
                 <Image
-                  src="/jared_signature.png"
+                  src="/images/home/jared_signature.png"
                   height={75}
                   width={200}
                   className="block w-[200px]"
