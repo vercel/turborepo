@@ -30,7 +30,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Build && Test
+      - name: Build & Unit Test
         run: yarn turbo run test --scope=cli
 
       - name: Lint
