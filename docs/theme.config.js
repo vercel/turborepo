@@ -129,7 +129,7 @@ const theme = {
   github: "https://github.com/vercel/turborepo",
   docsRepositoryBase:
     "https://github.com/vercel/turborepo/blob/main/docs/pages",
-  titleSuffix: " – Turborepo",
+  titleSuffix: " | Turborepo",
   search: true,
   unstable_stork: false,
   floatTOC: true,
