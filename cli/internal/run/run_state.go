@@ -191,7 +191,6 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 			r.done <- result.Label
 		}
 	case result.Status == TargetCached:
-		r.Success++
 		r.Cached++
 		r.Attempted++
 	case result.Status == TargetBuilt:

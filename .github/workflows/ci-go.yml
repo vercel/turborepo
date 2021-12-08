@@ -11,13 +11,52 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: 1.16.0
+          go-version: 1.17.2
+        id: go
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v1.4.4
+        with:
+          node-version: 14
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - name: Build & Unit Test
+        run: yarn turbo run test --scope=cli
+
+      - name: Lint
+        run: yarn turbo run lint --scope=cli
+
+      - name: E2E Tests
+        run: |
+          npm install -g pnpm
+          cd cli && make e2e
+
+      - name: Benchmark and Smoke Tests
+        run: cd cli && make bench/turbo
+
+  build-win:
+    name: turbo CI
+    timeout-minutes: 10
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.2
         id: go
 
       - name: Setup Node.js environment
@@ -31,18 +70,18 @@ jobs:
           fetch-depth: 2
 
       - name: go test
-        run: go test ./cmd/... ./internal/...
+        run: cd cli && go test ./cmd/... ./internal/...
 
       - name: go vet
-        run: go vet ./cmd/... ./internal/...
+        run: cd cli && go vet ./cmd/... ./internal/...
 
-      - name: make turbo
-        run: make turbo
+      - name: Build
+        run: cd cli && go build ./cmd/turbo/...
 
-      - name: run bench
-        run: make bench/turbo
-
-      - name: run e2e
+      - name: E2E Tests
         run: |
           npm install -g pnpm
-          make e2e
+          cd cli && make e2e
+
+      - name: Benchmark and Smoke Tests
+        run: cd cli && make bench/turbo

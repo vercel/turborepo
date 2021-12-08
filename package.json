@@ -5,24 +5,26 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "docs"
+      "docs",
+      "cli"
     ]
   },
   "scripts": {
     "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
-    "docs": "./turbo run dev --scope='docs' --no-cache",
-    "build": "./turbo run build --scope=docs",
-    "turbo": "./turbo"
+    "docs": "./turbow.sh run dev --scope='docs' --no-cache",
+    "build": "./turbow.sh run build --scope=docs",
+    "turbo": "./turbow.sh"
   },
   "devDependencies": {
     "prettier": "^2.5.0",
     "simple-git-hooks": "^2.7.0"
   },
   "lint-staged": {
-    "**/*.{ts,tsx,md,mdx,js,jsx}": [
-      "npm run format"
+    "**/*.{ts,tsx,md,mdx,js,jsx,.go}": [
+      "npm run format",
+      "cd cli && npm run format"
     ]
   },
   "simple-git-hooks": {
@@ -32,7 +34,9 @@
     "baseBranch": "origin/main",
     "pipeline": {
       "test": {
-        "dependsOn": [],
+        "dependsOn": [
+          "^build"
+        ],
         "outputs": [
           "coverage/**/*"
         ]
@@ -45,12 +49,18 @@
       },
       "build": {
         "outputs": [
-          "dist/**/*",
           ".next/**/*"
         ],
         "dependsOn": [
           "^build"
         ]
+      },
+      "cli#build": {
+        "outputs": [
+          "turbo",
+          "turbo.exe"
+        ],
+        "dependsOn": []
       }
     }
   }
