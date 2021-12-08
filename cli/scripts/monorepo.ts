@@ -2,7 +2,8 @@ import execa from "execa";
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-const turboPath = path.join(__dirname, "../turbo");
+const isWin = process.platform === "win32";
+const turboPath = path.join(__dirname, "../turbo" + (isWin ? ".exe" : ""));
 
 type NPMClient = "npm" | "pnpm" | "yarn";
 
