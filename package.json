@@ -22,8 +22,9 @@
     "simple-git-hooks": "^2.7.0"
   },
   "lint-staged": {
-    "**/*.{ts,tsx,md,mdx,js,jsx}": [
-      "npm run format"
+    "**/*.{ts,tsx,md,mdx,js,jsx,.go}": [
+      "npm run format",
+      "cd cli && npm run format"
     ]
   },
   "simple-git-hooks": {
@@ -33,7 +34,9 @@
     "baseBranch": "origin/main",
     "pipeline": {
       "test": {
-        "dependsOn": [],
+        "dependsOn": [
+          "^build"
+        ],
         "outputs": [
           "coverage/**/*"
         ]
@@ -49,13 +52,13 @@
           ".next/**/*"
         ],
         "dependsOn": [
-          "cli#turbo",
           "^build"
         ]
       },
       "cli#build": {
         "outputs": [
-          "turbo"
+          "turbo",
+          "turbo.exe"
         ],
         "dependsOn": []
       }

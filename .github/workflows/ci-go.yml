@@ -30,19 +30,16 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: go test
-        run: cd cli && go test ./cmd/... ./internal/...
+      - name: Build && Test
+        run: yarn turbo run test
 
-      - name: go vet
-        run: cd cli && go vet ./cmd/... ./internal/...
-
-      - name: make turbo
-        run: make turbo
+      - name: Lint
+        run: yarn turbo run lint
 
       - name: run bench
-        run: make bench/turbo
+        run: cd cli && make bench/turbo
 
       - name: run e2e
         run: |
           npm install -g pnpm
-          make e2e
+          cd cli && make e2e

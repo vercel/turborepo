@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "clean": "make clean",
-    "build": "go build ./cmd/turbo",
+    "build": "go build ./cmd/turbo/...",
     "test": "go test -race ./internal/...",
     "publish": "make publish-all",
     "format": "go fmt ./cmd/... ./internal/...",
