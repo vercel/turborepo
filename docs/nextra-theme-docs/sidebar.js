@@ -121,7 +121,7 @@ function Menu({ directories, anchors }) {
   return (
     <ul>
       {directories.map((item) => {
-        if (item.name === "posts") {
+        if (item.name === "blog") {
           return <File key={item.name} item={item} anchors={anchors} />;
         }
         if (item.name === "confirm") {
