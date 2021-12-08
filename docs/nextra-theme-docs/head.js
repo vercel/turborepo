@@ -1,11 +1,13 @@
-import React from 'react'
-import NextHead from 'next/head'
+import React from "react";
+import NextHead from "next/head";
 
-import renderComponent from './utils/render-component'
-import { useConfig } from './config'
+import renderComponent from "./utils/render-component";
+import { useConfig } from "./config";
+import { useRouter } from "next/router";
 
 export default function Head({ title, locale, meta }) {
-  const config = useConfig()
+  const config = useConfig();
+  const router = useRouter();
   return (
     <NextHead>
       {config.font ? (
@@ -18,11 +20,11 @@ export default function Head({ title, locale, meta }) {
       {config.font ? (
         <style
           dangerouslySetInnerHTML={{
-            __html: `html{font-family:Inter,sans-serif}@supports(font-variation-settings:normal){html{font-family:'Inter var',sans-serif}}`
+            __html: `html{font-family:Inter,sans-serif}@supports(font-variation-settings:normal){html{font-family:'Inter var',sans-serif}}`,
           }}
         />
       ) : null}
-      {renderComponent(config.head, { locale, config, title, meta })}
+      {renderComponent(config.head, { locale, config, title, meta, router })}
       {config.unstable_faviconGlyph ? (
         <link
           rel="icon"
@@ -30,5 +32,5 @@ export default function Head({ title, locale, meta }) {
         />
       ) : null}
     </NextHead>
-  )
+  );
 }
