@@ -4,7 +4,6 @@ import "focus-visible";
 import { SkipNavContent } from "@reach/skip-nav";
 import { ThemeProvider } from "next-themes";
 import cn from "classnames";
-
 import Head from "./head";
 import Navbar from "./navbar";
 import Footer, { NavLinks } from "./footer";
@@ -67,7 +66,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
               <div className="flex items-center justify-center mx-auto ">
                 <Avatar
                   name="Jared Palmer"
-                  picture="/jaredpalmer_headshot.jpeg"
+                  picture="/images/people/jaredpalmer_headshot.jpeg"
                   twitterUsername="jaredpalmer"
                 />
               </div>
@@ -245,7 +244,6 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
           <div
             className={cn("nextra-container main-container flex flex-col", {
               rtl: isRTL,
-              page: true,
             })}
           >
             <Navbar
@@ -259,17 +257,24 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
                   directories={flatPageDirectories}
                   flatDirectories={flatDirectories}
                   fullDirectories={directories}
-                  mdShow={false}
                   headings={headings}
+                  mdShow={false}
                 />
-
                 <Body
                   meta={meta}
                   filepathWithName={filepathWithName}
-                  navLinks={null}
+                  navLinks={
+                    meta.type === "post" ? (
+                      <NavLinks
+                        flatDirectories={flatDocsDirectories}
+                        currentIndex={activeIndex}
+                        isRTL={isRTL}
+                      />
+                    ) : null
+                  }
                   postList={postList}
                 >
-                  {content}
+                  {children}
                 </Body>
               </div>
             </ActiveAnchor>
