@@ -8,20 +8,10 @@ turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
 # These tests are for development
 test: test-go vet-go
 
-dev: 
-	cd app && yarn dev
 
-studio:
-	cd app && yarn prisma:studio
 
 ewatch: | scripts/node_modules
 	nodemon --exec "make turbo && make e2e" -e .ts,.go
-# # These tests are for release ("test-wasm" is not included in "test" because it's pretty slow)
-# test-all:
-# 	make -j6 test-go vet-go verify-source-map end-to-end-tests js-api-tests test-wasm
-
-# # This includes tests of some 3rd-party libraries, which can be very slow
-# test-extra: test-all test-sucrase test-esprima test-rollup
 
 check-go-version:
 	@go version | grep ' go1\.16 ' || (echo 'Please install Go version 1.16.0' && false)
@@ -42,17 +32,11 @@ vet-go:
 fmt-go:
 	go fmt ./cmd/... ./internal/...
 
-# verify-source-map: | scripts/node_modules
-# 	node scripts/verify-source-map.js
-
 scripts: | scripts/node_modules
 	cd scripts && yarn install
 
 e2e: | scripts/node_modules
 	cd scripts && yarn uvu -r esbuild-register e2e
-
-# js-api-tests: | scripts/node_modules
-# 	node scripts/js-api-tests.js
 
 cmd/turbo/version.go: version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
@@ -129,8 +113,6 @@ test-prepublish:
 	make turbo
 	make -j3 bench/turbo test-go vet-go e2e
 
-test-otp:
-	test -n "$(OTP)" && echo publish --otp="$(OTP)"
 
 publish-all: cmd/turbo/version.go
 	# @test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-master branch `git rev-parse --abbrev-ref HEAD`" && false)
@@ -200,9 +182,6 @@ publish-linux-ppc64le: platform-linux-ppc64le
 publish-neutral: platform-neutral
 	make test && cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
 
-scripts/node_modules:
-	cd scripts && yarn
-
 demo/lage: | scripts/node_modules
 	node scripts/generate.mjs lage
 
@@ -246,37 +225,9 @@ clean:
 	rm -rf npm/turbo-linux-ppc64le/bin/turbo
 	rm -rf npm/turbo-windows-32/turbo.exe
 	rm -rf npm/turbo-windows-64/turbo.exe
-	rm -rf playground/*/dist
-	rm -rf playground/*/.next
-	rm -rf playground/*/turbo
-	rm -rf playground/*/.turbo
-	rm -rf playground/*/node_modules
-	rm -rf packages/*/dist
-	rm -rf packages/*/.turbo
-	rm -rf packages/*/turbo
-	rm -rf packages/*/node_modules
 	rm -rf docs/.turbo
 	rm -rf docs/.next
 	rm -rf docs/node_modules
 	rm -rf node_modules
-
 	rm -rf demo
 	go clean -testcache ./internal/...
-
-platform-ts:
-	cd packages/turbo-core && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd packages/turbo-core && rm -rf dist && yarn lint && yarn compile
-
-publish-ts: platform-ts
-	cd packages/turbo-core && npm publish --tag $(TURBO_TAG)
-
-publish-js: cmd/turbo/version.go
-	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-master branch `git rev-parse --abbrev-ref HEAD`" && false)
-	@echo "Checking for unpushed commits..." && git fetch
-	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
-	rm -fr npm && git checkout npm
-	@echo Confirm release:
-	make publish-ts
-	git commit -am "publish $(TURBO_VERSION) to registry"
-	git tag "v$(TURBO_VERSION)"
-	git push origin main "v$(TURBO_VERSION)"
