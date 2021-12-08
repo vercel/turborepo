@@ -49,11 +49,11 @@ With the above pipeline configuration and proper output folders, if you were to 
 turbo run build test
 ```
 
-If you open up your `node_modules/.cache/turbo`, you should see the cached artifacts.
+And open up your `node_modules/.cache/turbo`, you should see the cached artifacts.
 
 ## Turn off caching
 
-Sometimes you really don't need or want this cache behavior (such as when you're doing something with live reloading such as `next dev` or `react-scripts start`). To entirely disable caching, simply append `--no-cache` to any command.
+Sometimes you really don't need or want this cache behavior (such as when you're doing something with live reloading such as `next dev` or `react-scripts start`). To entirely disable caching, simply append `--no-cache` to any command:
 
 ```shell
 # Run `dev` npm script in all packages and apps in parallel,
@@ -61,7 +61,7 @@ Sometimes you really don't need or want this cache behavior (such as when you're
 turbo run dev --parallel --no-cache
 ```
 
-You can also always disable caching on a specific task by setting `cache` to `false` in your Turborepo [`pipeline`](./reference/configuration#pipeline)
+You can also always disable caching on a specific task by setting `cache` to `false` in your Turborepo [`pipeline`](./reference/configuration#pipeline):
 
 ```json
 {
@@ -77,7 +77,7 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 
 ## Force overwrite cache
 
-Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag.
+Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
 
 ```shell
 # Run `build` npm script in all packages and apps,

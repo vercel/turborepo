@@ -96,7 +96,7 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
 }
 ```
 
-In the above example, the `build` and `test` tasks are dependant on their packages dependancies and devDependancies being built first, this is denoted with the `^` prefix.
+In the above example, the `build` and `test` tasks are dependant on their packages `dependancies` and `devDependancies` being built first, this is denoted with the `^` prefix.
 
 For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs) array allows you to override the default cache folders,
 like in the example above, where the `.next/**` folder is selected to be the default cache folder for the `build` task. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
@@ -134,7 +134,7 @@ If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg
 }
 ```
 
-Now re-run you NPM client's install command just to be sure. You should be good to go now.
+Now re-run your NPM client's install command just to be sure. You should be good to go now.
 
 ## Run stuff!
 
@@ -174,10 +174,10 @@ yarn turbo link
 ```
 
 Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
-Your cache artifacts will now be stored locally and in your remote cache. To verify that this worked, delete your local Turborepo cache:
+Your cache artifacts will now be stored locally _and_ in your Remote Cache. To verify that this worked, delete your local Turborepo cache:
 
 ```sh
 rm -rf ./node_modules/.cache/turbo
 ```
 
-Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your remote cache and replay them back to you.
+Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.

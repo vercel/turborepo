@@ -13,11 +13,11 @@ Lerna is a a monorepo task runner and NPM workspace implementation. Both Turbore
 
 ### Caching
 
-However, unlike Turborepo, Lerna has no ability to [cache prior work](../caching) or [intelligently schedule tasks (i.e. create pipelines)](../pipelines).
+However, unlike Turborepo, Lerna has no ability to [cache prior work](../features/caching) or [intelligently schedule tasks (i.e. create pipelines)](../features/pipelines).
 
 ### Task Scheduling
 
-Turborepos's task scheduler is more powerful than Lerna's (which can only schedule one task at a time) thanks to [Turborepo pipelines](../pipelines). Thanks to pipelines, Turborepo reduces idle CPUs, saves compute resource, and collapse waterfalls—which ultimately results in faster overall builds.
+Turborepos's task scheduler is more powerful than Lerna's (which can only schedule one task at a time) thanks to [Turborepo pipelines](../features/pipelines). Turborepo reduces idle CPUs, saves compute resource, and collapse waterfalls—which ultimately results in faster overall builds.
 
 Let's look at an example. Imagine you have two packages A and B each with 3 tasks `build`, `test`, and `bundle`, where A depends on B being built....
 

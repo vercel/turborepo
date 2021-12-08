@@ -136,7 +136,8 @@ Sometimes tasks declared in the `pipeline` are not present in all packages' `pac
 
 ### Implicit Dependencies and Specific Package Tasks
 
-Sometimes you need to manually place a package-task dependency on another package-task. This can occur especially in repos that are just coming off of a `lerna` or `rush` repository where the tasks are traditionally run in separate phases. Sometimes assumptions are made for those repositories that are not expressable in the simple task `pipeline` configuration as seen above. Additionally, you may need to express implicit dependencies or sequences between applications or microservices when using `turbo` in CI/CD.
+Sometimes you need to manually place a package-task dependency on another package-task. This can occur especially in repos that are just coming off of a `lerna` or `rush` repository where the tasks are traditionally run in separate phases. Sometimes assumptions are made for those repositories that are not expressable in the simple task `pipeline` configuration, as seen above.
+Additionally, you may need to express implicit dependencies or sequences between applications or microservices when using `turbo` in CI/CD.
 
 For these cases, you can express these relationships in your `pipeline` configuration like this:
 
