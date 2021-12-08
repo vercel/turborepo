@@ -13,9 +13,9 @@
     "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
-    "docs": "./turbow run dev --scope='docs' --no-cache",
-    "build": "./turbow run build --scope=docs",
-    "turbo": "./turbow"
+    "docs": "./turbow.sh run dev --scope='docs' --no-cache",
+    "build": "./turbow.sh run build --scope=docs",
+    "turbo": "./turbow.sh"
   },
   "devDependencies": {
     "prettier": "^2.5.0",
