@@ -31,10 +31,10 @@ jobs:
           fetch-depth: 2
 
       - name: Build && Test
-        run: yarn turbo run test
+        run: yarn turbo run test --scope=cli
 
       - name: Lint
-        run: yarn turbo run lint
+        run: yarn turbo run lint --scope=cli
 
       - name: E2E Tests
         run: |
