@@ -1,6 +1,6 @@
 import { Button } from "ui";
 
-export default function Checkout() {
+export default function Docs() {
   return (
     <div>
       <h1>Docs</h1>
