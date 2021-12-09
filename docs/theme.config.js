@@ -140,7 +140,7 @@ const theme = {
   projectChatLink: "https://turborepo.org/discord",
   banner: function Banner() {
     return (
-      <div className="px-6 py-2 text-xs text-center text-white bg-black dark:bg-white dark:text-black">
+      <div className="px-6 py-2 text-sm text-center text-white bg-black dark:bg-white dark:text-black">
         <a
           href="https://vercel.com/blog/vercel-acquires-turborepo?utm_source=turbo-site&amp;utm_medium=banner&amp;utm_campaign=turbo-website"
           target="_blank"
