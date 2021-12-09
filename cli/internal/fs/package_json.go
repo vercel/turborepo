@@ -50,8 +50,8 @@ type PackageJSON struct {
 	OptionalDependencies   map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies       map[string]string `json:"peerDependencies,omitempty"`
 	Os                     []string          `json:"os,omitempty"`
-	Workspaces             Workspaces        `json:"workspaces"`
-	Private                bool              `json:"private"`
+	Workspaces             Workspaces        `json:"workspaces,omitempty"`
+	Private                bool              `json:"private,omitempty"`
 	PackageJSONPath        string
 	Hash                   string
 	Dir                    string
