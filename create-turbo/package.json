@@ -1,31 +1,35 @@
 {
-  "name": "create-turborepo",
-  "version": "0.9.0-next.10",
+  "name": "create-turbo",
+  "version": "0.9.0-next.15",
   "description": "Create a new Turborepo",
   "homepage": "https://turborepo.org",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
-    "directory": "create-turborepo"
+    "directory": "create-turbo"
   },
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
   "bin": {
-    "create-turborepo": "dist/index.js"
+    "create-turbo": "dist/index.js"
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs",
     "test": "jest"
   },
   "dependencies": {
+    "chalk": "2.4.2",
+    "execa": "5.0.0",
     "fs-extra": "^10.0.0",
     "gradient-string": "^2.0.0",
     "inquirer": "^8.0.0",
-    "kleur": "^4.1.4",
     "meow": "^7.1.1",
-    "semver": "^7.3.5"
+    "ora": "4.0.4",
+    "rimraf": "^3.0.2",
+    "semver": "^7.3.5",
+    "update-check": "^1.5.4"
   },
   "devDependencies": {
     "@types/chalk-animation": "^1.6.0",

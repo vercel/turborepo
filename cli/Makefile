@@ -61,7 +61,7 @@ platform-all: cmd/turbo/version.go
 		platform-linux-mips64le \
 		platform-linux-ppc64le \
 		platform-neutral \
-		platform-create-turborepo
+		platform-create-turbo
 
 
 platform-windows:
@@ -111,8 +111,8 @@ platform-linux-ppc64le:
 platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 
-platform-create-turborepo: 
-	cd ../create-turborepo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+platform-create-turbo: 
+	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
 	rm -rf demo/turbo
@@ -146,7 +146,7 @@ publish-all: cmd/turbo/version.go
 	# Do these last to avoid race conditions
 	@echo Confirm release:
 	make publish-neutral
-	make publish-create-turborepo
+	make publish-create-turbo
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
@@ -190,8 +190,8 @@ publish-linux-ppc64le: platform-linux-ppc64le
 publish-neutral: platform-neutral
 	make test && cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
 
-publish-create-turborepo: platform-create-turborepo
-	cd ../create-turborepo && npm publish --tag $(TURBO_TAG)
+publish-create-turbo: platform-create-turbo
+	cd ../create-turbo && npm publish --tag $(TURBO_TAG)
 
 demo/lage: | scripts/node_modules
 	node scripts/generate.mjs lage
