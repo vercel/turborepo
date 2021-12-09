@@ -150,13 +150,13 @@ async function run() {
   let appPkg = require(path.join(sharedTemplate, "package.json"));
 
   // add current versions of remix deps
-  // ["dependencies", "devDependencies"].forEach((pkgKey) => {
-  //   for (let key in appPkg[pkgKey]) {
-  //     if (appPkg[pkgKey][key] === "*") {
-  //       appPkg[pkgKey][key] = `latest`;
-  //     }
-  //   }
-  // });
+  ["dependencies", "devDependencies"].forEach((pkgKey) => {
+    for (let key in appPkg[pkgKey]) {
+      if (appPkg[pkgKey][key] === "*") {
+        appPkg[pkgKey][key] = `latest`;
+      }
+    }
+  });
 
   // write package.json
   await fse.writeFile(
