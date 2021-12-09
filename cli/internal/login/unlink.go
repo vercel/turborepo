@@ -6,6 +6,7 @@ import (
 	"strings"
 	"turbo/internal/config"
 	"turbo/internal/ui"
+	"turbo/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -39,7 +40,7 @@ func (c *UnlinkCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Could not unlink. Something went wrong: %w", err))
 		return 1
 	}
-	c.Ui.Output(ui.Dim("Disabled Remote Caching"))
+	c.Ui.Output(util.Sprintf("${GREY}> Disabled Remote Caching${RESET}"))
 	return 0
 }
 
