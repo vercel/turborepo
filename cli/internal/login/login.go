@@ -20,7 +20,7 @@ type LoginCommand struct {
 
 // Synopsis of run command
 func (c *LoginCommand) Synopsis() string {
-	return "DEPRECATED - Login to your Turborepo.com account"
+	return "Login to your Vercel account"
 }
 
 // Help returns information about the `run` command
@@ -28,14 +28,14 @@ func (c *LoginCommand) Help() string {
 	helpText := `
 Usage: turbo login
 
-  Login to your Turborepo.com account
+  Login to your Vercel account
 `
 	return strings.TrimSpace(helpText)
 }
 
 // Run executes tasks in the monorepo
 func (c *LoginCommand) Run(args []string) int {
-	cmd := exec.Command("node", filepath.FromSlash("login.mjs"))
+	cmd := exec.Command("node", filepath.FromSlash("login.js"))
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
