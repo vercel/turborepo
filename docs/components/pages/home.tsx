@@ -81,10 +81,12 @@ function Page() {
   return (
     <>
       <Head>
-        <title>
-          Turborepo | High-performance Build System for JavaScript and
-          TypeScript Codebases
-        </title>
+        <title>Turborepo</title>
+        <meta
+          name="og:description"
+          content="Turborepo is a high-performance build system for JavaScript and
+          TypeScript codebases"
+        />
       </Head>
       <div className="px-4 pt-16 pb-8 sm:px-6 sm:pt-24 lg:px-8 dark:text-white dark:bg-black ">
         <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">

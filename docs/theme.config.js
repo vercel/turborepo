@@ -206,9 +206,10 @@ const theme = {
         <meta name="theme-color" content="#000" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@turborepo" />
-        <meta name="twitter:title" content={title} />
         <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
+        <meta name="og:title" content={title} />
+        <meta name="og:description" content={meta.description} />
         <meta
           property="og:url"
           content={`https://turborepo.org${meta.ogImage ?? router.asPath}`}
