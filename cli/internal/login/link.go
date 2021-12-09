@@ -25,7 +25,7 @@ type LinkCommand struct {
 
 // Synopsis of run command
 func (c *LinkCommand) Synopsis() string {
-	return "Link your local directory to a Vercel organization"
+	return "Link your local directory to a Vercel organization and enable remote caching."
 }
 
 // Help returns information about the `run` command
@@ -33,7 +33,7 @@ func (c *LinkCommand) Help() string {
 	helpText := `
 Usage: turbo link
 
-  Link your local directory to a Vercel organization. This will enable remote caching.
+  Link your local directory to a Vercel organization and enable remote caching.
 
 Options:
   --help                 Show this screen.
@@ -52,7 +52,14 @@ func (c *LinkCommand) Run(args []string) int {
 		c.logError(fmt.Errorf("could not find home directory.\n%w", homeDirErr))
 		return 1
 	}
-
+	c.Ui.Info(fmt.Sprintf(">>> Remote Caching (beta)"))
+	c.Ui.Info("")
+	c.Ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
+	c.Ui.Info("  with all of your team's Vercel projects and with any other")
+	c.Ui.Info("  team members and/or services that also enable Remote Caching. This results")
+	c.Ui.Info("  in a faster build time and faster deployment time for your team.")
+	c.Ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+	c.Ui.Info("")
 	currentDir, fpErr := filepath.Abs(".")
 	if fpErr != nil {
 		c.logError(fmt.Errorf("could figure out file path.\n%w", fpErr))
@@ -62,7 +69,7 @@ func (c *LinkCommand) Run(args []string) int {
 	survey.AskOne(
 		&survey.Confirm{
 			Default: true,
-			Message: util.Sprintf("Set up ${CYAN}${BOLD}\"%s\"${RESET}?", strings.Replace(currentDir, dir, "~", 1)),
+			Message: util.Sprintf("Would you like to enable Remote Caching for ${CYAN}${BOLD}\"%s\"${RESET}?", strings.Replace(currentDir, dir, "~", 1)),
 		},
 		&shouldSetup, survey.WithValidator(survey.Required),
 		survey.WithIcons(func(icons *survey.IconSet) {
@@ -103,7 +110,7 @@ func (c *LinkCommand) Run(args []string) int {
 	var chosenTeamName string
 	survey.AskOne(
 		&survey.Select{
-			Message: "Which Vercel scope should contain this Turborepo?",
+			Message: "Which Vercel scope (and Remote Cache) do you want associate with this Turborepo? ",
 			Options: append([]string{userResponse.User.Name}, teamOptions...),
 		},
 		&chosenTeamName,
@@ -150,9 +157,10 @@ func (c *LinkCommand) Run(args []string) int {
 	}
 
 	c.Ui.Info("")
-	c.Ui.Info(util.Sprintf("${GREEN}✓${RESET} Directory linked to ${BOLD}%s${RESET}", chosenTeam.Name))
-	c.Ui.Info(util.Sprintf("${GREEN}✓${RESET} Remote caching is now enabled"))
-
+	c.Ui.Info(util.Sprintf("${GREEN}✓ Success!${RESET} Remote Caching is now enabled for ${BOLD}%s${RESET}", chosenTeam.Name))
+	c.Ui.Info("")
+	c.Ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
+	c.Ui.Info("")
 	return 0
 }
 
