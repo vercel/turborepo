@@ -216,7 +216,7 @@ const theme = {
         />
         <meta
           property="og:image"
-          content="https://turborepo.org/og-image.jpg"
+          content="https://turborepo.org/og-image.png"
         />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turborepo" />
