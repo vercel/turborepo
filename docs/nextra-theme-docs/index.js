@@ -352,7 +352,7 @@ export default function NextraThemeLayout(opts, config) {
   return function NextraLayout(props) {
     return (
       <ThemeConfigContext.Provider value={extendedConfig}>
-        <ThemeProvider attribute="class">
+        <ThemeProvider attribute="class" defaultTheme="dark">
           <Layout {...opts} {...props} />
         </ThemeProvider>
       </ThemeConfigContext.Provider>
