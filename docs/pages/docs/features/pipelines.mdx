@@ -21,9 +21,9 @@ Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls
 
 ## Defining a `pipeline`
 
-To define your project's task dependency graph, use the [`pipeline`](./reference/configuration#pipeline) key in the root `package.json`'s `turbo` configuration. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your project.
+To define your project's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the root `package.json`'s `turbo` configuration. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your project.
 
-Each key in the [`pipeline`](./reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
+Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
 
 An example Pipeline configuration:
 
@@ -168,5 +168,5 @@ This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"d
 
 <Callout>
   **Note: Package-tasks do not inherit cache configuration. You must redeclare
-  [`outputs`](./reference/configuration#outputs) at the moment.**
+  [`outputs`](../reference/configuration#outputs) at the moment.**
 </Callout>
