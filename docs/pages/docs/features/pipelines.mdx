@@ -53,6 +53,12 @@ The running order based on the `dependsOn` key above is:
 3. `lint`
 4. `deploy`
 
+The full pipeline can then be run:
+
+```bash
+npx turbo run build test lint deploy
+```
+
 ## Task Dependency Format
 
 What you are declaring here in the `pipeline` object of the `turbo` configuration is a dependency graph of tasks. In the above example, in plain english, the configuration translates to the following conventions:
