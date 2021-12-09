@@ -83,7 +83,7 @@ func (c *LinkCommand) Run(args []string) int {
 	}
 
 	if c.Config.Token == "" {
-		c.logError(fmt.Errorf(util.Sprintf("User not found. Please login to Vercel first by running ${BOLD}`npx vercel login`${RESET}.")))
+		c.logError(fmt.Errorf(util.Sprintf("User not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}.")))
 		return 1
 	}
 
