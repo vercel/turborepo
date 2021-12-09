@@ -47,16 +47,6 @@ const features = [
     description: `Turborepo doesn't interfere with your runtime code or touch your sourcemaps. It does what it does and then gets out of your way.`,
     icon: ChipIcon,
   },
-  // {
-  //   name: 'Package manager agnostic',
-  //   description: `Turborepo works with Yarn v1, Yarn v2, NPM, and PNPM workspaces.`,
-  //   icon: LightningBoltIcon,
-  // },
-  // {
-  //   name: 'Focused installs',
-  //   description: `Only install the dependencies you actually need. Works perfectly with Docker layer caching.`,
-  //   icon: DownloadIcon,
-  // },
   {
     name: "Pruned subsets",
     description: `Speed up PaaS deploys by generating a subset of your monorepo with only what's needed to build a specific target.`,
@@ -94,7 +84,8 @@ function Page() {
           </span>{" "}
         </h1>
         <p className="max-w-lg mx-auto mt-6 text-xl font-medium leading-tight text-center text-gray-400 sm:max-w-4xl sm:text-2xl md:text-3xl lg:text-4xl">
-          Turborepo is a high-performance build system for modern codebases.
+          Turborepo is a high-performance build system for JavaScript and
+          TypeScript codebases.
         </p>
         <div className="max-w-sm mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
           <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
@@ -124,59 +115,53 @@ function Page() {
         </div>
       </div>
 
-      {/* <div className="dark:bg-[#050b13] bg-gray-50 py-16">
-          <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-            <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
-              Trusted in production
-            </p>
+      <div className="dark:bg-[#050b13] bg-gray-50 py-16">
+        <div className="max-w-4xl px-4 mx-auto sm:px-6 lg:px-8">
+          <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
+            Trusted by teams from around the world
+          </p>
 
-            <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
-              <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img
-                  className="h-12 text-gray-500"
-                  src="/images/logos/aws.svg"
-                  alt="Amazon Web Services"
-                />
-              </div>
-              <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img
-                  className="h-10 text-gray-500"
-                  src="/images/logos/lattice.svg"
-                  alt="Lattice"
-                />
-              </div>
-              <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img className="h-10" src="/images/logos/marvel.svg" alt="Marvel" />
-              </div>
-              <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img
-                  className="h-10"
-                  src="/images/logos/makeswift.svg"
-                  alt="Makeswift"
-                />
-              </div>
-              <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img className="h-10" src="/images/logos/ondeck.svg" alt="On Deck" />
-              </div>
-
-              <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-                <img
-                  className="h-12"
-                  src="/images/logos/youhodler.svg"
-                  alt="YouHodler"
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-4">
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="h-6"
+                src="/images/logos/vercel.svg"
+                alt="Vercel"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="h-6"
+                src="/images/logos/lattice.svg"
+                alt="Lattice"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="h-6"
+                src="/images/logos/teespring.svg"
+                alt="TeeSpring"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="h-6"
+                src="/images/logos/makeswift.svg"
+                alt="Makeswift"
+              />
             </div>
           </div>
-        </div> */}
+        </div>
+      </div>
 
       <div className="relative bg-gradient-to-b dark:from-[#050b13] dark:to-[#131820] from-gray-50 to-gray-100">
         <div className="max-w-4xl px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24 lg:px-8">
           <h2 className="text-4xl font-extrabold tracking-tight lg:text-5xl xl:text-6xl lg:text-center dark:text-white">
-            Why Turborepo?
+            Build like the best
           </h2>
           <p className="mx-auto mt-4 text-lg font-medium text-gray-400 lg:max-w-3xl lg:text-xl lg:text-center">
-            Turborepo has the tools you need to scale your codebase.
+            Turborepo reimagines build system techniques used by Facebook and
+            Google to remove maintenance burden and overhead.
           </p>
           <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12">
             {features.map((feature) => (
