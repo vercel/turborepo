@@ -47,7 +47,8 @@ func (c *LoginCommand) Run(args []string) int {
 	c.Ui.Info(util.Sprintf(">>> Opening browser to ${UNDERLINE}%v${RESET}", c.Config.LoginUrl))
 	s := ui.NewSpinner(os.Stdout)
 	s.Start("Waiting for your authorization...")
-	cmd := exec.Command("node", filepath.FromSlash("login.js"))
+	c.Config.Logger.Debug(fmt.Sprintf("running `node %v`", filepath.FromSlash("./node_modules/turbo/login.js")))
+	cmd := exec.Command("node", filepath.FromSlash("./node_modules/turbo/login.js"))
 	var outb, errb bytes.Buffer
 	cmd.Args = append(cmd.Args, c.Config.LoginUrl)
 	cmd.Stdout = &outb
@@ -80,6 +81,7 @@ func (c *LoginCommand) Run(args []string) int {
 	c.Ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
 	c.Ui.Info("")
 	c.Ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+	c.Ui.Info("")
 	return 0
 }
 
