@@ -23,12 +23,12 @@ type LinkCommand struct {
 	Ui     *cli.ColoredUi
 }
 
-// Synopsis of run command
+// Synopsis of link command
 func (c *LinkCommand) Synopsis() string {
 	return "Link your local directory to a Vercel organization and enable remote caching."
 }
 
-// Help returns information about the `run` command
+// Help returns information about the `link` command
 func (c *LinkCommand) Help() string {
 	helpText := `
 Usage: turbo link
@@ -43,7 +43,7 @@ Options:
 	return strings.TrimSpace(helpText)
 }
 
-// Run executes tasks in the monorepo
+// Run links a local directory to a Vercel organization and enables remote caching
 func (c *LinkCommand) Run(args []string) int {
 	var dontModifyGitIgnore bool
 	shouldSetup := true
@@ -108,10 +108,14 @@ func (c *LinkCommand) Run(args []string) int {
 	}
 
 	var chosenTeamName string
+	nameWithFallback := userResponse.User.Name
+	if nameWithFallback == "" {
+		nameWithFallback = userResponse.User.Username
+	}
 	survey.AskOne(
 		&survey.Select{
 			Message: "Which Vercel scope (and Remote Cache) do you want associate with this Turborepo? ",
-			Options: append([]string{userResponse.User.Name}, teamOptions...),
+			Options: append([]string{nameWithFallback}, teamOptions...),
 		},
 		&chosenTeamName,
 		survey.WithValidator(survey.Required),
