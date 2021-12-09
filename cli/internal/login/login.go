@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"turbo/internal/config"
@@ -52,11 +51,11 @@ func (c *LoginCommand) Run(args []string) int {
 	c.Config.Logger.Debug(fmt.Sprintf("login url: %v", c.Config.LoginUrl))
 	redirectUrl := fmt.Sprintf("http://%v:%v", DEFAULT_HOSTNAME, DEFAULT_PORT)
 	loginUrl := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.Config.LoginUrl, redirectUrl)
-	c.Ui.Info(util.Sprintf(">>> Opening browser to ${UNDERLINE}%v${RESET}", loginUrl))
+	c.Ui.Info(util.Sprintf(">>> Opening browser to %v", c.Config.LoginUrl))
 	s := ui.NewSpinner(os.Stdout)
-	s.Start("Waiting for your authorization...")
-	c.Config.Logger.Debug(fmt.Sprintf("running `node %v`", filepath.FromSlash("./node_modules/turbo/login.js")))
 	openbrowser(loginUrl)
+	s.Start("Waiting for your authorization...")
+
 	var query url.Values
 	ctx, cancel := context.WithCancel(context.Background())
 	fmt.Println(query.Encode())
