@@ -3,116 +3,86 @@ package ui
 import (
 	"fmt"
 	"io"
-	"sync"
+	"os"
 	"time"
 
-	"github.com/fatih/color"
+	"github.com/briandowns/spinner"
 )
 
+// Events display settings.
 const (
-	// 150ms per frame
-	DEFAULT_FRAME_RATE = time.Millisecond * 100
+	minCellWidth           = 20  // minimum number of characters in a table's cell.
+	tabWidth               = 4   // number of characters in between columns.
+	cellPaddingWidth       = 2   // number of padding characters added by default to a cell.
+	paddingChar            = ' ' // character in between columns.
+	noAdditionalFormatting = 0
+	maxCellLength          = 70 // Number of characters we want to display at most in a cell before wrapping it to the next line.
 )
 
-var DefaultCharset = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
+// startStopper is the interface to interact with the spinner.
+type startStopper interface {
+	Start()
+	Stop()
+}
 
+// Spinner represents an indicator that an asynchronous operation is taking place.
+//
+// For short operations, less than 4 seconds, display only the spinner with the Start and Stop methods.
+// For longer operations, display intermediate progress events using the Events method.
 type Spinner struct {
-	sync.Mutex
-	Title     string
-	Charset   []string
-	FrameRate time.Duration
-	runChan   chan struct{}
-	stopOnce  sync.Once
-	Output    io.Writer
-	NoTty     bool
+	spin startStopper
 }
 
-// create spinner object
-func NewSpinner(title string) *Spinner {
-	sp := &Spinner{
-		Title:     title,
-		Charset:   DefaultCharset,
-		FrameRate: DEFAULT_FRAME_RATE,
-		runChan:   make(chan struct{}),
+// NewSpinner returns a spinner that outputs to w.
+func NewSpinner(w io.Writer) *Spinner {
+	interval := 125 * time.Millisecond
+	if os.Getenv("CI") == "true" {
+		interval = 30 * time.Second
 	}
-	if !color.NoColor {
-		sp.NoTty = true
-	}
-	return sp
-}
-
-// start a new spinner, title can be an empty string
-func StartNew(title string) *Spinner {
-	return NewSpinner(title).Start()
-}
-
-// start spinner
-func (sp *Spinner) Start() *Spinner {
-	go sp.writer()
-	return sp
-}
-
-// set custom spinner frame rate
-func (sp *Spinner) SetSpeed(rate time.Duration) *Spinner {
-	sp.Lock()
-	sp.FrameRate = rate
-	sp.Unlock()
-	return sp
-}
-
-// set custom spinner character set
-func (sp *Spinner) SetCharset(chars []string) *Spinner {
-	sp.Lock()
-	sp.Charset = chars
-	sp.Unlock()
-	return sp
-}
-
-// stop and clear the spinner
-func (sp *Spinner) Stop() {
-	//prevent multiple calls
-	sp.stopOnce.Do(func() {
-		close(sp.runChan)
-		sp.clearLine()
-	})
-}
-
-// spinner animation
-func (sp *Spinner) animate() {
-	var out string
-	for i := 0; i < len(sp.Charset); i++ {
-		out = Dim(sp.Charset[i]) + " " + sp.Title
-		switch {
-		case sp.Output != nil:
-			fmt.Fprint(sp.Output, out)
-			//fmt.Fprint(sp.Output, "\r"+out)
-		case !sp.NoTty:
-			fmt.Print(out)
-			//fmt.Print("\r" + out)
-		}
-		time.Sleep(sp.FrameRate)
-		sp.clearLine()
+	s := spinner.New(charset, interval, spinner.WithHiddenCursor(true))
+	s.Writer = w
+	s.Color("faint")
+	return &Spinner{
+		spin: s,
 	}
 }
 
-// write out spinner animation until runChan is closed
-func (sp *Spinner) writer() {
-	sp.animate()
-	for {
-		select {
-		case <-sp.runChan:
-			return
-		default:
-			sp.animate()
-		}
+// Start starts the spinner suffixed with a label.
+func (s *Spinner) Start(label string) {
+	s.suffix(fmt.Sprintf(" %s", label))
+	s.spin.Start()
+}
+
+// Stop stops the spinner and replaces it with a label.
+func (s *Spinner) Stop(label string) {
+	s.finalMSG(fmt.Sprint(label))
+	s.spin.Stop()
+}
+
+func (s *Spinner) lock() {
+	if spinner, ok := s.spin.(*spinner.Spinner); ok {
+		spinner.Lock()
 	}
 }
 
-// workaround for Mac OS < 10 compatibility
-func (sp *Spinner) clearLine() {
-	if !sp.NoTty {
-		fmt.Printf("\033[2K")
-		fmt.Println()
-		fmt.Printf("\033[1A")
+func (s *Spinner) unlock() {
+	if spinner, ok := s.spin.(*spinner.Spinner); ok {
+		spinner.Unlock()
+	}
+}
+
+func (s *Spinner) suffix(label string) {
+	s.lock()
+	defer s.unlock()
+	if spinner, ok := s.spin.(*spinner.Spinner); ok {
+		spinner.Suffix = label
+	}
+}
+
+func (s *Spinner) finalMSG(label string) {
+	s.lock()
+	defer s.unlock()
+	if spinner, ok := s.spin.(*spinner.Spinner); ok {
+		spinner.FinalMSG = label
 	}
 }

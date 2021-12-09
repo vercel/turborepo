@@ -14,8 +14,10 @@ type TurborepoConfig struct {
 	Token string `json:"token,omitempty"`
 	// Team id
 	TeamId string `json:"teamId,omitempty"`
-	// ApiUrl is the backend url (defaults to turborepo.com)
+	// ApiUrl is the backend url (defaults to api.vercel.com)
 	ApiUrl string `json:"apiUrl,omitempty" envconfig:"api"`
+	// ApiUrl is the backend url (defaults to vercel.com)
+	LoginUrl string `json:"loginUrl,omitempty" envconfig:"login"`
 	// Owner slug
 	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
 }
@@ -48,6 +50,7 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 		Token:    "",
 		TeamId:   "",
 		ApiUrl:   "https://api.vercel.com",
+		LoginUrl: "https://vercel.com",
 		TeamSlug: "",
 	}
 	b, err := ioutil.ReadFile(path)
@@ -69,6 +72,7 @@ func ReadUserConfigFile() (*TurborepoConfig, error) {
 			Token:    "",
 			TeamId:   "",
 			ApiUrl:   "https://api.vercel.com",
+			LoginUrl: "https://vercel.com",
 			TeamSlug: "",
 		}, err
 	}

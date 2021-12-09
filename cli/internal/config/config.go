@@ -38,6 +38,8 @@ type Config struct {
 	TeamSlug string
 	// Backend API URL
 	ApiUrl string
+	// Login URL
+	LoginUrl string
 	// Backend retryable http client
 	ApiClient *client.ApiClient
 	// Turborepo CLI Version
@@ -80,7 +82,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		return nil, nil
 	}
 	// Precendence is flags > env > config > default
-	userConfig, err := GetVercelAuthConfig("")
+	userConfig, err := ReadUserConfigFile()
 	if err != nil {
 		// not logged in
 	}
@@ -139,6 +141,12 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 				return nil, fmt.Errorf("%s is an invalid URL", apiUrl)
 			}
 			partialConfig.ApiUrl = apiUrl
+		case strings.HasPrefix(arg, "--url="):
+			loginUrl := arg[len("--url="):]
+			if _, err := url.ParseRequestURI(loginUrl); err != nil {
+				return nil, fmt.Errorf("%s is an invalid URL", loginUrl)
+			}
+			partialConfig.LoginUrl = loginUrl
 		case strings.HasPrefix(arg, "--token="):
 			partialConfig.Token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
@@ -172,6 +180,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		TeamSlug:     partialConfig.TeamSlug,
 		TeamId:       partialConfig.TeamId,
 		ApiUrl:       partialConfig.ApiUrl,
+		LoginUrl:     partialConfig.LoginUrl,
 		ApiClient:    apiClient,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{

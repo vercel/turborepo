@@ -65,7 +65,7 @@ func main() {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
 	}
-	c.HiddenCommands = []string{"graph", "logout", "me"}
+	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
 			return &run.RunCommand{Config: cf, Ui: ui},

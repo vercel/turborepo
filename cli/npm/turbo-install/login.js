@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 const http = require("http");
 const open = require("open");
 
@@ -10,11 +11,13 @@ const DEFAULT_PORT = 9789;
 let server_ = http.createServer();
 
 const login = async () => {
+  const args = process.argv.slice(2);
+  const altUrl = args[0];
   const redirectURL = `http://${DEFAULT_HOSTNAME}:${DEFAULT_PORT}`;
-  let loginURL = `${DEFAULT_SITE}/turborepo/token?redirect_uri=${encodeURIComponent(
-    redirectURL
-  )}`;
-  // console.log(`Opening login URL. \n${loginURL}\n`);
+  let loginURL = `${
+    altUrl || DEFAULT_SITE
+  }/turborepo/token?redirect_uri=${encodeURIComponent(redirectURL)}`;
+
   let currentWindow;
   const responseParams = await new Promise((resolve) => {
     server_.once("request", async (req, res) => {
@@ -34,14 +37,13 @@ const login = async () => {
   return responseParams;
 };
 
-login().then(
-  (res) => {
-    console.log(res.get("token"));
-
+login()
+  .then((res) => {
+    // throw new Error(`Failed to login: ${res}`);
+    process.stdout.write(res.get("token"));
     process.exit(0);
-  },
-  (err) => {
+  })
+  .catch((err) => {
+    process.stderr.write(err.message);
     server_?.close();
-    throw e;
-  }
-);
+  });
