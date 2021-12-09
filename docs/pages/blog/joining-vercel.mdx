@@ -7,72 +7,12 @@ author: Jared Palmer
 type: post
 ---
 
-Turborepo has been acquired by [Vercel](https://vercel.com). With this announcement, **Vercel is open sourcing the `turbo` CLI and offering Remote Caching for free on all accounts during the transition period.**
+Turborepo has been acquired by Vercel and the Turborepo CLI is now open-source. Also, Turborepo now provides zero-config remote caching through [Vercel](https://vercel.com/?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link).
 
-Existing Turborepo customers should upgrade their `turbo` CLI to v1.x as soon as possible and migrate to Vercel (instructions below). Earlier versions of `turbo` CLI prior to 1.x will no longer be maintained going forward. New account creation on beta.turborepo.com has been disabled. The beta.turborepo.com dashboard and remote caching service will be shutdown on January 15th, 2022 and older versions will not be installable. All existing remote cache artifacts will also be deleted at this time.
+[beta.turborepo.com](http://beta.turborepo.com/) and its remote caching service will be shut down on January 15th, 2022 and older versions of the `turbo` CLI will not be installable. Learn more about how to upgrade your CLI and migrate to Vercel [here](https://turborepo.org/docs/upgrading-to-v1).  
 
-Below is a step-by-step migration guide for existing Turborepo users. If you get stuck, please reach out in the community [Discord](https://turborepo.org/discord) or file an issue on [GitHub](https://github.com/vercel/turborepo). Thank you again for your continued support as we begin this awesome new chapter of Turborepo together.
+This is a milestone moment for the project and for all of you who have supported and adopted Turborepo. With Vercel's infrastructure and team backing, I'll expand on the capabilities of Turborepo and build out a team focused on improving their world-class build system. I can't wait to bring you along for this [next chapter](https://vercel.com/blog/vercel-acquires-turborepo). 
 
----
+Join me this [Friday, December 10 at 4:00 p.m. ET | 9:00 p.m GMT for a livestream Q&A](https://www.youtube.com/watch?v=YX5yoApjI3M) with Vercel's Head of Developer Relations, Lee Robinson. We'll go over what's in store for Turborepo and Vercel as we work toward improving the developer experience together. 
 
-## Cleaning up
-
-For good hygeine, ensure you logout of `turbo` to remove old credentials.
-
-```sh
-yarn turbo logout
-```
-
-If it exists, also delete the `.turbo` directory from the root of your monorepo.
-
-```sh
-rm -rf .turbo
-```
-
-## Install the latest release of `turbo`
-
-Install the latest version version of `turbo`
-
-```sh
-yarn add turbo -W --dev
-```
-
-## Setup Remote Caching
-
-As mentioned, Turborepo now provides zero-config remote caching through [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link). Remote Caching is free for all Vercel plans during this transition period. Each Vercel account has a shared Remote Cache. This cache is shared across all enviroments (Development, Preview, and Production).
-
-Important: turborepo.com allowed multiple caches (i.e. projects) per team (denoted through `--project` flag). With v1.x caching on Vercel, each Vercel account (user or team) has a single shared remote cache. If you were actively using multiple turborepo.com projects for your team, please let us know in [Discord](https://turborepo.org/discord).
-
-Please note that we are not migrating cache artifacts to Vercel. We apologize for the slower builds during your migration as you rehydrate your remote cache on Vercel or custom cache infra.
-
-### Local Development
-
-If you were using Remote Caching for local development, upgrading will take a minute or two. To get started, login to the Vercel CLI.
-
-```sh
-npx vercel login
-```
-
-Now we can setup Remote Caching through Vercel by running:
-
-```sh
-npx turbo link
-```
-
-Follow the prompts and select the Vercel account (user or team) to wish to connect to.
-
-### On Vercel
-
-- If you already used Turborepo and Vercel together, you should remove `TURBO_TOKEN`, `TURBO_TEAM`, and `TURBO_PROJECT` enviroment variables from all projects. These are now automatically set on your behalf by Vercel.
-
-- Remove the usage of `--team`, `--token`, and `--project` CLI flags in your Vercel project settings and/or `package.json` scripts.
-
-### On other CI/CD
-
-- Replace your turbrepo.com personal access token with a new [Vercel personal access token](https://@todo) and update `TURBO_TOKEN` environment variable or equivalent usage of the `--token` CLI flag.
-- Remove `TURBO_PROJECT` environment variable and remove all usage of the `--project` CLI flag. This has been deprecated.
-- Update the value of the `TURBO_TEAM` environment variable and `--team` CLI flag to be your Vercel account slug (i.e. `https://vercel.com/<slug>`).
-
-### Getting Help
-
-If you are having difficulty upgrading please file an issue on GitHub. If you are having difficulty with your remote caching on Vercel, please reach out in [Discord](https://turborepo.org/discord)
+This is just the beginning. We're about to embark on a world of even faster builds, even more flexibility, and even better workflows. Thanks for joining us on this journey.
