@@ -7,9 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "yarn turbo run build",
-    "dev": "yarn turbo run dev --parallel",
-    "lint": "yarn turbo run lint",
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
     "format": "prettier --write '**/*.{ts,tsx,.md}'"
   },
   "devDependencies": {
