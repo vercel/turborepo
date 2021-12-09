@@ -1,3 +1,4 @@
+import copy from "copy-to-clipboard";
 import {
   ArrowsExpandIcon,
   BeakerIcon,
@@ -8,6 +9,8 @@ import {
   FingerPrintIcon,
   LightningBoltIcon,
   RefreshIcon,
+  ClipboardCopyIcon,
+  DuplicateIcon,
 } from "@heroicons/react/outline";
 import Head from "next/head";
 import Image from "next/image";
@@ -26,7 +29,7 @@ import { Keyframes, Frame } from "react-keyframes";
 import { Fragment } from "react";
 import { useTheme } from "next-themes";
 import { useClipboard } from "../useClipboard";
-
+import toast, { Toaster } from "react-hot-toast";
 const features = [
   {
     name: "Incremental builds",
@@ -289,7 +292,10 @@ const FRAMES = (() => {
 
 function Page() {
   const { theme } = useTheme();
-  const [didCopy, handleCopyToClipboard] = useClipboard("npx create-turbo");
+  const onClick = () => {
+    copy("npx create-turbo");
+    toast.success("Copied to clipboard");
+  };
   return (
     <>
       <Head>
@@ -312,15 +318,19 @@ function Page() {
             <Link href="/docs">
               <a
                 href="#"
-                className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6"
+                className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6"
               >
                 Start building →
               </a>
             </Link>
           </div>
-          <div className="mt-3 rounded-md sm:mt-0 sm:ml-3">
-            <button className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black bg-white border border-transparent border-gray-200 rounded-md dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 hover:bg-gray-50 md:py-3 md:text-base md:leading-6 md:px-10">
+          <div className="relative mt-3 rounded-md sm:mt-0 sm:ml-3">
+            <button
+              onClick={onClick}
+              className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black border border-transparent border-gray-200 rounded-md bg-opacity-5 dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 betterhover:hover:bg-gray-50 md:py-3 md:text-base md:leading-6 md:px-10"
+            >
               npx create-turbo
+              <DuplicateIcon className="w-6 h-6 ml-2 -mr-3 text-gray-400" />
             </button>
           </div>
         </div>
@@ -474,12 +484,21 @@ function Page() {
               />
             </div>
             <div className="flex flex-col h-full space-y-3">
-              <div className="-mb-4">
+              <div className="-mb-4 dark:hidden">
+                <Image
+                  src="/images/home/jared_signature_2.png"
+                  height={75}
+                  width={200}
+                  alt="Jared Palmer"
+                  className="block w-[200px] "
+                />
+              </div>
+              <div className="hidden -mb-4 dark:block">
                 <Image
                   src="/images/home/jared_signature.png"
                   height={75}
                   width={200}
-                  className="block w-[200px]"
+                  className="block w-[200px] "
                   alt="Jared Palmer"
                 />
               </div>
@@ -608,7 +627,7 @@ function Page() {
           <div className="max-w-sm py-16 mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
             <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
               <Link href="/docs">
-                <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
+                <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
                   Start Building →
                 </a>
               </Link>
@@ -617,6 +636,7 @@ function Page() {
         </Container>
       </div>
       <Footer />
+      <Toaster position="bottom-right" />
     </>
   );
 }
