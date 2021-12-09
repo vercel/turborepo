@@ -127,7 +127,8 @@ publish-all: cmd/turbo/version.go
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 	rm -fr npm && git checkout npm
 	@echo Enter one-time password:
-	
+	make publish-windows
+	make publish-windows-32
 	make publish-freebsd
 	make publish-freebsd-arm64
 	@echo Enter one-time password:
