@@ -19,7 +19,7 @@ Visit https://turborepo.com/docs to view the full documentation.
 
 To chat with other community members, you can join the [Turborepo Discord](https://turborepo.org/discord)
 
-Our [Code of Conduct](https://github.com/turborepo/turbo/blob/main/.github/CODE_OF_CONDUCT.md) applies to all Turborepo community channels.
+Our [Code of Conduct](https://github.com/vercel/turborepo/blob/main/.github/CODE_OF_CONDUCT.md) applies to all Turborepo community channels.
 
 ## Updates
 
