@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/pascaldekloe/name"
@@ -39,7 +40,7 @@ type PackageJSON struct {
 	Name                   string            `json:"name,omitempty"`
 	Version                string            `json:"version,omitempty"`
 	Description            string            `json:"description,omitempty"`
-	Keywords               []string          `json:"keywords,omitempty"`
+	Keywords               Keywords          `json:"keywords,omitempty"`
 	Homepage               string            `json:"homepage,omitempty"`
 	License                string            `json:"license,omitempty"`
 	Files                  []string          `json:"files,omitempty"`
@@ -65,6 +66,7 @@ type PackageJSON struct {
 	ExternalDepsHash       string
 }
 
+type Keywords []string
 type Workspaces []string
 
 type WorkspacesAlt struct {
@@ -82,6 +84,43 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*r = tempstr
+	return nil
+}
+
+func (k *Keywords) UnmarshalJSON(data []byte) error {
+	// First, attempt to get the keywords list expecting it's well defined
+	// as described by npm spec, an array of strings
+	// see: https://docs.npmjs.com/cli/v8/configuring-npm/package-json#keywords
+	var valid = []string{}
+	if err := json.Unmarshal(data, &valid); err == nil {
+		*k = Keywords(valid)
+		return nil
+	}
+	// Reaching this code path, the keywords list is defined in a non-standard
+	// or invalid format. Try to deal with that.
+
+	// Contain everything in a string
+	var tmpstr string
+	err := json.Unmarshal(data, &tmpstr)
+
+	// If we fail to unmarshal as string, give up at this point.
+	if err != nil {
+		return err
+	}
+
+	// Try removing extra chars, or chars meant to split the keywords list.
+	// Replace them with a whitespace instead, so we can split by it.
+	var removechars = []string{"[", "]", "/", ","}
+	for _, r := range removechars {
+		tmpstr = strings.ReplaceAll(tmpstr, r, " ")
+	}
+
+	// Trim leading/trailing spaces
+	tmpstr = strings.TrimSpace(tmpstr)
+	// Split by whitespace
+	var val = strings.Fields(tmpstr)
+	// fill the relevant type definition with the split result
+	*k = Keywords(val)
 	return nil
 }
 
