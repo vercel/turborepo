@@ -78,218 +78,6 @@ const features = [
   },
 ];
 
-const prompt = (
-  <Prompt>
-    <b>acme</b> [new-logo] ~
-  </Prompt>
-);
-const caret = <Caret />;
-
-const FRAMES = (() => {
-  let frames = [];
-  let current = [];
-  let duration = 0;
-
-  const data = [
-    {
-      duration: 500,
-      0: prompt,
-      1: caret,
-    },
-    {
-      duration: 40,
-      1: <b>t</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>tu</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>tur</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turb </b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo </b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo r</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo ru</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run </b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run b</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run bu</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run bui</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run buil</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run build</b>,
-      2: caret,
-    },
-    {
-      duration: 40,
-      1: <b>turbo run build</b>,
-      2: caret,
-    },
-    {
-      duration: 500,
-      1: (
-        <b>
-          turbo run build
-          <br />
-        </b>
-      ),
-      2: caret,
-    },
-    {
-      duration: 700,
-      1: (
-        <b>
-          turbo run build
-          <br />
-        </b>
-      ),
-      2: "• Remote computation caching enabled(experimental)\n",
-      3: "• Running build in 8 packages\n",
-      4: "logger:build: cache hit, replaying output 372424b6e1b6199f\n",
-      5: "ui:build: cache hit, replaying output 9ba0ecfdffdf2b3b\n",
-      6: "ui:build: $ tsup src/index.tsx --format esm,cjs --dts --external react\n",
-      7: "ui:build: CLI Building entry: src/index.tsx\n",
-      8: "ui:build: CLI Using tsconfig: tsconfig.json\n",
-      9: "ui:build: CLI tsup v5.10.1\n",
-      10: "ui:build: CLI Target: node12\n",
-      11: "ui:build: CJS Build start\n",
-      12: "ui:build: ESM Build start\n",
-      13: "ui:build: ESM Build success in 93ms\n",
-      14: "ui:build: CJS Build success in 107ms\n",
-      15: "ui:build: DTS Build start\n",
-      16: "ui:build: DTS Build success in 2158ms\n",
-      17: "logger:build: $ tsc\n",
-      18: "admin:build: cache hit, replaying output 635e129e375ce329\n",
-      19: "admin:build: $ vite build\n",
-      20: "admin:build: vite v2.6.14 building for production...\n",
-      21: "admin:build: transforming...\n",
-      22: "admin:build: ✓ 28 modules transformed.\n",
-      23: "admin:build: rendering chunks...\n",
-      24: "admin:build: dist/assets/logo.ecc203fb.svg    2.61 KiB\n",
-      25: "admin:build: dist/index.html                  0.44 KiB\n",
-      26: "admin:build: dist/assets/index.fbec93f3.js    2.11 KiB / gzip: 0.91 KiB\n",
-      27: "admin:build: dist/assets/index.8b431468.css   0.68 KiB / gzip: 0.44 KiB\n",
-      28: "admin:build: dist/assets/vendor.122d9bd3.js   128.46 KiB / gzip: 41.32 KiB\n",
-      29: "api:build: cache hit, replaying output 60e0f0b0d8d74393\n",
-      30: "api:build: $ tsc\n",
-      31: "blog:build: cache hit, replaying output 5db686ecaf7aee13\n",
-      32: "blog:build: $ remix build\n",
-      33: "blog:build: Building Remix app in production mode...\n",
-      34: "blog:build: Built in 628ms\n",
-      35: "storefront:build: cache hit, replaying output 0e337510c721a036\n",
-      36: "storefront:build: $ next build\n",
-      37: "storefront:build: info  - Loaded env from /Users/jared/dev/jaredpalmer/turborepo-starter/packages/storefront/.env\n",
-      38: "storefront:build: info  - Using webpack 5. Reason: Enabled by default https://nextjs.org/docs/messages/webpack5\n",
-      39: "storefront:build: info  - Checking validity of types...\n",
-      40: "storefront:build: info  - Creating an optimized production build...\n",
-      41: "storefront:build: next-transpile-modules - global SASS imports only work with a custom _app.js file\n",
-      42: "storefront:build: info  - Compiled successfully\n",
-      43: "storefront:build: info  - Collecting page data...\n",
-      44: "storefront:build: info  - Generating static pages (0/3)\n",
-      45: "storefront:build: logger: Hey! This is Home.\n",
-      46: "storefront:build: info  - Generating static pages (3/3)\n",
-      47: "storefront:build: info  - Finalizing page optimization...\n",
-      48: "storefront:build: \n",
-      49: "storefront:build: Page                             Size     First Load JS\n",
-      50: "storefront:build: ┌ ○ /                            534 B          64.3 kB\n",
-      51: "storefront:build: └ ○ /404                         3.17 kB        66.9 kB\n",
-      52: "storefront:build: + First Load JS shared by all    63.8 kB\n",
-      53: "storefront:build:   ├ chunks/framework.a085b0.js   42 kB\n",
-      54: "storefront:build:   ├ chunks/main.5d8b2c.js        20.2 kB\n",
-      55: "storefront:build:   ├ chunks/pages/_app.6d0cbf.js  798 B\n",
-      56: "storefront:build:   └ chunks/webpack.672781.js     766 B\n",
-      57: "storefront:build: \n",
-      58: "storefront:build: λ  (Server)  server-side renders at runtime (uses getInitialProps or getServerSideProps)\n",
-      59: "storefront:build: ○  (Static)  automatically rendered as static HTML (uses no initial props)\n",
-      60: "storefront:build: ●  (SSG)     automatically generated as static HTML + JSON (uses getStaticProps)\n",
-      61: "storefront:build:    (ISR)     incremental static regeneration (uses revalidate in getStaticProps)\n",
-      62: "storefront:build: \n",
-      63: "\n",
-      64: " Tasks:    6 successful, 6 total\n",
-      65: "Cached:    6 cached, 6 total\n",
-      66: "  Time:    194ms >>> FULL TURBO\n",
-      67: "\n",
-      68: caret,
-    },
-    {
-      duration: 50,
-      67: prompt,
-      68: caret,
-    },
-  ];
-
-  for (let i = 0; i < data.length; ++i) {
-    for (let line in data[i]) {
-      if (line === "duration") {
-        duration = data[i][line];
-      } else {
-        current[line] = data[i][line];
-      }
-    }
-
-    frames.push(
-      <Frame duration={duration} key={`frame-${i}`}>
-        {[...current].map((items, idx) => {
-          return <Fragment key={idx}>{items}</Fragment>;
-        })}
-      </Frame>
-    );
-  }
-
-  return frames;
-})();
-
 function Page() {
   const { theme } = useTheme();
   const onClick = () => {
@@ -301,7 +89,7 @@ function Page() {
       <Head>
         <title>Turborepo - Build your monorepo in seconds</title>
       </Head>
-      <div className="px-4 py-16 sm:px-6 sm:py-24  lg:px-8  dark:text-white dark:bg-gradient-to-b dark:from-[#000] dark:to-[#111] ">
+      <div className="px-4 pt-16 pb-8 sm:px-6 sm:pt-24 lg:px-8 dark:text-white dark:bg-black ">
         <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
           Monorepos that
           <br className="hidden lg:block" />
@@ -327,7 +115,7 @@ function Page() {
           <div className="relative mt-3 rounded-md sm:mt-0 sm:ml-3">
             <button
               onClick={onClick}
-              className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black border border-transparent border-gray-200 rounded-md bg-opacity-5 dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 betterhover:hover:bg-gray-50 md:py-3 md:text-base md:leading-6 md:px-10"
+              className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black border border-transparent border-gray-200 rounded-md bg-opacity-5 dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 betterhover:hover:bg-gray-50 betterhover:dark:hover:bg-gray-900 md:py-3 md:text-base md:leading-6 md:px-10"
             >
               npx create-turbo
               <DuplicateIcon className="w-6 h-6 ml-2 -mr-3 text-gray-400" />
@@ -335,39 +123,8 @@ function Page() {
           </div>
         </div>
       </div>
-      <div className="relative">
-        <div className="absolute inset-0 flex flex-col" aria-hidden="true">
-          <div className="flex-1 dark:bg-[#111]" />
-          <div className="flex-1 w-full dark:bg-black bg-gray-50" />
-        </div>
-        <div className="px-4 sm:px-6">
-          <div className="relative max-w-lg mx-auto h-[400px]">
-            <Terminal
-              title="bash"
-              className="text-xs text-black dark:text-white"
-              height="400"
-              white={theme != "dark"}
-            >
-              <div className="h-[350px] overflow-hidden">
-                <Keyframes component="pre" key={`${`running`}-terminal`}>
-                  {true
-                    ? FRAMES
-                    : [
-                        <Frame duration={2000} key="static-frame-1">
-                          {prompt} {caret}
-                        </Frame>,
-                        <Frame duration={2000} key="static-frame-2">
-                          {prompt} {caret}
-                        </Frame>,
-                      ]}
-                </Keyframes>
-              </div>
-            </Terminal>
-          </div>
-        </div>
-      </div>
 
-      <div className="py-16 dark:bg-black bg-gray-50">
+      <div className="py-16 dark:bg-black ">
         <div className="max-w-4xl px-4 mx-auto sm:px-6 lg:px-8">
           <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
             Trusted by teams from around the world

@@ -95,8 +95,6 @@ export class Window extends React.PureComponent {
               position: absolute;
             }
             .terminal-special {
-              background: #000;
-              color: #fff;
               position: relative;
               z-index: 1;
               border: none;
@@ -106,8 +104,7 @@ export class Window extends React.PureComponent {
               display: inline-block;
               white-space: nowrap;
               min-width: 28px;
-              border-radius: 8px;
-              color: #fff;
+              border-radius: 8px;             
             }
            
             .terminal-special:after {
