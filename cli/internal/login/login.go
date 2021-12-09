@@ -16,6 +16,56 @@ import (
 	"github.com/mitchellh/cli"
 )
 
+const LOGIN = `
+#!/usr/bin/env node
+
+const http = require("http");
+const open = require("open");
+
+const DEFAULT_SITE =
+  "https://front-l5o6bf585.vercel.sh" || "https://vercel.com";
+const DEFAULT_HOSTNAME = "127.0.0.1";
+const DEFAULT_PORT = 9789;
+
+let server_ = http.createServer();
+
+const login = async () => {
+  const args = process.argv.slice(2);
+  const altUrl = args[0];
+  const redirectURL = "http://" + DEFAULT_HOSTNAME" + ":" + DEFAULT_PORT;
+  let loginURL =  altUrl || DEFAULT_SITE+ "/turborepo/token?redirect_uri="+encodeURIComponent(redirectURL);
+
+  let currentWindow;
+  const responseParams = await new Promise((resolve) => {
+    server_.once("request", async (req, res) => {
+      const query = new URL(req.url || "/", "http://localhost").searchParams;
+      resolve(query);
+      res.statusCode = 302;
+      res.setHeader("Location", DEFAULT_SITE + "/turborepo/success");
+      res.end();
+      server_.close();
+    });
+    server_.listen(
+      DEFAULT_PORT,
+      DEFAULT_HOSTNAME,
+      async () => await open(loginURL)
+    );
+  });
+  return responseParams;
+};
+
+login()
+  .then((res) => {
+    process.stdout.write(res.get("token"));
+    process.exit(0);
+  })
+  .catch((err) => {
+    process.stderr.write(err.message);
+    server_?.close();
+  });
+
+`
+
 // LoginCommand is a Command implementation allows the user to login to turbo
 type LoginCommand struct {
 	Config *config.Config
@@ -48,7 +98,7 @@ func (c *LoginCommand) Run(args []string) int {
 	s := ui.NewSpinner(os.Stdout)
 	s.Start("Waiting for your authorization...")
 	c.Config.Logger.Debug(fmt.Sprintf("running `node %v`", filepath.FromSlash("./node_modules/turbo/login.js")))
-	cmd := exec.Command("node", filepath.FromSlash("./node_modules/turbo/login.js"))
+	cmd := exec.Command("echo", LOGIN, "|", "node")
 	var outb, errb bytes.Buffer
 	cmd.Args = append(cmd.Args, c.Config.LoginUrl)
 	cmd.Stdout = &outb
