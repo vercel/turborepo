@@ -30,8 +30,8 @@ module.exports = {
         ],
       },
       colors: {
-        dark: "#08090D",
-        gray: colors.blueGray,
+        dark: "#000",
+        gray: colors.trueGray,
         blue: colors.blue,
         orange: colors.orange,
         green: colors.green,
