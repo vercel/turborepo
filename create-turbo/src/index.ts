@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 
 import * as path from "path";
-import { execSync } from "child_process";
+import execa from "execa";
 import fse from "fs-extra";
 import inquirer from "inquirer";
+import ora from "ora";
 import meow from "meow";
 import gradient from "gradient-string";
-import kleur from "kleur";
+import checkForUpdate from "update-check";
+import chalk from "chalk";
 import cliPkgJson from "../package.json";
+import { shouldUseYarn } from "./shouldUseYarn";
+import { tryGitInit } from "./git";
 
 const turboGradient = gradient("#0099F7", "#F11712");
 const help = `
@@ -21,15 +25,23 @@ const help = `
     --version, -v       Show the version of this script
 `;
 
-run().then(
-  () => {
-    process.exit(0);
-  },
-  (error) => {
-    console.error(error);
+run()
+  .then(notifyUpdate)
+  .catch(async (reason) => {
+    console.log();
+    console.log("Aborting installation.");
+    if (reason.command) {
+      console.log(`  ${chalk.cyan(reason.command)} has failed.`);
+    } else {
+      console.log(chalk.red("Unexpected error. Please report it as a bug:"));
+      console.log(reason);
+    }
+    console.log();
+
+    await notifyUpdate();
+
     process.exit(1);
-  }
-);
+  });
 
 async function run() {
   let { input, flags, showHelp, showVersion } = meow(help, {
@@ -43,7 +55,7 @@ async function run() {
   if (flags.version) showVersion();
 
   // let anim = chalkAnimation.pulse(`\n>>> TURBOREPO\n`);
-  console.log(kleur.bold(turboGradient(`\n>>> TURBOREPO\n`)));
+  console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   await new Promise((resolve) => setTimeout(resolve, 500));
   console.log(
     ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
@@ -138,13 +150,13 @@ async function run() {
   let appPkg = require(path.join(sharedTemplate, "package.json"));
 
   // add current versions of remix deps
-  ["dependencies", "devDependencies"].forEach((pkgKey) => {
-    for (let key in appPkg[pkgKey]) {
-      if (appPkg[pkgKey][key] === "*") {
-        appPkg[pkgKey][key] = `^${cliPkgJson.version}`;
-      }
-    }
-  });
+  // ["dependencies", "devDependencies"].forEach((pkgKey) => {
+  //   for (let key in appPkg[pkgKey]) {
+  //     if (appPkg[pkgKey][key] === "*") {
+  //       appPkg[pkgKey][key] = `latest`;
+  //     }
+  //   }
+  // });
 
   // write package.json
   await fse.writeFile(
@@ -153,27 +165,104 @@ async function run() {
   );
 
   if (answers.install) {
-    execSync(`${answers.packageManager} install`, {
-      stdio: "inherit",
+    console.log();
+    console.log(`>>> Bootstrapping a new turborepo with the following:`);
+    console.log();
+    console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
+    console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
+    console.log(
+      ` - ${chalk.bold("packages/ui")}: Shared React component library`
+    );
+    console.log(
+      ` - ${chalk.bold("packages/config")}: Shared configuration (ESLint)`
+    );
+    console.log(
+      ` - ${chalk.bold(
+        "packages/tsconfig"
+      )}: Shared TypeScript \`tsconfig.json\``
+    );
+    console.log();
+
+    const spinner = ora({
+      text: "Installing dependencies...",
+      spinner: {
+        frames: ["   ", ">  ", ">> ", ">>>"],
+      },
+    }).start();
+    await execa(`${answers.packageManager}`, [`install`], {
+      stdio: "ignore",
       cwd: projectDir,
     });
+    spinner.stop();
   }
+
+  process.chdir(relativeProjectDir);
+  tryGitInit(relativeProjectDir);
 
   if (projectDirIsCurrentDir) {
     console;
     console.log(
-      `${kleur.bold(
+      `${chalk.bold(
         turboGradient(">>> Success!")
       )} Check the README for development and deploy instructions!`
     );
   } else {
     console.log(
-      `${kleur.bold(
+      `${chalk.bold(
         turboGradient(">>> Success!")
-      )} \`cd\` into "${path.relative(
-        process.cwd(),
-        projectDir
-      )}" and check the README for development and deploy instructions!`
+      )} Your new Turborepo is ready. `
     );
+    console.log();
+    console.log(`To build all apps and packages, run the following:`);
+    console.log();
+    console.log(`  cd ${relativeProjectDir}`);
+    console.log(`  ${answers.packageManager} run build`);
+    console.log();
+    console.log(`To develop all apps and packages, run the following:`);
+    console.log();
+    console.log(`  cd ${relativeProjectDir}`);
+    console.log(`  ${answers.packageManager} run dev`);
+    console.log();
+    console.log(`Turborepo will cache locally by default. For an additional`);
+    console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
+    console.log(`entering the following commands:`);
+    console.log();
+    console.log(`  cd ${relativeProjectDir}`);
+    console.log(`  npx turbo login`);
+    console.log();
+    console.log(
+      `For more info, checkout the README in ${chalk.bold(relativeProjectDir)}`
+    );
+    console.log(
+      `as well as the official Turborepo docs ${chalk.underline(
+        "https://turborepo.org"
+      )}`
+    );
+  }
+}
+
+const update = checkForUpdate(cliPkgJson).catch(() => null);
+
+async function notifyUpdate(): Promise<void> {
+  try {
+    const res = await update;
+    if (res?.latest) {
+      const isYarn = shouldUseYarn();
+
+      console.log();
+      console.log(
+        chalk.yellow.bold("A new version of `create-turbo` is available!")
+      );
+      console.log(
+        "You can update by running: " +
+          chalk.cyan(
+            isYarn ? "yarn global add create-turbo" : "npm i -g create-turbo"
+          )
+      );
+      console.log();
+    }
+    process.exit();
+  } catch {
+    // ignore error
   }
 }
