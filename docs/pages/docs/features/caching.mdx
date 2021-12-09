@@ -8,13 +8,13 @@ import Callout from "../../../components/callout";
 
 Unlike other tools you may have used, `turbo` can cache emitted files and logs of previously run commands. It does this so it can skip work that's already been done, yielding incredible time savings.
 
-By default, [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2) considers any files emitted in the `dist/**` or `build/**` folders of a package task (defined in that package's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
+By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist/**` or `build/**` folders of a package task (defined in that package's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
 
 ## Configuring Cache Outputs
 
-Using [`pipeline`](./reference/configuration#pipeline), you can configure cache conventions across your Turborepo.
+Using [`pipeline`](../reference/configuration#pipeline), you can configure cache conventions across your Turborepo.
 
-To override the default cache folder behavior, pass an array of globs to a [`pipeline.<task>.outputs`](./reference/configuration#outputs) array. Any file that satifies the glob patterns for a task will be treated as artifact.
+To override the default cache folder behavior, pass an array of globs to a [`pipeline.<task>.outputs`](../reference/configuration#outputs) array. Any file that satifies the glob patterns for a task will be treated as artifact.
 
 ```json
 {
@@ -61,7 +61,7 @@ Sometimes you really don't need or want this cache behavior (such as when you're
 turbo run dev --parallel --no-cache
 ```
 
-You can also always disable caching on a specific task by setting `cache` to `false` in your Turborepo [`pipeline`](./reference/configuration#pipeline):
+You can also always disable caching on a specific task by setting `cache` to `false` in your Turborepo [`pipeline`](../reference/configuration#pipeline-1):
 
 ```json
 {
@@ -95,13 +95,13 @@ By now, you're probably wondering how `turbo` decides what constitutes a cache h
 
 First `turbo` constructs a hash of the current global state of the monorepo:
 
-- The contents of any file that satifies the the glob patterns in [`globalDependencies`](./reference/configuration#globalDependencies)
+- The contents of any file that satifies the the glob patterns in [`globalDependencies`](../reference/configuration#globalDependencies-1)
 
 Then it adds on more factors relative to a given package's task:
 
 - Hash the contents of all not-gitignored files in the package folder
 - The hashes of all internal dependencies
-- The `outputs` option specified in the [`pipeline`](./reference/configuration#pipeline)
+- The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a package's `package.json` from the root lockfile
 - The package task's name
 
