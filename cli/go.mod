@@ -7,13 +7,13 @@ require (
 	github.com/adrg/xdg v0.3.3
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bmatcuk/doublestar v1.3.4
+	github.com/briandowns/spinner v1.16.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/fatih/color v1.7.0
 	github.com/gobwas/glob v0.2.3
 	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
 	github.com/google/go-cmp v0.5.5 // indirect
 	github.com/google/uuid v1.2.0 // indirect
-	github.com/gosimple/slug v1.9.0
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.16.2
 	github.com/hashicorp/go-retryablehttp v0.6.8

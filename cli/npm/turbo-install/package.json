@@ -1,6 +1,6 @@
 {
   "name": "turbo",
-  "version": "0.9.0-next.15",
+  "version": "0.9.0-next.21",
   "description": "The blazing fast monorepo build system.",
   "repository": "https://github.com/turborepo/turbo",
   "bugs": "https://github.com/turborepo/turbo/issues",
@@ -9,8 +9,13 @@
     "postinstall": "node install.js"
   },
   "bin": {
-    "turbo": "bin/turbo"
+    "turbo": "./bin/turbo"
   },
+  "files": [
+    "bin",
+    "install.js",
+    "login.js"
+  ],
   "license": "MPL-2.0",
   "dependencies": {
     "zlib": "^1.0.5"

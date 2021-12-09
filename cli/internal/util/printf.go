@@ -43,6 +43,7 @@ var replacements = map[string]string{
 	"BOLD_MAGENTA": "\x1b[35;1m",
 	"BOLD_CYAN":    "\x1b[36;1m",
 	"BOLD_WHITE":   "\x1b[37;1m",
+	"UNDERLINE":    "\x1b[4m",
 	"GREY":         "\x1b[2m",
 	"RED":          "\x1b[31m",
 	"GREEN":        "\x1b[32m",

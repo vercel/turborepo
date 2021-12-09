@@ -6,6 +6,7 @@ import (
 	"strings"
 	"turbo/internal/config"
 	"turbo/internal/ui"
+	"turbo/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -20,7 +21,7 @@ type UnlinkCommand struct {
 
 // Synopsis of run command
 func (c *UnlinkCommand) Synopsis() string {
-	return "Unlink the current directory from your Vercel organization."
+	return "Unlink the current directory from your Vercel organization and disable Remote Caching (beta)."
 }
 
 // Help returns information about the `run` command
@@ -28,7 +29,7 @@ func (c *UnlinkCommand) Help() string {
 	helpText := `
 Usage: turbo unlink
 
-    Unlink the current directory from your Vercel organization.
+    Unlink the current directory from your Vercel organization and disable Remote Caching (beta).
 `
 	return strings.TrimSpace(helpText)
 }
@@ -39,7 +40,7 @@ func (c *UnlinkCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Could not unlink. Something went wrong: %w", err))
 		return 1
 	}
-	c.Ui.Output(ui.Dim("Logged out"))
+	c.Ui.Output(util.Sprintf("${GREY}> Disabled Remote Caching${RESET}"))
 	return 0
 }
 
