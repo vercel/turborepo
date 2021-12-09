@@ -1,11 +1,15 @@
 package login
 
 import (
-	"bytes"
+	"context"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"turbo/internal/config"
 	"turbo/internal/ui"
@@ -15,56 +19,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 )
-
-const LOGIN = `
-#!/usr/bin/env node
-
-const http = require("http");
-const open = require("open");
-
-const DEFAULT_SITE =
-  "https://front-l5o6bf585.vercel.sh" || "https://vercel.com";
-const DEFAULT_HOSTNAME = "127.0.0.1";
-const DEFAULT_PORT = 9789;
-
-let server_ = http.createServer();
-
-const login = async () => {
-  const args = process.argv.slice(2);
-  const altUrl = args[0];
-  const redirectURL = "http://" + DEFAULT_HOSTNAME" + ":" + DEFAULT_PORT;
-  let loginURL =  altUrl || DEFAULT_SITE+ "/turborepo/token?redirect_uri="+encodeURIComponent(redirectURL);
-
-  let currentWindow;
-  const responseParams = await new Promise((resolve) => {
-    server_.once("request", async (req, res) => {
-      const query = new URL(req.url || "/", "http://localhost").searchParams;
-      resolve(query);
-      res.statusCode = 302;
-      res.setHeader("Location", DEFAULT_SITE + "/turborepo/success");
-      res.end();
-      server_.close();
-    });
-    server_.listen(
-      DEFAULT_PORT,
-      DEFAULT_HOSTNAME,
-      async () => await open(loginURL)
-    );
-  });
-  return responseParams;
-};
-
-login()
-  .then((res) => {
-    process.stdout.write(res.get("token"));
-    process.exit(0);
-  })
-  .catch((err) => {
-    process.stderr.write(err.message);
-    server_?.close();
-  });
-
-`
 
 // LoginCommand is a Command implementation allows the user to login to turbo
 type LoginCommand struct {
@@ -87,37 +41,44 @@ Usage: turbo login
 	return strings.TrimSpace(helpText)
 }
 
+const DEFAULT_SITE = "https://front-l5o6bf585.vercel.sh"
+const DEFAULT_HOSTNAME = "127.0.0.1"
+const DEFAULT_PORT = 9789
+
 // Run logs into the api with PKCE and writes the token to turbo user config directory
 func (c *LoginCommand) Run(args []string) int {
 	var rawToken string
 	c.Config.Logger.Debug(fmt.Sprintf("turbo v%v", c.Config.TurboVersion))
 	c.Config.Logger.Debug(fmt.Sprintf("api url: %v", c.Config.ApiUrl))
 	c.Config.Logger.Debug(fmt.Sprintf("login url: %v", c.Config.LoginUrl))
-
-	c.Ui.Info(util.Sprintf(">>> Opening browser to ${UNDERLINE}%v${RESET}", c.Config.LoginUrl))
+	redirectUrl := fmt.Sprintf("http://%v:%v", DEFAULT_HOSTNAME, DEFAULT_PORT)
+	loginUrl := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.Config.LoginUrl, redirectUrl)
+	c.Ui.Info(util.Sprintf(">>> Opening browser to ${UNDERLINE}%v${RESET}", loginUrl))
 	s := ui.NewSpinner(os.Stdout)
 	s.Start("Waiting for your authorization...")
 	c.Config.Logger.Debug(fmt.Sprintf("running `node %v`", filepath.FromSlash("./node_modules/turbo/login.js")))
-	cmd := exec.Command("echo", LOGIN, "|", "node")
-	var outb, errb bytes.Buffer
-	cmd.Args = append(cmd.Args, c.Config.LoginUrl)
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
+	openbrowser(loginUrl)
+	var query url.Values
+	ctx, cancel := context.WithCancel(context.Background())
+	fmt.Println(query.Encode())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		http.Redirect(w, r, c.Config.LoginUrl+"/turborepo/success", http.StatusFound)
+		cancel()
+	})
 
-	err := cmd.Run()
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("Could not activate device. Please try again: %w", err))
-		return 1
-	}
+	srv := &http.Server{Addr: "127.0.0.1:9789"}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			if err != nil {
+				c.logError(c.Config.Logger, "", fmt.Errorf("Could not activate device. Please try again: %w", err))
+			}
+		}
+	}()
+	<-ctx.Done()
 	s.Stop("")
-	config.WriteUserConfigFile(&config.TurborepoConfig{Token: outb.String()})
-	rawToken = outb.String()
-
-	if errb.String() != "" {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could not authorize: %s", errb.String()))
-		return 1
-	}
-
+	config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
+	rawToken = query.Get("token")
 	c.Config.ApiClient.SetToken(rawToken)
 	userResponse, err := c.Config.ApiClient.GetUser()
 	if err != nil {
@@ -167,4 +128,23 @@ func (c *LoginCommand) logFatal(log hclog.Logger, prefix string, err error) {
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 	os.Exit(1)
+}
+
+func openbrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
