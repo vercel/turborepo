@@ -47,7 +47,7 @@ const navigation = {
   support: [
     {
       name: "GitHub",
-      href: "https://github.com/vercel/turbo",
+      href: "https://github.com/vercel/turborepo",
     },
     {
       name: "Discord",
