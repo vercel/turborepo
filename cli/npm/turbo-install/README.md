@@ -13,7 +13,7 @@
 
 ## Documentation
 
-Visit https://turborepo.com/docs to view the full documentation.
+Visit https://turborepo.org to view the full documentation.
 
 ## Community
 
