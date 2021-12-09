@@ -24,15 +24,15 @@ Turborepo can use a technique known as Remote Caching to share cache artifacts a
 
 ### For Local Development
 
-Install the [Vercel CLI](https://vercel.com/cli?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link) and login to your Vercel account.
+If you want to link your local turborepo to your Remote Cache you do so by first authenticating the Turborepo CLI with your Vercel account:
 
 ```sh
-npx vercel login
+npx turbo login
 ```
 
-Link your Turborepo to your Vercel account or organization. Your Remote Cache will be shared across all of your organization's projects.
+Next, you can link your turborepo to your remote cache by running the following command:
 
-```sh
+```
 npx turbo link
 ```
 

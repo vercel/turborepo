@@ -157,8 +157,8 @@ At the moment, Turborepo caches your tasks on your local filesystem (i.e. "singl
 
 Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost.
 
-<Callout> 
-  Remote Caching is an incredibly powerful feature of Turborepo but also a breathtakingly ["sharp knife"](https://m.signalvnoise.com/provide-sharp-knives/) that you can easily cut yourself with. Make sure that you are properly caching things correctly first and double check that you are properly handling environment variables.
+<Callout type="error"> 
+  Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 
 ### Link Your Turborepo to Your Remote Cache
@@ -167,10 +167,16 @@ As part of Turborepo's initial public launch, [Vercel](https://vercel.com?utm_so
 
 #### Using Remote Caching for Local development
 
-If you want to link your local turborepo to your remote cache you do so by running:
+If you want to link your local turborepo to your Remote Cache you do so by first authenticating the Turborepo CLI with your Vercel account:
 
 ```sh
-yarn turbo link
+npx turbo login
+```
+
+Next, you can link your turborepo to your remote cache by running the following command:
+
+```
+npx turbo link
 ```
 
 Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
