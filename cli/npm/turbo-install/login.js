@@ -39,7 +39,6 @@ const login = async () => {
 
 login()
   .then((res) => {
-    // throw new Error(`Failed to login: ${res}`);
     process.stdout.write(res.get("token"));
     process.exit(0);
   })
