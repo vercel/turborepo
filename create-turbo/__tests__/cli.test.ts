@@ -21,13 +21,13 @@ const createTurbo = path.resolve(__dirname, "../dist/index.js");
 
 const DEFAULT_JEST_TIMEOUT = 5000;
 
-describe("create-turborepo cli", () => {
+describe("create-turbo cli", () => {
   beforeAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider runnuing the build here instead of throwing
       throw new Error(
-        `Cannot run Turbrepo CLI tests without building create-turborepo`
+        `Cannot run Turbrepo CLI tests without building create-turbo`
       );
     }
   });
@@ -116,7 +116,7 @@ describe("create-turborepo cli", () => {
           Create a new Turborepo
 
           Usage:
-            $ npx create-turborepo [flags...] [<dir>]
+            $ npx create-turbo [flags...] [<dir>]
 
           If <dir> is not provided up front you will be prompted for it.
 
@@ -137,7 +137,7 @@ describe("create-turborepo cli", () => {
           Create a new Turborepo
 
           Usage:
-            $ npx create-turborepo [flags...] [<dir>]
+            $ npx create-turbo [flags...] [<dir>]
 
           If <dir> is not provided up front you will be prompted for it.
 

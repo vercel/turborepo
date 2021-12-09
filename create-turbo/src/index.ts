@@ -16,7 +16,7 @@ import { tryGitInit } from "./git";
 const turboGradient = gradient("#0099F7", "#F11712");
 const help = `
   Usage:
-    $ npx create-turborepo [flags...] [<dir>]
+    $ npx create-turbo [flags...] [<dir>]
 
   If <dir> is not provided up front you will be prompted for it.
 
