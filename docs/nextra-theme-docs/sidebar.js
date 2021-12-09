@@ -127,6 +127,9 @@ function Menu({ directories, anchors }) {
         if (item.name === "confirm") {
           return null;
         }
+        if (item.name === "terms") {
+          return null;
+        }
         if (item.children) {
           return <Folder key={item.name} item={item} anchors={anchors} />;
         }

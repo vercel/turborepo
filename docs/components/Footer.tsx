@@ -63,7 +63,8 @@ const navigation = {
     { name: "Twitter", href: "https://twitter.com/vercel" },
   ],
   legal: [
-    { name: "Privacy Policy", href: "https://vercel.com/legal/privacy-policy" },
+    { name: "Privacy Policy", href: "/privacy" },
+    { name: "Terms of Use", href: "/terms" },
   ],
 };
 

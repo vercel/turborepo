@@ -43,7 +43,18 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
     <React.Fragment>
       <SkipNavContent />
       {meta.headeronly ? (
-        <div className="relative w-full overflow-x-hidden">{children}</div>
+        meta.container ? (
+          <div className="relative w-full mx-auto overflow-x-hidden">
+            <article className="pb-24">
+              <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
+                <Theme>{children}</Theme>
+              </main>
+            </article>
+            <FooterMain />
+          </div>
+        ) : (
+          <div className="relative w-full overflow-x-hidden">{children}</div>
+        )
       ) : postList ? (
         <div className="relative w-full overflow-x-hidden">
           <main className="z-10 max-w-screen-md min-w-0 px-6 pt-4 mx-auto nextra-content">
