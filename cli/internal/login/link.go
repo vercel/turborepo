@@ -157,7 +157,7 @@ func (c *LinkCommand) Run(args []string) int {
 	}
 
 	c.Ui.Info("")
-	c.Ui.Info(util.Sprintf("${GREEN}✓ Success!${RESET} Remote Caching is now enabled for ${BOLD}%s${RESET}", chosenTeam.Name))
+	c.Ui.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeam.Name))
 	c.Ui.Info("")
 	c.Ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	c.Ui.Info("")
