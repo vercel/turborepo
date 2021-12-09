@@ -1,5 +1,5 @@
 ---
-title: Getting Started 
+title: Getting Started
 ---
 
 import Callout from "../../components/callout";
@@ -101,7 +101,7 @@ In the above example, the `build` and `test` tasks are dependant on their packag
 For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
 like in the example above, where the `.next/**` folder is selected to be the default cache folder for the `build` task. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
 
-Finally, the `dev` task has it's chaching disabled using the `cache` key with a value of `false`.
+Finally, the `dev` task has its caching disabled using the `cache` key with a value of `false`.
 
 See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
 
@@ -157,7 +157,7 @@ At the moment, Turborepo caches your tasks on your local filesystem (i.e. "singl
 
 Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost.
 
-<Callout type="error"> 
+<Callout type="error">
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 
