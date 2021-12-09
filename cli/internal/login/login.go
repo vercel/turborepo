@@ -41,7 +41,6 @@ Usage: turbo login
 	return strings.TrimSpace(helpText)
 }
 
-const DEFAULT_SITE = "https://front-l5o6bf585.vercel.sh"
 const DEFAULT_HOSTNAME = "127.0.0.1"
 const DEFAULT_PORT = 9789
 
