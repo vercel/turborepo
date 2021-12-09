@@ -24,6 +24,8 @@ import { Window as Terminal } from "../Window";
 import { Caret, Prompt } from "../Caret";
 import { Keyframes, Frame } from "react-keyframes";
 import { Fragment } from "react";
+import { useTheme } from "next-themes";
+import { useClipboard } from "../useClipboard";
 
 const features = [
   {
@@ -286,6 +288,8 @@ const FRAMES = (() => {
 })();
 
 function Page() {
+  const { theme } = useTheme();
+  const [didCopy, handleCopyToClipboard] = useClipboard("npx create-turbo");
   return (
     <>
       <Head>
@@ -303,13 +307,21 @@ function Page() {
           Turborepo is a high-performance build system for JavaScript and
           TypeScript codebases.
         </p>
-        <div className="max-w-sm mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
-          <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
-            <Link href="/docs/getting-started">
-              <a className="flex items-center justify-center px-4 py-3 text-lg font-medium text-white no-underline rounded-md bg-gradient-to-r from-red-500 to-blue-500 betterhover:hover:bg-gray-50 sm:px-8">
+        <div className="max-w-xl mx-auto mt-5 sm:flex sm:justify-center md:mt-8">
+          <div className="rounded-md ">
+            <Link href="/docs">
+              <a
+                href="#"
+                className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6"
+              >
                 Start building →
               </a>
             </Link>
+          </div>
+          <div className="mt-3 rounded-md sm:mt-0 sm:ml-3">
+            <button className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black bg-white border border-transparent border-gray-200 rounded-md dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 hover:bg-gray-50 md:py-3 md:text-base md:leading-6 md:px-10">
+              npx create-turbo
+            </button>
           </div>
         </div>
       </div>
@@ -320,7 +332,12 @@ function Page() {
         </div>
         <div className="px-4 sm:px-6">
           <div className="relative max-w-lg mx-auto h-[400px]">
-            <Terminal title="bash" className="text-xs " height="400">
+            <Terminal
+              title="bash"
+              className="text-xs text-black dark:text-white"
+              height="400"
+              white={theme != "dark"}
+            >
               <div className="h-[350px] overflow-hidden">
                 <Keyframes component="pre" key={`${`running`}-terminal`}>
                   {true
@@ -590,9 +607,9 @@ function Page() {
         <Container>
           <div className="max-w-sm py-16 mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
             <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
-              <Link href="/docs/getting-started">
-                <a className="flex items-center justify-center px-4 py-3 text-lg font-medium text-white no-underline rounded-md bg-gradient-to-r from-red-500 to-blue-500 betterhover:hover:bg-gray-50 sm:px-8">
-                  Get Started →
+              <Link href="/docs">
+                <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
+                  Start Building →
                 </a>
               </Link>
             </div>

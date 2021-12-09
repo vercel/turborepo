@@ -69,6 +69,7 @@ export class Window extends React.PureComponent {
               border: 0;
               box-shadow: 0 20px 50px 0 ${shadowColor || "rgba(0, 0, 0, 0.1)"};
               background: #fff;
+              color: #000
             }
             .window.alias {
               box-shadow: none;
