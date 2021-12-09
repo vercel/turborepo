@@ -1,10 +1,10 @@
-# Turborepo starter with PNPM
+# Turborepo starter with NPM
 
 This is an official starter turborepo.
 
 ## What's inside?
 
-This turborepo uses [PNPM](https://pnpm.io) as a packages manager. It includes the following packages/apps:
+This turborepo uses [NPM](https://www.npmjs.com/) as a package manager. It includes the following packages/apps:
 
 ### Apps and Packages
 
@@ -27,7 +27,7 @@ This turborepo has some additional tools already setup for you:
 
 ## Setup
 
-This repository is used in the `npx create-turbo` command, and selected when choosing which package manager you wish to use with your monorepo (PNPM).
+This repository is used in the `npx create-turbo` command, and selected when choosing which package manager you wish to use with your monorepo (NPM).
 
 ### Build
 
@@ -35,7 +35,7 @@ To build all apps and packages, run the following command:
 
 ´´´
 cd my-turborepo
-pnpm run build
+npm run build
 ´´´
 
 ### Develop
@@ -44,7 +44,7 @@ To develop all apps and packages, run the following command:
 
 ´´´
 cd my-turborepo
-pnpm run dev
+npm run dev
 ´´´
 
 ### Remote Caching
