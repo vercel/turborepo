@@ -101,7 +101,7 @@ function Page() {
         </p>
         <div className="max-w-xl mx-auto mt-5 sm:flex sm:justify-center md:mt-8">
           <div className="rounded-md ">
-            <Link href="/docs">
+            <Link href="/docs/getting-started">
               <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
                 Start building →
               </a>
@@ -378,7 +378,7 @@ function Page() {
         <Container>
           <div className="max-w-sm py-16 mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
             <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
-              <Link href="/docs">
+              <Link href="/docs/getting-started">
                 <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
                   Start Building →
                 </a>
