@@ -1,4 +1,3 @@
-import copy from "copy-to-clipboard";
 import {
   ArrowsExpandIcon,
   BeakerIcon,
@@ -6,30 +5,25 @@ import {
   ChartPieIcon,
   ChipIcon,
   CloudUploadIcon,
+  DuplicateIcon,
   FingerPrintIcon,
   LightningBoltIcon,
   RefreshIcon,
-  ClipboardCopyIcon,
-  DuplicateIcon,
 } from "@heroicons/react/outline";
+import copy from "copy-to-clipboard";
+import { useTheme } from "next-themes";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
-import { Container } from "../Container";
-import { Footer } from "../Footer";
+import toast, { Toaster } from "react-hot-toast";
 import edelman from "../../images/edelman.jpeg";
 import elad from "../../images/elad.jpeg";
 import flavio from "../../images/flavio.jpeg";
 import jongold from "../../images/jongold.jpeg";
 import ollermi from "../../images/ollermi.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
-import { Window as Terminal } from "../Window";
-import { Caret, Prompt } from "../Caret";
-import { Keyframes, Frame } from "react-keyframes";
-import { Fragment } from "react";
-import { useTheme } from "next-themes";
-import { useClipboard } from "../useClipboard";
-import toast, { Toaster } from "react-hot-toast";
+import { Container } from "../Container";
+import { Footer } from "../Footer";
 const features = [
   {
     name: "Incremental builds",
@@ -87,7 +81,10 @@ function Page() {
   return (
     <>
       <Head>
-        <title>Turborepo - Build your monorepo in seconds</title>
+        <title>
+          Turborepo | High-performance Build System for JavaScript and
+          TypeScript Codebases
+        </title>
       </Head>
       <div className="px-4 pt-16 pb-8 sm:px-6 sm:pt-24 lg:px-8 dark:text-white dark:bg-black ">
         <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
