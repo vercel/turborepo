@@ -94,7 +94,7 @@ function Page() {
           </span>{" "}
         </h1>
         <p className="max-w-lg mx-auto mt-6 text-xl font-medium leading-tight text-center text-gray-400 sm:max-w-4xl sm:text-2xl md:text-3xl lg:text-4xl">
-          Turborepo is a high-performance build system for modern codebases.
+          Turborepo is a high-performance build system for large codebases.
         </p>
         <div className="max-w-sm mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
           <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
