@@ -37,7 +37,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Install cosign
-        uses: sigstore/cosign-installer@v1.3.1
+        uses: sigstore/cosign-installer@v1.4.1
       - name: Install git-chglog
         run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@${{ env.GIT_CHGLOG_VERSION }}
       - name: Build and push
