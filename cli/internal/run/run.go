@@ -692,6 +692,8 @@ type RunOptions struct {
 	// Immediately exit on task failure
 	bail            bool
 	passThroughArgs []string
+	// Restrict execution to only the listed task names. Default false
+	only bool
 }
 
 func getDefaultRunOptions() *RunOptions {
@@ -706,6 +708,7 @@ func getDefaultRunOptions() *RunOptions {
 		profile:        "", // empty string does no tracing
 		forceExecution: false,
 		stream:         true,
+		only:           false,
 	}
 }
 
@@ -789,6 +792,8 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				runOptions.ancestors = true
+			case strings.HasPrefix(arg, "--only"):
+				runOptions.only = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			default:

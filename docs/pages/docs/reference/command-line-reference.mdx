@@ -145,6 +145,37 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--only`
+
+Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
+
+Given this pipeline:
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": [
+          "^build"
+        ]
+      },
+      "test": {
+        "dependsOn": [
+          "^build"
+        ]
+      }
+    }
+  }
+}
+```
+
+```shell
+turbo run test --only
+```
+
+Will execute _only_ the `test` tasks in each package. It will not `build`.
+
 #### `--parallel`
 
 Default `false`. Run commands in parallel across packages and apps and ignore the dependency graph. This is useful for developing with live reloading.
