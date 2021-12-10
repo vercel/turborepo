@@ -56,6 +56,8 @@ type SchedulerExecutionOptions struct {
 	Concurrency int
 	// Parallel is whether to run tasks in parallel
 	Parallel bool
+	// Restrict execution to only the listed task names
+	TasksOnly bool
 }
 
 // Execute executes the pipeline, constructing an internal task graph and walking it accordlingly.
@@ -78,7 +80,7 @@ func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 
 	p.Parallel = options.Parallel
 
-	if err := p.generateTaskGraph(pkgs, tasks, true); err != nil {
+	if err := p.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
 		return err
 	}
 
@@ -110,7 +112,7 @@ func (p *scheduler) Execute() []error {
 	})
 }
 
-func (p *scheduler) generateTaskGraph(scope []string, targets []string, targetsOnly bool) error {
+func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -122,7 +124,7 @@ func (p *scheduler) generateTaskGraph(scope []string, targets []string, targetsO
 	traversalQueue := []string{}
 
 	for _, pkg := range scope {
-		for _, target := range targets {
+		for _, target := range taskNames {
 			traversalQueue = append(traversalQueue, GetTaskId(pkg, target))
 		}
 	}
@@ -141,12 +143,16 @@ func (p *scheduler) generateTaskGraph(scope []string, targets []string, targetsO
 			visited.Add(taskId)
 			deps := task.Deps
 
-			if targetsOnly {
+			if tasksOnly {
 				deps = deps.Filter(func(d interface{}) bool {
-					for _, target := range targets {
-						if dag.VertexName(d) == target {
-							return true
-						}
+					for _, target := range taskNames {
+						return fmt.Sprintf("%v", d) == target
+					}
+					return false
+				})
+				task.TopoDeps = task.TopoDeps.Filter(func(d interface{}) bool {
+					for _, target := range taskNames {
+						return fmt.Sprintf("%v", d) == target
 					}
 					return false
 				})
