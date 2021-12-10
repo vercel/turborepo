@@ -47,6 +47,14 @@ func TestSchedulerDefault(t *testing.T) {
 			return nil
 		},
 	})
+	p.AddTask(&Task{
+		Name: "side-quest", // not in the build/test tree
+		Deps: deps,
+		Run: func(cwd string) error {
+			fmt.Println(cwd)
+			return nil
+		},
+	})
 
 	if _, ok := p.Tasks["build"]; !ok {
 		t.Fatal("AddTask is not adding tasks (build)")
