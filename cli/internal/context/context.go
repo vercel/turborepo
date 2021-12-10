@@ -428,6 +428,10 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	for i, v := range externalDepSet.ToSlice() {
 		pkg.ExternalDeps[i] = v.(string)
 	}
+	pkg.InternalDeps = make([]string, internalDepsSet.Len())
+	for i, v := range internalDepsSet.List() {
+		pkg.InternalDeps[i] = v.(string)
+	}
 	sort.Strings(pkg.InternalDeps)
 	sort.Strings(pkg.ExternalDeps)
 	hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
