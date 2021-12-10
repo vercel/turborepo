@@ -48,7 +48,7 @@ An example Pipeline configuration:
 
 The rough execution order for a given package based on the `dependsOn` keys above will be:
 
-1. `build` once its depdendencies have run their `build` commands
+1. `build` once its dependencies have run their `build` commands
 2. `test` once its _own_ `build` command is finished
 3. `lint` whenever
 4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished
@@ -59,7 +59,7 @@ The full pipeline can then be run:
 npx turbo run build test lint deploy
 ```
 
-Turborepo will then efficiently schedule exection minimizing idle CPUs. 
+Turborepo will then efficiently schedule execution minimizing idle CPUs. 
 
 ## Task Dependency Format
 
