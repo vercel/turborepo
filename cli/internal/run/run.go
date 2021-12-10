@@ -608,6 +608,7 @@ func (c *RunCommand) Run(args []string) int {
 		TaskNames:   ctx.Targets.UnsafeListOfStrings(),
 		Concurrency: runOptions.concurrency,
 		Parallel:    runOptions.parallel,
+		TasksOnly:   runOptions.only,
 	}); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
