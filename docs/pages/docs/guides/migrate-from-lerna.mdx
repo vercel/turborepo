@@ -98,7 +98,7 @@ Alter `package.json` to use `turbo` for task running, but keep `lerna` for versi
 + "turbo": {
 +   "pipeline": {
 +     "build": {
-+       "dependsOn": ["^build"]
++       "dependsOn": ["^build"],
 +       "outputs": ["dist/**"]
 +     },
 +     "test": {
