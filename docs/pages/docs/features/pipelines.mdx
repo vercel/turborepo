@@ -6,7 +6,7 @@ import Callout from "../../../components/callout";
 
 # Pipelining Package Tasks
 
-In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each NPM lifecycle script like `build` or `test` is run [topologically](./glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
+In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each NPM lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
 
 Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold.
 
