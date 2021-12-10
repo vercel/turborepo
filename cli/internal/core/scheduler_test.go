@@ -186,9 +186,9 @@ c#test
 const leafStringOnly = `
 ___ROOT___
 a#test
-	___ROOT___
+  ___ROOT___
 b#test
-	___ROOT___
+  ___ROOT___
 c#test
-	___ROOT___
+  ___ROOT___
 `
