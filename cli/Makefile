@@ -215,7 +215,7 @@ bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo
-	cd demo/turbo && ../../turbo run test --force
+	cd demo/turbo && ../../turbo run test 
 
 bench/turbo-new: demo/turbo
 	cd demo/turbo && ../../turbo-new run build test 
