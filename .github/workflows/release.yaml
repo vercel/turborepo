@@ -15,6 +15,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_DOCKER_TOKEN }}
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Checkout code
         uses: actions/checkout@v2
       - run: git fetch --prune --unshallow
@@ -41,7 +46,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
+          tags: |
+            ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
+            troian/golang-cross:${{env.RELEASE_TAG}}
           build-args: |
             "GO_VERSION=${{env.GO_VERSION}}"
             "GORELEASER_VERSION=${{env.GORELEASER_VERSION}}"
@@ -53,13 +60,13 @@ jobs:
             "OSX_VERSION_MIN=${{env.OSX_VERSION_MIN}}"
             "OSX_CROSS_COMMIT=${{env.OSX_CROSS_COMMIT}}"
             "DEBIAN_FRONTEND=${{env.DEBIAN_FRONTEND}}"
-      - name: Sign images
-        run: |
-          echo "${COSIGN_KEY}" | base64 -d > /tmp/cosign.key
-          cosign sign --key /tmp/cosign.key ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
-        env:
-          COSIGN_KEY: ${{secrets.COSIGN_PRIVATE_KEY}}
-          COSIGN_PASSWORD: ${{secrets.COSIGN_PASSWORD}}
+#      - name: Sign images
+#        run: |
+#          echo "${COSIGN_KEY}" | base64 -d > /tmp/cosign.key
+#          cosign sign --key /tmp/cosign.key ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
+#        env:
+#          COSIGN_KEY: ${{secrets.COSIGN_PRIVATE_KEY}}
+#          COSIGN_PASSWORD: ${{secrets.COSIGN_PASSWORD}}
       - name: Generate changelog
         run: make gen-changelog
       - name: Release
