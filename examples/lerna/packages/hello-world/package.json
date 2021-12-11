@@ -1,0 +1,26 @@
+{
+  "name": "hello-world",
+  "version": "0.0.0",
+  "description": "",
+  "author": "",
+  "homepage": "",
+  "license": "",
+  "main": "cjs/hello-world.js",
+  "module": "esm/hello-world.js",
+  "types": "src/hello-world.ts",
+  "directories": {
+    "lib": "src",
+    "test": "__tests__"
+  },
+  "files": [
+    "src",
+    "esm",
+    "cjs"
+  ],
+  "scripts": {
+    "test": "jest",
+    "build:esm": "swc ./src -d esm -C module.type=es6",
+    "build:cjs": "swc ./src -d cjs -C module.type=commonjs",
+    "dev": "nodemon --config nodemon.json"
+  }
+}

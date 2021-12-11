@@ -1,0 +1,55 @@
+{
+  "name": "root",
+  "private": true,
+  "devDependencies": {
+    "@swc/cli": "^0.1.53",
+    "@swc/core": "^1.2.119",
+    "@swc/jest": "^0.2.12",
+    "jest": "^27.4.4",
+    "lerna": "^4.0.0",
+    "nodemon": "^2.0.15",
+    "swc": "^1.0.11",
+    "turbo": "^1.0.6",
+    "typescript": "^4.5.3"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "turbo": {
+    "pipeline": {
+      "build:esm": {
+        "dependsOn": [
+          "^build"
+        ],
+        "outputs": [
+          "esm/**"
+        ]
+      },
+      "build:cjs": {
+        "dependsOn": [
+          "^build"
+        ],
+        "outputs": [
+          "cjs/**"
+        ]
+      },
+      "build": {
+        "dependsOn": [
+          "build:esm",
+          "build:cjs"
+        ]
+      },
+      "test": {
+        "outputs": []
+      },
+      "dev": {
+        "cache": false
+      }
+    }
+  }
+}
