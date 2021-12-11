@@ -10,29 +10,12 @@ import (
 	"github.com/pascaldekloe/name"
 )
 
-// TurboCacheOptions are configuration for Turborepo cache
-
-type TurboConfigJSON struct {
-	Base               string   `json:"baseBranch,omitempty"`
-	GlobalDependencies []string `json:"globalDependencies,omitempty"`
-	TurboCacheOptions  string   `json:"cacheOptions,omitempty"`
-	Outputs            []string `json:"outputs,omitempty"`
-	RemoteCacheUrl     string   `json:"remoteCacheUrl,omitempty"`
-	Pipeline           map[string]Pipeline
-}
-
 // Camelcase string with optional args.
 func Camelcase(s string, v ...interface{}) string {
 	return name.CamelCase(fmt.Sprintf(s, v...), true)
 }
 
 var requiredFields = []string{"Name", "Version"}
-
-type Pipeline struct {
-	Outputs   []string `json:"outputs,omitempty"`
-	Cache     *bool    `json:"cache,omitempty"`
-	DependsOn []string `json:"dependsOn,omitempty"`
-}
 
 // PackageJSON represents NodeJS package.json
 type PackageJSON struct {
