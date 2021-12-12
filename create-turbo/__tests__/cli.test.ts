@@ -36,7 +36,7 @@ describe("create-turbo cli", () => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT);
   });
 
-  it("guides the user through the process", async () => {
+  it("guides the user through the process", (done) => {
     let cli = spawn("node", [createTurbo], {});
     let promptCount = 0;
     let previousPrompt: string;
@@ -89,6 +89,12 @@ describe("create-turbo cli", () => {
     });
 
     cli.on("exit", () => {
+      try {
+        expect(promptCount).toEqual(4);
+        done();
+      } catch (error) {
+        done(error);
+      }
       return;
     });
   });
