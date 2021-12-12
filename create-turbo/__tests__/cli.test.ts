@@ -25,7 +25,7 @@ describe("create-turbo cli", () => {
   beforeAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
     if (!fs.existsSync(createTurbo)) {
-      // TODO: Consider runnuing the build here instead of throwing
+      // TODO: Consider running the build here instead of throwing
       throw new Error(
         `Cannot run Turbrepo CLI tests without building create-turbo`
       );
