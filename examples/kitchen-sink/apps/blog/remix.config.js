@@ -3,8 +3,7 @@
  */
 module.exports = {
   appDirectory: "app",
-  browserBuildDirectory: "public/dist",
-  publicPath: "/dist/",
-  serverBuildDirectory: "dist",
-  devServerPort: 8002,
+  browserBuildDirectory: "public/build",
+  publicPath: "/build/",
+  serverBuildDirectory: "api/build",
 };
