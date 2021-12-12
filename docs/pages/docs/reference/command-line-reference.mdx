@@ -41,7 +41,7 @@ turbo run test --concurrency=1
 
 Defaults to `false`. This flag tells `turbo` whether or not to continue with execution in the presence of an error (i.e. non-zero exit code from a task).
 By default, specifying the `--parallel` flag will automatically set `--continue` to `true` unless explicitly set to `false`.
-When `--continue` is `true`, `turbo` will exit with the highest exit code value encountered during exection.
+When `--continue` is `true`, `turbo` will exit with the highest exit code value encountered during execution.
 
 ```sh
 turbo run build --continue
@@ -228,7 +228,7 @@ A bearer token for remote caching. Useful for running in non-interactive shells 
 turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
-You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precendence over the environment variable if both are present.
+You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precedence over the environment variable if both are present.
 
 #### `--team`
 
@@ -239,7 +239,7 @@ turbo run build --team=my-team
 turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
-You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precendence over the environment variable if both are present.
+You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precedence over the environment variable if both are present.
 
 ## `turbo prune --scope=<target>`
 
@@ -290,7 +290,7 @@ Default to `false`. Passing this flag will alter the outputted folder with the p
 
 With the `--docker` flag. The `prune` command will generate folder called `out` with the following inside of it:
 
-- A folder `json` with the pruned workspace's package.jsons
+- A folder `json` with the pruned workspace's `package.json`s
 - A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
 - A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
 
