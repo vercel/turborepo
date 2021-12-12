@@ -16,6 +16,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
@@ -27,13 +32,7 @@ jobs:
         with:
           node-version: 14
 
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-
-      - name: Install Node Modules
-        uses: bahmutov/npm-install@v1
+      - uses: bahmutov/npm-install@v1
 
       - name: Build & Unit Test
         run: yarn turbo run test
