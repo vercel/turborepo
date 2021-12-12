@@ -68,7 +68,7 @@ func CopyFile(from string, to string, mode os.FileMode) error {
 // WriteFile writes data from a reader to the file named 'to', with an attempt to perform
 // a copy & rename to avoid chaos if anything goes wrong partway.
 func WriteFile(fromFile io.Reader, to string, mode os.FileMode) error {
-	dir, file := path.Split(to)
+	dir, file := filepath.Split(to)
 	if dir != "" {
 		if err := os.MkdirAll(dir, DirPermissions); err != nil {
 			return err
