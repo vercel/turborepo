@@ -2,5 +2,5 @@
   "watch": ["src"],
   "ext": "ts,json",
   "ignore": ["**/*.test.ts"],
-  "exec": "yarn build:cjs && node ."
+  "exec": "yarn build:cjs && yarn build:esm && node ."
 }

@@ -9,13 +9,16 @@
     "lerna": "^4.0.0",
     "nodemon": "^2.0.15",
     "swc": "^1.0.11",
-    "turbo": "^1.0.6",
+    "turbo": "latest",
     "typescript": "^4.5.3"
   },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "prerelease": "yarn build && lerna version --no-push",
+    "release": "lerna publish from-git --yes",
+    "postrelease": "git push --follow-tags origin"
   },
   "workspaces": [
     "packages/*"
@@ -24,7 +27,7 @@
     "pipeline": {
       "build:esm": {
         "dependsOn": [
-          "^build"
+          "^build:esm"
         ],
         "outputs": [
           "esm/**"
@@ -32,7 +35,7 @@
       },
       "build:cjs": {
         "dependsOn": [
-          "^build"
+          "^build:cjs"
         ],
         "outputs": [
           "cjs/**"

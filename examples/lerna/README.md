@@ -18,7 +18,7 @@ This turborepo has some additional tools already setup for you:
 
 ### Build
 
-To build all apps and packages, run the following command:
+To build all packages, run the following command:
 
 ```
 cd my-turborepo
@@ -27,12 +27,23 @@ yarn run build
 
 ### Develop
 
-To develop all apps and packages, run the following command:
+To develop all packages, run the following command:
 
 ```
 cd my-turborepo
 yarn run dev
 ```
+
+### Publish
+
+To publish modified packages, run the following command:
+
+```
+cd my-turborepo
+yarn run release
+```
+
+_This command builds packages before publishing._
 
 ### Remote Caching
 

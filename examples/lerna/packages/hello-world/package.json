@@ -18,9 +18,9 @@
     "cjs"
   ],
   "scripts": {
-    "test": "jest",
     "build:esm": "swc ./src -d esm -C module.type=es6",
     "build:cjs": "swc ./src -d cjs -C module.type=commonjs",
-    "dev": "nodemon --config nodemon.json"
+    "dev": "nodemon --config nodemon.json",
+    "test": "jest"
   }
 }
