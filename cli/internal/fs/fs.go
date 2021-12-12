@@ -3,10 +3,8 @@ package fs
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"turbo/internal/util"
@@ -65,9 +63,9 @@ func CopyFile(from string, to string, mode os.FileMode) error {
 
 	dir, _ := filepath.Split(to)
 	if dir != "" {
-                if err := os.MkdirAll(dir, DirPermissions); err != nil {
-                        return err
-                }
+		if err := os.MkdirAll(dir, DirPermissions); err != nil {
+			return err
+		}
 	}
 	// Set permissions properly
 	if mode == 0 {
@@ -78,7 +76,7 @@ func CopyFile(from string, to string, mode os.FileMode) error {
 		return err
 	}
 	if _, err := io.Copy(toFile, fromFile); err != nil {
-		os.remove(to)
+		os.Remove(to)
 		return err
 	}
 	toFile.Close()
@@ -99,58 +97,6 @@ func IsPackage(buildFileNames []string, name string) bool {
 		}
 	}
 	return false
-}
-
-// Try to gracefully rename the file as the os.Rename does not work across
-// filesystems and on most Linux systems /tmp is mounted as tmpfs
-func renameFile(from, to string) (err error) {
-	err = os.Rename(from, to)
-	if err == nil {
-		return nil
-	}
-	err = copyFile(from, to)
-	if err != nil {
-		return err
-	}
-	err = os.RemoveAll(from)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func copyFile(from, to string) (err error) {
-	in, err := os.Open(from)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(to)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if e := out.Close(); e != nil {
-			err = e
-		}
-	}()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-
-	si, err := os.Stat(from)
-	if err != nil {
-		return err
-	}
-	err = os.Chmod(to, si.Mode())
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GlobList accepts a list of doublestar directive globs and returns a list of files matching them
