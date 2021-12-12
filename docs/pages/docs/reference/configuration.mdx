@@ -29,7 +29,7 @@ Defaults to `yarn`. The NPM client in-use in your project.
 
 An object representing the task dependency graph of your project. `turbo` interprets these conventions to properly schedule, execute, and cache the outputs of tasks in your project.
 
-Each key in the `pipeline` object is the name of a task that can be executed by `turbo run`. If `turbo` finds a workspace package with a `package.json` `scripts` object with a matching key, it will apply the pipline task configuration to that NPM script during execution. This allows you to use `pipeline` to set conventions across your entire Turborepo.
+Each key in the `pipeline` object is the name of a task that can be executed by `turbo run`. If `turbo` finds a workspace package with a `package.json` `scripts` object with a matching key, it will apply the pipeline task configuration to that NPM script during execution. This allows you to use `pipeline` to set conventions across your entire Turborepo.
 
 ```json
 {

@@ -9,7 +9,7 @@ import Callout from "../../../components/callout";
 Scoping task execution can speed up the process especially if there are distinct clusters of packages that are not related to each other within your repository. Turborepo has a `scope` option that allows the task running to proceed up to the packages found that matches the `scope` argument. It's useful to think of `scope` as an "entry point" into your monorepo's package/task graph. This is a string matcher based on the name of the packages (not the package path).
 
 <Callout type="info">
-  It is important to note that depedendents and dependencies refer to the
+  It is important to note that dependents and dependencies refer to the
   package and task.
 </Callout>
 
