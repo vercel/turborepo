@@ -3,7 +3,9 @@ name: Go CI
 on:
   push:
     branches: ["*"]
-
+  pull_request:
+    types: [opened, synchronize]
+    
 jobs:
   build:
     name: turbo CI
@@ -31,7 +33,7 @@ jobs:
           fetch-depth: 2
 
       - name: Build & Unit Test
-        run: yarn turbo run test --scope=cli
+        run: yarn turbo run test
 
       - name: Lint
         run: yarn turbo run lint --scope=cli
