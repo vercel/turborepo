@@ -1,8 +1,10 @@
-name: Go CI
+name: CI
 
 on:
   push:
     branches: ["*"]
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
   build:
@@ -14,6 +16,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
@@ -25,13 +32,23 @@ jobs:
         with:
           node-version: 14
 
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - uses: actions/cache@v2
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
         with:
-          fetch-depth: 2
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Yarn Install
+        run: yarn install
 
       - name: Build & Unit Test
-        run: yarn turbo run test --scope=cli
+        run: yarn turbo run test --scope=cli --scope=create-turbo
 
       - name: Lint
         run: yarn turbo run lint --scope=cli
