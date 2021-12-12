@@ -62,37 +62,27 @@ func CopyFile(from string, to string, mode os.FileMode) error {
 		return err
 	}
 	defer fromFile.Close()
-	return WriteFile(fromFile, to, mode)
-}
 
-// WriteFile writes data from a reader to the file named 'to', with an attempt to perform
-// a copy & rename to avoid chaos if anything goes wrong partway.
-func WriteFile(fromFile io.Reader, to string, mode os.FileMode) error {
-	dir, file := filepath.Split(to)
+	dir, _ := filepath.Split(to)
 	if dir != "" {
-		if err := os.MkdirAll(dir, DirPermissions); err != nil {
-			return err
-		}
+                if err := os.MkdirAll(dir, DirPermissions); err != nil {
+                        return err
+                }
 	}
-	tempFile, err := ioutil.TempFile(dir, file)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(tempFile, fromFile); err != nil {
-		return err
-	}
-	if err := tempFile.Close(); err != nil {
-		return err
-	}
-	// OK, now file is written; adjust permissions appropriately.
+	// Set permissions properly
 	if mode == 0 {
 		mode = 0664
 	}
-	if err := os.Chmod(tempFile.Name(), mode); err != nil {
+	toFile, err := os.OpenFile(to, 0302, mode)
+	if err != nil {
 		return err
 	}
-	// And move it to its final destination.
-	return renameFile(tempFile.Name(), to)
+	if _, err := io.Copy(toFile, fromFile); err != nil {
+		os.remove(to)
+		return err
+	}
+	toFile.Close()
+	return nil
 }
 
 // IsDirectory checks if a given path is a directory
