@@ -49,10 +49,8 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 
 	contentsOfLock, err := ioutil.ReadFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
 	if err != nil {
-
 		contentsB, err := ioutil.ReadFile("yarn.lock")
 		if err != nil {
-			fmt.Println("readfile")
 			return nil, fmt.Errorf("yarn.lock: %w", err)
 		}
 		lines := strings.Split(string(contentsB), "\n")
