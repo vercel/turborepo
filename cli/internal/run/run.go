@@ -797,6 +797,8 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
+			case strings.HasPrefix(arg, "--api"):
+			case strings.HasPrefix(arg, "--url"):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
