@@ -10,6 +10,7 @@ import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
+import { checkIfYarnInstalled } from "./yarn";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { tryGitInit } from "./git";
 
@@ -79,6 +80,7 @@ async function run() {
         ).dir
   );
 
+  const isYarnInstalled = checkIfYarnInstalled();
   let answers = await inquirer.prompt<{
     packageManager: "yarn" | "npm";
     install: boolean;
@@ -88,7 +90,11 @@ async function run() {
       type: "list",
       message: "Which package manager do you want to use?",
       choices: [
-        { name: "Yarn", value: "yarn" },
+        {
+          name: "Yarn",
+          value: "yarn",
+          disabled: !isYarnInstalled && "not installed",
+        },
         { name: "NPM", value: "npm" },
         // { name: "PNPM", value: "pnpm" },
       ],
