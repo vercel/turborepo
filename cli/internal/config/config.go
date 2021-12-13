@@ -93,7 +93,6 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	partialConfig.Token = userConfig.Token
 
 	enverr := envconfig.Process("TURBO", partialConfig)
-	fmt.Printf("TURBO_TEAM: %v, %v\n", partialConfig.TeamSlug, os.Getenv("TURBO_TEAM"))
 	if enverr != nil {
 		return nil, fmt.Errorf("invalid environment variable: %w", err)
 	}
