@@ -135,6 +135,7 @@ const theme = {
   search: true,
   unstable_stork: false,
   floatTOC: true,
+  font: false,
   enterpriseLink:
     "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink", // @TODO
   projectChatLink: "https://turborepo.org/discord",
