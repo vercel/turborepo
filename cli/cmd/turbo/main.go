@@ -28,10 +28,8 @@ func main() {
 		switch {
 		case strings.HasPrefix(arg, "--heap="):
 			heapFile = arg[len("--heap="):]
-
 		case strings.HasPrefix(arg, "--trace="):
 			traceFile = arg[len("--trace="):]
-
 		case strings.HasPrefix(arg, "--cpuprofile="):
 			cpuprofileFile = arg[len("--cpuprofile="):]
 		default:
@@ -146,7 +144,7 @@ func main() {
 			// Don't disable the GC if this is a long-running process
 			isServe := false
 			for _, arg := range args {
-				if arg == "--no-cache" {
+				if arg == "--no-gc" {
 					isServe = true
 					break
 				}

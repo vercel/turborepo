@@ -797,6 +797,12 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
+			case strings.HasPrefix(arg, "--api"):
+			case strings.HasPrefix(arg, "--url"):
+			case strings.HasPrefix(arg, "--trace"):
+			case strings.HasPrefix(arg, "--cpuprofile"):
+			case strings.HasPrefix(arg, "--heap"):
+			case strings.HasPrefix(arg, "--no-gc"):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
