@@ -231,7 +231,7 @@ async function run() {
   );
   console.log(
     `as well as the official Turborepo docs ${chalk.underline(
-      "https://turborepo.org"
+      "https://turborepo.org/docs"
     )}`
   );
 }
