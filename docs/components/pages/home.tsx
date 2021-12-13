@@ -395,7 +395,7 @@ function Page() {
                   Finally! <Mention>@astrodotbuild</Mention> is now using
                   <Mention>@turborepo</Mention>. ♥️⚡️
                   <br />
-                  So glad it's open source now—congrats to{" "}
+                  So glad it&apos;s open source now—congrats to{" "}
                   <Mention>@jaredpalmer</Mention> and <Mention>@vercel</Mention>{" "}
                   on the release!
                 </>
