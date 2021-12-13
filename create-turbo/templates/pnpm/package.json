@@ -1,12 +1,12 @@
 {
-  "name": "turborepo-basic",
+  "name": "turborepo-basic-pnpm",
   "version": "0.0.0",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
-    "format": "prettier --write '**/*.{ts,tsx,md}'"
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
     "prettier": "^2.5.1",

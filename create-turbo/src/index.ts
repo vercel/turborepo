@@ -196,7 +196,7 @@ async function run() {
     spinner.stop();
   }
 
-  process.chdir(relativeProjectDir);
+  process.chdir(projectDir);
   tryGitInit(relativeProjectDir);
 
   if (projectDirIsCurrentDir) {

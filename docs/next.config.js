@@ -23,6 +23,11 @@ module.exports = withNextra({
         permanent: true,
         destination: "https://discord.gg/d6kXWZPWkW",
       },
+      {
+        source: "/docs/changelog",
+        permanent: true,
+        destination: "https://github.com/vercel/turborepo/releases",
+      },
     ];
   },
 });
