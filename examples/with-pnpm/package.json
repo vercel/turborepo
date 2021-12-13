@@ -2,6 +2,11 @@
   "name": "turborepo-with-pnpm",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint"
+  },
   "devDependencies": {
     "turbo": "latest"
   },
@@ -18,6 +23,9 @@
       },
       "lint": {
         "outputs": []
+      },
+      "dev": {
+        "cache": false
       }
     }
   }
