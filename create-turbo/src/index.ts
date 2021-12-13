@@ -199,46 +199,45 @@ async function run() {
   process.chdir(projectDir);
   tryGitInit(relativeProjectDir);
 
+  console.log(
+    `${chalk.bold(turboGradient(">>> Success!"))} Your new Turborepo is ready. `
+  );
+  console.log();
+  console.log(`To build all apps and packages, run the following:`);
+  console.log();
+  if (!projectDirIsCurrentDir) {
+    console.log(`  cd ${relativeProjectDir}`);
+  }
+  console.log(`  ${answers.packageManager} run build`);
+  console.log();
+  console.log(`To develop all apps and packages, run the following:`);
+  console.log();
+  if (!projectDirIsCurrentDir) {
+    console.log(`  cd ${relativeProjectDir}`);
+  }
+  console.log(`  ${answers.packageManager} run dev`);
+  console.log();
+  console.log(`Turborepo will cache locally by default. For an additional`);
+  console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
+  console.log(`entering the following commands:`);
+  console.log();
+  if (!projectDirIsCurrentDir) {
+    console.log(`  cd ${relativeProjectDir}`);
+  }
+  console.log(`  npx turbo login`);
+  console.log();
   if (projectDirIsCurrentDir) {
-    console;
-    console.log(
-      `${chalk.bold(
-        turboGradient(">>> Success!")
-      )} Check the README for development and deploy instructions!`
-    );
+    console.log(`For more info, checkout the README`);
   } else {
-    console.log(
-      `${chalk.bold(
-        turboGradient(">>> Success!")
-      )} Your new Turborepo is ready. `
-    );
-    console.log();
-    console.log(`To build all apps and packages, run the following:`);
-    console.log();
-    console.log(`  cd ${relativeProjectDir}`);
-    console.log(`  ${answers.packageManager} run build`);
-    console.log();
-    console.log(`To develop all apps and packages, run the following:`);
-    console.log();
-    console.log(`  cd ${relativeProjectDir}`);
-    console.log(`  ${answers.packageManager} run dev`);
-    console.log();
-    console.log(`Turborepo will cache locally by default. For an additional`);
-    console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
-    console.log(`entering the following commands:`);
-    console.log();
-    console.log(`  cd ${relativeProjectDir}`);
-    console.log(`  npx turbo login`);
-    console.log();
     console.log(
       `For more info, checkout the README in ${chalk.bold(relativeProjectDir)}`
     );
-    console.log(
-      `as well as the official Turborepo docs ${chalk.underline(
-        "https://turborepo.org"
-      )}`
-    );
   }
+  console.log(
+    `as well as the official Turborepo docs ${chalk.underline(
+      "https://turborepo.org/docs"
+    )}`
+  );
 }
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
