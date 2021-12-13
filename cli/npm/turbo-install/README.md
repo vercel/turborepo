@@ -11,11 +11,13 @@
   </a>
 </p>
 
-## Documentation
+## Getting Started / Documentation
 
 Visit https://turborepo.org to view the full documentation.
 
 ## Community
+
+The Turborepo community can be found on [GitHub Discussions](https://github.com/vercel/turborepo/discussions), where you can ask questions, voice ideas, and share your projects.
 
 To chat with other community members, you can join the [Turborepo Discord](https://turborepo.org/discord)
 
@@ -23,7 +25,7 @@ Our [Code of Conduct](https://github.com/vercel/turborepo/blob/main/CODE_OF_COND
 
 ## Updates
 
-Follow [@turborepo](https://twitter.com/turborepo)
+Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates
 
 ## Author
 
