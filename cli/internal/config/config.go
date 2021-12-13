@@ -92,7 +92,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	}
 	partialConfig.Token = userConfig.Token
 
-	enverr := envconfig.Process("turbo", partialConfig)
+	enverr := envconfig.Process("TURBO", partialConfig)
 	if enverr != nil {
 		return nil, fmt.Errorf("invalid environment variable: %w", err)
 	}
@@ -113,7 +113,6 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		}
 	}
 
-	shouldEnsureTeam := false
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
 	var outArgs []string
@@ -151,7 +150,6 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			partialConfig.Token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
-			shouldEnsureTeam = true
 		default:
 			outArgs = append(outArgs, arg)
 		}
@@ -191,46 +189,10 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	c.ApiClient.SetToken(partialConfig.Token)
 
-	if shouldEnsureTeam || partialConfig.TeamSlug != "" {
-		if err := c.ensureTeam(); err != nil {
-			return c, err
-		}
-	}
-
 	return c, nil
 }
 
-func (c *Config) ensureTeam() error {
-	// if c.Token == "" {
-	// 	if IsCI() {
-	// 		fmt.Println(ui.Warn("no token has been provided, but you specified a Turborepo team and project. If this is intended (e.g. a pull request on an open source GitHub project from an outside contributor triggered this), you can ignore this warning. Otherwise, please run `turbo login`, pass `--token` flag, or set `TURBO_TOKEN` environment variable to enable remote caching. In the meantime, turbo will attempt to continue with local caching."))
-	// 		return nil
-	// 	}
-	// 	return fmt.Errorf("no credentials found. Please run `turbo login`, pass `--token` flag, or set TURBO_TOKEN environment variable")
-	// }
-	// req, err := graphql.NewGetTeamRequest(c.ApiUrl, &graphql.GetTeamVariables{
-	// 	Slug: (*graphql.String)(&c.TeamSlug),
-	// })
-	// if err != nil {
-	// 	return fmt.Errorf("could not fetch team information: %w", err)
-	// }
-	// req.Header.Set("Authorization", "Bearer "+c.Token)
-	// res, resErr := req.Execute(c.GraphQLClient.Client)
-	// if resErr != nil {
-	// 	return fmt.Errorf("could not fetch team information: %w", resErr)
-	// }
-
-	// if res.Team.ID == "" {
-	// 	return fmt.Errorf("could not fetch team information. Check the spelling of `%v` and make sure that the %v team exists on turborepo.com and that you have access to it", c.TeamSlug, c.TeamSlug)
-	// }
-
-	// c.TeamId = res.Team.ID
-	// c.TeamSlug = res.Team.Slug
-
-	return nil
-}
-
-// IsLogged returns true if the user is logged into turborepo.com
+// IsLoggedIn returns true if the user is logged into a Remote Cache
 func (c *Config) IsLoggedIn() bool {
 	return c.Token != ""
 }
