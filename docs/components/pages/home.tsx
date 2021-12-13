@@ -24,6 +24,8 @@ import ollermi from "../../images/ollermi.jpeg";
 import shadcn from "../../images/shadcn.jpeg";
 import christian from "../../images/christian.jpeg";
 import yangshunz from "../../images/yangshunz.jpeg";
+import nmoore from "../../images/nmoore.jpeg";
+import sseraphini from "../../images/sseraphini.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import { Footer } from "../Footer";
@@ -382,6 +384,23 @@ function Page() {
                 </>
               }
             />
+            <Tweet
+              url="https://twitter.com/n_moore/status/1469344866194788355"
+              username="n_moore"
+              name="Nate Moore"
+              date="Dec 10"
+              avatar={nmoore}
+              text={
+                <>
+                  Finally! <Mention>@astrodotbuild</Mention> is now using
+                  <Mention>@turborepo</Mention>. ♥️⚡️
+                  <br />
+                  So glad it's open source now—congrats to{" "}
+                  <Mention>@jaredpalmer</Mention> and <Mention>@vercel</Mention>{" "}
+                  on the release!
+                </>
+              }
+            />
           </div>
           <div className="space-y-4">
             <Tweet
@@ -429,6 +448,14 @@ function Page() {
                   wow, it just blew my mind how easy this all is to use.
                 </>
               }
+            />
+            <Tweet
+              url="https://twitter.com/sseraphini/status/1470501625580208139"
+              username="sseraphini"
+              name="Sibelius Seraphini"
+              date="Dec 13"
+              avatar={sseraphini}
+              text={<>Turborepo is sweet</>}
             />
           </div>
         </div>
