@@ -127,28 +127,28 @@ function Page() {
 
           <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-4">
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <Image
+              <img
                 className="h-6 "
                 src="/images/logos/vercel.svg"
                 alt="Vercel"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <Image
+              <img
                 className="h-6 "
                 src="/images/logos/lattice.svg"
                 alt="Lattice"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <Image
+              <img
                 className="h-6"
                 src="/images/logos/teespring.svg"
                 alt="TeeSpring"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <Image
+              <img
                 className="h-6"
                 src="/images/logos/makeswift.svg"
                 alt="Makeswift"
