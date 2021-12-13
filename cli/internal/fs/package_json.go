@@ -38,12 +38,6 @@ type Pipeline struct {
 type PackageJSON struct {
 	Name                   string            `json:"name,omitempty"`
 	Version                string            `json:"version,omitempty"`
-	Description            string            `json:"description,omitempty"`
-	Keywords               []string          `json:"keywords,omitempty"`
-	Homepage               string            `json:"homepage,omitempty"`
-	License                string            `json:"license,omitempty"`
-	Files                  []string          `json:"files,omitempty"`
-	Main                   string            `json:"main,omitempty"`
 	Scripts                map[string]string `json:"scripts,omitempty"`
 	Dependencies           map[string]string `json:"dependencies,omitempty"`
 	DevDependencies        map[string]string `json:"devDependencies,omitempty"`
