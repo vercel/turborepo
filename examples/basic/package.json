@@ -9,6 +9,12 @@
     "config",
     "tsconfig"
   ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
   "devDependencies": {
     "prettier": "^2.5.1",
     "turbo": "latest"
