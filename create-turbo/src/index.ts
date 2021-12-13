@@ -226,9 +226,13 @@ async function run() {
   }
   console.log(`  npx turbo login`);
   console.log();
-  console.log(
-    `For more info, checkout the README in ${chalk.bold(relativeProjectDir)}`
-  );
+  if (projectDirIsCurrentDir) {
+    console.log(`For more info, checkout the README`);
+  } else {
+    console.log(
+      `For more info, checkout the README in ${chalk.bold(relativeProjectDir)}`
+    );
+  }
   console.log(
     `as well as the official Turborepo docs ${chalk.underline(
       "https://turborepo.org/docs"
