@@ -102,7 +102,7 @@ function Page() {
         <div className="max-w-xl mx-auto mt-5 sm:flex sm:justify-center md:mt-8">
           <div className="rounded-md ">
             <Link href="/docs/getting-started">
-              <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
+              <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:dark:hover:bg-gray-300 betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
                 Start building →
               </a>
             </Link>
