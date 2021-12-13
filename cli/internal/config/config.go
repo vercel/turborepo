@@ -192,7 +192,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	return c, nil
 }
 
-// IsLogged returns true if the user is logged into turborepo.com
+// IsLogged returns true if the user is logged into a Remote Cache
 func (c *Config) IsLoggedIn() bool {
 	return c.Token != ""
 }
