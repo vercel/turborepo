@@ -5,7 +5,7 @@ import React, {
   useState,
   useEffect,
 } from "react";
-import matchSorter from "match-sorter";
+import { matchSorter } from "match-sorter";
 import cn from "classnames";
 import { useRouter } from "next/router";
 import Link from "next/link";
