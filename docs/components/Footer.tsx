@@ -37,7 +37,7 @@ const navigation = {
     { name: "Documentation", href: "/docs" },
     { name: "API Reference", href: "/docs/reference/command-line-reference" },
     { name: "Blog", href: "/blog" },
-    { name: "Releases", href: "/docs/changelog" },
+    { name: "Releases", href: "https://github.com/vercel/turborepo/releases" },
     { name: "FAQ", href: "/docs/faq" },
     {
       name: "Enterprise",
