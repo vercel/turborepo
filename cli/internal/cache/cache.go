@@ -34,7 +34,7 @@ func newSyncCache(config *config.Config, remoteOnly bool) Cache {
 	if config.Cache.Dir != "" && !remoteOnly {
 		mplex.caches = append(mplex.caches, newFsCache(config))
 	}
-	if config.Token != "" && config.TeamId != "" {
+	if (config.Token != "" && config.TeamId != "") || (config.Token != "" && config.TeamSlug != "") {
 		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
 		mplex.caches = append(mplex.caches, newHTTPCache(config))
 	}
