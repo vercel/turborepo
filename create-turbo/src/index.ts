@@ -87,7 +87,7 @@ async function run() {
   const isYarnInstalled = shouldUseYarn();
   let answers;
   if (flags.useNpm) {
-    answers = { packageManager: "npm " };
+    answers = { packageManager: "npm" };
   } else {
     answers = await inquirer.prompt<{
       packageManager: "yarn" | "npm";
@@ -221,46 +221,42 @@ async function run() {
 
   process.chdir(projectDir);
   tryGitInit(relativeProjectDir);
+  if (projectDirIsCurrentDir) {
+    console.log(
+      `${chalk.bold(
+        turboGradient(">>> Success!")
+      )} Your new Turborepo is ready. `
+    );
+    console.log("Inside this directory, you can run several commands:");
+  } else {
+    console.log(
+      `${chalk.bold(
+        turboGradient(">>> Success!")
+      )} Created a new Turborepo at "${relativeProjectDir}". `
+    );
+    console.log("Inside that directory, you can run several commands:");
+  }
 
-  console.log(
-    `${chalk.bold(turboGradient(">>> Success!"))} Your new Turborepo is ready. `
-  );
   console.log();
-  console.log(`To build all apps and packages, run the following:`);
+  console.log(chalk.cyan(`  ${answers.packageManager} run build`));
+  console.log(`     Build all apps and packages`);
   console.log();
-  if (!projectDirIsCurrentDir) {
-    console.log(`  cd ${relativeProjectDir}`);
-  }
-  console.log(`  ${answers.packageManager} run build`);
-  console.log();
-  console.log(`To develop all apps and packages, run the following:`);
-  console.log();
-  if (!projectDirIsCurrentDir) {
-    console.log(`  cd ${relativeProjectDir}`);
-  }
-  console.log(`  ${answers.packageManager} run dev`);
+  console.log(chalk.cyan(`  ${answers.packageManager} run dev`));
+  console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
   console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
-  console.log(`entering the following commands:`);
+  console.log(`entering the following command:`);
+  console.log();
+  console.log(chalk.cyan(`  npx turbo login`));
+  console.log();
+  console.log(`We suggest that you begin by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
-    console.log(`  cd ${relativeProjectDir}`);
+    console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
   }
-  console.log(`  npx turbo login`);
+  console.log(chalk.cyan(`  npx turbo login`));
   console.log();
-  if (projectDirIsCurrentDir) {
-    console.log(`For more info, checkout the README`);
-  } else {
-    console.log(
-      `For more info, checkout the README in ${chalk.bold(relativeProjectDir)}`
-    );
-  }
-  console.log(
-    `as well as the official Turborepo docs ${chalk.underline(
-      "https://turborepo.org/docs"
-    )}`
-  );
 }
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
