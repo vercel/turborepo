@@ -2,7 +2,13 @@ module.exports = {
   extends: ["next", "prettier"],
   settings: {
     next: {
-      rootDir: ["docs/", "ui/", "web/", "config/", "tsconfig/"],
+      rootDir: [
+        "apps/docs/",
+        "apps/web/",
+        "packages/ui/",
+        "packages/config/",
+        "packages/tsconfig/",
+      ],
     },
   },
 };
