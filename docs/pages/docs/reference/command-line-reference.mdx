@@ -26,6 +26,16 @@ Run NPM scripts across all packages in specified scope. Tasks must be specified 
 
 ### Options
 
+#### `--cache-dir`
+
+`type: string`
+
+Defaults to `./node_modules/.cache/turbo`. Specify local filesystem cache directory. Be sure to add this folder to your `.gitignore` if you change it from the default.
+
+```sh
+turbo run build --cache-dir="./my-cache"
+```
+
 #### `--concurrency`
 
 `type: number`
@@ -52,7 +62,7 @@ turbo run build --continue
 Set the working directory of the command.
 
 ```sh
-turbo run build --cwd ./somewhere/else
+turbo run build --cwd=./somewhere/else
 ```
 
 #### `--deps`
@@ -102,6 +112,17 @@ Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting 
 turbo run build --force
 ```
 
+#### `--global-deps`
+
+Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory that impact multiple packages/apps.
+Can be specified multiple times.
+
+```sh
+turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.js"
+```
+
+You can also specify these in your `turbo` configuration as `globalDependencies` key.
+
 #### `--ignore`
 
 `type: string[]`
@@ -130,7 +151,7 @@ Just a quick overview.
 - `{}` allows for a comma-separated list of "or" expressions
 - `!` at the beginning of a pattern will negate the match
 
-#### `--includeDependencies`
+#### `--include-dependencies`
 
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
