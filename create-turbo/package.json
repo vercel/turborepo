@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs",
-    "lint": "eslint ./src --ext .js,.ts",
+    "lint": "eslint ./src ./__tests__ --ext .js,.ts",
     "test": "jest"
   },
   "dependencies": {
