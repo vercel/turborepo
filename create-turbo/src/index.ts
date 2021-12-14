@@ -10,7 +10,6 @@ import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
-import { checkIfYarnInstalled } from "./yarn";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { tryGitInit } from "./git";
 
@@ -80,7 +79,7 @@ async function run() {
         ).dir
   );
 
-  const isYarnInstalled = checkIfYarnInstalled();
+  const isYarnInstalled = shouldUseYarn();
   let answers = await inquirer.prompt<{
     packageManager: "yarn" | "npm";
     install: boolean;
