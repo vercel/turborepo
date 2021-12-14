@@ -44,7 +44,7 @@ jobs:
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Lint
-        run: yarn turbo run lint --scope=cli
+        run: yarn turbo run lint --scope=cli --scope=create-turbo
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
