@@ -12,6 +12,7 @@ import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { tryGitInit } from "./git";
+import { hasExecutable } from "./hasExecutable";
 
 const turboGradient = gradient("#0099F7", "#F11712");
 const help = `
@@ -88,7 +89,11 @@ async function run() {
       type: "list",
       message: "Which package manager do you want to use?",
       choices: [
-        { name: "Yarn", value: "yarn" },
+        {
+          name: "Yarn",
+          value: "yarn",
+          disabled: !(await hasExecutable("yarn")),
+        },
         { name: "NPM", value: "npm" },
         // { name: "PNPM", value: "pnpm" },
       ],
@@ -246,7 +251,7 @@ async function notifyUpdate(): Promise<void> {
   try {
     const res = await update;
     if (res?.latest) {
-      const isYarn = shouldUseYarn();
+      const isYarn = await shouldUseYarn();
 
       console.log();
       console.log(

@@ -67,16 +67,21 @@ describe("create-turbo cli", () => {
           break;
 
         case 3:
-          // Which package manager do you want to use?
-          // easy to change deployment targets.
-          expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
+          const chocies = getPromptChoices(prompt);
+
+          // yarn is optional. however, npm should be present on almost
+          // every system.
+          expect(chocies).toContain("NPM");
+
+          // just hit enter to pick the first result from the list.
           cli.stdin.write(keys.enter);
           break;
 
         case 4:
-          expect(prompt).toEqual(
-            "? Do you want me to run `yarn install`? (Y/n)"
+          expect(prompt).toMatch(
+            /\? Do you want me to run \`(yarn|npm) install\`\? \(Y\/n\)/
           );
+
           cli.stdin.write("n");
 
           // At this point the CLI will create directories and all that fun stuff
