@@ -1,6 +1,9 @@
 module.exports = {
+  root: true,
+  parser: "@typescript-eslint/parser",
+  env: { node: true },
+  extends: ["eslint:recommended"],
   rules: {
-    // we have an example where we need this
-    "no-undef": "off",
+    "no-empty": ["error", { allowEmptyCatch: true }],
   },
 };

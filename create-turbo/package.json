@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs",
+    "lint": "eslint ./src --ext .js,.ts",
     "test": "jest"
   },
   "dependencies": {
@@ -39,6 +40,8 @@
     "@types/jest": "^27.0.3",
     "@types/node": "^16.11.12",
     "@types/semver": "^7.3.9",
+    "@typescript-eslint/parser": "^5.7.0",
+    "eslint": "^8.4.1",
     "jest": "^27.4.3",
     "semver": "^7.3.5",
     "strip-ansi": "^7.0.1",
