@@ -90,7 +90,7 @@ async function run() {
       choices: [
         { name: "Yarn", value: "yarn" },
         { name: "NPM", value: "npm" },
-        // { name: "PNPM", value: "pnpm" },
+        { name: "PNPM", value: "pnpm" },
       ],
     },
     {
