@@ -72,17 +72,6 @@ describe("create-turbo cli", () => {
           expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
           cli.stdin.write(keys.enter);
           break;
-
-        case 4:
-          expect(prompt).toEqual(
-            "? Do you want me to run `yarn install`? (Y/n)"
-          );
-          cli.stdin.write("n");
-
-          // At this point the CLI will create directories and all that fun stuff
-          // TODO: We should actually test this stuff too, kinda a big deal
-          cli.kill("SIGINT");
-          break;
       }
 
       previousPrompt = prompt;
@@ -126,7 +115,9 @@ describe("create-turbo cli", () => {
 
           If <dir> is not provided up front you will be prompted for it.
 
-          Flags:
+          Flags:    
+            --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+            --no-install        Explicitly do not run the package mananger's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
 
@@ -147,7 +138,9 @@ describe("create-turbo cli", () => {
 
           If <dir> is not provided up front you will be prompted for it.
 
-          Flags:
+          Flags:    
+            --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+            --no-install        Explicitly do not run the package mananger's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
 
