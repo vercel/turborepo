@@ -23,7 +23,15 @@ var NodejsYarnBackend = api.LanguageBackend{
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
-		return pkg.Workspaces, nil
+
+		workspaces := pkg.Workspaces
+
+		// Use self if no workspaces are defined
+		if workspaces == nil {
+			workspaces = append(workspaces, "./")
+		}
+
+		return workspaces, nil
 	},
 	GetPackageDir: func() string {
 		return "node_modules"
@@ -53,7 +61,15 @@ var NodejsPnpmBackend = api.LanguageBackend{
 		if err := yaml.Unmarshal(bytes, &pnpmWorkspaces); err != nil {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
 		}
-		return pnpmWorkspaces.Packages, nil
+
+		workspaces := pnpmWorkspaces.Packages
+
+		// Use self if no workspaces are defined
+		if workspaces == nil {
+			workspaces = append(workspaces, "./")
+		}
+
+		return workspaces, nil
 	},
 	GetPackageDir: func() string {
 		return "node_modules"
@@ -73,7 +89,15 @@ var NodejsNpmBackend = api.LanguageBackend{
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
-		return pkg.Workspaces, nil
+
+		workspaces := pkg.Workspaces
+
+		// Use self if no workspaces are defined
+		if workspaces == nil {
+			workspaces = append(workspaces, "./")
+		}
+
+		return workspaces, nil
 	},
 	GetPackageDir: func() string {
 		return "node_modules"
