@@ -1,4 +1,5 @@
-import { Button } from "@acme/core";
+import { Button } from "@acme/button";
+import { Card } from "@acme/card";
 import { useIsomorphicLayoutEffect } from "@acme/utils";
 
 export default function Docs() {
@@ -6,9 +7,19 @@ export default function Docs() {
     console.log("Acme docs page");
   }, []);
   return (
-    <div>
-      <h1>Acme Documentation</h1>
-      <Button />
+    <div
+      style={{ fontFamily: "Helvetica Neue", maxWidth: 800, margin: "0 auto" }}
+    >
+      <h1>acme Documentation</h1>
+      <Card>
+        <h3>Button</h3>
+        <Button>Hello World</Button>
+      </Card>
+      <div style={{ height: 16 }}></div>
+      <Card>
+        <h3>Card</h3>
+        <Card>Children</Card>
+      </Card>
     </div>
   );
 }
