@@ -21,6 +21,11 @@ import elad from "../../images/elad.jpeg";
 import flavio from "../../images/flavio.jpeg";
 import jongold from "../../images/jongold.jpeg";
 import ollermi from "../../images/ollermi.jpeg";
+import shadcn from "../../images/shadcn.jpeg";
+import christian from "../../images/christian.jpeg";
+import yangshunz from "../../images/yangshunz.jpeg";
+import nmoore from "../../images/nmoore.jpeg";
+import sseraphini from "../../images/sseraphini.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import { Footer } from "../Footer";
@@ -308,6 +313,30 @@ function Page() {
                 </>
               }
             />
+            <Tweet
+              url="https://twitter.com/shadcn/status/1470269932789125123"
+              username="yangshunz"
+              name="Yangshun Tay"
+              date="Dec 12"
+              avatar={yangshunz}
+              text={
+                <>
+                  Experimented with <Mention>@turborepo</Mention> on my
+                  Flow-based 4-package monorepo where each package contains
+                  lint, test and build commands:
+                  <br />
+                  <br />
+                  - lint, test, build all files in series: ~75s
+                  <br />
+                  - lerna --parallel: ~62s
+                  <br />
+                  - turbo: ~35s (791ms on cache hit)
+                  <br />
+                  <br />
+                  🤯 Impressive results! FULL TURBO!
+                </>
+              }
+            />
           </div>
 
           <div className="space-y-4">
@@ -342,6 +371,36 @@ function Page() {
                 </>
               }
             />
+            <Tweet
+              url="https://twitter.com/shadcn/status/1470269932789125123"
+              username="shadcn"
+              name="shadcn"
+              date="Dec 12"
+              avatar={shadcn}
+              text={
+                <>
+                  Turborepo is really good at what it does: Ridiculously fast
+                  builds.
+                </>
+              }
+            />
+            <Tweet
+              url="https://twitter.com/n_moore/status/1469344866194788355"
+              username="n_moore"
+              name="Nate Moore"
+              date="Dec 10"
+              avatar={nmoore}
+              text={
+                <>
+                  Finally! <Mention>@astrodotbuild</Mention> is now using
+                  <Mention>@turborepo</Mention>. ♥️⚡️
+                  <br />
+                  So glad it&apos;s open source now—congrats to{" "}
+                  <Mention>@jaredpalmer</Mention> and <Mention>@vercel</Mention>{" "}
+                  on the release!
+                </>
+              }
+            />
           </div>
           <div className="space-y-4">
             <Tweet
@@ -372,6 +431,31 @@ function Page() {
                   of tech lately! The hype is real
                 </>
               }
+            />
+
+            <Tweet
+              url="https://twitter.com/christianjuth/status/1469494057843847169"
+              username="christianjuth"
+              name="Christian 👨🏼‍💻"
+              date="Dec 10"
+              avatar={christian}
+              text={
+                <>
+                  Holy wow, I just rewrote my entire Lerna monorepo to use
+                  Turborepo and SWC, and it took me like maybe 20 minutes. This
+                  is insane. Literally, everything Vercel has
+                  backed/acquired/created makes development a little easier. But
+                  wow, it just blew my mind how easy this all is to use.
+                </>
+              }
+            />
+            <Tweet
+              url="https://twitter.com/sseraphini/status/1470501625580208139"
+              username="sseraphini"
+              name="Sibelius Seraphini"
+              date="Dec 13"
+              avatar={sseraphini}
+              text={<>Turborepo is sweet</>}
             />
           </div>
         </div>
