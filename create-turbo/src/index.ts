@@ -79,6 +79,7 @@ async function run() {
         ).dir
   );
 
+  const isYarnInstalled = shouldUseYarn();
   let answers = await inquirer.prompt<{
     packageManager: "yarn" | "npm";
     install: boolean;
@@ -88,7 +89,11 @@ async function run() {
       type: "list",
       message: "Which package manager do you want to use?",
       choices: [
-        { name: "Yarn", value: "yarn" },
+        {
+          name: "Yarn",
+          value: "yarn",
+          disabled: !isYarnInstalled && "not installed",
+        },
         { name: "NPM", value: "npm" },
         // { name: "PNPM", value: "pnpm" },
       ],
