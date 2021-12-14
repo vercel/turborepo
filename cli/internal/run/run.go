@@ -66,6 +66,8 @@ Options:
   --help                 Show this message.
   --scope                Specify package(s) to act as entry points for task
                          execution. Supports globs.
+  --cache-dir            Specify local filesystem cache directory.
+												 (default "./node_modules/.cache/turbo")
   --concurrency          Limit the concurrency of task execution. Use 1 for 
                          serial (i.e. one-at-a-time) execution. (default 10)
   --continue             Continue execution even if a task exits with an error
@@ -74,6 +76,9 @@ Options:
   --force                Ignore the existing cache (to force execution). 
                          (default false)
   --graph                Generate a Dot graph of the task execution.   
+  --global-deps          Specify glob of global filesystem dependencies to 
+	                       be hashed. Useful for .env and files in the root
+												 directory. Can be specified multiple times.
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
@@ -85,10 +90,10 @@ Options:
                          You can load the file up in chrome://tracing to see
                          which parts of your build were slow.
   --parallel             Execute all tasks in parallel. (default false)
-  --includeDependencies  Include the dependencies of tasks in execution.
+  --include-dependencies Include the dependencies of tasks in execution.
                          (default false)
-  --no-deps              Exclude affected/dependent task consumers from
-                         execution. (default false)
+  --no-deps              Exclude dependent task consumers from execution.
+                         (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
 `)
@@ -720,7 +725,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	unresolvedCacheFolder := "./node_modules/.cache/turbo"
+	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	for argIndex, arg := range args {
 		if arg == "--" {
@@ -742,7 +747,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				}
 			case strings.HasPrefix(arg, "--global-deps="):
 				if len(arg[len("--global-deps="):]) > 1 {
-					runOptions.globalDeps = append(runOptions.ignore, arg[len("--global-deps="):])
+					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
 				}
 			case strings.HasPrefix(arg, "--cwd="):
 				if len(arg[len("--cwd="):]) > 1 {
@@ -764,7 +769,10 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.cache = true
 			case strings.HasPrefix(arg, "--cacheFolder"):
+				log.Printf("[WARNING] The --cacheFolder flag has been deprecated and will be removed in future versions of turbo. Please use `--cache-dir` instead")
 				unresolvedCacheFolder = arg[len("--cacheFolder="):]
+			case strings.HasPrefix(arg, "--cache-dir"):
+				unresolvedCacheFolder = arg[len("--cache-dir="):]
 			case strings.HasPrefix(arg, "--continue"):
 				runOptions.bail = false
 			case strings.HasPrefix(arg, "--force"):
@@ -792,6 +800,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 					}
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
+			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.ancestors = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
