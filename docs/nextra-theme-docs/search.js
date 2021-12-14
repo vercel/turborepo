@@ -9,6 +9,7 @@ import { matchSorter } from "match-sorter";
 import cn from "classnames";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import useMounted from "./utils/use-mounted";
 
 const Item = ({ title, active, href, onMouseOver, search }) => {
   const highlight = title.toLowerCase().indexOf(search.toLowerCase());
@@ -37,7 +38,7 @@ const Search = ({ directories = [] }) => {
   const [search, setSearch] = useState("");
   const [active, setActive] = useState(0);
   const input = useRef(null);
-
+  const isMounted = useMounted();
   const results = useMemo(() => {
     if (!search) return [];
 
@@ -139,7 +140,13 @@ const Search = ({ directories = [] }) => {
           placeholder="Search docs..."
           onKeyDown={handleKeyDown}
           onFocus={() => setShow(true)}
-          onBlur={() => setShow(false)}
+          onBlur={() => {
+            setTimeout(() => {
+              if (isMounted) {
+                setShow(false);
+              }
+            }, 300);
+          }}
           ref={input}
           spellCheck={false}
         />
