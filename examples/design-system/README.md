@@ -22,7 +22,6 @@ This turborepo has some additional tools already setup for you:
 
 - [Typescript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
-- [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
 
 ## Using this example
@@ -32,8 +31,8 @@ We do not have a starter yet in `create-turbo` for this quite yet. If you want t
 ```sh
 npx degit vercel/turborepo/examples/design-system design-system
 cd design-system
-git init . && git add . && git commit -m "Init"
 yarn install
+git init . && git add . && git commit -m "Init"
 ```
 
 ### Changing the NPM organization scope
