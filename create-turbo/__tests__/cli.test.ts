@@ -187,13 +187,7 @@ function isSamePrompt(
     return false;
   }
   let promptStart = previousPrompt.split("\n")[0];
-  let nextPrompt = promptStart.slice(0, promptStart.lastIndexOf("("));
-  // console.log(`
-  //        "prev" ${previousPrompt.split("\n")[0]}
-  //     "current" ${currentPrompt}
-  //      "prefix" ${nextPrompt}
-  //      "isSame" ${currentPrompt.startsWith(nextPrompt)}
-  // `);
+  promptStart = promptStart.slice(0, promptStart.lastIndexOf("("));
 
-  return currentPrompt.startsWith(nextPrompt);
+  return currentPrompt.startsWith(promptStart);
 }
