@@ -100,7 +100,7 @@ async function run() {
           {
             name: "Yarn",
             value: "yarn",
-            disabled: !isYarnInstalled && "(not installed)",
+            disabled: !isYarnInstalled && "not installed",
           },
           { name: "NPM", value: "npm" },
         ],

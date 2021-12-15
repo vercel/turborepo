@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`create-turbo cli guides the user through the process 1`] = `
+">>> Bootstrapped a new turborepo with the following:
+
+ - apps/web: Next.js with TypeScript
+- apps/docs: Next.js with TypeScript
+ - packages/ui: Shared React component library
+ - packages/config: Shared configuration (ESLint)
+- packages/tsconfig: Shared TypeScript \`tsconfig.json\`
+>>> Success! Created a new Turborepo at \\"my-turborepo\\".
+Inside that directory, you can run several commands:
+
+  yarn run build
+     Build all apps and packages
+yarn run dev
+     Develop all apps and packages
+
+Turborepo will cache locally by default. For an additional
+speed boost, enable Remote Caching (beta) with Vercel by
+entering the following command:
+
+  npx turbo login
+
+We suggest that you begin by typing:
+
+  cd my-turborepo
+  npx turbo login"
+`;

@@ -30,22 +30,25 @@ describe("create-turbo cli", () => {
         `Cannot run Turbrepo CLI tests without building create-turbo`
       );
     }
+    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
   });
 
   afterAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT);
+    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
   });
 
   it("guides the user through the process", (done) => {
     let cli = spawn("node", [createTurbo, "--no-install"], {});
     let promptCount = 0;
     let previousPrompt: string;
-
+    const messages: string[] = [];
     cli.stdout.on("data", async (data) => {
       let prompt = cleanPrompt(data);
+
       if (
         !prompt ||
-        prompt === ">>> TURBOREPO" ||
+        prompt.startsWith(">>> TURBOREPO") ||
         isSamePrompt(prompt, previousPrompt)
       ) {
         return;
@@ -72,6 +75,9 @@ describe("create-turbo cli", () => {
           expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
           cli.stdin.write(keys.enter);
           break;
+        default:
+          messages.push(prompt);
+          break;
       }
 
       previousPrompt = prompt;
@@ -79,7 +85,7 @@ describe("create-turbo cli", () => {
 
     cli.on("exit", () => {
       try {
-        expect(promptCount).toEqual(4);
+        expect(messages.join("\n")).toMatchSnapshot();
         done();
       } catch (error) {
         done(error);
@@ -175,9 +181,14 @@ function isSamePrompt(
   if (previousPrompt === undefined) {
     return false;
   }
-
   let promptStart = previousPrompt.split("\n")[0];
-  promptStart = promptStart.slice(0, promptStart.lastIndexOf("("));
+  let nextPrompt = promptStart.slice(0, promptStart.lastIndexOf("("));
+  // console.log(`
+  //        "prev" ${previousPrompt.split("\n")[0]}
+  //     "current" ${currentPrompt}
+  //      "prefix" ${nextPrompt}
+  //      "isSame" ${currentPrompt.startsWith(nextPrompt)}
+  // `);
 
-  return currentPrompt.startsWith(promptStart);
+  return currentPrompt.startsWith(nextPrompt);
 }
