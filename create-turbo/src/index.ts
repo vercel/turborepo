@@ -95,7 +95,7 @@ async function run() {
           disabled: !isYarnInstalled && "not installed",
         },
         { name: "NPM", value: "npm" },
-        // { name: "PNPM", value: "pnpm" },
+        { name: "PNPM", value: "pnpm" },
       ],
     },
     {
