@@ -35,6 +35,11 @@
     "baseBranch": "origin/main",
     "pipeline": {
       "test": {
+        "outputs": [
+          "coverage/**/*"
+        ]
+      },
+      "create-turbo#test": {
         "dependsOn": [
           "build"
         ],

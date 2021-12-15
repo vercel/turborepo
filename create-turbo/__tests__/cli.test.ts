@@ -24,13 +24,13 @@ const DEFAULT_JEST_TIMEOUT = 5000;
 describe("create-turbo cli", () => {
   beforeAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
+    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
       throw new Error(
         `Cannot run Turbrepo CLI tests without building create-turbo`
       );
     }
-    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
   });
 
   afterAll(() => {
@@ -75,8 +75,14 @@ describe("create-turbo cli", () => {
           expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
           cli.stdin.write(keys.enter);
           break;
-        default:
-          messages.push(prompt);
+        case 4:
+          // Bootstrap info
+          expect(
+            prompt.startsWith(
+              ">>> Bootstrapped a new turborepo with the following:"
+            )
+          ).toBe(true);
+
           break;
       }
 
@@ -85,7 +91,6 @@ describe("create-turbo cli", () => {
 
     cli.on("exit", () => {
       try {
-        expect(messages.join("\n")).toMatchSnapshot();
         done();
       } catch (error) {
         done(error);
