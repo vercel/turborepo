@@ -37,7 +37,7 @@ describe("create-turbo cli", () => {
   });
 
   it("guides the user through the process", (done) => {
-    let cli = spawn("node", [createTurbo], {});
+    let cli = spawn("node", [createTurbo, "--no-install"], {});
     let promptCount = 0;
     let previousPrompt: string;
 
