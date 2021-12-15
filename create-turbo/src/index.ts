@@ -20,7 +20,9 @@ const help = `
 
   If <dir> is not provided up front you will be prompted for it.
 
-  Flags:
+  Flags:    
+    --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+    --no-install        Explicitly do not run the package mananger's install command
     --help, -h          Show this help message
     --version, -v       Show the version of this script
 `;
@@ -45,8 +47,11 @@ run()
 
 async function run() {
   let { input, flags, showHelp, showVersion } = meow(help, {
+    booleanDefault: undefined,
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
+      useNpm: { type: "boolean", default: false },
+      install: { type: "boolean", default: true },
       version: { type: "boolean", default: false, alias: "v" },
     },
   });
@@ -80,33 +85,28 @@ async function run() {
   );
 
   const isYarnInstalled = shouldUseYarn();
-  let answers = await inquirer.prompt<{
-    packageManager: "yarn" | "npm";
-    install: boolean;
-  }>([
-    {
-      name: "packageManager",
-      type: "list",
-      message: "Which package manager do you want to use?",
-      choices: [
-        {
-          name: "Yarn",
-          value: "yarn",
-          disabled: !isYarnInstalled && "not installed",
-        },
-        { name: "NPM", value: "npm" },
-        // { name: "PNPM", value: "pnpm" },
-      ],
-    },
-    {
-      name: "install",
-      type: "confirm",
-      message: function (answers) {
-        return `Do you want me to run \`${answers.packageManager} install\`?`;
+  let answers;
+  if (flags.useNpm) {
+    answers = { packageManager: "npm" };
+  } else {
+    answers = await inquirer.prompt<{
+      packageManager: "yarn" | "npm";
+    }>([
+      {
+        name: "packageManager",
+        type: "list",
+        message: "Which package manager do you want to use?",
+        choices: [
+          {
+            name: "Yarn",
+            value: "yarn",
+            disabled: !isYarnInstalled && "not installed",
+          },
+          { name: "NPM", value: "npm" },
+        ],
       },
-      default: true,
-    },
-  ]);
+    ]);
+  }
 
   // Create the app directory
   let relativeProjectDir = path.relative(process.cwd(), projectDir);
@@ -169,7 +169,7 @@ async function run() {
     JSON.stringify(appPkg, null, 2)
   );
 
-  if (answers.install) {
+  if (flags.install) {
     console.log();
     console.log(`>>> Bootstrapping a new turborepo with the following:`);
     console.log();
@@ -199,50 +199,64 @@ async function run() {
       cwd: projectDir,
     });
     spinner.stop();
+  } else {
+    console.log();
+    console.log(`>>> Bootstrapped a new turborepo with the following:`);
+    console.log();
+    console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
+    console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
+    console.log(
+      ` - ${chalk.bold("packages/ui")}: Shared React component library`
+    );
+    console.log(
+      ` - ${chalk.bold("packages/config")}: Shared configuration (ESLint)`
+    );
+    console.log(
+      ` - ${chalk.bold(
+        "packages/tsconfig"
+      )}: Shared TypeScript \`tsconfig.json\``
+    );
+    console.log();
   }
 
   process.chdir(projectDir);
   tryGitInit(relativeProjectDir);
+  if (projectDirIsCurrentDir) {
+    console.log(
+      `${chalk.bold(
+        turboGradient(">>> Success!")
+      )} Your new Turborepo is ready. `
+    );
+    console.log("Inside this directory, you can run several commands:");
+  } else {
+    console.log(
+      `${chalk.bold(
+        turboGradient(">>> Success!")
+      )} Created a new Turborepo at "${relativeProjectDir}". `
+    );
+    console.log("Inside that directory, you can run several commands:");
+  }
 
-  console.log(
-    `${chalk.bold(turboGradient(">>> Success!"))} Your new Turborepo is ready. `
-  );
   console.log();
-  console.log(`To build all apps and packages, run the following:`);
+  console.log(chalk.cyan(`  ${answers.packageManager} run build`));
+  console.log(`     Build all apps and packages`);
   console.log();
-  if (!projectDirIsCurrentDir) {
-    console.log(`  cd ${relativeProjectDir}`);
-  }
-  console.log(`  ${answers.packageManager} run build`);
-  console.log();
-  console.log(`To develop all apps and packages, run the following:`);
-  console.log();
-  if (!projectDirIsCurrentDir) {
-    console.log(`  cd ${relativeProjectDir}`);
-  }
-  console.log(`  ${answers.packageManager} run dev`);
+  console.log(chalk.cyan(`  ${answers.packageManager} run dev`));
+  console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
   console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
-  console.log(`entering the following commands:`);
+  console.log(`entering the following command:`);
+  console.log();
+  console.log(chalk.cyan(`  npx turbo login`));
+  console.log();
+  console.log(`We suggest that you begin by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
-    console.log(`  cd ${relativeProjectDir}`);
+    console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
   }
-  console.log(`  npx turbo login`);
+  console.log(chalk.cyan(`  npx turbo login`));
   console.log();
-  if (projectDirIsCurrentDir) {
-    console.log(`For more info, checkout the README`);
-  } else {
-    console.log(
-      `For more info, checkout the README in ${chalk.bold(relativeProjectDir)}`
-    );
-  }
-  console.log(
-    `as well as the official Turborepo docs ${chalk.underline(
-      "https://turborepo.org/docs"
-    )}`
-  );
 }
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
