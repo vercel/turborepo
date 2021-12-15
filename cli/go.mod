@@ -17,6 +17,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.16.2
 	github.com/hashicorp/go-retryablehttp v0.6.8
+	github.com/hashicorp/go-version v1.3.0 // indirect
 	github.com/karrick/godirwalk v1.16.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kr/text v0.2.0 // indirect

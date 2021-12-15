@@ -12,6 +12,7 @@ import (
 	prune "turbo/internal/prune"
 	"turbo/internal/run"
 	uiPkg "turbo/internal/ui"
+	update "turbo/internal/update"
 	"turbo/internal/util"
 
 	"github.com/fatih/color"
@@ -19,6 +20,20 @@ import (
 )
 
 func main() {
+	// check for updates before running turbo
+	newRelease, _ := update.CheckforUpdate(
+		turboVersion,
+		"./update-check-history.yaml",
+		"https://api.github.com/repos/vercel/turborepo/releases/latest",
+	)
+	if newRelease != nil {
+		color.Yellow("A new version of `create-turbo` is available! %s")
+		fmt.Println("You can update by running: ")
+		// TODO: show only one method depending on the user chosen package manager
+		color.Cyan("yarn global add create-turbo Or npm i -g create-turbo")
+	}
+
+	// start turborepo
 	args := os.Args[1:]
 	heapFile := ""
 	traceFile := ""
