@@ -35,11 +35,11 @@
     "baseBranch": "origin/main",
     "pipeline": {
       "test": {
-        "dependsOn": [
-          "build"
-        ],
         "outputs": [
           "coverage/**/*"
+        ],
+        "dependsOn": [
+          "^build"
         ]
       },
       "lint": {
@@ -63,6 +63,12 @@
           "turbo.exe"
         ],
         "dependsOn": []
+      },
+      "create-turbo#test": {
+        "dependsOn": [
+          "create-turbo#build"
+        ],
+        "outputs": []
       }
     }
   }
