@@ -30,11 +30,9 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@v2.5.0
         with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
           node-version: 14.x
-
-      - name: Conditionally install Yarn if local
-        if: ${{ env.ACT }}
-        run: npm i -g yarn
 
       - name: Yarn Install
         run: yarn install
