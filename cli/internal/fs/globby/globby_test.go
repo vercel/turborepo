@@ -14,7 +14,7 @@ import (
 func TestIgnoreDotGitFiles(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git/file",
@@ -37,7 +37,7 @@ func TestIgnoreDotGitFiles(t *testing.T) {
 func TestMathAllImg(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		"app.js",
@@ -67,7 +67,7 @@ func TestMathAllImg(t *testing.T) {
 func TestSignleStarFiles(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git",
@@ -102,7 +102,7 @@ func TestSignleStarFiles(t *testing.T) {
 func TestDirMatch(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git",
@@ -138,7 +138,7 @@ func TestDirMatch(t *testing.T) {
 func TestDirStar(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git",
@@ -176,7 +176,7 @@ func TestDirStar(t *testing.T) {
 func TestDirStar2(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git",
@@ -216,7 +216,7 @@ func TestDirStar2(t *testing.T) {
 func TestDirIgnoreFile(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git",
@@ -262,7 +262,7 @@ func TestDirIgnoreFile(t *testing.T) {
 func TestDirIgnoreDir(t *testing.T) {
 	// Init test files
 	curDir, _ := os.Getwd()
-	tmpDir := filepath.Join(curDir, "./tmp")
+	tmpDir := filepath.Join(curDir, "tmp")
 	defer os.RemoveAll(tmpDir)
 	makeTmpFiles(tmpDir, []string{
 		".git",
