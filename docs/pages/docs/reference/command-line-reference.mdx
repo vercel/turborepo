@@ -356,10 +356,37 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 └── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
 ```
 
+## `turbo login`
+
+Connect machine to your Remote Cache provider. The default provider is [Vercel](https://vercel.com).
+
+### Options
+
+#### `--url`
+
+`type: string`
+
+Defaults to `https://vercel.com`.
+
+#### `--api`
+
+`type: string`
+
+Defaults to `https://api.vercel.com`.
+
 ## `turbo link`
 
-Link the current directory to an existing Vercel organization or user. The selected owner (either a user or and organization) will be able to share [cache artifacts](../caching).
+Link the current directory to Remote Cache scope. The selected owner (either a user or and organization) will be able to share [cache artifacts](../features/caching) through [Remote Caching](../features/remote-caching).
+You should run this command from the root of your monorepo.
 
-## `turbo unlink`
+### Options
 
-Unlink the current directory from a Vercel organization or user.
+#### `--api`
+
+`type: string`
+
+Defaults to `https://api.vercel.com`
+
+### `turbo unlink`
+
+Unlink the current directory from the Remote Cache
