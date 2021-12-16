@@ -14,7 +14,6 @@ import (
 	"turbo/internal/fs/globby"
 	"turbo/internal/util"
 
-	"github.com/bmatcuk/doublestar"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/fatih/color"
 	"github.com/google/chrometracing"
@@ -181,14 +180,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalDeps := make(util.Set)
 
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
-			for _, value := range pkg.Turbo.GlobalDependencies {
-				f, err := doublestar.Glob(value)
-				if err != nil {
-					return fmt.Errorf("error parsing global dependencies glob %v: %w", value, err)
-				}
-				for _, val := range f {
-					globalDeps.Add(val)
-				}
+			f := globby.GlobFiles(rootpath, &pkg.Turbo.GlobalDependencies, nil)
+			for _, val := range f {
+				globalDeps.Add(val)
 			}
 		}
 		if c.Backend.Name != "nodejs-yarn" || fs.CheckIfWindows() {
@@ -242,16 +236,14 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		for i, space := range spaces {
 			justJsons[i] = path.Join(space, "package.json")
 		}
-		f := globby.Match(justJsons, globby.Option{
-			BaseDir:  rootpath,
-			CheckDot: true,
-			Excludes: []string{
-				"**/node_modules/**/*",
-				"**/bower_components/**/*",
-				"**/test/**/*",
-				"**/tests/**/*",
-			},
-		})
+		ignore := []string{
+			"**/node_modules/**/*",
+			"**/bower_components/**/*",
+			"**/test/**/*",
+			"**/tests/**/*",
+		}
+
+		f := globby.GlobFiles(rootpath, &justJsons, &ignore)
 
 		for i, val := range f {
 			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
