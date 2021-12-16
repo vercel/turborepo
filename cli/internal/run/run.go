@@ -624,9 +624,32 @@ func (c *RunCommand) Run(args []string) int {
 			Verbose:    true,
 			DrawCycles: true,
 		}))
-		hasDot := hasGraphViz()
+    ext := path.Ext(runOptions.dotGraph)[1:]
+    if ext == ".html" {
+      f, err := os.Create(runOptions.dotGraph)
+      if err != nil {
+          log.Fatal(err)
+      }
+      f.WriteString(`<!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Graph</title>
+      </head>
+      <body>
+        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
+        <script>`)
+      f.WriteString("const s = " + graphString + ";new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
+      f.WriteString(`
+      </script>
+    </body>
+    </html>`)
+      f.Close()
+    }
+    hasDot := hasGraphViz()
 		if hasDot {
-			dotArgs := []string{"-T" + path.Ext(runOptions.dotGraph)[1:], "-o", runOptions.dotGraph}
+			dotArgs := []string{"-T" + ext, "-o", runOptions.dotGraph}
 			cmd := exec.Command("dot", dotArgs...)
 			cmd.Stdin = strings.NewReader(graphString)
 			if err := cmd.Run(); err != nil {
