@@ -20,7 +20,7 @@ import (
 	"turbo/internal/context"
 	"turbo/internal/core"
 	"turbo/internal/fs"
-	"turbo/internal/fs/globby"
+	"turbo/internal/globby"
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"

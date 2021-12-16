@@ -11,7 +11,7 @@ import (
 	"turbo/internal/backends"
 	"turbo/internal/config"
 	"turbo/internal/fs"
-	"turbo/internal/fs/globby"
+	"turbo/internal/globby"
 	"turbo/internal/util"
 
 	mapset "github.com/deckarep/golang-set"
