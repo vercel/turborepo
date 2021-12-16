@@ -99,7 +99,7 @@ turbo run build test lint --graph=my-graph.png
   **Known Bug**: All possible pipeline task nodes will be added to the
   graph at the moment, even if that pipeline task does not actually exist in a
   given package. This has no impact on execution, it just means that:
-  
+
   - the terminal output may overstate the number of packages in which a task is running.
   - your dot viz graph may contain additional nodes that represents tasks that do not exist.
 </Callout>
@@ -263,6 +263,56 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
 You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precedence over the environment variable if both are present.
+
+#### `--trace`
+
+`type: string`
+
+To view CPU trace, outputs the trace to the given file,  use `go tool trace [file]`.
+
+<Callout emoji="🚨">
+  **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
+</Callout>
+
+```sh
+turbo run build --trace="<trace-file-name>"
+```
+
+#### `--heap`
+
+`type: string`
+
+To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://speedscope.app) and use the `left heavy` or `sandwich` view modes.
+
+```sh
+turbo run build --heap="<heap-file-name>"
+```
+
+#### `--cpuprofile`
+
+`type: string`
+
+To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://speedscope.app).
+
+<Callout emoji="🚨">
+  **Important**: The CPU profiler doesn't work under
+  Windows subsystem for Linux. The profiler has to be built
+  for native Windows and run using the command prompt instead.
+</Callout>
+
+
+```sh
+turbo run build --cpuprofile="<cpu-profile-file-name>"
+```
+#### `-v`, `-vv`, `-vvv`
+
+To sepecify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
+
+```sh
+turbo run build -v
+turbo run build -vv
+turbo run build -vvv
+```
 
 ## `turbo prune --scope=<target>`
 
