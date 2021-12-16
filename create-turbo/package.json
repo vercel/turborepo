@@ -17,7 +17,8 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs",
-    "test": "jest"
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
     "chalk": "2.4.2",
