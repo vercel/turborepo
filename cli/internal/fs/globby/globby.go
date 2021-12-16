@@ -57,7 +57,7 @@ func GlobFiles(ws_path string, include_pattens *[]string, exclude_pattens *[]str
 			return err
 		}
 
-		if val, _ := doublestar.Match(exclude_pattern, p); val {
+		if val, _ := doublestar.PathMatch(exclude_pattern, p); val {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -68,7 +68,7 @@ func GlobFiles(ws_path string, include_pattens *[]string, exclude_pattens *[]str
 			return nil
 		}
 
-		if val, _ := doublestar.Match(include_pattern, p); val || len(*include_pattens) == 0 {
+		if val, _ := doublestar.PathMatch(include_pattern, p); val || len(*include_pattens) == 0 {
 			result = append(result, p)
 		}
 
