@@ -305,7 +305,7 @@ func TestMain(m *testing.M) {
 
 func makeTmpFiles(baseDir string, files []string) {
 	for _, file := range files {
-		file = filepath.Join(baseDir, file)
+		file = filepath.Join(baseDir, filepath.FromSlash(file))
 		dir, _ := filepath.Split(file)
 		os.MkdirAll(dir, os.ModePerm)
 		os.OpenFile(file, os.O_RDONLY|os.O_CREATE, 0666)
@@ -315,7 +315,7 @@ func makeTmpFiles(baseDir string, files []string) {
 func checkFiles(baseDir string, resultFiles []string, expectedFiles []string) bool {
 	var expected []string
 	for _, file := range expectedFiles {
-		expected = append(expected, filepath.Join(baseDir, file))
+		expected = append(expected, filepath.Join(baseDir, filepath.FromSlash(file)))
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(resultFiles)))
 	sort.Sort(sort.Reverse(sort.StringSlice(expected)))
