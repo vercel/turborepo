@@ -1,16 +1,11 @@
 package fs
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
-	"turbo/internal/util"
-
-	"github.com/bmatcuk/doublestar"
 )
 
 // https://github.com/thought-machine/please/blob/master/src/fs/fs.go
@@ -160,24 +155,4 @@ func copyFile(from, to string) (err error) {
 	}
 
 	return nil
-}
-
-// GlobList accepts a list of doublestar directive globs and returns a list of files matching them
-func Globby(globs []string) ([]string, error) {
-	var fileset = make(util.Set)
-	for _, output := range globs {
-		results, err := doublestar.Glob(strings.TrimPrefix(output, "!"))
-		if err != nil {
-			return nil, fmt.Errorf("invalid glob %v: %w", output, err)
-		}
-		// we handle negation via "!" by removing the result from the fileset
-		for _, result := range results {
-			if strings.HasPrefix(output, "!") {
-				fileset.Delete(result)
-			} else {
-				fileset.Add(result)
-			}
-		}
-	}
-	return fileset.UnsafeListOfStrings(), nil
 }
