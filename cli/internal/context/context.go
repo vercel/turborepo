@@ -2,7 +2,7 @@ package context
 
 import (
 	"fmt"
-	"log"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,6 +11,7 @@ import (
 	"turbo/internal/backends"
 	"turbo/internal/config"
 	"turbo/internal/fs"
+	"turbo/internal/fs/globby"
 	"turbo/internal/util"
 
 	"github.com/bmatcuk/doublestar"
@@ -181,7 +182,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
 			for _, value := range pkg.Turbo.GlobalDependencies {
-				f, err := filepath.Glob(value)
+				f, err := doublestar.Glob(value)
 				if err != nil {
 					return fmt.Errorf("error parsing global dependencies glob %v: %w", value, err)
 				}
@@ -237,18 +238,26 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// until all parsing is complete
 		// and populate the graph
 		parseJSONWaitGroup := new(errgroup.Group)
-		for _, value := range spaces {
-			f, err := doublestar.Glob(value)
-			if err != nil {
-				log.Fatalf("Error parsing workspaces glob %v", value)
-			}
+		justJsons := make([]string, len(spaces))
+		for i, space := range spaces {
+			justJsons[i] = path.Join(space, "package.json")
+		}
+		f := globby.Match(justJsons, globby.Option{
+			BaseDir:  rootpath,
+			CheckDot: true,
+			Excludes: []string{
+				"**/node_modules/**/*",
+				"**/bower_components/**/*",
+				"**/test/**/*",
+				"**/tests/**/*",
+			},
+		})
 
-			for i, val := range f {
-				_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
-				parseJSONWaitGroup.Go(func() error {
-					return c.parsePackageJSON(val)
-				})
-			}
+		for i, val := range f {
+			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
+			parseJSONWaitGroup.Go(func() error {
+				return c.parsePackageJSON(val)
+			})
 		}
 
 		if err := parseJSONWaitGroup.Wait(); err != nil {
@@ -442,10 +451,9 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	return nil
 }
 
-func (c *Context) parsePackageJSON(fileName string) error {
+func (c *Context) parsePackageJSON(buildFilePath string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	buildFilePath := filepath.Join(fileName, "package.json")
 
 	// log.Printf("[TRACE] reading package.json : %+v", buildFilePath)
 	if fs.FileExists(buildFilePath) {
@@ -457,7 +465,7 @@ func (c *Context) parsePackageJSON(fileName string) error {
 		// log.Printf("[TRACE] adding %+v to graph", pkg.Name)
 		c.TopologicalGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = buildFilePath
-		pkg.Dir = fileName
+		pkg.Dir = filepath.Dir(buildFilePath)
 		c.PackageInfos[pkg.Name] = pkg
 		c.PackageNames = append(c.PackageNames, pkg.Name)
 	}
