@@ -603,7 +603,17 @@ func (c *RunCommand) Run(args []string) int {
 		Parallel:    runOptions.parallel,
 		TasksOnly:   runOptions.only,
 	}); err != nil {
-		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
+		c.Ui.Error(fmt.Sprintf("Error preparing graph: %s", err))
+		return 1
+	}
+
+	if err := engine.TopologicGraph.Validate(); err != nil {
+		c.logError(c.Config.Logger, "", fmt.Errorf("Invalid dependency graph: %w", err))
+		return 1
+	}
+
+	if err := engine.TaskGraph.Validate(); err != nil {
+		c.logError(c.Config.Logger, "", fmt.Errorf("Invalid task graph: %w", err))
 		return 1
 	}
 
