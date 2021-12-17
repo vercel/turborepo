@@ -19,7 +19,7 @@ import (
 	"turbo/internal/context"
 	"turbo/internal/core"
 	"turbo/internal/fs"
-	"turbo/internal/fs/globby"
+	"turbo/internal/globby"
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
@@ -413,6 +413,14 @@ func (c *RunCommand) Run(args []string) int {
 					// override if we need to...
 					pipeline = altpipe
 				}
+
+				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
+				if pipeline.Outputs == nil {
+					outputs = append(outputs, "dist/**/*", "build/**/*")
+				} else {
+					outputs = append(outputs, pipeline.Outputs...)
+				}
+				targetLogger.Debug("task output globs", "outputs", outputs)
 				hashable := struct {
 					Hash         string
 					Task         string
@@ -421,7 +429,7 @@ func (c *RunCommand) Run(args []string) int {
 				}{
 					Hash:         pack.Hash,
 					Task:         task,
-					Outputs:      pipeline.Outputs,
+					Outputs:      outputs,
 					PassThruArgs: runOptions.passThroughArgs,
 				}
 				hash, err := fs.HashObject(hashable)
@@ -436,13 +444,6 @@ func (c *RunCommand) Run(args []string) int {
 				// Cache ---------------------------------------------
 				// We create the real task outputs now so we can potentially use them to
 				// to store artifacts from remote cache to local fs cache
-
-				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-				if len(pipeline.Outputs) > 0 {
-					outputs = append(outputs, pipeline.Outputs...)
-				} else {
-					outputs = append(outputs, "dist/**/*", "build/**/*")
-				}
 
 				var hit bool
 				if runOptions.forceExecution {
@@ -582,7 +583,7 @@ func (c *RunCommand) Run(args []string) int {
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
 					ignore := []string{}
-					filesToBeCached := globby.GlobFiles(pack.Dir, &outputs, &ignore)
+					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
 					}
