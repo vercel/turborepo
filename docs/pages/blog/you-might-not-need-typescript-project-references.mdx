@@ -60,7 +60,7 @@ Internal packages just work. No extra config is needed.
 
 ### React Native
 
-If you use [Expo](https://expo.io) and use the [`expo-yarn-workspaces`](https://github.com/expo/expo/tree/master/packages/expo-yarn-workspaces) or [`@turborepo/adapter-expo`](https://www.npmjs.com/package/@turborepo/adapter-expo) package, you can just use internal packages as long as you are targeting iOS or Android. When you run Expo for these platforms, all of `node_modules` are automatically transpiled with [Metro](https://facebook.github.io/metro/). However, if you are targeting Expo for web, internal packages will not work because `node_modules` are oddly not transpiled for web.
+If you use [Expo](https://expo.io) and use the [`expo-yarn-workspaces`](https://github.com/expo/expo/tree/master/packages/expo-yarn-workspaces) or [`@turborepo/adapter-expo`](https://www.npmjs.com/package/@turborepo/adapter-expo) package, you can use internal packages as long as you are targeting iOS or Android. When you run Expo for these platforms, all of `node_modules` are automatically transpiled with [Metro](https://facebook.github.io/metro/). However, if you are targeting Expo for web, internal packages will not work because `node_modules` are oddly not transpiled for web.
 
 _I reached out to the Expo team about this inconsistency. They are aware of it. It's a legacy wart I'm told._
 
