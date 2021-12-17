@@ -52,7 +52,8 @@ func (c *Pipeline) UnmarshalJSON(data []byte) error {
 	if c.PPipeline.Outputs != nil {
 		c.Outputs = *c.PPipeline.Outputs
 	}
-
+	c.Cache = c.PPipeline.Cache
+	c.DependsOn = c.PPipeline.DependsOn
 	return nil
 }
 
