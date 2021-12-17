@@ -180,7 +180,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalDeps := make(util.Set)
 
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
-			f := globby.GlobFiles(rootpath, &pkg.Turbo.GlobalDependencies, nil)
+			f := globby.GlobFiles(rootpath, pkg.Turbo.GlobalDependencies, []string{})
 			for _, val := range f {
 				globalDeps.Add(val)
 			}
@@ -243,7 +243,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			"**/tests/**/*",
 		}
 
-		f := globby.GlobFiles(rootpath, &justJsons, &ignore)
+		f := globby.GlobFiles(rootpath, justJsons, ignore)
 
 		for i, val := range f {
 			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines

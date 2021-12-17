@@ -583,7 +583,7 @@ func (c *RunCommand) Run(args []string) int {
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
 					ignore := []string{}
-					filesToBeCached := globby.GlobFiles(pack.Dir, &outputs, &ignore)
+					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
 					}
