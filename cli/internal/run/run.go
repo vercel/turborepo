@@ -414,13 +414,14 @@ func (c *RunCommand) Run(args []string) int {
 					// override if we need to...
 					pipeline = altpipe
 				}
-				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-				if len(pipeline.Outputs) > 0 {
-					outputs = append(outputs, pipeline.Outputs...)
-				} else {
-					outputs = append(outputs, "dist/**/*", "build/**/*")
-				}
 
+				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
+				if pipeline.Outputs == nil {
+					outputs = append(outputs, "dist/**/*", "build/**/*")
+				} else {
+					outputs = append(outputs, pipeline.Outputs...)
+				}
+				targetLogger.Debug("task output globs", "outputs", outputs)
 				hashable := struct {
 					Hash         string
 					Task         string
