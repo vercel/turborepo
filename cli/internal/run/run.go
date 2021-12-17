@@ -613,7 +613,6 @@ func (c *RunCommand) Run(args []string) int {
 			DrawCycles: true,
 		}))
 		ext := filepath.Ext(runOptions.dotGraph)
-		log.Println(ext)
 		if ext == ".html" {
 			f, err := os.Create(filepath.Join(cwd, runOptions.dotGraph))
 			if err != nil {
