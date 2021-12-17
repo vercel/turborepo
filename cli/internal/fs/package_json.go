@@ -29,7 +29,9 @@ func Camelcase(s string, v ...interface{}) string {
 var requiredFields = []string{"Name", "Version"}
 
 type PPipeline struct {
-	Outputs *[]string `json:"outputs"`
+	Outputs   *[]string `json:"outputs"`
+	Cache     *bool     `json:"cache,omitempty"`
+	DependsOn []string  `json:"dependsOn,omitempty"`
 }
 
 type Pipeline struct {
