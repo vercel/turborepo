@@ -9,23 +9,23 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 )
 
-func GlobFiles(ws_path string, include_pattens []string, exclude_pattens []string) []string {
+func GlobFiles(ws_path string, includePatterns []string, excludePatterns []string) []string {
 	var include []string
 	var exclude []string
 	var result []string
 
-	for _, p := range include_pattens {
+	for _, p := range includePatterns {
 		include = append(include, filepath.Join(ws_path, p))
 	}
 
-	for _, p := range exclude_pattens {
+	for _, p := range excludePatterns {
 		exclude = append(exclude, filepath.Join(ws_path, p))
 	}
 
-	var include_pattern = "{" + strings.Join(include, ",") + "}"
-	var exclude_pattern = "{" + strings.Join(exclude, ",") + "}"
-	var _ = fs.Walk(ws_path, func(p string, isDir bool) error {
-		if val, _ := doublestar.PathMatch(exclude_pattern, p); val {
+	includePattern := "{" + strings.Join(include, ",") + "}"
+	excludePattern := "{" + strings.Join(exclude, ",") + "}"
+	_ = fs.Walk(ws_path, func(p string, isDir bool) error {
+		if val, _ := doublestar.PathMatch(excludePattern, p); val {
 			if isDir {
 				return filepath.SkipDir
 			}
@@ -36,7 +36,7 @@ func GlobFiles(ws_path string, include_pattens []string, exclude_pattens []strin
 			return nil
 		}
 
-		if val, _ := doublestar.PathMatch(include_pattern, p); val || len(include_pattens) == 0 {
+		if val, _ := doublestar.PathMatch(includePattern, p); val || len(includePatterns) == 0 {
 			result = append(result, p)
 		}
 
