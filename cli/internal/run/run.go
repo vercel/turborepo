@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -24,13 +23,13 @@ import (
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
+	"turbo/internal/util/browser"
 
 	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
 	glob "github.com/gobwas/glob"
 	"github.com/hashicorp/go-hclog"
-	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
@@ -613,9 +612,39 @@ func (c *RunCommand) Run(args []string) int {
 			Verbose:    true,
 			DrawCycles: true,
 		}))
+		ext := filepath.Ext(runOptions.dotGraph)
+		if ext == ".html" {
+			f, err := os.Create(filepath.Join(cwd, runOptions.dotGraph))
+			if err != nil {
+				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
+				return 1
+			}
+			defer f.Close()
+			f.WriteString(`<!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Graph</title>
+      </head>
+      <body>
+        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
+        <script>`)
+			f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
+			f.WriteString(`
+      </script>
+    </body>
+    </html>`)
+			c.Ui.Output("")
+			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
+			if ui.IsTTY {
+				browser.OpenBrowser(filepath.Join(cwd, runOptions.dotGraph))
+			}
+			return 0
+		}
 		hasDot := hasGraphViz()
 		if hasDot {
-			dotArgs := []string{"-T" + path.Ext(runOptions.dotGraph)[1:], "-o", runOptions.dotGraph}
+			dotArgs := []string{"-T" + ext[1:], "-o", runOptions.dotGraph}
 			cmd := exec.Command("dot", dotArgs...)
 			cmd.Stdin = strings.NewReader(graphString)
 			if err := cmd.Run(); err != nil {
@@ -808,7 +837,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
-	if !isatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("CI") != "" {
+	if !ui.IsTTY || ui.IsCI {
 		runOptions.stream = true
 	}
 
