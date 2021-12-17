@@ -414,6 +414,13 @@ func (c *RunCommand) Run(args []string) int {
 					// override if we need to...
 					pipeline = altpipe
 				}
+				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
+				if len(pipeline.Outputs) > 0 {
+					outputs = append(outputs, pipeline.Outputs...)
+				} else {
+					outputs = append(outputs, "dist/**/*", "build/**/*")
+				}
+
 				hashable := struct {
 					Hash         string
 					Task         string
@@ -422,7 +429,7 @@ func (c *RunCommand) Run(args []string) int {
 				}{
 					Hash:         pack.Hash,
 					Task:         task,
-					Outputs:      pipeline.Outputs,
+					Outputs:      outputs,
 					PassThruArgs: runOptions.passThroughArgs,
 				}
 				hash, err := fs.HashObject(hashable)
@@ -437,13 +444,6 @@ func (c *RunCommand) Run(args []string) int {
 				// Cache ---------------------------------------------
 				// We create the real task outputs now so we can potentially use them to
 				// to store artifacts from remote cache to local fs cache
-
-				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-				if len(pipeline.Outputs) > 0 {
-					outputs = append(outputs, pipeline.Outputs...)
-				} else {
-					outputs = append(outputs, "dist/**/*", "build/**/*")
-				}
 
 				var hit bool
 				if runOptions.forceExecution {
