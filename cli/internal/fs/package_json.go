@@ -28,10 +28,30 @@ func Camelcase(s string, v ...interface{}) string {
 
 var requiredFields = []string{"Name", "Version"}
 
+type PPipeline struct {
+	Outputs *[]string `json:"outputs"`
+}
+
 type Pipeline struct {
-	Outputs   []string `json:"outputs,omitempty"`
+	Outputs   []string `json:"-"`
 	Cache     *bool    `json:"cache,omitempty"`
 	DependsOn []string `json:"dependsOn,omitempty"`
+	PPipeline
+}
+
+func (c *Pipeline) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &c.PPipeline); err != nil {
+		return err
+	}
+	// We actually need a nil value to be able to unmarshal the json
+	// because we interpret the omission of outputs to be different
+	// from an empty array. We can't use omitempty because it will
+	// always unmarshal into an empty array which is not what we want.
+	if c.PPipeline.Outputs != nil {
+		c.Outputs = *c.PPipeline.Outputs
+	}
+
+	return nil
 }
 
 // PackageJSON represents NodeJS package.json
