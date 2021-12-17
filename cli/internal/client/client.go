@@ -104,6 +104,7 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 	}
 	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
 		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}

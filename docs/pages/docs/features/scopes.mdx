@@ -28,7 +28,7 @@ turbo run build --scope=*build-tools*
 
 ## Scoped tasks with no dependents & their dependencies
 
-Sometimes we want to run the tasks needed to satisfy the `build` script of all the packages that has the `build-tools` string in their names. Think of this as running tasks up and including the package matched in the scope. Simply add a `--no-deps` flag to run up to a package task.
+Sometimes we want to run the tasks needed to satisfy the `build` script of all the packages that has the `build-tools` string in their names. Think of this as running tasks up and including the package matched in the scope. Add a `--no-deps` flag to run up to a package task.
 
 ```sh
 turbo run build --scope=*build-tools* --no-deps --includeDependencies

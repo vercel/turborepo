@@ -33,7 +33,7 @@ To override the default cache folder behavior, pass an array of globs to a [`pip
 }
 ```
 
-If your task does not emit any files (e.g. unit tests with Jest), just set `outputs` to an empty array (i.e. `[]`). Turborepo will automagically cache the logs for you.
+If your task does not emit any files (e.g. unit tests with Jest), set `outputs` to an empty array (i.e. `[]`). Turborepo will automagically cache the logs for you.
 
 <Callout emoji="ℹ️">
   Pro Tip for caching ESLint: You can get a cacheable pretty terminal output
@@ -53,7 +53,7 @@ And open up your `node_modules/.cache/turbo`, you should see the cached artifact
 
 ## Turn off caching
 
-Sometimes you really don't need or want this cache behavior (such as when you're doing something with live reloading such as `next dev` or `react-scripts start`). To entirely disable caching, simply append `--no-cache` to any command:
+Sometimes you really don't need or want this cache behavior (such as when you're doing something with live reloading such as `next dev` or `react-scripts start`). To entirely disable caching, append `--no-cache` to any command:
 
 ```shell
 # Run `dev` npm script in all packages and apps in parallel,
@@ -112,7 +112,7 @@ The hash of a given task is injected at execution time as an environment variabl
 <Callout>
   As of `turbo` v0.6.10, `turbo`'s hashing algorithm when using `npm` or `pnpm`
   differs slightly from the above. When using either of these package managers,
-  `turbo` will simply include the hashed contents of the lockfile in its hash
+  `turbo` will include the hashed contents of the lockfile in its hash
   algorithm for each package's task. It will _not_ parse/figure out the resolved
   set of all dependencies like the current `yarn` implementation.
 </Callout>
