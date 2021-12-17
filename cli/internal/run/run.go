@@ -321,7 +321,7 @@ func (c *RunCommand) Run(args []string) int {
 		}
 	}
 
-	// If we are running in parallel, then we simply remove all the edges in the graph
+	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root
 	if runOptions.parallel {
 		for _, edge := range ctx.TopologicalGraph.Edges() {
