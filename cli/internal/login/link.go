@@ -100,11 +100,11 @@ func (c *LinkCommand) Run(args []string) int {
 
 	var chosenTeam client.Team
 
-	teamOptions := make([]string, len(teamsResponse.Teams))
+	teamOptions := make([]string, 0, len(teamsResponse.Teams))
 
 	// Gather team options
-	for i, team := range teamsResponse.Teams {
-		teamOptions[i] = team.Name
+	for _, team := range teamsResponse.Teams {
+		teamOptions = append(teamOptions, team.Name)
 	}
 
 	var chosenTeamName string
