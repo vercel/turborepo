@@ -212,7 +212,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.Targets = make(util.Set)
 		if len(c.Args) > 0 {
 			for _, arg := range c.Args {
-				if arg == "--" {
+				if arg == " -- " {
 					break
 				}
 				if !strings.HasPrefix(arg, "-") {
