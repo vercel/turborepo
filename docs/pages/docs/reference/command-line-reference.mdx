@@ -57,6 +57,14 @@ When `--continue` is `true`, `turbo` will exit with the highest exit code value 
 turbo run build --continue
 ```
 
+#### `--colors`
+
+Allow colors in the output of tasks run by `turbo`.
+
+```sh
+turbo run build --colors
+```
+
 #### `--cwd`
 
 Set the working directory of the command.
@@ -101,9 +109,9 @@ turbo run build test lint --graph=my-graph.html
   graph at the moment, even if that pipeline task does not actually exist in a
   given package. This has no impact on execution, it means that:
 
-  - the terminal output may overstate the number of packages in which a task is running.
-  - your dot viz graph may contain additional nodes that represents tasks that do not exist.
-</Callout>
+- the terminal output may overstate the number of packages in which a task is running.
+- your dot viz graph may contain additional nodes that represents tasks that do not exist.
+  </Callout>
 
 #### `--force`
 
@@ -269,7 +277,7 @@ You can also set the value of the current team by setting an environment variabl
 
 `type: string`
 
-To view CPU trace, outputs the trace to the given file,  use `go tool trace [file]`.
+To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
 
 <Callout emoji="🚨">
   **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
@@ -301,10 +309,10 @@ To view CPU profile, outputs the profile to the given file, drop the file into [
   for native Windows and run using the command prompt instead.
 </Callout>
 
-
 ```sh
 turbo run build --cpuprofile="<cpu-profile-file-name>"
 ```
+
 #### `-v`, `-vv`, `-vvv`
 
 To sepecify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.

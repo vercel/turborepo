@@ -67,21 +67,21 @@ Options:
                          execution. Supports globs.
   --cache-dir            Specify local filesystem cache directory.
 												 (default "./node_modules/.cache/turbo")
-  --concurrency          Limit the concurrency of task execution. Use 1 for 
+  --concurrency          Limit the concurrency of task execution. Use 1 for
                          serial (i.e. one-at-a-time) execution. (default 10)
   --continue             Continue execution even if a task exits with an error
                          or non-zero exit code. The default behavior is to bail
                          immediately. (default false)
-  --force                Ignore the existing cache (to force execution). 
+  --force                Ignore the existing cache (to force execution).
                          (default false)
-  --graph                Generate a Dot graph of the task execution.   
-  --global-deps          Specify glob of global filesystem dependencies to 
+  --graph                Generate a Dot graph of the task execution.
+  --global-deps          Specify glob of global filesystem dependencies to
 	                       be hashed. Useful for .env and files in the root
 												 directory. Can be specified multiple times.
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
-  --team                 The slug of the turborepo.com team.                         
+  --team                 The slug of the turborepo.com team.
   --token                A turborepo.com personal access token.
   --ignore               Files to ignore when calculating changed files
                          (i.e. --since). Supports globs.
@@ -261,7 +261,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependencies", ancestors)
 			for _, d := range ancestors {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
@@ -484,6 +484,7 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
+				// os.Setenv("FORCE_COLOR", "0")
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
 				cmd.Dir = pack.Dir
@@ -685,7 +686,7 @@ type RunOptions struct {
 	deps bool
 	// Whether to include ancestors (pkg.dependencies) in execution (defaults to false)
 	ancestors bool
-	// List of globs of file paths to ignore from exection scope calculation
+	// List of globs of file paths to ignore from execution scope calculation
 	ignore []string
 	// Whether to stream log outputs
 	stream bool
@@ -820,6 +821,9 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.ancestors = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
+			case strings.HasPrefix(arg, "--colors"):
+				fmt.Printf("--colors is given")
+				os.Setenv("FORCE_COLOR", "1")
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
