@@ -219,15 +219,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// until all parsing is complete
 		// and populate the graph
 		parseJSONWaitGroup := new(errgroup.Group)
-		justJsons := make([]string, len(spaces))
-		for i, space := range spaces {
-			justJsons[i] = path.Join(space, "package.json")
-		}
-		ignore := []string{
-			"**/node_modules/**/*",
-			"**/bower_components/**/*",
-			"**/test/**/*",
-			"**/tests/**/*",
+		justJsons := make([]string, 0, len(spaces))
+		for _, space := range spaces {
+			justJsons = append(justJsons, path.Join(space, "package.json"))
 		}
 
 		f := globby.GlobFiles(rootpath, justJsons, ignore)
