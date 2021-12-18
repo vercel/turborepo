@@ -423,7 +423,7 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 	if fs.FileExists(buildFilePath) {
 		pkg, err := fs.ReadPackageJSON(buildFilePath)
 		if err != nil {
-			return fmt.Errorf("error parsing %v: %w", buildFilePath, err)
+			return fmt.Errorf("parsing %s: %w", buildFilePath, err)
 		}
 
 		// log.Printf("[TRACE] adding %+v to graph", pkg.Name)
