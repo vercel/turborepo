@@ -387,8 +387,8 @@ func (c *RunCommand) Run(args []string) int {
 				tracer := runState.Run(context.GetTaskId(pack.Name, task))
 
 				// Create a logger
-				pref := context.PrefixColor(ctx, &pack.Name)
-				actualPrefix := pref("%v:%v: ", pack.Name, task)
+				pref := ctx.ColorCache.PrefixColor(pack.Name)
+				actualPrefix := pref("%s:%s: ", pack.Name, task)
 				targetUi := &cli.PrefixedUi{
 					Ui:           c.Ui,
 					OutputPrefix: actualPrefix,
