@@ -15,7 +15,6 @@ import (
 	"turbo/internal/util"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/fatih/color"
 	"github.com/google/chrometracing"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
@@ -34,19 +33,6 @@ const (
 	Yarn PackageManager = iota
 	Pnpm
 )
-
-type colorFn = func(format string, a ...interface{}) string
-
-var (
-	childProcessIndex     = 0
-	terminalPackageColors = [5]colorFn{color.CyanString, color.MagentaString, color.GreenString, color.YellowString, color.BlueString}
-)
-
-type ColorCache struct {
-	sync.Mutex
-	index int
-	Cache map[interface{}]colorFn
-}
 
 // Context of the CLI
 type Context struct {
@@ -84,20 +70,6 @@ func New(opts ...Option) (*Context, error) {
 	}
 
 	return &m, nil
-}
-
-// PrefixColor returns a color function for a given package name
-func PrefixColor(c *Context, name *string) colorFn {
-	c.ColorCache.Lock()
-	defer c.ColorCache.Unlock()
-	colorFn, ok := c.ColorCache.Cache[name]
-	if ok {
-		return colorFn
-	}
-	c.ColorCache.index++
-	colorFn = terminalPackageColors[util.PositiveMod(c.ColorCache.index, len(terminalPackageColors))]
-	c.ColorCache.Cache[name] = colorFn
-	return colorFn
 }
 
 // WithDir specifies the directory where turbo is initiated
@@ -141,10 +113,7 @@ func WithTracer(filename string) Option {
 func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
-		c.ColorCache = &ColorCache{
-			Cache: make(map[interface{}]colorFn),
-			index: 0,
-		}
+		c.ColorCache = NewColorCache()
 		c.RootNode = ROOT_NODE_NAME
 		c.PendingTaskNodes = make(dag.Set)
 		// Need to ALWAYS have a root node, might as well do it now
