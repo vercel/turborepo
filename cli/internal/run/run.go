@@ -484,7 +484,6 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
-				// os.Setenv("FORCE_COLOR", "0")
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
 				cmd.Dir = pack.Dir
