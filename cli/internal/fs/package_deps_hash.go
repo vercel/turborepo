@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"turbo/internal/util"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -34,7 +33,7 @@ type PackageDepsOptions struct {
 func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get git hashes for files in package %s: %w", p.PackagePath, err)
+		return nil, fmt.Errorf("getting git hashes for files in package %s: %w", p.PackagePath, err)
 	}
 	// Add all the checked in hashes.
 	result := parseGitLsTree(gitLsOutput)
@@ -53,14 +52,13 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	}
 	currentlyChangedFiles := parseGitStatus(gitStatusOutput, p.PackagePath)
 	var filesToHash []string
-	excludedPathsSet := new(util.Set)
+
 	for filename, changeType := range currentlyChangedFiles {
 		if changeType == "D" || (len(changeType) == 2 && string(changeType)[1] == []byte("D")[0]) {
 			delete(result, filename)
 		} else {
-			if !excludedPathsSet.Include(filename) {
-				filesToHash = append(filesToHash, filename)
-			}
+			// TODO: handle excluded paths here and only hash if included
+			filesToHash = append(filesToHash, filename)
 		}
 	}
 
@@ -83,13 +81,15 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	return result, nil
 }
 
+const hashCommand = "hash-object"
+
 // GitHashForFiles a list of files returns a map of with their git hash values. It uses
 // git hash-object under the
 func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]string, error) {
-	changes := make(map[string]string)
+	changes := make(map[string]string, len(filesToHash))
 	if len(filesToHash) > 0 {
-		var input = []string{"hash-object"}
-
+		input := make([]string, 0, len(filesToHash)+1)
+		input = append(input, hashCommand)
 		for _, filename := range filesToHash {
 			input = append(input, filepath.Join(PackagePath, filename))
 		}
@@ -105,11 +105,10 @@ func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]strin
 		offByOne := strings.Split(string(out), "\n") // there is an extra ""
 		hashes := offByOne[:len(offByOne)-1]
 		if len(hashes) != len(filesToHash) {
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes.", len(filesToHash), len(hashes))
+			return nil, fmt.Errorf("passed %v file paths to git to hash, but received %v hashes", len(filesToHash), len(hashes))
 		}
 		for i, hash := range hashes {
-			filepath := filesToHash[i]
-			changes[filepath] = hash
+			changes[filesToHash[i]] = hash
 		}
 	}
 
@@ -129,12 +128,11 @@ func UnescapeChars(in []byte) []byte {
 
 // gitLsTree executes "git ls-tree" in a folder
 func gitLsTree(path string, gitPath string) (string, error) {
-
 	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to read `git ls-tree`: %w", err)
+		return "", fmt.Errorf("reading `git ls-tree`: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -151,7 +149,7 @@ func parseGitLsTree(output string) map[string]string {
 		for _, line := range outputLines {
 			if len(line) > 0 {
 				matches := gitRex.MatchString(line)
-				if matches == true {
+				if matches {
 					// this looks like this
 					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
 					match := gitRex.FindAllStringSubmatch(line, -1)
@@ -218,7 +216,7 @@ func gitStatus(path string, gitPath string) (string, error) {
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to read git status: %w", err)
+		return "", fmt.Errorf("reading git status: %w", err)
 	}
 	// log.Printf("[TRACE] gitStatus result: %v", strings.TrimSpace(string(out)))
 	return strings.TrimSpace(string(out)), nil
@@ -247,7 +245,7 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 	for _, line := range outputLines {
 		if len(line) > 0 {
 			matches := gitRex.MatchString(line)
-			if matches == true {
+			if matches {
 				// changeType is in the format of "XY" where "X" is the status of the file in the index and "Y" is the status of
 				// the file in the working tree. Some example statuses:
 				//   - 'D' == deletion
