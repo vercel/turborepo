@@ -64,7 +64,7 @@ type Context struct {
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
 	PendingTaskNodes dag.Set
-	Targets          util.Set
+	Targets          []string
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -355,7 +355,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	return pkg, nil
 }
 
-func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) (util.Set, error) {
+func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
@@ -374,7 +374,7 @@ func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 			}
 		}
 	}
-	return targets, nil
+	return targets.UnsafeListOfStrings(), nil
 }
 
 func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
