@@ -209,24 +209,11 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("error hashing global dependencies %w", err)
 		}
 		c.GlobalHash = globalHash
-		c.Targets = make(util.Set)
-		if len(c.Args) > 0 {
-			for _, arg := range c.Args {
-				if !strings.HasPrefix(arg, "-") {
-					c.Targets.Add(arg)
-					found := false
-					for task := range c.RootPackageJSON.Turbo.Pipeline {
-						if task == arg {
-							found = true
-						}
-					}
-					if !found {
-						return fmt.Errorf("Task `%v` not found in Turborepo pipeline. Are you sure you added it?", arg)
-					}
-				}
-			}
+		targets, err := GetTargetsFromArguments(c.Args, &c.RootPackageJSON.Turbo)
+		if err != nil {
+			return err
 		}
-
+		c.Targets = targets
 		// We will parse all package.json's in simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
@@ -366,6 +353,28 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	}
 
 	return pkg, nil
+}
+
+func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) (util.Set, error) {
+	targets := make(util.Set)
+	for _, arg := range arguments {
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			targets.Add(arg)
+			found := false
+			for task := range configJson.Pipeline {
+				if task == arg {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("Task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			}
+		}
+	}
+	return targets, nil
 }
 
 func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
