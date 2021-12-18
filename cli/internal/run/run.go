@@ -286,13 +286,15 @@ func (c *RunCommand) Run(args []string) int {
 		topoVisit = append(topoVisit, v)
 		pack := ctx.PackageInfos[v]
 
-		ancestralHashes := make([]string, len(pack.InternalDeps))
+		ancestralHashes := make([]string, 0, len(pack.InternalDeps))
 		if len(pack.InternalDeps) > 0 {
-			for i, ancestor := range pack.InternalDeps {
-				ancestralHashes[i] = ctx.PackageInfos[ancestor].Hash
+			for _, ancestor := range pack.InternalDeps {
+				if h, ok := ctx.PackageInfos[ancestor]; ok {
+					ancestralHashes = append(ancestralHashes, h.Hash)
+				}
 			}
+			sort.Strings(ancestralHashes)
 		}
-		sort.Strings(ancestralHashes)
 		var hashable = struct {
 			hashOfFiles      string
 			ancestralHashes  []string
@@ -315,7 +317,7 @@ func (c *RunCommand) Run(args []string) int {
 		vertexSet.Add(v)
 	}
 	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range util.Set(vertexSet).Difference(filteredPkgs) {
+	for _, toRemove := range vertexSet.Difference(filteredPkgs) {
 		if toRemove != ctx.RootNode {
 			ctx.TopologicalGraph.Remove(toRemove)
 		}
@@ -845,13 +847,13 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 
 // convertStringsToGlobs converts string glob patterns to an array glob.Glob instances.
 func convertStringsToGlobs(patterns []string) (globss []glob.Glob, err error) {
-	var globs = make([]glob.Glob, len(patterns))
-	for i, pattern := range patterns {
+	var globs = make([]glob.Glob, 0, len(patterns))
+	for _, pattern := range patterns {
 		g, err := glob.Compile(pattern)
 		if err != nil {
 			return nil, err
 		}
-		globs[i] = g
+		globs = append(globs, g)
 	}
 
 	return globs, nil
