@@ -87,7 +87,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got.UnsafeListOfStrings(), tt.want) {
-				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
+				t.Errorf("GetTargetsFromArguments() = %v, want %v", got.UnsafeListOfStrings(), tt.want)
 			}
 		})
 	}
