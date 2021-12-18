@@ -822,7 +822,6 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--colors"):
-				fmt.Printf("--colors is given")
 				os.Setenv("FORCE_COLOR", "1")
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
