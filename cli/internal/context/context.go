@@ -224,7 +224,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			justJsons = append(justJsons, path.Join(space, "package.json"))
 		}
 
-		f := globby.GlobFiles(rootpath, justJsons, ignore)
+		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
 
 		for i, val := range f {
 			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
@@ -506,4 +506,13 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	}
 	// no op
 	return gitignore.CompileIgnoreLines([]string{}...), nil
+}
+
+func getWorkspaceIgnores() []string {
+	return []string{
+		"**/node_modules/**/*",
+		"**/bower_components/**/*",
+		"**/test/**/*",
+		"**/tests/**/*",
+	}
 }
