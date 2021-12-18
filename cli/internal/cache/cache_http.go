@@ -115,7 +115,7 @@ func (cache *httpCache) retrieve(key string) (bool, []string, error) {
 		return false, nil, err
 	}
 	defer resp.Body.Close()
-	files := []string{}
+	var files []string
 	if resp.StatusCode == http.StatusNotFound {
 		return false, files, nil // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {

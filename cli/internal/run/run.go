@@ -289,7 +289,9 @@ func (c *RunCommand) Run(args []string) int {
 		ancestralHashes := make([]string, 0, len(pack.InternalDeps))
 		if len(pack.InternalDeps) > 0 {
 			for _, ancestor := range pack.InternalDeps {
-				ancestralHashes = append(ancestralHashes, ctx.PackageInfos[ancestor].Hash)
+				if h, ok := ctx.PackageInfos[ancestor]; ok {
+					ancestralHashes = append(ancestralHashes, h.Hash)
+				}
 			}
 			sort.Strings(ancestralHashes)
 		}
@@ -315,7 +317,7 @@ func (c *RunCommand) Run(args []string) int {
 		vertexSet.Add(v)
 	}
 	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range util.Set(vertexSet).Difference(filteredPkgs) {
+	for _, toRemove := range vertexSet.Difference(filteredPkgs) {
 		if toRemove != ctx.RootNode {
 			ctx.TopologicalGraph.Remove(toRemove)
 		}

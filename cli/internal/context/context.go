@@ -300,19 +300,23 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
-		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
-		for v := range depSet.ToSlice() {
-			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
+		externalDepCount := depSet.Cardinality()
+		var externalDeps []string
+		var externalDepsHash string
+		if externalDepCount > 0 {
+			externalDeps = make([]string, 0, externalDepCount)
+			for v := range depSet.ToSlice() {
+				externalDeps = append(externalDeps, fmt.Sprintf("%v", v))
+			}
+			sort.Strings(externalDeps)
+			hashOfExternalDeps, err := fs.HashObject(externalDeps)
+			if err != nil {
+				return nil, err
+			}
+			externalDepsHash = hashOfExternalDeps
 		}
-		sort.Strings(pkg.ExternalDeps)
-		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
-		if err != nil {
-			return nil, err
-		}
-		pkg.ExternalDepsHash = hashOfExternalDeps
-	} else {
-		pkg.ExternalDeps = []string{}
-		pkg.ExternalDepsHash = ""
+		pkg.ExternalDepsHash = externalDepsHash
+		pkg.ExternalDeps = externalDeps
 	}
 
 	return pkg, nil
@@ -397,25 +401,38 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
 	lockfileWg.Wait()
 
-	// when there are no internal dependencies, we need to still add these leafs to the graph
-	if internalDepsSet.Len() == 0 {
+	internalDepsSetCount := internalDepsSet.Len()
+	var internalDeps []string
+	if internalDepsSetCount > 0 {
+		internalDeps = make([]string, 0, internalDepsSet.Len())
+		for v := range internalDepsSet.List() {
+			internalDeps = append(internalDeps, fmt.Sprintf("%v", v))
+		}
+		sort.Strings(internalDeps)
+	} else {
+		// when there are no internal dependencies, we need to still add these leafs to the graph
 		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
 	}
-	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
-	for v := range externalDepSet.ToSlice() {
-		pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
+	pkg.InternalDeps = internalDeps
+
+	externalDepCount := externalDepSet.Cardinality()
+	var externalDeps []string
+	var externalDepsHash string
+	if externalDepCount > 0 {
+		externalDeps = make([]string, 0, externalDepCount)
+		for v := range externalDepSet.ToSlice() {
+			externalDeps = append(externalDeps, fmt.Sprintf("%v", v))
+		}
+		sort.Strings(externalDeps)
+		hashOfExternalDeps, err := fs.HashObject(externalDeps)
+		if err != nil {
+			return err
+		}
+		externalDepsHash = hashOfExternalDeps
 	}
-	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
-	for v := range internalDepsSet.List() {
-		pkg.ExternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
-	}
-	sort.Strings(pkg.InternalDeps)
-	sort.Strings(pkg.ExternalDeps)
-	hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
-	if err != nil {
-		return err
-	}
-	pkg.ExternalDepsHash = hashOfExternalDeps
+	pkg.ExternalDeps = externalDeps
+	pkg.ExternalDepsHash = externalDepsHash
+
 	return nil
 }
 
