@@ -582,8 +582,21 @@ func (c *RunCommand) Run(args []string) int {
 
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
-					ignore := []string{}
-					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
+					ignoreStrings := []string{}
+					globs := []string{}
+					for _, output := range outputs {
+						if strings.HasPrefix(output, "!") {
+							ignoreStrings = append(ignoreStrings, strings.TrimPrefix(output, "!"))
+						} else {
+							globs = append(globs, output)
+						}
+					}
+
+					filesToBeCached := globby.Match(outputs, globby.Option{
+						CheckDot:       true,
+						RelativeReturn: true,
+						BaseDir:        pack.Dir,
+					})
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
 					}
