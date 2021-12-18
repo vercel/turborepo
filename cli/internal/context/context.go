@@ -297,7 +297,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	if c.Backend.Name == "nodejs-yarn" && !fs.CheckIfWindows() {
-		pkg.SubLockfile = make(fs.YarnLockfile)
+		pkg.SubLockfile = fs.YarnLockfile{}
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
@@ -397,13 +397,13 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	if internalDepsSet.Len() == 0 {
 		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
 	}
-	pkg.ExternalDeps = make([]string, externalDepSet.Cardinality())
-	for i, v := range externalDepSet.ToSlice() {
-		pkg.ExternalDeps[i] = v.(string)
+	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
+	for _, v := range externalDepSet.ToSlice() {
+		pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%s", v))
 	}
-	pkg.InternalDeps = make([]string, internalDepsSet.Len())
-	for i, v := range internalDepsSet.List() {
-		pkg.InternalDeps[i] = v.(string)
+	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
+	for _, v := range internalDepsSet.List() {
+		pkg.ExternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%s", v))
 	}
 	sort.Strings(pkg.InternalDeps)
 	sort.Strings(pkg.ExternalDeps)
