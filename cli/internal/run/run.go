@@ -591,11 +591,10 @@ func (c *RunCommand) Run(args []string) int {
 							globs = append(globs, output)
 						}
 					}
-
-					filesToBeCached := globby.Match(outputs, globby.Option{
-						CheckDot:       true,
-						RelativeReturn: true,
-						BaseDir:        pack.Dir,
+					filesToBeCached := globby.Match(globs, globby.Option{
+						CheckDot: true,
+						Excludes: ignoreStrings,
+						BaseDir:  pack.Dir,
 					})
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
