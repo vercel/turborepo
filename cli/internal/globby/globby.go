@@ -1,180 +1,161 @@
 package globby
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strings"
+	"turbo/internal/util"
+
+	"github.com/bmatcuk/doublestar/v4"
+	"github.com/karrick/godirwalk"
 )
 
-type Option struct {
-	BaseDir        string
-	CheckDot       bool
-	RelativeReturn bool
-	Excludes       []string
-}
+// IgnoreFunc checks if a path ought to be ignored
+type IgnoreFunc func(path string) bool
 
-/*
- * Glob all patterns
- */
-func Match(patterns []string, opt Option) []string {
-	var allFiles []string
-	patterns, opt, err := completeOpt(patterns, opt)
-	if err != nil {
-		fmt.Printf("Magth err: [%v]\n", err)
-		return allFiles
-	}
-	for _, pattern := range patterns {
-		files := find(pattern, opt)
-		if files == nil || len(*files) == 0 {
-			continue
-		}
-		allFiles = append(allFiles, *files...)
-	}
-	return allFiles
-}
+// IgnoreNone ignores nothing
+var IgnoreNone IgnoreFunc = func(path string) bool { return false }
 
-func find(pattern string, opt Option) *[]string {
-	// match ./some/path/**/*
-	if regexTest("\\*\\*", pattern) ||
-		!regexTest("\\*", pattern) { // Dirname
-		return findRecr(pattern, opt)
-	}
-	// match ./some/path/*
-	if regexTest("\\*", pattern) {
-		return findDir(pattern, opt)
-	}
-	return nil
-}
-
-// find under centain directory
-func findDir(pattern string, opt Option) *[]string {
-	var list []string
-	files, err := Glob(context.Background(), pattern)
-	if err != nil {
-		fmt.Printf("err: [%v]\n", err)
-		return &list
-	}
-	for _, fullpath := range files {
-		path, err := filepath.Rel(opt.BaseDir, fullpath)
-		if err != nil {
-			continue
-		}
-		if checkExclude(opt, path) {
-			continue
-		}
-		if opt.RelativeReturn {
-			list = append(list, path)
-		} else {
-			list = append(list, fullpath)
-		}
-	}
-	return &list
-}
-
-// find recursively
-func findRecr(pattern string, opt Option) *[]string {
-	dir := strReplace(pattern, "\\*\\*.+", "")
-	afterMacth := ""
-	matchAfterFlag := false
-	if regexTest("\\*", pattern) {
-		afterMacth = strReplace(pattern, ".+\\*", "")
-		matchAfterFlag = len(afterMacth) > 0
-	}
-
-	var list []string
-	err := filepath.Walk(dir, func(fullpath string, f os.FileInfo, err error) error {
-		if !opt.CheckDot && regexTest("^\\.", f.Name()) {
-			if f.IsDir() {
-				return filepath.SkipDir
+// IgnoreStrings ignores all paths which contain one of the ignores substrings
+func IgnoreStrings(ignores []string) IgnoreFunc {
+	return func(path string) bool {
+		for _, ptn := range ignores {
+			if ptn == "" {
+				continue
 			}
-			return nil
+			if strings.Contains(path, ptn) {
+				return true
+			}
 		}
-		if f.IsDir() {
-			return nil
-		}
-		path, _ := filepath.Rel(opt.BaseDir, fullpath)
-		if checkExclude(opt, path) {
-			return nil
-		}
-		if !opt.RelativeReturn {
-			path = fullpath
-		}
-		if !matchAfterFlag {
-			list = append(list, path)
-			return nil
-		}
-		if regexTest(afterMacth+"$", path) {
-			list = append(list, path)
-		}
-		return nil
-	})
-	if err != nil {
-		fmt.Printf("err: [%v]\n", err)
-	}
-	return &list
-}
-
-// check and complete the options
-func completeOpt(srcPatterns []string, opt Option) ([]string, Option, error) {
-	if len(opt.BaseDir) == 0 {
-		curDir, err := os.Getwd()
-		if err != nil {
-			panic(err)
-		}
-		opt.BaseDir = curDir
-	}
-
-	var patterns []string
-	for _, pattern := range srcPatterns {
-		// TODO: check no "tmp/*", use "tmp" or "tmp/*.ext" instead
-
-		if regexTest("^\\!", pattern) {
-			opt.Excludes = append(opt.Excludes, strReplace(pattern, "^\\!", ""))
-			continue
-		}
-		if regexTest("^\\.", pattern) || // like ./dist
-			!regexTest("^\\/", pattern) { // like dist
-			patterns = append(patterns, filepath.Join(opt.BaseDir, pattern))
-			continue
-		}
-		patterns = append(patterns, pattern)
-	}
-	return patterns, opt, nil
-}
-
-// check if path should be excluded
-func checkExclude(opt Option, path string) bool {
-	// if exludes dirs
-	for _, exclude := range opt.Excludes {
-		rule := exclude
-		if regexTest("\\*\\*", exclude) {
-			rule = strReplace(exclude, "\\*\\*/\\*+?", ".+")
-		} else if regexTest("\\*", exclude) {
-			rule = strReplace(exclude, "\\*", "[^/]+")
-		}
-		if regexTest("^"+rule, path) {
-			return true // ignore
-		}
-	}
-	return false
-}
-
-// Check if regex match the "src" string
-func regexTest(re string, src string) bool {
-	matched, err := regexp.MatchString(re, src)
-	if err != nil {
 		return false
 	}
-	if matched {
-		return true
+}
+func Globby(baseDir string, patterns []string) ([]string, error) {
+	var filesToBeCached = make(util.Set)
+	for _, output := range patterns {
+		results, err := doublestar.Glob(os.DirFS(baseDir), strings.TrimPrefix(output, "!"))
+		if err != nil {
+			return nil, err
+		}
+		for _, result := range results {
+			if strings.HasPrefix(output, "!") {
+				filesToBeCached.Delete(result)
+			} else {
+				filesToBeCached.Add(result)
+			}
+		}
 	}
-	return false
+	return filesToBeCached.UnsafeListOfStrings(), nil
 }
 
-// "dest" replace "text" pattern with "repl"
-func strReplace(dest, text, repl string) string {
-	re := regexp.MustCompile(text)
-	return re.ReplaceAllString(dest, repl)
+// Glob finds all files that match the pattern and not the ignore func
+func Glob(base, pattern string, ignore IgnoreFunc) ([]string, error) {
+	var res []string
+	err := godirwalk.Walk(base, &godirwalk.Options{
+		Callback: func(osPathname string, directoryEntry *godirwalk.Dirent) error {
+			if ignore != nil && ignore(osPathname) {
+				if directoryEntry.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			path := strings.TrimPrefix(osPathname, base+"/")
+			m, err := Match(pattern, path)
+			if err != nil {
+				return err
+			}
+			if m {
+				res = append(res, osPathname)
+			}
+			return nil
+		},
+		FollowSymbolicLinks: true,
+		Unsorted:            true,
+		ErrorCallback: func(path string, err error) godirwalk.ErrorAction {
+			return godirwalk.SkipNode
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// Match matches the same patterns as filepath.Match except it can also match
+// an arbitrary number of path segments using **
+func Match(pattern, path string) (matches bool, err error) {
+	if path == pattern {
+		return true, nil
+	}
+
+	var (
+		patterns = strings.Split(filepath.ToSlash(pattern), "/")
+		paths    = strings.Split(filepath.ToSlash(path), "/")
+	)
+	return match(patterns, paths)
+}
+
+func match(patterns, paths []string) (matches bool, err error) {
+	var pathIndex int
+	for patternIndex := 0; patternIndex < len(patterns); patternIndex++ {
+		pattern := patterns[patternIndex]
+		if patternIndex >= len(paths) {
+			// pattern is longer than path - path can't match
+			// TODO: what if the last pattern segment is **
+			return false, nil
+		}
+
+		path := paths[pathIndex]
+		if pattern == path {
+			// path and pattern segment match exactly - consume the path segment
+			pathIndex++
+			continue
+		}
+
+		if pattern == "**" {
+			if patternIndex == len(patterns)-1 {
+				// this is the last pattern segment, hence we consume the remainder of the path.
+				return true, nil
+			}
+
+			// this segment consumes all path segments until the next pattern segment
+			nextPattern := patterns[patternIndex+1]
+			if nextPattern == "**" {
+				// next pattern is a doublestar, too. Hence we just consume this path segment
+				// and let the next doublestar do the work.
+				continue
+			}
+
+			// we consume one path segment after the other and check if the remainder of the pattern
+			// matches the remainder of the path
+			for pi := pathIndex; pi < len(paths); pi++ {
+				m, err := match(patterns[patternIndex+1:], paths[pi:])
+				if err != nil {
+					return false, err
+				}
+				if m {
+					return true, nil
+				}
+			}
+			// none of the remainder matched
+			return false, nil
+		}
+
+		match, err := filepath.Match(pattern, path)
+		if err != nil {
+			return false, err
+		}
+		if match {
+			pathIndex++
+			continue
+		}
+
+		// did not find a match - we're done here
+		return false, nil
+	}
+
+	// we made it through the whole pattern, which means it matches alright
+	return true, nil
 }

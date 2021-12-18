@@ -16,6 +16,7 @@ require (
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.16.2
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.8
 	github.com/karrick/godirwalk v1.16.1
 	github.com/kelseyhightower/envconfig v1.4.0

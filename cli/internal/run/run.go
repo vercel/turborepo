@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -23,13 +24,13 @@ import (
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
-	"turbo/internal/util/browser"
 
 	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
 	glob "github.com/gobwas/glob"
 	"github.com/hashicorp/go-hclog"
+	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
@@ -321,7 +322,7 @@ func (c *RunCommand) Run(args []string) int {
 		}
 	}
 
-	// If we are running in parallel, then we remove all the edges in the graph
+	// If we are running in parallel, then we simply remove all the edges in the graph
 	// except for the root
 	if runOptions.parallel {
 		for _, edge := range ctx.TopologicalGraph.Edges() {
@@ -413,14 +414,6 @@ func (c *RunCommand) Run(args []string) int {
 					// override if we need to...
 					pipeline = altpipe
 				}
-
-				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-				if pipeline.Outputs == nil {
-					outputs = append(outputs, "dist/**/*", "build/**/*")
-				} else {
-					outputs = append(outputs, pipeline.Outputs...)
-				}
-				targetLogger.Debug("task output globs", "outputs", outputs)
 				hashable := struct {
 					Hash         string
 					Task         string
@@ -429,7 +422,7 @@ func (c *RunCommand) Run(args []string) int {
 				}{
 					Hash:         pack.Hash,
 					Task:         task,
-					Outputs:      outputs,
+					Outputs:      pipeline.Outputs,
 					PassThruArgs: runOptions.passThroughArgs,
 				}
 				hash, err := fs.HashObject(hashable)
@@ -444,6 +437,13 @@ func (c *RunCommand) Run(args []string) int {
 				// Cache ---------------------------------------------
 				// We create the real task outputs now so we can potentially use them to
 				// to store artifacts from remote cache to local fs cache
+
+				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
+				if len(pipeline.Outputs) > 0 {
+					outputs = append(outputs, pipeline.Outputs...)
+				} else {
+					outputs = append(outputs, "dist/**/*", "build/**/*")
+				}
 
 				var hit bool
 				if runOptions.forceExecution {
@@ -582,20 +582,11 @@ func (c *RunCommand) Run(args []string) int {
 
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
-					ignoreStrings := []string{}
-					globs := []string{}
-					for _, output := range outputs {
-						if strings.HasPrefix(output, "!") {
-							ignoreStrings = append(ignoreStrings, strings.TrimPrefix(output, "!"))
-						} else {
-							globs = append(globs, output)
-						}
+					filesToBeCached, globErr := globby.Globby(pack.Dir, outputs)
+					if globErr != nil {
+						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
+						os.Exit(1)
 					}
-					filesToBeCached := globby.Match(globs, globby.Option{
-						CheckDot: true,
-						Excludes: ignoreStrings,
-						BaseDir:  pack.Dir,
-					})
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
 					}
@@ -624,39 +615,9 @@ func (c *RunCommand) Run(args []string) int {
 			Verbose:    true,
 			DrawCycles: true,
 		}))
-		ext := filepath.Ext(runOptions.dotGraph)
-		if ext == ".html" {
-			f, err := os.Create(filepath.Join(cwd, runOptions.dotGraph))
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
-				return 1
-			}
-			defer f.Close()
-			f.WriteString(`<!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Graph</title>
-      </head>
-      <body>
-        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
-        <script>`)
-			f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
-			f.WriteString(`
-      </script>
-    </body>
-    </html>`)
-			c.Ui.Output("")
-			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
-			if ui.IsTTY {
-				browser.OpenBrowser(filepath.Join(cwd, runOptions.dotGraph))
-			}
-			return 0
-		}
 		hasDot := hasGraphViz()
 		if hasDot {
-			dotArgs := []string{"-T" + ext[1:], "-o", runOptions.dotGraph}
+			dotArgs := []string{"-T" + path.Ext(runOptions.dotGraph)[1:], "-o", runOptions.dotGraph}
 			cmd := exec.Command("dot", dotArgs...)
 			cmd.Stdin = strings.NewReader(graphString)
 			if err := cmd.Run(); err != nil {
@@ -849,7 +810,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
-	if !ui.IsTTY || ui.IsCI {
+	if !isatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("CI") != "" {
 		runOptions.stream = true
 	}
 

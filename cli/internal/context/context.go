@@ -180,11 +180,10 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalDeps := make(util.Set)
 
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
-			f := globby.Match(pkg.Turbo.GlobalDependencies, globby.Option{
-				BaseDir:        rootpath,
-				CheckDot:       true,
-				RelativeReturn: true,
-			})
+			f, err := globby.Globby(rootpath, pkg.Turbo.GlobalDependencies)
+			if err != nil {
+				return err
+			}
 			for _, val := range f {
 				globalDeps.Add(val)
 			}
@@ -236,23 +235,20 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// until all parsing is complete
 		// and populate the graph
 		parseJSONWaitGroup := new(errgroup.Group)
-		justJsons := make([]string, len(spaces))
+		justJsons := []string{
+			"!**/node_modules/**/*",
+			"!**/bower_components/**/*",
+			"!**/test/**/*",
+			"!**/tests/**/*",
+		}
 		for i, space := range spaces {
 			justJsons[i] = path.Join(space, "package.json")
 		}
-		ignore := []string{
-			"**/node_modules/**/*",
-			"**/bower_components/**/*",
-			"**/test/**/*",
-			"**/tests/**/*",
-		}
 
-		f := globby.Match(justJsons, globby.Option{
-			BaseDir:        rootpath,
-			CheckDot:       true,
-			RelativeReturn: true,
-			Excludes:       ignore,
-		})
+		f, err := globby.Globby(rootpath, justJsons)
+		if err != nil {
+			return err
+		}
 
 		for i, val := range f {
 			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
