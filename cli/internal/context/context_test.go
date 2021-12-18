@@ -17,7 +17,6 @@ func TestGetTargetsFromArguments(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
-		// TODO: Add test cases.
 		{
 			name: "handles one defined target",
 			args: args{
