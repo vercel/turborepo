@@ -64,7 +64,7 @@ type Context struct {
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
 	PendingTaskNodes dag.Set
-	Targets          util.Set
+	Targets          []string
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -355,7 +355,9 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	return pkg, nil
 }
 
-func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) (util.Set, error) {
+// GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
+// Return targets are always unique sorted alphabetically.
+func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
@@ -370,11 +372,13 @@ func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf("Task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
 			}
 		}
 	}
-	return targets, nil
+	stringTargets := targets.UnsafeListOfStrings()
+	sort.Strings(stringTargets)
+	return stringTargets, nil
 }
 
 func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
