@@ -300,9 +300,9 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
-		pkg.ExternalDeps = make([]string, depSet.Cardinality())
-		for i, v := range depSet.ToSlice() {
-			pkg.ExternalDeps[i] = v.(string)
+		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
+		for _, v := range depSet.ToSlice() {
+			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%s", v))
 		}
 		sort.Strings(pkg.ExternalDeps)
 		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
