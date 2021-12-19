@@ -16,11 +16,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-version"
-	"github.com/planetscale/cli/internal/cmdutil"
 	"github.com/planetscale/cli/internal/config"
 	"gopkg.in/yaml.v2"
-
-	exec "golang.org/x/sys/execabs"
 )
 
 type UpdateInfo struct {
@@ -74,16 +71,6 @@ func CheckVersion(ctx context.Context, buildVersion string) error {
 		color.CyanString(buildVersion),
 		color.CyanString(updateInfo.ReleaseInfo.Version))
 
-	var binpath string
-	if exepath, err := os.Executable(); err == nil {
-		binpath = exepath
-	} else if path, err := exec.LookPath("pscale"); err == nil {
-		binpath = path
-	}
-
-	if cmdutil.IsUnderHomebrew(binpath) {
-		fmt.Fprintf(os.Stderr, "To upgrade, run: %s\n", "brew update && brew upgrade pscale")
-	}
 	fmt.Fprintf(color.Error, "%s\n", color.YellowString(updateInfo.ReleaseInfo.URL))
 	return nil
 }
