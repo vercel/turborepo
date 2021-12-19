@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLatestVersion(t *testing.T) {
-	c := qt.New(t)
 
 	var tests = []struct {
 		name       string
@@ -45,10 +44,11 @@ func TestLatestVersion(t *testing.T) {
 
 			success := tt.statusCode >= 200 && tt.statusCode < 300
 			if !success {
-				c.Assert(err, qt.Not(qt.IsNil))
+				assert.NotNil(t, err)
 			} else {
-				c.Assert(err, qt.IsNil)
-				c.Assert(info, qt.DeepEquals, tt.resp)
+				assert.Nil(t, err)
+				assert.EqualValues(t, tt.resp, info)
+
 			}
 
 		})
@@ -57,7 +57,6 @@ func TestLatestVersion(t *testing.T) {
 }
 
 func TestCheckVersion(t *testing.T) {
-	c := qt.New(t)
 
 	var tests = []struct {
 		name          string
@@ -101,7 +100,7 @@ func TestCheckVersion(t *testing.T) {
 
 			if !tt.lastChecked.IsZero() {
 				err := setStateEntry(path, tt.lastChecked, ReleaseInfo{Version: tt.latestVersion})
-				c.Assert(err, qt.IsNil)
+				assert.Nil(t, err)
 			}
 
 			updateInfo, err := checkVersion(
@@ -113,8 +112,8 @@ func TestCheckVersion(t *testing.T) {
 				},
 			)
 
-			c.Assert(err, qt.IsNil)
-			c.Assert(updateInfo.Update, qt.Equals, tt.update, qt.Commentf("reason: %s", updateInfo.Reason))
+			assert.Nil(t, err)
+			assert.EqualValues(t, tt.update, updateInfo.Update)
 
 		})
 	}
