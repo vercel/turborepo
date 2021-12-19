@@ -1,4 +1,4 @@
-// Package update is checking for a new version of Turbo and informs the user
+// Package update is checking for a new version of Turborepo and informs the user
 // to update. Most of the logic is copied from planetscale/cli:
 // https://github.com/planetscale/cli/blob/main/internal/update/update.go
 // and updated to our own needs.
@@ -67,7 +67,7 @@ func CheckVersion(ctx context.Context, buildVersion string) error {
 	}
 
 	fmt.Fprintf(color.Error, "\n%s %s → %s\n",
-		color.BlueString("A new release of pscale is available:"),
+		color.BlueString("A new release of turborepo is available:"),
 		color.CyanString(buildVersion),
 		color.CyanString(updateInfo.ReleaseInfo.Version))
 
