@@ -13,10 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"turbo/internal/config"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-version"
-	"github.com/planetscale/cli/internal/config"
 	"gopkg.in/yaml.v2"
 )
 
@@ -211,7 +211,7 @@ func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 }
 
 func stateFilePath() (string, error) {
-	dir, err := config.ConfigDir()
+	dir, err := config.GetConfigDir()
 	if err != nil {
 		return "", err
 	}

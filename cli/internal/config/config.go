@@ -19,7 +19,8 @@ import (
 
 const (
 	// EnvLogLevel is the environment log level
-	EnvLogLevel = "TURBO_LOG_LEVEL"
+	EnvLogLevel       = "TURBO_LOG_LEVEL"
+	defaultConfigPath = "~/.config/turborepo"
 )
 
 // IsCI returns true if running in a CI/CD environment

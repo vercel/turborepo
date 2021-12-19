@@ -2,10 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+	"github.com/mitchellh/go-homedir"
 )
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
@@ -82,4 +84,14 @@ func ReadUserConfigFile() (*TurborepoConfig, error) {
 // DeleteUserConfigFile deletes a user  config file
 func DeleteUserConfigFile() error {
 	return WriteUserConfigFile(&TurborepoConfig{})
+}
+
+// GetConfigDir is the directory for Turbo config.
+func GetConfigDir() (string, error) {
+	dir, err := homedir.Expand(defaultConfigPath)
+	if err != nil {
+		return "", fmt.Errorf("can't expand path %q: %s", defaultConfigPath, err)
+	}
+
+	return dir, nil
 }
