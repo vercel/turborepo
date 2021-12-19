@@ -95,7 +95,7 @@ func checkVersion(
 		}, nil
 	}
 
-	addr := "https://api.github.com/repos/planetscale/cli/releases/latest"
+	addr := "https://api.github.com/repos/vercel/turborepo/releases/latest"
 	info, err := latestVersionFn(ctx, addr)
 	if err != nil {
 		return nil, err
