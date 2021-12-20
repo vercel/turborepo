@@ -4,6 +4,10 @@ title: Pipelines
 
 import Callout from "../../../components/callout";
 
+<Callout>
+This page and Turborepo's Pipeline API design was copied from the Microsoft Lage [Pipelines Page](https://microsoft.github.io/lage/guide/pipeline.html#defining-a-pipeline).
+</Callout>
+
 # Pipelining Package Tasks
 
 In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each NPM lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
