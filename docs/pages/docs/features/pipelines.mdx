@@ -3,10 +3,7 @@ title: Pipelines
 ---
 
 import Callout from "../../../components/callout";
-
-<Callout>
-This page and Turborepo's Pipeline API design was copied from the Microsoft Lage [Pipelines Page](https://microsoft.github.io/lage/guide/pipeline.html#defining-a-pipeline).
-</Callout>
+import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Pipelining Package Tasks
 
@@ -63,7 +60,7 @@ The full pipeline can then be run:
 npx turbo run build test lint deploy
 ```
 
-Turborepo will then efficiently schedule execution minimizing idle CPUs. 
+Turborepo will then efficiently schedule execution minimizing idle CPUs.
 
 ## Task Dependency Format
 
@@ -181,4 +178,9 @@ This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"d
 <Callout>
   **Note: Package-tasks do not inherit cache configuration. You must redeclare
   [`outputs`](../reference/configuration#outputs) at the moment.**
+</Callout>
+
+<Callout type="idea" icon={<HeartIcon  className="h-5 w-5 mt-1 text-gray-400" aria-hidden="true" />}>
+Turborepo's Pipeline API design and this page of documentation was inspired by [Microsoft's Lage project](https://microsoft.github.io/lage/guide/pipeline.html#defining-a-pipeline).
+Shoutout to [Kenneth Chau](https://twitter.com/kenneth_chau) for the idea of fanning out tasks in such a concise and elegant way.
 </Callout>
