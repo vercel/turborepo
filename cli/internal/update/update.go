@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"time"
 	"turbo/internal/config"
+	"turbo/internal/util"
 
-	"github.com/fatih/color"
 	"github.com/hashicorp/go-version"
 	"gopkg.in/yaml.v2"
 )
@@ -66,12 +66,8 @@ func CheckVersion(ctx context.Context, buildVersion string) error {
 		return fmt.Errorf("skipping update, reason: %s", updateInfo.Reason)
 	}
 
-	fmt.Fprintf(color.Error, "\n%s %s → %s\n",
-		color.BlueString("A new release of turborepo is available:"),
-		color.CyanString(buildVersion),
-		color.CyanString(updateInfo.ReleaseInfo.Version))
-
-	fmt.Fprintf(color.Error, "%s\n", color.YellowString(updateInfo.ReleaseInfo.URL))
+	util.Printf("\n${BLUE}A new release of turborepo is available: ${CYAN}%s → %s\n", buildVersion, updateInfo.ReleaseInfo.Version)
+	util.Printf("${YELLOW}%s${RESET}\n", updateInfo.ReleaseInfo.URL)
 	return nil
 }
 
