@@ -36,8 +36,8 @@ type ReleaseInfo struct {
 // StateEntry stores the information we have checked for a new version. It's
 // used to decide whether to check for a new version or not.
 type StateEntry struct {
-	CheckedForUpdateAt time.Time   `yaml:"checked_for_update_at"`
-	LatestRelease      ReleaseInfo `yaml:"latest_release"`
+	CheckedForUpdateAt time.Time   `yaml:"checked-for-update-at"`
+	LatestRelease      ReleaseInfo `yaml:"latest-release"`
 }
 
 // CheckVersion checks for the given build version whether there is a new
