@@ -407,7 +407,7 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	}
 	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
 	for v := range internalDepsSet.List() {
-		pkg.ExternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
+		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
 	}
 	sort.Strings(pkg.InternalDeps)
 	sort.Strings(pkg.ExternalDeps)
