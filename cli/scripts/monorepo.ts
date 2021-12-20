@@ -141,7 +141,7 @@ importers:
         version: "0.1.0",
         private: true,
         license: "MIT",
-        workspaces: ["packages/*"],
+        workspaces: ["packages/**"],
         scripts: {
           build: `${turboPath} run build`,
           test: `${turboPath} run test`,

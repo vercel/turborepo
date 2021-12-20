@@ -1,8 +1,9 @@
 module.exports = {
+  root: true,
   extends: ["next", "prettier"],
   settings: {
     next: {
-      rootDir: ["docs/"],
+      rootDir: ["docs/", "create-turbo/"],
     },
   },
 };

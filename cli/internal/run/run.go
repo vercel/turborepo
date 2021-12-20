@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -20,17 +19,17 @@ import (
 	"turbo/internal/context"
 	"turbo/internal/core"
 	"turbo/internal/fs"
+	"turbo/internal/globby"
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
+	"turbo/internal/util/browser"
 
-	"github.com/bmatcuk/doublestar"
 	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
 	glob "github.com/gobwas/glob"
 	"github.com/hashicorp/go-hclog"
-	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
@@ -287,13 +286,15 @@ func (c *RunCommand) Run(args []string) int {
 		topoVisit = append(topoVisit, v)
 		pack := ctx.PackageInfos[v]
 
-		ancestralHashes := make([]string, len(pack.InternalDeps))
+		ancestralHashes := make([]string, 0, len(pack.InternalDeps))
 		if len(pack.InternalDeps) > 0 {
-			for i, ancestor := range pack.InternalDeps {
-				ancestralHashes[i] = ctx.PackageInfos[ancestor].Hash
+			for _, ancestor := range pack.InternalDeps {
+				if h, ok := ctx.PackageInfos[ancestor]; ok {
+					ancestralHashes = append(ancestralHashes, h.Hash)
+				}
 			}
+			sort.Strings(ancestralHashes)
 		}
-		sort.Strings(ancestralHashes)
 		var hashable = struct {
 			hashOfFiles      string
 			ancestralHashes  []string
@@ -316,13 +317,13 @@ func (c *RunCommand) Run(args []string) int {
 		vertexSet.Add(v)
 	}
 	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range util.Set(vertexSet).Difference(filteredPkgs) {
+	for _, toRemove := range vertexSet.Difference(filteredPkgs) {
 		if toRemove != ctx.RootNode {
 			ctx.TopologicalGraph.Remove(toRemove)
 		}
 	}
 
-	// If we are running in parallel, then we simply remove all the edges in the graph
+	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root
 	if runOptions.parallel {
 		for _, edge := range ctx.TopologicalGraph.Edges() {
@@ -333,11 +334,7 @@ func (c *RunCommand) Run(args []string) int {
 	}
 
 	if runOptions.stream {
-		targetList := make([]string, ctx.Targets.Len())
-		for i, v := range ctx.Targets.List() {
-			targetList[i] = v.(string)
-		}
-		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(targetList, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
+		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(ctx.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
 	}
 	runState := NewRunState(runOptions)
 	runState.Listen(c.Ui, time.Now())
@@ -392,8 +389,8 @@ func (c *RunCommand) Run(args []string) int {
 				tracer := runState.Run(context.GetTaskId(pack.Name, task))
 
 				// Create a logger
-				pref := context.PrefixColor(ctx, &pack.Name)
-				actualPrefix := pref("%v:%v: ", pack.Name, task)
+				pref := ctx.ColorCache.PrefixColor(pack.Name)
+				actualPrefix := pref("%s:%s: ", pack.Name, task)
 				targetUi := &cli.PrefixedUi{
 					Ui:           c.Ui,
 					OutputPrefix: actualPrefix,
@@ -414,6 +411,14 @@ func (c *RunCommand) Run(args []string) int {
 					// override if we need to...
 					pipeline = altpipe
 				}
+
+				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
+				if pipeline.Outputs == nil {
+					outputs = append(outputs, "dist/**/*", "build/**/*")
+				} else {
+					outputs = append(outputs, pipeline.Outputs...)
+				}
+				targetLogger.Debug("task output globs", "outputs", outputs)
 				hashable := struct {
 					Hash         string
 					Task         string
@@ -422,7 +427,7 @@ func (c *RunCommand) Run(args []string) int {
 				}{
 					Hash:         pack.Hash,
 					Task:         task,
-					Outputs:      pipeline.Outputs,
+					Outputs:      outputs,
 					PassThruArgs: runOptions.passThroughArgs,
 				}
 				hash, err := fs.HashObject(hashable)
@@ -437,13 +442,6 @@ func (c *RunCommand) Run(args []string) int {
 				// Cache ---------------------------------------------
 				// We create the real task outputs now so we can potentially use them to
 				// to store artifacts from remote cache to local fs cache
-
-				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-				if len(pipeline.Outputs) > 0 {
-					outputs = append(outputs, pipeline.Outputs...)
-				} else {
-					outputs = append(outputs, "dist/**/*", "build/**/*")
-				}
 
 				var hit bool
 				if runOptions.forceExecution {
@@ -582,21 +580,9 @@ func (c *RunCommand) Run(args []string) int {
 
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
-					var filesToBeCached = make(util.Set)
-					for _, output := range outputs {
-						results, err := doublestar.Glob(filepath.Join(pack.Dir, strings.TrimPrefix(output, "!")))
-						if err != nil {
-							targetUi.Error(fmt.Sprintf("Could not find output artifacts in %v, likely invalid glob %v: %s", pack.Dir, output, err))
-						}
-						for _, result := range results {
-							if strings.HasPrefix(output, "!") {
-								filesToBeCached.Delete(result)
-							} else {
-								filesToBeCached.Add(result)
-							}
-						}
-					}
-					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached.UnsafeListOfStrings()); err != nil {
+					ignore := []string{}
+					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
+					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
 					}
 				}
@@ -610,7 +596,7 @@ func (c *RunCommand) Run(args []string) int {
 
 	if err := engine.Prepare(&core.SchedulerExecutionOptions{
 		Packages:    filteredPkgs.UnsafeListOfStrings(),
-		TaskNames:   ctx.Targets.UnsafeListOfStrings(),
+		TaskNames:   ctx.Targets,
 		Concurrency: runOptions.concurrency,
 		Parallel:    runOptions.parallel,
 		TasksOnly:   runOptions.only,
@@ -624,9 +610,39 @@ func (c *RunCommand) Run(args []string) int {
 			Verbose:    true,
 			DrawCycles: true,
 		}))
+		ext := filepath.Ext(runOptions.dotGraph)
+		if ext == ".html" {
+			f, err := os.Create(filepath.Join(cwd, runOptions.dotGraph))
+			if err != nil {
+				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
+				return 1
+			}
+			defer f.Close()
+			f.WriteString(`<!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Graph</title>
+      </head>
+      <body>
+        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
+        <script>`)
+			f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
+			f.WriteString(`
+      </script>
+    </body>
+    </html>`)
+			c.Ui.Output("")
+			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
+			if ui.IsTTY {
+				browser.OpenBrowser(filepath.Join(cwd, runOptions.dotGraph))
+			}
+			return 0
+		}
 		hasDot := hasGraphViz()
 		if hasDot {
-			dotArgs := []string{"-T" + path.Ext(runOptions.dotGraph)[1:], "-o", runOptions.dotGraph}
+			dotArgs := []string{"-T" + ext[1:], "-o", runOptions.dotGraph}
 			cmd := exec.Command("dot", dotArgs...)
 			cmd.Stdin = strings.NewReader(graphString)
 			if err := cmd.Run(); err != nil {
@@ -819,7 +835,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
-	if !isatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("CI") != "" {
+	if !ui.IsTTY || ui.IsCI {
 		runOptions.stream = true
 	}
 
@@ -831,13 +847,13 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 
 // convertStringsToGlobs converts string glob patterns to an array glob.Glob instances.
 func convertStringsToGlobs(patterns []string) (globss []glob.Glob, err error) {
-	var globs = make([]glob.Glob, len(patterns))
-	for i, pattern := range patterns {
+	var globs = make([]glob.Glob, 0, len(patterns))
+	for _, pattern := range patterns {
 		g, err := glob.Compile(pattern)
 		if err != nil {
 			return nil, err
 		}
-		globs[i] = g
+		globs = append(globs, g)
 	}
 
 	return globs, nil
