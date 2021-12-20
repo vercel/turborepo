@@ -1,5 +1,5 @@
 import { log } from "logger";
-import { CounterButton } from "ui";
+import { CounterButton, Button } from "ui";
 
 export default function Store() {
   log("Hey! This is Home.");
@@ -7,6 +7,7 @@ export default function Store() {
     <div>
       <h1>Store</h1>
       <CounterButton />
+      <Button>Boop</Button>
     </div>
   );
 }
