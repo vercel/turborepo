@@ -3,10 +3,7 @@ title: Scoped tasks
 ---
 
 import Callout from "../../../components/callout";
-
-<Callout>
-This page and Turborepo's Scoped Tasks API design was copied from the Microsoft Lage [Scoped Builds Page](https://microsoft.github.io/lage/guide/scopes.html#scoped-builds-with-all-its-dependents).
-</Callout>
+import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Scoped Tasks
 
@@ -37,3 +34,10 @@ Sometimes we want to run the tasks needed to satisfy the `build` script of all t
 ```sh
 turbo run build --scope=*build-tools* --no-deps --includeDependencies
 ```
+
+<Callout type="idea" icon={<HeartIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />}>
+Turborepo's Scoped Tasks API design and docs were/are inspired [Microsoft's Lage project](https://microsoft.github.io/lage/guide/scopes.html#scoped-builds-with-all-its-dependents) `--scope` flag which was inspired by [Lerna's](https://github.com/lerna/lerna/tree/main/commands/run#readme).
+
+We are working toward a new, more expressive task filtering/scoping syntax. [Read the RFC here.](https://github.com/vercel/turborepo/discussions/105)
+
+</Callout>
