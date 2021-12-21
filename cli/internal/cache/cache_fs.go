@@ -29,7 +29,7 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	}
 
 	// Otherwise, copy it into position
-	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, fs.DirPermissions, true, true)
+	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, 0, true, true)
 	if err != nil {
 		return false, nil, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
 	}
@@ -51,7 +51,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 					return fmt.Errorf("error ensuring directory file from cache: %w", err)
 				}
 
-				if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, rel), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
+				if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, rel), 0, 0, true, true); err != nil {
 					return fmt.Errorf("error copying file from cache: %w", err)
 				}
 			}
