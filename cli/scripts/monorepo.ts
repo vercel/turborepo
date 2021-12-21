@@ -5,7 +5,7 @@ import path from "path";
 const isWin = process.platform === "win32";
 const turboPath = path.join(__dirname, "../turbo" + (isWin ? ".exe" : ""));
 
-type NPMClient = "npm" | "pnpm" | "yarn";
+type NpmClient = "npm" | "pnpm" | "yarn";
 
 export class Monorepo {
   static tmpdir = os.tmpdir();
@@ -13,7 +13,7 @@ export class Monorepo {
   root: string;
   subdir?: string;
   name: string;
-  npmClient: NPMClient;
+  npmClient: NpmClient;
   get nodeModulesPath() {
     return this.subdir
       ? path.join(this.root, this.subdir, "node_modules")
@@ -24,7 +24,7 @@ export class Monorepo {
     this.root = fs.mkdtempSync(path.join(__dirname, `turbo-monorepo-${name}-`));
   }
 
-  init(npmClient: NPMClient, turboConfig = {}, subdir?: string) {
+  init(npmClient: NpmClient, turboConfig = {}, subdir?: string) {
     this.npmClient = npmClient;
     this.subdir = subdir;
     fs.removeSync(path.join(this.root, ".git"));

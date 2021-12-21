@@ -32,7 +32,7 @@ async function installBinaryFromPackage(name, fromPath, toPath) {
   let buffer;
   let didFail = true;
   try {
-    buffer = installUsingNPM(name, fromPath);
+    buffer = installUsingNpm(name, fromPath);
   } catch (err) {
     didFail = true;
     console.error(`Trying to install "${name}" using npm`);
@@ -188,7 +188,7 @@ function extractFileFromTarGzip(buffer, file) {
   throw new Error(`Could not find ${JSON.stringify(file)} in archive`);
 }
 
-function installUsingNPM(name, file) {
+function installUsingNpm(name, file) {
   const installDir = path.join(
     os.tmpdir(),
     "turbo-" + Math.random().toString(36).slice(2)

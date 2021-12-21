@@ -72,7 +72,7 @@ describe("create-turbo cli", () => {
         case 3:
           // Which package manager do you want to use?
           // easy to change deployment targets.
-          expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
+          expect(getPromptChoices(prompt)).toEqual(["Yarn", "npm"]);
           cli.stdin.write(keys.enter);
           break;
         case 4:

@@ -102,7 +102,7 @@ async function run() {
             value: "yarn",
             disabled: !isYarnInstalled && "not installed",
           },
-          { name: "NPM", value: "npm" },
+          { name: "npm", value: "npm" },
         ],
       },
     ]);

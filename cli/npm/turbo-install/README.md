@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">  
-  <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo">
+  <a aria-label="npm version" href="https://www.npmjs.com/package/turbo">
     <img alt="" src="https://badgen.net/npm/v/turbo">
   </a>
   <a aria-label="Vercel logo" href="https://vercel.com">
