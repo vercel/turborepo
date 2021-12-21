@@ -19,8 +19,7 @@ import (
 
 const (
 	// EnvLogLevel is the environment log level
-	EnvLogLevel       = "TURBO_LOG_LEVEL"
-	defaultConfigPath = "~/.config/turborepo"
+	EnvLogLevel = "TURBO_LOG_LEVEL"
 )
 
 // IsCI returns true if running in a CI/CD environment
@@ -87,7 +86,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		// not logged in
 	}
-	partialConfig, err := ReadConfigFile(filepath.Join(".turbo", "config.json"))
+	partialConfig, err := ReadTurboConfigFile(filepath.Join(".turbo", "config.json"))
 	if err != nil {
 		// not linked
 	}

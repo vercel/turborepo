@@ -36,7 +36,7 @@ Usage: turbo unlink
 
 // Run executes tasks in the monorepo
 func (c *UnlinkCommand) Run(args []string) int {
-	if err := config.WriteConfigFile(filepath.Join(".turbo", "config.json"), &config.TurborepoConfig{}); err != nil {
+	if err := config.WriteTurboConfigFile(filepath.Join(".turbo", "config.json"), &config.TurborepoConfig{}); err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Could not unlink. Something went wrong: %w", err))
 		return 1
 	}

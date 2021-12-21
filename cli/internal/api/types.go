@@ -34,4 +34,8 @@ type LanguageBackend struct {
 	GetWorkspaceGlobs func() ([]string, error)
 	// Returns run command
 	GetRunCommand func() []string
+	// GetInstallCommand returns the install command
+	GetInstallCommand func() []string
+	// GetTurboInstallCommand returns the turbo install command
+	GetTurboInstallCommand func() []string
 }

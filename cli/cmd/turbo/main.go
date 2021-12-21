@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	prune "turbo/internal/prune"
 	"turbo/internal/run"
 	uiPkg "turbo/internal/ui"
+	"turbo/internal/update"
 	"turbo/internal/util"
 
 	"github.com/fatih/color"
@@ -63,6 +66,7 @@ func main() {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
 	}
+
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
@@ -164,5 +168,8 @@ func main() {
 			}
 		}
 	}()
+	if err := update.CheckVersion(context.Background(), cf, turboVersion); err != nil {
+		log.Fatal(err)
+	}
 	os.Exit(exitCode)
 }

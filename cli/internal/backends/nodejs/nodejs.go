@@ -31,6 +31,9 @@ var NodejsYarnBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
 	},
+	GetTurboInstallCommand: func() []string {
+		return []string{"yarn", "add", "turbo", "--dev", "-w"}
+	},
 }
 
 // PnpmWorkspaces is a representation of workspace package globs found
@@ -61,6 +64,12 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"pnpm", "run"}
 	},
+	GetInstallCommand: func() []string {
+		return []string{"pnpm", "install"}
+	},
+	GetTurboInstallCommand: func() []string {
+		return []string{"pnpm", "install", "turbo", "-D", "-w"}
+	},
 }
 
 var NodejsNpmBackend = api.LanguageBackend{
@@ -80,5 +89,8 @@ var NodejsNpmBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"npm", "run"}
+	},
+	GetTurboInstallCommand: func() []string {
+		return []string{"npm", "install", "turbo", "-D", "-w"}
 	},
 }

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-	"github.com/mitchellh/go-homedir"
 )
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
@@ -25,7 +24,7 @@ type TurborepoConfig struct {
 }
 
 // WriteUserConfigFile writes config file at a oath
-func WriteConfigFile(path string, config *TurborepoConfig) error {
+func WriteTurboConfigFile(path string, config *TurborepoConfig) error {
 	jsonBytes, marhsallError := json.Marshal(config)
 	if marhsallError != nil {
 		return marhsallError
@@ -39,15 +38,15 @@ func WriteConfigFile(path string, config *TurborepoConfig) error {
 
 // WriteUserConfigFile writes a user config file
 func WriteUserConfigFile(config *TurborepoConfig) error {
-	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
+	path, err := GetConfigFilePath("config.json")
 	if err != nil {
 		return err
 	}
-	return WriteConfigFile(path, config)
+	return WriteTurboConfigFile(path, config)
 }
 
-// ReadConfigFile reads a config file at a path
-func ReadConfigFile(path string) (*TurborepoConfig, error) {
+// ReadTurboConfigFile reads a config file at a path
+func ReadTurboConfigFile(path string) (*TurborepoConfig, error) {
 	var config = &TurborepoConfig{
 		Token:    "",
 		TeamId:   "",
@@ -68,7 +67,7 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 
 // ReadUserConfigFile reads a user config file
 func ReadUserConfigFile() (*TurborepoConfig, error) {
-	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
+	path, err := GetConfigFilePath("config.json")
 	if err != nil {
 		return &TurborepoConfig{
 			Token:    "",
@@ -78,7 +77,7 @@ func ReadUserConfigFile() (*TurborepoConfig, error) {
 			TeamSlug: "",
 		}, err
 	}
-	return ReadConfigFile(path)
+	return ReadTurboConfigFile(path)
 }
 
 // DeleteUserConfigFile deletes a user  config file
@@ -86,12 +85,12 @@ func DeleteUserConfigFile() error {
 	return WriteUserConfigFile(&TurborepoConfig{})
 }
 
-// GetConfigDir is the directory for Turbo config.
-func GetConfigDir() (string, error) {
-	dir, err := homedir.Expand(defaultConfigPath)
+// GetConfigFilePath is the path to the config file on the machine
+func GetConfigFilePath(name string) (string, error) {
+	file, err := xdg.ConfigFile(filepath.Join("turborepo", name))
 	if err != nil {
-		return "", fmt.Errorf("can't expand path %q: %s", defaultConfigPath, err)
+		return "", fmt.Errorf("cannot get configuration file %q: %s", name, err)
 	}
 
-	return dir, nil
+	return file, nil
 }

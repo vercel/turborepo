@@ -11,14 +11,20 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
+	"turbo/internal/backends"
 	"turbo/internal/config"
 	"turbo/internal/util"
+	"unicode/utf8"
+
+	cleanhttp "github.com/hashicorp/go-cleanhttp"
 
 	"github.com/hashicorp/go-version"
 	"gopkg.in/yaml.v2"
 )
+
+const RELEASE_URL = "https://api.github.com/repos/vercel/turborepo/releases/latest"
 
 type UpdateInfo struct {
 	Update      bool
@@ -42,7 +48,7 @@ type StateEntry struct {
 
 // CheckVersion checks for the given build version whether there is a new
 // version of the CLI or not.
-func CheckVersion(ctx context.Context, buildVersion string) error {
+func CheckVersion(ctx context.Context, config *config.Config, buildVersion string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -59,15 +65,31 @@ func CheckVersion(ctx context.Context, buildVersion string) error {
 		latestVersion,
 	)
 	if err != nil {
-		return fmt.Errorf("skipping update, error: %s", err)
+		config.Logger.Debug("No update available", "latest version", updateInfo.ReleaseInfo.Version)
+		return nil
 	}
 
 	if !updateInfo.Update {
-		return fmt.Errorf("skipping update, reason: %s", updateInfo.Reason)
+		config.Logger.Debug("No update available, latest version is currently installed", "version", buildVersion)
+		return nil
 	}
 
-	util.Printf("\n${BLUE}A new release of turborepo is available: ${CYAN}%s → %s\n", buildVersion, updateInfo.ReleaseInfo.Version)
-	util.Printf("${YELLOW}%s${RESET}\n", updateInfo.ReleaseInfo.URL)
+	backend, err := backends.GetBackend()
+	if err != nil {
+		return fmt.Errorf("cannot infer language backend and package manager: %w", err)
+	}
+	installCmdStr := strings.Join(backend.GetTurboInstallCommand(), " ")
+	installCommandLen := utf8.RuneCountInString((installCmdStr))
+	util.Printf("${YELLOW}+----------------------------------------------------------------+${RESET}\n")
+	util.Printf("${YELLOW}|${RESET}                                                                ${YELLOW}|${RESET}\n")
+	util.Printf("${YELLOW}|${RESET}    Update avaiable for turbo: ${GREY}%s${RESET} → ${CYAN}%s${RESET}%s${YELLOW}|${RESET}\n", fmt.Sprintf("v%s", buildVersion), updateInfo.ReleaseInfo.Version, strings.Repeat(" ", 14-len(updateInfo.ReleaseInfo.Version)))
+	util.Printf("${YELLOW}|${RESET}    Run ${CYAN}%s${RESET} to update%s${YELLOW}|${RESET}\n", installCmdStr, strings.Repeat(" ", 46-installCommandLen))
+	util.Printf("${YELLOW}|${RESET}                                                                ${YELLOW}|${RESET}\n")
+	util.Printf("${YELLOW}+----------------------------------------------------------------+${RESET}\n")
+	util.Printf("\n")
+	util.Printf("${GREY}For more information and release notes, visit:${RESET}\n")
+	util.Printf("${GREY}${UNDERLINE}%s${RESET}\n", updateInfo.ReleaseInfo.URL)
+	util.Printf("\n")
 	return nil
 }
 
@@ -84,14 +106,14 @@ func checkVersion(
 	}
 
 	stateEntry, _ := getStateEntry(path)
-	if stateEntry != nil && time.Since(stateEntry.CheckedForUpdateAt).Hours() < 24 {
+	if stateEntry != nil && time.Since(stateEntry.CheckedForUpdateAt).Hours() < 1 {
 		return &UpdateInfo{
 			Update: false,
 			Reason: "Latest version was already checked",
 		}, nil
 	}
 
-	addr := "https://api.github.com/repos/vercel/turborepo/releases/latest"
+	addr := RELEASE_URL
 	info, err := latestVersionFn(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -131,6 +153,7 @@ func checkVersion(
 }
 
 func latestVersion(ctx context.Context, addr string) (*ReleaseInfo, error) {
+	cleanClient := cleanhttp.DefaultClient()
 	req, err := http.NewRequestWithContext(ctx, "GET", addr, nil)
 	if err != nil {
 		return nil, err
@@ -150,8 +173,9 @@ func latestVersion(ctx context.Context, addr string) (*ReleaseInfo, error) {
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", token))
 	}
 
-	client := &http.Client{Timeout: time.Second * 15}
-	resp, err := client.Do(req)
+	cleanClient.Timeout = time.Second * 15
+
+	resp, err := cleanClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -207,10 +231,5 @@ func setStateEntry(stateFilePath string, t time.Time, r ReleaseInfo) error {
 }
 
 func stateFilePath() (string, error) {
-	dir, err := config.GetConfigDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(dir, "state.yml"), nil
+	return config.GetConfigFilePath("state.yml")
 }
