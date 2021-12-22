@@ -1,2 +1,2 @@
-export { Button } from "./Button";
+export { NewTabLink } from "./NewTabLink";
 export { CounterButton } from "./CounterButton";
