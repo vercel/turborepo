@@ -110,6 +110,7 @@ platform-linux-ppc64le:
 
 platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
+	node ./scripts/bump-version.js
 
 platform-create-turbo: 
 	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
