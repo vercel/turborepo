@@ -191,7 +191,6 @@ A list of the names of the environment variables that should be included in the 
 **Example**
 
 For example, the following configuration will include the key-value pair of the `GITHUB_TOKEN` environment variable in the global hash when `turbo` is executed.
-All else equal, changes to the value of `GITHUB_TOKEN` alters the hash of all tasks.
 
 ```json
 {
@@ -205,7 +204,10 @@ All else equal, changes to the value of `GITHUB_TOKEN` alters the hash of all ta
         "dependsOn": {
           "^build"
         },
-        "outputs": ["dist/**", ".next/**"]
+        "outputs": ["dist/**", ".next/**"],
+        "env": [ // values will impact the hashes of all build tasks
+          "SOMETHING_ELSE"
+        ],
       },
       "web#build": {
         "dependsOn": [
@@ -214,10 +216,16 @@ All else equal, changes to the value of `GITHUB_TOKEN` alters the hash of all ta
         "outputs": [".next/**"],
         "env": [ // values will impact hash of only web's build task
            "STRIPE_SECRET_KEY",
-           "NEXT_PUBLIC_API_URL"
+           "NEXT_PUBLIC_STRIPE_PUBLIC_KEY"
         ]
       }
     },
   }
 }
 ```
+
+All else equal...the above configuration will have the following impact on `turbo`:
+
+- The value of the `GITHUB_TOKEN` environment variable will alter the hash of all tasks.
+- The values of `GITHUB_TOKEN` and `SOMETHING_ELSE` environment variables will alter the hash of all `build` tasks
+- The values of `GITHUB_TOKEN`, `STRIPE_SECRET_KEY`, and `NEXT_PUBLIC_STRIPE_PUBLIC_KEY` environment variables will alter the hash of only the `build` task for a package/app named `web`
