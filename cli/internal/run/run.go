@@ -419,16 +419,27 @@ func (c *RunCommand) Run(args []string) int {
 					outputs = append(outputs, pipeline.Outputs...)
 				}
 				targetLogger.Debug("task output globs", "outputs", outputs)
+				// Hash the task-specific environment variables
+				var hashabledEnvVars = make([]string, 0, len(pipeline.HashedEnv))
+				if len(pipeline.HashedEnv) > 0 {
+					for _, v := range pipeline.HashedEnv {
+						hashabledEnvVars = append(hashabledEnvVars, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
+					}
+					sort.Strings(hashabledEnvVars) // always sort them
+				}
+				targetLogger.Debug("hashable env vars", "vars", pipeline.HashedEnv)
 				hashable := struct {
-					Hash         string
-					Task         string
-					Outputs      []string
-					PassThruArgs []string
+					Hash            string
+					Task            string
+					Outputs         []string
+					PassThruArgs    []string
+					HashableEnvVars []string
 				}{
-					Hash:         pack.Hash,
-					Task:         task,
-					Outputs:      outputs,
-					PassThruArgs: runOptions.passThroughArgs,
+					Hash:            pack.Hash,
+					Task:            task,
+					Outputs:         outputs,
+					PassThruArgs:    runOptions.passThroughArgs,
+					HashableEnvVars: hashabledEnvVars,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
@@ -492,16 +503,16 @@ func (c *RunCommand) Run(args []string) int {
 
 				// Get a pipe to read from stdout and stderr
 				stdout, err := cmd.StdoutPipe()
+				if err != nil {
+					tracer(TargetBuildFailed, err)
+					c.logError(targetLogger, actualPrefix, err)
+					if runOptions.bail {
+						os.Exit(1)
+					}
+				}
 				defer stdout.Close()
-				if err != nil {
-					tracer(TargetBuildFailed, err)
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-						os.Exit(1)
-					}
-				}
 				stderr, err := cmd.StderrPipe()
-				defer stderr.Close()
+
 				if err != nil {
 					tracer(TargetBuildFailed, err)
 					c.logError(targetLogger, actualPrefix, err)
@@ -509,7 +520,7 @@ func (c *RunCommand) Run(args []string) int {
 						os.Exit(1)
 					}
 				}
-
+				defer stderr.Close()
 				writer := bufio.NewWriter(output)
 
 				// Merge the streams together

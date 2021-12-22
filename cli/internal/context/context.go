@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -36,22 +37,23 @@ const (
 
 // Context of the CLI
 type Context struct {
-	Args             []string
-	PackageInfos     map[interface{}]*fs.PackageJSON
-	ColorCache       *ColorCache
-	PackageNames     []string
-	TopologicalGraph dag.AcyclicGraph
-	TaskGraph        dag.AcyclicGraph
-	Dir              string
-	RootNode         string
-	RootPackageJSON  *fs.PackageJSON
-	GlobalHash       string
-	TraceFilePath    string
-	Lockfile         *fs.YarnLockfile
-	SCC              [][]dag.Vertex
-	PendingTaskNodes dag.Set
-	Targets          []string
-	Backend          *api.LanguageBackend
+	Args                  []string
+	PackageInfos          map[interface{}]*fs.PackageJSON
+	ColorCache            *ColorCache
+	PackageNames          []string
+	TopologicalGraph      dag.AcyclicGraph
+	TaskGraph             dag.AcyclicGraph
+	Dir                   string
+	RootNode              string
+	RootPackageJSON       *fs.PackageJSON
+	GlobalHashableEnvVars []string
+	GlobalHash            string
+	TraceFilePath         string
+	Lockfile              *fs.YarnLockfile
+	SCC                   [][]dag.Vertex
+	PendingTaskNodes      dag.Set
+	Targets               []string
+	Backend               *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -147,7 +149,13 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		// Calculate the global hash
 		globalDeps := make(util.Set)
-
+		if len(pkg.Turbo.HashedEnv) > 0 {
+			for _, v := range pkg.Turbo.HashedEnv {
+				c.GlobalHashableEnvVars = append(c.GlobalHashableEnvVars, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
+			}
+			sort.Strings(c.GlobalHashableEnvVars)
+		}
+		fmt.Printf("%#v\n", c.GlobalHashableEnvVars)
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
 			f := globby.GlobFiles(rootpath, pkg.Turbo.GlobalDependencies, []string{})
 			for _, val := range f {
@@ -167,10 +175,12 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalHashable := struct {
 			globalFileHashMap    map[string]string
 			rootExternalDepsHash string
+			hashedSortedEnvVars  []string
 			globalCacheKey       string
 		}{
 			globalFileHashMap:    globalFileHashMap,
 			rootExternalDepsHash: pkg.ExternalDepsHash,
+			hashedSortedEnvVars:  c.GlobalHashableEnvVars,
 			globalCacheKey:       GLOBAL_CACHE_KEY,
 		}
 		globalHash, err := fs.HashObject(globalHashable)

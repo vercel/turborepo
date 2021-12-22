@@ -35,7 +35,7 @@ To override the default cache folder behavior, pass an array of globs to a [`pip
 
 If your task does not emit any files (e.g. unit tests with Jest), set `outputs` to an empty array (i.e. `[]`). Turborepo will automagically cache the logs for you.
 
-<Callout emoji="ℹ️">
+<Callout type="info">
   Pro Tip for caching ESLint: You can get a cacheable pretty terminal output
   (even for non-errors) by setting `TIMING=1` variable before `eslint`. Learn
   more over at the [ESLint
@@ -75,6 +75,48 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 }
 ```
 
+## Alter Caching Based on Environment Variables
+
+You can control caching based on the value of environment variables by setting `env` key where applicable.
+
+**At the root** will tell `turbo` to include the hashed values of each environment variable it all other hashes.
+**In the `pipeline`** will tell `turbo` to inclued the hashed values of each environment variable on a per-task or per-package-task basis.
+
+```json
+{
+  "turbo": {
+    "baseBranch": "origin/master",
+    "env": [ // values will impact the hashes of all tasks
+      "GITHUB_TOKEN"
+    ],
+    "pipeline": {
+      "build": {
+        "dependsOn": {
+          "^build"
+        },
+        "outputs": ["dist/**"]
+        "env": [ // values will impact hashes of all "build" tasks
+          "SOME_ENV_VAR"
+        ]
+      },
+      "web#build": { // override settings for the "build" task for the "web" package
+        "dependsOn": [
+          "^build"
+        ],
+        "outputs": [".next/**"],
+        "env": [ // values will impact the hash of "build" task for only "web" package
+           "STRIPE_SECRET_KEY",
+           "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+           "NEXT_PUBLIC_ANALYTICS_ID",
+        ]
+      }
+    },
+  }
+}
+```
+
+When caching applications or packages that inline environment variables (e.g. like Next.js, Remix), you _should_ include them in the relevant `env` key based on the granularity that meets your needs.
+
 ## Force overwrite cache
 
 Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
@@ -96,6 +138,7 @@ By now, you're probably wondering how `turbo` decides what constitutes a cache h
 First `turbo` constructs a hash of the current global state of the monorepo:
 
 - The contents of any file that satisfies the glob patterns in [`globalDependencies`](../reference/configuration#globalDependencies-1)
+- The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in the top-level [`env`](../reference/configuration#env) list.
 
 Then it adds on more factors relative to a given package's task:
 
@@ -104,6 +147,7 @@ Then it adds on more factors relative to a given package's task:
 - The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a package's `package.json` from the root lockfile
 - The package task's name
+- The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in applicable [`pipeline.<task-or-package-task>.env`](../reference/configuration#env) list.
 
 Once `turbo` encounters a given package's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
 

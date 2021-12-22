@@ -19,6 +19,34 @@ Defaults to `origin/master`. The base branch or your git repository. Git is used
 A list of globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm.
 This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts package tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
 
+## `env`
+
+`type: string`
+
+A list of the names of the environment variables that should be included in the global hashing function (which impacts _all_ tasks).
+
+For example, the following configuration will include the key-value pair of the `GITHUB_TOKEN` environment variable in the global hash when `turbo` is executed.
+All else equal, changes to the value of `GITHUB_TOKEN` alters the hash of all tasks.
+
+```json
+{
+  "turbo": {
+    "baseBranch": "origin/master",
+    "env": [ // values will impact the hashes of all tasks
+      "GITHUB_TOKEN"
+    ],
+    "pipeline": {
+      "build": {
+        "dependsOn": {
+          "^build"
+        },
+        "outputs": ["dist/**", ".next/**"]
+      },
+    },
+  }
+}
+```
+
 ## `npmClient`
 
 `type: "yarn" | "npm" | "pnpm"`
@@ -150,6 +178,46 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs-1). Se
     "dev": {
       "cache": false
     }
+  }
+}
+```
+
+### `env`
+
+`type: string`
+
+A list of the names of the environment variables that should be included in the global hashing function (which impacts _all_ tasks).
+
+**Example**
+
+For example, the following configuration will include the key-value pair of the `GITHUB_TOKEN` environment variable in the global hash when `turbo` is executed.
+All else equal, changes to the value of `GITHUB_TOKEN` alters the hash of all tasks.
+
+```json
+{
+  "turbo": {
+    "baseBranch": "origin/master",
+    "env": [ // values will impact the hashes of all tasks
+      "GITHUB_TOKEN"
+    ],
+    "pipeline": {
+      "build": {
+        "dependsOn": {
+          "^build"
+        },
+        "outputs": ["dist/**", ".next/**"]
+      },
+      "web#build": {
+        "dependsOn": [
+          "^build"
+        ],
+        "outputs": [".next/**"],
+        "env": [ // values will impact hash of only web's build task
+           "STRIPE_SECRET_KEY",
+           "NEXT_PUBLIC_API_URL"
+        ]
+      }
+    },
   }
 }
 ```
