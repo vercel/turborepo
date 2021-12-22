@@ -482,7 +482,6 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				output, err := os.Create(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task)))
 				if err != nil {
-					fmt.Println("here")
 					tracer(TargetBuildFailed, err)
 					c.logError(targetLogger, actualPrefix, err)
 					if runOptions.bail {

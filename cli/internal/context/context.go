@@ -155,7 +155,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			}
 			sort.Strings(c.GlobalHashableEnvVars)
 		}
-		fmt.Printf("%#v\n", c.GlobalHashableEnvVars)
+		config.Logger.Debug("global hash env vars", "vars", fmt.Sprintf("%s", pkg.Turbo.HashedEnv))
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
 			f := globby.GlobFiles(rootpath, pkg.Turbo.GlobalDependencies, []string{})
 			for _, val := range f {
