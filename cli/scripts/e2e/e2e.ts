@@ -19,6 +19,9 @@ const basicPipeline = {
   },
 };
 
+// This is injected by github actions
+process.env.TURBO_TOKEN = "";
+
 for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
