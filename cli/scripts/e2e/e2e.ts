@@ -130,6 +130,7 @@ function runSmokeTests(
       testCLine2[2],
       "Runs only in changed packages after a second run"
     );
+
     assert.ok(
       testCLine2[3].startsWith(`a:test: cache hit, replaying output`),
       "Cache hit in changed package after a second run"
@@ -140,15 +141,13 @@ function runSmokeTests(
       [path.join("packages", "b", "test.js")]: `console.log('testingz b');`,
     });
 
-    const since3Results = repo.turbo(
-      "run",
-      ["test", "--stream", "-vvv"],
-      options
-    );
-
-    const testCLine3 = (since3Results.stdout + since3Results.stderr).split(
-      "\n"
-    );
+    const hashChangeResults = repo.turbo("run", ["test", "--stream"], options);
+    const hashChangeResultsOut =
+      hashChangeResults.stdout + hashChangeResults.stderr;
+    console.log("------------------------------------------------------");
+    console.log(hashChangeResultsOut);
+    console.log("------------------------------------------------------");
+    const testCLine3 = hashChangeResultsOut.split("\n");
 
     assert.equal(
       `• Packages in scope: a, b, c`,
