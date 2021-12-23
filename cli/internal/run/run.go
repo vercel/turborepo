@@ -24,11 +24,11 @@ import (
 	"turbo/internal/ui"
 	"turbo/internal/util"
 	"turbo/internal/util/browser"
+	"turbo/internal/util/filter"
 
 	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
-	glob "github.com/gobwas/glob"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
@@ -139,14 +139,14 @@ func (c *RunCommand) Run(args []string) int {
 		c.logWarning(c.Config.Logger, "", err)
 	}
 
-	ignoreGlobs, err := convertStringsToGlobs(runOptions.ignore)
+	ignoreGlob, err := filter.Compile(runOptions.ignore)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("invalid ignore globs: %w", err))
 		return 1
 	}
-	globalDeps, err := convertStringsToGlobs(runOptions.globalDeps)
+	globalDepsGlob, err := filter.Compile(runOptions.globalDeps)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid global deps: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("invalid global deps glob: %w", err))
 		return 1
 	}
 	hasRepoGlobalFileChanged := false
@@ -158,19 +158,15 @@ func (c *RunCommand) Run(args []string) int {
 	ignoreSet := make(util.Set)
 
 	for _, f := range changedFiles {
-		for _, g := range globalDeps {
-			if g.Match(f) {
-				hasRepoGlobalFileChanged = true
-				break
-			}
+		if globalDepsGlob.Match(f) {
+			hasRepoGlobalFileChanged = true
+			break
 		}
 	}
 
 	for _, f := range changedFiles {
-		for _, g := range ignoreGlobs {
-			if g.Match(f) {
-				ignoreSet.Add(f)
-			}
+		if ignoreGlob.Match(f) {
+			ignoreSet.Add(f)
 		}
 	}
 	filteredChangedFiles := make(util.Set)
@@ -197,7 +193,6 @@ func (c *RunCommand) Run(args []string) int {
 	// Scoped packages
 	// Unwind scope globs
 	scopePkgs, err := getScopedPackages(ctx, runOptions.scope)
-
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Invalid scope: %w", err))
 		return 1
@@ -750,23 +745,23 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 		} else if strings.HasPrefix(arg, "--") {
 			switch {
 			case strings.HasPrefix(arg, "--since="):
-				if len(arg[len("--since="):]) > 1 {
+				if len(arg[len("--since="):]) > 0 {
 					runOptions.since = arg[len("--since="):]
 				}
 			case strings.HasPrefix(arg, "--scope="):
-				if len(arg[len("--scope="):]) > 1 {
+				if len(arg[len("--scope="):]) > 0 {
 					runOptions.scope = append(runOptions.scope, arg[len("--scope="):])
 				}
 			case strings.HasPrefix(arg, "--ignore="):
-				if len(arg[len("--ignore="):]) > 1 {
+				if len(arg[len("--ignore="):]) > 0 {
 					runOptions.ignore = append(runOptions.ignore, arg[len("--ignore="):])
 				}
 			case strings.HasPrefix(arg, "--global-deps="):
-				if len(arg[len("--global-deps="):]) > 1 {
+				if len(arg[len("--global-deps="):]) > 0 {
 					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
 				}
 			case strings.HasPrefix(arg, "--cwd="):
-				if len(arg[len("--cwd="):]) > 1 {
+				if len(arg[len("--cwd="):]) > 0 {
 					runOptions.cwd = arg[len("--cwd="):]
 				} else {
 					runOptions.cwd = cwd
@@ -774,7 +769,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
 			case strings.HasPrefix(arg, "--profile="): // this one must com before the next
-				if len(arg[len("--profile="):]) > 1 {
+				if len(arg[len("--profile="):]) > 0 {
 					runOptions.profile = arg[len("--profile="):]
 				}
 			case strings.HasPrefix(arg, "--profile"):
@@ -797,7 +792,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.stream = true
 
 			case strings.HasPrefix(arg, "--graph="): // this one must com before the next
-				if len(arg[len("--graph="):]) > 1 {
+				if len(arg[len("--graph="):]) > 0 {
 					runOptions.dotGraph = arg[len("--graph="):]
 				}
 			case strings.HasPrefix(arg, "--graph"):
@@ -816,6 +811,8 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 					}
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
+				log.Printf("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
+				runOptions.ancestors = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.ancestors = true
 			case strings.HasPrefix(arg, "--only"):
@@ -845,32 +842,22 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 	return runOptions, nil
 }
 
-// convertStringsToGlobs converts string glob patterns to an array glob.Glob instances.
-func convertStringsToGlobs(patterns []string) (globss []glob.Glob, err error) {
-	var globs = make([]glob.Glob, 0, len(patterns))
-	for _, pattern := range patterns {
-		g, err := glob.Compile(pattern)
-		if err != nil {
-			return nil, err
-		}
-		globs = append(globs, g)
-	}
-
-	return globs, nil
-}
-
 // getScopedPackages returns a set of package names in scope for a given list of glob patterns
 func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs util.Set, err error) {
-	scopeGlobs, err := convertStringsToGlobs(scopePatterns)
 	if err != nil {
 		return nil, fmt.Errorf("invalid glob pattern %w", err)
 	}
 	var scopedPkgs = make(util.Set)
+	if len(scopePatterns) == 0 {
+		return scopePkgs, nil
+	}
+	glob, err := filter.Compile(scopePatterns)
+	if err != nil {
+		return nil, err
+	}
 	for _, f := range ctx.PackageNames {
-		for _, g := range scopeGlobs {
-			if g.Match(f) {
-				scopedPkgs.Add(f)
-			}
+		if glob.Match(f) {
+			scopedPkgs.Add(f)
 		}
 	}
 
