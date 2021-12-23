@@ -2,8 +2,14 @@
 TURBO_VERSION = $(shell head -n 1 version.txt)
 TURBO_TAG = $(shell cat version.txt | sed -n '2 p')
 
+# Strip debug info
+GO_FLAGS += "-ldflags=-s -w"
+
+# Avoid embedding the build path in the executable for more reproducible builds
+GO_FLAGS += -trimpath
+
 turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
-	go build ./cmd/turbo
+	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
 # These tests are for development
 test: test-go vet-go
@@ -14,8 +20,7 @@ ewatch: | scripts/node_modules
 	nodemon --exec "make turbo && make e2e" -e .ts,.go
 
 check-go-version:
-	@go version | grep ' go1\.16 ' || (echo 'Please install Go version 1.16.0' && false)
-
+	@go version | grep ' go1\.17\.5 ' || (echo 'Please install Go version 1.17.5' && false)
 
 # This "TURBO_RACE" variable exists at the request of a user on GitHub who
 # wants to run "make test" on an unsupported version of macOS (version 10.9).
@@ -47,37 +52,49 @@ cmd/turbo/version.go: version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 platform-all: cmd/turbo/version.go
-	make -j14 \
-		platform-windows \
+	make -j4 \
+	  platform-windows \
 		platform-windows-32 \
+		platform-windows-arm64 \
+		platform-android-arm64 \
 		platform-darwin \
 		platform-darwin-arm64 \
 		platform-freebsd \
 		platform-freebsd-arm64 \
+		platform-netbsd \
+		platform-openbsd \
 		platform-linux \
 		platform-linux-32 \
 		platform-linux-arm \
 		platform-linux-arm64 \
-		platform-android-arm64 \
 		platform-linux-mips64le \
 		platform-linux-ppc64le \
+		platform-linux-s390x \
+		platform-sunos \
 		platform-neutral \
 		platform-create-turbo
 
 
 platform-windows:
 	cd npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version
-	GOOS=windows GOARCH=amd64 go build "-ldflags=-s -w" -o npm/turbo-windows-64/turbo.exe ./cmd/turbo
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(GO_FLAGS) -o npm/turbo-windows-64/turbo.exe ./cmd/turbo
 
 platform-windows-32:
 	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version
-	GOOS=windows GOARCH=386 go build "-ldflags=-s -w" -o npm/turbo-windows-32/turbo.exe ./cmd/turbo
+	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(GO_FLAGS) -o npm/turbo-windows-32/turbo.exe ./cmd/turbo
+
+platform-windows-arm64:
+	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64  go build $(GO_FLAGS) -o npm/turbo-windows-arm64/turbo.exe ./cmd/turbo
 
 platform-unixlike:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build "-ldflags=-s -w" -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+
+platform-android-arm64:
+	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
 
 platform-darwin:
 	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-unixlike
@@ -91,6 +108,12 @@ platform-freebsd:
 platform-freebsd-arm64:
 	make GOOS=freebsd GOARCH=arm64 NPMDIR=npm/turbo-freebsd-arm64 platform-unixlike
 
+platform-netbsd:
+	make GOOS=netbsd GOARCH=amd64 NPMDIR=npm/turbo-netbsd-64 platform-unixlike
+
+platform-openbsd:
+	make GOOS=openbsd GOARCH=amd64 NPMDIR=npm/turbo-openbsd-64 platform-unixlike
+
 platform-linux:
 	make GOOS=linux GOARCH=amd64 NPMDIR=npm/turbo-linux-64 platform-unixlike
 
@@ -103,14 +126,18 @@ platform-linux-arm:
 platform-linux-arm64:
 	make GOOS=linux GOARCH=arm64 NPMDIR=npm/turbo-linux-arm64 platform-unixlike
 
-platform-android-arm64:
-	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
-
 platform-linux-mips64le:
 	make GOOS=linux GOARCH=mips64le NPMDIR=npm/turbo-linux-mips64le platform-unixlike
 
 platform-linux-ppc64le:
 	make GOOS=linux GOARCH=ppc64le NPMDIR=npm/turbo-linux-ppc64le platform-unixlike
+
+platform-linux-s390x:
+	make GOOS=linux GOARCH=s390x NPMDIR=npm/turbo-linux-s390x platform-unixlike
+
+platform-sunos:
+	# make GOOS=illumos GOARCH=amd64 NPMDIR=npm/turbo-sunos-64 platform-unixlike
+	@echo skipping illumos, not supported for now
 
 platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
