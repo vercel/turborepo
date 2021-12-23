@@ -128,6 +128,7 @@ turbo-linux
             inlineSourceMap: true,
             inlineSources: false,
             isolatedModules: true,
+            moduleResolution: "node",
             noUnusedLocals: false,
             noUnusedParameters: false,
             preserveWatchOutput: true,
