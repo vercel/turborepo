@@ -156,19 +156,23 @@ func (c *RunCommand) Run(args []string) int {
 	}
 
 	ignoreSet := make(util.Set)
-
-	for _, f := range changedFiles {
-		if globalDepsGlob.Match(f) {
-			hasRepoGlobalFileChanged = true
-			break
+	if globalDepsGlob != nil {
+		for _, f := range changedFiles {
+			if globalDepsGlob.Match(f) {
+				hasRepoGlobalFileChanged = true
+				break
+			}
 		}
 	}
 
-	for _, f := range changedFiles {
-		if ignoreGlob.Match(f) {
-			ignoreSet.Add(f)
+	if ignoreGlob != nil {
+		for _, f := range changedFiles {
+			if ignoreGlob.Match(f) {
+				ignoreSet.Add(f)
+			}
 		}
 	}
+
 	filteredChangedFiles := make(util.Set)
 	// Ignore any changed files in the ignore set
 	for _, c := range changedFiles {
