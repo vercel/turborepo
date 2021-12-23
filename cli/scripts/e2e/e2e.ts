@@ -159,28 +159,23 @@ function runSmokeTests(
       testCLine3[1],
       "Runs correct number of packages"
     );
-    const runnerOrder = [testCLine3[2], testCLine3[3], testCLine3[4]];
-    runnerOrder.sort();
     assert.ok(
-      runnerOrder[0].includes("a:test: cache miss, executing"),
-      `A was impacted. 
-      - Expected: a:test: cache miss, executing       
-      +   Actual: ${runnerOrder[0]}
-      `
+      testCLine3.findIndex((l) =>
+        l.startsWith("a:test: cache miss, executing")
+      ) >= 0,
+      `A was impacted.`
     );
     assert.ok(
-      runnerOrder[1].includes(`b:test: cache miss, executing`),
-      `B was impacted. 
-      - Expected: b:test: cache miss, executing       
-      +   Actual: ${runnerOrder[1]}
-      `
+      testCLine3.findIndex((l) =>
+        l.startsWith("b:test: cache miss, executing")
+      ) >= 0,
+      `B was impacted.`
     );
     assert.ok(
-      runnerOrder[2].includes(`c:test: cache hit, replaying output`),
-      `C was unchanged
-      - Expected: c:test: cache hit, replaying output     
-      +   Actual: ${runnerOrder[2]}
-      `
+      testCLine3.findIndex((l) =>
+        l.startsWith("c:test: cache hit, replaying output")
+      ) >= 0,
+      `C was unchanged`
     );
     repo.cleanup();
   });
