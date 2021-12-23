@@ -168,12 +168,12 @@ Building on the example from above, you can now set cache output conventions acr
     "pipeline": {
       "build": {
         // Cache anything in dist or .next directories emitted by a `build` command
-        "outputs": ["dist/**", ".next/**"]
+        "outputs": ["dist", ".next"]
         "dependsOn": ["^build"]
       },
       "test": {
         // Cache the test coverage report
-        "outputs": ["coverage/**"],
+        "outputs": ["coverage"],
         "dependsOn": ["lint", "build"]
       },
        "dev": {

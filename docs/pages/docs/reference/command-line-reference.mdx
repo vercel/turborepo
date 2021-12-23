@@ -101,9 +101,9 @@ turbo run build test lint --graph=my-graph.html
   graph at the moment, even if that pipeline task does not actually exist in a
   given package. This has no impact on execution, it means that:
 
-  - the terminal output may overstate the number of packages in which a task is running.
-  - your dot viz graph may contain additional nodes that represents tasks that do not exist.
-</Callout>
+- the terminal output may overstate the number of packages in which a task is running.
+- your dot viz graph may contain additional nodes that represents tasks that do not exist.
+  </Callout>
 
 #### `--force`
 
@@ -128,12 +128,12 @@ You can also specify these in your `turbo` configuration as `globalDependencies`
 
 `type: string[]`
 
-Ignore **files or directories** from impacting scope. Uses glob patterns via [`multimatch`](https://github.com/sindresorhus/multimatch) under the hood.
+Ignore **files or directories** from impacting scope. Uses glob patterns
 
 ```
-turbo run build --ignore="apps/**/*"
-turbo run build --ignore="packages/**/*"
-turbo run build --ignore="packages/**/*" --ignore="\!/packages/not-this-one/**/*"
+turbo run build --ignore="apps/*"
+turbo run build --ignore="packages/*"
+turbo run build --ignore="packages/*" --ignore="\!/packages/not-this-one"
 ```
 
 ##### How multiple patterns work
@@ -214,7 +214,7 @@ turbo run dev --parallel --no-cache
 Specify/filter package(s)/apps to act as entry points for execution. Globs against package.json `name` field (and not the file system.)
 
 ```sh
-turbo run lint --scope="@example/**"
+turbo run lint --scope="@example/*"
 turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --no-deps
 ```
 
@@ -269,7 +269,7 @@ You can also set the value of the current team by setting an environment variabl
 
 `type: string`
 
-To view CPU trace, outputs the trace to the given file,  use `go tool trace [file]`.
+To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
 
 <Callout emoji="🚨">
   **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
@@ -301,10 +301,10 @@ To view CPU profile, outputs the profile to the given file, drop the file into [
   for native Windows and run using the command prompt instead.
 </Callout>
 
-
 ```sh
 turbo run build --cpuprofile="<cpu-profile-file-name>"
 ```
+
 #### `-v`, `-vv`, `-vvv`
 
 To sepecify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.

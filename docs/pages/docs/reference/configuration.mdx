@@ -39,7 +39,7 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
         "dependsOn": ["^build"]
       },
       "test": {
-        "outputs": ["coverage/**"],
+        "outputs": ["coverage"],
         "dependsOn": ["build"]
       },
       "dev": {
@@ -92,7 +92,7 @@ Items in `dependsOn` without `^` prefix, express the relationships between tasks
 
 `type: string[]`
 
-Defaults to `["dist/**", "build/**"]`. The set of glob patterns of a task's cacheable filesystem outputs.
+Defaults to `["dist", "build"]`. The set of glob patterns of a task's cacheable filesystem outputs.
 
 Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. This file is _always_ treated as a cacheable artifact and never needs to be specified.
 
@@ -104,9 +104,9 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
 {
   "pipeline": {
     "build": {
-      // "Cache all files emitted to package's dist/** or .next
+      // "Cache all files emitted to package's dist or .next
       // directories by a `build` task"
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": ["dist", ".next"],
       "dependsOn": ["^build"]
     },
     "test": {
@@ -117,7 +117,7 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
     },
     "test:ci": {
       // "Cache the coverage report of a `test:ci` command"
-      "outputs": ["coverage/**"],
+      "outputs": ["coverage"],
       "dependsOn": ["build"]
     },
     "dev": {

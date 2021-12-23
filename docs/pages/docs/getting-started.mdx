@@ -79,7 +79,7 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
     "pipeline": {
       "build": {
         "dependsOn": ["^build"],
-        "outputs": [".next/**"]
+        "outputs": [".next"]
       },
       "test": {
         "dependsOn": ["^build"],
@@ -98,8 +98,8 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
 
 In the above example, the `build` and `test` tasks are dependent on their packages `dependencies` and `devDependencies` being built first, this is denoted with the `^` prefix.
 
-For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
-like in the example above, where the `.next/**` folder is selected to be the default cache folder for the `build` task. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
+For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist` and `build` folders by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
+like in the example above, where the `.next` folder is selected to be the default cache folder for the `build` task. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
 
 Finally, the `dev` task has its caching disabled using the `cache` key with a value of `false`.
 
@@ -116,9 +116,9 @@ Next, add `.turbo` to your `.gitignore` file. The CLI uses these folders for log
 Make sure that your task artifacts (the files you want to be cached) are also ignored. As a rule, any files/folder that you want cached should be gitignored.
 
 ```diff
-+ build/**
-+ dist/**
-+ .next/**
++ build
++ dist
++ .next
 ```
 
 ### Ensure workspaces are configured

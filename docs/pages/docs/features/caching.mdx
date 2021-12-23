@@ -8,7 +8,7 @@ import Callout from "../../../components/callout";
 
 Unlike other tools you may have used, `turbo` can cache emitted files and logs of previously run commands. It does this so it can skip work that's already been done, yielding incredible time savings.
 
-By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist/**` or `build/**` folders of a package task (defined in that package's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
+By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist` or `build` folders of a package task (defined in that package's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
 
 ## Configuring Cache Outputs
 
@@ -21,7 +21,7 @@ To override the default cache folder behavior, pass an array of globs to a [`pip
   "turbo": {
     "pipeline": {
       "build": {
-        "outputs": ["dist/**", ".next/**"],
+        "outputs": ["dist", ".next"],
         "dependsOn": ["^build"]
       },
       "test": {
