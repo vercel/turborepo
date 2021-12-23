@@ -74,6 +74,7 @@ function runSmokeTests(
     }, `Could not read log file from cache ${logFilePath}`);
 
     assert.ok(text.includes("testing c"), "Contains correct output");
+
     repo.newBranch("my-feature-branch");
     repo.commitFiles({
       [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
@@ -85,21 +86,100 @@ function runSmokeTests(
       options
     );
     const testCLine = (sinceResults.stdout + sinceResults.stderr).split("\n");
+
     assert.equal(
       `• Packages changed since main: a`,
       testCLine[0],
       "Calculates changed packages (--since)"
     );
+    assert.equal(`• Packages in scope: a`, testCLine[1], "Packages in scope");
     assert.equal(
       `• Running test in 1 packages`,
-      testCLine[1],
+      testCLine[2],
       "Runs only in changed packages"
     );
     assert.ok(
-      testCLine[2].startsWith(`a:test: cache miss, executing`),
+      testCLine[3].startsWith(`a:test: cache miss, executing`),
       "Cache miss in changed package"
     );
 
+    // Check cache hit after another run
+    const since2Results = repo.turbo(
+      "run",
+      ["test", "--since=main", "--stream", "-vvv"],
+      options
+    );
+    const testCLine2 = (since2Results.stdout + since2Results.stderr).split(
+      "\n"
+    );
+    assert.equal(
+      `• Packages changed since main: a`,
+      testCLine2[0],
+      "Calculates changed packages (--since) after a second run"
+    );
+    assert.equal(
+      `• Packages in scope: a`,
+      testCLine2[1],
+      "Packages in scope after a second run"
+    );
+    assert.equal(
+      `• Running test in 1 packages`,
+      testCLine2[2],
+      "Runs only in changed packages after a second run"
+    );
+    assert.ok(
+      testCLine2[3].startsWith(`a:test: cache hit, replaying output`),
+      "Cache hit in changed package after a second run"
+    );
+
+    // Check that hashes are different and trigger a cascade
+    repo.commitFiles({
+      [path.join("packages", "b", "test.js")]: `console.log('testingz b');`,
+    });
+
+    const since3Results = repo.turbo(
+      "run",
+      ["test", "--stream", "-vvv"],
+      options
+    );
+
+    const testCLine3 = (since3Results.stdout + since3Results.stderr).split(
+      "\n"
+    );
+
+    assert.equal(
+      `• Packages in scope: a, b, c`,
+      testCLine3[0],
+      "Packages in scope after a third run"
+    );
+    assert.equal(
+      `• Running test in 3 packages`,
+      testCLine3[1],
+      "Runs correct number of packages"
+    );
+    const runnerOrder = [testCLine3[2], testCLine3[3], testCLine3[4]];
+    runnerOrder.sort();
+    assert.ok(
+      runnerOrder[0].includes("a:test: cache miss, executing"),
+      `A was impacted. 
+      - Expected: a:test: cache miss, executing       
+      +   Actual: ${runnerOrder[0]}
+      `
+    );
+    assert.ok(
+      runnerOrder[1].includes(`b:test: cache miss, executing`),
+      `B was impacted. 
+      - Expected: b:test: cache miss, executing       
+      +   Actual: ${runnerOrder[1]}
+      `
+    );
+    assert.ok(
+      runnerOrder[2].includes(`c:test: cache hit, replaying output`),
+      `C was unchanged
+      - Expected: c:test: cache hit, replaying output     
+      +   Actual: ${runnerOrder[2]}
+      `
+    );
     repo.cleanup();
   });
 }
