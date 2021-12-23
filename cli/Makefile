@@ -58,6 +58,7 @@ platform-all: cmd/turbo/version.go
 		platform-linux-32 \
 		platform-linux-arm \
 		platform-linux-arm64 \
+		platform-android-arm64 \
 		platform-linux-mips64le \
 		platform-linux-ppc64le \
 		platform-neutral \
@@ -102,6 +103,9 @@ platform-linux-arm:
 platform-linux-arm64:
 	make GOOS=linux GOARCH=arm64 NPMDIR=npm/turbo-linux-arm64 platform-unixlike
 
+platform-android-arm64:
+	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
+
 platform-linux-mips64le:
 	make GOOS=linux GOARCH=mips64le NPMDIR=npm/turbo-linux-mips64le platform-unixlike
 
@@ -142,6 +146,7 @@ publish-all: cmd/turbo/version.go
 	make -j4 \
 		publish-linux-arm \
 		publish-linux-arm64 \
+		publish-android-arm64 \
 		publish-linux-mips64le \
 		publish-linux-ppc64le
 	# Do these last to avoid race conditions
@@ -181,6 +186,9 @@ publish-linux-arm: platform-linux-arm
 
 publish-linux-arm64: platform-linux-arm64
 	make test && cd npm/turbo-linux-arm64 && npm publish --tag $(TURBO_TAG)
+
+publish-android-arm64: platform-android-arm64
+	make test && cd npm/turbo-android-arm64 && npm publish --tag $(TURBO_TAG)
 
 publish-linux-mips64le: platform-linux-mips64le
 	make test && cd npm/turbo-linux-mips64le && npm publish --tag $(TURBO_TAG)
@@ -233,6 +241,7 @@ clean:
 	rm -rf npm/turbo-linux-64/bin/turbo
 	rm -rf npm/turbo-linux-arm/bin/turbo
 	rm -rf npm/turbo-linux-arm64/bin/turbo
+	rm -rf npm/turbo-android-arm64/bin/turbo
 	rm -rf npm/turbo-linux-mips64le/bin/turbo
 	rm -rf npm/turbo-linux-ppc64le/bin/turbo
 	rm -rf npm/turbo-windows-32/turbo.exe
