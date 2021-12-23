@@ -125,6 +125,7 @@ module.exports = {
   knownUnixlikePackages,
   knownWindowsPackages,
   generateBinPath,
+  downloadedBinPath,
   pkgAndSubpathForCurrentPlatform,
   TURBO_BINARY_PATH,
 };
