@@ -17,7 +17,8 @@ body:
   - type: dropdown
     id: packageManager
     attributes:
-      label: What package manager are you using?
+      multiple: true
+      label: What package manager are you using / does the bug impact?
       options:
         - npm
         - pnpm
