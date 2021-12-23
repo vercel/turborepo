@@ -224,37 +224,40 @@ func (c *RunCommand) Run(args []string) int {
 		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if scopePkgs.Len() > 0 {
 		filteredPkgs = scopePkgs
-		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(scopePkgs.UnsafeListOfStrings(), ", ")))
 	} else {
 		for _, f := range ctx.PackageNames {
 			filteredPkgs.Add(f)
 		}
 	}
 
-	if runOptions.deps {
+	if runOptions.includeDependents {
 		// perf??? this is duplicative from the step above
-		for _, changed := range filteredPkgs {
-			descenders, err := ctx.TopologicalGraph.Descendents(changed)
+		for _, pkg := range filteredPkgs {
+			descenders, err := ctx.TopologicalGraph.Descendents(pkg)
 			if err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("error calculating affected packages: %w", err))
 				return 1
 			}
-			// filteredPkgs.Add(changed)
+			c.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
 			for _, d := range descenders {
-				filteredPkgs.Add(d)
+				// we need to exlcude the fake root node
+				// since it is not a real package
+				if d != ctx.RootNode {
+					filteredPkgs.Add(d)
+				}
 			}
 		}
 		c.Config.Logger.Debug("running with dependents")
 	}
 
-	if runOptions.ancestors {
-		for _, changed := range filteredPkgs {
-			ancestors, err := ctx.TopologicalGraph.Ancestors(changed)
+	if runOptions.includeDependencies {
+		for _, pkg := range filteredPkgs {
+			ancestors, err := ctx.TopologicalGraph.Ancestors(pkg)
 			if err != nil {
 				log.Printf("error getting dependency %v", err)
 				return 1
 			}
-			c.Config.Logger.Debug("dependencies", ancestors)
+			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
 			for _, d := range ancestors {
 				// we need to exlcude the fake root node
 				// since it is not a real package
@@ -265,9 +268,10 @@ func (c *RunCommand) Run(args []string) int {
 		}
 		c.Config.Logger.Debug(ui.Dim("running with dependencies"))
 	}
-	c.Config.Logger.Debug("execution scope", "packages", strings.Join(filteredPkgs.UnsafeListOfStrings(), ", "))
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
-
+	packagesInScope := filteredPkgs.UnsafeListOfStrings()
+	sort.Strings(packagesInScope)
+	c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
 	fs.EnsureDir(runOptions.cacheFolder)
 	turboCache := cache.New(c.Config)
@@ -677,9 +681,9 @@ func (c *RunCommand) Run(args []string) int {
 
 type RunOptions struct {
 	// Whether to include dependent impacted consumers in execution (defaults to true)
-	deps bool
-	// Whether to include ancestors (pkg.dependencies) in execution (defaults to false)
-	ancestors bool
+	includeDependents bool
+	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
+	includeDependencies bool
 	// List of globs of file paths to ignore from exection scope calculation
 	ignore []string
 	// Whether to stream log outputs
@@ -715,17 +719,17 @@ type RunOptions struct {
 
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
-		bail:           true,
-		deps:           true,
-		parallel:       false,
-		concurrency:    10,
-		dotGraph:       "",
-		ancestors:      false,
-		cache:          true,
-		profile:        "", // empty string does no tracing
-		forceExecution: false,
-		stream:         true,
-		only:           false,
+		bail:                true,
+		includeDependents:   true,
+		parallel:            false,
+		concurrency:         10,
+		dotGraph:            "",
+		includeDependencies: false,
+		cache:               true,
+		profile:             "", // empty string does no tracing
+		forceExecution:      false,
+		stream:              true,
+		only:                false,
 	}
 }
 
@@ -776,7 +780,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.profile = fmt.Sprintf("%v-profile.json", time.Now().UnixNano())
 
 			case strings.HasPrefix(arg, "--no-deps"):
-				runOptions.deps = false
+				runOptions.includeDependents = false
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.cache = true
 			case strings.HasPrefix(arg, "--cacheFolder"):
@@ -812,9 +816,9 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				log.Printf("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
-				runOptions.ancestors = true
+				runOptions.includeDependencies = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
-				runOptions.ancestors = true
+				runOptions.includeDependencies = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--team"):
