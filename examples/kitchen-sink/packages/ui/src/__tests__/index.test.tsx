@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { CounterButton } from "../index";
+import { CounterButton } from "../CounterButton";
 
 describe("CounterButton", () => {
   it("renders without crashing", () => {
