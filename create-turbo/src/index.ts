@@ -13,7 +13,13 @@ import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { tryGitInit } from "./git";
 
+type PackageManager = "yarn" | "pnpm" | "npm";
+interface Answers {
+  packageManager: PackageManager;
+}
+
 const turboGradient = gradient("#0099F7", "#F11712");
+
 const help = `
   Usage:
     $ npx create-turbo [flags...] [<dir>]
@@ -85,24 +91,25 @@ async function run() {
   );
 
   const isYarnInstalled = shouldUseYarn();
-  let answers;
+  let answers: Answers;
   if (flags.useNpm) {
     answers = { packageManager: "npm" };
   } else {
     answers = await inquirer.prompt<{
-      packageManager: "yarn" | "npm";
+      packageManager: PackageManager;
     }>([
       {
         name: "packageManager",
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
+          { name: "npm", value: "npm" },
+          { name: "pnpm", value: "pnpm" },
           {
-            name: "Yarn",
+            name: "yarn",
             value: "yarn",
             disabled: !isYarnInstalled && "not installed",
           },
-          { name: "NPM", value: "npm" },
         ],
       },
     ]);
@@ -248,14 +255,18 @@ async function run() {
   console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
   console.log(`entering the following command:`);
   console.log();
-  console.log(chalk.cyan(`  npx turbo login`));
+  console.log(
+    chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
+  );
   console.log();
   console.log(`We suggest that you begin by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
     console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
   }
-  console.log(chalk.cyan(`  npx turbo login`));
+  console.log(
+    chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
+  );
   console.log();
 }
 
@@ -282,5 +293,15 @@ async function notifyUpdate(): Promise<void> {
     process.exit();
   } catch {
     // ignore error
+  }
+}
+
+function getNpxCommand(pkgManager: PackageManager): string {
+  if (pkgManager === "yarn") {
+    return "npx";
+  } else if (pkgManager === "pnpm") {
+    return "pnpx";
+  } else {
+    return "npx";
   }
 }
