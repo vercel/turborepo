@@ -85,9 +85,12 @@ func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.Fi
 	} else if !info.IsDir() {
 		return callback(rootPath, false, info.Mode())
 	}
-	return godirwalk.Walk(rootPath, &godirwalk.Options{Callback: func(name string, info *godirwalk.Dirent) error {
-		return callback(name, info.IsDir(), info.ModeType())
-	}})
+	return godirwalk.Walk(rootPath, &godirwalk.Options{
+		Callback: func(name string, info *godirwalk.Dirent) error {
+			return callback(name, info.IsDir(), info.ModeType())
+		},
+		Unsorted: true,
+	})
 }
 
 // SameFile returns true if the two given paths refer to the same physical

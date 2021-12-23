@@ -2,7 +2,7 @@ package context
 
 import (
 	"fmt"
-	"log"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,11 +11,10 @@ import (
 	"turbo/internal/backends"
 	"turbo/internal/config"
 	"turbo/internal/fs"
+	"turbo/internal/globby"
 	"turbo/internal/util"
 
-	"github.com/bmatcuk/doublestar"
 	mapset "github.com/deckarep/golang-set"
-	"github.com/fatih/color"
 	"github.com/google/chrometracing"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
@@ -35,19 +34,6 @@ const (
 	Pnpm
 )
 
-type colorFn = func(format string, a ...interface{}) string
-
-var (
-	childProcessIndex     = 0
-	terminalPackageColors = [5]colorFn{color.CyanString, color.MagentaString, color.GreenString, color.YellowString, color.BlueString}
-)
-
-type ColorCache struct {
-	sync.Mutex
-	index int
-	Cache map[interface{}]colorFn
-}
-
 // Context of the CLI
 type Context struct {
 	Args             []string
@@ -64,7 +50,7 @@ type Context struct {
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
 	PendingTaskNodes dag.Set
-	Targets          util.Set
+	Targets          []string
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -84,20 +70,6 @@ func New(opts ...Option) (*Context, error) {
 	}
 
 	return &m, nil
-}
-
-// PrefixColor returns a color function for a given package name
-func PrefixColor(c *Context, name *string) colorFn {
-	c.ColorCache.Lock()
-	defer c.ColorCache.Unlock()
-	colorFn, ok := c.ColorCache.Cache[name]
-	if ok {
-		return colorFn
-	}
-	c.ColorCache.index++
-	colorFn = terminalPackageColors[util.PositiveMod(c.ColorCache.index, len(terminalPackageColors))]
-	c.ColorCache.Cache[name] = colorFn
-	return colorFn
 }
 
 // WithDir specifies the directory where turbo is initiated
@@ -141,10 +113,7 @@ func WithTracer(filename string) Option {
 func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
-		c.ColorCache = &ColorCache{
-			Cache: make(map[interface{}]colorFn),
-			index: 0,
-		}
+		c.ColorCache = NewColorCache()
 		c.RootNode = ROOT_NODE_NAME
 		c.PendingTaskNodes = make(dag.Set)
 		// Need to ALWAYS have a root node, might as well do it now
@@ -180,14 +149,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalDeps := make(util.Set)
 
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
-			for _, value := range pkg.Turbo.GlobalDependencies {
-				f, err := filepath.Glob(value)
-				if err != nil {
-					return fmt.Errorf("error parsing global dependencies glob %v: %w", value, err)
-				}
-				for _, val := range f {
-					globalDeps.Add(val)
-				}
+			f := globby.GlobFiles(rootpath, pkg.Turbo.GlobalDependencies, []string{})
+			for _, val := range f {
+				globalDeps.Add(val)
 			}
 		}
 		if c.Backend.Name != "nodejs-yarn" || fs.CheckIfWindows() {
@@ -214,41 +178,28 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("error hashing global dependencies %w", err)
 		}
 		c.GlobalHash = globalHash
-		c.Targets = make(util.Set)
-		if len(c.Args) > 0 {
-			for _, arg := range c.Args {
-				if !strings.HasPrefix(arg, "-") {
-					c.Targets.Add(arg)
-					found := false
-					for task := range c.RootPackageJSON.Turbo.Pipeline {
-						if task == arg {
-							found = true
-						}
-					}
-					if !found {
-						return fmt.Errorf("Task `%v` not found in Turborepo pipeline. Are you sure you added it?", arg)
-					}
-				}
-			}
+		targets, err := GetTargetsFromArguments(c.Args, &c.RootPackageJSON.Turbo)
+		if err != nil {
+			return err
 		}
-
+		c.Targets = targets
 		// We will parse all package.json's in simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
 		// and populate the graph
 		parseJSONWaitGroup := new(errgroup.Group)
-		for _, value := range spaces {
-			f, err := doublestar.Glob(value)
-			if err != nil {
-				log.Fatalf("Error parsing workspaces glob %v", value)
-			}
+		justJsons := make([]string, 0, len(spaces))
+		for _, space := range spaces {
+			justJsons = append(justJsons, path.Join(space, "package.json"))
+		}
 
-			for i, val := range f {
-				_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
-				parseJSONWaitGroup.Go(func() error {
-					return c.parsePackageJSON(val)
-				})
-			}
+		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
+
+		for i, val := range f {
+			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
+			parseJSONWaitGroup.Go(func() error {
+				return c.parsePackageJSON(val)
+			})
 		}
 
 		if err := parseJSONWaitGroup.Wait(); err != nil {
@@ -349,9 +300,9 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
-		pkg.ExternalDeps = make([]string, depSet.Cardinality())
-		for i, v := range depSet.ToSlice() {
-			pkg.ExternalDeps[i] = v.(string)
+		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
+		for _, v := range depSet.ToSlice() {
+			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
 		}
 		sort.Strings(pkg.ExternalDeps)
 		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
@@ -365,6 +316,32 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	}
 
 	return pkg, nil
+}
+
+// GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
+// Return targets are always unique sorted alphabetically.
+func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+	targets := make(util.Set)
+	for _, arg := range arguments {
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			targets.Add(arg)
+			found := false
+			for task := range configJson.Pipeline {
+				if task == arg {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			}
+		}
+	}
+	stringTargets := targets.UnsafeListOfStrings()
+	sort.Strings(stringTargets)
+	return stringTargets, nil
 }
 
 func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
@@ -424,13 +401,13 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	if internalDepsSet.Len() == 0 {
 		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
 	}
-	pkg.ExternalDeps = make([]string, externalDepSet.Cardinality())
-	for i, v := range externalDepSet.ToSlice() {
-		pkg.ExternalDeps[i] = v.(string)
+	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
+	for _, v := range externalDepSet.ToSlice() {
+		pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
 	}
-	pkg.InternalDeps = make([]string, internalDepsSet.Len())
-	for i, v := range internalDepsSet.List() {
-		pkg.InternalDeps[i] = v.(string)
+	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
+	for _, v := range internalDepsSet.List() {
+		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
 	}
 	sort.Strings(pkg.InternalDeps)
 	sort.Strings(pkg.ExternalDeps)
@@ -442,22 +419,21 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	return nil
 }
 
-func (c *Context) parsePackageJSON(fileName string) error {
+func (c *Context) parsePackageJSON(buildFilePath string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	buildFilePath := filepath.Join(fileName, "package.json")
 
 	// log.Printf("[TRACE] reading package.json : %+v", buildFilePath)
 	if fs.FileExists(buildFilePath) {
 		pkg, err := fs.ReadPackageJSON(buildFilePath)
 		if err != nil {
-			return fmt.Errorf("error parsing %v: %w", buildFilePath, err)
+			return fmt.Errorf("parsing %s: %w", buildFilePath, err)
 		}
 
 		// log.Printf("[TRACE] adding %+v to graph", pkg.Name)
 		c.TopologicalGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = buildFilePath
-		pkg.Dir = fileName
+		pkg.Dir = filepath.Dir(buildFilePath)
 		c.PackageInfos[pkg.Name] = pkg
 		c.PackageNames = append(c.PackageNames, pkg.Name)
 	}
@@ -503,4 +479,13 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	}
 	// no op
 	return gitignore.CompileIgnoreLines([]string{}...), nil
+}
+
+func getWorkspaceIgnores() []string {
+	return []string{
+		"**/node_modules/**/*",
+		"**/bower_components/**/*",
+		"**/test/**/*",
+		"**/tests/**/*",
+	}
 }

@@ -26,6 +26,16 @@ Run NPM scripts across all packages in specified scope. Tasks must be specified 
 
 ### Options
 
+#### `--cache-dir`
+
+`type: string`
+
+Defaults to `./node_modules/.cache/turbo`. Specify local filesystem cache directory. Be sure to add this folder to your `.gitignore` if you change it from the default.
+
+```sh
+turbo run build --cache-dir="./my-cache"
+```
+
 #### `--concurrency`
 
 `type: number`
@@ -52,7 +62,7 @@ turbo run build --continue
 Set the working directory of the command.
 
 ```sh
-turbo run build --cwd ./somewhere/else
+turbo run build --cwd=./somewhere/else
 ```
 
 #### `--deps`
@@ -72,7 +82,7 @@ Let's say you have packages A, B, C, and D where A depends on B and C depends on
 
 `type: string`
 
-If [Graphviz](https://graphviz.org) is installed, this command will generate an svg, png, jpg, pdf, json, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
+If [Graphviz](https://graphviz.org) is installed, this command will generate an svg, png, jpg, pdf, json, html, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
 The output file format can be controlled with the filename's extension if it is specified. If a filename is not specified, `graph-<timestamp>.jpg` is outputted.
 
 If Graphviz is not installed, this command prints the dot graph to `stdout`.
@@ -83,13 +93,14 @@ turbo run build test lint --graph=my-graph.svg
 turbo run build test lint --graph=my-json-graph.json
 turbo run build test lint --graph=my-graph.pdf
 turbo run build test lint --graph=my-graph.png
+turbo run build test lint --graph=my-graph.html
 ```
 
 <Callout>
   **Known Bug**: All possible pipeline task nodes will be added to the
   graph at the moment, even if that pipeline task does not actually exist in a
-  given package. This has no impact on execution, it just means that:
-  
+  given package. This has no impact on execution, it means that:
+
   - the terminal output may overstate the number of packages in which a task is running.
   - your dot viz graph may contain additional nodes that represents tasks that do not exist.
 </Callout>
@@ -101,6 +112,17 @@ Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting 
 ```sh
 turbo run build --force
 ```
+
+#### `--global-deps`
+
+Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory that impact multiple packages/apps.
+Can be specified multiple times.
+
+```sh
+turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.js"
+```
+
+You can also specify these in your `turbo` configuration as `globalDependencies` key.
 
 #### `--ignore`
 
@@ -130,7 +152,7 @@ Just a quick overview.
 - `{}` allows for a comma-separated list of "or" expressions
 - `!` at the beginning of a pattern will negate the match
 
-#### `--includeDependencies`
+#### `--include-dependencies`
 
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
@@ -243,6 +265,56 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 
 You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precedence over the environment variable if both are present.
 
+#### `--trace`
+
+`type: string`
+
+To view CPU trace, outputs the trace to the given file,  use `go tool trace [file]`.
+
+<Callout emoji="🚨">
+  **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
+</Callout>
+
+```sh
+turbo run build --trace="<trace-file-name>"
+```
+
+#### `--heap`
+
+`type: string`
+
+To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://speedscope.app) and use the `left heavy` or `sandwich` view modes.
+
+```sh
+turbo run build --heap="<heap-file-name>"
+```
+
+#### `--cpuprofile`
+
+`type: string`
+
+To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://speedscope.app).
+
+<Callout emoji="🚨">
+  **Important**: The CPU profiler doesn't work under
+  Windows subsystem for Linux. The profiler has to be built
+  for native Windows and run using the command prompt instead.
+</Callout>
+
+
+```sh
+turbo run build --cpuprofile="<cpu-profile-file-name>"
+```
+#### `-v`, `-vv`, `-vvv`
+
+To sepecify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
+
+```sh
+turbo run build -v
+turbo run build -vv
+turbo run build -vvv
+```
+
 ## `turbo prune --scope=<target>`
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target package.
@@ -335,10 +407,37 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 └── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
 ```
 
+## `turbo login`
+
+Connect machine to your Remote Cache provider. The default provider is [Vercel](https://vercel.com).
+
+### Options
+
+#### `--url`
+
+`type: string`
+
+Defaults to `https://vercel.com`.
+
+#### `--api`
+
+`type: string`
+
+Defaults to `https://api.vercel.com`.
+
 ## `turbo link`
 
-Link the current directory to an existing Vercel organization or user. The selected owner (either a user or and organization) will be able to share [cache artifacts](../caching).
+Link the current directory to Remote Cache scope. The selected owner (either a user or and organization) will be able to share [cache artifacts](../features/caching) through [Remote Caching](../features/remote-caching).
+You should run this command from the root of your monorepo.
 
-## `turbo unlink`
+### Options
 
-Unlink the current directory from a Vercel organization or user.
+#### `--api`
+
+`type: string`
+
+Defaults to `https://api.vercel.com`
+
+### `turbo unlink`
+
+Unlink the current directory from the Remote Cache
