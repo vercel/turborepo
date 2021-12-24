@@ -53,7 +53,7 @@ jobs:
       - name: E2E Tests
         run: | 
           cd cli && make e2e
-  windows:
+  buildwin:
     name: Turbo CI
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
