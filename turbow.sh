@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd cli && go build ./cmd/turbo/... && cd ..;
+cd cli && CGO_ENABLED=0 go build ./cmd/turbo/... && cd ..;
 
 UNAME=$(uname)
 

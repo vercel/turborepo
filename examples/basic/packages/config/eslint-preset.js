@@ -5,4 +5,7 @@ module.exports = {
       rootDir: ["apps/*/", "packages/*/"],
     },
   },
+  rules: {
+    "no-html-link-for-pages": "off",
+  },
 };

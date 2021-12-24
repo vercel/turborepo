@@ -311,7 +311,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
-		for v := range depSet.ToSlice() {
+		for _, v := range depSet.ToSlice() {
 			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
 		}
 		sort.Strings(pkg.ExternalDeps)
@@ -412,11 +412,11 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
 	}
 	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
-	for v := range externalDepSet.ToSlice() {
+	for _, v := range externalDepSet.ToSlice() {
 		pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
 	}
 	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
-	for v := range internalDepsSet.List() {
+	for _, v := range internalDepsSet.List() {
 		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
 	}
 	sort.Strings(pkg.InternalDeps)
