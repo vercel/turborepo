@@ -25,12 +25,19 @@ function cleanup {
     rm -rf yarn.lock
     rm -rf package-lock.json   
     rm -rf pnpm-lock.yaml
-    rm -rf .git
-    
 }
 
 function setup_git { 
    echo "=> Setting up git..."
+   rm -rf .git
+   mkdir .git
+   touch .git/config
+   echo "[user]" >> .git/config
+   echo "  name = GitHub Actions" >> .git/config
+   echo "  email = actions@users.noreply.github.com" >> .git/config
+   echo "" >> .git/config
+   echo "[init]" >> .git/config
+   echo "  defaultBranch = main" >> .git/config
    git init .
    git add . 
    git commit -m "Initial commit"      
