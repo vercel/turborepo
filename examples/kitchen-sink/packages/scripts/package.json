@@ -4,10 +4,6 @@
   "license": "MIT",
   "main": "index.js",
   "private": true,
-  "bin": {
-    "jest": "./node_modules/.bin/jest",
-    "eslint": "./node_modules/.bin/eslint"
-  },
   "files": [
     "jest",
     "eslint-preset.js"
@@ -19,7 +15,6 @@
     "@typescript-eslint/eslint-plugin": "^4.0.0",
     "@typescript-eslint/parser": "^4.0.0",
     "babel-eslint": "^10.0.0",
-    "eslint": "^7.5.0",
     "eslint-config-react-app": "^6.0.0",
     "eslint-plugin-flowtype": "^5.2.0",
     "eslint-plugin-import": "^2.22.0",
@@ -27,11 +22,9 @@
     "eslint-plugin-jsx-a11y": "^6.3.1",
     "eslint-plugin-react": "^7.20.3",
     "eslint-plugin-react-hooks": "^4.0.8",
-    "jest": "^26.6.3",
-    "ts-jest": "^26.5.0",
-    "typescript": "^4.5.3"
+    "ts-jest": "^26.5.0"
   },
   "devDependencies": {
-    "@types/jest": "^26.0.22"
+    "typescript": "^4.5.3"
   }
 }

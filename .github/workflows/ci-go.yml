@@ -8,41 +8,34 @@ on:
 
 jobs:
   build:
-    name: turbo CI
-    timeout-minutes: 15
+    name: build and test
+    timeout-minutes: 10
     runs-on: ${{ matrix.os }}
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - name: Check out code
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.5
+        id: go
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v1.4.4
+        with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          node-version: 14
+
+      - name: Check out code into the Go module directory
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
 
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17.2
-        id: go
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2.5.0
-        with:
-          cache: yarn
-          cache-dependency-path: yarn.lock
-          node-version: 14.x
-
-      - name: Yarn Install
-        run: yarn install
-
       - name: Build & Unit Test
-        run: yarn turbo run test --scope=cli --scope=create-turbo
+        run: yarn turbo run test --scope=cli
 
       - name: Lint
         run: yarn turbo run lint --scope=cli
@@ -56,7 +49,7 @@ jobs:
         run: cd cli && make bench/turbo
 
   build-win:
-    name: turbo CI
+    name: build and test
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
@@ -67,12 +60,14 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17.2
-        id: go
+          go-version: 1.17.5
+        id: wingo
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v1.4.4
         with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
           node-version: 14
 
       - name: Check out code into the Go module directory
@@ -96,3 +91,40 @@ jobs:
 
       - name: Benchmark and Smoke Tests
         run: cd cli && make bench/turbo
+
+  examples:
+    name: run examples
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.5
+        id: go
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2.5.0
+        with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          node-version: 14.x
+
+      - run: npm i -g pnpm
+
+      - name: Check examples
+        shell: bash
+        run: ./scripts/run-examples.sh
