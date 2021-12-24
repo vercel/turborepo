@@ -82,7 +82,7 @@ func CheckVersion(ctx context.Context, config *config.Config, buildVersion strin
 	installCommandLen := utf8.RuneCountInString((installCmdStr))
 	util.Printf("${YELLOW}+----------------------------------------------------------------+${RESET}\n")
 	util.Printf("${YELLOW}|${RESET}                                                                ${YELLOW}|${RESET}\n")
-	util.Printf("${YELLOW}|${RESET}    Update avaiable for turbo: ${GREY}%s${RESET} → ${CYAN}%s${RESET}%s${YELLOW}|${RESET}\n", fmt.Sprintf("v%s", buildVersion), updateInfo.ReleaseInfo.Version, strings.Repeat(" ", 14-len(updateInfo.ReleaseInfo.Version)))
+	util.Printf("${YELLOW}|${RESET}    Update available for turbo: ${GREY}%s${RESET} → ${CYAN}%s${RESET}%s${YELLOW}|${RESET}\n", fmt.Sprintf("v%s", buildVersion), updateInfo.ReleaseInfo.Version, strings.Repeat(" ", 14-len(updateInfo.ReleaseInfo.Version)))
 	util.Printf("${YELLOW}|${RESET}    Run ${CYAN}%s${RESET} to update%s${YELLOW}|${RESET}\n", installCmdStr, strings.Repeat(" ", 46-installCommandLen))
 	util.Printf("${YELLOW}|${RESET}                                                                ${YELLOW}|${RESET}\n")
 	util.Printf("${YELLOW}+----------------------------------------------------------------+${RESET}\n")
