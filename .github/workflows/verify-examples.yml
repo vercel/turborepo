@@ -36,8 +36,6 @@ jobs:
         with:
           node-version: 14.x
 
-      - run: npm i -g pnpm
-
       - name: Check examples
         shell: bash
         run: ./scripts/run-examples.sh
