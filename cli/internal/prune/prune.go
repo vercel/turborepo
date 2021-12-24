@@ -172,7 +172,7 @@ func (c *PruneCommand) Run(args []string) int {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to create folder %v for %v: %w", targetDir, internalDep, err))
 				return 1
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir, 0); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir, fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy %v into %v: %w", internalDep, targetDir, err))
 				return 1
 			}
@@ -180,7 +180,7 @@ func (c *PruneCommand) Run(args []string) int {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to create folder %v for %v: %w", jsonDir, internalDep, err))
 				return 1
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir, 0); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir, fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy %v into %v: %w", internalDep, jsonDir, err))
 				return 1
 			}
@@ -190,7 +190,7 @@ func (c *PruneCommand) Run(args []string) int {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to create folder %v for %v: %w", targetDir, internalDep, err))
 				return 1
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir, 0); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir, fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy %v into %v: %w", internalDep, targetDir, err))
 				return 1
 			}
@@ -205,29 +205,29 @@ func (c *PruneCommand) Run(args []string) int {
 	c.Config.Logger.Trace("new worksapces", "value", workspaces)
 	if pruneOptions.docker {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), 0); err != nil {
+			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy root .gitignore: %w", err))
 				return 1
 			}
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "full", "package.json"), 0); err != nil {
+		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "full", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy root package.json: %w", err))
 			return 1
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "json", "package.json"), 0); err != nil {
+		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "json", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy root package.json: %w", err))
 			return 1
 		}
 	} else {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", ".gitignore"), 0); err != nil {
+			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", ".gitignore"), fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy root .gitignore: %w", err))
 				return 1
 			}
 		}
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "package.json"), 0); err != nil {
+		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("Failed to copy root package.json: %w", err))
 			return 1
 		}
@@ -238,7 +238,7 @@ func (c *PruneCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Failed to materialize sub-lockfile. This can happen if your lockfile contains merge conflicts or is somehow corrupted. Please report this if it occurs: %w", err))
 		return 1
 	}
-	err = ioutil.WriteFile(filepath.Join(pruneOptions.cwd, "out", "yarn.lock"), next, 0)
+	err = ioutil.WriteFile(filepath.Join(pruneOptions.cwd, "out", "yarn.lock"), next, fs.DirPermissions)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Failed to write sub-lockfile: %w", err))
 		return 1
