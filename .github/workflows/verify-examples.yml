@@ -34,7 +34,12 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@v2.5.0
         with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
           node-version: 14.x
 
+      - run: npm i -g pnpm
+
       - name: Check examples
+        shell: bash
         run: ./scripts/run-examples.sh
