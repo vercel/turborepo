@@ -11,6 +11,7 @@ import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
+import { shouldUsePnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
 
 type PackageManager = "yarn" | "pnpm" | "npm";
@@ -28,6 +29,7 @@ const help = `
 
   Flags:    
     --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+    --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm.
     --no-install        Explicitly do not run the package mananger's install command
     --help, -h          Show this help message
     --version, -v       Show the version of this script
@@ -57,6 +59,7 @@ async function run() {
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
       useNpm: { type: "boolean", default: false },
+      usePnpm: { type: "boolean", default: false },
       install: { type: "boolean", default: true },
       version: { type: "boolean", default: false, alias: "v" },
     },
@@ -91,9 +94,12 @@ async function run() {
   );
 
   const isYarnInstalled = shouldUseYarn();
+  const isPnpmInstalled = shouldUsePnpm();
   let answers: Answers;
   if (flags.useNpm) {
     answers = { packageManager: "npm" };
+  } else if (flags.usePnpm) {
+    answers = { packageManager: "pnpm" };
   } else {
     answers = await inquirer.prompt<{
       packageManager: PackageManager;
@@ -104,7 +110,11 @@ async function run() {
         message: "Which package manager do you want to use?",
         choices: [
           { name: "npm", value: "npm" },
-          { name: "pnpm", value: "pnpm" },
+          {
+            name: "pnpm",
+            value: "pnpm",
+            disabled: !isPnpmInstalled && "not installed",
+          },
           {
             name: "yarn",
             value: "yarn",
