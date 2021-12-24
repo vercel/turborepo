@@ -46,10 +46,12 @@ jobs:
       - name: Lint
         run: yarn turbo run lint --scope=cli
       
-      - run: npm install -g pnpm
+      - name: Install PNPM
+        run: npm install -g pnpm
       
       - name: E2E Tests
         run: cd cli && make e2e
+
 
   windows:
     timeout-minutes: 10
@@ -86,7 +88,8 @@ jobs:
       - name: Build
         run: cd cli && go build ./cmd/turbo/...
 
-      - run: npm install -g pnpm
+      - name: Install PNPM
+        run: npm install -g pnpm
       
       - name: E2E Tests
         run: cd cli && make e2e
