@@ -7,8 +7,7 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  build:
-    name: turbo CI
+  build:  
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     env:
@@ -53,7 +52,6 @@ jobs:
         run: cd cli && make e2e
 
   windows:
-    name: turbo CI
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
