@@ -46,13 +46,13 @@ jobs:
 
       - name: Lint
         run: yarn turbo run lint --scope=cli
-
+      
+      - run: npm install -g pnpm
+      
       - name: E2E Tests
-        run: |
-          npm install -g pnpm
-          cd cli && make e2e
+        run: cd cli && make e2e
 
-  build-win:
+  windows:
     name: turbo CI
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
@@ -88,10 +88,10 @@ jobs:
       - name: Build
         run: cd cli && go build ./cmd/turbo/...
 
+      - run: npm install -g pnpm
+      
       - name: E2E Tests
-        run: |
-          npm install -g pnpm
-          cd cli && make e2e
+        run: cd cli && make e2e
 
       - name: Benchmark and Smoke Tests
         run: cd cli && make bench/turbo
@@ -106,7 +106,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Check out code
