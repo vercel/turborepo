@@ -1,5 +1,5 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-// https://github.com/microsoft/vscode-dev-containers/tree/v0.205.2/containers/go
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.209.6/containers/go
 {
   "name": "turbo (go, node)",
   "build": {
@@ -37,7 +37,7 @@
   // "forwardPorts": [],
 
   // Use 'postCreateCommand' to run commands after the container is created.
-  // "postCreateCommand": "go version",
+  "postCreateCommand": "go version",
 
   // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
   "remoteUser": "vscode",
