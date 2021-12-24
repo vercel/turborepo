@@ -38,7 +38,7 @@ function setup_git {
    echo "" >> .git/config
    echo "[init]" >> .git/config
    echo "  defaultBranch = main" >> .git/config
-   git init .
+   git init -q
    git add . 
    git commit -m "Initial commit"      
 }
