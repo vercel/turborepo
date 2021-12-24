@@ -1,0 +1,45 @@
+name: Verify Examples
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  examples:
+    name: Verify examples
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.5
+        id: go
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2.5.0
+        with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          node-version: 14.x
+
+      - run: npm i -g pnpm
+
+      - name: Check examples
+        shell: bash
+        run: ./scripts/run-examples.sh
