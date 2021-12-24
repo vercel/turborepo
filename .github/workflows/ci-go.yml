@@ -50,9 +50,9 @@ jobs:
         run: npm install -g pnpm
       
       - name: E2E Tests
-        run: cd cli && make e2e
-
-
+        run: | 
+          cd cli && make e2e
+          
   windows:
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
