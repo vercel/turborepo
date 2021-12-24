@@ -59,7 +59,7 @@ for folder in examples/* ; do
       echo "======================================================="
       echo "=> $folder: npm install"
       echo "======================================================="
-      npm install
+      npm install --force
       
       echo "======================================================="
       echo "=> $folder: npm build lint"
