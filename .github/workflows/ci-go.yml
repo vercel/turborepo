@@ -11,6 +11,10 @@ jobs:
     name: turbo CI
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -39,15 +43,9 @@ jobs:
 
       - name: Build & Unit Test
         run: yarn turbo run test --scope=cli --scope=create-turbo
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Lint
         run: yarn turbo run lint --scope=cli
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: E2E Tests
         run: |
