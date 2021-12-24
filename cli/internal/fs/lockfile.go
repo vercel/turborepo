@@ -14,7 +14,7 @@ import (
 )
 
 // ReadLockfile will read `yarn.lock` into memory (either from the cache or fresh)
-func ReadLockfile(cacheDir string) (*YarnLockfile, error) {.
+func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 	var lockfile YarnLockfile
 	var prettyLockFile = YarnLockfile{}
 	hash, err := HashFile("yarn.lock")
