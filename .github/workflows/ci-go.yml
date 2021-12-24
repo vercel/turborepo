@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: turbo CI
+    name: build and test
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
@@ -49,7 +49,7 @@ jobs:
         run: cd cli && make bench/turbo
 
   build-win:
-    name: turbo CI
+    name: build and test
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
@@ -93,7 +93,7 @@ jobs:
         run: cd cli && make bench/turbo
 
   examples:
-    name: Verify examples
+    name: run examples
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     env:
