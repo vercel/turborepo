@@ -1,5 +1,5 @@
-//go:build !windows
-// +build !windows
+//go:build windows
+// +build windows
 
 package fs
 
@@ -27,10 +27,10 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading yarn.lock: %w", err)
 		}
-		lines := strings.Split(string(contentsB), "\n")
+		lines := strings.Split(strings.TrimRight(string(contentsB), "\r\n"), "\r\n")
 		r := regexp.MustCompile(`^[\w"]`)
 		double := regexp.MustCompile(`\:\"\:`)
-		l := regexp.MustCompile("\"|:\n$")
+		l := regexp.MustCompile("\"|:\r\n$")
 		o := regexp.MustCompile(`\"\s\"`)
 		// deals with colons
 		// integrity sha-... -> integrity: sha-...
@@ -45,7 +45,7 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 				lines[i] = double.ReplaceAllString(first, "\":")
 			}
 		}
-		output := o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
+		output := o.ReplaceAllString(strings.Join(lines, "\r\n"), "\": \"")
 
 		next := a.ReplaceAllStringFunc(output, func(m string) string {
 			parts := a.FindStringSubmatch(m)

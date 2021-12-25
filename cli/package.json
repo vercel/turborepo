@@ -4,10 +4,13 @@
   "version": "0.0.0",
   "scripts": {
     "clean": "make clean",
-    "build": "CGO_ENABLED=0 go build ./cmd/turbo",
+    "build": "cross-env CGO_ENABLED=0 go build ./cmd/turbo",
     "test": "go test -race ./internal/...",
     "publish": "make publish-all",
     "format": "go fmt ./cmd/... ./internal/...",
     "lint": "go vet ./cmd/... ./internal/..."
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   }
 }
