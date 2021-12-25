@@ -516,7 +516,7 @@ func (c *RunCommand) Run(args []string) int {
 				writer := bufio.NewWriter(output)
 
 				// Merge the streams together
-				merged := io.MultiReader(stdout, stderr)
+				merged := io.MultiReader(stderr, stdout)
 
 				// Create a scanner which scans r in a line-by-line fashion
 				scanner := bufio.NewScanner(merged)
