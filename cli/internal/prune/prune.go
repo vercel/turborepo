@@ -205,7 +205,7 @@ func (c *PruneCommand) Run(args []string) int {
 
 		logger.Printf(" - Added %v", ctx.PackageInfos[internalDep].Name)
 	}
-	c.Config.Logger.Trace("new worksapces", "value", workspaces)
+	c.Config.Logger.Trace("new workspaces", "value", workspaces)
 	if pruneOptions.docker {
 		if fs.FileExists(".gitignore") {
 			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), fs.DirPermissions); err != nil {
