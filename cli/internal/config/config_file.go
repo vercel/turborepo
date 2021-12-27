@@ -24,9 +24,9 @@ type TurborepoConfig struct {
 
 // WriteUserConfigFile writes config file at a path
 func WriteConfigFile(path string, config *TurborepoConfig) error {
-	jsonBytes, marhsallError := json.Marshal(config)
-	if marhsallError != nil {
-		return marhsallError
+	jsonBytes, marshallError := json.Marshal(config)
+	if marshallError != nil {
+		return marshallError
 	}
 	writeFilErr := ioutil.WriteFile(path, jsonBytes, 0644)
 	if writeFilErr != nil {
