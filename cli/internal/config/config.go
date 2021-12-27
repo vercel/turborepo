@@ -85,7 +85,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if len(inputFlags) == 1 && (inputFlags[0] == "help" || inputFlags[0] == "--help" || inputFlags[0] == "-help") {
 		return nil, nil
 	}
-	// Precendence is flags > env > config > default
+	// Precedence is flags > env > config > default
 	userConfig, _ := ReadUserConfigFile()
 	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
 	partialConfig.Token = userConfig.Token
