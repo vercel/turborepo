@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -268,7 +269,7 @@ func (c *PruneCommand) Run(args []string) int {
 	tmpGeneratedLockfile, err := os.Create(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"))
 	tmpGeneratedLockfileWriter := bufio.NewWriter(tmpGeneratedLockfile)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed create tempory lockfile: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed create temporary lockfile: %w", err))
 		return 1
 	}
 
