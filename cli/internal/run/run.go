@@ -40,8 +40,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-const TOPOLOGICAL_PIPELINE_DELMITER = "^"
-const ENV_PIPELINE_DELMITER = "$"
+const TOPOLOGICAL_PIPELINE_DELIMITER = "^"
+const ENV_PIPELINE_DELIMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
@@ -408,13 +408,13 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		deps := make(util.Set)
 		if util.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
 					continue
 				}
 				if util.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
-				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
 					topoDeps.Add(from[1:])
 				} else {
 					deps.Add(from)
@@ -424,10 +424,10 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
 					continue
 				}
-				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
 					topoDeps.Add(from[1:])
 				} else {
 					deps.Add(from)
@@ -503,8 +503,8 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				var hashabledEnvPairs []string
 				if len(pipeline.DependsOn) > 0 {
 					for _, v := range pipeline.DependsOn {
-						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
-							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
+						if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
+							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
 							hashabledEnvPairs = append(hashabledEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
 							hashabledEnvVars = append(hashabledEnvVars, trimmed)
 						}
