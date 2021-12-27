@@ -2,8 +2,8 @@ package core
 
 import (
 	"fmt"
-	"strings"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"strings"
 
 	"github.com/pyr-sh/dag"
 )
@@ -86,7 +86,7 @@ func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	return nil
 }
 
-// Execute executes the pipeline, constructing an internal task graph and walking it accordlingly.
+// Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
 func (p *scheduler) Execute() []error {
 	var sema = util.NewSemaphore(p.Concurrency)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
