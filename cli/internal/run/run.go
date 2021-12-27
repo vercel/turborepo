@@ -269,7 +269,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
 			for _, d := range descenders {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
@@ -288,7 +288,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
 			for _, d := range ancestors {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
