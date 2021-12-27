@@ -766,7 +766,7 @@ type RunOptions struct {
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
 	includeDependencies bool
-	// List of globs of file paths to ignore from exection scope calculation
+	// List of globs of file paths to ignore from execution scope calculation
 	ignore []string
 	// Whether to stream log outputs
 	stream bool
