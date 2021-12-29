@@ -18,6 +18,7 @@ import (
 	"github.com/google/chrometracing"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
+	radixsort "github.com/yourbasic/radix"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -304,7 +305,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		for _, v := range depSet.ToSlice() {
 			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
 		}
-		sort.Strings(pkg.ExternalDeps)
+		radixsort.Sort(pkg.ExternalDeps)
 		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
 		if err != nil {
 			return nil, err
@@ -409,8 +410,8 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	for _, v := range internalDepsSet.List() {
 		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
 	}
-	sort.Strings(pkg.InternalDeps)
-	sort.Strings(pkg.ExternalDeps)
+	radixsort.Sort(pkg.InternalDeps)
+	radixsort.Sort(pkg.ExternalDeps)
 	hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
 	if err != nil {
 		return err

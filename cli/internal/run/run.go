@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +27,7 @@ import (
 	"turbo/internal/util/filter"
 
 	"github.com/pyr-sh/dag"
+	radixsort "github.com/yourbasic/radix"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -275,7 +275,6 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	packagesInScope := filteredPkgs.UnsafeListOfStrings()
-	sort.Strings(packagesInScope)
 	c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
 	fs.EnsureDir(runOptions.cacheFolder)
@@ -297,7 +296,7 @@ func (c *RunCommand) Run(args []string) int {
 					ancestralHashes = append(ancestralHashes, h.Hash)
 				}
 			}
-			sort.Strings(ancestralHashes)
+			radixsort.Sort(ancestralHashes)
 		}
 		var hashable = struct {
 			hashOfFiles      string
