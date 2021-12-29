@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/color"
@@ -12,6 +13,7 @@ import (
 )
 
 const ESC = 27
+const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
 
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
@@ -25,6 +27,15 @@ var clear = fmt.Sprintf("%c[%dA%c[2K", ESC, 1, ESC)
 
 func ClearLines(writer io.Writer, count int) {
 	_, _ = fmt.Fprint(writer, strings.Repeat(clear, count))
+}
+
+var ansiRegex = regexp.MustCompile(ansiEscapeStr)
+
+func StripAnsi(str string) string {
+	if !IsTTY {
+		return ansiRegex.ReplaceAllString(str, "")
+	}
+	return str
 }
 
 // Dim prints out dimmed text

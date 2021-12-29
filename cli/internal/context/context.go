@@ -23,7 +23,7 @@ import (
 
 const (
 	ROOT_NODE_NAME   = "___ROOT___"
-	GLOBAL_CACHE_KEY = "hello"
+	GLOBAL_CACHE_KEY = "snozzberries"
 )
 
 // A BuildResultStatus represents the status of a target when we log a build result.
