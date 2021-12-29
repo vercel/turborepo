@@ -479,9 +479,9 @@ func (c *RunCommand) Run(args []string) int {
 				// Setup stdout/stderr
 				// If we are not caching anything, then we don't need to write logs to disk
 				// be careful about this conditional given the default of cache = true
-				var combinedWriter io.Writer
-				if !runOptions.cache || !(pipeline.Cache == nil || *pipeline.Cache) {
-					combinedWriter = os.Stdout
+				var writer io.Writer
+				if !runOptions.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
+					writer = os.Stdout
 				} else {
 					// Setup log file
 					if err := fs.EnsureDir(logFileName); err != nil {
@@ -503,18 +503,19 @@ func (c *RunCommand) Run(args []string) int {
 					bufWriter := bufio.NewWriter(output)
 					bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 					defer bufWriter.Flush()
-					combinedWriter = io.MultiWriter(os.Stdout, bufWriter)
-					logger := log.New(combinedWriter, "", 0)
-					// Setup a streamer that we'll pipe cmd.Stdout to
-					logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
-					// Setup a streamer that we'll pipe cmd.Stderr to.
-					logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
-					cmd.Stderr = logStreamerErr
-					cmd.Stdout = logStreamerOut
-					// Flush/Reset any error we recorded
-					logStreamerErr.FlushRecord()
-					logStreamerOut.FlushRecord()
+					writer = io.MultiWriter(os.Stdout, bufWriter)
 				}
+
+				logger := log.New(writer, "", 0)
+				// Setup a streamer that we'll pipe cmd.Stdout to
+				logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+				// Setup a streamer that we'll pipe cmd.Stderr to.
+				logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+				cmd.Stderr = logStreamerErr
+				cmd.Stdout = logStreamerOut
+				// Flush/Reset any error we recorded
+				logStreamerErr.FlushRecord()
+				logStreamerOut.FlushRecord()
 
 				// Run the command
 				if err := cmd.Run(); err != nil {
