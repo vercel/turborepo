@@ -444,9 +444,6 @@ func (c *RunCommand) Run(args []string) int {
 				targetLogger.Debug("log file", "path", filepath.Join(runOptions.cwd, logFileName))
 
 				// Cache ---------------------------------------------
-				// We create the real task outputs now so we can potentially use them to
-				// to store artifacts from remote cache to local fs cache
-
 				var hit bool
 				if runOptions.forceExecution {
 					hit = false
@@ -469,6 +466,8 @@ func (c *RunCommand) Run(args []string) int {
 				if runOptions.stream {
 					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 				}
+
+				// Setup command execution
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
@@ -476,20 +475,23 @@ func (c *RunCommand) Run(args []string) int {
 				cmd.Dir = pack.Dir
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 				cmd.Env = append(os.Environ(), envs)
-				var combinedWriter io.Writer
+
+				// Setup stdout/stderr
+				// If we are not caching anything, then we don't need to write logs to disk
 				// be careful about this conditional given the default of cache = true
+				var combinedWriter io.Writer
 				if !runOptions.cache || !(pipeline.Cache == nil || *pipeline.Cache) {
 					combinedWriter = os.Stdout
 				} else {
 					// Setup log file
-					if err := fs.EnsureDir(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))); err != nil {
+					if err := fs.EnsureDir(logFileName); err != nil {
 						tracer(TargetBuildFailed, err)
 						c.logError(targetLogger, actualPrefix, err)
 						if runOptions.bail {
 							os.Exit(1)
 						}
 					}
-					output, err := os.Create(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task)))
+					output, err := os.Create(logFileName)
 					if err != nil {
 						tracer(TargetBuildFailed, err)
 						c.logError(targetLogger, actualPrefix, err)
@@ -506,12 +508,10 @@ func (c *RunCommand) Run(args []string) int {
 					// Setup a streamer that we'll pipe cmd.Stdout to
 					logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
 					// Setup a streamer that we'll pipe cmd.Stderr to.
-					// We want to record/buffer anything that's written to this (3rd argument true)
 					logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
 					cmd.Stderr = logStreamerErr
 					cmd.Stdout = logStreamerOut
-
-					// Reset any error we recorded
+					// Flush/Reset any error we recorded
 					logStreamerErr.FlushRecord()
 					logStreamerOut.FlushRecord()
 				}
@@ -520,7 +520,6 @@ func (c *RunCommand) Run(args []string) int {
 				if err := cmd.Run(); err != nil {
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
-					// writer.Flush()
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
@@ -549,8 +548,7 @@ func (c *RunCommand) Run(args []string) int {
 					return nil
 				}
 
-				// writer.Flush()
-
+				// Cache command outputs
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
 					ignore := []string{}
@@ -560,6 +558,7 @@ func (c *RunCommand) Run(args []string) int {
 					}
 				}
 
+				// Clean up tracing
 				tracer(TargetBuilt, nil)
 				targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 				return nil
