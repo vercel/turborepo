@@ -20,6 +20,7 @@ import (
 	"turbo/internal/core"
 	"turbo/internal/fs"
 	"turbo/internal/globby"
+	"turbo/internal/logstreamer"
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
@@ -454,9 +455,6 @@ func (c *RunCommand) Run(args []string) int {
 				targetLogger.Debug("log file", "path", filepath.Join(runOptions.cwd, logFileName))
 
 				// Cache ---------------------------------------------
-				// We create the real task outputs now so we can potentially use them to
-				// to store artifacts from remote cache to local fs cache
-
 				var hit bool
 				if runOptions.forceExecution {
 					hit = false
@@ -467,34 +465,19 @@ func (c *RunCommand) Run(args []string) int {
 					} else if hit {
 						if runOptions.stream && fs.FileExists(filepath.Join(runOptions.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							targetUi.Output(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(hash)))
-							go replayLogs(targetLogger, targetUi, runOptions, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, c.Ui, runOptions, logFileName, hash, &logReplayWaitGroup, false)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
+
 						return nil
 					}
 				}
-				// Setup log file
-				if err := fs.EnsureDir(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))); err != nil {
-					tracer(TargetBuildFailed, err)
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-						os.Exit(1)
-					}
-				}
-				output, err := os.Create(filepath.Join(runOptions.cwd, pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task)))
-				if err != nil {
-					tracer(TargetBuildFailed, err)
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-						os.Exit(1)
-					}
-				}
-				defer output.Close()
 				if runOptions.stream {
 					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 				}
+
+				// Setup command execution
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
@@ -503,64 +486,51 @@ func (c *RunCommand) Run(args []string) int {
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 				cmd.Env = append(os.Environ(), envs)
 
-				// Get a pipe to read from stdout and stderr
-				stdout, err := cmd.StdoutPipe()
-				if err != nil {
-					tracer(TargetBuildFailed, err)
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-						os.Exit(1)
-					}
-				}
-				defer stdout.Close()
-				stderr, err := cmd.StderrPipe()
-
-				if err != nil {
-					tracer(TargetBuildFailed, err)
-					c.logError(targetLogger, actualPrefix, err)
-					if runOptions.bail {
-						os.Exit(1)
-					}
-				}
-				defer stderr.Close()
-				writer := bufio.NewWriter(output)
-
-				// Merge the streams together
-				merged := io.MultiReader(stdout, stderr)
-
-				// Create a scanner which scans r in a line-by-line fashion
-				scanner := bufio.NewScanner(merged)
-
-				// Execute command
-				// Failed to spawn?
-				if err := cmd.Start(); err != nil {
-					tracer(TargetBuildFailed, err)
-					writer.Flush()
-					if runOptions.bail {
-						targetLogger.Error("Could not spawn command: %w", err)
-						targetUi.Error(fmt.Sprintf("Could not spawn command: %v", err))
-						os.Exit(1)
-					}
-					targetUi.Warn("could not spawn command, but continuing...")
-				}
-				// Read line by line and process it
-				if runOptions.stream || runOptions.cache {
-					for scanner.Scan() {
-						line := scanner.Text()
-						if runOptions.stream {
-							targetUi.Output(string(scanner.Bytes()))
-						}
-						if runOptions.cache {
-							writer.WriteString(fmt.Sprintf("%v\n", line))
+				// Setup stdout/stderr
+				// If we are not caching anything, then we don't need to write logs to disk
+				// be careful about this conditional given the default of cache = true
+				var writer io.Writer
+				if !runOptions.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
+					writer = os.Stdout
+				} else {
+					// Setup log file
+					if err := fs.EnsureDir(logFileName); err != nil {
+						tracer(TargetBuildFailed, err)
+						c.logError(targetLogger, actualPrefix, err)
+						if runOptions.bail {
+							os.Exit(1)
 						}
 					}
+					output, err := os.Create(logFileName)
+					if err != nil {
+						tracer(TargetBuildFailed, err)
+						c.logError(targetLogger, actualPrefix, err)
+						if runOptions.bail {
+							os.Exit(1)
+						}
+					}
+					defer output.Close()
+					bufWriter := bufio.NewWriter(output)
+					bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
+					defer bufWriter.Flush()
+					writer = io.MultiWriter(os.Stdout, bufWriter)
 				}
+
+				logger := log.New(writer, "", 0)
+				// Setup a streamer that we'll pipe cmd.Stdout to
+				logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+				// Setup a streamer that we'll pipe cmd.Stderr to.
+				logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+				cmd.Stderr = logStreamerErr
+				cmd.Stdout = logStreamerOut
+				// Flush/Reset any error we recorded
+				logStreamerErr.FlushRecord()
+				logStreamerOut.FlushRecord()
 
 				// Run the command
-				if err := cmd.Wait(); err != nil {
+				if err := cmd.Run(); err != nil {
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
-					writer.Flush()
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
@@ -589,8 +559,7 @@ func (c *RunCommand) Run(args []string) int {
 					return nil
 				}
 
-				writer.Flush()
-
+				// Cache command outputs
 				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
 					ignore := []string{}
@@ -600,6 +569,7 @@ func (c *RunCommand) Run(args []string) int {
 					}
 				}
 
+				// Clean up tracing
 				tracer(TargetBuilt, nil)
 				targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 				return nil
@@ -933,7 +903,7 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 	defer f.Close()
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
-		prefixUi.Output(ui.Dim(string(scan.Bytes()))) //Writing to Stdout
+		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }

@@ -32,7 +32,7 @@ turbo run build --scope=*build-tools*
 Sometimes we want to run the tasks needed to satisfy the `build` script of all the packages that has the `build-tools` string in their names. Think of this as running tasks up and including the package matched in the scope. Add a `--no-deps` flag to run up to a package task.
 
 ```sh
-turbo run build --scope=*build-tools* --no-deps --includeDependencies
+turbo run build --scope=*build-tools* --no-deps --include-dependencies
 ```
 
 <Callout type="idea" icon={<HeartIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />}>

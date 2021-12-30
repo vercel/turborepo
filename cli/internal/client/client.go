@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -327,6 +328,7 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
+		io.Copy(ioutil.Discard, resp.Body)
 		return nil, fmt.Errorf("404 - Not found") // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {
 		b, _ := ioutil.ReadAll(resp.Body)
