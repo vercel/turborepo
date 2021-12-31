@@ -139,6 +139,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.RootPackageJSON = pkg
 
 		spaces, err := c.Backend.GetWorkspaceGlobs()
+		if (spaces == nil) {
+			err = fmt.Errorf("Couldn't find workspaces defined for %w", c.Backend.Name)
+		}
 		if err != nil {
 			return err
 		}
