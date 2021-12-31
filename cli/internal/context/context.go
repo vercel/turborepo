@@ -37,23 +37,24 @@ const (
 
 // Context of the CLI
 type Context struct {
-	Args                  []string
-	PackageInfos          map[interface{}]*fs.PackageJSON
-	ColorCache            *ColorCache
-	PackageNames          []string
-	TopologicalGraph      dag.AcyclicGraph
-	TaskGraph             dag.AcyclicGraph
-	Dir                   string
-	RootNode              string
-	RootPackageJSON       *fs.PackageJSON
-	GlobalHashableEnvVars []string
-	GlobalHash            string
-	TraceFilePath         string
-	Lockfile              *fs.YarnLockfile
-	SCC                   [][]dag.Vertex
-	PendingTaskNodes      dag.Set
-	Targets               []string
-	Backend               *api.LanguageBackend
+	Args                   []string
+	PackageInfos           map[interface{}]*fs.PackageJSON
+	ColorCache             *ColorCache
+	PackageNames           []string
+	TopologicalGraph       dag.AcyclicGraph
+	TaskGraph              dag.AcyclicGraph
+	Dir                    string
+	RootNode               string
+	RootPackageJSON        *fs.PackageJSON
+	GlobalHashableEnvPairs []string
+	GlobalHashableEnvNames []string
+	GlobalHash             string
+	TraceFilePath          string
+	Lockfile               *fs.YarnLockfile
+	SCC                    [][]dag.Vertex
+	PendingTaskNodes       dag.Set
+	Targets                []string
+	Backend                *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -149,19 +150,28 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		// Calculate the global hash
 		globalDeps := make(util.Set)
-		if len(pkg.Turbo.HashedEnv) > 0 {
-			for _, v := range pkg.Turbo.HashedEnv {
-				c.GlobalHashableEnvVars = append(c.GlobalHashableEnvVars, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
-			}
-			sort.Strings(c.GlobalHashableEnvVars)
-		}
-		config.Logger.Debug("global hash env vars", "vars", fmt.Sprintf("%s", pkg.Turbo.HashedEnv))
+
+		// Calculate global file and env var dependencies
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
-			f := globby.GlobFiles(rootpath, pkg.Turbo.GlobalDependencies, []string{})
-			for _, val := range f {
-				globalDeps.Add(val)
+			var globs []string
+			for _, v := range pkg.Turbo.GlobalDependencies {
+				if strings.HasPrefix(v, "$") {
+					trimmed := strings.TrimPrefix(v, "$")
+					c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvNames, trimmed)
+					c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+				} else {
+					globs = append(globs, v)
+				}
+			}
+
+			if len(globs) > 0 {
+				f := globby.GlobFiles(rootpath, globs, []string{})
+				for _, val := range f {
+					globalDeps.Add(val)
+				}
 			}
 		}
+
 		if c.Backend.Name != "nodejs-yarn" {
 			// If we are not in Yarn, add the specfile and lockfile to global deps
 			globalDeps.Add(c.Backend.Specfile)
@@ -172,15 +182,16 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err != nil {
 			return fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 		}
+		config.Logger.Debug("global hash env vars", "vars", fmt.Sprintf("%s", c.GlobalHashableEnvNames))
 		globalHashable := struct {
 			globalFileHashMap    map[string]string
 			rootExternalDepsHash string
-			hashedSortedEnvVars  []string
+			hashedSortedEnvPairs []string
 			globalCacheKey       string
 		}{
 			globalFileHashMap:    globalFileHashMap,
 			rootExternalDepsHash: pkg.ExternalDepsHash,
-			hashedSortedEnvVars:  c.GlobalHashableEnvVars,
+			hashedSortedEnvPairs: c.GlobalHashableEnvPairs,
 			globalCacheKey:       GLOBAL_CACHE_KEY,
 		}
 		globalHash, err := fs.HashObject(globalHashable)

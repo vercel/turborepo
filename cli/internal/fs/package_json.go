@@ -18,7 +18,6 @@ type TurboConfigJSON struct {
 	TurboCacheOptions  string   `json:"cacheOptions,omitempty"`
 	Outputs            []string `json:"outputs,omitempty"`
 	RemoteCacheUrl     string   `json:"remoteCacheUrl,omitempty"`
-	HashedEnv          []string `json:"env,omitempty"`
 	Pipeline           map[string]Pipeline
 }
 
@@ -39,7 +38,6 @@ type Pipeline struct {
 	Outputs   []string `json:"-"`
 	Cache     *bool    `json:"cache,omitempty"`
 	DependsOn []string `json:"dependsOn,omitempty"`
-	HashedEnv []string `json:"env,omitempty"`
 	PPipeline
 }
 

@@ -36,6 +36,7 @@ import (
 )
 
 const TOPOLOGICAL_PIPELINE_DELMITER = "^"
+const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
@@ -349,6 +350,9 @@ func (c *RunCommand) Run(args []string) int {
 		deps := make(util.Set)
 		if core.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+					continue
+				}
 				if core.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
@@ -362,6 +366,9 @@ func (c *RunCommand) Run(args []string) int {
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+					continue
+				}
 				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
 					topoDeps.Add(from[1:])
 				} else {
@@ -425,9 +432,11 @@ func (c *RunCommand) Run(args []string) int {
 				targetLogger.Debug("task output globs", "outputs", outputs)
 				// Hash the task-specific environment variables
 				var hashabledEnvVars = make([]string, 0, len(pipeline.HashedEnv))
-				if len(pipeline.HashedEnv) > 0 {
-					for _, v := range pipeline.HashedEnv {
-						hashabledEnvVars = append(hashabledEnvVars, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
+				if len(pipeline.DependsOn) > 0 {
+					for _, v := range pipeline.DependsOn {
+						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
+							hashabledEnvVars = append(hashabledEnvVars, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
+						}
 					}
 					sort.Strings(hashabledEnvVars) // always sort them
 				}
