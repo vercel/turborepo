@@ -49,7 +49,6 @@ type Context struct {
 	TraceFilePath    string
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
-	PendingTaskNodes dag.Set
 	Targets          []string
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
@@ -115,7 +114,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.ColorCache = NewColorCache()
 		c.RootNode = ROOT_NODE_NAME
-		c.PendingTaskNodes = make(dag.Set)
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(ROOT_NODE_NAME)
 
