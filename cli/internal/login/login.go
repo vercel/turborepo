@@ -38,7 +38,6 @@ Usage: turbo login
 	return strings.TrimSpace(helpText)
 }
 
-// This lets us get the preferred local address
 const DEFAULT_HOSTNAME = "127.0.0.1"
 const DEFAULT_PORT = 9789
 

@@ -24,7 +24,7 @@ func OpenBrowser(url string) {
 	}
 	if err != nil {
 		var preferredHost = util.GetOutboundIP().String()
-		// Sorry don't know enough Golang to get the logger going
+		// this replaces the default hostname with the preferred outbound ip
 		log.Println("Could not open browser. Please visit:", strings.Replace(url, "127.0.0.1", preferredHost, -1))
 	}
 
