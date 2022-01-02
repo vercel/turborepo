@@ -5,6 +5,8 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"strings"
+	"turbo/internal/util"
 )
 
 func OpenBrowser(url string) {
@@ -21,7 +23,9 @@ func OpenBrowser(url string) {
 		err = fmt.Errorf("unsupported platform")
 	}
 	if err != nil {
-		log.Fatal(err)
+		var preferredHost = util.GetOutboundIP().String()
+		// Sorry don't know enough Golang to get the logger going
+		log.Println("Could not open browser. Please visit:", strings.Replace(url, "127.0.0.1", preferredHost, -1))
 	}
 
 }
