@@ -1,3 +1,4 @@
+import semver from "semver";
 import { execSync } from "child_process";
 
 export function shouldUsePnpm(): boolean {
@@ -11,4 +12,9 @@ export function shouldUsePnpm(): boolean {
   } catch (e) {
     return false;
   }
+}
+
+export function getNpxCommandOfPnpm() {
+  const currentVersion = execSync("pnpm --version").toString();
+  return semver.gte(currentVersion, "6.0.0") ? "pnpm dlx" : "pnpx";
 }

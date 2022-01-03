@@ -11,7 +11,7 @@ import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
-import { shouldUsePnpm } from "./shouldUsePnpm";
+import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
 
 type PackageManager = "yarn" | "pnpm" | "npm";
@@ -310,7 +310,7 @@ function getNpxCommand(pkgManager: PackageManager): string {
   if (pkgManager === "yarn") {
     return "npx";
   } else if (pkgManager === "pnpm") {
-    return "pnpx";
+    return getNpxCommandOfPnpm();
   } else {
     return "npx";
   }
