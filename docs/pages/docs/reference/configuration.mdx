@@ -16,8 +16,24 @@ Defaults to `origin/master`. The base branch or your git repository. Git is used
 
 `type: string[]`
 
-A list of globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm.
-This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts package tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
+A list of globs and environment variables for implicit global hash dependencies. Environment variables should be prefixed with `$` (e.g. `$GITHUB_TOKEN`). Any other entry without this prefix, will be considered filesystem glob. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
+This is useful for busting the cache based on `.env` files (not in Git), environment variables, or any root level file that impacts package tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
+
+**Example**
+
+```json
+{
+  "turbo": {
+    "globalDependencies": [
+      ".env", // contents will impact hashes of all tasks
+      "tsconfig.json", // contents will impact hashes of all tasks
+      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+    ],
+
+    // ... other configuration options
+  }
+}
+```
 
 ## `npmClient`
 
@@ -95,6 +111,9 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 ```json
 {
   "turbo": {
+    "globalDependencies": [
+      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+    ],
     "pipeline": {
       "build": {
         "dependsOn": {
@@ -102,7 +121,6 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
           "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
         },
         "outputs": ["dist/**", ".next/**"],
-
       },
       "web#build": {
         "dependsOn": [
