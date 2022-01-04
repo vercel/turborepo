@@ -157,7 +157,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			for _, v := range pkg.Turbo.GlobalDependencies {
 				if strings.HasPrefix(v, "$") {
 					trimmed := strings.TrimPrefix(v, "$")
-					c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvNames, trimmed)
+					c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, trimmed)
 					c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
 				} else {
 					globs = append(globs, v)
@@ -172,6 +172,16 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			}
 		}
 
+		// get system env vars for hashing purposes, these include any variable that includes "TURBO"
+		// that is NOT TURBO_TOKEN or TURBO_TEAM or TURBO_BINARY_PATH.
+		names, pairs := getHashableTurboEnvVarsFromOs()
+		c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, names...)
+		c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, pairs...)
+		// sort them for consistent hashing
+		sort.Strings(c.GlobalHashableEnvNames)
+		sort.Strings(c.GlobalHashableEnvPairs)
+		config.Logger.Debug("global hash env vars", "vars", c.GlobalHashableEnvNames)
+
 		if c.Backend.Name != "nodejs-yarn" {
 			// If we are not in Yarn, add the specfile and lockfile to global deps
 			globalDeps.Add(c.Backend.Specfile)
@@ -182,7 +192,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err != nil {
 			return fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 		}
-		config.Logger.Debug("global hash env vars", "vars", fmt.Sprintf("%s", c.GlobalHashableEnvNames))
 		globalHashable := struct {
 			globalFileHashMap    map[string]string
 			rootExternalDepsHash string
@@ -509,4 +518,25 @@ func getWorkspaceIgnores() []string {
 		"**/test/**/*",
 		"**/tests/**/*",
 	}
+}
+
+// getHashableTurboEnvVarsFromOs returns a list of environment variables names and
+// that are safe to include in the global hash
+func getHashableTurboEnvVarsFromOs() ([]string, []string) {
+	var justNames []string
+	var pairs []string
+	for _, e := range os.Environ() {
+		kv := strings.SplitN(e, "=", 2)
+		// Eventually we should turn this into a safelist of reserved env vars, these should never be
+		// included in
+		if kv[0] == "TURBO_TOKEN" || kv[0] == "TURBO_TEAM" || kv[0] == "TURBO_BINARY_PATH" {
+			continue
+		}
+		if strings.Contains(kv[0], "TURBO") {
+			justNames = append(justNames, kv[0])
+			pairs = append(pairs, e)
+		}
+	}
+
+	return justNames, pairs
 }
