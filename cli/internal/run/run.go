@@ -430,29 +430,33 @@ func (c *RunCommand) Run(args []string) int {
 					outputs = append(outputs, pipeline.Outputs...)
 				}
 				targetLogger.Debug("task output globs", "outputs", outputs)
-				// Hash the task-specific environment variables
-				var hashabledEnvVars = make([]string, 0, len(pipeline.HashedEnv))
+
+				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
+				var hashabledEnvVars []string
+				var hashabledEnvPairs []string
 				if len(pipeline.DependsOn) > 0 {
 					for _, v := range pipeline.DependsOn {
 						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
-							hashabledEnvVars = append(hashabledEnvVars, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
+							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
+							hashabledEnvPairs = append(hashabledEnvVars, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashabledEnvVars = append(hashabledEnvVars, trimmed)
 						}
 					}
 					sort.Strings(hashabledEnvVars) // always sort them
 				}
-				targetLogger.Debug("hashable env vars", "vars", pipeline.HashedEnv)
+				targetLogger.Debug("hashable env vars", "vars", hashabledEnvVars)
 				hashable := struct {
-					Hash            string
-					Task            string
-					Outputs         []string
-					PassThruArgs    []string
-					HashableEnvVars []string
+					Hash             string
+					Task             string
+					Outputs          []string
+					PassThruArgs     []string
+					HashableEnvPairs []string
 				}{
-					Hash:            pack.Hash,
-					Task:            task,
-					Outputs:         outputs,
-					PassThruArgs:    runOptions.passThroughArgs,
-					HashableEnvVars: hashabledEnvVars,
+					Hash:             pack.Hash,
+					Task:             task,
+					Outputs:          outputs,
+					PassThruArgs:     runOptions.passThroughArgs,
+					HashableEnvPairs: hashabledEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
