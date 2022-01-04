@@ -15,10 +15,9 @@ type Task struct {
 	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
 	Deps util.Set
 	// TopoDeps are dependencies across packages within the same topological graph (e.g. parent `build` -> child `build`) */
-	TopoDeps  util.Set
-	Cache     *bool
-	Run       func(cwd string) error
-	HashedEnv []string
+	TopoDeps util.Set
+	Cache    *bool
+	Run      func(cwd string) error
 }
 
 type scheduler struct {
