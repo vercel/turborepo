@@ -1,10 +1,11 @@
 {
   "name": "turbo",
-  "version": "1.0.9",
-  "description": "The blazing fast monorepo build system.",
+  "version": "1.0.24",
+  "description": "Turborepo is a high-performance build system for JavaScript and TypeScript codebases.",
   "repository": "https://github.com/vercel/turborepo",
   "bugs": "https://github.com/vercel/turborepo/issues",
   "homepage": "https://turborepo.org",
+  "license": "MPL-2.0",
   "scripts": {
     "postinstall": "node install.js"
   },
@@ -13,11 +14,21 @@
   },
   "files": [
     "bin",
-    "install.js",
-    "login.js"
+    "node-platform.js",
+    "install.js"
   ],
-  "license": "MPL-2.0",
-  "dependencies": {
-    "zlib": "^1.0.5"
+  "optionalDependencies": {
+    "turbo-darwin-64": "1.0.24",
+    "turbo-darwin-arm64": "1.0.24",
+    "turbo-freebsd-64": "1.0.24",
+    "turbo-freebsd-arm64": "1.0.24",
+    "turbo-linux-32": "1.0.24",
+    "turbo-linux-64": "1.0.24",
+    "turbo-linux-arm": "1.0.24",
+    "turbo-linux-arm64": "1.0.24",
+    "turbo-linux-mips64le": "1.0.24",
+    "turbo-linux-ppc64le": "1.0.24",
+    "turbo-windows-32": "1.0.24",
+    "turbo-windows-64": "1.0.24"
   }
 }

@@ -41,7 +41,7 @@ As it turns out, you might not even need references or even an interim TypeScrip
 }
 ```
 
-As it turns out, the TypeScript Language Server (in VSCode) and Type Checker can treat both a raw `.ts` or `.tsx` file as its own valid type declaration. This last sentence is obvious once you read it twice. What isn't so obvious, though, is that you can just point the `types` field directly to raw source code.
+As it turns out, the TypeScript Language Server (in VSCode) and Type Checker can treat both a raw `.ts` or `.tsx` file as its own valid type declaration. This last sentence is obvious once you read it twice. What isn't so obvious, though, is that you can point the `types` field directly to raw source code.
 
 Once you do this, this package can then be used _without_ project references or a TypeScript build step (either via `tsc` or `esbuild` etc) as long as you adhere to 2 rules:
 
@@ -60,7 +60,7 @@ Internal packages just work. No extra config is needed.
 
 ### React Native
 
-If you use [Expo](https://expo.io) and use the [`expo-yarn-workspaces`](https://github.com/expo/expo/tree/master/packages/expo-yarn-workspaces) or [`@turborepo/adapter-expo`](https://www.npmjs.com/package/@turborepo/adapter-expo) package, you can just use internal packages as long as you are targeting iOS or Android. When you run Expo for these platforms, all of `node_modules` are automatically transpiled with [Metro](https://facebook.github.io/metro/). However, if you are targeting Expo for web, internal packages will not work because `node_modules` are oddly not transpiled for web.
+If you use [Expo](https://expo.io) and use the [`expo-yarn-workspaces`](https://github.com/expo/expo/tree/master/packages/expo-yarn-workspaces) or [`@turborepo/adapter-expo`](https://www.npmjs.com/package/@turborepo/adapter-expo) package, you can use internal packages as long as you are targeting iOS or Android. When you run Expo for these platforms, all of `node_modules` are automatically transpiled with [Metro](https://facebook.github.io/metro/). However, if you are targeting Expo for web, internal packages will not work because `node_modules` are oddly not transpiled for web.
 
 _I reached out to the Expo team about this inconsistency. They are aware of it. It's a legacy wart I'm told._
 

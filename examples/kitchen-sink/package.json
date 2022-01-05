@@ -11,9 +11,11 @@
     "dev": "turbo run dev --no-cache --parallel --continue",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
+    "prettier": "^2.5.1",
     "turbo": "latest"
   },
   "turbo": {
@@ -35,9 +37,15 @@
         "dependsOn": []
       },
       "lint": {
+        "dependsOn": [
+          "^build"
+        ],
         "outputs": []
       },
       "dev": {
+        "cache": false
+      },
+      "clean": {
         "cache": false
       }
     }

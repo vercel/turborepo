@@ -7,7 +7,7 @@ import (
 	"turbo/internal/api"
 	"turbo/internal/fs"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // nodejsPatterns is the FilenamePatterns value for NodejsBackend.

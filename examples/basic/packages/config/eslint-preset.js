@@ -2,7 +2,10 @@ module.exports = {
   extends: ["next", "prettier"],
   settings: {
     next: {
-      rootDir: ["docs/", "ui/", "web/", "config/", "tsconfig/"],
+      rootDir: ["apps/*/", "packages/*/"],
     },
+  },
+  rules: {
+    "@next/next/no-html-link-for-pages": "off",
   },
 };

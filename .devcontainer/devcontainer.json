@@ -1,5 +1,5 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-// https://github.com/microsoft/vscode-dev-containers/tree/v0.205.2/containers/go
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.209.6/containers/go
 {
   "name": "turbo (go, node)",
   "build": {
@@ -25,19 +25,25 @@
 
   // Add the IDs of extensions you want installed when the container is created.
   "extensions": [
-    "golang.Go",
-    "windmilleng.vscode-go-autotest",
-    "dbaeumer.vscode-eslint",
     "bradlc.vscode-tailwindcss",
+    "christian-kohler.npm-intellisense",
+    "dbaeumer.vscode-eslint",
+    "eamodio.gitlens",
+    "esbenp.prettier-vscode",
+    "github.copilot",
+    "github.vscode-pull-request-github",
+    "golang.Go",
     "heybourn.headwind",
-    "esbenp.prettier-vscode"
+    "silvenon.mdx",
+    "windmilleng.vscode-go-autotest",
+    "yzhang.markdown-all-in-one"
   ],
 
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
 
   // Use 'postCreateCommand' to run commands after the container is created.
-  // "postCreateCommand": "go version",
+  "postCreateCommand": "go version",
 
   // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
   "remoteUser": "vscode",

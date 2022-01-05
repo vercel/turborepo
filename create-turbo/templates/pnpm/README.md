@@ -1,10 +1,10 @@
-# Turborepo starter with PNPM
+# Turborepo starter with pnpm
 
 This is an official starter turborepo.
 
 ## What's inside?
 
-This turborepo uses [PNPM](https://pnpm.io) as a packages manager. It includes the following packages/apps:
+This turborepo uses [pnpm](https://pnpm.io) as a packages manager. It includes the following packages/apps:
 
 ### Apps and Packages
 
@@ -55,7 +55,7 @@ By default, Turborepo will cache locally. To enable Remote Caching (Beta) you wi
 
 ```
 cd my-turborepo
-npx turbo login
+pnpx turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
@@ -63,7 +63,7 @@ This will authenticate the Turborepo CLI with your [Vercel account](https://verc
 Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your turborepo:
 
 ```
-npx turbo link
+pnpx turbo link
 ```
 
 ## Useful Links

@@ -24,6 +24,7 @@ const DEFAULT_JEST_TIMEOUT = 5000;
 describe("create-turbo cli", () => {
   beforeAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
+    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
       throw new Error(
@@ -34,18 +35,20 @@ describe("create-turbo cli", () => {
 
   afterAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT);
+    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
   });
 
   it("guides the user through the process", (done) => {
-    let cli = spawn("node", [createTurbo], {});
+    let cli = spawn("node", [createTurbo, "--no-install"], {});
     let promptCount = 0;
     let previousPrompt: string;
-
+    const messages: string[] = [];
     cli.stdout.on("data", async (data) => {
       let prompt = cleanPrompt(data);
+
       if (
         !prompt ||
-        prompt === ">>> TURBOREPO" ||
+        prompt.startsWith(">>> TURBOREPO") ||
         isSamePrompt(prompt, previousPrompt)
       ) {
         return;
@@ -69,19 +72,17 @@ describe("create-turbo cli", () => {
         case 3:
           // Which package manager do you want to use?
           // easy to change deployment targets.
-          expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
+          expect(getPromptChoices(prompt)).toEqual(["npm", "pnpm", "yarn"]);
           cli.stdin.write(keys.enter);
           break;
-
         case 4:
-          expect(prompt).toEqual(
-            "? Do you want me to run `yarn install`? (Y/n)"
-          );
-          cli.stdin.write("n");
+          // Bootstrap info
+          expect(
+            prompt.startsWith(
+              ">>> Bootstrapped a new turborepo with the following:"
+            )
+          ).toBe(true);
 
-          // At this point the CLI will create directories and all that fun stuff
-          // TODO: We should actually test this stuff too, kinda a big deal
-          cli.kill("SIGINT");
           break;
       }
 
@@ -90,7 +91,6 @@ describe("create-turbo cli", () => {
 
     cli.on("exit", () => {
       try {
-        expect(promptCount).toEqual(4);
         done();
       } catch (error) {
         done(error);
@@ -126,7 +126,10 @@ describe("create-turbo cli", () => {
 
           If <dir> is not provided up front you will be prompted for it.
 
-          Flags:
+          Flags:    
+            --use-npm           Explicitly tell the CLI to bootstrap the app using npm
+            --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
+            --no-install        Explicitly do not run the package mananger's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
 
@@ -147,7 +150,10 @@ describe("create-turbo cli", () => {
 
           If <dir> is not provided up front you will be prompted for it.
 
-          Flags:
+          Flags:    
+            --use-npm           Explicitly tell the CLI to bootstrap the app using npm
+            --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
+            --no-install        Explicitly do not run the package mananger's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
 
@@ -182,7 +188,6 @@ function isSamePrompt(
   if (previousPrompt === undefined) {
     return false;
   }
-
   let promptStart = previousPrompt.split("\n")[0];
   promptStart = promptStart.slice(0, promptStart.lastIndexOf("("));
 
