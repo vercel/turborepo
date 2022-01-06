@@ -13,13 +13,3 @@ No. [Remote Caching](./features/remote-caching) is optional. However, you'll fin
 No. Turborepo does not store source code. Without Remote Caching, no code ever leaves your machine—it will only cache artifacts to local disk.
 
 With Turborepo's Remote Caching, you are responsible for configuring cache behavior and should only set up Turborepo to cache compiled artifacts. Please be aware that Turborepo treats all logs as artifacts and so these _will_ be stored along with other cache artifacts. There is also a retention period of 14 days. In the future, this retention period will be configurable on a per-task basis.
-
-## Is Turborepo's Remote Caching secure?
-
-We take security extremely seriously.
-
-- Without Remote Caching, there is no movement or storage of code (either source or compiled) anywhere other than to the local disk cache.
-- With Remote Caching enabled, Turborepo only ever caches what you configure it to (compiled artifacts and logs), not underlying source code. Turborepo.com has a cache retention period of 14 days. In the future, this will be configurable on a per task basis. All remote cache artifacts and logs are encrypted at rest and only ever transferred via SSL. Lastly, each organization has a completely isolated AWS subaccount.
-- Turborepo's hashes (the way it indexes an artifact) are modeled after git's hashes and so the chance of a collision is almost non-existent. Furthermore, since we isolate each customer's artifacts in separate AWS subaccounts, in the event of a hash collision, the impact would be immaterial.
-
-If the above answers do not satisfy or meet your security requirements, please let us know by opening an issue on [GitHub](https://github.com/vercel/turborepo/issues/new).
