@@ -164,9 +164,15 @@ export default function Sidebar({
   }, []);
 
   useEffect(() => {
-    requestIdleCallback(onScroll);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    if (typeof window !== "undefined") {
+      requestIdleCallback(onScroll);
+      window.addEventListener("scroll", onScroll);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
   }, [onScroll]);
 
   const { menu } = useMenuContext();
