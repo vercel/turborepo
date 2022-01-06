@@ -51,7 +51,7 @@ const navigation = {
     },
     {
       name: "Discord",
-      href: "https://turborepo.com/discord",
+      href: "https://turborepo.org/discord",
     },
   ],
   company: [
