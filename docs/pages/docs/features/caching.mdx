@@ -129,7 +129,9 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
 }
 ```
 
-Pro Tip: In most monorepos, you're don't often use environment variables in shared packages—mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the package tasks where they are used.
+<Callout type="info">
+  Pro Tip: In most monorepos, you're don't often use environment variables in shared packages—mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the package tasks where they are used.
+</Callout>
 
 ## Force overwrite cache
 
