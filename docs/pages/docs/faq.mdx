@@ -1,5 +1,6 @@
 ---
 title: Frequently Asked Questions
+description: Frequently asked questions about Turborepo
 ---
 
 # Frequently Asked Questions
@@ -10,6 +11,22 @@ No. [Remote Caching](./features/remote-caching) is optional. However, you'll fin
 
 ## Does Turborepo / Remote Caching store my source code?
 
-No. Turborepo does not store source code. Without Remote Caching, no code ever leaves your machine—it will only cache artifacts to local disk.
+No. Turborepo does not store source code. Without [Remote Caching](./features/remote-caching), no code ever leaves your machine—it will only cache artifacts to local disk.
 
-With Turborepo's Remote Caching, you are responsible for configuring cache behavior and should only set up Turborepo to cache compiled artifacts. Please be aware that Turborepo treats all logs as artifacts and so these _will_ be stored along with other cache artifacts. There is also a retention period of 14 days. In the future, this retention period will be configurable on a per-task basis.
+With Turborepo's Remote Caching, you are responsible for configuring cache behavior and should only set up Turborepo to cache compiled artifacts. Please be aware that Turborepo treats all logs as artifacts and so these _will_ be stored along with other cache artifacts.
+
+## Do I have to use Vercel to use Turborepo?
+
+No. Turborepo is an open source project and is not tied to any specific hosting provider or Remote Cache provider. The default Remote Cache provider is Vercel, should you opt-in to enable it. However, you can use any other provider that you like as long as they support the same API. There are a several open source community Remote Caches that are compatible with Turborepo.
+
+## Can I use Turborepo with a different Remote Cache provider other than Vercel?
+
+Yes. As long as the [Remote Cache](./features/remote-caching) provider you choose supports the same API, you can use Turborepo with it.
+
+## Does Turborepo collect and personally identifiable information?
+
+Due to the nature of Turborepo's functionality, no personal information is gathered when the open source binary is run locally. All cached artifacts are stored on your machine by default. Further, no log in information or contact details are collected by the `turbo` CLI, so Turborepo will never have access to any personally identifiable information. Thus, for any data privacy questions and concerns please refer to [Turborepo's Privacy Policy](https://turborepo.org/privacy).
+
+### Does Turborepo collect and personally identifiable information when using Remote Caching?
+
+When [Remote Caching](./features/remote-caching) is enabled, by default Turbo will utilize your Vercel account to cache artifacts in the cloud. Thus, for any data privacy questions and concerns, please refer to [Turborepo's Privacy Policy](https://turborepo.org/privacy) and [Vercel's Privacy Policy](https://vercel.com/legal/privacy-policy). If you use a different Remote Cache provider, please refer to the provider's privacy policy.
