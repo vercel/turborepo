@@ -75,17 +75,20 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 }
 ```
 
-## Alter Caching Based on Environment Variables
+## Alter Caching Based on Environment Variables and Files
 
-You can control cache fingerprinting (a.k.a. hashing) based on the values of environment variables in 2 ways:
+When you use `turbo` with tools which inline environment variables at build time (e.g. Next.js or Create React App), it is important you tell `turbo` about it. Otherwise, you could ship a cached artifact with the wrong environment variables!
 
-- Any environment variable that includes `TURBO` will impact the cache fingerprint of _all_ tasks and packages.
-- Including environment variables in `dependsOn` list prefixed by a `$` lets you control the hash on a per-task or per-package-task basis.
+Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavior based on the values of both environment variables and the contents of files:
+
+- Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-package-task basis.
+- Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
+- Including files or globs of files in `globalDependencies` will impact the cache fingerprint of _all_ tasks.
+- The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```json
 {
   "turbo": {
-    "baseBranch": "origin/master",
     "pipeline": {
       "build": {
         "dependsOn": {
@@ -116,11 +119,17 @@ You can control cache fingerprinting (a.k.a. hashing) based on the values of env
         "outputs": [".next/**"],
       }
     },
+    "baseBranch": "origin/main",
+    "globalDependencies": [
+      "$GITHUB_TOKEN"// env var that will impact the hashes of all tasks,
+      "tsconfig.json" // file contents will impact the hashes of all tasks,
+      ".env.*" // glob file contents will impact the hashes of all tasks,
+    ],
   }
 }
 ```
 
-When caching applications or packages that inline environment variables (e.g. like Next.js, Remix), you _should_ include them in the relevant `dependsOn` key based on the granularity that meets your needs.
+Pro Tip: In most monorepos, you're don't often use environment variables in shared packages—mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the package tasks where they are used.
 
 ## Force overwrite cache
 
