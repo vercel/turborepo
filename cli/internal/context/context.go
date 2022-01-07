@@ -525,12 +525,7 @@ func getHashableTurboEnvVarsFromOs() ([]string, []string) {
 	var pairs []string
 	for _, e := range os.Environ() {
 		kv := strings.SplitN(e, "=", 2)
-		// Eventually we should turn this into a safelist of reserved env vars, these should never be
-		// included in
-		if kv[0] == "TURBO_TOKEN" || kv[0] == "TURBO_TEAM" || kv[0] == "TURBO_BINARY_PATH" {
-			continue
-		}
-		if strings.Contains(kv[0], "TURBO") {
+		if strings.Contains(kv[0], "THASH") {
 			justNames = append(justNames, kv[0])
 			pairs = append(pairs, e)
 		}

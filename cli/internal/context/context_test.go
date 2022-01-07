@@ -98,14 +98,14 @@ func TestGetTargetsFromArguments(t *testing.T) {
 func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
 	os.Setenv("SOME_ENV_VAR", "excluded")
 	os.Setenv("SOME_OTHER_ENV_VAR", "excluded")
-	os.Setenv("FIRST_TURBO_ENV_VAR", "first")
+	os.Setenv("FIRST_THASH_ENV_VAR", "first")
 	os.Setenv("TURBO_TOKEN", "never")
-	os.Setenv("SOME_OTHER_TURBO_ENV_VAR", "second")
+	os.Setenv("SOME_OTHER_THASH_ENV_VAR", "second")
 	os.Setenv("TURBO_TEAM", "never")
 
 	gotNames, gotPairs := getHashableTurboEnvVarsFromOs()
-	wantNames := []string{"FIRST_TURBO_ENV_VAR", "SOME_OTHER_TURBO_ENV_VAR"}
-	wantPairs := []string{"FIRST_TURBO_ENV_VAR=first", "SOME_OTHER_TURBO_ENV_VAR=second"}
+	wantNames := []string{"FIRST_THASH_ENV_VAR", "SOME_OTHER_THASH_ENV_VAR"}
+	wantPairs := []string{"FIRST_THASH_ENV_VAR=first", "SOME_OTHER_THASH_ENV_VAR=second"}
 	if !reflect.DeepEqual(wantNames, gotNames) {
 		t.Errorf("getHashableTurboEnvVarsFromOs() env names got = %v, want %v", gotNames, wantNames)
 	}

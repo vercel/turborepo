@@ -24,13 +24,15 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
 ```json
 {
   "turbo": {
+    "pipeline": {
+      // ... omitted for brevity
+    },
+
     "globalDependencies": [
       ".env", // contents will impact hashes of all tasks
       "tsconfig.json", // contents will impact hashes of all tasks
       "$GITHUB_TOKEN"// value will impact the hashes of all tasks
     ],
-
-    // ... other configuration options
   }
 }
 ```
@@ -111,9 +113,6 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 ```json
 {
   "turbo": {
-    "globalDependencies": [
-      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
-    ],
     "pipeline": {
       "build": {
         "dependsOn": {
@@ -131,6 +130,9 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
         "outputs": [".next/**"],
       }
     },
+    "globalDependencies": [
+      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+    ],
   }
 }
 ```
