@@ -464,7 +464,7 @@ func (c *RunCommand) Run(args []string) int {
 					}
 				} else {
 					if runOptions.stream {
-						targetUi.Output("cache bypassed, executing")
+						targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 					}
 				}
 
