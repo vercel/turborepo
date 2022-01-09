@@ -200,6 +200,9 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 }
 
 func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
+	if r.runOptions.stream {
+		return
+	}
 	lineBuffer := 10
 	go func(r *RunState, Ui cli.Ui) {
 		z := r
@@ -207,26 +210,22 @@ func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
 		for {
 			select {
 			case outcome := <-z.done:
-				if !r.runOptions.stream {
-					if outcome == "done" {
-						if i != 0 {
-							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
-						}
-					} else {
-						if i != 0 {
-							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
-						}
-						z.Render(Ui, startAt, i, lineBuffer)
+				if outcome == "done" {
+					if i != 0 {
+						cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
 					}
-				}
-			case <-z.ticker.C:
-				if !r.runOptions.stream {
+				} else {
 					if i != 0 {
 						cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
 					}
 					z.Render(Ui, startAt, i, lineBuffer)
-					i++
 				}
+			case <-z.ticker.C:
+				if i != 0 {
+					cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
+				}
+				z.Render(Ui, startAt, i, lineBuffer)
+				i++
 			default:
 				continue
 			}
