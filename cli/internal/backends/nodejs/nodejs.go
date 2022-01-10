@@ -23,6 +23,9 @@ var NodejsYarnBackend = api.LanguageBackend{
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
+		if len(pkg.Workspaces) == 0 {
+			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
+		}
 		return pkg.Workspaces, nil
 	},
 	GetPackageDir: func() string {
@@ -53,6 +56,11 @@ var NodejsPnpmBackend = api.LanguageBackend{
 		if err := yaml.Unmarshal(bytes, &pnpmWorkspaces); err != nil {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
 		}
+
+		if len(pnpmWorkspaces.Packages) == 0 {
+			return nil, fmt.Errorf("pnpm-workspace.yaml: no packages found. Turborepo requires PNPM workspaces and thus packages to be defined in the root pnpm-workspace.yaml")
+		}
+
 		return pnpmWorkspaces.Packages, nil
 	},
 	GetPackageDir: func() string {
@@ -72,6 +80,9 @@ var NodejsNpmBackend = api.LanguageBackend{
 		pkg, err := fs.ReadPackageJSON("package.json")
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
+		}
+		if len(pkg.Workspaces) == 0 {
+			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires NPM workspaces to be defined in the root package.json")
 		}
 		return pkg.Workspaces, nil
 	},
