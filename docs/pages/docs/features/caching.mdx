@@ -35,7 +35,7 @@ To override the default cache folder behavior, pass an array of globs to a [`pip
 
 If your task does not emit any files (e.g. unit tests with Jest), set `outputs` to an empty array (i.e. `[]`). Turborepo will automagically cache the logs for you.
 
-<Callout emoji="ℹ️">
+<Callout type="info">
   Pro Tip for caching ESLint: You can get a cacheable pretty terminal output
   (even for non-errors) by setting `TIMING=1` variable before `eslint`. Learn
   more over at the [ESLint
@@ -75,6 +75,64 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 }
 ```
 
+## Alter Caching Based on Environment Variables and Files
+
+When you use `turbo` with tools which inline environment variables at build time (e.g. Next.js or Create React App), it is important you tell `turbo` about it. Otherwise, you could ship a cached artifact with the wrong environment variables!
+
+Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavior based on the values of both environment variables and the contents of files:
+
+- Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-package-task basis.
+- Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
+- Including files or globs of files in `globalDependencies` will impact the cache fingerprint of _all_ tasks.
+- The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": {
+          "^build"
+          // env vars will impact hashes of all "build" tasks
+          "$SOME_ENV_VAR"
+        },
+        "outputs": ["dist/**"]
+      },
+      "web#build": { // override settings for the "build" task for the "web" app
+        "dependsOn": [
+          "^build",
+           // env vars that will impact the hash of "build" task for only "web" app
+           "$STRIPE_SECRET_KEY",
+           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+           "$NEXT_PUBLIC_ANALYTICS_ID",
+        ],
+        "outputs": [".next/**"],
+      },
+      "docs#build": { // override settings for the "build" task for the "docs" app
+        "dependsOn": [
+          "^build",
+           // env vars that will impact the hash of "build" task for only "web" app
+           "$STRIPE_SECRET_KEY",
+           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+           "$NEXT_PUBLIC_ANALYTICS_ID",
+        ],
+        "outputs": [".next/**"],
+      }
+    },
+    "baseBranch": "origin/main",
+    "globalDependencies": [
+      "$GITHUB_TOKEN"// env var that will impact the hashes of all tasks,
+      "tsconfig.json" // file contents will impact the hashes of all tasks,
+      ".env.*" // glob file contents will impact the hashes of all tasks,
+    ],
+  }
+}
+```
+
+<Callout type="info">
+  Pro Tip: In most monorepos, you're don't often use environment variables in shared packages, but mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the app-specific tasks where they are used/inlined.
+</Callout>
+
 ## Force overwrite cache
 
 Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
@@ -95,7 +153,8 @@ By now, you're probably wondering how `turbo` decides what constitutes a cache h
 
 First `turbo` constructs a hash of the current global state of the monorepo:
 
-- The contents of any file that satisfies the glob patterns in [`globalDependencies`](../reference/configuration#globalDependencies-1)
+- The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](../reference/configuration#globalDependencies-1)
+- The sorted list environment variable key-value pairs that includes `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY` but not `STRIPE_PUBLIC_KEY`)
 
 Then it adds on more factors relative to a given package's task:
 
@@ -104,6 +163,7 @@ Then it adds on more factors relative to a given package's task:
 - The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a package's `package.json` from the root lockfile
 - The package task's name
+- The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in applicable [`pipeline.<task-or-package-task>.dependsOn`](../reference/configuration#dependson) list.
 
 Once `turbo` encounters a given package's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
 

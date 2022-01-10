@@ -36,6 +36,7 @@ import (
 )
 
 const TOPOLOGICAL_PIPELINE_DELMITER = "^"
+const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
@@ -349,6 +350,9 @@ func (c *RunCommand) Run(args []string) int {
 		deps := make(util.Set)
 		if core.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+					continue
+				}
 				if core.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
@@ -362,6 +366,9 @@ func (c *RunCommand) Run(args []string) int {
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+					continue
+				}
 				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
 					topoDeps.Add(from[1:])
 				} else {
@@ -423,16 +430,33 @@ func (c *RunCommand) Run(args []string) int {
 					outputs = append(outputs, pipeline.Outputs...)
 				}
 				targetLogger.Debug("task output globs", "outputs", outputs)
+
+				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
+				var hashabledEnvVars []string
+				var hashabledEnvPairs []string
+				if len(pipeline.DependsOn) > 0 {
+					for _, v := range pipeline.DependsOn {
+						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
+							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
+							hashabledEnvPairs = append(hashabledEnvVars, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashabledEnvVars = append(hashabledEnvVars, trimmed)
+						}
+					}
+					sort.Strings(hashabledEnvVars) // always sort them
+				}
+				targetLogger.Debug("hashable env vars", "vars", hashabledEnvVars)
 				hashable := struct {
-					Hash         string
-					Task         string
-					Outputs      []string
-					PassThruArgs []string
+					Hash             string
+					Task             string
+					Outputs          []string
+					PassThruArgs     []string
+					HashableEnvPairs []string
 				}{
-					Hash:         pack.Hash,
-					Task:         task,
-					Outputs:      outputs,
-					PassThruArgs: runOptions.passThroughArgs,
+					Hash:             pack.Hash,
+					Task:             task,
+					Outputs:          outputs,
+					PassThruArgs:     runOptions.passThroughArgs,
+					HashableEnvPairs: hashabledEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
