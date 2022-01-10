@@ -101,15 +101,14 @@ type RunState struct {
 
 func NewRunState(runOptions *RunOptions) *RunState {
 	return &RunState{
-		Success:    0,
-		Failure:    0,
-		Cached:     0,
-		Attempted:  0,
-		state:      make(map[string]*BuildTargetState),
-		done:       make(chan string),
+		Success:   0,
+		Failure:   0,
+		Cached:    0,
+		Attempted: 0,
+		state:     make(map[string]*BuildTargetState),
+
 		cursor:     cursor.New(),
 		runOptions: runOptions,
-		ticker:     time.NewTicker(100 * time.Millisecond),
 	}
 }
 
@@ -203,6 +202,8 @@ func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
 	if r.runOptions.stream {
 		return
 	}
+	r.ticker = time.NewTicker(100 * time.Millisecond)
+	r.done = make(chan string)
 	lineBuffer := 10
 	go func(r *RunState, Ui cli.Ui) {
 		z := r
@@ -210,22 +211,26 @@ func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
 		for {
 			select {
 			case outcome := <-z.done:
-				if outcome == "done" {
-					if i != 0 {
-						cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
+				if !r.runOptions.stream {
+					if outcome == "done" {
+						if i != 0 {
+							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
+						}
+					} else {
+						if i != 0 {
+							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
+						}
+						z.Render(Ui, startAt, i, lineBuffer)
 					}
-				} else {
+				}
+			case <-z.ticker.C:
+				if !r.runOptions.stream {
 					if i != 0 {
 						cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
 					}
 					z.Render(Ui, startAt, i, lineBuffer)
+					i++
 				}
-			case <-z.ticker.C:
-				if i != 0 {
-					cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
-				}
-				z.Render(Ui, startAt, i, lineBuffer)
-				i++
 			default:
 				continue
 			}
@@ -289,8 +294,12 @@ func (r *RunState) Close(Ui cli.Ui, startAt time.Time, filename string) error {
 			return err
 		}
 	}
-	r.ticker.Stop()
-	r.done <- "done"
+
+	if !r.runOptions.stream {
+		r.ticker.Stop()
+		r.done <- "done"
+	}
+
 	maybeFullTurbo := ""
 	if r.Cached == r.Attempted {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
