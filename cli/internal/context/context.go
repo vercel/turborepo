@@ -142,11 +142,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.RootPackageJSON = pkg
 
 		spaces, err := c.Backend.GetWorkspaceGlobs()
-		if (spaces == nil) {
-			return fmt.Errorf("Couldn't find workspaces defined for %s", c.Backend.Name)
-		}
+
 		if err != nil {
-			return err
+			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
 		// Calculate the global hash
