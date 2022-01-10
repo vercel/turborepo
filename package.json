@@ -33,6 +33,11 @@
   },
   "turbo": {
     "baseBranch": "origin/main",
+    "env": [
+      "CONVERTKIT_API_KEY",
+      "CONVERTKIT_API_SECRET",
+      "CONVERTKIT_FORM_ID"
+    ],
     "pipeline": {
       "test": {
         "outputs": [

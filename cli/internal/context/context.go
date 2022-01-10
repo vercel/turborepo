@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -36,21 +37,23 @@ const (
 
 // Context of the CLI
 type Context struct {
-	Args             []string
-	PackageInfos     map[interface{}]*fs.PackageJSON
-	ColorCache       *ColorCache
-	PackageNames     []string
-	TopologicalGraph dag.AcyclicGraph
-	TaskGraph        dag.AcyclicGraph
-	Dir              string
-	RootNode         string
-	RootPackageJSON  *fs.PackageJSON
-	GlobalHash       string
-	TraceFilePath    string
-	Lockfile         *fs.YarnLockfile
-	SCC              [][]dag.Vertex
-	Targets          []string
-	Backend          *api.LanguageBackend
+	Args                   []string
+	PackageInfos           map[interface{}]*fs.PackageJSON
+	ColorCache             *ColorCache
+	PackageNames           []string
+	TopologicalGraph       dag.AcyclicGraph
+	TaskGraph              dag.AcyclicGraph
+	Dir                    string
+	RootNode               string
+	RootPackageJSON        *fs.PackageJSON
+	GlobalHashableEnvPairs []string
+	GlobalHashableEnvNames []string
+	GlobalHash             string
+	TraceFilePath          string
+	Lockfile               *fs.YarnLockfile
+	SCC                    [][]dag.Vertex
+	Targets                []string
+	Backend                *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -149,12 +152,37 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// Calculate the global hash
 		globalDeps := make(util.Set)
 
+		// Calculate global file and env var dependencies
 		if len(pkg.Turbo.GlobalDependencies) > 0 {
-			f := globby.GlobFiles(rootpath, pkg.Turbo.GlobalDependencies, []string{})
-			for _, val := range f {
-				globalDeps.Add(val)
+			var globs []string
+			for _, v := range pkg.Turbo.GlobalDependencies {
+				if strings.HasPrefix(v, "$") {
+					trimmed := strings.TrimPrefix(v, "$")
+					c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, trimmed)
+					c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+				} else {
+					globs = append(globs, v)
+				}
+			}
+
+			if len(globs) > 0 {
+				f := globby.GlobFiles(rootpath, globs, []string{})
+				for _, val := range f {
+					globalDeps.Add(val)
+				}
 			}
 		}
+
+		// get system env vars for hashing purposes, these include any variable that includes "TURBO"
+		// that is NOT TURBO_TOKEN or TURBO_TEAM or TURBO_BINARY_PATH.
+		names, pairs := getHashableTurboEnvVarsFromOs()
+		c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, names...)
+		c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, pairs...)
+		// sort them for consistent hashing
+		sort.Strings(c.GlobalHashableEnvNames)
+		sort.Strings(c.GlobalHashableEnvPairs)
+		config.Logger.Debug("global hash env vars", "vars", c.GlobalHashableEnvNames)
+
 		if c.Backend.Name != "nodejs-yarn" {
 			// If we are not in Yarn, add the specfile and lockfile to global deps
 			globalDeps.Add(c.Backend.Specfile)
@@ -168,10 +196,12 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalHashable := struct {
 			globalFileHashMap    map[string]string
 			rootExternalDepsHash string
+			hashedSortedEnvPairs []string
 			globalCacheKey       string
 		}{
 			globalFileHashMap:    globalFileHashMap,
 			rootExternalDepsHash: pkg.ExternalDepsHash,
+			hashedSortedEnvPairs: c.GlobalHashableEnvPairs,
 			globalCacheKey:       GLOBAL_CACHE_KEY,
 		}
 		globalHash, err := fs.HashObject(globalHashable)
@@ -489,4 +519,20 @@ func getWorkspaceIgnores() []string {
 		"**/test/**/*",
 		"**/tests/**/*",
 	}
+}
+
+// getHashableTurboEnvVarsFromOs returns a list of environment variables names and
+// that are safe to include in the global hash
+func getHashableTurboEnvVarsFromOs() ([]string, []string) {
+	var justNames []string
+	var pairs []string
+	for _, e := range os.Environ() {
+		kv := strings.SplitN(e, "=", 2)
+		if strings.Contains(kv[0], "THASH") {
+			justNames = append(justNames, kv[0])
+			pairs = append(pairs, e)
+		}
+	}
+
+	return justNames, pairs
 }
