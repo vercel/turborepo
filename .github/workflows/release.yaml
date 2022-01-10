@@ -40,6 +40,23 @@ jobs:
         uses: sigstore/cosign-installer@v1.4.1
       - name: Install git-chglog
         run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@${{ env.GIT_CHGLOG_VERSION }}
+      - name: Build and push base images
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          file: Dockerfile.base
+          tags: |
+            ghcr.io/troian/golang-cross-base:${{env.RELEASE_TAG}}
+            troian/golang-cross-base:${{env.RELEASE_TAG}}
+          build-args: |
+            "GO_VERSION=${{env.GO_VERSION}}"
+            "GORELEASER_VERSION=${{env.GORELEASER_VERSION}}"
+            "TINI_VERSION=${{env.TINI_VERSION}}"
+            "COSIGN_VERSION=${{env.COSIGN_VERSION}}"
+            "COSIGN_SHA256=${{env.COSIGN_SHA256}}"
+            "DEBIAN_FRONTEND=${{env.DEBIAN_FRONTEND}}"
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
@@ -51,10 +68,6 @@ jobs:
             troian/golang-cross:${{env.RELEASE_TAG}}
           build-args: |
             "GO_VERSION=${{env.GO_VERSION}}"
-            "GORELEASER_VERSION=${{env.GORELEASER_VERSION}}"
-            "TINI_VERSION=${{env.TINI_VERSION}}"
-            "COSIGN_VERSION=${{env.COSIGN_VERSION}}"
-            "COSIGN_SHA256=${{env.COSIGN_SHA256}}"
             "OSX_SDK=${{env.OSX_SDK}}"
             "OSX_SDK_SUM=${{env.OSX_SDK_SUM}}"
             "OSX_VERSION_MIN=${{env.OSX_VERSION_MIN}}"
