@@ -3,8 +3,7 @@ version = 1
 
 [merge]
 automerge_label = "pr: automerge"
-blacklist_title_regex = "^WIP.*"
-blacklist_labels = ["pr: work in progress", "pr: on hold"]
+require_automerge_label = false
 method = "squash"
 delete_branch_on_merge = true
 optimistic_updates = true
