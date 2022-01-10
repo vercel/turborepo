@@ -36,6 +36,7 @@ import (
 )
 
 const TOPOLOGICAL_PIPELINE_DELMITER = "^"
+const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
@@ -348,6 +349,9 @@ func (c *RunCommand) Run(args []string) int {
 		deps := make(util.Set)
 		if core.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+					continue
+				}
 				if core.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
@@ -361,6 +365,9 @@ func (c *RunCommand) Run(args []string) int {
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+					continue
+				}
 				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
 					topoDeps.Add(from[1:])
 				} else {
@@ -422,16 +429,33 @@ func (c *RunCommand) Run(args []string) int {
 					outputs = append(outputs, pipeline.Outputs...)
 				}
 				targetLogger.Debug("task output globs", "outputs", outputs)
+
+				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
+				var hashabledEnvVars []string
+				var hashabledEnvPairs []string
+				if len(pipeline.DependsOn) > 0 {
+					for _, v := range pipeline.DependsOn {
+						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
+							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
+							hashabledEnvPairs = append(hashabledEnvVars, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashabledEnvVars = append(hashabledEnvVars, trimmed)
+						}
+					}
+					sort.Strings(hashabledEnvVars) // always sort them
+				}
+				targetLogger.Debug("hashable env vars", "vars", hashabledEnvVars)
 				hashable := struct {
-					Hash         string
-					Task         string
-					Outputs      []string
-					PassThruArgs []string
+					Hash             string
+					Task             string
+					Outputs          []string
+					PassThruArgs     []string
+					HashableEnvPairs []string
 				}{
-					Hash:         pack.Hash,
-					Task:         task,
-					Outputs:      outputs,
-					PassThruArgs: runOptions.passThroughArgs,
+					Hash:             pack.Hash,
+					Task:             task,
+					Outputs:          outputs,
+					PassThruArgs:     runOptions.passThroughArgs,
+					HashableEnvPairs: hashabledEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
@@ -444,9 +468,7 @@ func (c *RunCommand) Run(args []string) int {
 
 				// Cache ---------------------------------------------
 				var hit bool
-				if runOptions.forceExecution {
-					hit = false
-				} else {
+				if !runOptions.forceExecution {
 					hit, _, err = turboCache.Fetch(pack.Dir, hash, nil)
 					if err != nil {
 						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -460,10 +482,13 @@ func (c *RunCommand) Run(args []string) int {
 
 						return nil
 					}
-				}
-
-				if runOptions.stream {
-					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
+					if runOptions.stream {
+						targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
+					}
+				} else {
+					if runOptions.stream {
+						targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
+					}
 				}
 
 				// Setup command execution
@@ -478,9 +503,9 @@ func (c *RunCommand) Run(args []string) int {
 				// Setup stdout/stderr
 				// If we are not caching anything, then we don't need to write logs to disk
 				// be careful about this conditional given the default of cache = true
-				var combinedWriter io.Writer
-				if !runOptions.cache || !(pipeline.Cache == nil || *pipeline.Cache) {
-					combinedWriter = os.Stdout
+				var writer io.Writer
+				if !runOptions.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
+					writer = os.Stdout
 				} else {
 					// Setup log file
 					if err := fs.EnsureDir(logFileName); err != nil {
@@ -502,18 +527,19 @@ func (c *RunCommand) Run(args []string) int {
 					bufWriter := bufio.NewWriter(output)
 					bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 					defer bufWriter.Flush()
-					combinedWriter = io.MultiWriter(os.Stdout, bufWriter)
-					logger := log.New(combinedWriter, "", 0)
-					// Setup a streamer that we'll pipe cmd.Stdout to
-					logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
-					// Setup a streamer that we'll pipe cmd.Stderr to.
-					logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
-					cmd.Stderr = logStreamerErr
-					cmd.Stdout = logStreamerOut
-					// Flush/Reset any error we recorded
-					logStreamerErr.FlushRecord()
-					logStreamerOut.FlushRecord()
+					writer = io.MultiWriter(os.Stdout, bufWriter)
 				}
+
+				logger := log.New(writer, "", 0)
+				// Setup a streamer that we'll pipe cmd.Stdout to
+				logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+				// Setup a streamer that we'll pipe cmd.Stderr to.
+				logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+				cmd.Stderr = logStreamerErr
+				cmd.Stdout = logStreamerOut
+				// Flush/Reset any error we recorded
+				logStreamerErr.FlushRecord()
+				logStreamerOut.FlushRecord()
 
 				// Run the command
 				if err := cmd.Run(); err != nil {
