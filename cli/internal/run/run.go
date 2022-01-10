@@ -469,9 +469,7 @@ func (c *RunCommand) Run(args []string) int {
 
 				// Cache ---------------------------------------------
 				var hit bool
-				if runOptions.forceExecution {
-					hit = false
-				} else {
+				if !runOptions.forceExecution {
 					hit, _, err = turboCache.Fetch(pack.Dir, hash, nil)
 					if err != nil {
 						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -485,9 +483,13 @@ func (c *RunCommand) Run(args []string) int {
 
 						return nil
 					}
-				}
-				if runOptions.stream {
-					targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
+					if runOptions.stream {
+						targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
+					}
+				} else {
+					if runOptions.stream {
+						targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
+					}
 				}
 
 				// Setup command execution
