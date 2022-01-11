@@ -5,7 +5,7 @@ import path from "path";
 const isWin = process.platform === "win32";
 const turboPath = path.join(__dirname, "../turbo" + (isWin ? ".exe" : ""));
 
-type NPMClient = "npm" | "pnpm" | "yarn";
+type NPMClient = "npm" | "pnpm" | "yarn" | "berry";
 
 export class Monorepo {
   static tmpdir = os.tmpdir();
@@ -111,7 +111,7 @@ importers:
         "junction"
       );
 
-      if (this.npmClient == "yarn") {
+      if (this.npmClient == "yarn" || this.npmClient == "berry") {
         const pkgJson = JSON.parse(
           fs.readFileSync(
             path.join(cwd, "packages", pkg, "package.json"),
@@ -129,6 +129,17 @@ importers:
           }
         }
         this.commitFiles({ "yarn.lock": yarnYaml });
+
+        if (this.npmClient == "berry") {
+          execa.sync("yarn", ["set", "version", "stable"], {
+            cwd,
+          });
+          execa.sync("yarn", ["install"], {
+            cwd,
+          });
+          this.commitAll();
+          return;
+        }
       }
     }
   }
@@ -187,7 +198,7 @@ fs.copyFileSync(
             internalDeps.reduce((deps, dep) => {
               return {
                 ...deps,
-                [dep]: this.npmClient === "pnpm" ? "workspace:*" : "*",
+                [dep]: (this.npmClient === "pnpm" || this.npmClient === "berry") ? "workspace:*" : "*",
               };
             }, {})),
         },
@@ -279,6 +290,12 @@ fs.copyFileSync(
   run(command, args?: readonly string[], options?: execa.SyncOptions<string>) {
     switch (this.npmClient) {
       case "yarn":
+        return execa.sync("yarn", [command, ...(args || [])], {
+          cwd: this.root,
+          shell: true,
+          ...options,
+        });
+      case "berry":
         return execa.sync("yarn", [command, ...(args || [])], {
           cwd: this.root,
           shell: true,
