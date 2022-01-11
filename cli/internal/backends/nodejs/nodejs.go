@@ -34,6 +34,35 @@ var NodejsYarnBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
 	},
+	FinalCheck: func() bool {
+		return !fs.FileExists(".yarnrc.yml")
+	},
+}
+
+var NodejsBerryBackend = api.LanguageBackend{
+	Name:             "nodejs-berry",
+	Specfile:         "package.json",
+	Lockfile:         "yarn.lock",
+	FilenamePatterns: nodejsPatterns,
+	GetWorkspaceGlobs: func() ([]string, error) {
+		pkg, err := fs.ReadPackageJSON("package.json")
+		if err != nil {
+			return nil, fmt.Errorf("package.json: %w", err)
+		}
+		if len(pkg.Workspaces) == 0 {
+			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
+		}
+		return pkg.Workspaces, nil
+	},
+	GetPackageDir: func() string {
+		return "node_modules"
+	},
+	GetRunCommand: func() []string {
+		return []string{"yarn", "run"}
+	},
+	FinalCheck: func() bool {
+		return fs.PathExists(".yarnrc.yml")
+	},
 }
 
 // PnpmWorkspaces is a representation of workspace package globs found
@@ -69,6 +98,9 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"pnpm", "run"}
 	},
+	FinalCheck: func() bool {
+		return true
+	},
 }
 
 var NodejsNpmBackend = api.LanguageBackend{
@@ -91,5 +123,8 @@ var NodejsNpmBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"npm", "run"}
+	},
+	FinalCheck: func() bool {
+		return true
 	},
 }

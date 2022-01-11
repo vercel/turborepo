@@ -13,6 +13,7 @@ import (
 	"turbo/internal/context"
 	"turbo/internal/fs"
 	"turbo/internal/ui"
+	"turbo/internal/util"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/fatih/color"
@@ -112,7 +113,7 @@ func (c *PruneCommand) Run(args []string) int {
 	c.Config.Logger.Trace("docker", "value", pruneOptions.docker)
 	c.Config.Logger.Trace("out dir", "value", filepath.Join(pruneOptions.cwd, "out"))
 
-	if ctx.Backend.Name != "nodejs-yarn" {
+	if !util.IsYarn(ctx.Backend.Name) {
 		c.logError(c.Config.Logger, "", fmt.Errorf("this command is not yet implemented for %s", ctx.Backend.Name))
 		return 1
 	}

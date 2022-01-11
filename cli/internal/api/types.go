@@ -34,4 +34,6 @@ type LanguageBackend struct {
 	GetWorkspaceGlobs func() ([]string, error)
 	// Returns run command
 	GetRunCommand func() []string
+	// Returns final check to make sure the backend is valid
+	FinalCheck func() bool
 }

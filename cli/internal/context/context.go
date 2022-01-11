@@ -27,14 +27,6 @@ const (
 	GLOBAL_CACHE_KEY = "snozzberries"
 )
 
-// A BuildResultStatus represents the status of a target when we log a build result.
-type PackageManager int
-
-const (
-	Yarn PackageManager = iota
-	Pnpm
-)
-
 // Context of the CLI
 type Context struct {
 	Args                   []string
@@ -62,7 +54,7 @@ type Context struct {
 // Option is used to configure context
 type Option func(*Context) error
 
-// NewContext initializes run context
+// New initializes run context
 func New(opts ...Option) (*Context, error) {
 	var m Context
 	for _, opt := range opts {
@@ -74,30 +66,12 @@ func New(opts ...Option) (*Context, error) {
 	return &m, nil
 }
 
-// WithDir specifies the directory where turbo is initiated
-func WithDir(d string) Option {
-	return func(m *Context) error {
-		m.Dir = d
-		return nil
-	}
-}
-
 // WithArgs sets the arguments to the command that are used for parsing.
 // Remaining arguments can be accessed using your flag set and asking for Args.
 // Example: c.Flags().Args().
 func WithArgs(args []string) Option {
 	return func(c *Context) error {
 		c.Args = args
-		return nil
-	}
-}
-
-// WithArgs sets the arguments to the command that are used for parsing.
-// Remaining arguments can be accessed using your flag set and asking for Args.
-// Example: c.Flags().Args().
-func WithAuth() Option {
-	return func(c *Context) error {
-
 		return nil
 	}
 }
@@ -127,8 +101,8 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		}
 
 		// this should go into the bacend abstraction
-		if c.Backend.Name == "nodejs-yarn" {
-			lockfile, err := fs.ReadLockfile(config.Cache.Dir)
+		if util.IsYarn(c.Backend.Name) {
+			lockfile, err := fs.ReadLockfile(c.Backend.Name, config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}
@@ -181,7 +155,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		sort.Strings(c.GlobalHashableEnvPairs)
 		config.Logger.Debug("global hash env vars", "vars", c.GlobalHashableEnvNames)
 
-		if c.Backend.Name != "nodejs-yarn" {
+		if !util.IsYarn(c.Backend.Name) {
 			// If we are not in Yarn, add the specfile and lockfile to global deps
 			globalDeps.Add(c.Backend.Specfile)
 			globalDeps.Add(c.Backend.Lockfile)
@@ -212,10 +186,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 		c.Targets = targets
-		// We will parse all package.json's in simultaneously. We use a
-		// wait group because we cannot fully populate the graph (the next step)
+		// We will parse all package.json's simultaneously. We use a
+		// waitgroup because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
-		// and populate the graph
 		parseJSONWaitGroup := new(errgroup.Group)
 		justJsons := make([]string, 0, len(spaces))
 		for _, space := range spaces {
@@ -253,7 +226,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 
-		// Only can we get the SCC (i.e. topological order)
+		// Only we can get the SCC (i.e. topological order)
 		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
@@ -325,7 +298,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	for dep, version := range pkg.PeerDependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if c.Backend.Name == "nodejs-yarn" {
+	if util.IsYarn(c.Backend.Name) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
@@ -469,8 +442,8 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 	return nil
 }
 
-func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolveDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if c.Backend.Name != "nodejs-yarn" {
+func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
+	if !util.IsYarn(c.Backend.Name) {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
@@ -489,13 +462,13 @@ func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 			pkg.Mu.Lock()
 			pkg.SubLockfile[lockfileKey] = entry
 			pkg.Mu.Unlock()
-			resolveDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
+			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
 
 			if len(entry.Dependencies) > 0 {
-				c.ResolveDepGraph(wg, entry.Dependencies, resolveDepsSet, seen, pkg)
+				c.ResolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
 			}
 			if len(entry.OptionalDependencies) > 0 {
-				c.ResolveDepGraph(wg, entry.OptionalDependencies, resolveDepsSet, seen, pkg)
+				c.ResolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
 			}
 
 		}(directDepName, unresolvedVersion)

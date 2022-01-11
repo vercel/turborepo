@@ -90,7 +90,7 @@ type WorkspacesAlt struct {
 
 func (r *Workspaces) UnmarshalJSON(data []byte) error {
 	var tmp = &WorkspacesAlt{}
-	if err := json.Unmarshal(data, &tmp); err == nil {
+	if err := json.Unmarshal(data, tmp); err == nil {
 		*r = Workspaces(tmp.Packages)
 		return nil
 	}
@@ -105,7 +105,7 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 // Parse parses package.json payload and returns structure.
 func Parse(payload []byte) (*PackageJSON, error) {
 	var packagejson *PackageJSON
-	err := json.Unmarshal(payload, &packagejson)
+	err := json.Unmarshal(payload, packagejson)
 	return packagejson, err
 }
 

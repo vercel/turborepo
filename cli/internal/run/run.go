@@ -496,7 +496,12 @@ func (c *RunCommand) Run(args []string) int {
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
-				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+				var cmd *exec.Cmd
+				if ctx.Backend.Name == "nodejs-berry" {
+					cmd = exec.Command("yarn", argsactual...)
+				} else {
+					cmd = exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+				}
 				cmd.Dir = pack.Dir
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 				cmd.Env = append(os.Environ(), envs)
