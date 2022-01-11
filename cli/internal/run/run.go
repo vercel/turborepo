@@ -66,6 +66,7 @@ Options:
   --help                 Show this message.
   --scope                Specify package(s) to act as entry points for task
                          execution. Supports globs.
+  --exclude-scope        Specify package(s) to remove from scope.
   --cache-dir            Specify local filesystem cache directory.
 												 (default "./node_modules/.cache/turbo")
   --concurrency          Limit the concurrency of task execution. Use 1 for 
@@ -192,6 +193,16 @@ func (c *RunCommand) Run(args []string) int {
 			}) {
 				changedPackages.Add(k)
 			}
+		}
+	}
+
+	//Exclude packages
+	if len(runOptions.excludeScope) > 0 {
+		err = removePackages(ctx, runOptions.excludeScope)
+
+		if err != nil {
+			c.logError(c.Config.Logger, "", fmt.Errorf("Invalid exclude scope: %w", err))
+			return 1
 		}
 	}
 
@@ -668,6 +679,8 @@ type RunOptions struct {
 	globalDeps []string
 	// Filtered list of package entrypoints
 	scope []string
+	// Exclude from scope
+	excludeScope []string
 	// Force execution to be serially one-at-a-time
 	concurrency int
 	// Whether to execute in parallel (defaults to false)
@@ -729,6 +742,10 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--scope="):
 				if len(arg[len("--scope="):]) > 0 {
 					runOptions.scope = append(runOptions.scope, arg[len("--scope="):])
+				}
+			case strings.HasPrefix(arg, "--exclude-scope="):
+				if len(arg[len("--exclude-scope="):]) > 0 {
+					runOptions.excludeScope = append(runOptions.excludeScope, arg[len("--exclude-scope="):])
 				}
 			case strings.HasPrefix(arg, "--ignore="):
 				if len(arg[len("--ignore="):]) > 0 {
@@ -840,6 +857,24 @@ func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs 
 	}
 
 	return scopedPkgs, nil
+}
+
+func removePackages(ctx *context.Context, excludePatterns []string) (err error) {
+	var packages []string
+
+	glob, err := filter.Compile(excludePatterns)
+	if err != nil {
+		return err
+	}
+	for _, f := range ctx.PackageNames {
+		if !glob.Match(f) {
+			packages = append(packages, f)
+		}
+	}
+
+	ctx.PackageNames = packages
+
+	return nil
 }
 
 // logError logs an error and outputs it to the UI.

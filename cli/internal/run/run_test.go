@@ -67,6 +67,23 @@ func TestParseConfig(t *testing.T) {
 			},
 		},
 		{
+			"scope",
+			[]string{"foo", "--exclude-scope=foo", "--exclude-scope=blah"},
+			&RunOptions{
+				includeDependents:   true,
+				stream:              true,
+				bail:                true,
+				dotGraph:            "",
+				concurrency:         10,
+				includeDependencies: false,
+				cache:               true,
+				forceExecution:      false,
+				profile:             "",
+				excludeScope:        []string{"foo", "blah"},
+				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+			},
+		},
+		{
 			"concurrency",
 			[]string{"foo", "--concurrency=12"},
 			&RunOptions{
@@ -150,7 +167,7 @@ func TestScopedPackages(t *testing.T) {
 	cases := []struct {
 		Name     string
 		Ctx      *context.Context
-		Patttern []string
+		Pattern  []string
 		Expected util.Set
 	}{
 		{
@@ -189,11 +206,63 @@ func TestScopedPackages(t *testing.T) {
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			actual, err := getScopedPackages(tc.Ctx, tc.Patttern)
+			actual, err := getScopedPackages(tc.Ctx, tc.Pattern)
 			if err != nil {
 				t.Fatalf("invalid scope parse: %#v", err)
 			}
 			assert.EqualValues(t, tc.Expected, actual)
+		})
+	}
+}
+
+func TestExcludePackages(t *testing.T) {
+	cases := []struct {
+		Name     string
+		Ctx      *context.Context
+		Pattern  []string
+		Expected []string
+	}{
+		{
+			"starts with @",
+			&context.Context{
+				PackageNames: []string{"@sample/app", "sample-app", "jared"},
+			},
+			[]string{"@sample/*"},
+			[]string{"sample-app", "jared"},
+		},
+		{
+			"return an array of matches",
+			&context.Context{
+				PackageNames: []string{"foo", "bar", "baz"},
+			},
+			[]string{"f*"},
+			[]string{"bar", "baz"},
+		},
+		{
+			"return an array of matches",
+			&context.Context{
+				PackageNames: []string{"foo", "bar", "baz"},
+			},
+			[]string{"f*", "bar"},
+			[]string{"baz"},
+		},
+		{
+			"return matches in the order the list were defined",
+			&context.Context{
+				PackageNames: []string{"foo", "bar", "baz"},
+			},
+			[]string{"*a*", "!f*"},
+			[]string{"foo"},
+		},
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
+			err := removePackages(tc.Ctx, tc.Pattern)
+			if err != nil {
+				t.Fatalf("invalid scope parse: %#v", err)
+			}
+			assert.EqualValues(t, tc.Expected, tc.Ctx.PackageNames)
 		})
 	}
 }
