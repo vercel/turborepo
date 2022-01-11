@@ -24,6 +24,11 @@ func (s Set) Add(v interface{}) {
 	s[hashcode(v)] = v
 }
 
+// Delete removes an item from the set.
+func (s Set) Delete(v interface{}) {
+	delete(s, hashcode(v))
+}
+
 // Includes returns true/false of whether a value is in the set.
 func (s Set) Includes(v interface{}) bool {
 	_, ok := s[hashcode(v)]

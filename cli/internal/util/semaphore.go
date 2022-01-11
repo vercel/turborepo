@@ -21,6 +21,17 @@ func (s Semaphore) Acquire() {
 	s <- struct{}{}
 }
 
+// TryAcquire is used to do a non-blocking acquire.
+// Returns a bool indicating success
+func (s Semaphore) TryAcquire() bool {
+	select {
+	case s <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 // Release is used to return a slot. Acquire must
 // be called as a pre-condition.
 func (s Semaphore) Release() {
