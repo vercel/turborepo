@@ -11,6 +11,7 @@ import (
 	"turbo/internal/api"
 	"turbo/internal/backends"
 	"turbo/internal/config"
+	"turbo/internal/core"
 	"turbo/internal/fs"
 	"turbo/internal/globby"
 	"turbo/internal/util"
@@ -22,10 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	ROOT_NODE_NAME   = "___ROOT___"
-	GLOBAL_CACHE_KEY = "snozzberries"
-)
+const GLOBAL_CACHE_KEY = "snozzberries"
 
 // Context of the CLI
 type Context struct {
@@ -90,9 +88,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.ColorCache = NewColorCache()
-		c.RootNode = ROOT_NODE_NAME
+		c.RootNode = core.ROOT_NODE_NAME
 		// Need to ALWAYS have a root node, might as well do it now
-		c.TaskGraph.Add(ROOT_NODE_NAME)
+		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
 		if backend, err := backends.GetBackend(); err != nil {
 			return err
@@ -401,7 +399,7 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
-		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
+		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
 	}
 	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
 	for _, v := range externalDepSet.ToSlice() {

@@ -348,12 +348,12 @@ func (c *RunCommand) Run(args []string) int {
 	for taskName, value := range ctx.RootPackageJSON.Turbo.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
-		if core.IsPackageTask(taskName) {
+		if util.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
 				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
 					continue
 				}
-				if core.IsPackageTask(from) {
+				if util.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
 				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
@@ -362,7 +362,7 @@ func (c *RunCommand) Run(args []string) int {
 					deps.Add(from)
 				}
 			}
-			_, id := core.GetPackageTaskFromId(taskName)
+			_, id := util.GetPackageTaskFromId(taskName)
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
@@ -383,7 +383,7 @@ func (c *RunCommand) Run(args []string) int {
 			Cache:    value.Cache,
 			Run: func(id string) error {
 				cmdTime := time.Now()
-				name, task := context.GetPackageTaskFromId(id)
+				name, task := util.GetPackageTaskFromId(id)
 				pack := ctx.PackageInfos[name]
 				targetLogger := c.Config.Logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
 				defer targetLogger.ResetNamed(pack.Name)
@@ -397,7 +397,7 @@ func (c *RunCommand) Run(args []string) int {
 				}
 
 				// Setup tracer
-				tracer := runState.Run(context.GetTaskId(pack.Name, task))
+				tracer := runState.Run(util.GetTaskId(pack.Name, task))
 
 				// Create a logger
 				pref := ctx.ColorCache.PrefixColor(pack.Name)
@@ -563,7 +563,7 @@ func (c *RunCommand) Run(args []string) int {
 							defer f.Close()
 							scan := bufio.NewScanner(f)
 							c.Ui.Error("")
-							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, context.GetTaskId(pack.Name, task)))
+							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
 							c.Ui.Error("")
 							for scan.Scan() {
 								c.Ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout

@@ -87,9 +87,6 @@ func main() {
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
 		},
-		"me": func() (cli.Command, error) {
-			return &login.MeCommand{Config: cf, Ui: ui}, nil
-		},
 	}
 
 	// Capture the defer statements below so the "done" message comes last

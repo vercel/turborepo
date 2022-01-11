@@ -60,7 +60,6 @@ type SchedulerExecutionOptions struct {
 	TasksOnly bool
 }
 
-// Execute executes the pipeline, constructing an internal task graph and walking it accordlingly.
 func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
 	if len(pkgs) == 0 {
@@ -87,6 +86,7 @@ func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	return nil
 }
 
+// Execute executes the pipeline, constructing an internal task graph and walking it accordlingly.
 func (p *scheduler) Execute() []error {
 	var sema = util.NewSemaphore(p.Concurrency)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
@@ -100,7 +100,7 @@ func (p *scheduler) Execute() []error {
 			defer sema.Release()
 		}
 		// Find and run the task for the current vertex
-		_, taskName := GetPackageTaskFromId(dag.VertexName(v))
+		_, taskName := util.GetPackageTaskFromId(dag.VertexName(v))
 		task, ok := p.Tasks[taskName]
 		if !ok {
 			return fmt.Errorf("task %s not found", dag.VertexName(v))
@@ -125,7 +125,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 	for _, pkg := range scope {
 		for _, target := range taskNames {
-			traversalQueue = append(traversalQueue, GetTaskId(pkg, target))
+			traversalQueue = append(traversalQueue, util.GetTaskId(pkg, target))
 		}
 	}
 
@@ -134,7 +134,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 	for len(traversalQueue) > 0 {
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
-		pkg, taskName := GetPackageTaskFromId(taskId)
+		pkg, taskName := util.GetPackageTaskFromId(taskId)
 		task, ok := p.Tasks[taskName]
 		if !ok {
 			return fmt.Errorf("task %v not found", taskId)
@@ -158,7 +158,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 				})
 			}
 
-			toTaskId := GetTaskId(pkg, taskName)
+			toTaskId := util.GetTaskId(pkg, taskName)
 			hasTopoDeps := task.TopoDeps.Len() > 0 && p.TopologicGraph.DownEdges(pkg).Len() > 0
 			hasDeps := deps.Len() > 0
 			hasPackageTaskDeps := false
@@ -176,7 +176,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 					// add task dep from all the package deps within repo
 					for _, depPkg := range depPkgs.List() {
-						fromTaskId := GetTaskId(depPkg, from)
+						fromTaskId := util.GetTaskId(depPkg, from)
 						taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 						p.TaskGraph.Add(fromTaskId)
 						p.TaskGraph.Add(toTaskId)
@@ -188,7 +188,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 			if hasDeps {
 				for _, from := range deps.UnsafeListOfStrings() {
-					fromTaskId := GetTaskId(pkg, from)
+					fromTaskId := util.GetTaskId(pkg, from)
 					taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 					p.TaskGraph.Add(fromTaskId)
 					p.TaskGraph.Add(toTaskId)
@@ -211,7 +211,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 			if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
 				// TODO: this should change to ROOT_NODE_NAME
-				fromTaskId := GetTaskId(pkg, "")
+				fromTaskId := util.GetTaskId(pkg, "")
 				taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 				p.TaskGraph.Add(ROOT_NODE_NAME)
 				p.TaskGraph.Add(toTaskId)
