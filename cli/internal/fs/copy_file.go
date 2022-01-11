@@ -33,14 +33,6 @@ func RecursiveCopy(from string, to string, mode os.FileMode) error {
 	return RecursiveCopyOrLinkFile(from, to, mode, false, false)
 }
 
-// RecursiveLink hardlinks either a single file or a directory.
-// Note that you can't hardlink directories so the behaviour is much the same as a recursive copy.
-// If it can't link then it falls back to a copy.
-// 'mode' is the mode of the destination file.
-func RecursiveLink(from string, to string, mode os.FileMode) error {
-	return RecursiveCopyOrLinkFile(from, to, mode, true, true)
-}
-
 // RecursiveCopyOrLinkFile recursively copies or links a file or directory.
 // 'mode' is the mode of the destination file.
 // If 'link' is true then we'll hardlink files instead of copying them.

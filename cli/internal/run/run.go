@@ -40,9 +40,8 @@ const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Ui *cli.ColoredUi
-
 	Config *config.Config
+	Ui     *cli.ColoredUi
 }
 
 // Synopsis of run command
@@ -178,7 +177,7 @@ func (c *RunCommand) Run(args []string) int {
 	filteredChangedFiles := make(util.Set)
 	// Ignore any changed files in the ignore set
 	for _, c := range changedFiles {
-		if !ignoreSet.Include(c) {
+		if !ignoreSet.Includes(c) {
 			filteredChangedFiles.Add(c)
 		}
 	}
@@ -200,7 +199,7 @@ func (c *RunCommand) Run(args []string) int {
 	// Unwind scope globs
 	scopePkgs, err := getScopedPackages(ctx, runOptions.scope)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("Invalid scope: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("invalid scope: %w", err))
 		return 1
 	}
 
@@ -585,7 +584,7 @@ func (c *RunCommand) Run(args []string) int {
 					ignore := []string{}
 					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
-						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
+						c.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 					}
 				}
 
@@ -810,12 +809,12 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
 				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
-					return nil, fmt.Errorf("Invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
+					return nil, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
 				} else {
 					if i >= 1 {
 						runOptions.concurrency = i
 					} else {
-						return nil, fmt.Errorf("Invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1.", i)
+						return nil, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
 					}
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
@@ -892,18 +891,6 @@ func (c *RunCommand) logWarning(log hclog.Logger, prefix string, err error) {
 	}
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
-}
-
-// logError logs an error and outputs it to the UI.
-func (c *RunCommand) logFatal(log hclog.Logger, prefix string, err error) {
-	log.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
-	os.Exit(1)
 }
 
 func hasGraphViz() bool {

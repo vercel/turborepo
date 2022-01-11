@@ -53,32 +53,6 @@ func New() *Cursor {
 	}
 }
 
-// New creates a new cursor that writes to the given out writer.
-func NewWithWriter(out io.Writer) *Cursor {
-	return &Cursor{
-		c: &terminal.Cursor{
-			Out: &fakeFileWriter{w: out},
-		},
-	}
-}
-
-// Hide makes the cursor invisible.
-func (c *Cursor) Hide() {
-	c.c.Hide()
-}
-
-// Show makes the cursor visible.
-func (c *Cursor) Show() {
-	c.c.Show()
-}
-
-// EraseLine deletes the contents of the current line.
-func (c *Cursor) EraseLine() {
-	if cur, ok := c.c.(*terminal.Cursor); ok {
-		terminal.EraseLine(cur.Out, terminal.ERASE_LINE_ALL)
-	}
-}
-
 // EraseLine erases a line from a FileWriter.
 func EraseLine(fw terminal.FileWriter) {
 	terminal.EraseLine(fw, terminal.ERASE_LINE_ALL)

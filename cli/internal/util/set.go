@@ -24,13 +24,8 @@ func (s Set) Add(v interface{}) {
 	s[hashcode(v)] = v
 }
 
-// Delete removes an item from the set.
-func (s Set) Delete(v interface{}) {
-	delete(s, hashcode(v))
-}
-
-// Include returns true/false of whether a value is in the set.
-func (s Set) Include(v interface{}) bool {
+// Includes returns true/false of whether a value is in the set.
+func (s Set) Includes(v interface{}) bool {
 	_, ok := s[hashcode(v)]
 	return ok
 }
@@ -46,7 +41,7 @@ func (s Set) Intersection(other Set) Set {
 		s, other = other, s
 	}
 	for _, v := range s {
-		if other.Include(v) {
+		if other.Includes(v) {
 			result.Add(v)
 		}
 	}

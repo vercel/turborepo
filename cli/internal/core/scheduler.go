@@ -139,7 +139,7 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 		if !ok {
 			return fmt.Errorf("task %v not found", taskId)
 		}
-		if !visited.Include(taskId) {
+		if !visited.Includes(taskId) {
 			visited.Add(taskId)
 			deps := task.Deps
 

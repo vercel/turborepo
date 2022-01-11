@@ -2,7 +2,6 @@ package util
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"turbo/internal/ui"
 )
@@ -18,14 +17,6 @@ func InitPrintf() {
 // replacements for pseudo-shell variables for ANSI formatting codes.
 func Sprintf(format string, args ...interface{}) string {
 	return os.Expand(fmt.Sprintf(format, args...), replace)
-}
-
-func Printf(format string, args ...interface{}) {
-	fmt.Fprint(os.Stderr, os.Expand(fmt.Sprintf(format, args...), replace))
-}
-
-func Fprintf(writer io.Writer, format string, args ...interface{}) {
-	fmt.Fprint(writer, os.Expand(fmt.Sprintf(format, args...), replace))
 }
 
 func replace(s string) string {
@@ -57,12 +48,4 @@ var replacements = map[string]string{
 	"RESET":        "\x1b[0m",
 	"ERASE_AFTER":  "\x1b[K",
 	"CLEAR_END":    "\x1b[0J",
-}
-
-// replacements overrides for light colour scheme.
-var lightOverrides = map[string]string{
-	"BOLD_GREY":  "\x1b[37;1m",
-	"BOLD_WHITE": "\x1b[30;1m",
-	"GREY":       "\x1b[37m",
-	"WHITE":      "\x1b[30m",
 }

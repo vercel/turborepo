@@ -18,9 +18,6 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// clear the line and move the cursor up
-var clear = fmt.Sprintf("%c[%dA%c[2K", 27, 1, 27)
-
 // A RunResult represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
 type RunResult struct {
@@ -55,18 +52,6 @@ const (
 	TargetTested
 	TargetTestFailed
 )
-
-// Category returns the broad area that this event represents in the tasks we perform for a target.
-func (s RunResultStatus) Category() string {
-	switch s {
-	case TargetBuilding, TargetBuildStopped, TargetBuilt, TargetBuildFailed:
-		return "Build"
-	case TargetTesting, TargetTestStopped, TargetTested, TargetTestFailed:
-		return "Test"
-	default:
-		return "Other"
-	}
-}
 
 type BuildTargetState struct {
 	StartAt time.Time
