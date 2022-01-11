@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
@@ -19,9 +20,11 @@ import (
 
 type ApiClient struct {
 	// The api's base URL
-	baseUrl      string
-	Token        string
-	turboVersion string
+	baseUrl          string
+	Token            string
+	turboVersion     string
+	currentFailCount uint64
+	maxFailCount     uint64
 	// An http client
 	HttpClient *retryablehttp.Client
 }
@@ -32,21 +35,41 @@ func (api *ApiClient) SetToken(token string) {
 
 // New creates a new ApiClient
 func NewClient(baseUrl string, logger hclog.Logger, turboVersion string) *ApiClient {
-	return &ApiClient{
-		baseUrl:      baseUrl,
-		turboVersion: turboVersion,
+	client := &ApiClient{
+		baseUrl:          baseUrl,
+		turboVersion:     turboVersion,
+		currentFailCount: 0,
+		maxFailCount:     2,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(60 * time.Second),
+				Timeout: time.Duration(4 * time.Second),
 			},
-			RetryWaitMin: 10 * time.Second,
-			RetryWaitMax: 20 * time.Second,
+			RetryWaitMin: 5 * time.Second,
+			RetryWaitMax: 10 * time.Second,
 			RetryMax:     5,
-			CheckRetry:   retryablehttp.DefaultRetryPolicy,
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
 	}
+
+	client.HttpClient.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		// do not retry on context.Canceled or context.DeadlineExceeded
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+
+		if err != nil {
+			atomic.AddUint64(&client.currentFailCount, 1)
+			return false, err
+		}
+		if resp.StatusCode == http.StatusInternalServerError {
+			atomic.AddUint64(&client.currentFailCount, 1)
+			return false, err
+		}
+		return retryablehttp.ErrorPropagatedRetryPolicy(ctx, resp, err)
+	}
+
+	return client
 }
 
 // DeviceToken is an OAuth 2.0 Device Flow token
@@ -72,6 +95,9 @@ func (c *ApiClient) UserAgent() string {
 }
 
 func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
+	if c.currentFailCount >= c.maxFailCount {
+		return fmt.Errorf("too many failures, not even going to try")
+	}
 	params := url.Values{}
 	if teamId != "" && strings.HasPrefix(teamId, "team_") {
 		params.Add("teamId", teamId)
@@ -79,7 +105,12 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	if slug != "" {
 		params.Add("slug", slug)
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), rawBody)
+	// only add a ? if it's actually needed (makes logging cleaner)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
+	}
+	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -96,6 +127,9 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 }
 
 func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBody interface{}) (*http.Response, error) {
+	if c.currentFailCount >= c.maxFailCount {
+		return nil, fmt.Errorf("too many failures, not even going to try")
+	}
 	params := url.Values{}
 	if teamId != "" && strings.HasPrefix(teamId, "team_") {
 		params.Add("teamId", teamId)
@@ -103,11 +137,16 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 	if slug != "" {
 		params.Add("slug", slug)
 	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), nil)
+	// only add a ? if it's actually needed (makes logging cleaner)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
+	}
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded), nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
-		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
+		return nil, fmt.Errorf("invalid cache URL: %w", err)
 	}
 	return c.HttpClient.Do(req)
 }
