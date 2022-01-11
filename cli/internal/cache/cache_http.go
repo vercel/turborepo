@@ -41,6 +41,10 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
+	if cache.config.ApiClient.CurrentFailCount > cache.config.Cache.MaxRemoteFailCount {
+		return fmt.Errorf("skipping uploading artifacts to HTTP cache: too many failures")
+	}
+
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
 	return cache.config.ApiClient.PutArtifact(hash, cache.config.TeamId, cache.config.TeamSlug, duration, r)
@@ -102,6 +106,9 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
+	if cache.config.ApiClient.CurrentFailCount > cache.config.Cache.MaxRemoteFailCount {
+		return false, nil, fmt.Errorf("skipping downloading artifacts to HTTP cache: too many past failures")
+	}
 	m, files, err := cache.retrieve(key)
 	if err != nil {
 		return false, files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)

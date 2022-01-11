@@ -23,8 +23,7 @@ type ApiClient struct {
 	baseUrl          string
 	Token            string
 	turboVersion     string
-	currentFailCount uint64
-	maxFailCount     uint64
+	CurrentFailCount uint64
 	// An http client
 	HttpClient *retryablehttp.Client
 }
@@ -38,8 +37,7 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string) *ApiCli
 	client := &ApiClient{
 		baseUrl:          baseUrl,
 		turboVersion:     turboVersion,
-		currentFailCount: 0,
-		maxFailCount:     2,
+		CurrentFailCount: 0,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
 				Timeout: time.Duration(4 * time.Second),
@@ -51,25 +49,41 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string) *ApiCli
 			Logger:       logger,
 		},
 	}
+	return client
+}
 
-	client.HttpClient.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
-		// do not retry on context.Canceled or context.DeadlineExceeded
-		if ctx.Err() != nil {
-			return false, ctx.Err()
+func (client *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
+	if err != nil {
+		if v, ok := err.(*url.Error); ok {
+			// Don't retry if the error was due to TLS cert verification failure.
+			if _, ok := v.Err.(x509.UnknownAuthorityError); ok {
+				atomic.AddUint64(&client.CurrentFailCount, 1)
+				return false, v
+			}
 		}
 
-		if err != nil {
-			atomic.AddUint64(&client.currentFailCount, 1)
-			return false, err
-		}
-		if resp.StatusCode == http.StatusInternalServerError {
-			atomic.AddUint64(&client.currentFailCount, 1)
-			return false, err
-		}
-		return retryablehttp.ErrorPropagatedRetryPolicy(ctx, resp, err)
+		atomic.AddUint64(&client.CurrentFailCount, 1)
+		return true, nil
 	}
 
-	return client
+	// 429 Too Many Requests is recoverable. Sometimes the server puts
+	// a Retry-After response header to indicate when the server is
+	// available to start processing request from client.
+	if resp.StatusCode == http.StatusTooManyRequests {
+		atomic.AddUint64(&client.CurrentFailCount, 1)
+		return true, nil
+	}
+
+	// Check the response code. We retry on 500-range responses to allow
+	// the server time to recover, as 500's are typically not permanent
+	// errors and may relate to outages on the server side. This will catch
+	// invalid response codes as well, like 0 and 999.
+	if resp.StatusCode == 0 || (resp.StatusCode >= 500 && resp.StatusCode != 501) {
+		atomic.AddUint64(&client.CurrentFailCount, 1)
+		return true, fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	}
+
+	return false, nil
 }
 
 // DeviceToken is an OAuth 2.0 Device Flow token
@@ -95,9 +109,6 @@ func (c *ApiClient) UserAgent() string {
 }
 
 func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
-	if c.currentFailCount >= c.maxFailCount {
-		return fmt.Errorf("too many failures, not even going to try")
-	}
 	params := url.Values{}
 	if teamId != "" && strings.HasPrefix(teamId, "team_") {
 		params.Add("teamId", teamId)
@@ -118,6 +129,19 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
+
+	c.HttpClient.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		// do not retry on context.Canceled or context.DeadlineExceeded
+		if ctx.Err() != nil {
+			c.CurrentFailCount = atomic.AddUint64(&c.CurrentFailCount, 1)
+			return false, ctx.Err()
+		}
+
+		// don't propagate other errors
+		shouldRetry, err := c.retryCachePolicy(resp, err)
+		return shouldRetry, err
+	}
+
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -127,9 +151,6 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 }
 
 func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBody interface{}) (*http.Response, error) {
-	if c.currentFailCount >= c.maxFailCount {
-		return nil, fmt.Errorf("too many failures, not even going to try")
-	}
 	params := url.Values{}
 	if teamId != "" && strings.HasPrefix(teamId, "team_") {
 		params.Add("teamId", teamId)
@@ -148,6 +169,19 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 	if err != nil {
 		return nil, fmt.Errorf("invalid cache URL: %w", err)
 	}
+
+	c.HttpClient.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		// do not retry on context.Canceled or context.DeadlineExceeded
+		if ctx.Err() != nil {
+			c.CurrentFailCount = atomic.AddUint64(&c.CurrentFailCount, 1)
+			return false, ctx.Err()
+		}
+
+		// don't propagate other errors
+		shouldRetry, err := c.retryCachePolicy(resp, err)
+		return shouldRetry, err
+	}
+
 	return c.HttpClient.Do(req)
 }
 

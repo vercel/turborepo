@@ -49,12 +49,12 @@ type Config struct {
 
 // CacheConfig
 type CacheConfig struct {
+	// Number of failed requests before we stop trying to upload/download artifacts to the remote cache
+	MaxRemoteFailCount uint64
 	// Number of async workers
 	Workers int
 	// Cache directory
 	Dir string
-	// HTTP URI of the cache
-	Url string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
@@ -182,8 +182,9 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		ApiClient:    apiClient,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
-			Workers: runtime.NumCPU() + 2,
-			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
+			MaxRemoteFailCount: 3,
+			Workers:            runtime.NumCPU() + 2,
+			Dir:                filepath.Join("node_modules", ".cache", "turbo"),
 		},
 	}
 
