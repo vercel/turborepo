@@ -149,7 +149,7 @@ function removeRecursive(dir) {
     if (stats.isDirectory()) removeRecursive(entryPath);
     else fs.unlinkSync(entryPath);
   }
-  fs.rmdirSync(dir);
+  fs.rmSync(dir);
 }
 
 function applyManualBinaryPathOverride(overridePath) {

@@ -71,7 +71,7 @@ turbo-linux
     );
     if (fs.existsSync(root)) {
       try {
-        fs.rmdirSync(root + "/packages", { recursive: true });
+        fs.rmSync(root + "/packages", { recursive: true });
       } catch (error) {}
     }
 

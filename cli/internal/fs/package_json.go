@@ -105,7 +105,7 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 // Parse parses package.json payload and returns structure.
 func Parse(payload []byte) (*PackageJSON, error) {
 	var packagejson *PackageJSON
-	err := json.Unmarshal(payload, packagejson)
+	err := json.Unmarshal(payload, &packagejson)
 	return packagejson, err
 }
 

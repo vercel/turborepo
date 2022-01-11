@@ -306,6 +306,6 @@ fs.copyFileSync(
   }
 
   cleanup() {
-    fs.rmdirSync(this.root, { recursive: true });
+    fs.rmSync(this.root, { recursive: true });
   }
 }
