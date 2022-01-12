@@ -90,7 +90,6 @@ func parsePruneArgs(args []string) (*PruneOptions, error) {
 	return options, nil
 }
 
-// TODO(@Xenfo): Add Yarn Berry support
 // Prune creates a smaller monorepo with only the required workspaces
 func (c *PruneCommand) Run(args []string) int {
 	pruneOptions, err := parsePruneArgs(args)
