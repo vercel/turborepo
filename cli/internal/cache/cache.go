@@ -3,9 +3,10 @@ package cache
 
 import (
 	"fmt"
-	"sync"
 	"turbo/internal/config"
 	"turbo/internal/ui"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Cache is abstracted way to cache/fetch previously run tasks
@@ -53,8 +54,7 @@ type cacheMultiplexer struct {
 }
 
 func (mplex cacheMultiplexer) Put(target string, key string, duration int, files []string) error {
-	mplex.storeUntil(target, key, duration, files, len(mplex.caches))
-	return nil
+	return mplex.storeUntil(target, key, duration, files, len(mplex.caches))
 }
 
 // storeUntil stores artifacts into higher priority caches than the given one.
@@ -62,30 +62,34 @@ func (mplex cacheMultiplexer) Put(target string, key string, duration int, files
 // downloading from the RPC cache.
 // This is a little inefficient since we could write the file to plz-out then copy it to the dir cache,
 // but it's hard to fix that without breaking the cache abstraction.
-func (mplex cacheMultiplexer) storeUntil(target string, key string, duration int, outputGlobs []string, stopAt int) {
+func (mplex cacheMultiplexer) storeUntil(target string, key string, duration int, outputGlobs []string, stopAt int) error {
 	// Attempt to store on all caches simultaneously.
-	var wg sync.WaitGroup
+	g := new(errgroup.Group)
 	for i, cache := range mplex.caches {
 		if i == stopAt {
 			break
 		}
-		wg.Add(1)
-		go func(cache Cache) {
-			cache.Put(target, key, duration, outputGlobs)
-			wg.Done()
-		}(cache)
+		c := cache
+		g.Go(func() error {
+			return c.Put(target, key, duration, outputGlobs)
+		})
 	}
-	wg.Wait()
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (mplex cacheMultiplexer) Fetch(target string, key string, files []string) (bool, []string, error) {
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range mplex.caches {
-		if ok, actualFiles, _ := cache.Fetch(target, key, files); ok {
+		if ok, actualFiles, err := cache.Fetch(target, key, files); ok {
 			// Store this into other caches
 			mplex.storeUntil(target, key, 0, actualFiles, i)
-			return ok, actualFiles, nil
+			return ok, actualFiles, err
 		}
 	}
 	return false, files, nil
