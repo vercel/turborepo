@@ -34,9 +34,6 @@ var NodejsYarnBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
 	},
-	FinalCheck: func() bool {
-		return !fs.PathExists(".yarn/releases")
-	},
 }
 
 var NodejsBerryBackend = api.LanguageBackend{
@@ -59,9 +56,6 @@ var NodejsBerryBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
-	},
-	FinalCheck: func() bool {
-		return fs.PathExists(".yarn/releases")
 	},
 }
 
@@ -98,9 +92,6 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"pnpm", "run"}
 	},
-	FinalCheck: func() bool {
-		return true
-	},
 }
 
 var NodejsNpmBackend = api.LanguageBackend{
@@ -123,8 +114,5 @@ var NodejsNpmBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"npm", "run"}
-	},
-	FinalCheck: func() bool {
-		return true
 	},
 }
