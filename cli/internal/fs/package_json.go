@@ -6,8 +6,6 @@ import (
 	"sync"
 )
 
-// TurboCacheOptions are configuration for Turborepo cache
-
 type TurboConfigJSON struct {
 	Base               string   `json:"baseBranch,omitempty"`
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`

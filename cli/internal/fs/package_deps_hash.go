@@ -21,7 +21,7 @@ var (
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
 type PackageDepsOptions struct {
 	// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
-	// containing package.json.  If omitted, the default value is the current working directory.
+	// containing package.json. If omitted, the default value is the current working directory.
 	PackagePath string
 	// ExcludedPaths is an optional array of file path exclusions. If a file should be omitted from the list
 	// of dependencies, use this to exclude it.

@@ -1,9 +1,7 @@
-//go:build !windows
-// +build !windows
-
 package fs
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -30,10 +28,21 @@ func ReadLockfile(backendName string, cacheDir string) (*YarnLockfile, error) {
 
 		var next []byte
 		if backendName == "nodejs-yarn" {
-			lines := strings.Split(string(contentsB), "\n")
+			var lines []string
+			var l *regexp.Regexp
+			var output string
+
+			hasLF := !bytes.HasSuffix(contentsB, []byte("\r\n"))
+			if hasLF {
+				lines = strings.Split(string(contentsB), "\n")
+				l = regexp.MustCompile("\"|:\n$")
+			} else {
+				lines = strings.Split(strings.TrimRight(string(contentsB), "\r\n"), "\r\n")
+				l = regexp.MustCompile("\"|:\r\n$")
+			}
+
 			r := regexp.MustCompile(`^[\w"]`)
 			double := regexp.MustCompile(`\:\"\:`)
-			l := regexp.MustCompile("\"|:\n$")
 			o := regexp.MustCompile(`\"\s\"`)
 			// deals with colons
 			// integrity sha-... -> integrity: sha-...
@@ -48,7 +57,12 @@ func ReadLockfile(backendName string, cacheDir string) (*YarnLockfile, error) {
 					lines[i] = double.ReplaceAllString(first, "\":")
 				}
 			}
-			output := o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
+
+			if hasLF {
+				output = o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
+			} else {
+				output = o.ReplaceAllString(strings.Join(lines, "\r\n"), "\": \"")
+			}
 
 			next = []byte(a.ReplaceAllStringFunc(output, func(m string) string {
 				parts := a.FindStringSubmatch(m)
