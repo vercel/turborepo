@@ -452,15 +452,30 @@ func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 		wg.Add(1)
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
-			lockfileKey := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
-			if seen.Contains(lockfileKey) {
+			var lockfileKey string
+			lockfileKey1 := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
+			lockfileKey2 := fmt.Sprintf("%v@npm:%v", directDepName, unresolvedVersion)
+			if seen.Contains(lockfileKey1) || seen.Contains(lockfileKey2) {
 				return
 			}
-			seen.Add(lockfileKey)
-			entry, ok := (*c.Lockfile)[lockfileKey]
-			if !ok {
+
+			seen.Add(lockfileKey1)
+			seen.Add(lockfileKey2)
+
+			var entry *fs.LockfileEntry
+			entry1, ok1 := (*c.Lockfile)[lockfileKey1]
+			entry2, ok2 := (*c.Lockfile)[lockfileKey2]
+			if !ok1 && !ok2 {
 				return
 			}
+			if ok1 {
+				lockfileKey = lockfileKey1
+				entry = entry1
+			} else {
+				lockfileKey = lockfileKey2
+				entry = entry2
+			}
+
 			pkg.Mu.Lock()
 			pkg.SubLockfile[lockfileKey] = entry
 			pkg.Mu.Unlock()

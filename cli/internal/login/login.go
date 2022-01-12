@@ -63,7 +63,7 @@ func (c *LoginCommand) Run(args []string) int {
 		cancel()
 	})
 
-	srv := &http.Server{Addr: "127.0.0.1:9789"}
+	srv := &http.Server{Addr: DEFAULT_HOSTNAME + ":" + fmt.Sprint(DEFAULT_PORT)}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			if err != nil {
