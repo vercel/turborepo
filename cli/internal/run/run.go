@@ -438,7 +438,7 @@ func (c *RunCommand) Run(args []string) int {
 					for _, v := range pipeline.DependsOn {
 						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
 							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
-							hashabledEnvPairs = append(hashabledEnvVars, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashabledEnvPairs = append(hashabledEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
 							hashabledEnvVars = append(hashabledEnvVars, trimmed)
 						}
 					}
