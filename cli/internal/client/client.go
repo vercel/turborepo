@@ -40,11 +40,11 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string) *ApiCli
 		CurrentFailCount: 0,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(4 * time.Second),
+				Timeout: time.Duration(20 * time.Second),
 			},
-			RetryWaitMin: 5 * time.Second,
+			RetryWaitMin: 2 * time.Second,
 			RetryWaitMax: 10 * time.Second,
-			RetryMax:     5,
+			RetryMax:     2,
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
@@ -61,7 +61,6 @@ func (client *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool,
 				return false, v
 			}
 		}
-
 		atomic.AddUint64(&client.CurrentFailCount, 1)
 		return true, nil
 	}
@@ -83,7 +82,7 @@ func (client *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool,
 		return true, fmt.Errorf("unexpected HTTP status %s", resp.Status)
 	}
 
-	return false, nil
+	return false, fmt.Errorf("unexpected HTTP status %s", resp.Status)
 }
 
 // DeviceToken is an OAuth 2.0 Device Flow token
