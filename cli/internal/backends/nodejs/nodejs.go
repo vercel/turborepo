@@ -3,6 +3,7 @@ package nodejs
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 
 	"turbo/internal/api"
 	"turbo/internal/fs"
@@ -34,6 +35,17 @@ var NodejsYarnBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
 	},
+	Detect: func(cwd string, backend *api.LanguageBackend) (bool, error) {
+		specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+		lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+		isNotBerry := !fs.PathExists(filepath.Join(cwd, ".yarn/releases"))
+
+		if specfileExists && lockfileExists && isNotBerry {
+			return true, nil
+		}
+
+		return false, nil
+	},
 }
 
 var NodejsBerryBackend = api.LanguageBackend{
@@ -56,6 +68,17 @@ var NodejsBerryBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
+	},
+	Detect: func(cwd string, backend *api.LanguageBackend) (bool, error) {
+		specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+		lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+		isBerry := fs.PathExists(filepath.Join(cwd, ".yarn/releases"))
+
+		if specfileExists && lockfileExists && isBerry {
+			return true, nil
+		}
+
+		return false, nil
 	},
 }
 
@@ -92,6 +115,16 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"pnpm", "run"}
 	},
+	Detect: func(cwd string, backend *api.LanguageBackend) (bool, error) {
+		specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+		lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+
+		if specfileExists && lockfileExists {
+			return true, nil
+		}
+
+		return false, nil
+	},
 }
 
 var NodejsNpmBackend = api.LanguageBackend{
@@ -114,5 +147,15 @@ var NodejsNpmBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"npm", "run"}
+	},
+	Detect: func(cwd string, backend *api.LanguageBackend) (bool, error) {
+		specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+		lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+
+		if specfileExists && lockfileExists {
+			return true, nil
+		}
+
+		return false, nil
 	},
 }

@@ -34,4 +34,7 @@ type LanguageBackend struct {
 	GetWorkspaceGlobs func() ([]string, error)
 	// Returns run command
 	GetRunCommand func() []string
+	
+	// Detect if the project is using a specific package manager
+	Detect func (string, *LanguageBackend) (bool, error)
 }
