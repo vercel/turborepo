@@ -32,9 +32,9 @@ type Config struct {
 	Logger hclog.Logger
 	// Bearer token
 	Token string
-	// vercel.com team id
+	// vercel.com / remote cache team id
 	TeamId string
-	// vercel.com team slug
+	// vercel.com / remote cache team slug
 	TeamSlug string
 	// Backend API URL
 	ApiUrl string

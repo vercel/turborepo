@@ -35,7 +35,7 @@ var NodejsYarnBackend = api.LanguageBackend{
 		return []string{"yarn", "run"}
 	},
 	FinalCheck: func() bool {
-		return !fs.FileExists(".yarnrc.yml")
+		return !fs.PathExists(".yarn/releases")
 	},
 }
 
@@ -61,7 +61,7 @@ var NodejsBerryBackend = api.LanguageBackend{
 		return []string{"yarn", "run"}
 	},
 	FinalCheck: func() bool {
-		return fs.PathExists(".yarnrc.yml")
+		return fs.PathExists(".yarn/releases")
 	},
 }
 
