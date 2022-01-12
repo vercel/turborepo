@@ -152,30 +152,30 @@ function runSmokeTests(
     assert.equal(
       `• Packages in scope: a, b, c`,
       testCLine3[0],
-      "Packages in scope after a third run"
+      "After running, changing source of b, and running `turbo run test` again, should print `Packages in scope: a, b, c`"
     );
     assert.equal(
       `• Running test in 3 packages`,
       testCLine3[1],
-      "Runs correct number of packages"
+      "After running, changing source of b, and running `turbo run test` again, should print `Running in 3 packages`"
     );
     assert.ok(
       testCLine3.findIndex((l) =>
         l.startsWith("a:test: cache miss, executing")
       ) >= 0,
-      `A was impacted.`
+      "After running, changing source of b, and running `turbo run test` again, should print `a:test: cache miss, executing` since a depends on b and b has changed"
     );
     assert.ok(
       testCLine3.findIndex((l) =>
         l.startsWith("b:test: cache miss, executing")
       ) >= 0,
-      `B was impacted.`
+      "After running, changing source of b, and running `turbo run test` again, should print `b:test: cache miss, executing` since b has changed"
     );
     assert.ok(
       testCLine3.findIndex((l) =>
         l.startsWith("c:test: cache hit, replaying output")
       ) >= 0,
-      `C was unchanged`
+      "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying output` since c should not be impacted by changes to b"
     );
     repo.cleanup();
   });
