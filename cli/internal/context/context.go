@@ -92,7 +92,11 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
-		if backend, err := backends.GetBackend(); err != nil {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("could not get cwd: %w", err)
+		}
+		if backend, err := backends.GetBackend(cwd); err != nil {
 			return err
 		} else {
 			c.Backend = backend
