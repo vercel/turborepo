@@ -15,7 +15,7 @@ export function checkGitStatus(force: boolean) {
 
   if (!clean) {
     if (force) {
-      console.log(`WARNING: ${errorMessage}. Forcibly continuing.`);
+      console.log(`WARNING: ${errorMessage}. Forcibly continuing...`);
     } else {
       console.log("Thank you for using turbo-migrate!");
       console.log(

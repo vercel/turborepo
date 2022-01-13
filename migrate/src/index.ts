@@ -1,21 +1,14 @@
 #!/usr/bin/env node
 
-import * as path from "path";
-import execa from "execa";
-import globby from "globby";
-import fse from "fs-extra";
-import inquirer from "inquirer";
-import ora from "ora";
-import meow from "meow";
-import gradient from "gradient-string";
-import checkForUpdate from "update-check";
 import chalk from "chalk";
+import globby from "globby";
+import inquirer from "inquirer";
+import meow from "meow";
+import checkForUpdate from "update-check";
 import cliPkgJson from "../package.json";
-import { shouldUseYarn } from "./shouldUseYarn";
-import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { checkGitStatus } from "./git";
 import { runTransform } from "./runTransform";
-import { Flags } from "./types";
+import { shouldUseYarn } from "./shouldUseYarn";
 
 const help = `
   Usage:
