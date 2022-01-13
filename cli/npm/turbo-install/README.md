@@ -11,6 +11,8 @@
   </a>
 </p>
 
+![turbo-screenshot](https://user-images.githubusercontent.com/4060187/148454607-f65de1fb-2d46-4594-ad95-2234815338f3.png)
+
 ## Getting Started / Documentation
 
 Visit https://turborepo.org to view the full documentation.

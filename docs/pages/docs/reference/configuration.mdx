@@ -4,7 +4,7 @@ title: Configuration Options
 
 # Configuration Options
 
-You can configure the behavior of `turbo` by adding a `turbo` object in the `package.json` in your workspace's root (i.e. where you specify your Yarn workspaces).
+You can configure the behavior of `turbo` by adding a `turbo` object in the `package.json` in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and NPM users).
 
 ## `baseBranch`
 
@@ -16,8 +16,26 @@ Defaults to `origin/master`. The base branch or your git repository. Git is used
 
 `type: string[]`
 
-A list of globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm.
-This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts package tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
+A list of globs and environment variables for implicit global hash dependencies. Environment variables should be prefixed with `$` (e.g. `$GITHUB_TOKEN`). Any other entry without this prefix, will be considered filesystem glob. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
+This is useful for busting the cache based on `.env` files (not in Git), environment variables, or any root level file that impacts package tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
+
+**Example**
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      // ... omitted for brevity
+    },
+
+    "globalDependencies": [
+      ".env", // contents will impact hashes of all tasks
+      "tsconfig.json", // contents will impact hashes of all tasks
+      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+    ],
+  }
+}
+```
 
 ## `npmClient`
 
@@ -54,13 +72,15 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
 
 `type: string[]`
 
-The list of tasks that this task depends on.
+The list of tasks and environment variables that this task depends on.
 
-Prefixing a task in `dependsOn` with a `^` tells `turbo` that this pipeline task depends on the package's topological dependencies completing the task with the `^` prefix first (e.g. "a package's `build` tasks should only run once all of its `dependencies` and `devDependencies` have completed their own `build` commands").
+Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline task depends on the package's topological dependencies completing the task with the `^` prefix first (e.g. "a package's `build` tasks should only run once all of its `dependencies` and `devDependencies` have completed their own `build` commands").
 
 Items in `dependsOn` without `^` prefix, express the relationships between tasks at the package level (e.g. "a package's `test` and `lint` commands depend on `build` being completed first").
 
-**Example**
+Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends the value of that environment variable.
+
+**Example: Basics**
 
 ```json
 {
@@ -84,6 +104,35 @@ Items in `dependsOn` without `^` prefix, express the relationships between tasks
       // A package's `lint` command has no dependencies
       "lint": {},
     }
+  }
+}
+```
+
+**Example: Environment Variables and Tasks**
+
+```json
+{
+  "turbo": {
+    "pipeline": {
+      "build": {
+        "dependsOn": {
+          "^build",
+          "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
+        },
+        "outputs": ["dist/**", ".next/**"],
+      },
+      "web#build": {
+        "dependsOn": [
+          "^build",
+          "$STRIPE_SECRET_KEY", // value will impact hash of only web's build task
+          "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY"
+        ],
+        "outputs": [".next/**"],
+      }
+    },
+    "globalDependencies": [
+      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+    ],
   }
 }
 ```

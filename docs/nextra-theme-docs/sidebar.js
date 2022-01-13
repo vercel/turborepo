@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import cn from "classnames";
 import Slugger from "github-slugger";
 import { useRouter } from "next/router";
@@ -157,6 +157,23 @@ export default function Sidebar({
         .map((child) => child.props.children),
     [headings]
   );
+  const [hasScrolled, setHasScrolled] = useState(false);
+
+  const onScroll = useCallback(() => {
+    setHasScrolled(window.pageYOffset > 1);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      requestIdleCallback(onScroll);
+      window.addEventListener("scroll", onScroll);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+  }, [onScroll]);
 
   const { menu } = useMenuContext();
   useEffect(() => {
@@ -175,8 +192,8 @@ export default function Sidebar({
         mdShow ? "md:block" : ""
       )}
       style={{
-        top: "4rem",
-        height: "calc(100vh - 4rem)",
+        top: hasScrolled ? "4rem" : "6rem",
+        height: hasScrolled ? "calc(100vh - 4rem)" : "calc(100vh - 6rem)",
       }}
     >
       <div className="w-full h-full p-4 pb-40 overflow-y-auto border-gray-200 sidebar dark:border-gray-900 md:pb-16">
