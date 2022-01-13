@@ -1,7 +1,6 @@
 package api
 
 // LanguageBackend is an abstraction across programming languages and their related package managers
-
 type LanguageBackend struct {
 	// Name is the name of the language backend
 	Name string
@@ -34,7 +33,7 @@ type LanguageBackend struct {
 	GetWorkspaceGlobs func() ([]string, error)
 	// Returns run command
 	GetRunCommand func() []string
-	
+
 	// Detect if the project is using a specific package manager
-	Detect func (string, *LanguageBackend) (bool, error)
+	Detect func(string, *LanguageBackend) (bool, error)
 }
