@@ -63,7 +63,8 @@ func (c *LoginCommand) Run(args []string) int {
 		cancel()
 	})
 
-	srv := &http.Server{Addr: "127.0.0.1:9789"}
+	// OK, not sure if we want to be listening on all interfaces in all circumstances - maybe add a check for browser failure?
+	srv := &http.Server{Addr: ":9789"}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			if err != nil {
