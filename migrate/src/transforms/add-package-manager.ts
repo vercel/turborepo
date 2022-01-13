@@ -43,27 +43,32 @@ export default function addPackageManager(files: string[], flags: Flags) {
     for (const workspace of allWorkspaces) {
       const { packageJsonPath, ...pkgJson } = workspace.packageJson;
       const relPackageJsonPath = path.relative(root, packageJsonPath);
-      if (pkgJson.packageManager === pkgManagerString) {
-        skip(
-          relPackageJsonPath,
-          chalk.dim(`(already set to ${pkgManagerString})`)
-        );
-      } else {
-        const newJson = { ...pkgJson, packageManager: pkgManagerString };
-        if (flags.print) {
-          console.log(JSON.stringify(newJson, null, 2));
-        }
-        if (!flags.dry) {
-          fs.writeJsonSync(packageJsonPath, newJson, {
-            spaces: 2,
-          });
-
-          ok(relPackageJsonPath);
-          modifiedCount++;
-          unmodifiedCount--;
+      try {
+        if (pkgJson.packageManager === pkgManagerString) {
+          skip(
+            relPackageJsonPath,
+            chalk.dim(`(already set to ${pkgManagerString})`)
+          );
         } else {
-          skip(relPackageJsonPath, chalk.dim(`(dry run)`));
+          const newJson = { ...pkgJson, packageManager: pkgManagerString };
+          if (flags.print) {
+            console.log(JSON.stringify(newJson, null, 2));
+          }
+          if (!flags.dry) {
+            fs.writeJsonSync(packageJsonPath, newJson, {
+              spaces: 2,
+            });
+
+            ok(relPackageJsonPath);
+            modifiedCount++;
+            unmodifiedCount--;
+          } else {
+            skip(relPackageJsonPath, chalk.dim(`(dry run)`));
+          }
         }
+      } catch (err) {
+        console.error(error);
+        error(relPackageJsonPath);
       }
     }
     console.log("All done.");
