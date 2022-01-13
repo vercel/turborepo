@@ -233,7 +233,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 
-		// Only we can get the SCC (i.e. topological order)
+		// Only now can we get the SCC (i.e. topological order)
 		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
