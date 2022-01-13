@@ -6,9 +6,6 @@ on:
   pull_request:
     types: [opened, synchronize]
 
-env:
-  YARN_ENABLE_IMMUTABLE_INSTALLS: false
-
 jobs:
   build:
     name: build and test
@@ -108,6 +105,15 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
+      - name: Install Sponge
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install -y moreutils
+          else
+            brew install moreutils
+          fi
+
       - name: Check out code
         uses: actions/checkout@v2
         with:
