@@ -26,7 +26,6 @@ jobs:
         uses: actions/setup-node@v2
         with:
           cache: yarn
-          cache-dependency-path: yarn.lock
           node-version: 16
 
       - name: Check out code into the Go module directory
