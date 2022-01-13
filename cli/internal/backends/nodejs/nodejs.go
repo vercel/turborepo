@@ -93,7 +93,7 @@ var NodejsBerryBackend = api.LanguageBackend{
 			if isBerry {
 				isNMLinker, err := util.IsNMLinker(cwd)
 				if err != nil {
-					return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
+					return false, fmt.Errorf("could not check if yarn is using `nodeLinker: node-modules`: %w", err)
 				} else if !isNMLinker {
 					return false, fmt.Errorf("only yarn nm-linker is supported")
 				}
