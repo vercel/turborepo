@@ -15,7 +15,10 @@ var backends = []api.LanguageBackend{
 
 func GetBackend(cwd string) (*api.LanguageBackend, error) {
 	for _, b := range backends {
-		hit, _ := b.Detect(cwd, &b)
+		hit, err := b.Detect(cwd, &b)
+		if err != nil {
+			return nil, err
+		}
 		if hit {
 			return &b, nil
 		}

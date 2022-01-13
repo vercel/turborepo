@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
-
 	"turbo/internal/api"
 	"turbo/internal/fs"
+	"turbo/internal/util"
 
 	"gopkg.in/yaml.v3"
 )
@@ -38,9 +38,13 @@ var NodejsYarnBackend = api.LanguageBackend{
 	Detect: func(cwd string, backend *api.LanguageBackend) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
-		isNotBerry := !fs.PathExists(filepath.Join(cwd, ".yarn/releases"))
 
-		if specfileExists && lockfileExists && isNotBerry {
+		isBerry, err := util.IsBerry(cwd)
+		if err != nil {
+			return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+		}
+
+		if specfileExists && lockfileExists && !isBerry {
 			return true, nil
 		}
 
@@ -72,7 +76,11 @@ var NodejsBerryBackend = api.LanguageBackend{
 	Detect: func(cwd string, backend *api.LanguageBackend) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
-		isBerry := fs.PathExists(filepath.Join(cwd, ".yarn/releases"))
+
+		isBerry, err := util.IsBerry(cwd)
+		if err != nil {
+			return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+		}
 
 		if specfileExists && lockfileExists && isBerry {
 			return true, nil
