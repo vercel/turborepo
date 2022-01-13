@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"turbo/internal/ui"
 )
@@ -17,6 +18,14 @@ func InitPrintf() {
 // replacements for pseudo-shell variables for ANSI formatting codes.
 func Sprintf(format string, args ...interface{}) string {
 	return os.Expand(fmt.Sprintf(format, args...), replace)
+}
+
+func Printf(format string, args ...interface{}) {
+	fmt.Fprint(os.Stderr, os.Expand(fmt.Sprintf(format, args...), replace))
+}
+
+func Fprintf(writer io.Writer, format string, args ...interface{}) {
+	fmt.Fprint(writer, os.Expand(fmt.Sprintf(format, args...), replace))
 }
 
 func replace(s string) string {

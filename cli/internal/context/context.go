@@ -96,7 +96,14 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err != nil {
 			return fmt.Errorf("could not get cwd: %w", err)
 		}
-		if backend, err := backends.GetBackend(cwd); err != nil {
+
+		pkg, err := fs.ReadPackageJSON("package.json")
+		if err != nil {
+			return fmt.Errorf("package.json: %w", err)
+		}
+		c.RootPackageJSON = pkg
+
+		if backend, err := backends.GetBackend(cwd, pkg); err != nil {
 			return err
 		} else {
 			c.Backend = backend
@@ -111,11 +118,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			c.Lockfile = lockfile
 		}
 
-		pkg, err := c.ResolveWorkspaceRootDeps()
-		if err != nil {
+		if c.ResolveWorkspaceRootDeps() != nil {
 			return err
 		}
-		c.RootPackageJSON = pkg
 
 		spaces, err := c.Backend.GetWorkspaceGlobs()
 
@@ -279,13 +284,10 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 	return nil
 }
 
-func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
+func (c *Context) ResolveWorkspaceRootDeps() (error) {
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
-	pkg, err := fs.ReadPackageJSON(c.Backend.Specfile)
-	if err != nil {
-		return nil, fmt.Errorf("package.json: %w", err)
-	}
+	pkg := c.RootPackageJSON
 	depSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
 	for dep, version := range pkg.Dependencies {
@@ -311,7 +313,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		sort.Strings(pkg.ExternalDeps)
 		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		pkg.ExternalDepsHash = hashOfExternalDeps
 	} else {
@@ -319,7 +321,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		pkg.ExternalDepsHash = ""
 	}
 
-	return pkg, nil
+	return nil
 }
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.

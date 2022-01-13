@@ -4,6 +4,8 @@ import (
 	"errors"
 	"turbo/internal/api"
 	"turbo/internal/backends/nodejs"
+	"turbo/internal/fs"
+	"turbo/internal/util"
 )
 
 var backends = []api.LanguageBackend{
@@ -13,9 +15,9 @@ var backends = []api.LanguageBackend{
 	nodejs.NodejsPnpmBackend,
 }
 
-func GetBackend(cwd string) (*api.LanguageBackend, error) {
+func GetBackend(cwd string, pkg *fs.PackageJSON) (*api.LanguageBackend, error) {
 	for _, b := range backends {
-		hit, err := b.Detect(cwd, &b)
+		hit, err := b.Detect(cwd, pkg, &b)
 		if err != nil {
 			return nil, err
 		}
@@ -24,5 +26,5 @@ func GetBackend(cwd string) (*api.LanguageBackend, error) {
 		}
 	}
 
-	return nil, errors.New("could not determine language / package management backend")
+	return nil, errors.New(util.Sprintf("could not determine language / package management backend. Please set the \"packageManager\" property in your package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET}"))
 }

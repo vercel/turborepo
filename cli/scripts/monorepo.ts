@@ -136,6 +136,9 @@ importers:
           });
           execa.sync("yarn", ["install"], {
             cwd,
+            env: {
+              "YARN_ENABLE_IMMUTABLE_INSTALLS": "false"
+            }
           });
           this.commitAll();
           return;

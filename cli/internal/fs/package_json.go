@@ -53,6 +53,7 @@ type PackageJSON struct {
 	DevDependencies        map[string]string `json:"devDependencies,omitempty"`
 	OptionalDependencies   map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies       map[string]string `json:"peerDependencies,omitempty"`
+	PackageManager         string            `json:"packageManager,omitempty"`
 	Os                     []string          `json:"os,omitempty"`
 	Workspaces             Workspaces        `json:"workspaces,omitempty"`
 	Private                bool              `json:"private,omitempty"`
