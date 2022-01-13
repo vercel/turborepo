@@ -87,7 +87,7 @@ var NodejsBerryBackend = api.LanguageBackend{
 
 			isBerry, err := util.IsBerry(cwd, version)
 			if err != nil {
-				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+				return false, fmt.Errorf("could not determine yarn version (v1 or berry): %w", err)
 			}
 
 			if isBerry {
