@@ -3,7 +3,6 @@ package nodejs
 import (
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 	"turbo/internal/api"
 	"turbo/internal/fs"
 	"turbo/internal/util"
@@ -43,24 +42,12 @@ var NodejsYarnBackend = api.LanguageBackend{
 				return false, nil
 			}
 
-			isBerry, err := util.IsBerry(cwd, version, true)
+			isBerry, err := util.IsBerry(cwd, version)
 			if err != nil {
 				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
 			}
 
 			if !isBerry {
-				return true, nil
-			}
-		} else {
-			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
-			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
-
-			isBerry, err := util.IsBerry(cwd, "", false)
-			if err != nil {
-				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
-			}
-
-			if specfileExists && lockfileExists && !isBerry {
 				return true, nil
 			}
 		}
@@ -98,31 +85,12 @@ var NodejsBerryBackend = api.LanguageBackend{
 				return false, nil
 			}
 
-			isBerry, err := util.IsBerry(cwd, version, true)
+			isBerry, err := util.IsBerry(cwd, version)
 			if err != nil {
 				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
 			}
 
 			if isBerry {
-				isNMLinker, err := util.IsNMLinker(cwd)
-				if err != nil {
-					return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
-				} else if !isNMLinker {
-					return false, fmt.Errorf("only yarn nm-linker is supported")
-				}
-
-				return true, nil
-			}
-		} else {
-			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
-			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
-
-			isBerry, err := util.IsBerry(cwd, "", false)
-			if err != nil {
-				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
-			}
-
-			if specfileExists && lockfileExists && isBerry {
 				isNMLinker, err := util.IsNMLinker(cwd)
 				if err != nil {
 					return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
@@ -171,18 +139,11 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"pnpm", "run"}
 	},
-	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
+	Detect: func(_ string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
 			packageManager, _ := util.GetPackageManagerAndVersion(pkg.PackageManager)
 
 			if packageManager == "pnpm" {
-				return true, nil
-			}
-		} else {
-			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
-			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
-
-			if specfileExists && lockfileExists {
 				return true, nil
 			}
 		}
@@ -212,18 +173,11 @@ var NodejsNpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"npm", "run"}
 	},
-	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
+	Detect: func(_ string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
 			packageManager, _ := util.GetPackageManagerAndVersion(pkg.PackageManager)
 
 			if packageManager == "npm" {
-				return true, nil
-			}
-		} else {
-			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
-			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
-
-			if specfileExists && lockfileExists {
 				return true, nil
 			}
 		}
