@@ -22,7 +22,7 @@ const basicPipeline = {
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
 
-for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
   repo.install();
@@ -48,7 +48,7 @@ test.run();
 
 function runSmokeTests(
   repo: Monorepo,
-  npmClient: "yarn" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
   test(`${npmClient} runs tests and logs ${

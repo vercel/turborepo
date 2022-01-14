@@ -5,28 +5,26 @@ import (
 	"turbo/internal/api"
 	"turbo/internal/backends/nodejs"
 	"turbo/internal/fs"
+	"turbo/internal/util"
 )
 
 var backends = []api.LanguageBackend{
 	nodejs.NodejsYarnBackend,
+	nodejs.NodejsBerryBackend,
 	nodejs.NodejsNpmBackend,
 	nodejs.NodejsPnpmBackend,
 }
 
-func GetBackend() (*api.LanguageBackend, error) {
+func GetBackend(cwd string, pkg *fs.PackageJSON) (*api.LanguageBackend, error) {
 	for _, b := range backends {
-		if fs.FileExists(b.Specfile) &&
-			fs.FileExists(b.Lockfile) {
+		hit, err := b.Detect(cwd, pkg, &b)
+		if err != nil {
+			return nil, err
+		}
+		if hit {
 			return &b, nil
 		}
 	}
 
-	for _, b := range backends {
-		if fs.FileExists(b.Specfile) ||
-			fs.FileExists(b.Lockfile) {
-			return &b, nil
-		}
-	}
-
-	return &api.LanguageBackend{}, errors.New("could not determine language / package management backend")
+	return nil, errors.New(util.Sprintf("could not determine language / package management backend. Please set the \"packageManager\" property in your package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET}"))
 }

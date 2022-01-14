@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 	"turbo/internal/config"
-	"turbo/internal/info"
 	"turbo/internal/login"
 	prune "turbo/internal/prune"
 	"turbo/internal/run"
@@ -78,17 +77,11 @@ func main() {
 		"unlink": func() (cli.Command, error) {
 			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
 		},
-		"graph": func() (cli.Command, error) {
-			return &info.GraphCommand{Config: cf, Ui: ui}, nil
-		},
 		"login": func() (cli.Command, error) {
 			return &login.LoginCommand{Config: cf, Ui: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
-		},
-		"me": func() (cli.Command, error) {
-			return &login.MeCommand{Config: cf, Ui: ui}, nil
 		},
 	}
 
