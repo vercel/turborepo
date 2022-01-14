@@ -52,4 +52,3 @@ func (c *BinCommand) logError(log hclog.Logger, prefix string, err error) {
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
-

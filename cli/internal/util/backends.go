@@ -20,16 +20,16 @@ func IsYarn(backendName string) bool {
 }
 
 func IsBerry(cwd string, version string) (bool, error) {
-		v, err := semver.NewVersion(version)
-		if err != nil {
-			return false, fmt.Errorf("could not parse yarn version: %w", err)
-		}
-		c, err := semver.NewConstraint(">=2.0.0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
-		}
+	v, err := semver.NewVersion(version)
+	if err != nil {
+		return false, fmt.Errorf("could not parse yarn version: %w", err)
+	}
+	c, err := semver.NewConstraint(">=2.0.0")
+	if err != nil {
+		return false, fmt.Errorf("could not create constraint: %w", err)
+	}
 
-		return c.Check(v), nil
+	return c.Check(v), nil
 }
 
 func IsNMLinker(cwd string) (bool, error) {
@@ -53,4 +53,3 @@ func GetPackageManagerAndVersion(packageManager string) (string, string) {
 
 	return strings.Split(match, "@")[0], strings.Split(match, "@")[1]
 }
-

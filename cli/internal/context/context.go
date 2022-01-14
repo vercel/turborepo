@@ -284,7 +284,7 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 	return nil
 }
 
-func (c *Context) ResolveWorkspaceRootDeps() (error) {
+func (c *Context) ResolveWorkspaceRootDeps() error {
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	pkg := c.RootPackageJSON
