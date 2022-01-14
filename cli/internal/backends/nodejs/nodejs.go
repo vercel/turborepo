@@ -54,6 +54,9 @@ var NodejsYarnBackend = api.LanguageBackend{
 
 		return false, nil
 	},
+	GetLockfileKeys: func(name, version string) []string {
+		return []string{fmt.Sprintf("%v@%v", name, version)}
+	},
 }
 
 var NodejsBerryBackend = api.LanguageBackend{
@@ -104,6 +107,9 @@ var NodejsBerryBackend = api.LanguageBackend{
 
 		return false, nil
 	},
+	GetLockfileKeys: func(name, version string) []string {
+		return []string{fmt.Sprintf("%v@%v", name, version), fmt.Sprintf("%v@npm:%v", name, version)}
+	},
 }
 
 // PnpmWorkspaces is a representation of workspace package globs found
@@ -150,6 +156,9 @@ var NodejsPnpmBackend = api.LanguageBackend{
 
 		return false, nil
 	},
+	GetLockfileKeys: func(name, version string) []string {
+		return []string{}
+	},
 }
 
 var NodejsNpmBackend = api.LanguageBackend{
@@ -183,5 +192,8 @@ var NodejsNpmBackend = api.LanguageBackend{
 		}
 
 		return false, nil
+	},
+	GetLockfileKeys: func(name, version string) []string {
+		return []string{}
 	},
 }

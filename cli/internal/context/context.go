@@ -284,7 +284,7 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 	return nil
 }
 
-func (c *Context) ResolveWorkspaceRootDeps() (error) {
+func (c *Context) ResolveWorkspaceRootDeps() error {
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	pkg := c.RootPackageJSON
@@ -454,28 +454,27 @@ func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 		wg.Add(1)
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
+
+			notOks := 0
 			var lockfileKey string
-			lockfileKey1 := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
-			lockfileKey2 := fmt.Sprintf("%v@npm:%v", directDepName, unresolvedVersion)
-			if seen.Contains(lockfileKey1) || seen.Contains(lockfileKey2) {
-				return
-			}
-
-			seen.Add(lockfileKey1)
-			seen.Add(lockfileKey2)
-
 			var entry *fs.LockfileEntry
-			entry1, ok1 := (*c.Lockfile)[lockfileKey1]
-			entry2, ok2 := (*c.Lockfile)[lockfileKey2]
-			if !ok1 && !ok2 {
-				return
-			}
-			if ok1 {
-				lockfileKey = lockfileKey1
-				entry = entry1
-			} else {
-				lockfileKey = lockfileKey2
-				entry = entry2
+			for _, key := range c.Backend.GetLockfileKeys(directDepName, unresolvedVersion) {
+				if seen.Contains(key) {
+					return
+				}
+
+				seen.Add(key)
+
+				if lockfileEntry, ok := (*c.Lockfile)[key]; ok {
+					lockfileKey = key
+					entry = lockfileEntry
+					break
+				}
+
+				notOks++
+				if notOks == 2 {
+					return
+				}
 			}
 
 			pkg.Mu.Lock()
