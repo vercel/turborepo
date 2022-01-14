@@ -19,14 +19,15 @@ type BinCommand struct {
 
 // Synopsis of run command
 func (c *BinCommand) Synopsis() string {
-	return "Get the path to the Turbo executable"
+	return "Get the path to the Turbo binary"
 }
 
 // Help returns information about the `bin` command
 func (c *BinCommand) Help() string {
 	helpText := `
 Usage: turbo bin
-  Get the path to the Turbo executable
+
+  Get the path to the Turbo binary
 `
 	return strings.TrimSpace(helpText)
 }
