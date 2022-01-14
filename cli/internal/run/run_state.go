@@ -186,7 +186,7 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	case result.Status == TargetBuildFailed:
 		r.Failure++
 		r.Attempted++
-		if r.runOptions.bail {
+		if r.runOptions.bail && !r.runOptions.stream {
 			r.done <- result.Label
 		}
 	case result.Status == TargetCached:
