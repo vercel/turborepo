@@ -75,6 +75,8 @@ for folder in examples/* ; do
 
       cleanup
       setup_git
+
+      cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json
       
       echo "======================================================="
       echo "=> $folder: yarn install"
@@ -98,7 +100,10 @@ for folder in examples/* ; do
 
     if [ "$folder" == "examples/with-pnpm" ]; then
       cleanup
-      setup_git      
+      setup_git
+
+      cat package.json | jq '.packageManager = "pnpm@6.26.1"' | sponge package.json
+
       echo "======================================================="
       echo "=> $folder: pnpm install"
       echo "======================================================="
@@ -131,7 +136,7 @@ if [ -f ".eslintrc.js.bak" ]; then
   mv .eslintrc.js.bak .eslintrc.js 
 fi
 
-if [[ ! -z $(git status -s) ]];then
+if [[ ! -z $(git status -s | grep -v package.json) ]];then
   echo "Detected changes"
   git status
   exit 1
