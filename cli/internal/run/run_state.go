@@ -171,7 +171,7 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	case result.Status == TargetBuildFailed:
 		r.Failure++
 		r.Attempted++
-		if r.runOptions.bail {
+		if r.runOptions.bail && !r.runOptions.stream {
 			r.done <- result.Label
 		}
 	case result.Status == TargetCached:
@@ -284,7 +284,6 @@ func (r *RunState) Close(Ui cli.Ui, startAt time.Time, filename string) error {
 		r.ticker.Stop()
 		r.done <- "done"
 	}
-
 	maybeFullTurbo := ""
 	if r.Cached == r.Attempted {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
