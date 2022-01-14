@@ -1,5 +1,5 @@
 {
-  "name": "turbo-migrate",
+  "name": "@turbo/migrate",
   "version": "1.0.26",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turborepo.org",
@@ -52,5 +52,8 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
