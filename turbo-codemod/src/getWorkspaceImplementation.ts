@@ -1,12 +1,8 @@
 import findUp from "find-up";
 import path from "path";
 
-export type WorkspaceImplementations =
-  | "yarn"
-  | "pnpm"
-  | "rush"
-  | "npm"
-  | "lerna";
+export type WorkspaceImplementations = "yarn" | "pnpm" | "npm";
+
 export interface ImplementationAndLockFile {
   implementation: WorkspaceImplementations | undefined;
   lockFile: string;
@@ -23,13 +19,7 @@ export function getWorkspaceImplementationAndLockFile(
   }
 
   const lockFile = findUp.sync(
-    [
-      "lerna.json",
-      "yarn.lock",
-      "pnpm-workspace.yaml",
-      "rush.json",
-      "package-lock.json",
-    ],
+    ["yarn.lock", "pnpm-workspace.yaml", "package-lock.json"],
     {
       cwd,
     }
@@ -40,13 +30,6 @@ export function getWorkspaceImplementationAndLockFile(
   }
 
   switch (path.basename(lockFile)) {
-    case "lerna.json":
-      cache[cwd] = {
-        implementation: "lerna",
-        lockFile,
-      };
-      break;
-
     case "yarn.lock":
       cache[cwd] = {
         implementation: "yarn",
@@ -57,13 +40,6 @@ export function getWorkspaceImplementationAndLockFile(
     case "pnpm-workspace.yaml":
       cache[cwd] = {
         implementation: "pnpm",
-        lockFile,
-      };
-      break;
-
-    case "rush.json":
-      cache[cwd] = {
-        implementation: "rush",
         lockFile,
       };
       break;

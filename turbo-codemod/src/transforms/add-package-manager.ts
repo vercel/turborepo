@@ -1,6 +1,5 @@
 import { Flags } from "../types";
 import path from "path";
-import workspaceTools from "workspace-tools";
 import { getWorkspaceImplementation } from "../getWorkspaceImplementation";
 import { getPackageManagerVersion } from "../getPackageManagerVersion";
 import fs from "fs-extra";
@@ -10,7 +9,7 @@ export default function addPackageManager(files: string[], flags: Flags) {
   if (files.length === 1) {
     const dir = files[0];
     const root = path.resolve(process.cwd(), dir);
-    console.log(`Set "packageManager" key in all "package.json" files...`);
+    console.log(`Set "packageManager" key in root "package.json" file...`);
     const packageManager = getWorkspaceImplementation(root);
     if (!packageManager) {
       error(`Unable to determine package manager for ${dir}`);
@@ -19,11 +18,9 @@ export default function addPackageManager(files: string[], flags: Flags) {
     // handle workspaces...
     const version = getPackageManagerVersion(packageManager);
     const pkgManagerString = `${packageManager}@${version}`;
-    const workspaceInfo = workspaceTools.getWorkspaces(root);
     const rootPackageJsonPath = path.join(root, "package.json");
     const rootPackageJson = fs.readJsonSync(rootPackageJsonPath);
     const allWorkspaces = [
-      ...workspaceInfo,
       {
         name: "package.json",
         path: root,
@@ -39,7 +36,6 @@ export default function addPackageManager(files: string[], flags: Flags) {
     let errorCount = 0;
     let unmodifiedCount = allWorkspaces.length;
     console.log(`Found ${unmodifiedCount} files for modification...`);
-
     for (const workspace of allWorkspaces) {
       const { packageJsonPath, ...pkgJson } = workspace.packageJson;
       const relPackageJsonPath = path.relative(root, packageJsonPath);

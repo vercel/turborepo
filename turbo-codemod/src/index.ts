@@ -6,6 +6,7 @@ import inquirer from "inquirer";
 import meow from "meow";
 import checkForUpdate from "update-check";
 import cliPkgJson from "../package.json";
+import { getWorkspaceImplementation } from "./getWorkspaceImplementation";
 import { checkGitStatus } from "./git";
 import { runTransform } from "./runTransform";
 
@@ -25,7 +26,7 @@ const help = `
 
 const TRANSFORMER_INQUIRER_CHOICES = [
   {
-    name: "add-package-manager: Set the `packageManager` key in all package.json files of defined workspaces",
+    name: "add-package-manager: Set the `packageManager` key in root package.json file",
     value: "add-package-manager",
   },
 ];
@@ -124,16 +125,20 @@ async function notifyUpdate(): Promise<void> {
   try {
     const res = await update;
     if (res?.latest) {
-      const isYarn = shouldUseYarn();
+      const ws = getWorkspaceImplementation(process.cwd());
 
       console.log();
       console.log(
-        chalk.yellow.bold("A new version of `turbo-migrate` is available!")
+        chalk.yellow.bold("A new version of `@turbo/codemod` is available!")
       );
       console.log(
         "You can update by running: " +
           chalk.cyan(
-            isYarn ? "yarn global add turbo-migrate" : "npm i -g turbo-migrate"
+            ws === "yarn"
+              ? "yarn global add @turbo/codemod"
+              : ws === "pnpm"
+              ? "pnpm i -g @turbo/codemod"
+              : "npm i -g @turbo/codemod"
           )
       );
       console.log();
