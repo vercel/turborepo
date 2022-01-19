@@ -8,7 +8,6 @@ import checkForUpdate from "update-check";
 import cliPkgJson from "../package.json";
 import { checkGitStatus } from "./git";
 import { runTransform } from "./runTransform";
-import { shouldUseYarn } from "./shouldUseYarn";
 
 const help = `
   Usage:
