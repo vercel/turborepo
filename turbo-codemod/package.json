@@ -1,5 +1,5 @@
 {
-  "name": "@turbo/migrate",
+  "name": "@turbo/codemod",
   "version": "1.0.26",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turborepo.org",
@@ -7,14 +7,12 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
-    "directory": "migrate"
+    "directory": "turbo-codemod"
   },
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "bin": {
-    "turbo-migrate": "dist/index.js"
-  },
+  "bin": "dist/index.js",
   "scripts": {
     "build": "tsup src/*.ts src/transforms/*.ts --format cjs",
     "test": "jest",
