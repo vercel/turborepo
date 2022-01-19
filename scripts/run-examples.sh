@@ -13,6 +13,8 @@ if [ -f ".eslintrc.js" ]; then
   mv .eslintrc.js .eslintrc.js.bak
 fi
 
+echo "'env:\n\tTURBO_BINARY_PATH: $TURBO_BINARY_PATH'" > examples/.yarnrc;
+
 function cleanup {
     rm -rf node_modules
     rm -rf apps/*/node_modules
@@ -141,3 +143,5 @@ if [[ ! -z $(git status -s | grep -v package.json) ]];then
   git status
   exit 1
 fi
+
+rm -rf examples/.yarnrc;
