@@ -76,7 +76,11 @@ func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.Fi
 			if isDirLike, err := info.IsDirOrSymlinkToDir(); err == nil {
 				return callback(name, isDirLike, info.ModeType())
 			} else {
-				return err
+				// Skip running callback on "dead" symlink (symlink to directory that doesn't exist)
+				if err, ok := err.(*os.PathError); !ok {
+					return err
+				}
+				return nil
 			}
 		},
 		Unsorted:            true,

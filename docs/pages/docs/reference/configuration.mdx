@@ -32,7 +32,7 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
       ".env", // contents will impact hashes of all tasks
       "tsconfig.json", // contents will impact hashes of all tasks
       "$GITHUB_TOKEN"// value will impact the hashes of all tasks
-    ],
+    ]
   }
 }
 ```
@@ -100,9 +100,9 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
         // "A package's `deploy` command, depends on its own `build`
         // and `test` commands first being completed"
         "dependsOn": ["build", "test"]
-      }
+      },
       // A package's `lint` command has no dependencies
-      "lint": {},
+      "lint": {}
     }
   }
 }
@@ -119,7 +119,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
           "^build",
           "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
         },
-        "outputs": ["dist/**", ".next/**"],
+        "outputs": ["dist/**", ".next/**"]
       },
       "web#build": {
         "dependsOn": [
@@ -127,12 +127,12 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
           "$STRIPE_SECRET_KEY", // value will impact hash of only web's build task
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY"
         ],
-        "outputs": [".next/**"],
+        "outputs": [".next/**"]
       }
     },
     "globalDependencies": [
       "$GITHUB_TOKEN"// value will impact the hashes of all tasks
-    ],
+    ]
   }
 }
 ```
