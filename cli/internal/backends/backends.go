@@ -26,5 +26,5 @@ func GetBackend(cwd string, pkg *fs.PackageJSON) (*api.LanguageBackend, error) {
 		}
 	}
 
-	return nil, errors.New(util.Sprintf("could not determine language / package management backend. Please set the \"packageManager\" property in your package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET}"))
+	return nil, errors.New(util.Sprintf("could not determine package manager. Please set the \"packageManager\" property in your root package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET} or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."))
 }
