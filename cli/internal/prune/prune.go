@@ -2,6 +2,7 @@ package prune
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -234,12 +235,16 @@ func (c *PruneCommand) Run(args []string) int {
 		}
 	}
 
-	next, err := yaml.Marshal(lockfile)
+	var b bytes.Buffer
+	yamlEncoder := yaml.NewEncoder(&b)
+	yamlEncoder.SetIndent(2) // this is what you're looking for
+	yamlEncoder.Encode(lockfile)
+
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to materialize sub-lockfile. This can happen if your lockfile contains merge conflicts or is somehow corrupted. Please report this if it occurs: %w", err))
 		return 1
 	}
-	err = ioutil.WriteFile(filepath.Join(pruneOptions.cwd, "out", "yarn.lock"), next, fs.DirPermissions)
+	err = ioutil.WriteFile(filepath.Join(pruneOptions.cwd, "out", "yarn.lock"), b.Bytes(), fs.DirPermissions)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to write sub-lockfile: %w", err))
 		return 1
