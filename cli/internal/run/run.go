@@ -310,7 +310,7 @@ func (c *RunCommand) Run(args []string) int {
 		if err != nil {
 			log.Printf("[ERROR] %v: error computing combined hash", pack.Name)
 		}
-		c.Config.Logger.Debug(fmt.Sprintf("%v: package anscestralHash", pack.Name), "hash", ancestralHashes)
+		c.Config.Logger.Debug(fmt.Sprintf("%v: package ancestralHash", pack.Name), "hash", ancestralHashes)
 		c.Config.Logger.Debug(fmt.Sprintf("%v: package hash", pack.Name), "hash", pack.Hash)
 	}
 
