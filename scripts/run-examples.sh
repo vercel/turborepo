@@ -54,11 +54,6 @@ for folder in examples/* ; do
     echo "======================================================="
     echo "=> checking $folder "
     echo "======================================================="
-
-    cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json      
-    if [ "$TURBO_TAG" == "canary" ]; then
-        cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
-    fi
     
     if [ "$folder" != "examples/with-pnpm" ]; then
             
@@ -87,6 +82,10 @@ for folder in examples/* ; do
       cleanup
       setup_git
       
+      cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json      
+      if [ "$TURBO_TAG" == "canary" ]; then
+         cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+      fi
       
       echo "======================================================="
       echo "=> $folder: yarn install"
@@ -113,7 +112,10 @@ for folder in examples/* ; do
       setup_git
 
       cat package.json | jq '.packageManager = "pnpm@6.26.1"' | sponge package.json
-
+      if [ "$TURBO_TAG" == "canary" ]; then
+         cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+      fi
+    
       echo "======================================================="
       echo "=> $folder: pnpm install"
       echo "======================================================="
@@ -134,6 +136,10 @@ for folder in examples/* ; do
       echo "======================================================="               
     fi
     
+    cat package.json | jq 'del(.packageManager)' | sponge package.json
+    if [ "$TURBO_TAG" == "canary" ]; then
+       cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
+    fi
 
     cleanup
 
@@ -144,12 +150,6 @@ done;
 
 if [ -f ".eslintrc.js.bak" ]; then
   mv .eslintrc.js.bak .eslintrc.js 
-fi
-
-cat package.json | jq 'del(.packageManager)' | sponge package.json
-      
-if [ "$TURBO_TAG" == "canary" ]; then
-    cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
 fi
 
 if [[ ! -z $(git status -s) ]];then

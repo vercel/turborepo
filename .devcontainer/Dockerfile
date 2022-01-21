@@ -20,4 +20,5 @@ RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/
 RUN su vscode -c "source /usr/local/share/nvm/nvm.sh && npm install -g vercel yarn yalc pnpm nodemon" 2>&1
 
 # Add hyperfine, a usefule benchmarking tool
-RUN wget https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_arm64.deb && dpkg -i hyperfine_1.12.0_arm64.deb
+RUN dpkgArch="$(dpkg --print-architecture)"; \
+    wget "https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_${dpkgArch}.deb" && dpkg -i "hyperfine_1.12.0_${dpkgArch}.deb"
