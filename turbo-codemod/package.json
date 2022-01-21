@@ -1,0 +1,56 @@
+{
+  "name": "@turbo/codemod",
+  "version": "1.0.26",
+  "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
+  "homepage": "https://turborepo.org",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "turbo-codemod"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "bin": "dist/index.js",
+  "scripts": {
+    "build": "tsup src/*.ts src/transforms/*.ts --format cjs",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "chalk": "2.4.2",
+    "execa": "5.0.0",
+    "find-up": "4.1.0",
+    "fs-extra": "^10.0.0",
+    "gradient-string": "^2.0.0",
+    "inquirer": "^8.0.0",
+    "is-git-clean": "^1.1.0",
+    "meow": "^7.1.1",
+    "ora": "4.0.4",
+    "rimraf": "^3.0.2",
+    "semver": "^7.3.5",
+    "update-check": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/chalk-animation": "^1.6.0",
+    "@types/fs-extra": "^9.0.13",
+    "@types/gradient-string": "^1.1.2",
+    "@types/inquirer": "^7.3.1",
+    "@types/jest": "^27.4.0",
+    "@types/node": "^16.11.12",
+    "@types/semver": "^7.3.9",
+    "jest": "^27.4.3",
+    "semver": "^7.3.5",
+    "strip-ansi": "^7.0.1",
+    "ts-jest": "^27.1.1",
+    "tsup": "^5.10.3",
+    "typescript": "^4.5.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
