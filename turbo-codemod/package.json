@@ -1,31 +1,31 @@
 {
-  "name": "create-turbo",
-  "version": "1.1.0-canary.1",
-  "description": "Create a new Turborepo",
+  "name": "@turbo/codemod",
+  "version": "1.0.26",
+  "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turborepo.org",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
-    "directory": "create-turbo"
+    "directory": "turbo-codemod"
   },
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "bin": {
-    "create-turbo": "dist/index.js"
-  },
+  "bin": "dist/index.js",
   "scripts": {
-    "build": "tsup src/index.ts --format cjs",
+    "build": "tsup src/*.ts src/transforms/*.ts --format cjs",
     "test": "jest",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
     "chalk": "2.4.2",
     "execa": "5.0.0",
+    "find-up": "4.1.0",
     "fs-extra": "^10.0.0",
     "gradient-string": "^2.0.0",
     "inquirer": "^8.0.0",
+    "is-git-clean": "^1.1.0",
     "meow": "^7.1.1",
     "ora": "4.0.4",
     "rimraf": "^3.0.2",
@@ -48,7 +48,9 @@
     "typescript": "^4.5.3"
   },
   "files": [
-    "dist",
-    "templates"
-  ]
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
