@@ -3,6 +3,7 @@ package util
 import (
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -19,17 +20,37 @@ func IsYarn(backendName string) bool {
 	return backendName == "nodejs-yarn" || backendName == "nodejs-berry"
 }
 
-func IsBerry(cwd string, version string) (bool, error) {
-	v, err := semver.NewVersion(version)
-	if err != nil {
-		return false, fmt.Errorf("could not parse yarn version: %w", err)
-	}
-	c, err := semver.NewConstraint(">=2.0.0")
-	if err != nil {
-		return false, fmt.Errorf("could not create constraint: %w", err)
-	}
+func IsBerry(cwd string, version string, pkgManager bool) (bool, error) {
+	if pkgManager {
+		v, err := semver.NewVersion(version)
+		if err != nil {
+			return false, fmt.Errorf("could not parse yarn version: %w", err)
+		}
+		c, err := semver.NewConstraint(">=2.0.0")
+		if err != nil {
+			return false, fmt.Errorf("could not create constraint: %w", err)
+		}
 
-	return c.Check(v), nil
+		return c.Check(v), nil
+	} else {
+		cmd := exec.Command("yarn", "--version")
+		cmd.Dir = cwd
+		out, err := cmd.Output()
+		if err != nil {
+			return false, fmt.Errorf("could not detect yarn version: %w", err)
+		}
+
+		v, err := semver.NewVersion(strings.TrimSpace(string(out)))
+		if err != nil {
+			return false, fmt.Errorf("could not parse yarn version: %w", err)
+		}
+		c, err := semver.NewConstraint(">=2.0.0")
+		if err != nil {
+			return false, fmt.Errorf("could not create constraint: %w", err)
+		}
+
+		return c.Check(v), nil
+	}
 }
 
 func IsNMLinker(cwd string) (bool, error) {
