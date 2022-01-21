@@ -3,6 +3,7 @@ package nodejs
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"path/filepath"
 	"turbo/internal/api"
 	"turbo/internal/fs"
@@ -52,6 +53,8 @@ var NodejsYarnBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/migrate add-package-manager\"")
+
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -114,6 +117,8 @@ var NodejsBerryBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please set the \"packageManager\" field to your package.json")
+
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -179,6 +184,8 @@ var NodejsPnpmBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/migrate add-package-manager\"")
+
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -220,6 +227,8 @@ var NodejsNpmBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/migrate add-package-manager\"")
+
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
