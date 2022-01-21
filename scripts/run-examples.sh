@@ -146,14 +146,14 @@ if [ -f ".eslintrc.js.bak" ]; then
   mv .eslintrc.js.bak .eslintrc.js 
 fi
 
-if [[ ! -z $(git status -s | grep -v package.json) ]];then
-  echo "Detected changes"
-  git status
-  exit 1
-fi
-
 cat package.json | jq 'del(.packageManager)' | sponge package.json
       
 if [ "$TURBO_TAG" == "canary" ]; then
     cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
+fi
+
+if [[ ! -z $(git status -s) ]];then
+  echo "Detected changes"
+  git status
+  exit 1
 fi
