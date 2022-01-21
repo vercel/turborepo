@@ -6,14 +6,17 @@ echo "=> Running examples..."
 echo "=> Building turbo from source..."
 cd cli && CGO_ENABLED=0 go build ./cmd/turbo/... && cd ..;
 export TURBO_BINARY_PATH=$(pwd)/cli/turbo
+export TURBO_VERSION=$(head -n 1 $(pwd)/cli/version.txt)
+export TURBO_TAG=$(cat $(pwd)/cli/version.txt | sed -n '2 p')
+
 echo "=> Binary path: TURBO_BINARY_PATH=$TURBO_BINARY_PATH"
+echo "=> Local Turbo Version: TURBO_VERSION=$TURBO_VERSION"
 echo "=> Moving our own eslint settings out of the way..."
 echo "=> Actually running examples for real..."
+
 if [ -f ".eslintrc.js" ]; then
   mv .eslintrc.js .eslintrc.js.bak
 fi
-
-echo "'env:\n\tTURBO_BINARY_PATH: $TURBO_BINARY_PATH'" > examples/.yarnrc;
 
 function cleanup {
     rm -rf node_modules
@@ -51,6 +54,12 @@ for folder in examples/* ; do
     echo "======================================================="
     echo "=> checking $folder "
     echo "======================================================="
+
+    cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json      
+    if [ "$TURBO_TAG" == "canary" ]; then
+        cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+    fi
+    
     if [ "$folder" != "examples/with-pnpm" ]; then
             
       # cleanup
@@ -77,8 +86,7 @@ for folder in examples/* ; do
 
       cleanup
       setup_git
-
-      cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json
+      
       
       echo "======================================================="
       echo "=> $folder: yarn install"
@@ -144,4 +152,8 @@ if [[ ! -z $(git status -s | grep -v package.json) ]];then
   exit 1
 fi
 
-rm -rf examples/.yarnrc;
+cat package.json | jq 'del(.packageManager)' | sponge package.json
+      
+if [ "$TURBO_TAG" == "canary" ]; then
+    cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
+fi
