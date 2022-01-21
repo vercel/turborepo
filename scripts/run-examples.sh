@@ -6,9 +6,11 @@ echo "=> Running examples..."
 echo "=> Building turbo from source..."
 cd cli && CGO_ENABLED=0 go build ./cmd/turbo/... && cd ..;
 export TURBO_BINARY_PATH=$(pwd)/cli/turbo
+export TURBO_VERSION = $(shell head -n 1 $(pwd)/cli/version.txt)
 echo "=> Binary path: TURBO_BINARY_PATH=$TURBO_BINARY_PATH"
 echo "=> Moving our own eslint settings out of the way..."
 echo "=> Actually running examples for real..."
+
 if [ -f ".eslintrc.js" ]; then
   mv .eslintrc.js .eslintrc.js.bak
 fi
@@ -78,6 +80,7 @@ for folder in examples/* ; do
       cleanup
       setup_git
 
+      cat package.json | jq "'.devDependencies.turbo = "$TURBO_VERSION"'" | sponge package.json
       cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json
       
       echo "======================================================="
