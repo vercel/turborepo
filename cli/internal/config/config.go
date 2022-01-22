@@ -32,9 +32,9 @@ type Config struct {
 	Logger hclog.Logger
 	// Bearer token
 	Token string
-	// Turborepo.com team id
+	// vercel.com / remote cache team id
 	TeamId string
-	// Turborepo.com team id
+	// vercel.com / remote cache team slug
 	TeamSlug string
 	// Backend API URL
 	ApiUrl string
@@ -82,14 +82,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		return nil, nil
 	}
 	// Precendence is flags > env > config > default
-	userConfig, err := ReadUserConfigFile()
-	if err != nil {
-		// not logged in
-	}
-	partialConfig, err := ReadConfigFile(filepath.Join(".turbo", "config.json"))
-	if err != nil {
-		// not linked
-	}
+	userConfig, _ := ReadUserConfigFile()
+	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
 	partialConfig.Token = userConfig.Token
 
 	enverr := envconfig.Process("TURBO", partialConfig)
@@ -115,10 +109,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
-	var outArgs []string
 	for _, arg := range args {
 		if len(arg) != 0 && arg[0] != '-' {
-			outArgs = append(outArgs, arg)
 			continue
 		}
 		switch {
@@ -151,7 +143,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
 		default:
-			outArgs = append(outArgs, arg)
+			continue
 		}
 	}
 
@@ -190,14 +182,4 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	c.ApiClient.SetToken(partialConfig.Token)
 
 	return c, nil
-}
-
-// IsLoggedIn returns true if the user is logged into a Remote Cache
-func (c *Config) IsLoggedIn() bool {
-	return c.Token != ""
-}
-
-// IsTurborepoLinked returns true if the project is linked (or has enough info to make API requests)
-func (c *Config) IsTurborepoLinked() bool {
-	return (c.TeamId != "" || c.TeamSlug != "")
 }

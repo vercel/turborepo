@@ -1,4 +1,4 @@
-package context
+package util
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ func GetTaskId(pkgName interface{}, target string) string {
 	return fmt.Sprintf("%v%v%v", pkgName, TASK_DELIMITER, target)
 }
 
-// GetPackageTaskFromId return a tuple of the package name and target task
+// GetPackageTaskFromId returns a tuple of the package name and target task
 func GetPackageTaskFromId(taskId string) (packageName string, task string) {
 	arr := strings.Split(taskId, TASK_DELIMITER)
 	return arr[0], arr[1]

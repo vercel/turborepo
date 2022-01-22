@@ -2,6 +2,7 @@ package context
 
 import (
 	"sync"
+	"turbo/internal/util"
 
 	"github.com/fatih/color"
 )
@@ -36,19 +37,7 @@ func (c *ColorCache) PrefixColor(name string) colorFn {
 		return colorFn
 	}
 	c.index++
-	colorFn = c.TermColors[positiveMod(c.index, 5)] // 5 possible colors
+	colorFn = c.TermColors[util.PositiveMod(c.index, 5)] // 5 possible colors
 	c.Cache[name] = colorFn
 	return colorFn
-}
-
-// postitiveMod returns a modulo operator like JavaScripts
-func positiveMod(x, d int) int {
-	x = x % d
-	if x >= 0 {
-		return x
-	}
-	if d < 0 {
-		return x - d
-	}
-	return x + d
 }

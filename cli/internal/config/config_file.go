@@ -16,13 +16,13 @@ type TurborepoConfig struct {
 	TeamId string `json:"teamId,omitempty"`
 	// ApiUrl is the backend url (defaults to api.vercel.com)
 	ApiUrl string `json:"apiUrl,omitempty" envconfig:"api"`
-	// ApiUrl is the backend url (defaults to vercel.com)
+	// LoginUrl is the login url (defaults to vercel.com)
 	LoginUrl string `json:"loginUrl,omitempty" envconfig:"login"`
 	// Owner slug
 	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
 }
 
-// WriteUserConfigFile writes config file at a oath
+// WriteUserConfigFile writes config file at a path
 func WriteConfigFile(path string, config *TurborepoConfig) error {
 	jsonBytes, marhsallError := json.Marshal(config)
 	if marhsallError != nil {
@@ -57,7 +57,7 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 	if err != nil {
 		return config, err
 	}
-	jsonErr := json.Unmarshal(b, &config)
+	jsonErr := json.Unmarshal(b, config)
 	if jsonErr != nil {
 		return config, jsonErr
 	}
@@ -79,7 +79,7 @@ func ReadUserConfigFile() (*TurborepoConfig, error) {
 	return ReadConfigFile(path)
 }
 
-// DeleteUserConfigFile deletes a user  config file
+// DeleteUserConfigFile deletes a user config file
 func DeleteUserConfigFile() error {
 	return WriteUserConfigFile(&TurborepoConfig{})
 }
