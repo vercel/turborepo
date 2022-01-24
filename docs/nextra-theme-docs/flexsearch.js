@@ -102,8 +102,14 @@ export default function Search() {
           .search(search, { enrich: true, limit: 10, suggest: true })
           .map((r) => r.result)
       )
-      .map((r, i) => ({ ...r, index: i }))
+      .map((r, i) => ({
+        ...r,
+        index: i,
+        matchTitle:
+          r.doc.content.indexOf(search) > r.doc.content.indexOf(" _NEXTRA_ "),
+      }))
       .sort((a, b) => {
+        if (a.matchTitle !== b.matchTitle) return a.matchTitle ? -1 : 1;
         if (a.doc.page !== b.doc.page) return a.doc.page > b.doc.page ? 1 : -1;
         return a.index - b.index;
       })
@@ -293,7 +299,7 @@ export default function Search() {
             load();
             setShow(true);
           }}
-          // onBlur={() => setShow(false)}
+          onBlur={() => setShow(false)}
           ref={input}
           spellCheck={false}
         />
