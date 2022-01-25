@@ -12,7 +12,7 @@ Building
 
 Smoke Testing via examples:
 
-1.  Run `scripts/check-examples.sh`
+1.  In `cli` run `make e2e`
 
 ## Debugging
 
