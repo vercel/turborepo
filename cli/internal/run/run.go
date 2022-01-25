@@ -344,7 +344,7 @@ func (c *RunCommand) Run(args []string) int {
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&ctx.TopologicalGraph)
 	var logReplayWaitGroup sync.WaitGroup
-	for taskName, value := range ctx.RootPackageJSON.Turbo.Pipeline {
+	for taskName, value := range ctx.Turbo.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
 		if util.IsPackageTask(taskName) {
@@ -410,10 +410,10 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				// Hash ---------------------------------------------
 				// first check for package-tasks
-				pipeline, ok := ctx.RootPackageJSON.Turbo.Pipeline[fmt.Sprintf("%v", id)]
+				pipeline, ok := ctx.Turbo.Pipeline[fmt.Sprintf("%v", id)]
 				if !ok {
 					// then check for regular tasks
-					altpipe, notcool := ctx.RootPackageJSON.Turbo.Pipeline[task]
+					altpipe, notcool := ctx.Turbo.Pipeline[task]
 					// if neither, then bail
 					if !notcool && !ok {
 						return nil
