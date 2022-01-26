@@ -73,15 +73,7 @@ func Walk(rootPath string, callback func(name string, isDir bool) error) error {
 func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.FileMode) error) error {
 	return godirwalk.Walk(rootPath, &godirwalk.Options{
 		Callback: func(name string, info *godirwalk.Dirent) error {
-			if isDirLike, err := info.IsDirOrSymlinkToDir(); err == nil {
-				return callback(name, isDirLike, info.ModeType())
-			} else {
-				// Skip running callback on "dead" symlink (symlink to directory that doesn't exist)
-				if err, ok := err.(*os.PathError); !ok {
-					return err
-				}
-				return nil
-			}
+			return callback(name, info.IsDir(), info.ModeType())
 		},
 		Unsorted:            true,
 		AllowNonDirectory:   true,
