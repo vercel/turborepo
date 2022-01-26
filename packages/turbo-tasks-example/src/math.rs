@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;
-use std::{any::TypeId, future::Future, sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 use turbo_tasks::{
-    schedule_child, NativeFunctionStaticRef, Node, NodeReuseMode, NodeType, TurboTasks,
+    dynamic_call,
+    macro_helpers::{new_node_intern, Node},
+    NativeFunction, NodeReuseMode, NodeType,
 };
 
 // [turbo_function]
@@ -26,10 +28,7 @@ pub async fn add_impl(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
 
 // TODO autogenerate that
 lazy_static! {
-    static ref ADD_FUNCTION: NativeFunctionStaticRef = NativeFunctionStaticRef::new(|inputs| {
-        if inputs.len() > 2 {
-            return Err(anyhow!("add() called with too many arguments"));
-        }
+    static ref ADD_FUNCTION: NativeFunction = NativeFunction::new(|inputs| {
         let mut iter = inputs.into_iter();
         let a = iter
             .next()
@@ -37,6 +36,9 @@ lazy_static! {
         let b = iter
             .next()
             .ok_or_else(|| anyhow!("add() second argument missing"))?;
+        if iter.next().is_some() {
+            return Err(anyhow!("add() called with too many arguments"));
+        }
         I32ValueRef::verify(&a).context("add() invalid 1st argument")?;
         I32ValueRef::verify(&b).context("add() invalid 2nd argument")?;
         Ok(Box::new(move || {
@@ -54,7 +56,7 @@ lazy_static! {
 pub fn add(a: I32ValueRef, b: I32ValueRef) -> impl Future<Output = I32ValueRef> {
     // TODO decide if we want to schedule or execute directly
     // directly would be `add_impl(a, b)`
-    let result = schedule_child(&ADD_FUNCTION, vec![a.into(), b.into()]);
+    let result = dynamic_call(&ADD_FUNCTION, vec![a.into(), b.into()]).unwrap();
     return async { I32ValueRef::from_node(result.await).unwrap() };
 }
 
@@ -89,10 +91,7 @@ lazy_static! {
 
 impl I32ValueRef {
     pub fn new(value: i32) -> Self {
-        // TODO potential interning
-        // TODO potential compare with nodes from previous call
-        // (using a task_local which store the )
-        let new_node = TurboTasks::intern((TypeId::of::<I32Value>(), value), || {
+        let new_node = new_node_intern::<I32Value, _, _>(value, || {
             Arc::new(Node::new(
                 &I32_VALUE_NODE_TYPE,
                 Arc::new(I32Value::new(value)),

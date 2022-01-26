@@ -4,7 +4,7 @@ use crate::math::I32ValueRef;
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use rand::Rng;
-use turbo_tasks::{schedule_child, NativeFunctionStaticRef, Task};
+use turbo_tasks::{dynamic_call, NativeFunction, Task};
 
 pub async fn random_impl() -> I32ValueRef {
     let mut rng = rand::thread_rng();
@@ -19,7 +19,7 @@ pub async fn random_impl() -> I32ValueRef {
 
 // TODO autogenerate that
 lazy_static! {
-    static ref RANDOM_FUNCTION: NativeFunctionStaticRef = NativeFunctionStaticRef::new(|inputs| {
+    static ref RANDOM_FUNCTION: NativeFunction = NativeFunction::new(|inputs| {
         if inputs.len() != 0 {
             return Err(anyhow!("random() called with too many arguments"));
         }
@@ -32,6 +32,6 @@ lazy_static! {
 pub fn random() -> impl Future<Output = I32ValueRef> {
     // TODO decide if we want to schedule or execute directly
     // directly would be `random_impl()`
-    let result = schedule_child(&RANDOM_FUNCTION, Vec::new());
+    let result = dynamic_call(&RANDOM_FUNCTION, Vec::new()).unwrap();
     return async { I32ValueRef::from_node(result.await).unwrap() };
 }
