@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,6 +37,7 @@ type Context struct {
 	Dir                    string
 	RootNode               string
 	RootPackageJSON        *fs.PackageJSON
+	TurboConfig            *fs.TurboConfigJSON
 	GlobalHashableEnvPairs []string
 	GlobalHashableEnvNames []string
 	GlobalHash             string
@@ -97,11 +99,37 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not get cwd: %w", err)
 		}
 
-		pkg, err := fs.ReadPackageJSON("package.json")
+		packageJSONPath := path.Join(rootpath, "package.json")
+		pkg, err := fs.ReadPackageJSON(packageJSONPath)
 		if err != nil {
 			return fmt.Errorf("package.json: %w", err)
 		}
 		c.RootPackageJSON = pkg
+
+		// If turbo.json exists, we use that
+		// If pkg.Turbo exists, we warn about running the migration
+		// Use pkg.Turbo if turbo.json doesn't exist
+		// If neither exists, it's a fatal error
+		turboJSONPath := path.Join(rootpath, "turbo.json")
+		if !fs.FileExists(turboJSONPath) {
+			if pkg.LegacyTurboConfig == nil {
+				// TODO: suggestion on how to create one
+				return fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+			} else {
+				log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+				c.TurboConfig = pkg.LegacyTurboConfig
+			}
+		} else {
+			turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
+			if err != nil {
+				return fmt.Errorf("turbo.json: %w", err)
+			}
+			c.TurboConfig = turbo
+			if pkg.LegacyTurboConfig != nil {
+				log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+				pkg.LegacyTurboConfig = nil
+			}
+		}
 
 		if backend, err := backends.GetBackend(cwd, pkg); err != nil {
 			return err
@@ -132,9 +160,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalDeps := make(util.Set)
 
 		// Calculate global file and env var dependencies
-		if len(pkg.Turbo.GlobalDependencies) > 0 {
+		if len(c.TurboConfig.GlobalDependencies) > 0 {
 			var globs []string
-			for _, v := range pkg.Turbo.GlobalDependencies {
+			for _, v := range c.TurboConfig.GlobalDependencies {
 				if strings.HasPrefix(v, "$") {
 					trimmed := strings.TrimPrefix(v, "$")
 					c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, trimmed)
@@ -188,7 +216,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("error hashing global dependencies %w", err)
 		}
 		c.GlobalHash = globalHash
-		targets, err := GetTargetsFromArguments(c.Args, &c.RootPackageJSON.Turbo)
+		targets, err := GetTargetsFromArguments(c.Args, c.TurboConfig)
 		if err != nil {
 			return err
 		}
@@ -284,7 +312,7 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 	return nil
 }
 
-func (c *Context) ResolveWorkspaceRootDeps() (error) {
+func (c *Context) ResolveWorkspaceRootDeps() error {
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	pkg := c.RootPackageJSON

@@ -69,3 +69,56 @@ Run the codemod:
 ```sh
 npx @turbo/codemod add-package-manager
 ```
+
+### `create-turbo-config`
+
+Creates the `turbo.json` file at the root of your project based on the `"turbo"` key in `package.json`.
+The `"turbo"` key is subsequently deleted from `package.json`.
+
+For example:
+
+```json
+// Before, package.json
+{
+  "name": "Monorepo root",
+  "private": true,
+  "turbo": {
+    "baseBranch": "origin/main",
+    "pipeline": {
+      ...
+    }
+  },
+  ...
+}
+```
+
+```json
+// After, package.json
+{
+  "name": "Monorepo root",
+  "private": true,
+  ...
+}
+
+// After, turbo.json
+{
+  "baseBranch": "origin/main",
+  "pipeline": {
+    ...
+  }
+}
+```
+
+#### Usage
+
+Go to your project:
+
+```sh
+cd path-to-your-turborepo/
+```
+
+Run the codemod:
+
+```sh
+npx @turbo/codemod create-turbo-config
+```
