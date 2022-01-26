@@ -176,7 +176,7 @@ article h2 a {
     @apply dark:text-gray-500;
   }
   &.nextra-flexsearch ul {
-    @apply overflow-auto left-0 md:-left-80 md:right-0;
+    @apply left-0 overflow-auto md:-left-80 md:right-0;
     min-height: 100px;
     max-height: min(calc(100vh - 12.5rem), 600px);
     max-width: min(calc(100vw - 2rem), calc(100% + 20rem));
@@ -188,7 +188,7 @@ article h2 a {
     li {
       @apply text-gray-800 break-words mx-2.5 px-2.5 py-2 rounded-md;
       .highlight {
-        @apply underline decoration-blue-400 text-blue-500;
+        @apply text-blue-500 underline decoration-blue-400;
       }
     }
     li.active,
@@ -198,11 +198,11 @@ article h2 a {
   }
   .dark & {
     ul {
-      @apply bg-neutral-800 backdrop-blur-xl bg-opacity-60 text-gray-100 ring-white ring-opacity-10 divide-gray-200/10;
+      @apply text-gray-100 bg-neutral-800 backdrop-blur-xl bg-opacity-60 ring-white ring-opacity-10 divide-gray-200/10;
       li {
         @apply text-gray-300;
         .highlight {
-          @apply underline decoration-blue-400 text-blue-500;
+          @apply text-blue-500 underline decoration-blue-400;
         }
       }
       li.active,
@@ -308,32 +308,31 @@ article .contains-task-list input[type="checkbox"] {
 }
 
 :root {
-  --shiki-color-text: #414141;
-  --shiki-color-background: transparent;
-  --shiki-token-constant: #1976d2;
-  --shiki-token-string: #22863a;
-  --shiki-token-comment: #aaa;
-  --shiki-token-keyword: #d32f2f;
-  --shiki-token-parameter: #ff9800;
-  --shiki-token-function: #6f42c1;
-  --shiki-token-string-expression: #22863a;
-  --shiki-token-punctuation: #212121;
-  --shiki-token-link: #22863a;
+  --shiki-color-text: #24292f;
+  --shiki-color-background: #ffffff;
+  --shiki-token-constant: #0550ae;
+  --shiki-token-string: #24292f;
+  --shiki-token-comment: #6e7781;
+  --shiki-token-keyword: #cf222e;
+  --shiki-token-parameter: #24292f;
+  --shiki-token-function: #8250df;
+  --shiki-token-string-expression: #0a3069;
+  --shiki-token-punctuation: #24292f;
   --nextra-shiki-deleted: #f00;
   --nextra-shiki-inserted: #f00;
 }
 
 .dark {
-  --shiki-color-text: #d1d1d1;
-  --shiki-token-constant: #79b8ff;
-  --shiki-token-string: #ffab70;
-  --shiki-token-comment: #6b737c;
-  --shiki-token-keyword: #f97583;
-  --shiki-token-parameter: #ff9800;
-  --shiki-token-function: #b392f0;
-  --shiki-token-string-expression: #4bb74a;
-  --shiki-token-punctuation: #bbbbbb;
-  --shiki-token-link: #ffab70;
+  --shiki-color-text: #c9d1d9;
+  --shiki-color-background: #0d1117;
+  --shiki-token-constant: #79c0ff;
+  --shiki-token-string: #a5d6ff;
+  --shiki-token-comment: #8b949e;
+  --shiki-token-keyword: #ff7b72;
+  --shiki-token-parameter: #c9d1d9;
+  --shiki-token-function: #d2a8ff;
+  --shiki-token-string-expression: #a5d6ff;
+  --shiki-token-punctuation: #c9d1d9;
 }
 
 .post-item .post-item-date {
