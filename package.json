@@ -31,6 +31,52 @@
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"
   },
+  "turbo": {
+    "baseBranch": "origin/main",
+    "env": [
+      "CONVERTKIT_API_KEY",
+      "CONVERTKIT_API_SECRET",
+      "CONVERTKIT_FORM_ID"
+    ],
+    "pipeline": {
+      "test": {
+        "outputs": [
+          "coverage/**/*"
+        ],
+        "dependsOn": [
+          "^build"
+        ]
+      },
+      "lint": {
+        "outputs": []
+      },
+      "dev": {
+        "cache": false
+      },
+      "build": {
+        "outputs": [
+          "dist/**/*",
+          ".next/**/*"
+        ],
+        "dependsOn": [
+          "^build"
+        ]
+      },
+      "cli#build": {
+        "outputs": [
+          "turbo",
+          "turbo.exe"
+        ],
+        "dependsOn": []
+      },
+      "create-turbo#test": {
+        "dependsOn": [
+          "create-turbo#build"
+        ],
+        "outputs": []
+      }
+    }
+  },
   "packageManager": "yarn@1.22.17",
   "dependencies": {
     "patch-package": "^6.4.7"
