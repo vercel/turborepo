@@ -3,6 +3,7 @@ import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import innerText from "react-innertext";
 import "intersection-observer";
+import { MDXProvider } from "@mdx-js/react";
 
 import { useActiveAnchorSet } from "./active-anchor";
 
@@ -220,8 +221,12 @@ const getComponents = (args) => ({
   table: Table,
 });
 
-export const MDXTheme = ({ MDXContent }) => {
+export const MDXTheme = ({ children }) => {
   const slugger = new Slugger();
   slugger.index = 0;
-  return <MDXContent components={getComponents({ slugger })} />;
+  return (
+    <MDXProvider components={getComponents({ slugger })}>
+      {children}
+    </MDXProvider>
+  );
 };

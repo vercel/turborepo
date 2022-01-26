@@ -35,7 +35,7 @@ function useDirectoryInfo(pageMap) {
   }, [pageMap, locale, defaultLocale, asPath]);
 }
 
-function Body({ meta, toc, filepathWithName, navLinks, MDXContent, postList }) {
+function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
   const config = useConfig();
   return (
     <React.Fragment>
@@ -45,15 +45,13 @@ function Body({ meta, toc, filepathWithName, navLinks, MDXContent, postList }) {
           <div className="relative w-full mx-auto overflow-x-hidden">
             <article className="pb-24">
               <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
-                <MDXTheme MDXContent={MDXContent} />
+                <MDXTheme>{children}</MDXTheme>
               </main>
             </article>
             <FooterMain />
           </div>
         ) : (
-          <div className="relative w-full overflow-x-hidden">
-            <MDXContent />
-          </div>
+          <div className="relative w-full overflow-x-hidden">{children}</div>
         )
       ) : postList ? (
         <div className="relative w-full overflow-x-hidden">
@@ -65,7 +63,7 @@ function Body({ meta, toc, filepathWithName, navLinks, MDXContent, postList }) {
         </div>
       ) : meta.full ? (
         <article className="relative w-full overflow-x-hidden nextra-content">
-          <MDXContent />
+          {children}
         </article>
       ) : meta.type === "post" ? (
         <div className="relative w-full mx-auto overflow-x-hidden">
@@ -83,7 +81,7 @@ function Body({ meta, toc, filepathWithName, navLinks, MDXContent, postList }) {
               </div>
             </div>
             <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
-              <MDXTheme MDXContent={MDXContent} />
+              <MDXTheme>{children}</MDXTheme>
             </main>
           </article>
           <FooterMain />
@@ -91,7 +89,7 @@ function Body({ meta, toc, filepathWithName, navLinks, MDXContent, postList }) {
       ) : (
         <article className="relative flex w-full max-w-full min-w-0 px-6 pb-16 docs-container md:px-8">
           <main className="z-10 max-w-screen-md min-w-0 pt-4 mx-auto nextra-content">
-            <MDXTheme MDXContent={MDXContent} />
+            <MDXTheme>{children}</MDXTheme>
             <Footer config={config} filepathWithName={filepathWithName}>
               {navLinks}
             </Footer>
@@ -108,7 +106,7 @@ const Layout = ({
   pageMap,
   meta,
   route: _route,
-  MDXContent,
+  children,
   headings,
   titleText,
 }) => {
@@ -291,8 +289,9 @@ const Layout = ({
                     ) : null
                   }
                   postList={postList}
-                  MDXContent={MDXContent}
-                />
+                >
+                  {children}
+                </Body>
               </div>
             </ActiveAnchor>
           </div>
@@ -346,8 +345,9 @@ const Layout = ({
                     isRTL={isRTL}
                   />
                 }
-                MDXContent={MDXContent}
-              />
+              >
+                {children}
+              </Body>
             </div>
           </ActiveAnchor>
         </div>
