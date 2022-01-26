@@ -11,6 +11,7 @@ use crate::{log::log, math::I32ValueRef, random::random};
 mod log;
 mod math;
 mod random;
+mod u32_value;
 
 fn main() {
     let tt = TurboTasks::new();
