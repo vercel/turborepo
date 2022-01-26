@@ -1,0 +1,13 @@
+diff --git a/node_modules/nextra/dist/loader.mjs b/node_modules/nextra/dist/loader.mjs
+index 217a98a..5de2dd7 100644
+--- a/node_modules/nextra/dist/loader.mjs
++++ b/node_modules/nextra/dist/loader.mjs
+@@ -47,7 +47,7 @@ import slash2 from "slash";
+ import fs from "graceful-fs";
+ import path from "path";
+ var { statSync, mkdirSync } = fs;
+-var assetDir = path.join(process.cwd(), "public", ".nextra");
++var assetDir = path.join(process.cwd(), "public", "nextra");
+ var asset = {};
+ try {
+   statSync(assetDir);

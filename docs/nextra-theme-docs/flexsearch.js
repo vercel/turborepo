@@ -26,7 +26,7 @@ const Item = ({ page, first, title, active, href, onHover, excerpt }) => {
       <Link href={href}>
         <a className="block no-underline" onMouseMove={onHover}>
           <li className={cn({ active })}>
-            <div className="font-semibold dark:text-white leading-5">
+            <div className="font-semibold leading-5 dark:text-white">
               {title}
             </div>
             {excerpt ? (
@@ -190,7 +190,7 @@ export default function Search() {
     if (!indexes[localeCode] && !loading) {
       setLoading(true);
       const data = await (
-        await fetch(`/.nextra/data-${localeCode}.json`)
+        await fetch(`/nextra/data-${localeCode}.json`)
       ).json();
 
       const index = new FlexSearch.Document({
@@ -285,7 +285,7 @@ export default function Search() {
             setSearch(e.target.value);
             setShow(true);
           }}
-          className="block w-full px-3 py-2 leading-tight rounded-lg appearance-none focus:outline-none focus:ring-1 focus:ring-gray-200 focus:bg-white hover:bg-opacity-5 transition-colors dark:focus:bg-dark dark:focus:ring-gray-100 dark:focus:ring-opacity-20"
+          className="block w-full px-3 py-2 leading-tight transition-colors rounded-lg appearance-none focus:outline-none focus:ring-1 focus:ring-gray-200 focus:bg-white hover:bg-opacity-5 dark:focus:bg-dark dark:focus:ring-gray-100 dark:focus:ring-opacity-20"
           type="search"
           placeholder={renderComponent(
             config.searchPlaceholder,
@@ -305,7 +305,7 @@ export default function Search() {
         />
         {renderList ? null : (
           <div className="hidden sm:flex absolute inset-y-0 right-0 py-1.5 pr-1.5 select-none pointer-events-none">
-            <kbd className="inline-flex items-center px-2 font-mono text-sm font-medium bg-white dark:bg-dark dark:bg-opacity-50 text-gray-400 dark:text-gray-500 dark:border-gray-100 dark:border-opacity-20 border rounded">
+            <kbd className="inline-flex items-center px-2 font-mono text-sm font-medium text-gray-400 bg-white border rounded dark:bg-dark dark:bg-opacity-50 dark:text-gray-500 dark:border-gray-100 dark:border-opacity-20">
               /
             </kbd>
           </div>
@@ -320,9 +320,9 @@ export default function Search() {
       >
         <ul className="absolute z-20 p-0 m-0 mt-2 top-full py-2.5">
           {loading ? (
-            <span className="p-8 text-center text-gray-400 text-sm select-none flex justify-center">
+            <span className="flex justify-center p-8 text-sm text-center text-gray-400 select-none">
               <svg
-                className="animate-spin -ml-1 mr-2 h-5 w-5 text-gray-400"
+                className="w-5 h-5 mr-2 -ml-1 text-gray-400 animate-spin"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
