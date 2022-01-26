@@ -1,8 +1,8 @@
-import React from 'react'
+import React from "react";
 
 export default {
-  docsRepositoryBase: 'https://github.com/shuding/nextra',
-  titleSuffix: ' – Nextra',
+  docsRepositoryBase: "https://github.com/shuding/nextra",
+  titleSuffix: " – Nextra",
   nextLinks: true,
   prevLinks: true,
   search: true,
@@ -11,7 +11,7 @@ export default {
   font: true,
   footer: true,
   footerText: `MIT ${new Date().getFullYear()} © Nextra.`,
-  footerEditLink: 'Edit this page',
+  footerEditLink: "Edit this page",
   logo: (
     <React.Fragment>
       <span className="mr-2 font-extrabold hidden md:inline">Nextra</span>
@@ -33,7 +33,15 @@ export default {
       <meta property="og:description" content="Nextra: the next docs builder" />
       <meta name="apple-mobile-web-app-title" content="Nextra" />
     </React.Fragment>
-  )
+  ),
+  searchPlaceholder: () => {
+    return "Search documentation...";
+  },
+  unstable_searchResultEmpty: () => (
+    <span className="block p-8 text-center text-gray-400 text-sm select-none">
+      No results found.
+    </span>
+  ),
   // direction: 'ltr',
   // i18n: [{ locale: 'en-US', text: 'English', direction: 'ltr' }],
-}
+};

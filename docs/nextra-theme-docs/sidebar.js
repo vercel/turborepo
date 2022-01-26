@@ -9,8 +9,7 @@ import { useActiveAnchor } from "./misc/active-anchor";
 import { getFSRoute } from "./utils/get-fs-route";
 import useMenuContext from "./utils/menu-context";
 
-import Search from "./search";
-import StorkSearch from "./stork-search";
+import Search from "./flexsearch";
 import { useConfig } from "./config";
 
 const TreeState = new Map();
@@ -153,8 +152,9 @@ export default function Sidebar({
   const anchors = useMemo(
     () =>
       headings
-        .filter((child) => child.props && child.type === "h2")
-        .map((child) => child.props.children),
+        .filter((v) => v.children && v.depth === 2 && v.type === "heading")
+        .map((v) => v.value || "")
+        .filter(Boolean),
     [headings]
   );
   const [hasScrolled, setHasScrolled] = useState(false);
@@ -199,13 +199,7 @@ export default function Sidebar({
       <div className="w-full h-full p-4 pb-40 overflow-y-auto border-gray-200 sidebar dark:border-gray-900 md:pb-16">
         <div className="block mb-4 md:hidden">
           {config.customSearch ||
-            (config.search ? (
-              config.unstable_stork ? (
-                <StorkSearch />
-              ) : (
-                <Search directories={flatDirectories} />
-              )
-            ) : null)}
+            (config.search ? <Search directories={flatDirectories} /> : null)}
         </div>
         <div className="hidden md:block">
           <Menu

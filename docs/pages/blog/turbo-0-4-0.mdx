@@ -37,7 +37,7 @@ Say we have a monorepo with Yarn workspaces that includes a set of packages call
 
 Here's what the Dockerfile for the `frontend` Next.js app might look like:
 
-```docker highlight="7"
+```docker {7}
 FROM node:alpine AS base
 RUN apk update
 WORKDIR /app
@@ -75,7 +75,7 @@ With the all new `turbo prune` command, you can now fix this nightmare by determ
 
 Let's look at how to use `turbo prune` inside of Docker.
 
-```docker highlight="11,16"
+```docker {11,16}
 FROM node:alpine AS base
 RUN apk update && apk add git
 
