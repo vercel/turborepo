@@ -190,7 +190,7 @@ export default function Search() {
     if (!indexes[localeCode] && !loading) {
       setLoading(true);
       const data = await (
-        await fetch(`/.nextra/data-${localeCode}.json`)
+        await fetch(`/_next/static/chunks/nextra-data-${localeCode}.json`)
       ).json();
 
       const index = new FlexSearch.Document({
@@ -243,7 +243,7 @@ export default function Search() {
 
       indexes[localeCode] = index;
       setLoading(false);
-      setSearch((s) => s + " "); // Trigger the effect
+      setSearch((s) => (s ? s + " " : s)); // Trigger the effect
     }
   };
 
