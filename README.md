@@ -1,4 +1,4 @@
-# golang-cross
+# goreleaser-cross
 
 Docker container to turn CGO cross-compilation pain into a pleasure. It tested on [variety of platforms](#supported-toolchains/platforms).
 [Custom sysroots](#Sysroot) also can be used.
@@ -9,11 +9,10 @@ it is probably better to call goreleaser directly as it saves time on downloadin
 **Tip!**
 Should you wish to see working [examples](#examples) instead of reading
 ## Credits
-This project is rather cookbook. Actual work to create cross-compile environment is done by [osxcross](https://github.com/tpoechtrager/osxcross) and [golang-cross](https://github.com/gythialy/golang-cross)
+This project is rather cookbook. Actual work to create cross-compile environment is done by [osxcross](https://github.com/tpoechtrager/osxcross)
 
 ## Docker
-[Docker image](https://ghcr.io/troian/golang-cross) is placed on Github.
-I stopped deploying to Docker Hub due to insane (but probably fare) rate limits and more insane one api key only for free accounts. 
+[Docker image](https://ghcr.io/goreleaser/goreleaser-cross) is placed on Github.
 
 The image is multiarch and supports hosts below
 
@@ -70,8 +69,8 @@ Windows|amd64|x86_64-w64-mingw32-gcc|x86_64-w64-mingw32-g++|Verification require
 - GITHUB_TOKEN - github auth token to deploy release
 
 ## Sysroot
-Most reasonable way to make a sysroot seem to be rsync and [the example](https://github.com/troian/golang-cross-example) is using it.
-You may want to use [the script](https://github.com/troian/golang-cross/blob/master/scripts/sysroot-rsync.sh) to create sysroot for your desired linux setup.
+Most reasonable way to make a sysroot seem to be rsync and [the example](https://github.com/goreleaser/goreleaser-cross-example) is using it.
+You may want to use [the script](https://github.com/goreleaser/goreleaser-cross/blob/master/scripts/sysroot-rsync.sh) to create sysroot for your desired linux setup.
 Lets consider creating sysroot for Raspberry Pi 4 running Debian Buster.
 - install all required dev packages. for this example we will install libftdi1-dev, libusb-1.0-0-dev and opencv4
   ```bash
@@ -88,7 +87,7 @@ For example RPI4 running Debian Buster this library `/usr/lib/x86_x64-gnu-linux/
 Any contribution helping to make this project is welcome
 
 ## Examples
- - [Example described in this tutorial](https://github.com/troian/golang-cross-example)
+ - [Example described in this tutorial](https://github.com/goreleaser/goreleaser-cross-example)
 
 ## Projects using
  - [Akash](https://github.com/ovrclk/akash)

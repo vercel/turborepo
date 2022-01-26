@@ -48,8 +48,8 @@ jobs:
           push: true
           file: Dockerfile.base
           tags: |
-            ghcr.io/troian/golang-cross-base:${{env.RELEASE_TAG}}
-            troian/golang-cross-base:${{env.RELEASE_TAG}}
+            ghcr.io/goreleaser/goreleaser-cross-base:${{env.RELEASE_TAG}}
+            goreleaser/goreleaser-cross-base:${{env.RELEASE_TAG}}
           build-args: |
             "GO_VERSION=${{env.GO_VERSION}}"
             "GORELEASER_VERSION=${{env.GORELEASER_VERSION}}"
@@ -64,8 +64,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
-            troian/golang-cross:${{env.RELEASE_TAG}}
+            ghcr.io/goreleaser/goreleaser-cross:${{env.RELEASE_TAG}}
+            goreleaser/goreleaser-cross:${{env.RELEASE_TAG}}
           build-args: |
             "GO_VERSION=${{env.GO_VERSION}}"
             "OSX_SDK=${{env.OSX_SDK}}"
@@ -76,7 +76,7 @@ jobs:
 #      - name: Sign images
 #        run: |
 #          echo "${COSIGN_KEY}" | base64 -d > /tmp/cosign.key
-#          cosign sign --key /tmp/cosign.key ghcr.io/troian/golang-cross:${{env.RELEASE_TAG}}
+#          cosign sign --key /tmp/cosign.key ghcr.io/goreleaser/goreleaser-cross:${{env.RELEASE_TAG}}
 #        env:
 #          COSIGN_KEY: ${{secrets.COSIGN_PRIVATE_KEY}}
 #          COSIGN_PASSWORD: ${{secrets.COSIGN_PASSWORD}}
