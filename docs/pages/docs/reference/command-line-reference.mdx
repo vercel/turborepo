@@ -101,8 +101,8 @@ turbo run build test lint --graph=my-graph.html
   graph at the moment, even if that pipeline task does not actually exist in a
   given package. This has no impact on execution, it means that:
 
-  - the terminal output may overstate the number of packages in which a task is running.
-  - your dot viz graph may contain additional nodes that represents tasks that do not exist.
+- the terminal output may overstate the number of packages in which a task is running.
+- your dot viz graph may contain additional nodes that represents tasks that do not exist.
 </Callout>
 
 #### `--force`
@@ -269,7 +269,7 @@ You can also set the value of the current team by setting an environment variabl
 
 `type: string`
 
-To view CPU trace, outputs the trace to the given file,  use `go tool trace [file]`.
+To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
 
 <Callout emoji="🚨">
   **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
@@ -301,10 +301,10 @@ To view CPU profile, outputs the profile to the given file, drop the file into [
   for native Windows and run using the command prompt instead.
 </Callout>
 
-
 ```sh
 turbo run build --cpuprofile="<cpu-profile-file-name>"
 ```
+
 #### `-v`, `-vv`, `-vvv`
 
 To specify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
@@ -325,7 +325,7 @@ This command will generate folder called `out` with the following inside of it:
 - A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
 - A copy of the root `package.json`
 
-```tree
+```
 .                                 # Folder full source code for all package needed to build the target
 ├── package.json                  # The root `package.json`
 ├── packages
@@ -368,7 +368,7 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 - A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
 - A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
 
-```tree
+```
 .
 ├── full                                # Folder full source code for all package needed to build the target
 │   ├── package.json
