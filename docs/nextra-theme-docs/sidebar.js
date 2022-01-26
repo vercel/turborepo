@@ -8,12 +8,11 @@ import innerText from "react-innertext";
 import { useActiveAnchor } from "./misc/active-anchor";
 import { getFSRoute } from "./utils/get-fs-route";
 import useMenuContext from "./utils/menu-context";
-
+import ArrowRight from "./icons/arrow-right";
 import Search from "./flexsearch";
 import { useConfig } from "./config";
 
 const TreeState = new Map();
-
 function Folder({ item, anchors }) {
   const { asPath, locale } = useRouter();
   const routeOriginal = getFSRoute(asPath, locale);
@@ -38,14 +37,26 @@ function Folder({ item, anchors }) {
           render((x) => !x);
         }}
       >
-        {item.title}
+        <span className="flex items-center justify-between gap-2">
+          {item.title}
+          <ArrowRight
+            height="1em"
+            className={cn(open ? "rotate-90" : "", "transition-transform")}
+          />
+        </span>
       </button>
       <div
         style={{
           display: open ? "initial" : "none",
         }}
       >
-        <Menu directories={item.children} base={item.route} anchors={anchors} />
+        {Array.isArray(item.children) && (
+          <Menu
+            directories={item.children}
+            base={item.route}
+            anchors={anchors}
+          />
+        )}
       </div>
     </li>
   );

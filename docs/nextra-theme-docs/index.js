@@ -333,7 +333,12 @@ const Layout = ({
               <Body
                 meta={meta}
                 filepathWithName={filepathWithName}
-                toc={<ToC headings={config.floatTOC ? headings : null} />}
+                toc={
+                  <ToC
+                    headings={config.floatTOC ? headings : null}
+                    filepathWithName={filepathWithName}
+                  />
+                }
                 navLinks={
                   <NavLinks
                     flatDirectories={flatDocsDirectories}
