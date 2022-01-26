@@ -7,7 +7,7 @@ import cn from "classnames";
 import Head from "./head";
 import Navbar from "./navbar";
 import Footer, { NavLinks } from "./footer";
-import Theme from "./misc/theme";
+import { MDXTheme } from "./misc/theme";
 import Sidebar from "./sidebar";
 import ToC from "./toc";
 import { ThemeConfigContext, useConfig } from "./config";
@@ -16,8 +16,6 @@ import defaultConfig from "./misc/default.config";
 import { getFSRoute } from "./utils/get-fs-route";
 import { MenuContext } from "./utils/menu-context";
 import normalizePages from "./utils/normalize-pages";
-import { getHeadings } from "./utils/get-headings";
-import { getTitle } from "./utils/get-title";
 import traverse from "./utils/traverse";
 import sortDate from "./utils/sort-date";
 import Link from "next/link";
@@ -47,7 +45,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
           <div className="relative w-full mx-auto overflow-x-hidden">
             <article className="pb-24">
               <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
-                <Theme>{children}</Theme>
+                <MDXTheme>{children}</MDXTheme>
               </main>
             </article>
             <FooterMain />
@@ -83,7 +81,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
               </div>
             </div>
             <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
-              <Theme>{children}</Theme>
+              <MDXTheme>{children}</MDXTheme>
             </main>
           </article>
           <FooterMain />
@@ -91,7 +89,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
       ) : (
         <article className="relative flex w-full max-w-full min-w-0 px-6 pb-16 docs-container md:px-8">
           <main className="z-10 max-w-screen-md min-w-0 pt-4 mx-auto nextra-content">
-            <Theme>{children}</Theme>
+            <MDXTheme>{children}</MDXTheme>
             <Footer config={config} filepathWithName={filepathWithName}>
               {navLinks}
             </Footer>
@@ -103,7 +101,15 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
   );
 }
 
-const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
+const Layout = ({
+  filename,
+  pageMap,
+  meta,
+  route: _route,
+  children,
+  headings,
+  titleText,
+}) => {
   const { route, locale } = useRouter();
   const config = useConfig();
 
@@ -118,11 +124,10 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
     directories,
   } = useDirectoryInfo(pageMap);
 
-  const content = children.type();
   const filepath = route.slice(0, route.lastIndexOf("/") + 1);
   const filepathWithName = filepath + filename;
-  const headings = getHeadings(content.props.children);
-  const title = meta.title || getTitle(headings) || "Untitled";
+  const title = meta.title || titleText || "Untitled";
+
   // gather info for tag/posts pages
   let posts = null;
   let navPages = [];
@@ -327,7 +332,12 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
               <Body
                 meta={meta}
                 filepathWithName={filepathWithName}
-                toc={<ToC headings={config.floatTOC ? headings : null} />}
+                toc={
+                  <ToC
+                    headings={config.floatTOC ? headings : null}
+                    filepathWithName={filepathWithName}
+                  />
+                }
                 navLinks={
                   <NavLinks
                     flatDirectories={flatDocsDirectories}

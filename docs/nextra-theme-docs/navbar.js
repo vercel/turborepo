@@ -8,8 +8,7 @@ import { getFSRoute } from "./utils/get-fs-route";
 import useMenuContext from "./utils/menu-context";
 
 import { useConfig } from "./config";
-import Search from "./search";
-import StorkSearch from "./stork-search";
+import Search from "./flexsearch";
 import GitHubIcon from "./icons/github";
 import DiscordIcon from "./icons/discord";
 import ThemeSwitch from "./theme-switch";
@@ -80,13 +79,7 @@ export default function Navbar({
         <div className="flex-1">
           <div className="hidden mr-2 md:inline-block">
             {config.customSearch ||
-              (config.search ? (
-                config.unstable_stork ? (
-                  <StorkSearch />
-                ) : (
-                  <Search directories={flatDirectories} />
-                )
-              ) : null)}
+              (config.search ? <Search directories={flatDirectories} /> : null)}
           </div>
         </div>
 
