@@ -11,7 +11,6 @@
     ]
   },
   "scripts": {
-    "postinstall": "patch-package",
     "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
     "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
@@ -58,7 +57,7 @@
         "outputs": [
           "dist/**/*",
           ".next/**/*",
-          "public/nextra/**/*"
+          "public/.nextra/**/*"
         ],
         "dependsOn": [
           "^build"
