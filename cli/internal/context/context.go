@@ -99,7 +99,8 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not get cwd: %w", err)
 		}
 
-		pkg, err := fs.ReadPackageJSON("package.json")
+		packageJSONPath := path.Join(rootpath, "package.json")
+		pkg, err := fs.ReadPackageJSON(packageJSONPath)
 		if err != nil {
 			return fmt.Errorf("package.json: %w", err)
 		}
@@ -109,7 +110,8 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// If pkg.Turbo exists, we warn about running the migration
 		// Use pkg.Turbo if turbo.json doesn't exist
 		// If neither exists, it's a fatal error
-		if !fs.FileExists("turbo.json") {
+		turboJSONPath := path.Join(rootpath, "turbo.json")
+		if !fs.FileExists(turboJSONPath) {
 			if pkg.LegacyTurboConfig == nil {
 				// TODO: suggestion on how to create one
 				return fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
@@ -118,7 +120,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 				c.TurboConfig = pkg.LegacyTurboConfig
 			}
 		} else {
-			turbo, err := fs.ReadTurboConfigJSON("turbo.json")
+			turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
 			if err != nil {
 				return fmt.Errorf("turbo.json: %w", err)
 			}
