@@ -9,7 +9,8 @@ import { useActiveAnchor } from "./misc/active-anchor";
 import { getFSRoute } from "./utils/get-fs-route";
 import useMenuContext from "./utils/menu-context";
 import ArrowRight from "./icons/arrow-right";
-import Search from "./flexsearch";
+import FlexSearch from "./flexsearch";
+import Search from "./search";
 import { useConfig } from "./config";
 
 const TreeState = new Map();

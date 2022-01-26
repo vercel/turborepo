@@ -8,7 +8,7 @@ import { getFSRoute } from "./utils/get-fs-route";
 import useMenuContext from "./utils/menu-context";
 
 import { useConfig } from "./config";
-import Search from "./flexsearch";
+import Search from "./search";
 import GitHubIcon from "./icons/github";
 import DiscordIcon from "./icons/discord";
 import ThemeSwitch from "./theme-switch";

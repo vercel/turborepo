@@ -165,52 +165,51 @@ article h2 a {
 }
 
 /* Search */
-.nextra-search {
-  input {
-    @apply text-gray-900 bg-black bg-opacity-[.03];
-    @apply dark:text-gray-300 dark:bg-gray-50 dark:bg-opacity-10;
-    @apply dark:border-gray-800;
-  }
-  input::placeholder {
-    @apply text-gray-400;
-    @apply dark:text-gray-500;
-  }
-  &.nextra-flexsearch ul {
-    @apply left-0 overflow-auto md:-left-80 md:right-0;
-    min-height: 100px;
-    max-height: min(calc(100vh - 12.5rem), 600px);
-    max-width: min(calc(100vw - 2rem), calc(100% + 20rem));
-    transition: max-height 0.2s ease;
-    width: 100vw;
-  }
-  ul {
-    @apply rounded-xl backdrop-blur-lg bg-white bg-opacity-[.7] text-gray-100 ring-1 ring-black ring-opacity-5 overflow-hidden overscroll-contain shadow-xl list-none;
-    li {
-      @apply text-gray-800 break-words mx-2.5 px-2.5 py-2 rounded-md;
-      .highlight {
-        @apply text-blue-500 underline decoration-blue-400;
-      }
-    }
-    li.active,
-    a:focus li {
-      @apply text-blue-500 bg-blue-400 bg-opacity-[.1];
-    }
-  }
-  .dark & {
-    ul {
-      @apply text-gray-100 bg-neutral-800 backdrop-blur-xl bg-opacity-60 ring-white ring-opacity-10 divide-gray-200/10;
-      li {
-        @apply text-gray-300;
-        .highlight {
-          @apply text-blue-500 underline decoration-blue-400;
-        }
-      }
-      li.active,
-      a:focus li {
-        @apply text-blue-500 bg-blue-500 bg-opacity-[.1];
-      }
-    }
-  }
+/* Search */
+.nextra-search input {
+  @apply text-gray-900 border-gray-300;
+}
+.dark .nextra-search input {
+  @apply text-gray-100 border-gray-800 bg-dark;
+}
+.nextra-search input::placeholder {
+  @apply text-gray-400;
+}
+.dark .nextra-search input::placeholder {
+  @apply text-gray-700;
+}
+.nextra-search ul {
+  @apply overflow-hidden text-gray-100 list-none bg-white border border-gray-300 divide-gray-300 rounded shadow-lg;
+}
+.dark .nextra-search ul {
+  @apply text-gray-100 border-gray-700 divide-gray-700 bg-dark;
+}
+.nextra-search ul li {
+  @apply text-gray-800;
+}
+.nextra-search ul li.active,
+.nextra-search ul a:focus li {
+  @apply bg-gray-200;
+}
+.dark .nextra-search ul li {
+  @apply text-gray-300;
+}
+.dark .nextra-search ul li.active,
+.dark .nextra-search ul a:focus li {
+  @apply bg-gray-800;
+}
+.nextra-search ul li .highlight {
+  @apply bg-yellow-300;
+}
+.dark .nextra-search ul li .highlight {
+  @apply bg-yellow-700;
+}
+.search-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
 }
 
 input[type="search"]::-webkit-search-decoration,
