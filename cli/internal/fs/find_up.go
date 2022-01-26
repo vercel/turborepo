@@ -48,24 +48,8 @@ func findupFrom(name, dir string, readdir readDir) (string, error) {
 	}
 }
 
-func findup(name string, readdir readDir) (string, error) {
-	cwd, err := os.Getwd()
-
-	if err != nil {
-		return "", err
-	}
-
-	return findupFrom(name, cwd, readdir)
-}
-
 // Recursively find a file by walking up parents in the file tree
 // starting from a specific directory.
 func FindupFrom(name, dir string) (string, error) {
 	return findupFrom(name, dir, defaultReadDir)
-}
-
-// Recursively find a file by walking up parents in the file tree
-// starting from the current working directory.
-func Findup(name string) (string, error) {
-	return findup(name, defaultReadDir)
 }

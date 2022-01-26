@@ -2,6 +2,7 @@
 
 import * as path from "path";
 import execa from "execa";
+import fs from 'fs';
 import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -211,6 +212,22 @@ async function run() {
         frames: ["   ", ">  ", ">> ", ">>>"],
       },
     }).start();
+
+    const data = fs.readFileSync(`${projectDir}/package.json`, "utf8");
+    const pkg = JSON.parse(data.toString());
+    switch (answers.packageManager) {
+      case "yarn":
+        pkg.packageManager = "yarn@1.22.17";
+        break;
+      case "pnpm":
+        pkg.packageManager = "pnpm@6.26.1";
+        break;
+      case "npm":
+        pkg.packageManager = "npm@8.3.0";
+        break;
+    }
+    fs.writeFileSync(`${projectDir}/package.json`, JSON.stringify(pkg, null, 2));
+
     await execa(`${answers.packageManager}`, [`install`], {
       stdio: "ignore",
       cwd: projectDir,

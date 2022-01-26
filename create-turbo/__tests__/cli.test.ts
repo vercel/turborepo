@@ -24,7 +24,7 @@ const DEFAULT_JEST_TIMEOUT = 5000;
 describe("create-turbo cli", () => {
   beforeAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
-    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
+    fs.rmSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
       throw new Error(
@@ -35,7 +35,7 @@ describe("create-turbo cli", () => {
 
   afterAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT);
-    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
+    fs.rmSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
   });
 
   it("guides the user through the process", (done) => {

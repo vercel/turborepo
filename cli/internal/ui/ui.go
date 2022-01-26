@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"regexp"
@@ -12,7 +11,6 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-const ESC = 27
 const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
 
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
@@ -21,13 +19,6 @@ var gray = color.New(color.Faint)
 var bold = color.New(color.Bold)
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
-
-// clear the line and move the cursor up
-var clear = fmt.Sprintf("%c[%dA%c[2K", ESC, 1, ESC)
-
-func ClearLines(writer io.Writer, count int) {
-	_, _ = fmt.Fprint(writer, strings.Repeat(clear, count))
-}
 
 var ansiRegex = regexp.MustCompile(ansiEscapeStr)
 
@@ -45,10 +36,6 @@ func Dim(str string) string {
 
 func Bold(str string) string {
 	return bold.Sprint(str)
-}
-
-func Warn(str string) string {
-	return fmt.Sprintf("%s %s", WARNING_PREFIX, color.YellowString(str))
 }
 
 func rgb(i int) (int, int, int) {

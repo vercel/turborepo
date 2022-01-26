@@ -40,9 +40,8 @@ const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Ui *cli.ColoredUi
-
 	Config *config.Config
+	Ui     *cli.ColoredUi
 }
 
 // Synopsis of run command
@@ -178,7 +177,7 @@ func (c *RunCommand) Run(args []string) int {
 	filteredChangedFiles := make(util.Set)
 	// Ignore any changed files in the ignore set
 	for _, c := range changedFiles {
-		if !ignoreSet.Include(c) {
+		if !ignoreSet.Includes(c) {
 			filteredChangedFiles.Add(c)
 		}
 	}
@@ -200,7 +199,7 @@ func (c *RunCommand) Run(args []string) int {
 	// Unwind scope globs
 	scopePkgs, err := getScopedPackages(ctx, runOptions.scope)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("Invalid scope: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("invalid scope: %w", err))
 		return 1
 	}
 
@@ -311,7 +310,7 @@ func (c *RunCommand) Run(args []string) int {
 		if err != nil {
 			log.Printf("[ERROR] %v: error computing combined hash", pack.Name)
 		}
-		c.Config.Logger.Debug(fmt.Sprintf("%v: package anscestralHash", pack.Name), "hash", ancestralHashes)
+		c.Config.Logger.Debug(fmt.Sprintf("%v: package ancestralHash", pack.Name), "hash", ancestralHashes)
 		c.Config.Logger.Debug(fmt.Sprintf("%v: package hash", pack.Name), "hash", pack.Hash)
 	}
 
@@ -348,12 +347,12 @@ func (c *RunCommand) Run(args []string) int {
 	for taskName, value := range ctx.RootPackageJSON.Turbo.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
-		if core.IsPackageTask(taskName) {
+		if util.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
 				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
 					continue
 				}
-				if core.IsPackageTask(from) {
+				if util.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
 				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
@@ -362,7 +361,7 @@ func (c *RunCommand) Run(args []string) int {
 					deps.Add(from)
 				}
 			}
-			_, id := core.GetPackageTaskFromId(taskName)
+			_, id := util.GetPackageTaskFromId(taskName)
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
@@ -383,7 +382,7 @@ func (c *RunCommand) Run(args []string) int {
 			Cache:    value.Cache,
 			Run: func(id string) error {
 				cmdTime := time.Now()
-				name, task := context.GetPackageTaskFromId(id)
+				name, task := util.GetPackageTaskFromId(id)
 				pack := ctx.PackageInfos[name]
 				targetLogger := c.Config.Logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
 				defer targetLogger.ResetNamed(pack.Name)
@@ -397,7 +396,7 @@ func (c *RunCommand) Run(args []string) int {
 				}
 
 				// Setup tracer
-				tracer := runState.Run(context.GetTaskId(pack.Name, task))
+				tracer := runState.Run(util.GetTaskId(pack.Name, task))
 
 				// Create a logger
 				pref := ctx.ColorCache.PrefixColor(pack.Name)
@@ -496,7 +495,12 @@ func (c *RunCommand) Run(args []string) int {
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
-				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+				var cmd *exec.Cmd
+				if ctx.Backend.Name == "nodejs-berry" {
+					cmd = exec.Command("yarn", argsactual...)
+				} else {
+					cmd = exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+				}
 				cmd.Dir = pack.Dir
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 				cmd.Env = append(os.Environ(), envs)
@@ -558,7 +562,7 @@ func (c *RunCommand) Run(args []string) int {
 							defer f.Close()
 							scan := bufio.NewScanner(f)
 							c.Ui.Error("")
-							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, context.GetTaskId(pack.Name, task)))
+							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
 							c.Ui.Error("")
 							for scan.Scan() {
 								c.Ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
@@ -580,7 +584,7 @@ func (c *RunCommand) Run(args []string) int {
 					ignore := []string{}
 					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
-						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
+						c.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 					}
 				}
 
@@ -805,12 +809,12 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
 				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
-					return nil, fmt.Errorf("Invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
+					return nil, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
 				} else {
 					if i >= 1 {
 						runOptions.concurrency = i
 					} else {
-						return nil, fmt.Errorf("Invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1.", i)
+						return nil, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
 					}
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
@@ -887,18 +891,6 @@ func (c *RunCommand) logWarning(log hclog.Logger, prefix string, err error) {
 	}
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
-}
-
-// logError logs an error and outputs it to the UI.
-func (c *RunCommand) logFatal(log hclog.Logger, prefix string, err error) {
-	log.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
-	os.Exit(1)
 }
 
 func hasGraphViz() bool {

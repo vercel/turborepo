@@ -9,16 +9,6 @@ import (
 	"github.com/briandowns/spinner"
 )
 
-// Events display settings.
-const (
-	minCellWidth           = 20  // minimum number of characters in a table's cell.
-	tabWidth               = 4   // number of characters in between columns.
-	cellPaddingWidth       = 2   // number of padding characters added by default to a cell.
-	paddingChar            = ' ' // character in between columns.
-	noAdditionalFormatting = 0
-	maxCellLength          = 70 // Number of characters we want to display at most in a cell before wrapping it to the next line.
-)
-
 // startStopper is the interface to interact with the spinner.
 type startStopper interface {
 	Start()

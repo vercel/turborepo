@@ -139,6 +139,7 @@ const theme = {
   enterpriseLink:
     "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink", // @TODO
   projectChatLink: "https://turborepo.org/discord",
+  feedbackLink: "Question? Give us feedback →",
   banner: function Banner() {
     return (
       <div className="px-6 py-2 text-sm text-center text-white bg-black dark:bg-white dark:text-black">

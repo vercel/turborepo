@@ -24,7 +24,7 @@ const basicPipeline = {
 process.env.TURBO_TOKEN = "";
 
 let suites = [];
-for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
@@ -55,7 +55,7 @@ for (let s of suites) {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {

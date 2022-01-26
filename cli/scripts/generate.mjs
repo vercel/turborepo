@@ -71,7 +71,7 @@ turbo-linux
     );
     if (fs.existsSync(root)) {
       try {
-        fs.rmdirSync(root + "/packages", { recursive: true });
+        fs.rmSync(root + "/packages", { recursive: true });
       } catch (error) {}
     }
 
@@ -107,8 +107,8 @@ turbo-linux
           version: "0.0.0",
           private: true,
           workspaces: ["packages/*"],
-
           ...deps,
+          packageManager: "yarn@1.22.17"
         },
         null,
         2
