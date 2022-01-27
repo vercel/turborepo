@@ -82,22 +82,7 @@ turbo-linux
               [type]: "*",
             },
           }
-        : {
-            turbo: {
-              pipeline: {
-                build: {
-                  outputs: ["dist/**/*"],
-                  dependsOn: ["^build"],
-                },
-                test: {
-                  dependsOn: ["build"],
-                },
-                dev: {
-                  cache: false,
-                },
-              },
-            },
-          };
+        : {};
 
     fs.writeFileSync(
       path.join(root, "package.json"),
@@ -108,7 +93,7 @@ turbo-linux
           private: true,
           workspaces: ["packages/*"],
           ...deps,
-          packageManager: "yarn@1.22.17"
+          packageManager: "yarn@1.22.17",
         },
         null,
         2
@@ -156,6 +141,18 @@ turbo-linux
           cacheStorageConfig: {
             provider: "local",
             cacheUrl: "https://1a77600385dd.ngrok.io",
+          },
+          pipeline: {
+            build: {
+              outputs: ["dist/**/*"],
+              dependsOn: ["^build"],
+            },
+            test: {
+              dependsOn: ["build"],
+            },
+            dev: {
+              cache: false,
+            },
           },
         },
         null,

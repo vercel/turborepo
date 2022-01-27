@@ -6,13 +6,33 @@ import (
 	"sync"
 )
 
+// TurboConfigJSON is the root turborepo configuration
 type TurboConfigJSON struct {
+	// Base Git branch
 	Base               string   `json:"baseBranch,omitempty"`
+	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	TurboCacheOptions  string   `json:"cacheOptions,omitempty"`
 	Outputs            []string `json:"outputs,omitempty"`
+	// RemoteCacheUrl is the Remote Cache API URL
 	RemoteCacheUrl     string   `json:"remoteCacheUrl,omitempty"`
+	// Pipeline is a map of Turbo pipeline entries which define the task graph
+	// and cache behavior on a per task or per package-task basis.
 	Pipeline           map[string]Pipeline
+}
+
+func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var turboConfig *TurboConfigJSON
+	err = json.Unmarshal(b, &turboConfig)
+	if err != nil {
+		println("error unmarshalling", err.Error())
+		return nil, err
+	}
+	return turboConfig, nil
 }
 
 type PPipeline struct {
@@ -64,7 +84,7 @@ type PackageJSON struct {
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
 	SubLockfile            YarnLockfile
-	Turbo                  TurboConfigJSON `json:"turbo"`
+	LegacyTurboConfig      *TurboConfigJSON `json:"turbo"`
 	Mu                     sync.Mutex
 	FilesHash              string
 	ExternalDepsHash       string
