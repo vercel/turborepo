@@ -12,7 +12,7 @@ import { runTransform } from "./runTransform";
 
 const help = `
   Usage:
-    $ npx turbo-migrate <transform> <path> <...options>
+    $ npx @turbo/codemod <transform> <path> <...options>
 
   If <dir> is not provided up front you will be prompted for it.
 
@@ -26,11 +26,11 @@ const help = `
 
 const TRANSFORMER_INQUIRER_CHOICES = [
   {
-    name: "add-package-manager: Set the `packageManager` key in root package.json file",
+    name: "add-package-manager: Set the `packageManager` key in root `package.json` file",
     value: "add-package-manager",
   },
   {
-    name: 'create-turbo-config: Creates the turbo.json file from an existing "turbo" key in package.json',
+    name: 'create-turbo-config: Create the `turbo.json` file from an existing "turbo" key in `package.json`',
     value: "create-turbo-config",
   },
 ];
