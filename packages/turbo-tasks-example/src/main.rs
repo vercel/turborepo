@@ -41,8 +41,8 @@ fn main() {
             rz.into()
         })
     }));
-    println!("{:#?}", task);
+    // println!("{:#?}", task);
     block_on(task.wait_output());
-    println!("{:#?}", task);
+    // println!("{:#?}", task);
     sleep(Duration::from_secs(30));
 }
