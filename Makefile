@@ -1,7 +1,6 @@
 include .env
 
 REGISTRY           ?= ghcr.io
-TAG_VERSION        := v$(GO_VERSION)
 
 ifeq ($(REGISTRY),)
 	IMAGE_BASE_NAME := goreleaser/goreleaser-cross-base:$(TAG_VERSION)
@@ -77,7 +76,7 @@ docker-push: $(patsubst %, docker-push-base-%,$(SUBIMAGES))
 docker-push: $(patsubst %, docker-push-%,$(SUBIMAGES))
 
 .PHONY: manifest-create-base
-manifest-create:
+manifest-create-base:
 	@echo "creating base manifest $(IMAGE_BASE_NAME)"
 	docker manifest create $(IMAGE_BASE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_BASE_NAME)-$(arch))
 
@@ -89,7 +88,7 @@ manifest-create:
 	docker manifest create $(IMAGE_NAME)-base $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_NAME)-base-$(arch))
 
 .PHONY: manifest-push-base
-manifest-push:
+manifest-push-base:
 	@echo "pushing base manifest $(IMAGE_BASE_NAME)"
 	docker manifest push $(IMAGE_BASE_NAME)
 
@@ -104,4 +103,4 @@ tags:
 
 .PHONY: tag
 tag:
-	@echo $(TAG_VERSION)
+	@echo $(GORELEASER_TAG)
