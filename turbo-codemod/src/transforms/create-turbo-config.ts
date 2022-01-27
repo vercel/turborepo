@@ -26,12 +26,24 @@ export default function createTurboConfig(files: string[], flags: Flags) {
     } else if (rootPackageJson.hasOwnProperty("turbo")) {
       const { turbo: turboConfig, ...remainingPkgJson } = rootPackageJson;
       if (flags.dry) {
+        if (flags.print) {
+          console.log(JSON.stringify(turboConfig, null, 2));
+        }
         skip("turbo.json", chalk.dim("(dry run)"));
+        if (flags.print) {
+          console.log(JSON.stringify(remainingPkgJson, null, 2));
+        }
         skip("package.json", chalk.dim("(dry run)"));
         skippedCount += 2;
       } else {
+        if (flags.print) {
+          console.log(JSON.stringify(turboConfig, null, 2));
+        }
         ok("turbo.json", chalk.dim("(created)"));
         fs.writeJsonSync(turboConfigPath, turboConfig, { spaces: 2 });
+        if (flags.print) {
+          console.log(JSON.stringify(remainingPkgJson, null, 2));
+        }
         ok("package.json", chalk.dim("(remove turbo key)"));
         fs.writeJsonSync(rootPackageJsonPath, remainingPkgJson, { spaces: 2 });
         modifiedCount += 2;
