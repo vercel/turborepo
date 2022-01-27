@@ -14,9 +14,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.48"
+version = "1.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62e1f47f7dc0422027a4e370dd4548d4d66b26782e513e98dca1e689e058a80e"
+checksum = "94a45b455c14666b85fc40a019e8ab9eb75e3a124e05494f5397122bc9eb06e0"
 
 [[package]]
 name = "anymap"
@@ -707,6 +707,7 @@ dependencies = [
 name = "turbo-tasks-macros"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "pmutil",
  "proc-macro2",
  "quote",

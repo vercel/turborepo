@@ -1,11 +1,7 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context};
 use lazy_static::lazy_static;
-use std::{future::Future, sync::Arc, time::Duration};
-use turbo_tasks::{
-    dynamic_call,
-    macro_helpers::{new_node_intern, Node},
-    NativeFunction, NodeReuseMode, NodeType,
-};
+use std::{future::Future, time::Duration};
+use turbo_tasks::{dynamic_call, NativeFunction};
 
 // [turbo_function]
 // pub async fn add(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
@@ -66,72 +62,15 @@ pub fn add(a: I32ValueRef, b: I32ValueRef) -> impl Future<Output = I32ValueRef> 
 //   }
 // }
 
-// [turbo_node]
+#[turbo_tasks::value]
 pub struct I32Value {
     pub value: i32,
 }
 
+#[turbo_tasks::value_impl]
 impl I32Value {
-    // [turbo_constructor(NodeReuseMode::GlobalInterning)]
+    #[turbo_tasks::constructor]
     pub fn new(value: i32) -> Self {
         Self { value }
-    }
-}
-
-// TODO autogenerate I32ValueRef
-#[derive(Clone, Debug)]
-pub struct I32ValueRef {
-    node: Arc<Node>,
-}
-
-lazy_static! {
-    static ref I32_VALUE_NODE_TYPE: NodeType =
-        NodeType::new("I32Value".to_string(), NodeReuseMode::GlobalInterning);
-}
-
-impl I32ValueRef {
-    pub fn new(value: i32) -> Self {
-        let new_node = new_node_intern::<I32Value, _, _>(value, || {
-            Arc::new(Node::new(
-                &I32_VALUE_NODE_TYPE,
-                Arc::new(I32Value::new(value)),
-            ))
-        });
-        // let new_node = Arc::new(Node::new(
-        //     &I32_VALUE_NODE_TYPE,
-        //     Arc::new(I32Value::new(value)),
-        // ));
-        Self { node: new_node }
-    }
-
-    pub fn from_node(node: Arc<Node>) -> Option<Self> {
-        if node.is_node_type(&I32_VALUE_NODE_TYPE) {
-            Some(I32ValueRef { node })
-        } else {
-            None
-        }
-    }
-
-    pub fn verify(node: &Arc<Node>) -> Result<()> {
-        if node.is_node_type(&I32_VALUE_NODE_TYPE) {
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "expected {:?} but got {:?}",
-                *I32_VALUE_NODE_TYPE,
-                node.get_node_type()
-            ))
-        }
-    }
-
-    pub fn get(&self) -> Arc<I32Value> {
-        // unwrap is safe here since we ensure that it will be the correct node type
-        self.node.read::<I32Value>().unwrap()
-    }
-}
-
-impl From<I32ValueRef> for Arc<Node> {
-    fn from(node_ref: I32ValueRef) -> Self {
-        node_ref.node
     }
 }
