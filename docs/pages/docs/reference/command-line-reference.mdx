@@ -103,7 +103,7 @@ turbo run build test lint --graph=my-graph.html
 
 - the terminal output may overstate the number of packages in which a task is running.
 - your dot viz graph may contain additional nodes that represents tasks that do not exist.
-</Callout>
+  </Callout>
 
 #### `--force`
 
@@ -171,22 +171,20 @@ turbo run dev --parallel --no-cache
 
 Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
 
-Given this pipeline:
+Given this pipeline in `turbo.json`:
 
 ```json
 {
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "test": {
-        "dependsOn": [
-          "^build"
-        ]
-      }
+  "pipeline": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ]
     }
   }
 }
@@ -211,7 +209,7 @@ turbo run dev --parallel --no-cache
 
 `type: string[]`
 
-Specify/filter package(s)/apps to act as entry points for execution. Globs against package.json `name` field (and not the file system.)
+Specify/filter package(s)/apps to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
 
 ```sh
 turbo run lint --scope="@example/**"
