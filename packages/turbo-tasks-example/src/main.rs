@@ -4,9 +4,13 @@ use std::{thread::sleep, time::Duration};
 
 use async_std::task::block_on;
 use math::add;
-use turbo_tasks::{Task, TurboTasks};
+use turbo_tasks::TurboTasks;
 
-use crate::{log::log, math::I32ValueRef, random::random};
+use crate::{
+    log::{log, LoggingOptionsRef},
+    math::I32ValueRef,
+    random::random,
+};
 
 mod log;
 mod math;
@@ -27,10 +31,13 @@ fn main() {
             let rz = add(r, y);
             let z = z.await;
             let rz = rz.await;
-            log(x).await;
-            log(z).await;
-            log(rz.clone()).await;
-            Task::side_effect();
+            log(x, LoggingOptionsRef::new("value of x".to_string())).await;
+            log(z, LoggingOptionsRef::new("value of z".to_string())).await;
+            log(
+                rz.clone(),
+                LoggingOptionsRef::new("value of rz".to_string()),
+            )
+            .await;
             rz.into()
         })
     }));
