@@ -94,20 +94,25 @@ Alter `package.json` to use `turbo` for task running, but keep `lerna` for versi
   "devDependencies": {
     "lerna": "^3.19.0",
 +   "turbo": "*"
-  },
-+ "turbo": {
-+   "pipeline": {
-+     "build": {
-+       "dependsOn": ["^build"],
-+       "outputs": ["dist/**"]
-+     },
-+     "test": {
-+       "outputs": []
-+     },
-+     "dev": {
-+       "cache": false
-+     }
-+   }
+  }
+}
+```
+
+Create a `turbo.json` file in the root of your project.
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
   }
 }
 ```
