@@ -17,7 +17,7 @@ export function checkGitStatus(force: boolean) {
     if (force) {
       console.log(`WARNING: ${errorMessage}. Forcibly continuing...`);
     } else {
-      console.log("Thank you for using turbo-migrate!");
+      console.log("Thank you for using @turbo/codemod!");
       console.log(
         chalk.yellow(
           "\nBut before we continue, please stash or commit your git changes."
