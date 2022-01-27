@@ -96,14 +96,11 @@ turbo run build test lint --graph=my-graph.png
 turbo run build test lint --graph=my-graph.html
 ```
 
-<Callout>
+<Callout type="info">
   **Known Bug**: All possible pipeline task nodes will be added to the
   graph at the moment, even if that pipeline task does not actually exist in a
-  given package. This has no impact on execution, it means that:
-
-- the terminal output may overstate the number of packages in which a task is running.
-- your dot viz graph may contain additional nodes that represents tasks that do not exist.
-  </Callout>
+  given package. This has no impact on execution, it means that 1) the terminal output may overstate the number of packages in which a task is running and 2) your dot viz graph may contain additional nodes that represents tasks that do not exist.
+</Callout>
 
 #### `--force`
 
@@ -234,7 +231,7 @@ Filter execution based on which packages have changed since a merge-base.
 turbo run build --since=origin/main
 ```
 
-<Callout emoji="🚨">
+<Callout type="info">
   **Important**: This uses the `git diff ${target_branch}...` mechanism to
   identify which packages have changed. There is an assumption that all the
   input files for a package exist inside their respective package/app folders.
@@ -269,7 +266,7 @@ You can also set the value of the current team by setting an environment variabl
 
 To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
 
-<Callout emoji="🚨">
+<Callout>
   **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
 </Callout>
 
@@ -293,9 +290,9 @@ turbo run build --heap="<heap-file-name>"
 
 To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://speedscope.app).
 
-<Callout emoji="🚨">
+<Callout>
   **Important**: The CPU profiler doesn't work under
-  Windows subsystem for Linux. The profiler has to be built
+  Windows Subsystem for Linux. The profiler has to be built
   for native Windows and run using the command prompt instead.
 </Callout>
 
