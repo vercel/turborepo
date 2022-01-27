@@ -57,27 +57,32 @@ for folder in examples/* ; do
     
     if [ "$folder" != "examples/with-pnpm" ]; then
             
-      # cleanup
-      # setup_git
-
-      # echo "======================================================="
-      # echo "=> $folder: npm install"
-      # echo "======================================================="
-      # npm install --force
+      cleanup
+      setup_git
       
-      # echo "======================================================="
-      # echo "=> $folder: npm build lint"
-      # echo "======================================================="
-      # npm run build lint
+      cat package.json | jq '.packageManager = "npm@8.1.2"' | sponge package.json      
+      if [ "$TURBO_TAG" == "canary" ]; then
+         cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+      fi
       
-      # echo "======================================================="
-      # echo "=> $folder: npm build lint again"
-      # echo "======================================================="
-      # npm run build lint
+      echo "======================================================="
+      echo "=> $folder: npm install"
+      echo "======================================================="
+      npm install --force
+      
+      echo "======================================================="
+      echo "=> $folder: npm build lint"
+      echo "======================================================="
+      npm run build lint
+      
+      echo "======================================================="
+      echo "=> $folder: npm build lint again"
+      echo "======================================================="
+      npm run build lint
                 
-      # echo "======================================================="    
-      # echo "=> $folder: npm SUCCESSFUL"
-      # echo "======================================================="    
+      echo "======================================================="    
+      echo "=> $folder: npm SUCCESSFUL"
+      echo "======================================================="    
 
       cleanup
       setup_git
