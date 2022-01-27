@@ -2,7 +2,7 @@
 
 import * as path from "path";
 import execa from "execa";
-import fs from 'fs';
+import fs from "fs";
 import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -14,8 +14,9 @@ import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
+import { PackageManager } from "./types";
+import { getPackageManagerVersion } from "./getPackageManagerVersion";
 
-type PackageManager = "yarn" | "pnpm" | "npm";
 interface Answers {
   packageManager: PackageManager;
 }
@@ -154,15 +155,6 @@ async function run() {
     await fse.copy(serverTemplate, projectDir, { overwrite: true });
   }
 
-  // let serverLangTemplate = path.resolve(
-  //   __dirname,
-  //   "templates",
-  //   `${answers.packageManager}_ts`
-  // );
-  // if (fse.existsSync(serverLangTemplate)) {
-  //   await fse.copy(serverLangTemplate, projectDir, { overwrite: true });
-  // }
-
   // rename dotfiles
   await fse.move(
     path.join(projectDir, "gitignore"),
@@ -180,6 +172,10 @@ async function run() {
       }
     }
   });
+
+  appPkg.packageManager = `${answers.packageManager}@${getPackageManagerVersion(
+    answers.packageManager
+  )}`;
 
   // write package.json
   await fse.writeFile(
@@ -212,21 +208,6 @@ async function run() {
         frames: ["   ", ">  ", ">> ", ">>>"],
       },
     }).start();
-
-    const data = fs.readFileSync(`${projectDir}/package.json`, "utf8");
-    const pkg = JSON.parse(data.toString());
-    switch (answers.packageManager) {
-      case "yarn":
-        pkg.packageManager = "yarn@1.22.17";
-        break;
-      case "pnpm":
-        pkg.packageManager = "pnpm@6.26.1";
-        break;
-      case "npm":
-        pkg.packageManager = "npm@8.3.0";
-        break;
-    }
-    fs.writeFileSync(`${projectDir}/package.json`, JSON.stringify(pkg, null, 2));
 
     await execa(`${answers.packageManager}`, [`install`], {
       stdio: "ignore",
