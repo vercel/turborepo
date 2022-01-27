@@ -20,7 +20,6 @@ fn main() {
             let b = I32ValueRef::new(2);
             let c = I32ValueRef::new(7);
             let r = random().await;
-            dbg!(&a, &b, &c);
             let x = add(a, b.clone());
             let y = add(b, c);
             let (x, y) = (x.await, y.await);
