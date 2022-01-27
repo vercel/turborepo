@@ -158,8 +158,8 @@ importers:
           execa.sync("yarn", ["install"], {
             cwd,
             env: {
-              "YARN_ENABLE_IMMUTABLE_INSTALLS": "false"
-            }
+              YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
+            },
           });
           this.commitAll();
           return;
@@ -182,10 +182,10 @@ importers:
           test: `${turboPath} run test`,
           lint: `${turboPath} run lint`,
         },
-        turbo: {
-          baseBranch: "origin/main",
-          ...turboConfig,
-        },
+      },
+      "turbo.json": {
+        baseBranch: "origin/main",
+        ...turboConfig,
       },
     });
   }
@@ -222,7 +222,10 @@ fs.copyFileSync(
             internalDeps.reduce((deps, dep) => {
               return {
                 ...deps,
-                [dep]: (this.npmClient === "pnpm" || this.npmClient === "berry") ? "workspace:*" : "*",
+                [dep]:
+                  this.npmClient === "pnpm" || this.npmClient === "berry"
+                    ? "workspace:*"
+                    : "*",
               };
             }, {})),
         },

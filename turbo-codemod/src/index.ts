@@ -29,6 +29,10 @@ const TRANSFORMER_INQUIRER_CHOICES = [
     name: "add-package-manager: Set the `packageManager` key in root package.json file",
     value: "add-package-manager",
   },
+  {
+    name: 'create-turbo-config: Creates the turbo.json file from an existing "turbo" key in package.json',
+    value: "create-turbo-config",
+  },
 ];
 
 run()

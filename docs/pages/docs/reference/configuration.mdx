@@ -4,7 +4,7 @@ title: Configuration Options
 
 # Configuration Options
 
-You can configure the behavior of `turbo` by adding a `turbo` object in the `package.json` in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and NPM users).
+You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and NPM users).
 
 ## `baseBranch`
 
@@ -23,17 +23,15 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
 
 ```json
 {
-  "turbo": {
-    "pipeline": {
-      // ... omitted for brevity
-    },
+  "pipeline": {
+    // ... omitted for brevity
+  },
 
-    "globalDependencies": [
-      ".env", // contents will impact hashes of all tasks
-      "tsconfig.json", // contents will impact hashes of all tasks
-      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
-    ]
-  }
+  "globalDependencies": [
+    ".env", // contents will impact hashes of all tasks
+    "tsconfig.json", // contents will impact hashes of all tasks
+    "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+  ]
 }
 ```
 
@@ -51,18 +49,16 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
 
 ```json
 {
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "dependsOn": ["^build"]
-      },
-      "test": {
-        "outputs": ["coverage/**"],
-        "dependsOn": ["build"]
-      },
-      "dev": {
-        "cache": false
-      }
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "dependsOn": ["build"]
+    },
+    "dev": {
+      "cache": false
     }
   }
 }
@@ -84,26 +80,24 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 ```json
 {
-  "turbo": {
-    "pipeline": {
-      "build": {
-        // "A package's `build` command depends on its dependencies'
-        // or devDependencies' `build` command being completed first"
-        "dependsOn": ["^build"]
-      },
-      "test": {
-        // "A package's `test` command depends on its own `lint` and
-        // `build` commands first being completed"
-        "dependsOn": ["lint", "build"]
-      },
-      "deploy": {
-        // "A package's `deploy` command, depends on its own `build`
-        // and `test` commands first being completed"
-        "dependsOn": ["build", "test"]
-      },
-      // A package's `lint` command has no dependencies
-      "lint": {}
-    }
+  "pipeline": {
+    "build": {
+      // "A package's `build` command depends on its dependencies'
+      // or devDependencies' `build` command being completed first"
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      // "A package's `test` command depends on its own `lint` and
+      // `build` commands first being completed"
+      "dependsOn": ["lint", "build"]
+    },
+    "deploy": {
+      // "A package's `deploy` command, depends on its own `build`
+      // and `test` commands first being completed"
+      "dependsOn": ["build", "test"]
+    },
+    // A package's `lint` command has no dependencies
+    "lint": {}
   }
 }
 ```
@@ -112,28 +106,26 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 ```json
 {
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "dependsOn": {
-          "^build",
-          "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
-        },
-        "outputs": ["dist/**", ".next/**"]
+  "pipeline": {
+    "build": {
+      "dependsOn": {
+        "^build",
+        "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
       },
-      "web#build": {
-        "dependsOn": [
-          "^build",
-          "$STRIPE_SECRET_KEY", // value will impact hash of only web's build task
-          "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY"
-        ],
-        "outputs": [".next/**"]
-      }
+      "outputs": ["dist/**", ".next/**"]
     },
-    "globalDependencies": [
-      "$GITHUB_TOKEN"// value will impact the hashes of all tasks
-    ]
-  }
+    "web#build": {
+      "dependsOn": [
+        "^build",
+        "$STRIPE_SECRET_KEY", // value will impact hash of only web's build task
+        "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY"
+      ],
+      "outputs": [".next/**"]
+    }
+  },
+  "globalDependencies": [
+    "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+  ]
 }
 ```
 

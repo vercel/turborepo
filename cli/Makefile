@@ -146,6 +146,9 @@ platform-neutral: | turbo
 platform-create-turbo: 
 	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
+platform-turbo-codemod: 
+	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+
 test-prepublish:
 	rm -rf demo/turbo
 	make demo/turbo
@@ -228,6 +231,9 @@ publish-neutral: platform-neutral
 
 publish-create-turbo: platform-create-turbo
 	cd ../create-turbo && npm publish --tag $(TURBO_TAG)
+
+publish-turbo-codemod: platform-turbo-codemod
+	cd ../turbo-codemod && npm publish --tag $(TURBO_TAG)
 
 demo/lage: | scripts/node_modules
 	node scripts/generate.mjs lage
