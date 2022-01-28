@@ -24,7 +24,7 @@ const basicPipeline = {
 process.env.TURBO_TOKEN = "";
 
 let suites = [];
-for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
@@ -184,6 +184,82 @@ function runSmokeTests<T>(
       );
     }
   );
+
+  if (npmClient === "yarn") {
+    // Test `turbo prune --scope=out`
+    // @todo refactor with other package managers
+    suite(
+      `${npmClient} + turbo prune ${
+        options.cwd ? " from " + options.cwd : ""
+      } `,
+      async () => {
+        const pruneCommandOutput = getCommandOutputAsArray(
+          repo.turbo("prune", ["--scope=a"], options)
+        );
+        assert.fixture(pruneCommandOutput[1], " - Added a");
+        assert.fixture(pruneCommandOutput[2], " - Added b");
+
+        let files = [];
+        assert.not.throws(() => {
+          files = repo.globbySync("out/**/*", {
+            cwd: options.cwd ?? repo.root,
+          });
+        }, `Could not read generated \`out\` directory after \`turbo prune\``);
+        const expected = [
+          "out/package.json",
+          "out/turbo.json",
+          "out/yarn.lock",
+          "out/packages/a/build.js",
+          "out/packages/a/lint.js",
+          "out/packages/a/package.json",
+          "out/packages/a/test.js",
+          "out/packages/b/build.js",
+          "out/packages/b/lint.js",
+          "out/packages/b/package.json",
+          "out/packages/b/test.js",
+        ];
+        for (const file of expected) {
+          assert.ok(
+            files.includes(file),
+            `Expected file ${file} to be generated`
+          );
+        }
+      }
+    );
+
+    suite(
+      `${npmClient} + turbo prune ${
+        options.cwd ? " from " + options.cwd : ""
+      } generates frozen lockfile`,
+      async () => {
+        repo.turbo("prune", ["--scope=a"], options);
+        const install = repo.run("install", ["--frozen-lockfile"], {
+          cwd: options.cwd
+            ? path.join(options.cwd, "out")
+            : path.join(repo.root, "out"),
+        });
+        assert.is(install.exitCode, 0, "Expected install to succeed");
+      }
+    );
+  }
+}
+
+type PackageManager = "yarn" | "pnpm" | "npm" | "berry";
+
+// getLockfileForPackageManager returns the name of the lockfile for the given package manager
+function getLockfileForPackageManager(ws: PackageManager) {
+  switch (ws) {
+    case "yarn":
+      return "yarn.lock";
+    case "pnpm":
+      return "pnpm-lock.yaml";
+    case "npm":
+      return "package-lock.json";
+    case "berry":
+      return "yarn.lock";
+    default:
+      throw new Error(`Unknown package manager: ${ws}`);
+  }
 }
 
 function getCommandOutputAsArray(
