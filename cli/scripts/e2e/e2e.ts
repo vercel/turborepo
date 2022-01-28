@@ -193,7 +193,7 @@ function runSmokeTests<T>(
   );
 
   if (npmClient === "yarn") {
-    // Test `turbo prune --scope=out`
+    // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
     suite(
       `${npmClient} + turbo prune ${
