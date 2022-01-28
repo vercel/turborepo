@@ -1,5 +1,6 @@
 import execa from "execa";
 import fsNormal from "fs";
+import globby from "globby";
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
@@ -347,6 +348,24 @@ fs.copyFileSync(
 
   readFileSync(filepath) {
     return fs.readFileSync(path.join(this.root, filepath), "utf-8");
+  }
+
+  readdirSync(filepath) {
+    return fs.readdirSync(path.join(this.root, filepath), "utf-8");
+  }
+
+  globbySync(
+    patterns: string | readonly string[],
+    options?: globby.GlobbyOptions
+  ) {
+    return globby.sync(patterns, { cwd: this.root, ...options });
+  }
+
+  async globby(
+    patterns: string | readonly string[],
+    options?: globby.GlobbyOptions
+  ) {
+    return await globby(patterns, { cwd: this.root, ...options });
   }
 
   cleanup() {
