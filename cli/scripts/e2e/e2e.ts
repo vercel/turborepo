@@ -280,7 +280,7 @@ function getHashFromOutput(lines: string[], taskId: string): string {
 
 function getCachedDirForHash(repo: Monorepo, hash: string): string {
   return path.join(
-    repo.subdir ? repo.subdir : repo.root,
+    repo.subdir ? repo.subdir : ".",
     "node_modules",
     ".cache",
     "turbo",
