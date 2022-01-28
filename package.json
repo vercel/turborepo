@@ -19,20 +19,20 @@
     "turbo": "./turbow.sh"
   },
   "devDependencies": {
+    "lint-staged": "^12.3.2",
     "prettier": "^2.5.0",
     "simple-git-hooks": "^2.7.0"
   },
   "lint-staged": {
-    "**/*.{ts,tsx,md,mdx,js,jsx,.go}": [
-      "npm run format",
+    "*.{ts,tsx,md,mdx,js,jsx}": [
+      "prettier --write"
+    ],
+    "*.go": [
       "cd cli && npm run format"
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "npx lint-staged"
+    "pre-commit": "lint-staged"
   },
-  "packageManager": "yarn@1.22.17",
-  "dependencies": {
-    "patch-package": "^6.4.7"
-  }
+  "packageManager": "yarn@1.22.17"
 }
