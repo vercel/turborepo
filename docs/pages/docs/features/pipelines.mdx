@@ -30,6 +30,7 @@ An example Pipeline configuration in `turbo.json`:
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]
@@ -66,6 +67,7 @@ What you are declaring here in the `pipeline` object of the `turbo` configuratio
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       // A package's `build` task depends on that package's
@@ -100,6 +102,7 @@ A common pattern in many TypeScript monorepos is to declare that a package's `bu
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       // "A package's `build` command depends on its dependencies'
@@ -117,13 +120,13 @@ An empty dependency list (`dependsOn` is either undefined or `[]`) means that a 
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
-      // ... omitted for brevity
-
-      // A package's `lint` command has no dependencies and can be run at
-      // whenever.
-      "lint": {}
-    }
+    // ... omitted for brevity
+    
+    // A package's `lint` command has no dependencies and can be run at
+    // whenever.
+    "lint": {}
   }
 }
 ```
@@ -145,22 +148,21 @@ For these cases, you can express these relationships in your `pipeline` configur
 
 ```json
 {
-
-    "pipeline": {
-      "build": {
-        "dependsOn": ["^build"]
-      },
-      "test": {
-        "dependsOn": ["build"]
-      },
-      "deploy": {
-        "dependsOn": ["test"]
-      },
-      "frontend#deploy": {
-        "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"]
-      }
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["build"]
+    },
+    "deploy": {
+      "dependsOn": ["test"]
+    },
+    "frontend#deploy": {
+      "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"]
     }
-
+  }
 }
 ```
 

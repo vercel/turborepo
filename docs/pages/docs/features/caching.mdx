@@ -18,6 +18,7 @@ To override the default cache output behavior, pass an array of globs to a [`pip
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**"],
@@ -63,6 +64,7 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "dev": {
       "cache": false
@@ -84,44 +86,43 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
 
 ```json
 {
-
-    "pipeline": {
-      "build": {
-        "dependsOn": {
-          "^build"
-          // env vars will impact hashes of all "build" tasks
-          "$SOME_ENV_VAR"
-        },
-        "outputs": ["dist/**"]
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": {
+        "^build"
+        // env vars will impact hashes of all "build" tasks
+        "$SOME_ENV_VAR"
       },
-      "web#build": { // override settings for the "build" task for the "web" app
-        "dependsOn": [
-          "^build",
-           // env vars that will impact the hash of "build" task for only "web" app
-           "$STRIPE_SECRET_KEY",
-           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-           "$NEXT_PUBLIC_ANALYTICS_ID",
-        ],
-        "outputs": [".next/**"],
-      },
-      "docs#build": { // override settings for the "build" task for the "docs" app
-        "dependsOn": [
-          "^build",
-           // env vars that will impact the hash of "build" task for only "web" app
-           "$STRIPE_SECRET_KEY",
-           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-           "$NEXT_PUBLIC_ANALYTICS_ID",
-        ],
-        "outputs": [".next/**"],
-      }
+      "outputs": ["dist/**"]
     },
-    "baseBranch": "origin/main",
-    "globalDependencies": [
-      "$GITHUB_TOKEN"// env var that will impact the hashes of all tasks,
-      "tsconfig.json" // file contents will impact the hashes of all tasks,
-      ".env.*" // glob file contents will impact the hashes of all tasks,
-    ],
-
+    "web#build": { // override settings for the "build" task for the "web" app
+      "dependsOn": [
+        "^build",
+        // env vars that will impact the hash of "build" task for only "web" app
+        "$STRIPE_SECRET_KEY",
+        "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "$NEXT_PUBLIC_ANALYTICS_ID",
+      ],
+      "outputs": [".next/**"],
+    },
+    "docs#build": { // override settings for the "build" task for the "docs" app
+      "dependsOn": [
+        "^build",
+        // env vars that will impact the hash of "build" task for only "web" app
+        "$STRIPE_SECRET_KEY",
+         "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+         "$NEXT_PUBLIC_ANALYTICS_ID",
+      ],
+      "outputs": [".next/**"],
+    }
+  },
+  "baseBranch": "origin/main",
+  "globalDependencies": [
+    "$GITHUB_TOKEN"// env var that will impact the hashes of all tasks,
+    "tsconfig.json" // file contents will impact the hashes of all tasks,
+    ".env.*" // glob file contents will impact the hashes of all tasks,
+  ],
 }
 ```
 

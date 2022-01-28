@@ -23,6 +23,7 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     // ... omitted for brevity
   },
@@ -49,6 +50,7 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]
@@ -80,6 +82,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       // "A package's `build` command depends on its dependencies'
@@ -106,6 +109,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": {
@@ -143,6 +147,7 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       // "Cache all files emitted to package's dist/** or .next
@@ -180,6 +185,7 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs-1). Se
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]
