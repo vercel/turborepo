@@ -24,7 +24,7 @@ const basicPipeline = {
 process.env.TURBO_TOKEN = "";
 
 let suites = [];
-for (let npmClient of ["yarn"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
