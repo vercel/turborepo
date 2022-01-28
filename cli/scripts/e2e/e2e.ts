@@ -224,21 +224,16 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-      }
-    );
-
-    suite(
-      `${npmClient} + turbo prune ${
-        options.cwd ? " from " + options.cwd : ""
-      } generates frozen lockfile`,
-      async () => {
-        repo.turbo("prune", ["--scope=a"], options);
         const install = repo.run("install", ["--frozen-lockfile"], {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
         });
-        assert.is(install.exitCode, 0, "Expected install to succeed");
+        assert.is(
+          install.exitCode,
+          0,
+          "Expected yarn install --frozen-lockfile to succeed"
+        );
       }
     );
   }
