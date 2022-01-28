@@ -212,6 +212,13 @@ func (c *PruneCommand) Run(args []string) int {
 				return 1
 			}
 		}
+		// We only need to actually copy turbo.json into "full" folder since it isn't needed for installation in docker
+		if fs.FileExists("turbo.json") {
+			if err := fs.CopyFile("turbo.json", filepath.Join(pruneOptions.cwd, "out", "full", "turbo.json"), fs.DirPermissions); err != nil {
+				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root turbo.json: %w", err))
+				return 1
+			}
+		}
 
 		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "full", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
@@ -229,6 +236,14 @@ func (c *PruneCommand) Run(args []string) int {
 				return 1
 			}
 		}
+
+		if fs.FileExists("turbo.json") {
+			if err := fs.CopyFile("turbo.json", filepath.Join(pruneOptions.cwd, "out", "turbo.json"), fs.DirPermissions); err != nil {
+				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root turbo.json: %w", err))
+				return 1
+			}
+		}
+
 		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
 			return 1
