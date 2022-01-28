@@ -1,10 +1,13 @@
 #![feature(once_cell)]
 
-use std::{thread::sleep, time::Duration};
+use std::{env::current_dir, thread::sleep, time::Duration};
 
 use async_std::task::block_on;
 use math::add;
 use turbo_tasks::TurboTasks;
+use turbo_tasks_fs::{
+    read, DiskFileSystemRef, FileSystemPathRef, FileSystemRef, PathInFileSystemRef,
+};
 
 use crate::{
     log::{log, LoggingOptionsRef},
@@ -38,7 +41,18 @@ fn main() {
                 LoggingOptionsRef::new("value of rz".to_string()),
             )
             .await;
-            rz.into()
+
+            let disk_fs = DiskFileSystemRef::new(
+                "project".to_string(),
+                current_dir().unwrap().to_str().unwrap().to_string(),
+            );
+            // TODO add casts to Smart Pointers
+            let fs = FileSystemRef::from_node(disk_fs.into()).unwrap();
+            let file_ref =
+                FileSystemPathRef::new(fs, PathInFileSystemRef::new("Cargo.toml".to_string()));
+            let content = read(file_ref).await;
+            println!("Size of Cargo.toml: {}", content.get().buffer.len());
+            content.into()
         })
     }));
     // println!("{:#?}", task);
