@@ -67,7 +67,7 @@ function runSmokeTests<T>(
       options.cwd ? " from " + options.cwd : ""
     } `,
     async () => {
-      const results = repo.turbo("run", ["test", "--stream", "-vvv"], options);
+      const results = repo.turbo("run", ["test", "--stream"], options);
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
@@ -95,32 +95,36 @@ function runSmokeTests<T>(
       });
 
       const sinceCommandOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["test", "--since=main", "--stream", "-vvv"], options)
+        repo.turbo("run", ["test", "--since=main", "--stream"], options)
       );
 
-      assert.equal(
+      assert.fixture(
         `• Packages changed since main: a`,
         sinceCommandOutput[0],
         "Calculates changed packages (--since)"
       );
-      assert.equal(
+      assert.fixture(
         `• Packages in scope: a`,
         sinceCommandOutput[1],
         "Packages in scope"
       );
-      assert.equal(
+      assert.fixture(
         `• Running test in 1 packages`,
         sinceCommandOutput[2],
         "Runs only in changed packages"
       );
-      assert.ok(
-        sinceCommandOutput[3].startsWith(`a:test: cache miss, executing`),
+      assert.fixture(
+        sinceCommandOutput[3],
+        `a:test: cache miss, executing ${getHashFromOutput(
+          sinceCommandOutput,
+          "a#test"
+        )}`,
         "Cache miss in changed package"
       );
 
       // Check cache hit after another run
       const sinceCommandSecondRunOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["test", "--since=main", "--stream", "-vvv"], options)
+        repo.turbo("run", ["test", "--since=main", "--stream"], options)
       );
       assert.equal(
         `• Packages changed since main: a`,
@@ -138,10 +142,13 @@ function runSmokeTests<T>(
         "Runs only in changed packages after a second run"
       );
 
-      assert.ok(
-        sinceCommandSecondRunOutput[3].startsWith(
-          `a:test: cache hit, replaying output`
-        ),
+      assert.fixture(
+        sinceCommandSecondRunOutput[3],
+        `a:test: cache hit, replaying output ${getHashFromOutput(
+          sinceCommandSecondRunOutput,
+          "a#test"
+        )}`,
+
         "Cache hit in changed package after a second run"
       );
 
@@ -154,12 +161,12 @@ function runSmokeTests<T>(
         repo.turbo("run", ["test", "--stream"], options)
       );
 
-      assert.equal(
+      assert.fixture(
         `• Packages in scope: a, b, c`,
         commandOnceBHasChangedOutput[0],
         "After running, changing source of b, and running `turbo run test` again, should print `Packages in scope: a, b, c`"
       );
-      assert.equal(
+      assert.fixture(
         `• Running test in 3 packages`,
         commandOnceBHasChangedOutput[1],
         "After running, changing source of b, and running `turbo run test` again, should print `Running in 3 packages`"
