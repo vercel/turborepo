@@ -28,7 +28,7 @@ We're further improving build performance and caching with Turborepo v1.1, featu
 - [**`turbo.json` Support:**](#turbojson-support) Turborepo configuration now lives in its own file.
 - [**Faster Package Manager Detection:**](#faster-package-manager-detection) Turborepo now respects the `packageManager` key in the root `package.json`.
 - [**Environment Variable Dependencies:**](#environment-variable-dependencies) Define how environment variables impact global and task-specific caching.
-- [**Partial Support for Yarn v2+:**](#partial-yarn-v2v3-support) Support for yarn v2+ with [`nodeLinker: "node-modules"`](https://yarnpkg.com/configuration/yarnrc#nodeLinker).
+- [**Partial Support for Yarn v2+:**](#partial-yarn-v2v3-support) Support for yarn v2+ with `nodeLinker: "node-modules"`.
 
 Update today by running `npm install turbo@latest`. After running `turbo`, you'll see instructions about how to use `@turbo/codemod` to run automatic migrations for `v1.1`.
 
@@ -49,7 +49,7 @@ npx @turbo/codemod <transform> <path>
 - `--dry` - Do a dry run, no code will be edited.
 - `--print` - Prints the changed output for comparison.
 
-For more information about specific transforms, check out the [new Codemods documentation](https://turborepo.org/docs/reference/codemods#turborepo-1x)
+For more information about specific transforms, check out the [new Codemods documentation](https://turborepo.org/docs/reference/codemods#turborepo-1x).
 
 ## `turbo.json` Support
 
@@ -128,7 +128,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](https://tu
 
 Note: In most monorepos, you don't often use environment variables in shared packages, but mostly in applications. Thus, to get higher cache hit rates, you should only include environment variables in the app-specific tasks where they are used/inlined.
 
-For more information, read the [caching and hashing documentation](https://turborepo.org/docs/features/caching)
+For more information, read the [caching and hashing documentation](https://turborepo.org/docs/features/caching).
 
 ## Partial Yarn v2/v3 support
 
@@ -136,7 +136,7 @@ In addition to Yarn v1, npm, and pnpm package managers, Turborepo now supports Y
 
 ## What's next?
 
-[Since launch](https://turborepo.org/blog/joining-vercel), Turborepo has focused on seamless incremental adoption/migration and speeding up CI/CD. We are committed to both of those values, but now we'll also be focusing on improving Turborepo's day-to-day ergonomics for local development and observability. We're really excited about this next chapter and will be sharing more details soon.
+[Since our launch](https://turborepo.org/blog/joining-vercel), Turborepo has focused on seamless incremental adoption/migration and speeding up CI/CD. We are committed to both of those values, but now we'll also be focusing on improving Turborepo's day-to-day ergonomics for local development and observability. We're really excited about this next chapter and will be sharing more details soon.
 
 ## We're hiring!
 
