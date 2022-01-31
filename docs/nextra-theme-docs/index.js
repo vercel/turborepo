@@ -64,7 +64,8 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
                 Blog
               </h1>
               <div className="flex items-center justify-center mx-auto ">
-                The latest updates and releases from the Turborepo team at Vercel.
+                The latest updates and releases from the Turborepo team at
+                Vercel.
               </div>
             </div>
             <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
@@ -84,7 +85,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
               <h1 className="max-w-screen-lg pt-2 mx-auto text-4xl font-bold leading-tight lg:text-5xl">
                 {meta.title}
               </h1>
-              <div className="text-gray-400 dark:text-gray-700">
+              <div className="text-gray-400 dark:text-gray-600">
                 {format(new Date(meta.date), "MMMM do, yyyy")} (
                 {formatDistanceToNow(new Date(meta.date), {
                   includeSeconds: false,
