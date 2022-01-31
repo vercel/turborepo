@@ -157,6 +157,7 @@ const theme = {
   titleSuffix: " | Turborepo",
   search: true,
   unstable_stork: false,
+  unstable_staticImage: true,
   floatTOC: true,
   font: false,
   enterpriseLink:
