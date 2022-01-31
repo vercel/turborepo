@@ -20,6 +20,8 @@ export const Avatar = ({ name, picture, twitterUsername }) => {
           <a
             href={`https://twitter.com/${twitterUsername}`}
             className="text-xs text-blue-500 no-underline betterhover:hover:text-blue-600 betterhover:hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             @{/* */}
             {twitterUsername}
