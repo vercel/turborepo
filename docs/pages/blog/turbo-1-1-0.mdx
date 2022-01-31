@@ -14,11 +14,11 @@ authors:
 
 Since releasing Turborepo v1.0 in mid-December, we've seen incredible adoption:
 
-- 5.4k+ GitHub Stars
+- 5.5k+ GitHub Stars
 - 70k+ weekly NPM downloads
 - 65+ OSS contributors
 - In production at [Vercel](https://github.com/vercel/next.js), [AWS](https://github.com/aws-amplify/amplify-ui), [PayPal](https://twitter.com/jaredpalmer/status/1485617973477978121?s=20&t=E5K-_H-Uo0Q1qIB_uAvdXw), [Twilio](https://github.com/twilio-labs/function-templates), [Contentful](https://github.com/contentful/forma-36), [Miro](https://github.com/miroapp/app-examples), [Framer](https://github.com/framer/motion), [Discord.js](https://github.com/discordjs/discord.js), [Rocket.chat](https://github.com/RocketChat/Rocket.Chat.Fuselage), [Astro.build](https://github.com/withastro/astro)
-- 575+ members of the [Turborepo Community Discord](https://turborepo.org/discord)
+- 585+ members of the [Turborepo Community Discord](https://turborepo.org/discord)
 
 ![Weekly NPM downloads of `turbo`](/images/blog/turbo-1-1-0/turborepo-weekly-npm-downloads.png)
 
@@ -34,7 +34,7 @@ Update today by running `npm install turbo@latest`. After running `turbo`, you'l
 
 ## Automatic Migrations
 
-Turborepo now provides idempotent code transformations and automatic migration scripts (a.k.a “codemods”) to help upgrade your Turborepo codebase when a feature is deprecated or will be deprecated in the future.
+Turborepo now provides idempotent code transformations and automatic migration scripts (a.k.a "codemods") to help upgrade your Turborepo codebase when a feature is deprecated or will be deprecated in the future.
 
 Codemods are transformations that run on your codebase programmatically. This saves you time by applying a large number of changes to your code automatically, without having to manually go through and edit every file.
 
@@ -132,7 +132,7 @@ For more information, read the [caching and hashing documentation](https://turbo
 
 ## Partial Yarn v2/v3 support
 
-In addition to Yarn v1, npm, and pnpm package managers, Turborepo now supports Yarn v2+ with [`nodeLinker: "node-modules"` set in `.yarnrc.yml`](https://yarnpkg.com/configuration/yarnrc#nodeLinker). This key tells Yarn v2+ to mimic Yarn v1's `node_modules` installation behavior. Yarn v2+ Plug'n'Play (a.k.a. “PnP”) is not currently supported.
+In addition to Yarn v1, npm, and pnpm package managers, Turborepo now supports Yarn v2+ with [`nodeLinker: "node-modules"` set in `.yarnrc.yml`](https://yarnpkg.com/configuration/yarnrc#nodeLinker). This key tells Yarn v2+ to mimic Yarn v1's `node_modules` installation behavior. Yarn v2+ Plug'n'Play (a.k.a. "PnP") is not currently supported.
 
 ## What's next?
 
