@@ -64,7 +64,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
                 Blog
               </h1>
               <div className="flex items-center justify-center mx-auto ">
-                The latest news about Turborepo from the Vercel team
+                The latest updates and releases from the Turborepo team at Vercel.
               </div>
             </div>
             <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
