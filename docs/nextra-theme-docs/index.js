@@ -85,7 +85,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
               <h1 className="max-w-screen-lg pt-2 mx-auto text-4xl font-bold leading-tight lg:text-5xl">
                 {meta.title}
               </h1>
-              <div className="text-gray-400 dark:text-gray-600">
+              <div className="text-gray-400 dark:text-gray-500">
                 {format(new Date(meta.date), "MMMM do, yyyy")} (
                 {formatDistanceToNow(new Date(meta.date), {
                   includeSeconds: false,
