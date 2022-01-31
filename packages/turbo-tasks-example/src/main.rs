@@ -24,14 +24,14 @@ mod random;
 
 fn main() {
     let tt = TurboTasks::new();
-    let task = tt.spawn_root_task(Box::new(|| {
+    let task = tt.spawn_root_task(|| {
         Box::pin(async {
             make_math().await;
 
-            let content = ls().await;
-            content.into()
+            ls().await;
+            None
         })
-    }));
+    });
     // println!("{:#?}", task);
     block_on(task.wait_output());
     let mut graph_viz = GraphViz::new();
@@ -42,7 +42,7 @@ fn main() {
 }
 
 #[turbo_tasks::function]
-async fn make_math() -> I32ValueRef {
+async fn make_math() {
     let a = I32ValueRef::new(42);
     let b = I32ValueRef::new(2);
     let c = I32ValueRef::new(7);
@@ -61,11 +61,10 @@ async fn make_math() -> I32ValueRef {
         LoggingOptionsRef::new("value of rz".to_string()),
     )
     .await;
-    rz
 }
 
 #[turbo_tasks::function]
-async fn ls() -> FileContentRef {
+async fn ls() {
     let disk_fs = DiskFileSystemRef::new(
         "project".to_string(),
         current_dir().unwrap().to_str().unwrap().to_string(),
@@ -75,16 +74,15 @@ async fn ls() -> FileContentRef {
     let path = PathInFileSystemRef::new("Cargo.toml".to_string());
     let file_ref = FileSystemPathRef::new(fs, path.clone());
     let content = read(file_ref).await;
-    print_size(path, content.clone()).await
+    print_size(path, content.clone()).await;
 }
 
 #[turbo_tasks::function]
-async fn print_size(path: PathInFileSystemRef, content: FileContentRef) -> FileContentRef {
+async fn print_size(path: PathInFileSystemRef, content: FileContentRef) {
     println!(
         "Size of {}: {}",
         path.get().path,
         content.get().buffer.len()
     );
     Task::side_effect();
-    content
 }

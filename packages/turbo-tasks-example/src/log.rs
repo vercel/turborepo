@@ -3,10 +3,9 @@ use turbo_tasks::Task;
 use crate::math::I32ValueRef;
 
 #[turbo_tasks::function]
-pub async fn log(a: I32ValueRef, options: LoggingOptionsRef) -> I32ValueRef {
+pub async fn log(a: I32ValueRef, options: LoggingOptionsRef) {
     println!("{}: {}", options.get().name, a.get().value);
     Task::side_effect();
-    a
 }
 
 #[turbo_tasks::value]
