@@ -241,7 +241,7 @@ const theme = {
         />
         <meta
           property="og:image"
-          content={`https://turborepo.org${meta.ogImage ?? router.asPath}`}
+          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
         />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turborepo" />
