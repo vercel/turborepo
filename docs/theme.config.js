@@ -227,10 +227,6 @@ const theme = {
         />
         <link rel="shortcut icon" href="/images/favicon/favicon.ico" />
         <meta name="msapplication-TileColor" content="#000000" />
-        <meta
-          name="msapplication-config"
-          content="/images/favicon/browserconfig.xml"
-        />
         <meta name="theme-color" content="#000" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@turborepo" />
