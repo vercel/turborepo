@@ -240,11 +240,11 @@ const theme = {
         <meta name="og:description" content={meta.description} />
         <meta
           property="og:url"
-          content={`https://turborepo.org${meta.ogImage ?? router.asPath}`}
+          content={`https://turborepo.org${router.asPath}`}
         />
         <meta
           property="og:image"
-          content="https://turborepo.org/og-image.png"
+          content={`https://turborepo.org${meta.ogImage ?? router.asPath}`}
         />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turborepo" />
