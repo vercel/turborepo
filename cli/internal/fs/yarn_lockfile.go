@@ -11,6 +11,7 @@ type LockfileEntry struct {
 	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
 	OptionalDependencies map[string]string `yaml:"optionalDependencies,omitempty"`
 	Checksum             string            `yaml:"checksum,omitempty"`
+	Conditions           string            `yaml:"conditions,omitempty"`
 	LanguageName         string            `yaml:"languageName,omitempty"`
 	LinkType             string            `yaml:"linkType,omitempty"`
 }
