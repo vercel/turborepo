@@ -13,13 +13,6 @@ export interface Schema {
   baseBranch?: string;
 
   /**
-   * The NPM client in-use in your project.
-   *
-   * @default yarn
-   */
-  npmClient?: "yarn" | "npm" | "pnpm";
-
-  /**
    * A list of globs and environment variables for implicit global hash dependencies.
    * Environment variables should be prefixed with $ (e.g. $GITHUB_TOKEN).
    *
