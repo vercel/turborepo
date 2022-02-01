@@ -1,9 +1,9 @@
 #![feature(once_cell)]
 
-use std::{env::current_dir, fs};
-
 use async_std::task::block_on;
 use math::add;
+use std::thread::sleep;
+use std::{env::current_dir, fs, time::Duration};
 use turbo_tasks::{
     viz::{GraphViz, Visualizable},
     Task, TurboTasks,
@@ -41,12 +41,12 @@ fn main() {
         })
     });
     // println!("{:#?}", task);
+    // println!("{:#?}", task);
+    sleep(Duration::from_secs(30));
     block_on(task.wait_output());
     let mut graph_viz = GraphViz::new();
     task.visualize(&mut graph_viz);
     fs::write("graph.html", GraphViz::wrap_html(&graph_viz.to_string())).unwrap();
-    // println!("{:#?}", task);
-    // sleep(Duration::from_secs(30));
 }
 
 #[turbo_tasks::function]
