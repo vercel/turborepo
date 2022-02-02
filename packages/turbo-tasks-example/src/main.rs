@@ -1,7 +1,7 @@
 #![feature(once_cell)]
 
 use async_std::task::block_on;
-use math::{add, max_new, max_reuse};
+use math::{add, max_new};
 use random::RandomIdRef;
 use std::thread::sleep;
 use std::{env::current_dir, fs, time::Duration};
@@ -41,21 +41,27 @@ fn main() {
             None
         })
     });
-    // println!("{:#?}", task);
-    // println!("{:#?}", task);
-    sleep(Duration::from_secs(30));
     block_on(task.wait_output());
+    sleep(Duration::from_secs(30));
+
+    // create a graph
     let mut graph_viz = GraphViz::new();
+
+    // graph root node
     task.visualize(&mut graph_viz);
+
+    // graph unconnected nodes
     tt.visualize(&mut graph_viz);
+
+    // write HTML
     fs::write("graph.html", GraphViz::wrap_html(&graph_viz.to_string())).unwrap();
     println!("graph.html written");
 }
 
 #[turbo_tasks::function]
 async fn make_math() {
-    let r1 = random(RandomIdRef::new());
-    let r2 = random(RandomIdRef::new());
+    let r1 = random(RandomIdRef::new(Duration::from_secs(5), 4));
+    let r2 = random(RandomIdRef::new(Duration::from_secs(7), 3));
     let r1 = r1.await;
     let max = max_new(r1.clone(), r2.await);
     let a = add(I32ValueRef::new(42), I32ValueRef::new(1));

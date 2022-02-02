@@ -5,7 +5,7 @@ pub async fn add(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
     let a = a.get().value;
     let b = b.get().value;
     println!("{} + {} = ...", a, b);
-    async_std::task::sleep(Duration::from_secs(1)).await;
+    async_std::task::sleep(Duration::from_millis(500)).await;
     println!("{} + {} = {}", a, b, a + b);
     I32ValueRef::new(a + b)
 }
@@ -15,7 +15,7 @@ pub async fn max_new(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
     let a = a.get().value;
     let b = b.get().value;
     println!("max({}, {}) = ...", a, b);
-    async_std::task::sleep(Duration::from_secs(1)).await;
+    async_std::task::sleep(Duration::from_millis(500)).await;
     let max = if a > b { a } else { b };
     println!("max({}, {}) = {}", a, b, max);
     I32ValueRef::new(max)
@@ -26,7 +26,7 @@ pub async fn max_reuse(a_ref: I32ValueRef, b_ref: I32ValueRef) -> I32ValueRef {
     let a = a_ref.get().value;
     let b = b_ref.get().value;
     println!("max({}, {}) = ...", a, b);
-    async_std::task::sleep(Duration::from_secs(1)).await;
+    async_std::task::sleep(Duration::from_millis(500)).await;
     println!("max({}, {}) = {}", a, b, a + b);
     if a > b {
         a_ref

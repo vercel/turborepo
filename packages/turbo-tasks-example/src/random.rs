@@ -11,9 +11,11 @@ use turbo_tasks::Task;
 pub async fn random(id: RandomIdRef) -> I32ValueRef {
     let mut rng = rand::thread_rng();
     let invalidator = Task::get_invalidator();
-    if id.get().counter.fetch_sub(1, Ordering::SeqCst) > 0 {
-        async_std::task::spawn(async {
-            async_std::task::sleep(Duration::from_secs(5)).await;
+    let id = id.get();
+    let dur = id.duration;
+    if id.counter.fetch_sub(1, Ordering::SeqCst) > 1 {
+        async_std::task::spawn(async move {
+            async_std::task::sleep(dur).await;
             println!("invalidate random number...");
             invalidator.invalidate();
         });
@@ -23,15 +25,21 @@ pub async fn random(id: RandomIdRef) -> I32ValueRef {
 
 #[turbo_tasks::value]
 pub struct RandomId {
+    duration: Duration,
     counter: AtomicI32,
 }
 
 #[turbo_tasks::value_impl]
 impl RandomId {
-    #[turbo_tasks::constructor(compare)]
-    pub fn new() -> Self {
+    #[turbo_tasks::constructor(compare: reuse)]
+    pub fn new(duration: Duration, times: i32) -> Self {
         Self {
-            counter: AtomicI32::new(3),
+            duration,
+            counter: AtomicI32::new(times),
         }
+    }
+
+    fn reuse(&self, duration: &Duration, _times: &i32) -> bool {
+        self.duration == *duration
     }
 }
