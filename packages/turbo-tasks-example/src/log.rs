@@ -15,7 +15,7 @@ pub struct LoggingOptions {
 
 #[turbo_tasks::value_impl]
 impl LoggingOptions {
-    #[turbo_tasks::constructor(!intern)]
+    #[turbo_tasks::constructor(compare)]
     pub fn new(name: String) -> Self {
         Self { name }
     }

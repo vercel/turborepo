@@ -1,7 +1,8 @@
 #![feature(once_cell)]
 
 use async_std::task::block_on;
-use math::add;
+use math::{add, max_new, max_reuse};
+use random::RandomIdRef;
 use std::thread::sleep;
 use std::{env::current_dir, fs, time::Duration};
 use turbo_tasks::{
@@ -46,29 +47,27 @@ fn main() {
     block_on(task.wait_output());
     let mut graph_viz = GraphViz::new();
     task.visualize(&mut graph_viz);
+    tt.visualize(&mut graph_viz);
     fs::write("graph.html", GraphViz::wrap_html(&graph_viz.to_string())).unwrap();
+    println!("graph.html written");
 }
 
 #[turbo_tasks::function]
 async fn make_math() {
-    let a = I32ValueRef::new(42);
-    let b = I32ValueRef::new(2);
-    let c = I32ValueRef::new(7);
-    let r = random().await;
-    let x = add(a, b.clone());
-    let y = add(b, c);
-    let (x, y) = (x.await, y.await);
-    let z = add(x.clone(), y.clone());
-    let rz = add(r, y);
-    let z = z.await;
-    let rz = rz.await;
-    log(x, LoggingOptionsRef::new("value of x".to_string())).await;
-    log(z, LoggingOptionsRef::new("value of z".to_string())).await;
-    log(
-        rz.clone(),
-        LoggingOptionsRef::new("value of rz".to_string()),
-    )
-    .await;
+    let r1 = random(RandomIdRef::new());
+    let r2 = random(RandomIdRef::new());
+    let r1 = r1.await;
+    let max = max_reuse(r1.clone(), r2.await);
+    let a = add(I32ValueRef::new(42), I32ValueRef::new(1));
+    let b = add(I32ValueRef::new(2), I32ValueRef::new(3));
+    let a = a.await;
+    log(a.clone(), LoggingOptionsRef::new("value of a".to_string())).await;
+    let max = max.await;
+    let c = add(max.clone(), a);
+    let d = add(max, b.await);
+    let e = add(c.await, d.await);
+    let r = add(r1, e.await);
+    log(r.await, LoggingOptionsRef::new("value of r".to_string())).await;
 }
 
 #[turbo_tasks::function]
