@@ -57,7 +57,7 @@ async fn make_math() {
     let r1 = random(RandomIdRef::new());
     let r2 = random(RandomIdRef::new());
     let r1 = r1.await;
-    let max = max_reuse(r1.clone(), r2.await);
+    let max = max_new(r1.clone(), r2.await);
     let a = add(I32ValueRef::new(42), I32ValueRef::new(1));
     let b = add(I32ValueRef::new(2), I32ValueRef::new(3));
     let a = a.await;
