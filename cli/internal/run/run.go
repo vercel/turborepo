@@ -21,6 +21,7 @@ import (
 	"turbo/internal/fs"
 	"turbo/internal/globby"
 	"turbo/internal/logstreamer"
+	"turbo/internal/process"
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
@@ -40,8 +41,9 @@ const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Config *config.Config
-	Ui     *cli.ColoredUi
+	Config    *config.Config
+	Ui        *cli.ColoredUi
+	Processes *process.Manager
 }
 
 // Synopsis of run command
@@ -547,13 +549,17 @@ func (c *RunCommand) Run(args []string) int {
 				logStreamerOut.FlushRecord()
 
 				// Run the command
-				if err := cmd.Run(); err != nil {
+				if err := c.Processes.Exec(cmd); err != nil {
+					// if we already know we're in the process of exiting,
+					// we don't need to record an error to that effect.
+					if errors.Is(err, process.ErrClosing) {
+						return nil
+					}
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
-							os.Exit(1)
 						} else {
 							f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 							if err != nil {
@@ -567,15 +573,14 @@ func (c *RunCommand) Run(args []string) int {
 							for scan.Scan() {
 								c.Ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
 							}
-							os.Exit(1)
 						}
+						c.Processes.Close()
 					} else {
 						if runOptions.stream {
 							targetUi.Warn("command finished with error, but continuing...")
 						}
 					}
-
-					return nil
+					return err
 				}
 
 				// Cache command outputs
