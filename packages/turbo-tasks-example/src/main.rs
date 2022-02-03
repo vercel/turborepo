@@ -1,3 +1,4 @@
+#![feature(trivial_bounds)]
 #![feature(once_cell)]
 
 use async_std::task::block_on;
@@ -11,9 +12,10 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemRef, FileContent, FileContentRef,
-    FileSystemPathRef, FileSystemRef, PathInFileSystemRef,
+    FileSystemPathRef, FileSystemRef,
 };
 
+use crate::trace::{copy_all, CopyAllOptions};
 use crate::{
     log::{log, LoggingOptionsRef},
     math::I32ValueRef,
@@ -23,12 +25,13 @@ use crate::{
 mod log;
 mod math;
 mod random;
+mod trace;
 
 fn main() {
     let tt = TurboTasks::new();
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
-            make_math().await;
+            // make_math().await;
 
             let disk_fs = DiskFileSystemRef::new(
                 "project".to_string(),
@@ -37,12 +40,26 @@ fn main() {
             // TODO add casts to Smart Pointers
             let fs = FileSystemRef::from_node(disk_fs.into()).unwrap();
 
-            ls(fs).await;
+            // ls(fs).await;
+            let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
+            let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
+            let entry = FileSystemPathRef::new(fs.clone(), "demo/index.txt".to_string());
+
+            copy_all(
+                entry,
+                CopyAllOptions {
+                    input_dir: input,
+                    output_dir: output,
+                }
+                .into(),
+            )
+            .await;
+
             None
         })
     });
     block_on(task.wait_output());
-    sleep(Duration::from_secs(30));
+    // sleep(Duration::from_secs(30));
 
     // create a graph
     let mut graph_viz = GraphViz::new();
@@ -78,20 +95,19 @@ async fn make_math() {
 
 #[turbo_tasks::function]
 async fn ls(fs: FileSystemRef) {
-    let path = PathInFileSystemRef::new(".".to_string());
-    let directory_ref = FileSystemPathRef::new(fs, path.clone());
+    let directory_ref = FileSystemPathRef::new(fs, ".".to_string());
     print_sizes(directory_ref.clone()).await;
 }
 
 #[turbo_tasks::function]
 async fn print_sizes(directory: FileSystemPathRef) {
-    let content = directory.read_dir().await;
+    let content = directory.clone().read_dir().await;
     match &*content.get() {
         DirectoryContent::Entries(entries) => {
             for entry in entries.iter() {
                 match &*entry.get() {
                     DirectoryEntry::File(path) => {
-                        print_size(path.clone(), path.read().await).await;
+                        print_size(path.clone(), path.clone().read().await).await;
                     }
                     DirectoryEntry::Directory(path) => {
                         print_sizes(path.clone()).await;
@@ -101,7 +117,7 @@ async fn print_sizes(directory: FileSystemPathRef) {
             }
         }
         DirectoryContent::NotFound => {
-            println!("{}: not found", directory.get().path.get().path);
+            println!("{}: not found", directory.get().path);
         }
     };
 }
