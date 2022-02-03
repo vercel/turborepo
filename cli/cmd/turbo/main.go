@@ -9,12 +9,14 @@ import (
 	"turbo/internal/config"
 	"turbo/internal/info"
 	"turbo/internal/login"
+	"turbo/internal/process"
 	prune "turbo/internal/prune"
 	"turbo/internal/run"
 	uiPkg "turbo/internal/ui"
 	"turbo/internal/util"
 
 	"github.com/fatih/color"
+	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 )
 
@@ -39,6 +41,7 @@ func main() {
 		}
 	}
 	args = args[:argsEnd]
+
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
@@ -58,15 +61,25 @@ func main() {
 	c.HelpWriter = os.Stdout
 	c.ErrorWriter = os.Stderr
 	// Parse and validate cmd line flags and env vars
+	// Note that cf can be nil
 	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion)
 	if err != nil {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
 	}
+
+	var logger hclog.Logger
+	if cf != nil {
+		logger = cf.Logger
+	} else {
+		logger = hclog.Default()
+	}
+	processes := process.NewManager(logger.Named("processes"))
+	signalCh := watchSignals(func() { processes.Close() })
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
-			return &run.RunCommand{Config: cf, Ui: ui},
+			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes},
 				nil
 		},
 		"prune": func() (cli.Command, error) {
@@ -91,7 +104,9 @@ func main() {
 
 	// Capture the defer statements below so the "done" message comes last
 	exitCode := 1
+	doneCh := make(chan struct{})
 	func() {
+		defer func() { close(doneCh) }()
 		// To view a CPU trace, use "go tool trace [file]". Note that the trace
 		// viewer doesn't work under Windows Subsystem for Linux for some reason.
 		if traceFile != "" {
@@ -161,5 +176,12 @@ func main() {
 			}
 		}
 	}()
+	// Wait for either our command to finish, in which case we need to clean up,
+	// or to receive a signal, in which case the signal handler above does the cleanup
+	select {
+	case <-doneCh:
+		processes.Close()
+	case <-signalCh:
+	}
 	os.Exit(exitCode)
 }
