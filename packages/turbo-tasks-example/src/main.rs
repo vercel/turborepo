@@ -26,6 +26,7 @@ mod log;
 mod math;
 mod random;
 mod trace;
+mod utils;
 
 fn main() {
     let tt = TurboTasks::new();
@@ -59,10 +60,10 @@ fn main() {
         })
     });
     block_on(task.wait_output());
-    // sleep(Duration::from_secs(30));
+    sleep(Duration::from_secs(30));
 
     // create a graph
-    let mut graph_viz = GraphViz::new();
+    let mut graph_viz = GraphViz::new(false);
 
     // graph root node
     task.visualize(&mut graph_viz);
