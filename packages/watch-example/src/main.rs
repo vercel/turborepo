@@ -9,7 +9,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemRef, FileContent, FileContentRef,
-    FileSystemPathRef, FileSystemRef, PathInFileSystemRef,
+    FileSystemPathRef, FileSystemRef,
 };
 
 use notify::{watcher, RecursiveMode, Watcher};
