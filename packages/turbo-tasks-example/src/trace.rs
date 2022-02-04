@@ -1,9 +1,6 @@
-use std::{collections::HashSet, future::Future, pin::Pin, task::Poll};
+use std::collections::HashSet;
 
-use turbo_tasks::Task;
-use turbo_tasks_fs::{
-    rebase, FileContent, FileContentRef, FileSystemPath, FileSystemPathRef, FileSystemRef,
-};
+use turbo_tasks_fs::{rebase, FileContent, FileContentRef, FileSystemPath, FileSystemPathRef};
 
 use crate::utils::{all, race_pop};
 
