@@ -838,6 +838,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "lazy_static",
+ "notify",
  "rand 0.8.4",
  "turbo-tasks",
  "turbo-tasks-fs",
@@ -980,21 +981,6 @@ name = "wasm-bindgen-shared"
 version = "0.2.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0237232789cf037d5480773fe568aac745bfe2afbc11a863e97901780a6b47cc"
-
-[[package]]
-name = "watch-example"
-version = "0.1.0"
-dependencies = [
- "any_key",
- "anyhow",
- "async-std",
- "async-trait",
- "lazy_static",
- "notify",
- "rand 0.8.4",
- "turbo-tasks",
- "turbo-tasks-fs",
-]
 
 [[package]]
 name = "web-sys"
