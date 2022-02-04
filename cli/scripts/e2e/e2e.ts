@@ -80,7 +80,10 @@ function runSmokeTests<T>(
       assert.not.throws(() => {
         text = repo.readFileSync(cachedLogFilePath);
       }, `Could not read cached log file from cache ${cachedLogFilePath}`);
-      assert.ok(text.includes("testing c"), "Contains correct output");
+      assert.ok(
+        text.includes("testing c"),
+        `Contains correct output:\n${text}`
+      );
     }
   );
 
