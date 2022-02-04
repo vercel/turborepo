@@ -71,7 +71,7 @@ function runSmokeTests<T>(
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
-      assert.ok(!!hash, "No hash for c#test");
+      assert.ok(!!hash, `No hash for c#test: ${commandOutput.join("\n")}`);
       const cachedLogFilePath = getCachedLogFilePathForTask(
         getCachedDirForHash(repo, hash),
         "test"
