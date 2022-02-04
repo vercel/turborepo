@@ -82,7 +82,7 @@ function runSmokeTests<T>(
       }, `Could not read cached log file from cache ${cachedLogFilePath}`);
       assert.ok(
         text.includes("testing c"),
-        `Contains correct output:\n${text}`
+        `Contains correct output from file ${cachedLogFilePath} hash ${hash}:\n${text}`
       );
     }
   );
