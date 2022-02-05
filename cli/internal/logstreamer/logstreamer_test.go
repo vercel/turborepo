@@ -103,7 +103,7 @@ func TestLogstreamerFlush(t *testing.T) {
 	logStreamerOut.Flush()
 	byteWriter.Flush()
 
-	s := strings.TrimSpace(string(buffer.Bytes()))
+	s := strings.TrimSpace(buffer.String())
 
 	if s != text {
 		t.Fatalf("Expected '%s', got '%s'.", text, s)

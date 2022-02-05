@@ -42,12 +42,6 @@ func FileExists(filename string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// IsSymlink returns true if the given path exists and is a symlink.
-func IsSymlink(filename string) bool {
-	info, err := os.Lstat(filename)
-	return err == nil && (info.Mode()&os.ModeSymlink) != 0
-}
-
 // CopyFile copies a file from 'from' to 'to', with an attempt to perform a copy & rename
 // to avoid chaos if anything goes wrong partway.
 func CopyFile(from string, to string, mode os.FileMode) error {
@@ -93,16 +87,6 @@ func WriteFile(fromFile io.Reader, to string, mode os.FileMode) error {
 func IsDirectory(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
-}
-
-// IsPackage returns true if the given directory name is a package (i.e. contains a build file)
-func IsPackage(buildFileNames []string, name string) bool {
-	for _, buildFileName := range buildFileNames {
-		if FileExists(filepath.Join(name, buildFileName)) {
-			return true
-		}
-	}
-	return false
 }
 
 // Try to gracefully rename the file as the os.Rename does not work across

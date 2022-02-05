@@ -14,6 +14,29 @@ body:
       description: "For example: 1.0.0"
     validations:
       required: true
+  - type: dropdown
+    id: packageManager
+    attributes:
+      multiple: true
+      label: What package manager are you using / does the bug impact?
+      options:
+        - npm
+        - pnpm
+        - Yarn v1
+        - Yarn v2/v3 (node_modules linker only)
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: What operating system are you using?
+      options:
+        - Mac
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: Describe the Bug

@@ -114,7 +114,7 @@ func TestSetCopy(t *testing.T) {
 		t.Fatalf("expected single diff value, got %#v", diff)
 	}
 
-	if !diff.Include(3) {
+	if !diff.Includes(3) {
 		t.Fatalf("diff does not contain 3, got %#v", diff)
 	}
 

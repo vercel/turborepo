@@ -2,6 +2,7 @@
 
 import * as path from "path";
 import execa from "execa";
+import fs from "fs";
 import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -11,9 +12,17 @@ import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
+import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
+import { PackageManager } from "./types";
+import { getPackageManagerVersion } from "./getPackageManagerVersion";
+
+interface Answers {
+  packageManager: PackageManager;
+}
 
 const turboGradient = gradient("#0099F7", "#F11712");
+
 const help = `
   Usage:
     $ npx create-turbo [flags...] [<dir>]
@@ -21,7 +30,8 @@ const help = `
   If <dir> is not provided up front you will be prompted for it.
 
   Flags:    
-    --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+    --use-npm           Explicitly tell the CLI to bootstrap the app using npm
+    --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
     --no-install        Explicitly do not run the package mananger's install command
     --help, -h          Show this help message
     --version, -v       Show the version of this script
@@ -51,6 +61,7 @@ async function run() {
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
       useNpm: { type: "boolean", default: false },
+      usePnpm: { type: "boolean", default: false },
       install: { type: "boolean", default: true },
       version: { type: "boolean", default: false, alias: "v" },
     },
@@ -85,24 +96,32 @@ async function run() {
   );
 
   const isYarnInstalled = shouldUseYarn();
-  let answers;
+  const isPnpmInstalled = shouldUsePnpm();
+  let answers: Answers;
   if (flags.useNpm) {
     answers = { packageManager: "npm" };
+  } else if (flags.usePnpm) {
+    answers = { packageManager: "pnpm" };
   } else {
     answers = await inquirer.prompt<{
-      packageManager: "yarn" | "npm";
+      packageManager: PackageManager;
     }>([
       {
         name: "packageManager",
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
+          { name: "npm", value: "npm" },
           {
-            name: "Yarn",
+            name: "pnpm",
+            value: "pnpm",
+            disabled: !isPnpmInstalled && "not installed",
+          },
+          {
+            name: "yarn",
             value: "yarn",
             disabled: !isYarnInstalled && "not installed",
           },
-          { name: "NPM", value: "npm" },
         ],
       },
     ]);
@@ -136,15 +155,6 @@ async function run() {
     await fse.copy(serverTemplate, projectDir, { overwrite: true });
   }
 
-  // let serverLangTemplate = path.resolve(
-  //   __dirname,
-  //   "templates",
-  //   `${answers.packageManager}_ts`
-  // );
-  // if (fse.existsSync(serverLangTemplate)) {
-  //   await fse.copy(serverLangTemplate, projectDir, { overwrite: true });
-  // }
-
   // rename dotfiles
   await fse.move(
     path.join(projectDir, "gitignore"),
@@ -162,6 +172,10 @@ async function run() {
       }
     }
   });
+
+  appPkg.packageManager = `${answers.packageManager}@${getPackageManagerVersion(
+    answers.packageManager
+  )}`;
 
   // write package.json
   await fse.writeFile(
@@ -194,6 +208,7 @@ async function run() {
         frames: ["   ", ">  ", ">> ", ">>>"],
       },
     }).start();
+
     await execa(`${answers.packageManager}`, [`install`], {
       stdio: "ignore",
       cwd: projectDir,
@@ -248,14 +263,18 @@ async function run() {
   console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
   console.log(`entering the following command:`);
   console.log();
-  console.log(chalk.cyan(`  npx turbo login`));
+  console.log(
+    chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
+  );
   console.log();
   console.log(`We suggest that you begin by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
     console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
   }
-  console.log(chalk.cyan(`  npx turbo login`));
+  console.log(
+    chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
+  );
   console.log();
 }
 
@@ -282,5 +301,15 @@ async function notifyUpdate(): Promise<void> {
     process.exit();
   } catch {
     // ignore error
+  }
+}
+
+function getNpxCommand(pkgManager: PackageManager): string {
+  if (pkgManager === "yarn") {
+    return "npx";
+  } else if (pkgManager === "pnpm") {
+    return getNpxCommandOfPnpm();
+  } else {
+    return "npx";
   }
 }

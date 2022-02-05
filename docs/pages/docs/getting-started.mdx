@@ -21,14 +21,16 @@ To see more examples and starters, have a look at the [examples directory on Git
 
 ## Add Turborepo to your existing monorepo
 
-Turborepo was designed to be incrementally adopted. Adding it to an existing monorepo takes just a few minutes.
+Turborepo was designed to be incrementally adopted. Adding it to an existing monorepo takes only a few minutes.
 
 Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](https://npmjs.com), and [PNPM](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
 
-- macOS darwin 64-bit (Intel), Arm 64-bit (Apple Silicon)
-- Linux 32-bit, 64-bit, Arm, Arm 64-bit, mips64le, ppc64le
-- Windows 32-bit, 64-bit
-- FreeBSD 64-bit, FreeBSD Arm 64-bit
+- macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
+- Linux 32-bit, 64-bit, ARM, ARM 64-bit, MIPS 64-bit Little Endian, PowerPC 64-bit Little Endian, IBM Z 64-bit Big Endian
+- Windows 32-bit, 64-bit, ARM 64-bit
+- FreeBSD 64-bit, ARM 64-bit
+- NetBSD AMD64
+- Android ARM 64-bit
 
 ### Install `turbo`
 
@@ -37,7 +39,7 @@ Add `turbo` as a development dependency in the root of your project.
 ### Yarn
 
 ```bash
-yarn add turbo -W --dev
+yarn add turbo -DW
 ```
 
 ### NPM
@@ -49,48 +51,46 @@ npm install turbo -D
 ### PNPM
 
 ```bash
-pnpm add turbo -D
+pnpm add turbo -DW
 ```
 
 The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
 
-### Add `turbo` to `package.json`
+### Create `turbo.json`
 
-In your root `package.json`, add a key `turbo`. If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, ours is set to `origin/main`).
+In your root directory, create an empty file named `turbo.json`.
+This will hold the configuration for Turborepo in your project.
+If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, ours is set to `origin/main`).
 
 ```json
 {
-  "turbo": {
-    "baseBranch": "origin/main"
-  }
+  "baseBranch": "origin/main"
 }
 ```
 
 ### Create a `pipeline`
 
-In your `package.json`, add the commands you want to "turbocharge" to your pipeline.
+In `turbo.json`, add the commands you want to "turbocharge" to your pipeline.
 
 Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
 ```json
 {
-  "turbo": {
-    "baseBranch": "origin/main",
-    "pipeline": {
-      "build": {
-        "dependsOn": ["^build"],
-        "outputs": [".next/**"]
-      },
-      "test": {
-        "dependsOn": ["^build"],
-        "outputs": []
-      },
-      "lint": {
-        "outputs": []
-      },
-      "dev": {
-        "cache": false
-      }
+  "baseBranch": "origin/main",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
     }
   }
 }

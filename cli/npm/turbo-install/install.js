@@ -1,148 +1,45 @@
-// Most of this file is ripped from esbuild's postinstall script
-// @see https://github.com/evanw/esbuild/blob/v0.12.29/lib/npm/install.ts
+// Most of this file is ripped from esbuild
+// @see https://github.com/evanw/esbuild/blob/master/lib/npm/node-install.ts
+// This file is MIT licensed.
+
+const nodePlatform = require("./node-platform");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const zlib = require("zlib");
 const https = require("https");
 const child_process = require("child_process");
-const version = require("./package.json").version;
-const binPath = path.join(__dirname, "bin", "turbo");
+const {
+  downloadedBinPath,
+  TURBO_BINARY_PATH,
+  pkgAndSubpathForCurrentPlatform,
+} = nodePlatform;
+const TURBO_VERSION = require("./package.json").version;
 
-async function installBinaryFromPackage(name, fromPath, toPath) {
-  // Try to install from the cache if possible
-  const cachePath = getCachePath(name);
-  try {
-    // Copy from the cache
-    fs.copyFileSync(cachePath, toPath);
-    fs.chmodSync(toPath, 0o755);
+const toPath = path.join(__dirname, "bin", "turbo");
+let isToPathJS = true;
 
-    // Verify that the binary is the correct version
-    validateBinaryVersion(toPath);
-
-    // Mark the cache entry as used for LRU
-    const now = new Date();
-    fs.utimesSync(cachePath, now, now);
-    return;
-  } catch (e) {}
-
-  // Next, try to install using npm. This should handle various tricky cases
-  // such as environments where requests to npmjs.org will hang (in which case
-  // there is probably a proxy and/or a custom registry configured instead).
-  let buffer;
-  let didFail = true;
-  try {
-    buffer = installUsingNPM(name, fromPath);
-  } catch (err) {
-    didFail = true;
-    console.error(`Trying to install "${name}" using npm`);
-    console.error(
-      `Failed to install "${name}" using npm: ${(err && err.message) || err}`
-    );
-  }
-
-  // If that fails, the user could have npm configured incorrectly or could not
-  // have npm installed. Try downloading directly from npm as a last resort.
-  if (!buffer) {
-    const url = `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`;
-    console.error(`Trying to download ${JSON.stringify(url)}`);
-    try {
-      buffer = extractFileFromTarGzip(await fetch(url), fromPath);
-    } catch (err) {
-      console.error(
-        `Failed to download ${JSON.stringify(url)}: ${
-          (err && err.message) || err
-        }`
-      );
-    }
-  }
-
-  // Give up if none of that worked
-  if (!buffer) {
-    console.error(`Install unsuccessful`);
-    process.exit(1);
-  }
-
-  // Write out the binary executable that was extracted from the package
-  fs.writeFileSync(toPath, buffer, { mode: 0o755 });
-
-  // Verify that the binary is the correct version
-  try {
-    validateBinaryVersion(toPath);
-  } catch (err) {
-    console.error(
-      `The version of the downloaded binary is incorrect: ${
-        (err && err.message) || err
-      }`
-    );
-    console.error(`Install unsuccessful`);
-    process.exit(1);
-  }
-
-  // Also try to cache the file to speed up future installs
-  try {
-    fs.mkdirSync(path.dirname(cachePath), {
-      recursive: true,
-      mode: 0o700, // https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-    });
-    fs.copyFileSync(toPath, cachePath);
-    cleanCacheLRU(cachePath);
-  } catch (e) {}
-
-  if (didFail) console.error(`Install successful`);
-}
-
-function validateBinaryVersion(binaryPath) {
+function validateBinaryVersion(...command) {
+  command.push("--version");
   const stdout = child_process
-    .execFileSync(binaryPath, ["--version"])
+    .execFileSync(command.shift(), command)
     .toString()
     .trim();
-  if (stdout !== version) {
+  if (stdout !== TURBO_VERSION) {
     throw new Error(
-      `Expected ${JSON.stringify(version)} but got ${JSON.stringify(stdout)}`
+      `Expected ${JSON.stringify(TURBO_VERSION)} but got ${JSON.stringify(
+        stdout
+      )}`
     );
   }
 }
 
-function getCachePath(name) {
-  const home = os.homedir();
-  const common = ["turbo", "bin", `${name}@${version}`];
-  if (process.platform === "darwin")
-    return path.join(home, "Library", "Caches", ...common);
-  if (process.platform === "win32")
-    return path.join(home, "AppData", "Local", "Cache", ...common);
-
-  // https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-  const XDG_CACHE_HOME = process.env.XDG_CACHE_HOME;
-  if (
-    process.platform === "linux" &&
-    XDG_CACHE_HOME &&
-    path.isAbsolute(XDG_CACHE_HOME)
-  )
-    return path.join(XDG_CACHE_HOME, ...common);
-
-  return path.join(home, ".cache", ...common);
-}
-
-function cleanCacheLRU(fileToKeep) {
-  // Gather all entries in the cache
-  const dir = path.dirname(fileToKeep);
-  const entries = [];
-  for (const entry of fs.readdirSync(dir)) {
-    const entryPath = path.join(dir, entry);
-    try {
-      const stats = fs.statSync(entryPath);
-      entries.push({ path: entryPath, mtime: stats.mtime });
-    } catch (e) {}
+function isYarn() {
+  const { npm_config_user_agent } = process.env;
+  if (npm_config_user_agent) {
+    return /\byarn\//.test(npm_config_user_agent);
   }
-
-  // Only keep the most recent entries
-  entries.sort((a, b) => +b.mtime - +a.mtime);
-  for (const entry of entries.slice(5)) {
-    try {
-      fs.unlinkSync(entry.path);
-    } catch (e) {}
-  }
+  return false;
 }
 
 function fetch(url) {
@@ -164,7 +61,7 @@ function fetch(url) {
   });
 }
 
-function extractFileFromTarGzip(buffer, file) {
+function extractFileFromTarGzip(buffer, subpath) {
   try {
     buffer = zlib.unzipSync(buffer);
   } catch (err) {
@@ -175,51 +72,69 @@ function extractFileFromTarGzip(buffer, file) {
   let str = (i, n) =>
     String.fromCharCode(...buffer.subarray(i, i + n)).replace(/\0.*$/, "");
   let offset = 0;
-  file = `package/${file}`;
+  subpath = `package/${subpath}`;
   while (offset < buffer.length) {
     let name = str(offset, 100);
     let size = parseInt(str(offset + 124, 12), 8);
     offset += 512;
     if (!isNaN(size)) {
-      if (name === file) return buffer.subarray(offset, offset + size);
+      if (name === subpath) return buffer.subarray(offset, offset + size);
       offset += (size + 511) & ~511;
     }
   }
-  throw new Error(`Could not find ${JSON.stringify(file)} in archive`);
+  throw new Error(`Could not find ${JSON.stringify(subpath)} in archive`);
 }
 
-function installUsingNPM(name, file) {
-  const installDir = path.join(
-    os.tmpdir(),
-    "turbo-" + Math.random().toString(36).slice(2)
-  );
-  fs.mkdirSync(installDir, { recursive: true });
-  fs.writeFileSync(path.join(installDir, "package.json"), "{}");
-
+function installUsingNPM(pkg, subpath, binPath) {
   // Erase "npm_config_global" so that "npm install --global turbo" works.
   // Otherwise this nested "npm install" will also be global, and the install
   // will deadlock waiting for the global installation lock.
   const env = { ...process.env, npm_config_global: undefined };
 
-  child_process.execSync(
-    `npm install --loglevel=error --prefer-offline --no-audit --progress=false ${name}@${version}`,
-    { cwd: installDir, stdio: "pipe", env }
-  );
-  const buffer = fs.readFileSync(
-    path.join(installDir, "node_modules", name, file)
-  );
+  // Create a temporary directory inside the "turbo" package with an empty
+  // "package.json" file. We'll use this to run "npm install" in.
+  const turboLibDir = path.dirname(require.resolve("turbo"));
+  const installDir = path.join(turboLibDir, "npm-install");
+  fs.mkdirSync(installDir);
   try {
-    removeRecursive(installDir);
-  } catch (e) {
-    // Removing a file or directory can randomly break on Windows, returning
-    // EBUSY for an arbitrary length of time. I think this happens when some
-    // other program has that file or directory open (e.g. an anti-virus
-    // program). This is fine on Unix because the OS just unlinks the entry
-    // but keeps the reference around until it's unused. In this case we just
-    // ignore errors because this directory is in a temporary directory, so in
-    // theory it should get cleaned up eventually anyway.
+    fs.writeFileSync(path.join(installDir, "package.json"), "{}");
+
+    // Run "npm install" in the temporary directory which should download the
+    // desired package. Try to avoid unnecessary log output. This uses the "npm"
+    // command instead of a HTTP request so that it hopefully works in situations
+    // where HTTP requests are blocked but the "npm" command still works due to,
+    // for example, a custom configured npm registry and special firewall rules.
+    child_process.execSync(
+      `npm install --loglevel=error --prefer-offline --no-audit --progress=false ${pkg}@${TURBO_VERSION}`,
+      { cwd: installDir, stdio: "pipe", env }
+    );
+
+    // Move the downloaded binary executable into place. The destination path
+    // is the same one that the JavaScript API code uses so it will be able to
+    // find the binary executable here later.
+    const installedBinPath = path.join(
+      installDir,
+      "node_modules",
+      pkg,
+      subpath
+    );
+    fs.renameSync(installedBinPath, binPath);
+  } finally {
+    // Try to clean up afterward so we don't unnecessarily waste file system
+    // space. Leaving nested "node_modules" directories can also be problematic
+    // for certain tools that scan over the file tree and expect it to have a
+    // certain structure.
+    try {
+      removeRecursive(installDir);
+    } catch {
+      // Removing a file or directory can randomly break on Windows, returning
+      // EBUSY for an arbitrary length of time. I think this happens when some
+      // other program has that file or directory open (e.g. an anti-virus
+      // program). This is fine on Unix because the OS just unlinks the entry
+      // but keeps the reference around until it's unused. There's nothing we
+      // can do in this case so we just leave the directory there.
+    }
   }
-  return buffer;
 }
 
 function removeRecursive(dir) {
@@ -228,115 +143,164 @@ function removeRecursive(dir) {
     let stats;
     try {
       stats = fs.lstatSync(entryPath);
-    } catch (e) {
+    } catch {
       continue; // Guard against https://github.com/nodejs/node/issues/4760
     }
     if (stats.isDirectory()) removeRecursive(entryPath);
     else fs.unlinkSync(entryPath);
   }
-  fs.rmdirSync(dir);
+  fs.rmSync(dir);
 }
 
-function isYarnBerryOrNewer() {
-  const { npm_config_user_agent } = process.env;
-  if (npm_config_user_agent) {
-    const match = npm_config_user_agent.match(/yarn\/(\d+)/);
-    if (match && match[1]) {
-      return parseInt(match[1], 10) >= 2;
+function applyManualBinaryPathOverride(overridePath) {
+  // Patch the CLI use case (the "turbo" command)
+  const pathString = JSON.stringify(overridePath);
+  fs.writeFileSync(
+    toPath,
+    `#!/usr/bin/env node\n` +
+      `require('child_process').execFileSync(${pathString}, process.argv.slice(2), { stdio: 'inherit' });\n`
+  );
+
+  // Not needed for turbo
+  // // Patch the JS API use case (the "require('turbo')" workflow)
+  // const libMain = path.join(__dirname, "lib", "main.js");
+  // const code = fs.readFileSync(libMain, "utf8");
+  // fs.writeFileSync(libMain, `var TURBO_BINARY_PATH = ${pathString};\n${code}`);
+}
+
+function maybeOptimizePackage(binPath) {
+  // This package contains a "bin/turbo" JavaScript file that finds and runs
+  // the appropriate binary executable. However, this means that running the
+  // "turbo" command runs another instance of "node" which is way slower than
+  // just running the binary executable directly.
+  //
+  // Here we optimize for this by replacing the JavaScript file with the binary
+  // executable at install time. This optimization does not work on Windows
+  // because on Windows the binary executable must be called "turbo.exe"
+  // instead of "turbo".
+  //
+  // This also doesn't work with Yarn both because of lack of support for binary
+  // files in Yarn 2+ (see https://github.com/yarnpkg/berry/issues/882) and
+  // because Yarn (even Yarn 1?) may run the same install scripts in the same
+  // place multiple times from different platforms, especially when people use
+  // Docker. Avoid idempotency issues by just not optimizing when using Yarn.
+  //
+  // This optimization also doesn't apply when npm's "--ignore-scripts" flag is
+  // used since in that case this install script will not be run.
+  if (os.platform() !== "win32" && !isYarn()) {
+    const tempPath = path.join(__dirname, "bin-turbo");
+    try {
+      // First link the binary with a temporary file. If this fails and throws an
+      // error, then we'll just end up doing nothing. This uses a hard link to
+      // avoid taking up additional space on the file system.
+      fs.linkSync(binPath, tempPath);
+
+      // Then use rename to atomically replace the target file with the temporary
+      // file. If this fails and throws an error, then we'll just end up leaving
+      // the temporary file there, which is harmless.
+      fs.renameSync(tempPath, toPath);
+
+      // If we get here, then we know that the target location is now a binary
+      // executable instead of a JavaScript file.
+      isToPathJS = false;
+
+      // If this install script is being re-run, then "renameSync" will fail
+      // since the underlying inode is the same (it just returns without doing
+      // anything, and without throwing an error). In that case we should remove
+      // the file manually.
+      fs.unlinkSync(tempPath);
+    } catch {
+      // Ignore errors here since this optimization is optional
     }
   }
-  return false;
 }
 
-function installDirectly(name) {
-  if (process.env.TURBO_BINARY_PATH) {
-    fs.copyFileSync(process.env.TURBO_BINARY_PATH, binPath);
-    validateBinaryVersion(binPath);
-  } else {
-    // Write to a temporary file, then move the file into place. This is an
-    // attempt to avoid problems with package managers like pnpm which will
-    // usually turn each file into a hard link. We don't want to mutate the
-    // hard-linked file which may be shared with other files.
-    const tempBinPath = binPath + "__";
-    installBinaryFromPackage(name, "bin/turbo", tempBinPath)
-      .then(() => fs.renameSync(tempBinPath, binPath))
-      .catch((e) =>
-        setImmediate(() => {
-          throw e;
-        })
-      );
-  }
-}
-
-function installWithWrapper(name, fromPath, toPath) {
-  fs.writeFileSync(
-    binPath,
-    `#!/usr/bin/env node
-const path = require('path');
-const turbo_exe = path.join(__dirname, '..', ${JSON.stringify(toPath)});
-const child_process = require('child_process');
-const { status } = child_process.spawnSync(turbo_exe, process.argv.slice(2), { stdio: 'inherit' });
-process.exitCode = status === null ? 1 : status;
-`
-  );
-  const absToPath = path.join(__dirname, toPath);
-  if (process.env.TURBO_BINARY_PATH) {
-    fs.copyFileSync(process.env.TURBO_BINARY_PATH, absToPath);
-    validateBinaryVersion(absToPath);
-  } else {
-    installBinaryFromPackage(name, fromPath, absToPath).catch((e) =>
-      setImmediate(() => {
-        throw e;
-      })
+async function downloadDirectlyFromNPM(pkg, subpath, binPath) {
+  // If that fails, the user could have npm configured incorrectly or could not
+  // have npm installed. Try downloading directly from npm as a last resort.
+  const url = `https://registry.npmjs.org/${pkg}/-/${pkg}-${TURBO_VERSION}.tgz`;
+  console.error(`[turbo] Trying to download ${JSON.stringify(url)}`);
+  try {
+    fs.writeFileSync(
+      binPath,
+      extractFileFromTarGzip(await fetch(url), subpath)
     );
+    fs.chmodSync(binPath, 0o755);
+  } catch (e) {
+    console.error(
+      `[turbo] Failed to download ${JSON.stringify(url)}: ${
+        (e && e.message) || e
+      }`
+    );
+    throw e;
   }
 }
 
-function installOnUnix(name) {
-  // Yarn 2 is deliberately incompatible with binary modules because the
-  // developers of Yarn 2 don't think they should be used. See this thread for
-  // details: https://github.com/yarnpkg/berry/issues/882.
-  //
-  // We want to avoid slowing down turbo for everyone just because of this
-  // decision by the Yarn 2 developers, so we explicitly detect if turbo is
-  // being installed using Yarn 2 and install a compatability shim only for
-  // Yarn 2. Normal package managers can just run the binary directly for
-  // maximum speed.
-  if (isYarnBerryOrNewer()) {
-    installWithWrapper(name, "bin/turbo", "turbo");
+async function checkAndPreparePackage() {
+  // This feature was added to give external code a way to modify the binary
+  // path without modifying the code itself. Do not remove this because
+  // external code relies on this (in addition to turbo's own test suite).
+  if (TURBO_BINARY_PATH) {
+    applyManualBinaryPathOverride(TURBO_BINARY_PATH);
+    return;
+  }
+
+  const { pkg, subpath } = pkgAndSubpathForCurrentPlatform();
+
+  let binPath;
+  try {
+    // First check for the binary package from our "optionalDependencies". This
+    // package should have been installed alongside this package at install time.
+    binPath = require.resolve(`${pkg}/${subpath}`);
+  } catch (e) {
+    console.error(`[turbo] Failed to find package "${pkg}" on the file system
+
+This can happen if you use the "--no-optional" flag. The "optionalDependencies"
+package.json feature is used by turbo to install the correct binary executable
+for your current platform. This install script will now attempt to work around
+this. If that fails, you need to remove the "--no-optional" flag to use turbo.
+`);
+
+    // If that didn't work, then someone probably installed turbo with the
+    // "--no-optional" flag. Attempt to compensate for this by downloading the
+    // package using a nested call to "npm" instead.
+    //
+    // THIS MAY NOT WORK. Package installation uses "optionalDependencies" for
+    // a reason: manually downloading the package has a lot of obscure edge
+    // cases that fail because people have customized their environment in
+    // some strange way that breaks downloading. This code path is just here
+    // to be helpful but it's not the supported way of installing turbo.
+    binPath = downloadedBinPath(pkg, subpath);
+    try {
+      console.error(`[turbo] Trying to install package "${pkg}" using npm`);
+      installUsingNPM(pkg, subpath, binPath);
+    } catch (e2) {
+      console.error(
+        `[turbo] Failed to install package "${pkg}" using npm: ${
+          (e2 && e2.message) || e2
+        }`
+      );
+
+      // If that didn't also work, then something is likely wrong with the "npm"
+      // command. Attempt to compensate for this by manually downloading the
+      // package from the npm registry over HTTP as a last resort.
+      try {
+        await downloadDirectlyFromNPM(pkg, subpath, binPath);
+      } catch (e3) {
+        throw new Error(`Failed to install package "${pkg}"`);
+      }
+    }
+  }
+
+  maybeOptimizePackage(binPath);
+}
+
+checkAndPreparePackage().then(() => {
+  if (isToPathJS) {
+    // We need "node" before this command since it's a JavaScript file
+    validateBinaryVersion("node", toPath);
   } else {
-    installDirectly(name);
+    // This is no longer a JavaScript file so don't run it using "node"
+    validateBinaryVersion(toPath);
   }
-}
-
-function installOnWindows(name) {
-  installWithWrapper(name, "turbo.exe", "turbo.exe");
-}
-
-const platformKey = `${process.platform} ${os.arch()} ${os.endianness()}`;
-const knownWindowsPackages = {
-  "win32 ia32 LE": "turbo-windows-32",
-  "win32 x64 LE": "turbo-windows-64",
-};
-const knownUnixlikePackages = {
-  "darwin x64 LE": "turbo-darwin-64",
-  "darwin arm64 LE": "turbo-darwin-arm64",
-  "freebsd arm64 LE": "turbo-freebsd-arm64",
-  "freebsd x64 LE": "turbo-freebsd-64",
-  "linux arm LE": "turbo-linux-arm",
-  "linux arm64 LE": "turbo-linux-arm64",
-  "linux ia32 LE": "turbo-linux-32",
-  "linux mips64el LE": "turbo-linux-mips64le",
-  "linux ppc64 LE": "turbo-linux-ppc64le",
-  "linux x64 LE": "turbo-linux-64",
-};
-
-// Pick a package to install
-if (platformKey in knownWindowsPackages) {
-  installOnWindows(knownWindowsPackages[platformKey]);
-} else if (platformKey in knownUnixlikePackages) {
-  installOnUnix(knownUnixlikePackages[platformKey]);
-} else {
-  console.error(`Unsupported platform: ${platformKey}`);
-  process.exit(1);
-}
+});

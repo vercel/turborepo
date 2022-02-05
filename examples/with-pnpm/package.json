@@ -1,6 +1,4 @@
 {
-  "name": "turborepo-with-pnpm",
-  "version": "0.0.0",
   "private": true,
   "scripts": {
     "build": "turbo run build",
@@ -11,24 +9,5 @@
     "eslint": "7.32.0",
     "prettier": "^2.5.1",
     "turbo": "latest"
-  },
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "dependsOn": [
-          "^build"
-        ],
-        "outputs": [
-          "dist/**",
-          ".next/**"
-        ]
-      },
-      "lint": {
-        "outputs": []
-      },
-      "dev": {
-        "cache": false
-      }
-    }
   }
 }

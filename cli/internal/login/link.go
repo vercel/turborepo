@@ -52,7 +52,7 @@ func (c *LinkCommand) Run(args []string) int {
 		c.logError(fmt.Errorf("could not find home directory.\n%w", homeDirErr))
 		return 1
 	}
-	c.Ui.Info(fmt.Sprintf(">>> Remote Caching (beta)"))
+	c.Ui.Info(">>> Remote Caching (beta)")
 	c.Ui.Info("")
 	c.Ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
 	c.Ui.Info("  all your team’s Vercel projects. It also can share outputs")

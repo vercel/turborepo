@@ -24,7 +24,7 @@ const DEFAULT_JEST_TIMEOUT = 5000;
 describe("create-turbo cli", () => {
   beforeAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
-    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
+    fs.rmSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
       throw new Error(
@@ -35,7 +35,7 @@ describe("create-turbo cli", () => {
 
   afterAll(() => {
     jest.setTimeout(DEFAULT_JEST_TIMEOUT);
-    fs.rmdirSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
+    fs.rmSync(path.join(__dirname, "../my-turborepo"), { recursive: true });
   });
 
   it("guides the user through the process", (done) => {
@@ -72,7 +72,7 @@ describe("create-turbo cli", () => {
         case 3:
           // Which package manager do you want to use?
           // easy to change deployment targets.
-          expect(getPromptChoices(prompt)).toEqual(["Yarn", "NPM"]);
+          expect(getPromptChoices(prompt)).toEqual(["npm", "pnpm", "yarn"]);
           cli.stdin.write(keys.enter);
           break;
         case 4:
@@ -127,7 +127,8 @@ describe("create-turbo cli", () => {
           If <dir> is not provided up front you will be prompted for it.
 
           Flags:    
-            --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+            --use-npm           Explicitly tell the CLI to bootstrap the app using npm
+            --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
             --no-install        Explicitly do not run the package mananger's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
@@ -150,7 +151,8 @@ describe("create-turbo cli", () => {
           If <dir> is not provided up front you will be prompted for it.
 
           Flags:    
-            --use-npm           Explicitly tell the CLI to bootstrap the app using npm.
+            --use-npm           Explicitly tell the CLI to bootstrap the app using npm
+            --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
             --no-install        Explicitly do not run the package mananger's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
