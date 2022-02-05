@@ -167,30 +167,35 @@ function runSmokeTests<T>(
       assert.fixture(
         `• Packages in scope: a, b, c`,
         commandOnceBHasChangedOutput[0],
-        "After running, changing source of b, and running `turbo run test` again, should print `Packages in scope: a, b, c`"
+        "After running, changing source of b, and running `turbo run test` again, should print `Packages in scope: a, b, c` in\n" +
+          commandOnceBHasChangedOutput.join("\n")
       );
       assert.fixture(
         `• Running test in 3 packages`,
         commandOnceBHasChangedOutput[1],
-        "After running, changing source of b, and running `turbo run test` again, should print `Running in 3 packages`"
+        "After running, changing source of b, and running `turbo run test` again, should print `Running in 3 packages` in\n" +
+          commandOnceBHasChangedOutput.join("\n")
       );
       assert.ok(
         commandOnceBHasChangedOutput.findIndex((l) =>
           l.startsWith("a:test: cache miss, executing")
         ) >= 0,
-        "After running, changing source of b, and running `turbo run test` again, should print `a:test: cache miss, executing` since a depends on b and b has changed"
+        "After running, changing source of b, and running `turbo run test` again, should print `a:test: cache miss, executing` since a depends on b and b has changed in\n" +
+          commandOnceBHasChangedOutput.join("\n")
       );
       assert.ok(
         commandOnceBHasChangedOutput.findIndex((l) =>
           l.startsWith("b:test: cache miss, executing")
         ) >= 0,
-        "After running, changing source of b, and running `turbo run test` again, should print `b:test: cache miss, executing` since b has changed"
+        "After running, changing source of b, and running `turbo run test` again, should print `b:test: cache miss, executing` since b has changed in\n" +
+          commandOnceBHasChangedOutput.join("\n")
       );
       assert.ok(
         commandOnceBHasChangedOutput.findIndex((l) =>
           l.startsWith("c:test: cache hit, replaying output")
         ) >= 0,
-        "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying output` since c should not be impacted by changes to b"
+        "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying output` since c should not be impacted by changes to b in\n" +
+          commandOnceBHasChangedOutput.join("\n")
       );
     }
   );
