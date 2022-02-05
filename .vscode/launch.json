@@ -12,6 +12,15 @@
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/examples/basic",
       "args": ["run", "build"]
+    },
+    {
+      "name": "Turbo Version",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/examples/basic",
+      "args": ["--version"]
     }
   ]
 }
