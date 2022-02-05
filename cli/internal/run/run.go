@@ -377,6 +377,8 @@ func (c *RunCommand) Run(args []string) int {
 				}
 			}
 		}
+
+		targetBaseUI := &cli.ConcurrentUi{Ui: c.Ui}
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
@@ -404,7 +406,7 @@ func (c *RunCommand) Run(args []string) int {
 				pref := ctx.ColorCache.PrefixColor(pack.Name)
 				actualPrefix := pref("%s:%s: ", pack.Name, task)
 				targetUi := &cli.PrefixedUi{
-					Ui:           c.Ui,
+					Ui:           targetBaseUI,
 					OutputPrefix: actualPrefix,
 					InfoPrefix:   actualPrefix,
 					ErrorPrefix:  actualPrefix,
@@ -477,7 +479,7 @@ func (c *RunCommand) Run(args []string) int {
 					} else if hit {
 						if runOptions.stream && fs.FileExists(filepath.Join(runOptions.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, c.Ui, runOptions, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, targetBaseUI, runOptions, logFileName, hash, &logReplayWaitGroup, false)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
@@ -567,11 +569,11 @@ func (c *RunCommand) Run(args []string) int {
 							}
 							defer f.Close()
 							scan := bufio.NewScanner(f)
-							c.Ui.Error("")
-							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
-							c.Ui.Error("")
+							targetBaseUI.Error("")
+							targetBaseUI.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
+							targetBaseUI.Error("")
 							for scan.Scan() {
-								c.Ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
+								targetBaseUI.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
 							}
 						}
 						c.Processes.Close()
