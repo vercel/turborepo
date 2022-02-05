@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"turbo/internal/config"
+	"turbo/internal/info"
 	"turbo/internal/login"
 	"turbo/internal/process"
 	prune "turbo/internal/prune"
@@ -95,6 +96,9 @@ func main() {
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
+		},
+		"bin": func() (cli.Command, error) {
+			return &info.BinCommand{Config: cf, Ui: ui}, nil
 		},
 	}
 
