@@ -26,22 +26,6 @@ type Logstreamer struct {
 	colorReset string
 }
 
-func NewLogstreamerForWriter(prefix string, writer io.Writer) *Logstreamer {
-	logger := log.New(writer, prefix, 0)
-	return NewLogstreamer(logger, "", false)
-}
-
-func NewLogstreamerForStdout(prefix string) *Logstreamer {
-	// logger := log.New(os.Stdout, prefix, log.Ldate|log.Ltime)
-	logger := log.New(os.Stdout, prefix, 0)
-	return NewLogstreamer(logger, "", false)
-}
-
-func NewLogstreamerForStderr(prefix string) *Logstreamer {
-	logger := log.New(os.Stderr, prefix, 0)
-	return NewLogstreamer(logger, "", false)
-}
-
 func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,
@@ -130,7 +114,7 @@ func (l *Logstreamer) out(str string) {
 		return
 	}
 
-	if l.record == true {
+	if l.record {
 		l.persist = l.persist + str
 	}
 

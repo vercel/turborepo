@@ -20,10 +20,10 @@ func HashObject(i interface{}) (string, error) {
 
 func HashFile(filePath string) (string, error) {
 	file, err := os.Open(filePath)
-	defer file.Close()
 	if err != nil {
 		return "", err
 	}
+	defer file.Close()
 
 	hash := xxhash.New()
 	if _, err := io.Copy(hash, file); err != nil {
@@ -37,10 +37,11 @@ func HashFile(filePath string) (string, error) {
 // calculates the SHA1 for a file (or, in Git terms, a "blob") (without git)
 func GitLikeHashFile(filePath string) (string, error) {
 	file, err := os.Open(filePath)
-	defer file.Close()
 	if err != nil {
 		return "", err
 	}
+	defer file.Close()
+
 	stat, err := file.Stat()
 	if err != nil {
 		return "", err

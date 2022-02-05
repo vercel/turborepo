@@ -1,6 +1,4 @@
 {
-  "name": "turborepo-design-system",
-  "version": "0.0.0",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -18,33 +16,5 @@
     "eslint": "7.32.0",
     "prettier": "^2.5.1",
     "turbo": "latest"
-  },
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "outputs": [
-          "dist/**",
-          ".next/**"
-        ],
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "test": {
-        "outputs": [
-          "coverage/**"
-        ],
-        "dependsOn": []
-      },
-      "lint": {
-        "outputs": []
-      },
-      "dev": {
-        "cache": false
-      },
-      "clean": {
-        "cache": false
-      }
-    }
   }
 }

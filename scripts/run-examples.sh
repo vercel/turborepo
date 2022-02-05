@@ -6,9 +6,14 @@ echo "=> Running examples..."
 echo "=> Building turbo from source..."
 cd cli && CGO_ENABLED=0 go build ./cmd/turbo/... && cd ..;
 export TURBO_BINARY_PATH=$(pwd)/cli/turbo
+export TURBO_VERSION=$(head -n 1 $(pwd)/cli/version.txt)
+export TURBO_TAG=$(cat $(pwd)/cli/version.txt | sed -n '2 p')
+
 echo "=> Binary path: TURBO_BINARY_PATH=$TURBO_BINARY_PATH"
+echo "=> Local Turbo Version: TURBO_VERSION=$TURBO_VERSION"
 echo "=> Moving our own eslint settings out of the way..."
 echo "=> Actually running examples for real..."
+
 if [ -f ".eslintrc.js" ]; then
   mv .eslintrc.js .eslintrc.js.bak
 fi
@@ -49,32 +54,43 @@ for folder in examples/* ; do
     echo "======================================================="
     echo "=> checking $folder "
     echo "======================================================="
+    
     if [ "$folder" != "examples/with-pnpm" ]; then
             
-      # cleanup
-      # setup_git
-
-      # echo "======================================================="
-      # echo "=> $folder: npm install"
-      # echo "======================================================="
-      # npm install --force
+      cleanup
+      setup_git
       
-      # echo "======================================================="
-      # echo "=> $folder: npm build lint"
-      # echo "======================================================="
-      # npm run build lint
+      cat package.json | jq '.packageManager = "npm@8.1.2"' | sponge package.json      
+      if [ "$TURBO_TAG" == "canary" ]; then
+         cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+      fi
       
-      # echo "======================================================="
-      # echo "=> $folder: npm build lint again"
-      # echo "======================================================="
-      # npm run build lint
+      echo "======================================================="
+      echo "=> $folder: npm install"
+      echo "======================================================="
+      npm install --force
+      
+      echo "======================================================="
+      echo "=> $folder: npm build lint"
+      echo "======================================================="
+      npm run build lint
+      
+      echo "======================================================="
+      echo "=> $folder: npm build lint again"
+      echo "======================================================="
+      npm run build lint
                 
-      # echo "======================================================="    
-      # echo "=> $folder: npm SUCCESSFUL"
-      # echo "======================================================="    
+      echo "======================================================="    
+      echo "=> $folder: npm SUCCESSFUL"
+      echo "======================================================="    
 
       cleanup
       setup_git
+      
+      cat package.json | jq '.packageManager = "yarn@1.22.17"' | sponge package.json      
+      if [ "$TURBO_TAG" == "canary" ]; then
+         cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+      fi
       
       echo "======================================================="
       echo "=> $folder: yarn install"
@@ -98,7 +114,13 @@ for folder in examples/* ; do
 
     if [ "$folder" == "examples/with-pnpm" ]; then
       cleanup
-      setup_git      
+      setup_git
+
+      cat package.json | jq '.packageManager = "pnpm@6.26.1"' | sponge package.json
+      if [ "$TURBO_TAG" == "canary" ]; then
+         cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+      fi
+    
       echo "======================================================="
       echo "=> $folder: pnpm install"
       echo "======================================================="
@@ -119,6 +141,10 @@ for folder in examples/* ; do
       echo "======================================================="               
     fi
     
+    cat package.json | jq 'del(.packageManager)' | sponge package.json
+    if [ "$TURBO_TAG" == "canary" ]; then
+       cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
+    fi
 
     cleanup
 

@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"turbo/internal/api"
 	"turbo/internal/backends"
 	"turbo/internal/config"
+	"turbo/internal/core"
 	"turbo/internal/fs"
 	"turbo/internal/globby"
 	"turbo/internal/util"
@@ -22,18 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	ROOT_NODE_NAME   = "___ROOT___"
-	GLOBAL_CACHE_KEY = "snozzberries"
-)
-
-// A BuildResultStatus represents the status of a target when we log a build result.
-type PackageManager int
-
-const (
-	Yarn PackageManager = iota
-	Pnpm
-)
+const GLOBAL_CACHE_KEY = "snozzberries"
 
 // Context of the CLI
 type Context struct {
@@ -46,6 +37,7 @@ type Context struct {
 	Dir                    string
 	RootNode               string
 	RootPackageJSON        *fs.PackageJSON
+	TurboConfig            *fs.TurboConfigJSON
 	GlobalHashableEnvPairs []string
 	GlobalHashableEnvNames []string
 	GlobalHash             string
@@ -62,7 +54,7 @@ type Context struct {
 // Option is used to configure context
 type Option func(*Context) error
 
-// NewContext initializes run context
+// New initializes run context
 func New(opts ...Option) (*Context, error) {
 	var m Context
 	for _, opt := range opts {
@@ -74,30 +66,12 @@ func New(opts ...Option) (*Context, error) {
 	return &m, nil
 }
 
-// WithDir specifies the directory where turbo is initiated
-func WithDir(d string) Option {
-	return func(m *Context) error {
-		m.Dir = d
-		return nil
-	}
-}
-
 // WithArgs sets the arguments to the command that are used for parsing.
 // Remaining arguments can be accessed using your flag set and asking for Args.
 // Example: c.Flags().Args().
 func WithArgs(args []string) Option {
 	return func(c *Context) error {
 		c.Args = args
-		return nil
-	}
-}
-
-// WithArgs sets the arguments to the command that are used for parsing.
-// Remaining arguments can be accessed using your flag set and asking for Args.
-// Example: c.Flags().Args().
-func WithAuth() Option {
-	return func(c *Context) error {
-
 		return nil
 	}
 }
@@ -116,30 +90,65 @@ func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.ColorCache = NewColorCache()
-		c.RootNode = ROOT_NODE_NAME
+		c.RootNode = core.ROOT_NODE_NAME
 		// Need to ALWAYS have a root node, might as well do it now
-		c.TaskGraph.Add(ROOT_NODE_NAME)
+		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
-		if backend, err := backends.GetBackend(); err != nil {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("could not get cwd: %w", err)
+		}
+
+		packageJSONPath := path.Join(rootpath, "package.json")
+		pkg, err := fs.ReadPackageJSON(packageJSONPath)
+		if err != nil {
+			return fmt.Errorf("package.json: %w", err)
+		}
+		c.RootPackageJSON = pkg
+
+		// If turbo.json exists, we use that
+		// If pkg.Turbo exists, we warn about running the migration
+		// Use pkg.Turbo if turbo.json doesn't exist
+		// If neither exists, it's a fatal error
+		turboJSONPath := path.Join(rootpath, "turbo.json")
+		if !fs.FileExists(turboJSONPath) {
+			if pkg.LegacyTurboConfig == nil {
+				// TODO: suggestion on how to create one
+				return fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+			} else {
+				log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+				c.TurboConfig = pkg.LegacyTurboConfig
+			}
+		} else {
+			turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
+			if err != nil {
+				return fmt.Errorf("turbo.json: %w", err)
+			}
+			c.TurboConfig = turbo
+			if pkg.LegacyTurboConfig != nil {
+				log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+				pkg.LegacyTurboConfig = nil
+			}
+		}
+
+		if backend, err := backends.GetBackend(cwd, pkg); err != nil {
 			return err
 		} else {
 			c.Backend = backend
 		}
 
 		// this should go into the bacend abstraction
-		if c.Backend.Name == "nodejs-yarn" {
-			lockfile, err := fs.ReadLockfile(config.Cache.Dir)
+		if util.IsYarn(c.Backend.Name) {
+			lockfile, err := fs.ReadLockfile(c.Backend.Name, config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}
 			c.Lockfile = lockfile
 		}
 
-		pkg, err := c.ResolveWorkspaceRootDeps()
-		if err != nil {
+		if c.ResolveWorkspaceRootDeps() != nil {
 			return err
 		}
-		c.RootPackageJSON = pkg
 
 		spaces, err := c.Backend.GetWorkspaceGlobs()
 
@@ -151,9 +160,9 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalDeps := make(util.Set)
 
 		// Calculate global file and env var dependencies
-		if len(pkg.Turbo.GlobalDependencies) > 0 {
+		if len(c.TurboConfig.GlobalDependencies) > 0 {
 			var globs []string
-			for _, v := range pkg.Turbo.GlobalDependencies {
+			for _, v := range c.TurboConfig.GlobalDependencies {
 				if strings.HasPrefix(v, "$") {
 					trimmed := strings.TrimPrefix(v, "$")
 					c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, trimmed)
@@ -181,7 +190,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		sort.Strings(c.GlobalHashableEnvPairs)
 		config.Logger.Debug("global hash env vars", "vars", c.GlobalHashableEnvNames)
 
-		if c.Backend.Name != "nodejs-yarn" {
+		if !util.IsYarn(c.Backend.Name) {
 			// If we are not in Yarn, add the specfile and lockfile to global deps
 			globalDeps.Add(c.Backend.Specfile)
 			globalDeps.Add(c.Backend.Lockfile)
@@ -207,15 +216,14 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("error hashing global dependencies %w", err)
 		}
 		c.GlobalHash = globalHash
-		targets, err := GetTargetsFromArguments(c.Args, &c.RootPackageJSON.Turbo)
+		targets, err := GetTargetsFromArguments(c.Args, c.TurboConfig)
 		if err != nil {
 			return err
 		}
 		c.Targets = targets
-		// We will parse all package.json's in simultaneously. We use a
-		// wait group because we cannot fully populate the graph (the next step)
+		// We will parse all package.json's simultaneously. We use a
+		// waitgroup because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
-		// and populate the graph
 		parseJSONWaitGroup := new(errgroup.Group)
 		justJsons := make([]string, 0, len(spaces))
 		for _, space := range spaces {
@@ -253,7 +261,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 
-		// Only can we get the SCC (i.e. topological order)
+		// Only now can we get the SCC (i.e. topological order)
 		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
@@ -304,13 +312,10 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 	return nil
 }
 
-func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
+func (c *Context) ResolveWorkspaceRootDeps() error {
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
-	pkg, err := fs.ReadPackageJSON(c.Backend.Specfile)
-	if err != nil {
-		return nil, fmt.Errorf("package.json: %w", err)
-	}
+	pkg := c.RootPackageJSON
 	depSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
 	for dep, version := range pkg.Dependencies {
@@ -325,7 +330,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 	for dep, version := range pkg.PeerDependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if c.Backend.Name == "nodejs-yarn" {
+	if util.IsYarn(c.Backend.Name) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
@@ -336,7 +341,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		sort.Strings(pkg.ExternalDeps)
 		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		pkg.ExternalDepsHash = hashOfExternalDeps
 	} else {
@@ -344,7 +349,7 @@ func (c *Context) ResolveWorkspaceRootDeps() (*fs.PackageJSON, error) {
 		pkg.ExternalDepsHash = ""
 	}
 
-	return pkg, nil
+	return nil
 }
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
@@ -428,7 +433,7 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
-		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, ROOT_NODE_NAME))
+		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
 	}
 	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
 	for _, v := range externalDepSet.ToSlice() {
@@ -469,33 +474,48 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 	return nil
 }
 
-func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolveDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if c.Backend.Name != "nodejs-yarn" {
+func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
+	if !util.IsYarn(c.Backend.Name) {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
 		wg.Add(1)
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
-			lockfileKey := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
-			if seen.Contains(lockfileKey) {
+			var lockfileKey string
+			lockfileKey1 := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
+			lockfileKey2 := fmt.Sprintf("%v@npm:%v", directDepName, unresolvedVersion)
+			if seen.Contains(lockfileKey1) || seen.Contains(lockfileKey2) {
 				return
 			}
-			seen.Add(lockfileKey)
-			entry, ok := (*c.Lockfile)[lockfileKey]
-			if !ok {
+
+			seen.Add(lockfileKey1)
+			seen.Add(lockfileKey2)
+
+			var entry *fs.LockfileEntry
+			entry1, ok1 := (*c.Lockfile)[lockfileKey1]
+			entry2, ok2 := (*c.Lockfile)[lockfileKey2]
+			if !ok1 && !ok2 {
 				return
 			}
+			if ok1 {
+				lockfileKey = lockfileKey1
+				entry = entry1
+			} else {
+				lockfileKey = lockfileKey2
+				entry = entry2
+			}
+
 			pkg.Mu.Lock()
 			pkg.SubLockfile[lockfileKey] = entry
 			pkg.Mu.Unlock()
-			resolveDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
+			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
 
 			if len(entry.Dependencies) > 0 {
-				c.ResolveDepGraph(wg, entry.Dependencies, resolveDepsSet, seen, pkg)
+				c.ResolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
 			}
 			if len(entry.OptionalDependencies) > 0 {
-				c.ResolveDepGraph(wg, entry.OptionalDependencies, resolveDepsSet, seen, pkg)
+				c.ResolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
 			}
 
 		}(directDepName, unresolvedVersion)

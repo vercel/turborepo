@@ -16,23 +16,23 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17.5
-        id: go
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v1.4.4
-        with:
-          cache: yarn
-          cache-dependency-path: yarn.lock
-          node-version: 14
-
-      - name: Check out code into the Go module directory
+      - name: Check out code
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.6
+        id: go
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          node-version: 16
 
       - name: Build & Unit Test
         run: yarn turbo run test --scope=cli
@@ -57,23 +57,23 @@ jobs:
         os: [windows-latest]
 
     steps:
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17.5
-        id: wingo
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v1.4.4
-        with:
-          cache: yarn
-          cache-dependency-path: yarn.lock
-          node-version: 14
-
-      - name: Check out code into the Go module directory
+      - name: Check out code
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.6
+        id: wingo
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          node-version: 16
 
       - name: go test
         run: cd cli && go test ./cmd/... ./internal/...
@@ -105,6 +105,15 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
+      - name: Install Sponge
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install -y moreutils
+          else
+            brew install moreutils
+          fi
+
       - name: Check out code
         uses: actions/checkout@v2
         with:
@@ -113,15 +122,15 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17.5
+          go-version: 1.17.6
         id: go
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v2.5.0
+        uses: actions/setup-node@v2
         with:
           cache: yarn
           cache-dependency-path: yarn.lock
-          node-version: 14.x
+          node-version: 16
 
       - run: npm i -g pnpm
 
