@@ -1,11 +1,9 @@
 #![feature(trivial_bounds)]
 #![feature(once_cell)]
 
-use async_std::task::block_on;
 use math::{add, max_new};
-use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
 use random::RandomIdRef;
-use std::{env::current_dir, fs, sync::mpsc::channel, thread, time::Duration};
+use std::{env::current_dir, fs, thread, time::Duration};
 use turbo_tasks::{
     viz::{GraphViz, Visualizable},
     Task, TurboTasks,
@@ -39,39 +37,7 @@ fn main() {
             let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
 
             // TODO add casts to Smart Pointers
-            let fs = FileSystemRef::from_node(disk_fs.into()).unwrap();
-
-            thread::spawn(|| {
-                // Create a channel to receive the events.
-                let (tx, rx) = channel();
-                let root = current_dir().unwrap().to_str().unwrap().to_string();
-                // Create a watcher object, delivering debounced events.
-                // The notification back-end is selected based on the platform.
-                let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
-                // Add a path to be watched. All files and directories at that path and
-                // below will be monitored for changes.
-                watcher
-                    .watch(root.clone(), RecursiveMode::Recursive)
-                    .unwrap();
-                let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
-                loop {
-                    match rx.recv() {
-                        Ok(DebouncedEvent::Write(event)) => {
-                            if let Some(invalidator) = disk_fs
-                                .get()
-                                .invalidators
-                                .lock()
-                                .unwrap()
-                                .remove(&event.into_os_string().into_string().unwrap())
-                            {
-                                invalidator.invalidate()
-                            }
-                        }
-                        Ok(_event) => unimplemented!(),
-                        Err(e) => println!("watch error: {:?}", e),
-                    }
-                }
-            });
+            let fs = FileSystemRef::from_node(disk_fs.clone().into()).unwrap();
 
             // ls(fs).await;
             let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
@@ -91,21 +57,21 @@ fn main() {
             None
         })
     });
-    block_on(task.wait_output());
-    sleep(Duration::from_secs(30));
+    loop {
+        // create a graph
+        let mut graph_viz = GraphViz::new(false);
 
-    // create a graph
-    let mut graph_viz = GraphViz::new(false);
+        // graph root node
+        task.visualize(&mut graph_viz);
 
-    // graph root node
-    task.visualize(&mut graph_viz);
+        // graph unconnected nodes
+        tt.visualize(&mut graph_viz);
 
-    // graph unconnected nodes
-    tt.visualize(&mut graph_viz);
-
-    // write HTML
-    fs::write("graph.html", GraphViz::wrap_html(&graph_viz.to_string())).unwrap();
-    println!("graph.html written");
+        // write HTML
+        fs::write("graph.html", GraphViz::wrap_html(&graph_viz.to_string())).unwrap();
+        println!("graph.html written");
+        thread::sleep(Duration::from_secs(3));
+    }
 }
 
 #[turbo_tasks::function]
