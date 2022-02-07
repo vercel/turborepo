@@ -3,13 +3,14 @@
 
 use async_std::task::block_on;
 use math::{add, max_new};
+use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
 use random::RandomIdRef;
-use std::thread::sleep;
-use std::{env::current_dir, fs, time::Duration};
+use std::{env::current_dir, fs, sync::mpsc::channel, thread, time::Duration};
 use turbo_tasks::{
     viz::{GraphViz, Visualizable},
     Task, TurboTasks,
 };
+
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemRef, FileContent, FileContentRef,
     FileSystemPathRef, FileSystemRef,
@@ -34,12 +35,43 @@ fn main() {
         Box::pin(async {
             // make_math().await;
 
-            let disk_fs = DiskFileSystemRef::new(
-                "project".to_string(),
-                current_dir().unwrap().to_str().unwrap().to_string(),
-            );
+            let root = current_dir().unwrap().to_str().unwrap().to_string();
+            let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
+
             // TODO add casts to Smart Pointers
             let fs = FileSystemRef::from_node(disk_fs.into()).unwrap();
+
+            thread::spawn(|| {
+                // Create a channel to receive the events.
+                let (tx, rx) = channel();
+                let root = current_dir().unwrap().to_str().unwrap().to_string();
+                // Create a watcher object, delivering debounced events.
+                // The notification back-end is selected based on the platform.
+                let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
+                // Add a path to be watched. All files and directories at that path and
+                // below will be monitored for changes.
+                watcher
+                    .watch(root.clone(), RecursiveMode::Recursive)
+                    .unwrap();
+                let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
+                loop {
+                    match rx.recv() {
+                        Ok(DebouncedEvent::Write(event)) => {
+                            if let Some(invalidator) = disk_fs
+                                .get()
+                                .invalidators
+                                .lock()
+                                .unwrap()
+                                .remove(&event.into_os_string().into_string().unwrap())
+                            {
+                                invalidator.invalidate()
+                            }
+                        }
+                        Ok(_event) => unimplemented!(),
+                        Err(e) => println!("watch error: {:?}", e),
+                    }
+                }
+            });
 
             // ls(fs).await;
             let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
