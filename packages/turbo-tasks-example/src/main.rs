@@ -61,7 +61,7 @@ fn main() {
                                 .invalidators
                                 .lock()
                                 .unwrap()
-                                .get(&event.into_os_string().into_string().unwrap())
+                                .remove(&event.into_os_string().into_string().unwrap())
                             {
                                 invalidator.invalidate()
                             }
