@@ -4,7 +4,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
-	"turbo/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 func TestGetTargetsFromArguments(t *testing.T) {
