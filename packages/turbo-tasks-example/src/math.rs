@@ -2,8 +2,8 @@ use std::time::Duration;
 
 #[turbo_tasks::function]
 pub async fn add(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
-    let a = a.get().value;
-    let b = b.get().value;
+    let a = a.await.value;
+    let b = b.await.value;
     println!("{} + {} = ...", a, b);
     async_std::task::sleep(Duration::from_millis(500)).await;
     println!("{} + {} = {}", a, b, a + b);
@@ -12,8 +12,8 @@ pub async fn add(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
 
 #[turbo_tasks::function]
 pub async fn max_new(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
-    let a = a.get().value;
-    let b = b.get().value;
+    let a = a.await.value;
+    let b = b.await.value;
     println!("max({}, {}) = ...", a, b);
     async_std::task::sleep(Duration::from_millis(500)).await;
     let max = if a > b { a } else { b };
@@ -23,8 +23,8 @@ pub async fn max_new(a: I32ValueRef, b: I32ValueRef) -> I32ValueRef {
 
 #[turbo_tasks::function]
 pub async fn max_reuse(a_ref: I32ValueRef, b_ref: I32ValueRef) -> I32ValueRef {
-    let a = a_ref.get().value;
-    let b = b_ref.get().value;
+    let a = a_ref.get().await.value;
+    let b = b_ref.get().await.value;
     println!("max({}, {}) = ...", a, b);
     async_std::task::sleep(Duration::from_millis(500)).await;
     println!("max({}, {}) = {}", a, b, a + b);

@@ -9,9 +9,9 @@ use turbo_tasks::Task;
 
 #[turbo_tasks::function]
 pub async fn random(id: RandomIdRef) -> I32ValueRef {
+    let id = id.await;
     let mut rng = rand::thread_rng();
     let invalidator = Task::get_invalidator();
-    let id = id.get();
     let dur = id.duration;
     if id.counter.fetch_sub(1, Ordering::SeqCst) > 1 {
         async_std::task::spawn(async move {

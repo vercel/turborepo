@@ -18,6 +18,7 @@ pub async fn copy_all(input: FileSystemPathRef, options: CopyAllOptionsRef) {
 
     all(modules
         .get()
+        .await
         .modules
         .iter()
         .map(|module| copy_module(module.clone(), options.clone())))
@@ -26,9 +27,9 @@ pub async fn copy_all(input: FileSystemPathRef, options: CopyAllOptionsRef) {
 
 #[turbo_tasks::function]
 async fn copy_module(module: ModuleRef, options: CopyAllOptionsRef) {
-    let resource = &module.get().resource;
+    let resource = &module.await.resource;
     let content = resource.clone().read().await;
-    let options_value = options.get();
+    let options_value = options.await;
     let output = rebase(
         resource.clone(),
         options_value.input_dir.clone(),
@@ -77,7 +78,7 @@ struct ModuleReference {
 
 #[turbo_tasks::function]
 async fn parse(content: FileContentRef) -> ModuleContentRef {
-    match &*content.get() {
+    match &*content.await {
         FileContent::Content(bytes) => {
             let content = &*String::from_utf8_lossy(&bytes);
             let items: Vec<ModuleItemRef> = content
@@ -125,7 +126,7 @@ async fn all_modules(module: ModuleRef) -> ModulesSetRef {
             }
             None => match race_pop(&mut futures_queue).await {
                 Some(modules_set) => {
-                    for module in modules_set.get().modules.iter() {
+                    for module in modules_set.await.modules.iter() {
                         queue.push(module.clone());
                     }
                 }
@@ -140,8 +141,8 @@ async fn all_modules(module: ModuleRef) -> ModulesSetRef {
 #[turbo_tasks::function]
 async fn referenced_modules(origin: ModuleRef) -> ModulesSetRef {
     let mut modules = HashSet::new();
-    for item in origin.get().content.get().items.iter() {
-        match &*item.get() {
+    for item in origin.get().await.content.get().await.items.iter() {
+        match &*item.get().await {
             ModuleItem::Comment(_) => {}
             ModuleItem::Reference(reference) => {
                 let resolved = referenced_module(origin.clone(), reference.clone()).await;
@@ -154,14 +155,14 @@ async fn referenced_modules(origin: ModuleRef) -> ModulesSetRef {
 
 #[turbo_tasks::function]
 async fn referenced_module(origin: ModuleRef, reference: ModuleReferenceRef) -> ModuleRef {
-    let resolved = resolve(origin.get().resource.clone(), reference.clone()).await;
+    let resolved = resolve(origin.await.resource.clone(), reference.clone()).await;
     module(resolved).await
 }
 
 #[turbo_tasks::function]
 async fn resolve(origin: FileSystemPathRef, reference: ModuleReferenceRef) -> FileSystemPathRef {
-    let FileSystemPath { fs, path } = &*origin.get();
-    let mut request = reference.get().request.to_string();
+    let FileSystemPath { fs, path } = &*origin.await;
+    let mut request = reference.await.request.to_string();
     let mut p = path.to_string();
     match p.rfind(|c| c == '/' || c == '\\') {
         Some(pos) => p.replace_range(pos.., ""),

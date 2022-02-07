@@ -1,5 +1,6 @@
 #![feature(trivial_bounds)]
 #![feature(once_cell)]
+#![feature(into_future)]
 
 use math::{add, max_new};
 use random::RandomIdRef;
@@ -101,10 +102,10 @@ async fn ls(fs: FileSystemRef) {
 #[turbo_tasks::function]
 async fn print_sizes(directory: FileSystemPathRef) {
     let content = directory.clone().read_dir().await;
-    match &*content.get() {
+    match &*content.await {
         DirectoryContent::Entries(entries) => {
             for entry in entries.iter() {
-                match &*entry.get() {
+                match &*entry.get().await {
                     DirectoryEntry::File(path) => {
                         print_size(path.clone(), path.clone().read().await).await;
                     }
@@ -116,19 +117,19 @@ async fn print_sizes(directory: FileSystemPathRef) {
             }
         }
         DirectoryContent::NotFound => {
-            println!("{}: not found", directory.get().path);
+            println!("{}: not found", directory.await.path);
         }
     };
 }
 
 #[turbo_tasks::function]
 async fn print_size(path: FileSystemPathRef, content: FileContentRef) {
-    match &*content.get() {
+    match &*content.await {
         FileContent::Content(buffer) => {
-            println!("{:?}: Size {}", *path.get(), buffer.len());
+            println!("{:?}: Size {}", *path.await, buffer.len());
         }
         FileContent::NotFound => {
-            println!("{:?}: not found", *path.get());
+            println!("{:?}: not found", *path.await);
         }
     }
     Task::side_effect();
