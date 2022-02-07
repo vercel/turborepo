@@ -865,7 +865,19 @@ func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs 
 	if len(scopePatterns) == 0 {
 		return scopePkgs, nil
 	}
-	glob, err := filter.Compile(scopePatterns)
+
+	include := make([]string, 0, len(scopePatterns))
+	exclude := make([]string, 0, len(scopePatterns))
+
+	for _, pattern := range scopePatterns {
+		if strings.HasPrefix(pattern, "-") {
+			exclude = append(exclude, pattern[1:])
+		} else {
+			include = append(include, pattern)
+		}
+	}
+
+	glob, err := filter.NewIncludeExcludeFilter(include, exclude)
 	if err != nil {
 		return nil, err
 	}
