@@ -189,6 +189,21 @@ function runSmokeTests<T>(
         ) >= 0,
         "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying output` since c should not be impacted by changes to b"
       );
+
+      const scopeCommandOutput = getCommandOutputAsArray(
+        repo.turbo("run", ["test", '--scope="!b"', "--stream"], options)
+      );
+
+      assert.fixture(
+        `• Packages in scope: a, c`,
+        scopeCommandOutput[0],
+        "Packages in scope"
+      );
+      assert.fixture(
+        `• Running test in 2 packages`,
+        scopeCommandOutput[1],
+        "Runs only in changed packages"
+      );
     }
   );
 
