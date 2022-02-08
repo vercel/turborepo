@@ -785,7 +785,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--no-deps"):
 				runOptions.includeDependents = false
 			case strings.HasPrefix(arg, "--no-cache"):
-				runOptions.cache = true
+				runOptions.cache = false
 			case strings.HasPrefix(arg, "--cacheFolder"):
 				log.Printf("[WARNING] The --cacheFolder flag has been deprecated and will be removed in future versions of turbo. Please use `--cache-dir` instead")
 				unresolvedCacheFolder = arg[len("--cacheFolder="):]
