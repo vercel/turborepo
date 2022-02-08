@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"turbo/internal/client"
+	"github.com/vercel/turborepo/cli/internal/client"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
