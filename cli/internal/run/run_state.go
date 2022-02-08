@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"turbo/internal/fs"
-	"turbo/internal/ui"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 
-	cursor "turbo/internal/ui/term"
+	cursor "github.com/vercel/turborepo/cli/internal/ui/term"
 
 	"github.com/google/chrometracing"
 	"github.com/mitchellh/cli"

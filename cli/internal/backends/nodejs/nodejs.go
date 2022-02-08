@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
-	"turbo/internal/api"
-	"turbo/internal/fs"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/api"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"gopkg.in/yaml.v3"
 )

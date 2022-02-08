@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
 )

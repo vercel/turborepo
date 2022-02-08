@@ -2,7 +2,7 @@ package context
 
 import (
 	"sync"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
 )

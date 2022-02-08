@@ -3,9 +3,9 @@ package login
 import (
 	"fmt"
 	"strings"
-	"turbo/internal/config"
-	"turbo/internal/ui"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
