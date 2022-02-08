@@ -4,8 +4,8 @@ package cache
 import (
 	"fmt"
 	"sync"
-	"turbo/internal/config"
-	"turbo/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/ui"
 )
 
 // Cache is abstracted way to cache/fetch previously run tasks
