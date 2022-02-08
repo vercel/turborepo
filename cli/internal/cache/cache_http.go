@@ -11,8 +11,8 @@ import (
 	"os"
 	"path"
 	"time"
-	"turbo/internal/config"
-	"turbo/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 type httpCache struct {
@@ -123,6 +123,7 @@ func (cache *httpCache) retrieve(key string) (bool, []string, error) {
 	}
 	defer resp.Body.Close()
 	files := []string{}
+	missingLinks := []*tar.Header{}
 	if resp.StatusCode == http.StatusNotFound {
 		return false, files, nil // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {
@@ -139,6 +140,12 @@ func (cache *httpCache) retrieve(key string) (bool, []string, error) {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
+				for _, link := range missingLinks {
+					if err := os.Symlink(link.Linkname, link.Name); err != nil {
+						return false, files, err
+					}
+				}
+
 				return true, files, nil
 			}
 			return false, files, err
@@ -163,6 +170,20 @@ func (cache *httpCache) retrieve(key string) (bool, []string, error) {
 				return false, files, err
 			}
 		case tar.TypeSymlink:
+			if dir := path.Dir(hdr.Name); dir != "." {
+				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
+					return false, files, err
+				}
+			}
+			if _, err := os.Lstat(hdr.Name); err == nil {
+				if err := os.Remove(hdr.Name); err != nil {
+					return false, files, err
+				}
+			} else if os.IsNotExist(err) {
+				missingLinks = append(missingLinks, hdr)
+				continue
+			}
+
 			if err := os.Symlink(hdr.Linkname, hdr.Name); err != nil {
 				return false, files, err
 			}

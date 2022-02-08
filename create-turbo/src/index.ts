@@ -2,6 +2,7 @@
 
 import * as path from "path";
 import execa from "execa";
+import fs from "fs";
 import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -13,8 +14,9 @@ import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
+import { PackageManager } from "./types";
+import { getPackageManagerVersion } from "./getPackageManagerVersion";
 
-type PackageManager = "yarn" | "pnpm" | "npm";
 interface Answers {
   packageManager: PackageManager;
 }
@@ -153,15 +155,6 @@ async function run() {
     await fse.copy(serverTemplate, projectDir, { overwrite: true });
   }
 
-  // let serverLangTemplate = path.resolve(
-  //   __dirname,
-  //   "templates",
-  //   `${answers.packageManager}_ts`
-  // );
-  // if (fse.existsSync(serverLangTemplate)) {
-  //   await fse.copy(serverLangTemplate, projectDir, { overwrite: true });
-  // }
-
   // rename dotfiles
   await fse.move(
     path.join(projectDir, "gitignore"),
@@ -179,6 +172,10 @@ async function run() {
       }
     }
   });
+
+  appPkg.packageManager = `${answers.packageManager}@${getPackageManagerVersion(
+    answers.packageManager
+  )}`;
 
   // write package.json
   await fse.writeFile(
@@ -211,6 +208,7 @@ async function run() {
         frames: ["   ", ">  ", ">> ", ">>>"],
       },
     }).start();
+
     await execa(`${answers.packageManager}`, [`install`], {
       stdio: "ignore",
       cwd: projectDir,

@@ -2,31 +2,38 @@ package fs
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
-	"reflect"
 	"sync"
-
-	"github.com/pascaldekloe/name"
 )
 
-// TurboCacheOptions are configuration for Turborepo cache
-
+// TurboConfigJSON is the root turborepo configuration
 type TurboConfigJSON struct {
-	Base               string   `json:"baseBranch,omitempty"`
+	// Base Git branch
+	Base string `json:"baseBranch,omitempty"`
+	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	TurboCacheOptions  string   `json:"cacheOptions,omitempty"`
 	Outputs            []string `json:"outputs,omitempty"`
-	RemoteCacheUrl     string   `json:"remoteCacheUrl,omitempty"`
-	Pipeline           map[string]Pipeline
+	// RemoteCacheUrl is the Remote Cache API URL
+	RemoteCacheUrl string `json:"remoteCacheUrl,omitempty"`
+	// Pipeline is a map of Turbo pipeline entries which define the task graph
+	// and cache behavior on a per task or per package-task basis.
+	Pipeline map[string]Pipeline
 }
 
-// Camelcase string with optional args.
-func Camelcase(s string, v ...interface{}) string {
-	return name.CamelCase(fmt.Sprintf(s, v...), true)
+func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var turboConfig *TurboConfigJSON
+	err = json.Unmarshal(b, &turboConfig)
+	if err != nil {
+		println("error unmarshalling", err.Error())
+		return nil, err
+	}
+	return turboConfig, nil
 }
-
-var requiredFields = []string{"Name", "Version"}
 
 type PPipeline struct {
 	Outputs   *[]string `json:"outputs"`
@@ -66,6 +73,7 @@ type PackageJSON struct {
 	DevDependencies        map[string]string `json:"devDependencies,omitempty"`
 	OptionalDependencies   map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies       map[string]string `json:"peerDependencies,omitempty"`
+	PackageManager         string            `json:"packageManager,omitempty"`
 	Os                     []string          `json:"os,omitempty"`
 	Workspaces             Workspaces        `json:"workspaces,omitempty"`
 	Private                bool              `json:"private,omitempty"`
@@ -76,7 +84,7 @@ type PackageJSON struct {
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
 	SubLockfile            YarnLockfile
-	Turbo                  TurboConfigJSON `json:"turbo"`
+	LegacyTurboConfig      *TurboConfigJSON `json:"turbo"`
 	Mu                     sync.Mutex
 	FilesHash              string
 	ExternalDepsHash       string
@@ -90,7 +98,7 @@ type WorkspacesAlt struct {
 
 func (r *Workspaces) UnmarshalJSON(data []byte) error {
 	var tmp = &WorkspacesAlt{}
-	if err := json.Unmarshal(data, &tmp); err == nil {
+	if err := json.Unmarshal(data, tmp); err == nil {
 		*r = Workspaces(tmp.Packages)
 		return nil
 	}
@@ -107,25 +115,6 @@ func Parse(payload []byte) (*PackageJSON, error) {
 	var packagejson *PackageJSON
 	err := json.Unmarshal(payload, &packagejson)
 	return packagejson, err
-}
-
-// Validate checks if provided package.json is valid.
-func (p *PackageJSON) Validate() error {
-	for _, fieldname := range requiredFields {
-		value := getField(p, fieldname)
-		if len(value) == 0 {
-			return fmt.Errorf("'%s' field is required in package.json", fieldname)
-		}
-	}
-
-	return nil
-}
-
-// getField returns struct field value by name.
-func getField(i interface{}, fieldname string) string {
-	value := reflect.ValueOf(i)
-	field := reflect.Indirect(value).FieldByName(fieldname)
-	return field.String()
 }
 
 // ReadPackageJSON returns a struct of package.json

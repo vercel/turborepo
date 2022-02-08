@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import format from "date-fns/format";
 import { useRouter } from "next/router";
 import "focus-visible";
 import { SkipNavContent } from "@reach/skip-nav";
@@ -7,7 +8,7 @@ import cn from "classnames";
 import Head from "./head";
 import Navbar from "./navbar";
 import Footer, { NavLinks } from "./footer";
-import Theme from "./misc/theme";
+import { MDXTheme } from "./misc/theme";
 import Sidebar from "./sidebar";
 import ToC from "./toc";
 import { ThemeConfigContext, useConfig } from "./config";
@@ -16,13 +17,13 @@ import defaultConfig from "./misc/default.config";
 import { getFSRoute } from "./utils/get-fs-route";
 import { MenuContext } from "./utils/menu-context";
 import normalizePages from "./utils/normalize-pages";
-import { getHeadings } from "./utils/get-headings";
-import { getTitle } from "./utils/get-title";
 import traverse from "./utils/traverse";
 import sortDate from "./utils/sort-date";
 import Link from "next/link";
 import { Footer as FooterMain } from "../components/Footer";
 import { Avatar } from "../components/Avatar";
+import { formatDistanceToNow } from "date-fns";
+import renderComponent from "./utils/render-component";
 function useDirectoryInfo(pageMap) {
   const { locale, defaultLocale, asPath } = useRouter();
 
@@ -47,7 +48,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
           <div className="relative w-full mx-auto overflow-x-hidden">
             <article className="pb-24">
               <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
-                <Theme>{children}</Theme>
+                <MDXTheme>{children}</MDXTheme>
               </main>
             </article>
             <FooterMain />
@@ -57,10 +58,20 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
         )
       ) : postList ? (
         <div className="relative w-full overflow-x-hidden">
-          <main className="z-10 max-w-screen-md min-w-0 px-6 pt-4 mx-auto nextra-content">
-            <h1 className="pt-2 pb-8 text-4xl font-bold">Blog</h1>
-            {postList}
-          </main>
+          <div className="pb-24">
+            <div className="px-6 py-8 mx-auto border-b dark:border-gray-800">
+              <h1 className="max-w-screen-lg pt-2 pb-8 mx-auto text-4xl font-bold leading-tight text-center lg:text-5xl">
+                Blog
+              </h1>
+              <div className="flex items-center justify-center mx-auto ">
+                The latest updates and releases from the Turborepo team at
+                Vercel.
+              </div>
+            </div>
+            <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
+              {postList}
+            </main>
+          </div>
           <FooterMain />
         </div>
       ) : meta.full ? (
@@ -70,20 +81,26 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
       ) : meta.type === "post" ? (
         <div className="relative w-full mx-auto overflow-x-hidden">
           <article className="pb-24">
-            <div className="px-6 py-8 mx-auto border-b dark:border-gray-800">
-              <h1 className="max-w-screen-lg pt-2 pb-8 mx-auto text-4xl font-bold leading-tight text-center lg:text-5xl">
+            <div className="px-6 py-8 mx-auto space-y-8 text-center border-b dark:border-gray-800">
+              <h1 className="max-w-screen-lg pt-2 mx-auto text-4xl font-bold leading-tight lg:text-5xl">
                 {meta.title}
               </h1>
+              <div className="text-gray-400 dark:text-gray-500">
+                {format(new Date(meta.date), "MMMM do, yyyy")} (
+                {formatDistanceToNow(new Date(meta.date), {
+                  includeSeconds: false,
+                  addSuffix: true,
+                })}
+                )
+              </div>
               <div className="flex items-center justify-center mx-auto ">
-                <Avatar
-                  name="Jared Palmer"
-                  picture="/images/people/jaredpalmer_headshot.jpeg"
-                  twitterUsername="jaredpalmer"
-                />
+                {config.authors
+                  ? renderComponent(config.authors, { authors: meta.authors })
+                  : null}
               </div>
             </div>
             <main className="z-10 max-w-screen-md min-w-0 px-6 pt-8 mx-auto">
-              <Theme>{children}</Theme>
+              <MDXTheme>{children}</MDXTheme>
             </main>
           </article>
           <FooterMain />
@@ -91,7 +108,7 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
       ) : (
         <article className="relative flex w-full max-w-full min-w-0 px-6 pb-16 docs-container md:px-8">
           <main className="z-10 max-w-screen-md min-w-0 pt-4 mx-auto nextra-content">
-            <Theme>{children}</Theme>
+            <MDXTheme>{children}</MDXTheme>
             <Footer config={config} filepathWithName={filepathWithName}>
               {navLinks}
             </Footer>
@@ -103,7 +120,15 @@ function Body({ meta, toc, filepathWithName, navLinks, children, postList }) {
   );
 }
 
-const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
+const Layout = ({
+  filename,
+  pageMap,
+  meta,
+  route: _route,
+  children,
+  headings,
+  titleText,
+}) => {
   const { route, locale } = useRouter();
   const config = useConfig();
 
@@ -118,11 +143,10 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
     directories,
   } = useDirectoryInfo(pageMap);
 
-  const content = children.type();
   const filepath = route.slice(0, route.lastIndexOf("/") + 1);
   const filepathWithName = filepath + filename;
-  const headings = getHeadings(content.props.children);
-  const title = meta.title || getTitle(headings) || "Untitled";
+  const title = meta.title || titleText || "Untitled";
+
   // gather info for tag/posts pages
   let posts = null;
   let navPages = [];
@@ -183,20 +207,11 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
   const postList = posts ? (
     <ul className="pb-24 space-y-10 ">
       {posts.map((post) => {
-        // if (tagName) {
-        //   const tags = getTags(post);
-        //   if (!tags.includes(tagName)) {
-        //     return null;
-        //   }
-        // } else if (type === "tag") {
-        //   return null;
-        // }
-
         const postTitle =
           (post.frontMatter ? post.frontMatter.title : null) || post.name;
         const postDate = post.frontMatter ? (
           <time className="post-item-date">
-            {new Date(post.frontMatter.date).toDateString()}
+            {format(new Date(post.frontMatter.date), "MMMM do, yyyy")}
           </time>
         ) : null;
         const postDescription =
@@ -327,7 +342,12 @@ const Layout = ({ filename, pageMap, meta, route: _route, children }) => {
               <Body
                 meta={meta}
                 filepathWithName={filepathWithName}
-                toc={<ToC headings={config.floatTOC ? headings : null} />}
+                toc={
+                  <ToC
+                    headings={config.floatTOC ? headings : null}
+                    filepathWithName={filepathWithName}
+                  />
+                }
                 navLinks={
                   <NavLinks
                     flatDirectories={flatDocsDirectories}

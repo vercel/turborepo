@@ -3,9 +3,11 @@ package nodejs
 import (
 	"fmt"
 	"io/ioutil"
-
-	"turbo/internal/api"
-	"turbo/internal/fs"
+	"log"
+	"path/filepath"
+	"github.com/vercel/turborepo/cli/internal/api"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,6 +35,118 @@ var NodejsYarnBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"yarn", "run"}
+	},
+	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
+		if pkg.PackageManager != "" {
+			packageManager, version, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+
+			if err != nil {
+				return false, err
+			}
+
+			if packageManager != "yarn" {
+				return false, nil
+			}
+
+			isBerry, err := util.IsBerry(cwd, version, true)
+			if err != nil {
+				return false, fmt.Errorf("could not determine yarn version (v1 or berry): %w", err)
+			}
+
+			if !isBerry {
+				return true, nil
+			}
+		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
+
+			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+
+			isBerry, err := util.IsBerry(cwd, "", false)
+			if err != nil {
+				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+			}
+
+			if specfileExists && lockfileExists && !isBerry {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	},
+}
+
+var NodejsBerryBackend = api.LanguageBackend{
+	Name:             "nodejs-berry",
+	Specfile:         "package.json",
+	Lockfile:         "yarn.lock",
+	FilenamePatterns: nodejsPatterns,
+	GetWorkspaceGlobs: func() ([]string, error) {
+		pkg, err := fs.ReadPackageJSON("package.json")
+		if err != nil {
+			return nil, fmt.Errorf("package.json: %w", err)
+		}
+		if len(pkg.Workspaces) == 0 {
+			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
+		}
+		return pkg.Workspaces, nil
+	},
+	GetPackageDir: func() string {
+		return "node_modules"
+	},
+	GetRunCommand: func() []string {
+		return []string{"yarn", "run"}
+	},
+	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
+		if pkg.PackageManager != "" {
+			packageManager, version, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+
+			if err != nil {
+				return false, err
+			}
+			if packageManager != "yarn" {
+				return false, nil
+			}
+
+			isBerry, err := util.IsBerry(cwd, version, true)
+			if err != nil {
+				return false, fmt.Errorf("could not determine yarn version (v1 or berry): %w", err)
+			}
+
+			if isBerry {
+				isNMLinker, err := util.IsNMLinker(cwd)
+				if err != nil {
+					return false, fmt.Errorf("could not determine if yarn is using `nodeLinker: node-modules`: %w", err)
+				} else if !isNMLinker {
+					return false, fmt.Errorf("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
+				}
+
+				return true, nil
+			}
+		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please set the \"packageManager\" field to your package.json")
+
+			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+
+			isBerry, err := util.IsBerry(cwd, "", false)
+			if err != nil {
+				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+			}
+
+			if specfileExists && lockfileExists && isBerry {
+				isNMLinker, err := util.IsNMLinker(cwd)
+				if err != nil {
+					return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
+				} else if !isNMLinker {
+					return false, fmt.Errorf("only yarn nm-linker is supported")
+				}
+
+				return true, nil
+			}
+		}
+
+		return false, nil
 	},
 }
 
@@ -69,6 +183,28 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	GetRunCommand: func() []string {
 		return []string{"pnpm", "run"}
 	},
+	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
+		if pkg.PackageManager != "" {
+			packageManager, _, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+			if err != nil {
+				return false, err
+			}
+			if packageManager == "pnpm" {
+				return true, nil
+			}
+		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
+
+			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+
+			if specfileExists && lockfileExists {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	},
 }
 
 var NodejsNpmBackend = api.LanguageBackend{
@@ -91,5 +227,27 @@ var NodejsNpmBackend = api.LanguageBackend{
 	},
 	GetRunCommand: func() []string {
 		return []string{"npm", "run"}
+	},
+	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
+		if pkg.PackageManager != "" {
+			packageManager, _, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+			if err != nil {
+				return false, err
+			}
+			if packageManager == "npm" {
+				return true, nil
+			}
+		} else {
+			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
+
+			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
+			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
+
+			if specfileExists && lockfileExists {
+				return true, nil
+			}
+		}
+
+		return false, nil
 	},
 }

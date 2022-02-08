@@ -14,18 +14,19 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"turbo/internal/cache"
-	"turbo/internal/config"
-	"turbo/internal/context"
-	"turbo/internal/core"
-	"turbo/internal/fs"
-	"turbo/internal/globby"
-	"turbo/internal/logstreamer"
-	"turbo/internal/scm"
-	"turbo/internal/ui"
-	"turbo/internal/util"
-	"turbo/internal/util/browser"
-	"turbo/internal/util/filter"
+	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/core"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/logstreamer"
+	"github.com/vercel/turborepo/cli/internal/process"
+	"github.com/vercel/turborepo/cli/internal/scm"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util/browser"
+	"github.com/vercel/turborepo/cli/internal/util/filter"
 
 	"github.com/pyr-sh/dag"
 
@@ -40,9 +41,9 @@ const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Ui *cli.ColoredUi
-
-	Config *config.Config
+	Config    *config.Config
+	Ui        *cli.ColoredUi
+	Processes *process.Manager
 }
 
 // Synopsis of run command
@@ -178,7 +179,7 @@ func (c *RunCommand) Run(args []string) int {
 	filteredChangedFiles := make(util.Set)
 	// Ignore any changed files in the ignore set
 	for _, c := range changedFiles {
-		if !ignoreSet.Include(c) {
+		if !ignoreSet.Includes(c) {
 			filteredChangedFiles.Add(c)
 		}
 	}
@@ -200,7 +201,7 @@ func (c *RunCommand) Run(args []string) int {
 	// Unwind scope globs
 	scopePkgs, err := getScopedPackages(ctx, runOptions.scope)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("Invalid scope: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("invalid scope: %w", err))
 		return 1
 	}
 
@@ -311,7 +312,7 @@ func (c *RunCommand) Run(args []string) int {
 		if err != nil {
 			log.Printf("[ERROR] %v: error computing combined hash", pack.Name)
 		}
-		c.Config.Logger.Debug(fmt.Sprintf("%v: package anscestralHash", pack.Name), "hash", ancestralHashes)
+		c.Config.Logger.Debug(fmt.Sprintf("%v: package ancestralHash", pack.Name), "hash", ancestralHashes)
 		c.Config.Logger.Debug(fmt.Sprintf("%v: package hash", pack.Name), "hash", pack.Hash)
 	}
 
@@ -345,15 +346,15 @@ func (c *RunCommand) Run(args []string) int {
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&ctx.TopologicalGraph)
 	var logReplayWaitGroup sync.WaitGroup
-	for taskName, value := range ctx.RootPackageJSON.Turbo.Pipeline {
+	for taskName, value := range ctx.TurboConfig.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
-		if core.IsPackageTask(taskName) {
+		if util.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
 				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
 					continue
 				}
-				if core.IsPackageTask(from) {
+				if util.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
 				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
@@ -362,7 +363,7 @@ func (c *RunCommand) Run(args []string) int {
 					deps.Add(from)
 				}
 			}
-			_, id := core.GetPackageTaskFromId(taskName)
+			_, id := util.GetPackageTaskFromId(taskName)
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
@@ -376,6 +377,8 @@ func (c *RunCommand) Run(args []string) int {
 				}
 			}
 		}
+
+		targetBaseUI := &cli.ConcurrentUi{Ui: c.Ui}
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
@@ -383,7 +386,7 @@ func (c *RunCommand) Run(args []string) int {
 			Cache:    value.Cache,
 			Run: func(id string) error {
 				cmdTime := time.Now()
-				name, task := context.GetPackageTaskFromId(id)
+				name, task := util.GetPackageTaskFromId(id)
 				pack := ctx.PackageInfos[name]
 				targetLogger := c.Config.Logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
 				defer targetLogger.ResetNamed(pack.Name)
@@ -397,13 +400,13 @@ func (c *RunCommand) Run(args []string) int {
 				}
 
 				// Setup tracer
-				tracer := runState.Run(context.GetTaskId(pack.Name, task))
+				tracer := runState.Run(util.GetTaskId(pack.Name, task))
 
 				// Create a logger
 				pref := ctx.ColorCache.PrefixColor(pack.Name)
 				actualPrefix := pref("%s:%s: ", pack.Name, task)
 				targetUi := &cli.PrefixedUi{
-					Ui:           c.Ui,
+					Ui:           targetBaseUI,
 					OutputPrefix: actualPrefix,
 					InfoPrefix:   actualPrefix,
 					ErrorPrefix:  actualPrefix,
@@ -411,10 +414,10 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				// Hash ---------------------------------------------
 				// first check for package-tasks
-				pipeline, ok := ctx.RootPackageJSON.Turbo.Pipeline[fmt.Sprintf("%v", id)]
+				pipeline, ok := ctx.TurboConfig.Pipeline[fmt.Sprintf("%v", id)]
 				if !ok {
 					// then check for regular tasks
-					altpipe, notcool := ctx.RootPackageJSON.Turbo.Pipeline[task]
+					altpipe, notcool := ctx.TurboConfig.Pipeline[task]
 					// if neither, then bail
 					if !notcool && !ok {
 						return nil
@@ -438,7 +441,7 @@ func (c *RunCommand) Run(args []string) int {
 					for _, v := range pipeline.DependsOn {
 						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
 							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
-							hashabledEnvPairs = append(hashabledEnvVars, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashabledEnvPairs = append(hashabledEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
 							hashabledEnvVars = append(hashabledEnvVars, trimmed)
 						}
 					}
@@ -476,7 +479,7 @@ func (c *RunCommand) Run(args []string) int {
 					} else if hit {
 						if runOptions.stream && fs.FileExists(filepath.Join(runOptions.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, c.Ui, runOptions, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, targetBaseUI, runOptions, logFileName, hash, &logReplayWaitGroup, false)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
@@ -496,7 +499,12 @@ func (c *RunCommand) Run(args []string) int {
 				argsactual := append([]string{"run"}, task)
 				argsactual = append(argsactual, runOptions.passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
-				cmd := exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+				var cmd *exec.Cmd
+				if ctx.Backend.Name == "nodejs-berry" {
+					cmd = exec.Command("yarn", argsactual...)
+				} else {
+					cmd = exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+				}
 				cmd.Dir = pack.Dir
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 				cmd.Env = append(os.Environ(), envs)
@@ -543,13 +551,17 @@ func (c *RunCommand) Run(args []string) int {
 				logStreamerOut.FlushRecord()
 
 				// Run the command
-				if err := cmd.Run(); err != nil {
+				if err := c.Processes.Exec(cmd); err != nil {
+					// if we already know we're in the process of exiting,
+					// we don't need to record an error to that effect.
+					if errors.Is(err, process.ErrClosing) {
+						return nil
+					}
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
-							os.Exit(1)
 						} else {
 							f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 							if err != nil {
@@ -557,21 +569,20 @@ func (c *RunCommand) Run(args []string) int {
 							}
 							defer f.Close()
 							scan := bufio.NewScanner(f)
-							c.Ui.Error("")
-							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, context.GetTaskId(pack.Name, task)))
-							c.Ui.Error("")
+							targetBaseUI.Error("")
+							targetBaseUI.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
+							targetBaseUI.Error("")
 							for scan.Scan() {
-								c.Ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
+								targetBaseUI.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
 							}
-							os.Exit(1)
 						}
+						c.Processes.Close()
 					} else {
 						if runOptions.stream {
 							targetUi.Warn("command finished with error, but continuing...")
 						}
 					}
-
-					return nil
+					return err
 				}
 
 				// Cache command outputs
@@ -580,7 +591,7 @@ func (c *RunCommand) Run(args []string) int {
 					ignore := []string{}
 					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
 					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
-						c.logError(targetLogger, "", fmt.Errorf("Error caching output: %w", err))
+						c.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 					}
 				}
 
@@ -662,7 +673,15 @@ func (c *RunCommand) Run(args []string) int {
 	// run the thing
 	errs := engine.Execute()
 
+	// Track if we saw any child with a non-zero exit code
+	exitCode := 0
+	exitCodeErr := &process.ChildExit{}
 	for _, err := range errs {
+		if errors.As(err, &exitCodeErr) {
+			if exitCodeErr.ExitCode > exitCode {
+				exitCode = exitCodeErr.ExitCode
+			}
+		}
 		c.Ui.Error(err.Error())
 	}
 
@@ -673,7 +692,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	return 0
+	return exitCode
 }
 
 // RunOptions holds the current run operations configuration
@@ -805,12 +824,12 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
 				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
-					return nil, fmt.Errorf("Invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
+					return nil, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
 				} else {
 					if i >= 1 {
 						runOptions.concurrency = i
 					} else {
-						return nil, fmt.Errorf("Invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1.", i)
+						return nil, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
 					}
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
@@ -887,18 +906,6 @@ func (c *RunCommand) logWarning(log hclog.Logger, prefix string, err error) {
 	}
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
-}
-
-// logError logs an error and outputs it to the UI.
-func (c *RunCommand) logFatal(log hclog.Logger, prefix string, err error) {
-	log.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
-	os.Exit(1)
 }
 
 func hasGraphViz() bool {

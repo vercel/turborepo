@@ -3,10 +3,11 @@ package cache
 
 import (
 	"fmt"
-	"turbo/internal/config"
-	"turbo/internal/ui"
+	"sync"
+  "golang.org/x/sync/errgroup"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/ui"
 
-	"golang.org/x/sync/errgroup"
 )
 
 // Cache is abstracted way to cache/fetch previously run tasks

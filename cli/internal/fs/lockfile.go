@@ -1,9 +1,7 @@
-//go:build !windows
-// +build !windows
-
 package fs
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -14,7 +12,7 @@ import (
 )
 
 // ReadLockfile will read `yarn.lock` into memory (either from the cache or fresh)
-func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
+func ReadLockfile(backendName string, cacheDir string) (*YarnLockfile, error) {
 	var lockfile YarnLockfile
 	var prettyLockFile = YarnLockfile{}
 	hash, err := HashFile("yarn.lock")
@@ -27,32 +25,54 @@ func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading yarn.lock: %w", err)
 		}
-		lines := strings.Split(string(contentsB), "\n")
-		r := regexp.MustCompile(`^[\w"]`)
-		double := regexp.MustCompile(`\:\"\:`)
-		l := regexp.MustCompile("\"|:\n$")
-		o := regexp.MustCompile(`\"\s\"`)
-		// deals with colons
-		// integrity sha-... -> integrity: sha-...
-		// "@apollo/client" latest -> "@apollo/client": latest
-		// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
-		// apollo-client "0.0.0" -> apollo-client: "0.0.0"
-		a := regexp.MustCompile(`(\w|\")\s(\"|\w)`)
 
-		for i, line := range lines {
-			if r.MatchString(line) {
-				first := fmt.Sprintf("\"%v\":", l.ReplaceAllString(line, ""))
-				lines[i] = double.ReplaceAllString(first, "\":")
+		var next []byte
+		if backendName == "nodejs-yarn" {
+			var lines []string
+			var l *regexp.Regexp
+			var output string
+
+			hasLF := !bytes.HasSuffix(contentsB, []byte("\r\n"))
+			if hasLF {
+				lines = strings.Split(string(contentsB), "\n")
+				l = regexp.MustCompile("\"|:\n$")
+			} else {
+				lines = strings.Split(strings.TrimRight(string(contentsB), "\r\n"), "\r\n")
+				l = regexp.MustCompile("\"|:\r\n$")
 			}
+
+			r := regexp.MustCompile(`^[\w"]`)
+			double := regexp.MustCompile(`\:\"\:`)
+			o := regexp.MustCompile(`\"\s\"`)
+			// deals with colons
+			// integrity sha-... -> integrity: sha-...
+			// "@apollo/client" latest -> "@apollo/client": latest
+			// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
+			// apollo-client "0.0.0" -> apollo-client: "0.0.0"
+			a := regexp.MustCompile(`(\w|\")\s(\"|\w)`)
+
+			for i, line := range lines {
+				if r.MatchString(line) {
+					first := fmt.Sprintf("\"%v\":", l.ReplaceAllString(line, ""))
+					lines[i] = double.ReplaceAllString(first, "\":")
+				}
+			}
+
+			if hasLF {
+				output = o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
+			} else {
+				output = o.ReplaceAllString(strings.Join(lines, "\r\n"), "\": \"")
+			}
+
+			next = []byte(a.ReplaceAllStringFunc(output, func(m string) string {
+				parts := a.FindStringSubmatch(m)
+				return fmt.Sprintf("%s: %s", parts[1], parts[2])
+			}))
+		} else {
+			next = contentsB
 		}
-		output := o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
 
-		next := a.ReplaceAllStringFunc(output, func(m string) string {
-			parts := a.FindStringSubmatch(m)
-			return fmt.Sprintf("%s: %s", parts[1], parts[2])
-		})
-
-		err = yaml.Unmarshal([]byte(next), &lockfile)
+		err = yaml.Unmarshal(next, &lockfile)
 		if err != nil {
 			return &YarnLockfile{}, fmt.Errorf("could not unmarshal lockfile: %w", err)
 		}

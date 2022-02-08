@@ -7,10 +7,10 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"turbo/internal/config"
-	"turbo/internal/ui"
-	"turbo/internal/util"
-	"turbo/internal/util/browser"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util/browser"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -63,11 +63,11 @@ func (c *LoginCommand) Run(args []string) int {
 		cancel()
 	})
 
-	srv := &http.Server{Addr: "127.0.0.1:9789"}
+	srv := &http.Server{Addr: DEFAULT_HOSTNAME + ":" + fmt.Sprint(DEFAULT_PORT)}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("Could not activate device. Please try again: %w", err))
+				c.logError(c.Config.Logger, "", fmt.Errorf("could not activate device. Please try again: %w", err))
 			}
 		}
 	}()
@@ -101,27 +101,4 @@ func (c *LoginCommand) logError(log hclog.Logger, prefix string, err error) {
 	}
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
-}
-
-// logError logs an error and outputs it to the UI.
-func (c *LoginCommand) logWarning(log hclog.Logger, prefix string, err error) {
-	log.Warn(prefix, "warning", err)
-
-	if prefix != "" {
-		prefix = " " + prefix + ": "
-	}
-
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
-}
-
-// logError logs an error and outputs it to the UI.
-func (c *LoginCommand) logFatal(log hclog.Logger, prefix string, err error) {
-	log.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
-	os.Exit(1)
 }

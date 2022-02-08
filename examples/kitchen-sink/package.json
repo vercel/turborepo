@@ -1,6 +1,4 @@
 {
-  "name": "turborepo",
-  "version": "0.0.0",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -17,37 +15,5 @@
   "devDependencies": {
     "prettier": "^2.5.1",
     "turbo": "latest"
-  },
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "outputs": [
-          "dist/**",
-          ".next/**",
-          "public/dist/**"
-        ],
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "test": {
-        "outputs": [
-          "coverage/**"
-        ],
-        "dependsOn": []
-      },
-      "lint": {
-        "dependsOn": [
-          "^build"
-        ],
-        "outputs": []
-      },
-      "dev": {
-        "cache": false
-      },
-      "clean": {
-        "cache": false
-      }
-    }
   }
 }

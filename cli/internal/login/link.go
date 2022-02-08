@@ -5,11 +5,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"turbo/internal/client"
-	"turbo/internal/config"
-	"turbo/internal/fs"
-	"turbo/internal/ui"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/client"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
@@ -52,7 +52,7 @@ func (c *LinkCommand) Run(args []string) int {
 		c.logError(fmt.Errorf("could not find home directory.\n%w", homeDirErr))
 		return 1
 	}
-	c.Ui.Info(fmt.Sprintf(">>> Remote Caching (beta)"))
+	c.Ui.Info(">>> Remote Caching (beta)")
 	c.Ui.Info("")
 	c.Ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
 	c.Ui.Info("  all your team’s Vercel projects. It also can share outputs")

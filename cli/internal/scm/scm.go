@@ -4,9 +4,8 @@ package scm
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
-	"turbo/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // An SCM represents an SCM implementation that we can ask for various things.
@@ -48,14 +47,5 @@ func NewFallback(repoRoot string) (SCM, error) {
 		return scm, nil
 	}
 
-	return &stub{}, fmt.Errorf("Cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.")
-}
-
-// MustNew returns a new SCM instance for this repo root. It dies on any errors.
-func MustNew(repoRoot string) SCM {
-	scm := New(repoRoot)
-	if scm == nil {
-		log.Fatalf("Cannot determine SCM implementation")
-	}
-	return scm
+	return &stub{}, fmt.Errorf("cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo")
 }

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -21,7 +21,7 @@ var (
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
 type PackageDepsOptions struct {
 	// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
-	// containing package.json.  If omitted, the default value is the current working directory.
+	// containing package.json. If omitted, the default value is the current working directory.
 	PackagePath string
 	// ExcludedPaths is an optional array of file path exclusions. If a file should be omitted from the list
 	// of dependencies, use this to exclude it.
@@ -34,7 +34,7 @@ type PackageDepsOptions struct {
 func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get git hashes for files in package %s: %w", p.PackagePath, err)
+		return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 	}
 	// Add all the checked in hashes.
 	result := parseGitLsTree(gitLsOutput)
@@ -58,7 +58,7 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 		if changeType == "D" || (len(changeType) == 2 && string(changeType)[1] == []byte("D")[0]) {
 			delete(result, filename)
 		} else {
-			if !excludedPathsSet.Include(filename) {
+			if !excludedPathsSet.Includes(filename) {
 				filesToHash = append(filesToHash, filename)
 			}
 		}
@@ -105,7 +105,7 @@ func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]strin
 		offByOne := strings.Split(string(out), "\n") // there is an extra ""
 		hashes := offByOne[:len(offByOne)-1]
 		if len(hashes) != len(filesToHash) {
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes.", len(filesToHash), len(hashes))
+			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes", len(filesToHash), len(hashes))
 		}
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
@@ -134,7 +134,7 @@ func gitLsTree(path string, gitPath string) (string, error) {
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to read `git ls-tree`: %w", err)
+		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -151,7 +151,7 @@ func parseGitLsTree(output string) map[string]string {
 		for _, line := range outputLines {
 			if len(line) > 0 {
 				matches := gitRex.MatchString(line)
-				if matches == true {
+				if matches {
 					// this looks like this
 					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
 					match := gitRex.FindAllStringSubmatch(line, -1)
@@ -218,7 +218,7 @@ func gitStatus(path string, gitPath string) (string, error) {
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to read git status: %w", err)
+		return "", fmt.Errorf("failed to read git status: %w", err)
 	}
 	// log.Printf("[TRACE] gitStatus result: %v", strings.TrimSpace(string(out)))
 	return strings.TrimSpace(string(out)), nil
@@ -247,7 +247,7 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 	for _, line := range outputLines {
 		if len(line) > 0 {
 			matches := gitRex.MatchString(line)
-			if matches == true {
+			if matches {
 				// changeType is in the format of "XY" where "X" is the status of the file in the index and "Y" is the status of
 				// the file in the working tree. Some example statuses:
 				//   - 'D' == deletion
