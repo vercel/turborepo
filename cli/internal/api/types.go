@@ -1,6 +1,6 @@
 package api
 
-import "turbo/internal/fs"
+import "github.com/vercel/turborepo/cli/internal/fs"
 
 // LanguageBackend is an abstraction across programming languages and their related package managers
 type LanguageBackend struct {

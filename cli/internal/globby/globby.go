@@ -1,7 +1,7 @@
 package globby
 
 import (
-	"turbo/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 
 	"path/filepath"
 	"strings"

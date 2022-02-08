@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"turbo/internal/config"
-	"turbo/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/ui"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
