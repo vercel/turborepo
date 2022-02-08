@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-
+import { Avatar } from "./components/Avatar";
 const Logo = ({ height, ...props }) => (
   <svg
     height={height}
@@ -127,6 +127,29 @@ const Vercel = ({ height = 20 }) => (
   </svg>
 );
 
+const team = {
+  jaredpalmer: {
+    name: "Jared Palmer",
+    twitterUsername: "jaredpalmer",
+    picture: "/images/people/jaredpalmer_headshot.jpeg",
+  },
+  gaspargarcia_: {
+    name: "Gaspar Garcia",
+    twitterUsername: "gaspargarcia_",
+    picture: "/images/people/gaspargarcia_.jpeg",
+  },
+  becca__z: {
+    name: "Becca Z.",
+    twitterUsername: "becca__z",
+    picture: "/images/people/becca__z.jpeg",
+  },
+  gsoltis: {
+    name: "Greg Soltis",
+    twitterUsername: "gsoltis",
+    picture: "/images/people/gsoltis.jpeg",
+  },
+};
+
 const theme = {
   github: "https://github.com/vercel/turborepo",
   docsRepositoryBase:
@@ -134,12 +157,26 @@ const theme = {
   titleSuffix: " | Turborepo",
   search: true,
   unstable_stork: false,
+  unstable_staticImage: true,
   floatTOC: true,
   font: false,
   enterpriseLink:
     "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink", // @TODO
   projectChatLink: "https://turborepo.org/discord",
   feedbackLink: "Question? Give us feedback →",
+  authors: function Authors({ authors }) {
+    return (
+      <div className="grid max-w-screen-md gap-4 px-6 sm:grid-cols-2 md:grid-cols-4">
+        {authors.map((username) =>
+          !!team[username] ? (
+            <Avatar key={username} {...team[username]} />
+          ) : (
+            console.warning("no author found for", username) || null
+          )
+        )}
+      </div>
+    );
+  },
   banner: function Banner() {
     return (
       <div className="px-6 py-2 text-sm text-center text-white bg-black dark:bg-white dark:text-black">
@@ -191,10 +228,6 @@ const theme = {
         />
         <link rel="shortcut icon" href="/images/favicon/favicon.ico" />
         <meta name="msapplication-TileColor" content="#000000" />
-        <meta
-          name="msapplication-config"
-          content="/images/favicon/browserconfig.xml"
-        />
         <meta name="theme-color" content="#000" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@turborepo" />
@@ -204,11 +237,11 @@ const theme = {
         <meta name="og:description" content={meta.description} />
         <meta
           property="og:url"
-          content={`https://turborepo.org${meta.ogImage ?? router.asPath}`}
+          content={`https://turborepo.org${router.asPath}`}
         />
         <meta
           property="og:image"
-          content="https://turborepo.org/og-image.png"
+          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
         />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turborepo" />
@@ -223,7 +256,7 @@ const theme = {
       <a
         href="https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink"
         target="_blank"
-        rel="noopener"
+        rel="noopener noreferrer"
         className="inline-flex items-center font-semibold text-current no-underline"
       >
         <span className="mr-1">Powered by</span>

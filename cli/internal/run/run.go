@@ -21,6 +21,7 @@ import (
 	"turbo/internal/fs"
 	"turbo/internal/globby"
 	"turbo/internal/logstreamer"
+	"turbo/internal/process"
 	"turbo/internal/scm"
 	"turbo/internal/ui"
 	"turbo/internal/util"
@@ -40,8 +41,9 @@ const ENV_PIPELINE_DELMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Config *config.Config
-	Ui     *cli.ColoredUi
+	Config    *config.Config
+	Ui        *cli.ColoredUi
+	Processes *process.Manager
 }
 
 // Synopsis of run command
@@ -375,6 +377,8 @@ func (c *RunCommand) Run(args []string) int {
 				}
 			}
 		}
+
+		targetBaseUI := &cli.ConcurrentUi{Ui: c.Ui}
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
@@ -402,7 +406,7 @@ func (c *RunCommand) Run(args []string) int {
 				pref := ctx.ColorCache.PrefixColor(pack.Name)
 				actualPrefix := pref("%s:%s: ", pack.Name, task)
 				targetUi := &cli.PrefixedUi{
-					Ui:           c.Ui,
+					Ui:           targetBaseUI,
 					OutputPrefix: actualPrefix,
 					InfoPrefix:   actualPrefix,
 					ErrorPrefix:  actualPrefix,
@@ -475,7 +479,7 @@ func (c *RunCommand) Run(args []string) int {
 					} else if hit {
 						if runOptions.stream && fs.FileExists(filepath.Join(runOptions.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, c.Ui, runOptions, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, targetBaseUI, runOptions, logFileName, hash, &logReplayWaitGroup, false)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
@@ -547,13 +551,17 @@ func (c *RunCommand) Run(args []string) int {
 				logStreamerOut.FlushRecord()
 
 				// Run the command
-				if err := cmd.Run(); err != nil {
+				if err := c.Processes.Exec(cmd); err != nil {
+					// if we already know we're in the process of exiting,
+					// we don't need to record an error to that effect.
+					if errors.Is(err, process.ErrClosing) {
+						return nil
+					}
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
 					if runOptions.bail {
 						if runOptions.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
-							os.Exit(1)
 						} else {
 							f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 							if err != nil {
@@ -561,21 +569,20 @@ func (c *RunCommand) Run(args []string) int {
 							}
 							defer f.Close()
 							scan := bufio.NewScanner(f)
-							c.Ui.Error("")
-							c.Ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
-							c.Ui.Error("")
+							targetBaseUI.Error("")
+							targetBaseUI.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
+							targetBaseUI.Error("")
 							for scan.Scan() {
-								c.Ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
+								targetBaseUI.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
 							}
-							os.Exit(1)
 						}
+						c.Processes.Close()
 					} else {
 						if runOptions.stream {
 							targetUi.Warn("command finished with error, but continuing...")
 						}
 					}
-
-					return nil
+					return err
 				}
 
 				// Cache command outputs
@@ -666,7 +673,15 @@ func (c *RunCommand) Run(args []string) int {
 	// run the thing
 	errs := engine.Execute()
 
+	// Track if we saw any child with a non-zero exit code
+	exitCode := 0
+	exitCodeErr := &process.ChildExit{}
 	for _, err := range errs {
+		if errors.As(err, &exitCodeErr) {
+			if exitCodeErr.ExitCode > exitCode {
+				exitCode = exitCodeErr.ExitCode
+			}
+		}
 		c.Ui.Error(err.Error())
 	}
 
@@ -677,7 +692,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	return 0
+	return exitCode
 }
 
 // RunOptions holds the current run operations configuration
