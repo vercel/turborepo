@@ -68,9 +68,13 @@ func IsNMLinker(cwd string) (bool, error) {
 	return yarnRC.NodeLinker == "node-modules", nil
 }
 
-func GetPackageManagerAndVersion(packageManager string) (string, string) {
-	re := regexp.MustCompile(`(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`)
+func GetPackageManagerAndVersion(packageManager string) (string, string, error) {
+	pattern := `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
+	re := regexp.MustCompile(pattern)
 	match := re.FindString(packageManager)
+	if len(match) == 0 {
+		return "", "", fmt.Errorf("could not parse packageManager field in package.json, expected: %s, received: %s", pattern, packageManager)
+	}
 
-	return strings.Split(match, "@")[0], strings.Split(match, "@")[1]
+	return strings.Split(match, "@")[0], strings.Split(match, "@")[1], nil
 }
