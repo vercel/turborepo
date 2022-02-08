@@ -54,7 +54,8 @@ func TestExec_multiple(t *testing.T) {
 	wg.Wait()
 	end := time.Now()
 	duration := end.Sub(start)
-	if duration > 300*time.Millisecond {
+	// running all in sequence would total 600ms
+	if duration > 450*time.Millisecond {
 		t.Errorf("expected parallel execution, total time was %q", duration)
 	}
 	for _, err := range errors {

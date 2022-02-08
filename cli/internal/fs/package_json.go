@@ -9,16 +9,16 @@ import (
 // TurboConfigJSON is the root turborepo configuration
 type TurboConfigJSON struct {
 	// Base Git branch
-	Base               string   `json:"baseBranch,omitempty"`
+	Base string `json:"baseBranch,omitempty"`
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	TurboCacheOptions  string   `json:"cacheOptions,omitempty"`
 	Outputs            []string `json:"outputs,omitempty"`
 	// RemoteCacheUrl is the Remote Cache API URL
-	RemoteCacheUrl     string   `json:"remoteCacheUrl,omitempty"`
+	RemoteCacheUrl string `json:"remoteCacheUrl,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
-	Pipeline           map[string]Pipeline
+	Pipeline map[string]Pipeline
 }
 
 func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
