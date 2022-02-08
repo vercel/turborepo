@@ -673,7 +673,15 @@ func (c *RunCommand) Run(args []string) int {
 	// run the thing
 	errs := engine.Execute()
 
+	// Track if we saw any child with a non-zero exit code
+	exitCode := 0
+	exitCodeErr := &process.ChildExit{}
 	for _, err := range errs {
+		if errors.As(err, &exitCodeErr) {
+			if exitCodeErr.ExitCode > exitCode {
+				exitCode = exitCodeErr.ExitCode
+			}
+		}
 		c.Ui.Error(err.Error())
 	}
 
@@ -684,7 +692,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	return 0
+	return exitCode
 }
 
 // RunOptions holds the current run operations configuration
