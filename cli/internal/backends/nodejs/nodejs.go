@@ -38,7 +38,11 @@ var NodejsYarnBackend = api.LanguageBackend{
 	},
 	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
-			packageManager, version := util.GetPackageManagerAndVersion(pkg.PackageManager)
+			packageManager, version, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+
+			if err != nil {
+				return false, err
+			}
 
 			if packageManager != "yarn" {
 				return false, nil
@@ -95,8 +99,11 @@ var NodejsBerryBackend = api.LanguageBackend{
 	},
 	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
-			packageManager, version := util.GetPackageManagerAndVersion(pkg.PackageManager)
+			packageManager, version, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
 
+			if err != nil {
+				return false, err
+			}
 			if packageManager != "yarn" {
 				return false, nil
 			}
@@ -178,8 +185,10 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	},
 	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
-			packageManager, _ := util.GetPackageManagerAndVersion(pkg.PackageManager)
-
+			packageManager, _, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+			if err != nil {
+				return false, err
+			}
 			if packageManager == "pnpm" {
 				return true, nil
 			}
@@ -221,8 +230,10 @@ var NodejsNpmBackend = api.LanguageBackend{
 	},
 	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
-			packageManager, _ := util.GetPackageManagerAndVersion(pkg.PackageManager)
-
+			packageManager, _, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
+			if err != nil {
+				return false, err
+			}
 			if packageManager == "npm" {
 				return true, nil
 			}
