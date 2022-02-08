@@ -20,7 +20,7 @@ type LogoutCommand struct {
 
 // Synopsis of run command
 func (c *LogoutCommand) Synopsis() string {
-	return "Logout of your Turborepo account"
+	return "Logout of your Vercel account"
 }
 
 // Help returns information about the `run` command
@@ -28,7 +28,7 @@ func (c *LogoutCommand) Help() string {
 	helpText := `
 Usage: turbo logout
 
-    Login of your Turborepo account
+    Logout of your Vercel account
 `
 	return strings.TrimSpace(helpText)
 }
