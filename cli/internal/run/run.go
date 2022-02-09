@@ -231,7 +231,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if scopePkgs.Len() > 0 {
 		filteredPkgs = scopePkgs
-	} else {
+	} else if runOptions.since == "" {
 		for _, f := range ctx.PackageNames {
 			filteredPkgs.Add(f)
 		}
