@@ -1,4 +1,4 @@
-/* This file is used to generate the `schema.js` file. */
+/* This file generates the `schema.json` file. */
 
 export interface Schema {
   /** @default https://turborepo.org/schema.json */
@@ -16,7 +16,7 @@ export interface Schema {
    * A list of globs and environment variables for implicit global hash dependencies.
    * Environment variables should be prefixed with $ (e.g. $GITHUB_TOKEN).
    *
-   * Any other entry* without this prefix, will be considered filesystem glob. The
+   * Any other entry without this prefix, will be considered filesystem glob. The
    * contents of these files will be included in the global hashing algorithm and affect
    * the hashes of all tasks.
    *
@@ -25,6 +25,8 @@ export interface Schema {
    * in the traditional dependency graph
    *
    * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)).
+   * 
+   * @default []
    */
   globalDependencies?: string[];
 
@@ -32,6 +34,8 @@ export interface Schema {
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to properly schedule, execute, and cache the outputs of tasks in
    * your project.
+   * 
+   * @default {}
    */
   pipeline: {
     /**
@@ -59,6 +63,8 @@ export interface Pipeline {
    *
    * Prefixing an item in dependsOn with a $ tells turbo that this pipeline task depends
    * the value of that environment variable.
+   * 
+   * @default []
    */
   dependsOn?: string[];
 
