@@ -17,11 +17,8 @@ vendor/
 dist
 data
 node_modules
-packages/turbo-server/data/
-packages/turbo-server/uploads/
 packages/*/node_modules
 packages/*/data
-apps/*/data
 docs/public/*.st
 docs/public/*.toml
 
@@ -56,7 +53,7 @@ store
 !http_cache/cache/cache.go
 *.log
 .npmrc
-!create-turbo/templates/**/*
+!packages/create-turbo/templates/**/*
 todos.md
 examples/*/*.lock
 examples/*/*-lock.yaml
