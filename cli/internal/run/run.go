@@ -14,19 +14,19 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"turbo/internal/cache"
-	"turbo/internal/config"
-	"turbo/internal/context"
-	"turbo/internal/core"
-	"turbo/internal/fs"
-	"turbo/internal/globby"
-	"turbo/internal/logstreamer"
-	"turbo/internal/process"
-	"turbo/internal/scm"
-	"turbo/internal/ui"
-	"turbo/internal/util"
-	"turbo/internal/util/browser"
-	"turbo/internal/util/filter"
+	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/core"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/logstreamer"
+	"github.com/vercel/turborepo/cli/internal/process"
+	"github.com/vercel/turborepo/cli/internal/scm"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util/browser"
+	"github.com/vercel/turborepo/cli/internal/util/filter"
 
 	"github.com/pyr-sh/dag"
 
@@ -673,7 +673,15 @@ func (c *RunCommand) Run(args []string) int {
 	// run the thing
 	errs := engine.Execute()
 
+	// Track if we saw any child with a non-zero exit code
+	exitCode := 0
+	exitCodeErr := &process.ChildExit{}
 	for _, err := range errs {
+		if errors.As(err, &exitCodeErr) {
+			if exitCodeErr.ExitCode > exitCode {
+				exitCode = exitCodeErr.ExitCode
+			}
+		}
 		c.Ui.Error(err.Error())
 	}
 
@@ -684,7 +692,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	return 0
+	return exitCode
 }
 
 // RunOptions holds the current run operations configuration

@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 	"strings"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
 )

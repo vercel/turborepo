@@ -2,10 +2,10 @@ package backends
 
 import (
 	"errors"
-	"turbo/internal/api"
-	"turbo/internal/backends/nodejs"
-	"turbo/internal/fs"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/api"
+	"github.com/vercel/turborepo/cli/internal/backends/nodejs"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 var backends = []api.LanguageBackend{

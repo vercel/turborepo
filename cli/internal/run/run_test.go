@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"turbo/internal/context"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
