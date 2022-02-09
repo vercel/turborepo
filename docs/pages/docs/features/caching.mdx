@@ -18,6 +18,7 @@ To override the default cache output behavior, pass an array of globs to a [`pip
 
 ```jsonc
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**"],
@@ -63,6 +64,7 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "dev": {
       "cache": false
@@ -84,6 +86,7 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
 
 ```jsonc
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": {
