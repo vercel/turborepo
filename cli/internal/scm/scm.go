@@ -5,7 +5,7 @@ package scm
 import (
 	"fmt"
 	"path/filepath"
-	"turbo/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // An SCM represents an SCM implementation that we can ask for various things.

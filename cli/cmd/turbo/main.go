@@ -6,13 +6,14 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-	"turbo/internal/config"
-	"turbo/internal/login"
-	"turbo/internal/process"
-	prune "turbo/internal/prune"
-	"turbo/internal/run"
-	uiPkg "turbo/internal/ui"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/info"
+	"github.com/vercel/turborepo/cli/internal/login"
+	"github.com/vercel/turborepo/cli/internal/process"
+	prune "github.com/vercel/turborepo/cli/internal/prune"
+	"github.com/vercel/turborepo/cli/internal/run"
+	uiPkg "github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
 	hclog "github.com/hashicorp/go-hclog"
@@ -95,6 +96,9 @@ func main() {
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
+		},
+		"bin": func() (cli.Command, error) {
+			return &info.BinCommand{Config: cf, Ui: ui}, nil
 		},
 	}
 

@@ -65,6 +65,7 @@ If your git repo's base branch is NOT `origin/master` then you need to specify a
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "baseBranch": "origin/main"
 }
 ```
@@ -77,6 +78,7 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "baseBranch": "origin/main",
   "pipeline": {
     "build": {

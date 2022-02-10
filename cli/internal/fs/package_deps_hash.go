@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"turbo/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
