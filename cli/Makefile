@@ -259,6 +259,9 @@ bench/nx: demo/nx
 bench/turbo: demo/turbo turbo
 	cd demo/turbo && ../../turbo run test 
 
+bench/turbo-new: demo/turbo
+	cd demo/turbo && ../../turbo-new run build test
+
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
 clean:
