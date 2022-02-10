@@ -264,6 +264,9 @@ bench/turbo-new: demo/turbo
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
+bench/e2e: | scripts/node_modules
+	cd scripts && yarn uvu -r esbuild-register benchmark --output benchmarks.json
+
 clean:
 	rm -f turbo
 	rm -rf npm/turbo-darwin-64/bin/turbo
