@@ -244,7 +244,7 @@ demo/lerna: | scripts/node_modules
 demo/nx: | scripts/node_modules
 	node scripts/generate.mjs nx
 
-demo/turbo: | scripts/node_modules
+demo/turbo: | scripts/node_modules turbo
 	node scripts/generate.mjs turbo
 
 bench/lerna: demo/lerna
