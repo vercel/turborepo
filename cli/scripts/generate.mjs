@@ -57,8 +57,8 @@ packageGraph.forEachNode((node) => {
 const root = path.join(__dirname, "../demo", type);
 
 function generate(root, skipInstall) {
+  fs.mkdirSync(root, { recursive: true });
   if (type !== "nx") {
-    fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(
       path.join(root, ".gitignore"),
       `node_modules
@@ -265,7 +265,7 @@ module.exports = {
       );
       // instead of dealing with actual code, just list as implicitDependencies
       const safeName = node.data.name.replace(/^@[^/]+\//, "");
-      const workspace = fs.readJSONSync(path.join(root, "nx.json"));
+      const workspace = fs.readJSONSync(path.join(root, "workspace.json"));
       workspace.projects[safeName] = {
         ...workspace.projects[safeName],
         implicitDependencies: node.data.implicitDependencies || [],
