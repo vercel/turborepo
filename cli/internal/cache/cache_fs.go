@@ -2,7 +2,6 @@ package cache
 
 import (
 	"fmt"
-	"math"
 	"runtime"
 
 	"path/filepath"
@@ -44,13 +43,11 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	g := new(errgroup.Group)
 
 	var numDigesters int = runtime.NumCPU()
-	var totalFiles int = len(files)
-	var chunkSize int = int(math.Ceil(float64(len(files)) / float64(numDigesters)))
+	fileQueue := make(chan string, numDigesters)
 
-	for i := 0; i < numDigesters && i < totalFiles; i++ {
-		batch := files[chunkSize*i : int(math.Min(float64(chunkSize*i+chunkSize), float64(totalFiles)))]
+	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
-			for _, file := range batch {
+			for file := range fileQueue {
 				rel, err := filepath.Rel(target, file)
 				if err != nil {
 					return fmt.Errorf("error constructing relative path from %v to %v: %w", target, file, err)
@@ -68,6 +65,11 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 			return nil
 		})
 	}
+
+	for _, file := range files {
+		fileQueue <- file
+	}
+	close(fileQueue)
 
 	if err := g.Wait(); err != nil {
 		return err
