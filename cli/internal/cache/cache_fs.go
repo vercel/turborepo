@@ -42,7 +42,7 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	g := new(errgroup.Group)
 
-	var numDigesters int = runtime.NumCPU()
+  numDigesters := runtime.NumCPU()
 	fileQueue := make(chan string, numDigesters)
 
 	for i := 0; i < numDigesters; i++ {
