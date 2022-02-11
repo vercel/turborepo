@@ -256,11 +256,11 @@ bench/lage: demo/lage
 bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
-bench/turbo: demo/turbo
+bench/turbo: demo/turbo turbo
 	cd demo/turbo && ../../turbo run test 
 
 bench/turbo-new: demo/turbo
-	cd demo/turbo && ../../turbo-new run build test 
+	cd demo/turbo && ../../turbo-new run build test
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
