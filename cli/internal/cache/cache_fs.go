@@ -2,7 +2,11 @@ package cache
 
 import (
 	"fmt"
+	"math"
+	"runtime"
+
 	"path/filepath"
+
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 
@@ -38,21 +42,27 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 
 func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	g := new(errgroup.Group)
-	for i, file := range files {
-		_, file := i, file // https://golang.org/doc/faq#closures_and_goroutines
-		hash := hash
-		g.Go(func() error {
-			rel, err := filepath.Rel(target, file)
-			if err != nil {
-				return fmt.Errorf("error constructing relative path from %v to %v: %w", target, file, err)
-			}
-			if !fs.IsDirectory(file) {
-				if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, rel)); err != nil {
-					return fmt.Errorf("error ensuring directory file from cache: %w", err)
-				}
 
-				if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, rel), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
-					return fmt.Errorf("error copying file from cache: %w", err)
+	var numDigesters int = runtime.NumCPU()
+	var totalFiles int = len(files)
+	var chunkSize int = int(math.Ceil(float64(len(files)) / float64(numDigesters)))
+
+	for i := 0; i < numDigesters && i < totalFiles; i++ {
+		batch := files[chunkSize*i : int(math.Min(float64(chunkSize*i+chunkSize), float64(totalFiles)))]
+		g.Go(func() error {
+			for _, file := range batch {
+				rel, err := filepath.Rel(target, file)
+				if err != nil {
+					return fmt.Errorf("error constructing relative path from %v to %v: %w", target, file, err)
+				}
+				if !fs.IsDirectory(file) {
+					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, rel)); err != nil {
+						return fmt.Errorf("error ensuring directory file from cache: %w", err)
+					}
+
+					if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, rel), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
+						return fmt.Errorf("error copying file from cache: %w", err)
+					}
 				}
 			}
 			return nil
