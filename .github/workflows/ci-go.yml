@@ -51,42 +51,18 @@ jobs:
       - name: Benchmark E2E
         run: cd cli && make bench/e2e
 
-      # Download previous benchmark result from cache (if exists)
-      - name: Download previous benchmark data
-        uses: actions/cache@v1
-        with:
-          path: ./cache
-          key: "${{ runner.os }}-e2e-benchmark-${{ github.sha }}"
-          restore-keys: |
-            "${{ runner.os }}-e2e-benchmark-"
-
-      - name: Set up comparison to main
-        # if we are on a branch, we want out benchmark to be against main, if it exists
-        if: ${{ github.event_name != 'push' }}
-        # note that the shell command ":" does nothing and exits successfully. This lets us pass this
-        # step if we don't end up doing the copy
-        run: '[ -f "./cache/benchmarks-main.json" ] && cp ./cache/benchmarks-main.json ./cache/benchmarks-${{ github.head_ref }}.json || :'
-
-      # Run `github-action-benchmark` action
-      - name: Store benchmark result
+      - name: Store Benchmark Result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: "${{ runner.os }} Benchmark"
-          # What benchmark tool the output.txt came from
+          # What benchmark tool the output is formatted as
           tool: "customSmallerIsBetter"
-          # Where the output from the benchmark tool is stored
           output-file-path: ./cli/scripts/benchmarks.json
-          # Where the previous data file is stored.
-          # Note that this is somewhat of a hack to say that if we are pushing, save as the "main"
-          # benchmark. If we're not, save it at this particular sha. In the previous step, we have
-          # overwritten this particular sha with the main file if it exists so that we are always
-          # benchmarking against main, not our previous run on this PR.
-          external-data-json-path: ./cache/benchmarks-${{ github.event_name == 'push' && 'main' || github.head_ref }}.json
-          save-data-file: true
-          skip-fetch-gh-pages: true
+          benchmark-data-dir-path: benchmarks/e2e/${{ runner.os }}
+          auto-push: ${{ github.event_name == 'push' }}
           comment-on-alert: true
           comment-always: true
-          # GitHub API token to make a commit comment
+          # GitHub API token to make a commit on push, and a comment always
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build-win:
