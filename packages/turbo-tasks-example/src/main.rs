@@ -7,7 +7,7 @@ use random::RandomIdRef;
 use std::{env::current_dir, fs, thread, time::Duration};
 use turbo_tasks::{
     viz::{GraphViz, Visualizable},
-    Task, TurboTasks,
+    SlotRef, Task, TurboTasks,
 };
 
 use turbo_tasks_fs::{
@@ -38,7 +38,7 @@ fn main() {
             let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
 
             // TODO add casts to Smart Pointers
-            let fs = FileSystemRef::from_node(disk_fs.clone().into()).unwrap();
+            let fs = FileSystemRef::from_slot_ref(disk_fs.clone().into()).unwrap();
 
             // ls(fs).await;
             let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
@@ -55,7 +55,7 @@ fn main() {
             )
             .await;
 
-            None
+            SlotRef::Nothing
         })
     });
     loop {
