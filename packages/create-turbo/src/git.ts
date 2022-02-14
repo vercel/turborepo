@@ -1,7 +1,7 @@
 /* eslint-disable import/no-extraneous-dependencies */
 import { execSync } from "child_process";
+import { rmdirSync } from "fs"
 import path from "path";
-import rimraf from "rimraf";
 
 function isInGitRepository(): boolean {
   try {
@@ -40,7 +40,7 @@ export function tryGitInit(root: string): boolean {
   } catch (e) {
     if (didInit) {
       try {
-        rimraf.sync(path.join(root, ".git"));
+        rmdirSync(path.join(root, ".git"), { recursive:true });
       } catch (_) {}
     }
     return false;
