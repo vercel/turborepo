@@ -497,7 +497,11 @@ func (c *RunCommand) Run(args []string) int {
 
 				// Setup command execution
 				argsactual := append([]string{"run"}, task)
-				argsactual = append(argsactual, runOptions.passThroughArgs...)
+				for _, target := range ctx.Targets {
+					if target == task {
+						argsactual = append(argsactual, runOptions.passThroughArgs...)
+					}
+				}
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				var cmd *exec.Cmd
 				if ctx.Backend.Name == "nodejs-berry" {
