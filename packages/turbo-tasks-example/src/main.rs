@@ -5,9 +5,12 @@
 use math::{add, max_new};
 use random::RandomIdRef;
 use std::{env::current_dir, fs, thread, time::Duration};
+use turbo_tasks::viz::GraphViz;
 use turbo_tasks::{
-    viz::{GraphViz, Visualizable},
-    SlotRef, Task, TurboTasks,
+    // viz::{GraphViz, Visualizable},
+    SlotRef,
+    Task,
+    TurboTasks,
 };
 
 use turbo_tasks_fs::{
@@ -38,7 +41,7 @@ fn main() {
             let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
 
             // TODO add casts to Smart Pointers
-            let fs = FileSystemRef::from_slot_ref(disk_fs.clone().into()).unwrap();
+            let fs = FileSystemRef::from_slot_ref(disk_fs.clone().into());
 
             // ls(fs).await;
             let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
@@ -60,16 +63,17 @@ fn main() {
     });
     loop {
         // create a graph
-        let mut graph_viz = GraphViz::new(false);
+        let mut graph_viz = GraphViz::new();
 
-        // graph root node
-        task.visualize(&mut graph_viz);
+        // // graph root node
+        graph_viz.add_task(&task);
+        // task.visualize(&mut graph_viz);
 
-        // graph unconnected nodes
-        tt.visualize(&mut graph_viz);
+        // // graph unconnected nodes
+        // tt.visualize(&mut graph_viz);
 
         // write HTML
-        fs::write("graph.html", GraphViz::wrap_html(&graph_viz.to_string())).unwrap();
+        fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
         println!("graph.html written");
         thread::sleep(Duration::from_secs(3));
     }
