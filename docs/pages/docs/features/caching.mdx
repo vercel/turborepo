@@ -110,7 +110,7 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
     "docs#build": { // override settings for the "build" task for the "docs" app
       "dependsOn": [
         "^build",
-          // env vars that will impact the hash of "build" task for only "web" app
+          // env vars that will impact the hash of "build" task for only "docs" app
           "$STRIPE_SECRET_KEY",
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
           "$NEXT_PUBLIC_ANALYTICS_ID",
