@@ -8,7 +8,7 @@ const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
 const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 const REPETITIONS = 5;
 
-const DEFAULT_EXEC_OPTS = { stdio: "inherit" as const, cwd: REPO_PATH };
+const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
 const TURBO_BIN = path.resolve(path.join("..", "cli", "turbo"));
 const DEFAULT_CACHE_PATH = path.join(
   REPO_PATH,
@@ -60,12 +60,16 @@ function cleanTurboCache(): void {
 function cleanBuild(): Benchmark {
   const timings: number[] = [];
   let total = 0;
+  const isLocal = process.argv[process.argv.length - 1] == "--local";
   // We aren't really benchmarking this one, it OOMs if run in full parallel
-  for (let i = 0; i < 1; i++) {
+  // on GH actions
+  const repetitions = isLocal ? REPETITIONS : 1;
+  const concurrency = isLocal ? "" : " --concurrency=1";
+  for (let i = 0; i < repetitions; i++) {
     // clean first, we'll leave the cache in place for subsequent builds
     cleanTurboCache();
     const start = new Date().getTime();
-    cp.execSync(`${TURBO_BIN} run build --concurrency=1`, DEFAULT_EXEC_OPTS);
+    cp.execSync(`${TURBO_BIN} run build${concurrency}`, DEFAULT_EXEC_OPTS);
     const end = new Date().getTime();
     const timing = end - start;
     total += timing;
