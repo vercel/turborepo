@@ -70,7 +70,13 @@ fn main() {
         // task.visualize(&mut graph_viz);
 
         // // graph unconnected nodes
+        for task in tt.cached_tasks_iter() {
+            graph_viz.add_task(&task);
+        }
         // tt.visualize(&mut graph_viz);
+
+        graph_viz.drop_unchanged_slots();
+        graph_viz.skip_loney_resolve();
 
         // write HTML
         fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
