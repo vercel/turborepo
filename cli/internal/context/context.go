@@ -32,7 +32,6 @@ type Context struct {
 	PackageInfos           map[interface{}]*fs.PackageJSON
 	PackageNames           []string
 	TopologicalGraph       dag.AcyclicGraph
-	TaskGraph              dag.AcyclicGraph
 	Dir                    string
 	RootNode               string
 	RootPackageJSON        *fs.PackageJSON
@@ -89,8 +88,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
-		// Need to ALWAYS have a root node, might as well do it now
-		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
 		packageJSONPath := filepath.Join(rootpath, "package.json")
 		pkg, err := fs.ReadPackageJSON(packageJSONPath)
