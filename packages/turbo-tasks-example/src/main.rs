@@ -6,11 +6,7 @@ use math::{add, max_new};
 use random::RandomIdRef;
 use std::{env::current_dir, fs, thread, time::Duration};
 use turbo_tasks::viz::GraphViz;
-use turbo_tasks::{
-    // viz::{GraphViz, Visualizable},
-    SlotRef,
-    TurboTasks,
-};
+use turbo_tasks::{SlotRef, TurboTasks};
 
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemRef, FileContent, FileContentRef,
@@ -64,16 +60,15 @@ fn main() {
         // create a graph
         let mut graph_viz = GraphViz::new();
 
-        // // graph root node
+        // graph root node
         graph_viz.add_task(&task);
-        // task.visualize(&mut graph_viz);
 
-        // // graph unconnected nodes
+        // graph tasks in cache
         for task in tt.cached_tasks_iter() {
             graph_viz.add_task(&task);
         }
-        // tt.visualize(&mut graph_viz);
 
+        // prettify graph
         graph_viz.merge_edges();
         graph_viz.drop_unchanged_slots();
         graph_viz.skip_loney_resolve();
