@@ -47,6 +47,15 @@ type RunCommand struct {
 	Processes *process.Manager
 }
 
+type completeGraph struct {
+	TopologicalGraph dag.AcyclicGraph
+	Pipeline         map[string]fs.Pipeline
+	SCC              [][]dag.Vertex
+	PackageInfos     map[interface{}]*fs.PackageJSON
+	GlobalHash       string
+	RootNode         string
+}
+
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
 	return "Run a task"
@@ -283,19 +292,31 @@ func (c *RunCommand) Run(args []string) int {
 	fs.EnsureDir(runOptions.cacheFolder)
 	turboCache := cache.New(c.Config)
 	defer turboCache.Shutdown()
+
+	// Start segmenting out the boundary with context.
+	g := &completeGraph{
+		TopologicalGraph: ctx.TopologicalGraph,
+		Pipeline:         ctx.TurboConfig.Pipeline,
+		SCC:              ctx.SCC,
+		PackageInfos:     ctx.PackageInfos,
+		GlobalHash:       ctx.GlobalHash,
+		RootNode:         ctx.RootNode,
+	}
+	targets := ctx.Targets
+	backend := ctx.Backend
 	var topoVisit []interface{}
-	for _, node := range ctx.SCC {
+	for _, node := range g.SCC {
 		v := node[0]
-		if v == ctx.RootNode {
+		if v == g.RootNode {
 			continue
 		}
 		topoVisit = append(topoVisit, v)
-		pack := ctx.PackageInfos[v]
+		pack := g.PackageInfos[v]
 
 		ancestralHashes := make([]string, 0, len(pack.InternalDeps))
 		if len(pack.InternalDeps) > 0 {
 			for _, ancestor := range pack.InternalDeps {
-				if h, ok := ctx.PackageInfos[ancestor]; ok {
+				if h, ok := g.PackageInfos[ancestor]; ok {
 					ancestralHashes = append(ancestralHashes, h.Hash)
 				}
 			}
@@ -306,7 +327,7 @@ func (c *RunCommand) Run(args []string) int {
 			ancestralHashes  []string
 			externalDepsHash string
 			globalHash       string
-		}{hashOfFiles: pack.FilesHash, ancestralHashes: ancestralHashes, externalDepsHash: pack.ExternalDepsHash, globalHash: ctx.GlobalHash}
+		}{hashOfFiles: pack.FilesHash, ancestralHashes: ancestralHashes, externalDepsHash: pack.ExternalDepsHash, globalHash: g.GlobalHash}
 
 		pack.Hash, err = fs.HashObject(hashable)
 		if err != nil {
@@ -320,35 +341,35 @@ func (c *RunCommand) Run(args []string) int {
 	c.Config.Logger.Debug("topological sort order", "value", topoVisit)
 
 	vertexSet := make(util.Set)
-	for _, v := range ctx.TopologicalGraph.Vertices() {
+	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
 	}
 	// We remove nodes that aren't in the final filter set
 	for _, toRemove := range vertexSet.Difference(filteredPkgs) {
-		if toRemove != ctx.RootNode {
-			ctx.TopologicalGraph.Remove(toRemove)
+		if toRemove != g.RootNode {
+			g.TopologicalGraph.Remove(toRemove)
 		}
 	}
 
 	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root
 	if runOptions.parallel {
-		for _, edge := range ctx.TopologicalGraph.Edges() {
-			if edge.Target() != ctx.RootNode {
-				ctx.TopologicalGraph.RemoveEdge(edge)
+		for _, edge := range g.TopologicalGraph.Edges() {
+			if edge.Target() != g.RootNode {
+				g.TopologicalGraph.RemoveEdge(edge)
 			}
 		}
 	}
 
 	if runOptions.stream {
-		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(ctx.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
+		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
 	}
 	runState := NewRunState(runOptions)
 	runState.Listen(c.Ui, time.Now())
-	engine := core.NewScheduler(&ctx.TopologicalGraph)
+	engine := core.NewScheduler(&g.TopologicalGraph)
 	colorCache := NewColorCache()
 	var logReplayWaitGroup sync.WaitGroup
-	for taskName, value := range ctx.TurboConfig.Pipeline {
+	for taskName, value := range g.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
 		if util.IsPackageTask(taskName) {
@@ -389,7 +410,7 @@ func (c *RunCommand) Run(args []string) int {
 			Run: func(id string) error {
 				cmdTime := time.Now()
 				name, task := util.GetPackageTaskFromId(id)
-				pack := ctx.PackageInfos[name]
+				pack := g.PackageInfos[name]
 				targetLogger := c.Config.Logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
 				defer targetLogger.ResetNamed(pack.Name)
 				targetLogger.Debug("start")
@@ -416,10 +437,10 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				// Hash ---------------------------------------------
 				// first check for package-tasks
-				pipeline, ok := ctx.TurboConfig.Pipeline[fmt.Sprintf("%v", id)]
+				pipeline, ok := g.Pipeline[fmt.Sprintf("%v", id)]
 				if !ok {
 					// then check for regular tasks
-					altpipe, notcool := ctx.TurboConfig.Pipeline[task]
+					altpipe, notcool := g.Pipeline[task]
 					// if neither, then bail
 					if !notcool && !ok {
 						return nil
@@ -509,10 +530,10 @@ func (c *RunCommand) Run(args []string) int {
 				argsactual = append(argsactual, passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				var cmd *exec.Cmd
-				if ctx.Backend.Name == "nodejs-berry" {
+				if backend.Name == "nodejs-berry" {
 					cmd = exec.Command("yarn", argsactual...)
 				} else {
-					cmd = exec.Command(strings.TrimPrefix(ctx.Backend.Name, "nodejs-"), argsactual...)
+					cmd = exec.Command(strings.TrimPrefix(backend.Name, "nodejs-"), argsactual...)
 				}
 				cmd.Dir = pack.Dir
 				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
@@ -614,7 +635,7 @@ func (c *RunCommand) Run(args []string) int {
 
 	if err := engine.Prepare(&core.SchedulerExecutionOptions{
 		Packages:    filteredPkgs.UnsafeListOfStrings(),
-		TaskNames:   ctx.Targets,
+		TaskNames:   targets,
 		Concurrency: runOptions.concurrency,
 		Parallel:    runOptions.parallel,
 		TasksOnly:   runOptions.only,
