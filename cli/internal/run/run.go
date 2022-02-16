@@ -4,6 +4,17 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -17,16 +28,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 	"github.com/vercel/turborepo/cli/internal/util/filter"
-	"io"
-	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/pyr-sh/dag"
 
@@ -345,6 +346,7 @@ func (c *RunCommand) Run(args []string) int {
 	runState := NewRunState(runOptions)
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&ctx.TopologicalGraph)
+	colorCache := NewColorCache()
 	var logReplayWaitGroup sync.WaitGroup
 	for taskName, value := range ctx.TurboConfig.Pipeline {
 		topoDeps := make(util.Set)
@@ -403,7 +405,7 @@ func (c *RunCommand) Run(args []string) int {
 				tracer := runState.Run(util.GetTaskId(pack.Name, task))
 
 				// Create a logger
-				pref := ctx.ColorCache.PrefixColor(pack.Name)
+				pref := colorCache.PrefixColor(pack.Name)
 				actualPrefix := pref("%s:%s: ", pack.Name, task)
 				targetUi := &cli.PrefixedUi{
 					Ui:           targetBaseUI,
