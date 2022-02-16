@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -290,10 +291,8 @@ func (c *RunCommand) Run(args []string) int {
 	c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
 	fs.EnsureDir(runOptions.cacheFolder)
-	turboCache := cache.New(c.Config)
-	defer turboCache.Shutdown()
 
-	// Start segmenting out the boundary with context.
+	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
 		Pipeline:         ctx.TurboConfig.Pipeline,
@@ -304,6 +303,13 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	targets := ctx.Targets
 	backend := ctx.Backend
+	return c.runOperation(g, targets, backend, runOptions, filteredPkgs, cwd, startAt)
+}
+
+func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *api.LanguageBackend, runOptions *RunOptions, filteredPkgs util.Set, cwd string, startAt time.Time) int {
+	turboCache := cache.New(c.Config)
+	defer turboCache.Shutdown()
+
 	var topoVisit []interface{}
 	for _, node := range g.SCC {
 		v := node[0]
@@ -329,6 +335,7 @@ func (c *RunCommand) Run(args []string) int {
 			globalHash       string
 		}{hashOfFiles: pack.FilesHash, ancestralHashes: ancestralHashes, externalDepsHash: pack.ExternalDepsHash, globalHash: g.GlobalHash}
 
+		var err error
 		pack.Hash, err = fs.HashObject(hashable)
 		if err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("[ERROR] %v: error computing combined hash: %v", pack.Name, err))
@@ -364,6 +371,8 @@ func (c *RunCommand) Run(args []string) int {
 	if runOptions.stream {
 		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
 	}
+	// TODO(gsoltis): I think this should be passed in, and close called from the calling function
+	// however, need to handle the graph case, which early-returns
 	runState := NewRunState(runOptions, startAt)
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&g.TopologicalGraph)
