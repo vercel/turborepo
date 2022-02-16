@@ -106,7 +106,6 @@ Options:
 // Run executes tasks in the monorepo
 func (c *RunCommand) Run(args []string) int {
 	startAt := time.Now()
-	log.Default()
 	log.SetFlags(0)
 	flags := flag.NewFlagSet("run", flag.ContinueOnError)
 	flags.Usage = func() { c.Config.Logger.Info(c.Help()) }
@@ -120,7 +119,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, cwd)
+	runOptions, err := parseRunArgs(args, cwd, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -262,7 +261,7 @@ func (c *RunCommand) Run(args []string) int {
 		for _, pkg := range filteredPkgs {
 			ancestors, err := ctx.TopologicalGraph.Ancestors(pkg)
 			if err != nil {
-				log.Printf("error getting dependency %v", err)
+				c.logError(c.Config.Logger, "", fmt.Errorf("error getting dependency %v", err))
 				return 1
 			}
 			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
@@ -311,7 +310,8 @@ func (c *RunCommand) Run(args []string) int {
 
 		pack.Hash, err = fs.HashObject(hashable)
 		if err != nil {
-			log.Printf("[ERROR] %v: error computing combined hash", pack.Name)
+			c.logError(c.Config.Logger, "", fmt.Errorf("[ERROR] %v: error computing combined hash: %v", pack.Name, err))
+			return 1
 		}
 		c.Config.Logger.Debug(fmt.Sprintf("%v: package ancestralHash", pack.Name), "hash", ancestralHashes)
 		c.Config.Logger.Debug(fmt.Sprintf("%v: package hash", pack.Name), "hash", pack.Hash)
@@ -760,7 +760,7 @@ func getDefaultRunOptions() *RunOptions {
 	}
 }
 
-func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
+func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
@@ -811,7 +811,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.cache = true
 			case strings.HasPrefix(arg, "--cacheFolder"):
-				log.Printf("[WARNING] The --cacheFolder flag has been deprecated and will be removed in future versions of turbo. Please use `--cache-dir` instead")
+				output.Warn("[WARNING] The --cacheFolder flag has been deprecated and will be removed in future versions of turbo. Please use `--cache-dir` instead")
 				unresolvedCacheFolder = arg[len("--cacheFolder="):]
 			case strings.HasPrefix(arg, "--cache-dir"):
 				unresolvedCacheFolder = arg[len("--cache-dir="):]
@@ -829,7 +829,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--graph"):
 				runOptions.dotGraph = fmt.Sprintf("graph-%v.jpg", time.Now().UnixNano())
 			case strings.HasPrefix(arg, "--serial"):
-				log.Printf("[WARNING] The --serial flag has been deprecated and will be removed in future versions of turbo. Please use `--concurrency=1` instead")
+				output.Warn("[WARNING] The --serial flag has been deprecated and will be removed in future versions of turbo. Please use `--concurrency=1` instead")
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
 				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
@@ -842,7 +842,7 @@ func parseRunArgs(args []string, cwd string) (*RunOptions, error) {
 					}
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
-				log.Printf("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
+				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
