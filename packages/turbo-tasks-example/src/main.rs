@@ -9,7 +9,6 @@ use turbo_tasks::viz::GraphViz;
 use turbo_tasks::{
     // viz::{GraphViz, Visualizable},
     SlotRef,
-    Task,
     TurboTasks,
 };
 
@@ -75,6 +74,7 @@ fn main() {
         }
         // tt.visualize(&mut graph_viz);
 
+        graph_viz.merge_edges();
         graph_viz.drop_unchanged_slots();
         graph_viz.skip_loney_resolve();
 
@@ -142,5 +142,4 @@ async fn print_size(path: FileSystemPathRef, content: FileContentRef) {
             println!("{:?}: not found", *path.await);
         }
     }
-    Task::side_effect();
 }
