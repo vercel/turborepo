@@ -146,7 +146,7 @@ func TestParseConfig(t *testing.T) {
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ".", ui)
+			actual, err := parseRunArgs(tc.Args, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}

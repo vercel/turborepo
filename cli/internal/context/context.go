@@ -93,11 +93,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("could not get cwd: %w", err)
-		}
-
 		packageJSONPath := path.Join(rootpath, "package.json")
 		pkg, err := fs.ReadPackageJSON(packageJSONPath)
 		if err != nil {
@@ -130,7 +125,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			}
 		}
 
-		if backend, err := backends.GetBackend(cwd, pkg); err != nil {
+		if backend, err := backends.GetBackend(rootpath, pkg); err != nil {
 			return err
 		} else {
 			c.Backend = backend
@@ -138,7 +133,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		// this should go into the bacend abstraction
 		if util.IsYarn(c.Backend.Name) {
-			lockfile, err := fs.ReadLockfile(c.Backend.Name, config.Cache.Dir)
+			lockfile, err := fs.ReadLockfile(rootpath, c.Backend.Name, config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}
@@ -149,7 +144,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 
-		spaces, err := c.Backend.GetWorkspaceGlobs()
+		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
 
 		if err != nil {
 			return fmt.Errorf("could not detect workspaces: %w", err)
