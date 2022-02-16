@@ -48,6 +48,8 @@ type RunCommand struct {
 	Processes *process.Manager
 }
 
+// completeGraph represents the common state inferred from the filesystem and pipeline.
+// It is not intended to include information specific to a particular run.
 type completeGraph struct {
 	TopologicalGraph dag.AcyclicGraph
 	Pipeline         map[string]fs.Pipeline
@@ -55,6 +57,14 @@ type completeGraph struct {
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	GlobalHash       string
 	RootNode         string
+}
+
+// runSpec contains the run-specific configuration elements that come from a particular
+// invocation of turbo.
+type runSpec struct {
+	Targets      []string
+	FilteredPkgs util.Set
+	Opts         *RunOptions
 }
 
 // Synopsis of run command
@@ -301,12 +311,16 @@ func (c *RunCommand) Run(args []string) int {
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
 	}
-	targets := ctx.Targets
+	rs := &runSpec{
+		Targets:      ctx.Targets,
+		FilteredPkgs: filteredPkgs,
+		Opts:         runOptions,
+	}
 	backend := ctx.Backend
-	return c.runOperation(g, targets, backend, runOptions, filteredPkgs, cwd, startAt)
+	return c.runOperation(g, rs, backend, cwd, startAt)
 }
 
-func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *api.LanguageBackend, runOptions *RunOptions, filteredPkgs util.Set, cwd string, startAt time.Time) int {
+func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
 	turboCache := cache.New(c.Config)
 	defer turboCache.Shutdown()
 
@@ -352,7 +366,7 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 		vertexSet.Add(v)
 	}
 	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range vertexSet.Difference(filteredPkgs) {
+	for _, toRemove := range vertexSet.Difference(rs.FilteredPkgs) {
 		if toRemove != g.RootNode {
 			g.TopologicalGraph.Remove(toRemove)
 		}
@@ -360,7 +374,7 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 
 	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root
-	if runOptions.parallel {
+	if rs.Opts.parallel {
 		for _, edge := range g.TopologicalGraph.Edges() {
 			if edge.Target() != g.RootNode {
 				g.TopologicalGraph.RemoveEdge(edge)
@@ -368,12 +382,12 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 		}
 	}
 
-	if runOptions.stream {
-		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
+	if rs.Opts.stream {
+		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 	}
 	// TODO(gsoltis): I think this should be passed in, and close called from the calling function
 	// however, need to handle the graph case, which early-returns
-	runState := NewRunState(runOptions, startAt)
+	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&g.TopologicalGraph)
 	colorCache := NewColorCache()
@@ -466,10 +480,10 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 				}
 				targetLogger.Debug("task output globs", "outputs", outputs)
 
-				passThroughArgs := make([]string, 0, len(args))
-				for _, target := range ctx.Targets {
+				passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
+				for _, target := range rs.Targets {
 					if target == task {
-						passThroughArgs = append(passThroughArgs, runOptions.passThroughArgs...)
+						passThroughArgs = append(passThroughArgs, rs.Opts.passThroughArgs...)
 					}
 				}
 
@@ -507,29 +521,29 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 					// @TODO probably should abort fatally???
 				}
 				logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
-				targetLogger.Debug("log file", "path", filepath.Join(runOptions.cwd, logFileName))
+				targetLogger.Debug("log file", "path", filepath.Join(rs.Opts.cwd, logFileName))
 
 				// Cache ---------------------------------------------
 				var hit bool
-				if !runOptions.forceExecution {
+				if !rs.Opts.forceExecution {
 					hit, _, err = turboCache.Fetch(pack.Dir, hash, nil)
 					if err != nil {
 						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 					} else if hit {
-						if runOptions.stream && fs.FileExists(filepath.Join(runOptions.cwd, logFileName)) {
+						if rs.Opts.stream && fs.FileExists(filepath.Join(rs.Opts.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, targetBaseUI, runOptions, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
 
 						return nil
 					}
-					if runOptions.stream {
+					if rs.Opts.stream {
 						targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 					}
 				} else {
-					if runOptions.stream {
+					if rs.Opts.stream {
 						targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 					}
 				}
@@ -552,14 +566,14 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 				// If we are not caching anything, then we don't need to write logs to disk
 				// be careful about this conditional given the default of cache = true
 				var writer io.Writer
-				if !runOptions.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
+				if !rs.Opts.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
 					writer = os.Stdout
 				} else {
 					// Setup log file
 					if err := fs.EnsureDir(logFileName); err != nil {
 						tracer(TargetBuildFailed, err)
 						c.logError(targetLogger, actualPrefix, err)
-						if runOptions.bail {
+						if rs.Opts.bail {
 							os.Exit(1)
 						}
 					}
@@ -567,7 +581,7 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 					if err != nil {
 						tracer(TargetBuildFailed, err)
 						c.logError(targetLogger, actualPrefix, err)
-						if runOptions.bail {
+						if rs.Opts.bail {
 							os.Exit(1)
 						}
 					}
@@ -598,11 +612,11 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 					}
 					tracer(TargetBuildFailed, err)
 					targetLogger.Error("Error: command finished with error: %w", err)
-					if runOptions.bail {
-						if runOptions.stream {
+					if rs.Opts.bail {
+						if rs.Opts.stream {
 							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
 						} else {
-							f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
+							f, err := os.Open(filepath.Join(rs.Opts.cwd, logFileName))
 							if err != nil {
 								targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
 							}
@@ -617,7 +631,7 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 						}
 						c.Processes.Close()
 					} else {
-						if runOptions.stream {
+						if rs.Opts.stream {
 							targetUi.Warn("command finished with error, but continuing...")
 						}
 					}
@@ -625,7 +639,7 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 				}
 
 				// Cache command outputs
-				if runOptions.cache && (pipeline.Cache == nil || *pipeline.Cache) {
+				if rs.Opts.cache && (pipeline.Cache == nil || *pipeline.Cache) {
 					targetLogger.Debug("caching output", "outputs", outputs)
 					ignore := []string{}
 					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
@@ -643,24 +657,24 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 	}
 
 	if err := engine.Prepare(&core.SchedulerExecutionOptions{
-		Packages:    filteredPkgs.UnsafeListOfStrings(),
-		TaskNames:   targets,
-		Concurrency: runOptions.concurrency,
-		Parallel:    runOptions.parallel,
-		TasksOnly:   runOptions.only,
+		Packages:    rs.FilteredPkgs.UnsafeListOfStrings(),
+		TaskNames:   rs.Targets,
+		Concurrency: rs.Opts.concurrency,
+		Parallel:    rs.Opts.parallel,
+		TasksOnly:   rs.Opts.only,
 	}); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
 
-	if runOptions.dotGraph != "" {
+	if rs.Opts.dotGraph != "" {
 		graphString := string(engine.TaskGraph.Dot(&dag.DotOpts{
 			Verbose:    true,
 			DrawCycles: true,
 		}))
-		ext := filepath.Ext(runOptions.dotGraph)
+		ext := filepath.Ext(rs.Opts.dotGraph)
 		if ext == ".html" {
-			f, err := os.Create(filepath.Join(cwd, runOptions.dotGraph))
+			f, err := os.Create(filepath.Join(cwd, rs.Opts.dotGraph))
 			if err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
 				return 1
@@ -682,23 +696,23 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
     </body>
     </html>`)
 			c.Ui.Output("")
-			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
+			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
 			if ui.IsTTY {
-				browser.OpenBrowser(filepath.Join(cwd, runOptions.dotGraph))
+				browser.OpenBrowser(filepath.Join(cwd, rs.Opts.dotGraph))
 			}
 			return 0
 		}
 		hasDot := hasGraphViz()
 		if hasDot {
-			dotArgs := []string{"-T" + ext[1:], "-o", runOptions.dotGraph}
+			dotArgs := []string{"-T" + ext[1:], "-o", rs.Opts.dotGraph}
 			cmd := exec.Command("dot", dotArgs...)
 			cmd.Stdin = strings.NewReader(graphString)
 			if err := cmd.Run(); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("could not generate task graphfile %v:  %w", runOptions.dotGraph, err))
+				c.logError(c.Config.Logger, "", fmt.Errorf("could not generate task graphfile %v:  %w", rs.Opts.dotGraph, err))
 				return 1
 			} else {
 				c.Ui.Output("")
-				c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(runOptions.dotGraph)))
+				c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
 			}
 		} else {
 			c.Ui.Output("")
@@ -726,7 +740,7 @@ func (c *RunCommand) runOperation(g *completeGraph, targets []string, backend *a
 
 	logReplayWaitGroup.Wait()
 
-	if err := runState.Close(c.Ui, runOptions.profile); err != nil {
+	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
