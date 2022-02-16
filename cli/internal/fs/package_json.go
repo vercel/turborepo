@@ -25,10 +25,6 @@ type TurboConfigJSON struct {
 }
 
 func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
-	// b, err := ioutil.ReadFile(path)
-	// if err != nil {
-	// 	return nil, err
-	// }
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
