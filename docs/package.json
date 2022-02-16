@@ -8,7 +8,7 @@
     "start": "next start",
     "build": "next build",
     "lint": "next lint",
-    "schema": "ts-json-schema-generator -p ./schema.d.ts -o ./public/schema.json -t Schema"
+    "schema": "ts-json-schema-generator -p ./schema.d.ts -o ./public/schema.json -t Schema --minify"
   },
   "author": "Jared Palmer",
   "license": "MPL-2.0",
@@ -66,7 +66,7 @@
     "eslint-config-prettier": "^8.3.0",
     "postcss": "^8.3.5",
     "tailwindcss": "^3.0.15",
-    "ts-json-schema-generator": "^0.97.0",
+    "ts-json-schema-generator": "^0.98.0-next.0",
     "typescript": "^4.5.5",
     "webpack": "^5.65.0"
   },
