@@ -434,6 +434,13 @@ func (c *RunCommand) Run(args []string) int {
 				}
 				targetLogger.Debug("task output globs", "outputs", outputs)
 
+				passThroughArgs := make([]string, 0, len(args))
+				for _, target := range ctx.Targets {
+					if target == task {
+						passThroughArgs = append(passThroughArgs, runOptions.passThroughArgs...)
+					}
+				}
+
 				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
 				var hashabledEnvVars []string
 				var hashabledEnvPairs []string
@@ -458,7 +465,7 @@ func (c *RunCommand) Run(args []string) int {
 					Hash:             pack.Hash,
 					Task:             task,
 					Outputs:          outputs,
-					PassThruArgs:     runOptions.passThroughArgs,
+					PassThruArgs:     passThroughArgs,
 					HashableEnvPairs: hashabledEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
@@ -497,7 +504,7 @@ func (c *RunCommand) Run(args []string) int {
 
 				// Setup command execution
 				argsactual := append([]string{"run"}, task)
-				argsactual = append(argsactual, runOptions.passThroughArgs...)
+				argsactual = append(argsactual, passThroughArgs...)
 				// @TODO: @jaredpalmer fix this hack to get the package manager's name
 				var cmd *exec.Cmd
 				if ctx.Backend.Name == "nodejs-berry" {
