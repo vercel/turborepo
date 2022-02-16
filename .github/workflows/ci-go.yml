@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches: ["main"]
+    paths:
+      - '!docs/**'
   pull_request:
     types: [opened, synchronize]
+    paths:
+      - '!docs/**'
 
 jobs:
   build:
