@@ -5,6 +5,8 @@
 use math::{add, max_new};
 use random::RandomIdRef;
 use std::{env::current_dir, fs, thread, time::Duration};
+use turbo_pack::emit;
+use turbo_pack::module::Module;
 use turbo_tasks::viz::GraphViz;
 use turbo_tasks::{SlotRef, TurboTasks};
 
@@ -41,17 +43,19 @@ fn main() {
             // ls(fs).await;
             let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
             let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
-            let entry = FileSystemPathRef::new(fs.clone(), "demo/index.txt".to_string());
+            let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
 
-            copy_all(
-                entry,
-                CopyAllOptions {
-                    input_dir: input,
-                    output_dir: output,
-                }
-                .into(),
-            )
-            .await;
+            emit(Module { path: entry }.into(), input, output).await;
+
+            // copy_all(
+            //     entry,
+            //     CopyAllOptions {
+            //         input_dir: input,
+            //         output_dir: output,
+            //     }
+            //     .into(),
+            // )
+            // .await;
 
             SlotRef::Nothing
         })
