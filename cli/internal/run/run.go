@@ -364,7 +364,7 @@ func (c *RunCommand) Run(args []string) int {
 	if runOptions.stream {
 		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", filteredPkgs.Len()))))
 	}
-	runState := NewRunState(runOptions)
+	runState := NewRunState(runOptions, startAt)
 	runState.Listen(c.Ui, time.Now())
 	engine := core.NewScheduler(&g.TopologicalGraph)
 	colorCache := NewColorCache()
@@ -717,7 +717,7 @@ func (c *RunCommand) Run(args []string) int {
 
 	logReplayWaitGroup.Wait()
 
-	if err := runState.Close(c.Ui, startAt, runOptions.profile); err != nil {
+	if err := runState.Close(c.Ui, runOptions.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
