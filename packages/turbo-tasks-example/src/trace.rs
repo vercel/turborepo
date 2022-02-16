@@ -1,8 +1,7 @@
+use crate::utils::race_pop;
 use std::collections::HashSet;
-
+use std::future::IntoFuture;
 use turbo_tasks_fs::{rebase, FileContent, FileContentRef, FileSystemPath, FileSystemPathRef};
-
-use crate::utils::{all, race_pop};
 
 #[turbo_tasks::value]
 #[derive(PartialEq, Eq)]
@@ -13,16 +12,12 @@ pub struct CopyAllOptions {
 
 #[turbo_tasks::function]
 pub async fn copy_all(input: FileSystemPathRef, options: CopyAllOptionsRef) {
-    let entry = module(input).await;
-    let modules = all_modules(entry).await;
+    let entry = module(input);
+    let modules = all_modules(entry);
 
-    all(modules
-        .get()
-        .await
-        .modules
-        .iter()
-        .map(|module| copy_module(module.clone(), options.clone())))
-    .await;
+    for module in modules.get().await.modules.iter() {
+        copy_module(module.clone(), options.clone());
+    }
 }
 
 #[turbo_tasks::function]
@@ -34,15 +29,14 @@ async fn copy_module(module: ModuleRef, options: CopyAllOptionsRef) {
         resource.clone(),
         options_value.input_dir.clone(),
         options_value.output_dir.clone(),
-    )
-    .await;
+    );
     output.write(content).await;
 }
 
 #[turbo_tasks::function]
 async fn module(fs_path: FileSystemPathRef) -> ModuleRef {
     let source = fs_path.clone().read().await;
-    let content = parse(source).await;
+    let content = parse(source);
     Module {
         resource: fs_path,
         content,
@@ -122,11 +116,11 @@ async fn all_modules(module: ModuleRef) -> ModulesSetRef {
         match queue.pop() {
             Some(module) => {
                 modules.insert(module.clone());
-                futures_queue.push(Box::pin(referenced_modules(module)));
+                futures_queue.push(Box::pin(referenced_modules(module).into_future()));
             }
             None => match race_pop(&mut futures_queue).await {
                 Some(modules_set) => {
-                    for module in modules_set.await.modules.iter() {
+                    for module in modules_set.modules.iter() {
                         queue.push(module.clone());
                     }
                 }
@@ -145,7 +139,7 @@ async fn referenced_modules(origin: ModuleRef) -> ModulesSetRef {
         match &*item.get().await {
             ModuleItem::Comment(_) => {}
             ModuleItem::Reference(reference) => {
-                let resolved = referenced_module(origin.clone(), reference.clone()).await;
+                let resolved = referenced_module(origin.clone(), reference.clone());
                 modules.insert(resolved);
             }
         }
@@ -155,8 +149,8 @@ async fn referenced_modules(origin: ModuleRef) -> ModulesSetRef {
 
 #[turbo_tasks::function]
 async fn referenced_module(origin: ModuleRef, reference: ModuleReferenceRef) -> ModuleRef {
-    let resolved = resolve(origin.await.resource.clone(), reference.clone()).await;
-    module(resolved).await
+    let resolved = resolve(origin.await.resource.clone(), reference.clone());
+    module(resolved)
 }
 
 #[turbo_tasks::function]

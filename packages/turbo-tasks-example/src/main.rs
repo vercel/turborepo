@@ -45,7 +45,7 @@ fn main() {
             let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
             let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
 
-            emit(Module { path: entry }.into(), input, output).await;
+            emit(Module { path: entry }.into(), input, output);
 
             // copy_all(
             //     entry,
@@ -85,27 +85,24 @@ fn main() {
 }
 
 #[turbo_tasks::function]
-async fn make_math() {
+fn make_math() {
     let r1 = random(RandomIdRef::new(Duration::from_secs(5), 4));
     let r2 = random(RandomIdRef::new(Duration::from_secs(7), 3));
-    let r1 = r1.await;
-    let max = max_new(r1.clone(), r2.await);
+    let max = max_new(r1.clone(), r2);
     let a = add(I32ValueRef::new(42), I32ValueRef::new(1));
     let b = add(I32ValueRef::new(2), I32ValueRef::new(3));
-    let a = a.await;
-    log(a.clone(), LoggingOptionsRef::new("value of a".to_string())).await;
-    let max = max.await;
+    log(a.clone(), LoggingOptionsRef::new("value of a".to_string()));
     let c = add(max.clone(), a);
-    let d = add(max, b.await);
-    let e = add(c.await, d.await);
-    let r = add(r1, e.await);
-    log(r.await, LoggingOptionsRef::new("value of r".to_string())).await;
+    let d = add(max, b);
+    let e = add(c, d);
+    let r = add(r1, e);
+    log(r, LoggingOptionsRef::new("value of r".to_string()));
 }
 
 #[turbo_tasks::function]
 async fn ls(fs: FileSystemRef) {
     let directory_ref = FileSystemPathRef::new(fs, ".".to_string());
-    print_sizes(directory_ref.clone()).await;
+    print_sizes(directory_ref.clone());
 }
 
 #[turbo_tasks::function]
@@ -116,10 +113,10 @@ async fn print_sizes(directory: FileSystemPathRef) {
             for entry in entries.iter() {
                 match &*entry.get().await {
                     DirectoryEntry::File(path) => {
-                        print_size(path.clone(), path.clone().read().await).await;
+                        print_size(path.clone(), path.clone().read().await);
                     }
                     DirectoryEntry::Directory(path) => {
-                        print_sizes(path.clone()).await;
+                        print_sizes(path.clone());
                     }
                     _ => {}
                 }
