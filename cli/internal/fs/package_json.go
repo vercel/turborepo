@@ -3,7 +3,10 @@ package fs
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"sync"
+
+	"github.com/yosuke-furukawa/json5/encoding/json5"
 )
 
 // TurboConfigJSON is the root turborepo configuration
@@ -22,12 +25,18 @@ type TurboConfigJSON struct {
 }
 
 func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
-	b, err := ioutil.ReadFile(path)
+	// b, err := ioutil.ReadFile(path)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+
 	var turboConfig *TurboConfigJSON
-	err = json.Unmarshal(b, &turboConfig)
+	decoder := json5.NewDecoder(file)
+	err = decoder.Decode(&turboConfig)
 	if err != nil {
 		println("error unmarshalling", err.Error())
 		return nil, err
