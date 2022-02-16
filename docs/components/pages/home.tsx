@@ -125,12 +125,12 @@ function Page() {
       </div>
 
       <div className="py-16 dark:bg-black ">
-        <div className="max-w-4xl px-4 mx-auto sm:px-6 lg:px-8">
+        <div className="max-w-5xl px-4 mx-auto sm:px-6 lg:px-8">
           <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
 
-          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6 "
@@ -139,24 +139,34 @@ function Page() {
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img className="h-8" src="/images/logos/aws.svg" alt="AWS" />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
-                className="h-6 "
-                src="/images/logos/lattice.svg"
+                className="h-7"
+                src="/images/logos/paypal.svg"
                 alt="Lattice"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6"
-                src="/images/logos/teespring.svg"
-                alt="TeeSpring"
+                src="/images/logos/twilio.svg"
+                alt="Twilio"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
-                className="h-6"
-                src="/images/logos/makeswift.svg"
-                alt="Makeswift"
+                className="w-auto h-7"
+                src="/images/logos/washingtonpost.svg"
+                alt="The Washington Post"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="h-6 "
+                src="/images/logos/lattice.svg"
+                alt="Lattice"
               />
             </div>
           </div>
