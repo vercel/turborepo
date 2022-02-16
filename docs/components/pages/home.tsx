@@ -145,7 +145,7 @@ function Page() {
               <img
                 className="h-7"
                 src="/images/logos/paypal.svg"
-                alt="Lattice"
+                alt="PayPal"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
