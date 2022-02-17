@@ -2,6 +2,7 @@ package run
 
 import (
 	"bufio"
+	gocontext "context"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -321,7 +323,10 @@ func (c *RunCommand) Run(args []string) int {
 }
 
 func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
-	turboCache := cache.New(c.Config)
+	goctx := gocontext.Background()
+	analyticsClient := analytics.NewClient(goctx)
+	defer analyticsClient.Close()
+	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()
 
 	var topoVisit []interface{}

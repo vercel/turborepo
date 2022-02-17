@@ -3,6 +3,8 @@ package cache
 import (
 	"fmt"
 	"path/filepath"
+
+	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 
@@ -12,11 +14,12 @@ import (
 // fsCache is a local filesystem cache
 type fsCache struct {
 	cacheDirectory string
+	sink           analytics.Sink
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(config *config.Config) Cache {
-	return &fsCache{cacheDirectory: config.Cache.Dir}
+func newFsCache(config *config.Config, sink analytics.Sink) Cache {
+	return &fsCache{cacheDirectory: config.Cache.Dir, sink: sink}
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
@@ -25,15 +28,32 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 
 	// If it's not in the cache bail now
 	if !fs.PathExists(cachedFolder) {
+		f.logFetch(false, hash)
 		return false, nil, nil
 	}
 
 	// Otherwise, copy it into position
 	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, fs.DirPermissions, true, true)
 	if err != nil {
+		// TODO: what event to log here?
 		return false, nil, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
 	}
+	f.logFetch(true, hash)
 	return true, nil, nil
+}
+
+func (f *fsCache) logFetch(hit bool, hash string) {
+	var event string
+	if hit {
+		event = "local-hit"
+	} else {
+		event = "local-miss"
+	}
+	payload := &cacheEvent{
+		event,
+		hash,
+	}
+	f.sink.LogEvent(payload)
 }
 
 func (f *fsCache) Put(target, hash string, duration int, files []string) error {

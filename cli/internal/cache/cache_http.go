@@ -11,6 +11,8 @@ import (
 	"os"
 	"path"
 	"time"
+
+	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
@@ -19,6 +21,7 @@ type httpCache struct {
 	writable       bool
 	config         *config.Config
 	requestLimiter limiter
+	sink           analytics.Sink
 }
 
 type limiter chan struct{}
@@ -103,11 +106,27 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
-	m, files, err := cache.retrieve(key)
+	hit, files, err := cache.retrieve(key)
 	if err != nil {
+		// TODO: analytics event?
 		return false, files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
-	return m, files, err
+	cache.logFetch(hit, key)
+	return hit, files, err
+}
+
+func (cache *httpCache) logFetch(hit bool, hash string) {
+	var event string
+	if hit {
+		event = "remote-hit"
+	} else {
+		event = "remote-miss"
+	}
+	payload := &cacheEvent{
+		event,
+		hash,
+	}
+	cache.sink.LogEvent(payload)
 }
 
 func (cache *httpCache) retrieve(key string) (bool, []string, error) {
@@ -197,10 +216,11 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(config *config.Config) *httpCache {
+func newHTTPCache(config *config.Config, sink analytics.Sink) *httpCache {
 	return &httpCache{
 		writable:       true,
 		config:         config,
 		requestLimiter: make(limiter, 20),
+		sink:           sink,
 	}
 }

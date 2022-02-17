@@ -4,6 +4,7 @@ package cache
 import (
 	"fmt"
 
+	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"golang.org/x/sync/errgroup"
@@ -21,23 +22,28 @@ type Cache interface {
 	Shutdown()
 }
 
+type cacheEvent struct {
+	event string
+	hash  string
+}
+
 // New creates a new cache
-func New(config *config.Config) Cache {
-	c := newSyncCache(config, false)
+func New(config *config.Config, sink analytics.Sink) Cache {
+	c := newSyncCache(config, false, sink)
 	if config.Cache.Workers > 0 {
 		return newAsyncCache(c, config)
 	}
 	return c
 }
 
-func newSyncCache(config *config.Config, remoteOnly bool) Cache {
+func newSyncCache(config *config.Config, remoteOnly bool, sink analytics.Sink) Cache {
 	mplex := &cacheMultiplexer{}
 	if config.Cache.Dir != "" && !remoteOnly {
-		mplex.caches = append(mplex.caches, newFsCache(config))
+		mplex.caches = append(mplex.caches, newFsCache(config, sink))
 	}
 	if (config.Token != "" && config.TeamId != "") || (config.Token != "" && config.TeamSlug != "") {
 		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
-		mplex.caches = append(mplex.caches, newHTTPCache(config))
+		mplex.caches = append(mplex.caches, newHTTPCache(config, sink))
 	}
 	if len(mplex.caches) == 0 {
 		return nil
