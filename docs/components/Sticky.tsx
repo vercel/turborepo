@@ -1,11 +1,11 @@
-import * as React from 'react'
+import * as React from "react";
 
-import cn from 'classnames'
+import cn from "classnames";
 
 export interface StickyProps {
-  offset?: number
-  shadow?: boolean
-  className?: string
+  offset?: number;
+  shadow?: boolean;
+  className?: string;
 }
 
 export const Sticky: React.FC<StickyProps> = ({
@@ -17,7 +17,7 @@ export const Sticky: React.FC<StickyProps> = ({
   return (
     <div
       style={{ top: offset || 0 }}
-      className={cn({ shadow }, 'z-20', className)}
+      className={cn({ shadow }, "z-20", className)}
     >
       {children}
 
@@ -30,7 +30,7 @@ export const Sticky: React.FC<StickyProps> = ({
         }
       `}</style>
     </div>
-  )
-}
+  );
+};
 
-Sticky.displayName = 'Sticky'
+Sticky.displayName = "Sticky";

@@ -1,39 +1,39 @@
-import * as React from 'react'
-import { SliderState, useSliderState } from '@react-stately/slider'
-import { useSlider, useSliderThumb } from '@react-aria/slider'
-import { useFocusRing } from '@react-aria/focus'
-import { VisuallyHidden } from '@react-aria/visually-hidden'
-import { mergeProps } from '@react-aria/utils'
-import { useNumberFormatter } from '@react-aria/i18n'
-import { AriaSliderProps, AriaSliderThumbProps } from '@react-types/slider'
-import { AriaNumberFieldProps } from '@react-types/numberfield'
+import * as React from "react";
+import { SliderState, useSliderState } from "@react-stately/slider";
+import { useSlider, useSliderThumb } from "@react-aria/slider";
+import { useFocusRing } from "@react-aria/focus";
+import { VisuallyHidden } from "@react-aria/visually-hidden";
+import { mergeProps } from "@react-aria/utils";
+import { useNumberFormatter } from "@react-aria/i18n";
+import { AriaSliderProps, AriaSliderThumbProps } from "@react-types/slider";
+import { AriaNumberFieldProps } from "@react-types/numberfield";
 
 export function Slider(
-  props: AriaSliderProps & Pick<AriaNumberFieldProps, 'formatOptions'>
+  props: AriaSliderProps & Pick<AriaNumberFieldProps, "formatOptions">
 ) {
-  let trackRef = React.useRef(null)
-  let numberFormatter = useNumberFormatter(props.formatOptions)
-  let state = useSliderState({ ...props, numberFormatter })
+  let trackRef = React.useRef(null);
+  let numberFormatter = useNumberFormatter(props.formatOptions);
+  let state = useSliderState({ ...props, numberFormatter });
   let { groupProps, trackProps, labelProps, outputProps } = useSlider(
     props,
     state,
     trackRef
-  )
+  );
 
   return (
     <div
       {...groupProps}
       style={{
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
 
-        touchAction: 'none',
+        touchAction: "none",
       }}
     >
       {/* Create a flex container for the label and output element. */}
-      <div style={{ display: 'flex', alignSelf: 'stretch' }}>
+      <div style={{ display: "flex", alignSelf: "stretch" }}>
         {props.label && (
           <label className="text-blue-400 text-xl font-medium" {...labelProps}>
             {props.label}
@@ -42,7 +42,7 @@ export function Slider(
         <output
           {...outputProps}
           className="text-blue-400 text-xl font-bold pl-6"
-          style={{ flex: '1 0 auto', textAlign: 'end' }}
+          style={{ flex: "1 0 auto", textAlign: "end" }}
         >
           {state.getThumbValueLabel(0)}
         </output>
@@ -53,32 +53,32 @@ export function Slider(
         ref={trackRef}
         className="mt-2"
         style={{
-          position: 'relative',
+          position: "relative",
           height: 30,
-          width: ' 100%',
+          width: " 100%",
         }}
       >
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
 
             height: 2,
             top: 13,
-            width: '100%',
+            width: "100%",
           }}
           className="bg-blue-400 bg-opacity-50"
         />
         <Thumb index={0} state={state} trackRef={trackRef} />
       </div>
     </div>
-  )
+  );
 }
 
 function Thumb(
   props: AriaSliderThumbProps & { state: SliderState; trackRef: any }
 ) {
-  let { state, trackRef, index } = props
-  let inputRef = React.useRef(null)
+  let { state, trackRef, index } = props;
+  let inputRef = React.useRef(null);
   let { thumbProps, inputProps } = useSliderThumb(
     {
       index,
@@ -86,15 +86,15 @@ function Thumb(
       inputRef,
     },
     state
-  )
+  );
 
-  let { focusProps, isFocusVisible } = useFocusRing()
+  let { focusProps, isFocusVisible } = useFocusRing();
   return (
     <div
       style={{
-        position: 'absolute',
+        position: "absolute",
         top: 4,
-        transform: 'translateX(-50%)',
+        transform: "translateX(-50%)",
         left: `${state.getThumbPercent(index) * 100}%`,
       }}
     >
@@ -103,14 +103,14 @@ function Thumb(
         style={{
           width: 20,
           height: 20,
-          borderRadius: '50%',
+          borderRadius: "50%",
         }}
         className={
           isFocusVisible
-            ? 'bg-blue-200 border border-blue-400 shadow'
+            ? "bg-blue-200 border border-blue-400 shadow"
             : state.isThumbDragging(index)
-            ? 'bg-blue-500 border border-blue-400 shadow'
-            : 'bg-blue-400 border border-blue-400 shadow'
+            ? "bg-blue-500 border border-blue-400 shadow"
+            : "bg-blue-400 border border-blue-400 shadow"
         }
       >
         <VisuallyHidden>
@@ -118,5 +118,5 @@ function Thumb(
         </VisuallyHidden>
       </div>
     </div>
-  )
+  );
 }

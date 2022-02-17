@@ -25,7 +25,7 @@ export interface Schema {
    * in the traditional dependency graph
    *
    * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)).
-   * 
+   *
    * @default []
    */
   globalDependencies?: string[];
@@ -34,7 +34,7 @@ export interface Schema {
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to properly schedule, execute, and cache the outputs of tasks in
    * your project.
-   * 
+   *
    * @default {}
    */
   pipeline: {
@@ -63,7 +63,7 @@ export interface Pipeline {
    *
    * Prefixing an item in dependsOn with a $ tells turbo that this pipeline task depends
    * the value of that environment variable.
-   * 
+   *
    * @default []
    */
   dependsOn?: string[];
