@@ -22,9 +22,9 @@ type Cache interface {
 	Shutdown()
 }
 
-type cacheEvent struct {
-	event string
-	hash  string
+type CacheEvent struct {
+	Event string
+	Hash  string
 }
 
 // New creates a new cache

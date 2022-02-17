@@ -49,7 +49,7 @@ func (f *fsCache) logFetch(hit bool, hash string) {
 	} else {
 		event = "miss-local"
 	}
-	payload := &cacheEvent{
+	payload := &CacheEvent{
 		event,
 		hash,
 	}

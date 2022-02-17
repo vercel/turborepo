@@ -122,7 +122,7 @@ func (cache *httpCache) logFetch(hit bool, hash string) {
 	} else {
 		event = "miss-remote"
 	}
-	payload := &cacheEvent{
+	payload := &CacheEvent{
 		event,
 		hash,
 	}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/vercel/turborepo/cli/internal/analytics"
 )
 
 type ApiClient struct {
@@ -184,6 +185,22 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 	}
 
 	return c.HttpClient.Do(req)
+}
+
+func (c *ApiClient) RecordAnalyticsEvents(events *analytics.Events) error {
+	body, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/artifacts/events"), body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("User-Agent", c.UserAgent())
+	_, err = c.HttpClient.Do(req)
+	return err
 }
 
 // Team is a Vercel Team object

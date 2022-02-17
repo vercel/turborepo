@@ -324,7 +324,7 @@ func (c *RunCommand) Run(args []string) int {
 
 func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
 	goctx := gocontext.Background()
-	analyticsClient := analytics.NewClient(goctx)
+	analyticsClient := analytics.NewClient(goctx, c.Config.ApiClient)
 	defer analyticsClient.Close()
 	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()
