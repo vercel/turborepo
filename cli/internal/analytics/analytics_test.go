@@ -11,6 +11,7 @@ type dummySink struct {
 	events []*Events
 	err    error
 	mu     sync.Mutex
+	ch     chan struct{}
 }
 
 type evt struct {
@@ -20,6 +21,7 @@ type evt struct {
 func newDummySink() *dummySink {
 	return &dummySink{
 		events: []*Events{},
+		ch:     make(chan struct{}, 1),
 	}
 }
 
@@ -30,6 +32,7 @@ func (d *dummySink) RecordAnalyticsEvents(events *Events) error {
 	eventsCopy := make([]*Events, len(d.events))
 	copy(eventsCopy, d.events)
 	d.events = append(eventsCopy, events)
+	d.ch <- struct{}{}
 	return d.err
 }
 
@@ -37,6 +40,23 @@ func (d *dummySink) Events() []*Events {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.events
+}
+
+func (d *dummySink) ExpectImmediateMessage(t *testing.T) {
+	select {
+	case <-time.After(150 * time.Millisecond):
+		t.Errorf("expected to not wait out the flush timeout")
+	case <-d.ch:
+	}
+}
+
+func (d *dummySink) ExpectTimeoutThenMessage(t *testing.T) {
+	select {
+	case <-d.ch:
+		t.Errorf("Expected to wait out the flush timeout")
+	case <-time.After(150 * time.Millisecond):
+	}
+	<-d.ch
 }
 
 func Test_batching(t *testing.T) {
@@ -51,7 +71,7 @@ func Test_batching(t *testing.T) {
 		t.Errorf("got %v events, want 0 due to batching", len(found))
 	}
 	// Should timeout
-	<-time.After(210 * time.Millisecond)
+	d.ExpectTimeoutThenMessage(t)
 	found = d.Events()
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
@@ -69,8 +89,8 @@ func Test_batchingAcrossTwoBatches(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		c.LogEvent(&evt{i})
 	}
-	// Short timeout to allow for first batch
-	<-time.After(10 * time.Millisecond)
+	// We sent more than the batch size, expect a message immediately
+	d.ExpectImmediateMessage(t)
 	found := d.Events()
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
@@ -80,7 +100,7 @@ func Test_batchingAcrossTwoBatches(t *testing.T) {
 		t.Errorf("got %v, want 10 payloads to have been flushed", len(payloads))
 	}
 	// Should timeout second batch
-	<-time.After(210 * time.Millisecond)
+	d.ExpectTimeoutThenMessage(t)
 	found = d.Events()
 	if len(found) != 2 {
 		t.Errorf("got %v, want 2 batches to have been flushed", len(found))
@@ -125,7 +145,7 @@ func Test_closingByContext(t *testing.T) {
 		t.Errorf("got %v events, want 0 due to batching", len(found))
 	}
 	cancel()
-	<-time.After(10 * time.Millisecond)
+	d.ExpectImmediateMessage(t)
 	found = d.Events()
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
