@@ -47,7 +47,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
-	return cache.config.ApiClient.PutArtifact(hash, cache.config.TeamId, cache.config.TeamSlug, duration, r)
+	return cache.config.ApiClient.PutArtifact(hash, duration, r)
 }
 
 // write writes a series of files into the given Writer.
@@ -130,7 +130,7 @@ func (cache *httpCache) logFetch(hit bool, hash string) {
 }
 
 func (cache *httpCache) retrieve(key string) (bool, []string, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(key, cache.config.TeamId, cache.config.TeamSlug, nil)
+	resp, err := cache.config.ApiClient.FetchArtifact(key, nil)
 	if err != nil {
 		return false, nil, err
 	}

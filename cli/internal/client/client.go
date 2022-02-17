@@ -31,6 +31,8 @@ type ApiClient struct {
 	currentFailCount uint64
 	// An http client
 	HttpClient *retryablehttp.Client
+	teamID     string
+	teamSlug   string
 }
 
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
@@ -41,7 +43,7 @@ func (api *ApiClient) SetToken(token string) {
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, maxRemoteFailCount uint64) *ApiClient {
+func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
 	client := &ApiClient{
 		baseUrl:            baseUrl,
 		turboVersion:       turboVersion,
@@ -56,6 +58,8 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, maxRemo
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
+		teamID:   teamID,
+		teamSlug: teamSlug,
 	}
 	client.HttpClient.CheckRetry = client.checkRetry
 	return client
@@ -133,12 +137,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 		return err
 	}
 	params := url.Values{}
-	if teamId != "" && strings.HasPrefix(teamId, "team_") {
-		params.Add("teamId", teamId)
-	}
-	if slug != "" {
-		params.Add("slug", slug)
-	}
+	c.addTeamParam(&params)
 	// only add a ? if it's actually needed (makes logging cleaner)
 	encoded := params.Encode()
 	if encoded != "" {
@@ -166,12 +165,7 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 		return nil, err
 	}
 	params := url.Values{}
-	if teamId != "" && strings.HasPrefix(teamId, "team_") {
-		params.Add("teamId", teamId)
-	}
-	if slug != "" {
-		params.Add("slug", slug)
-	}
+	c.addTeamParam(&params)
 	// only add a ? if it's actually needed (makes logging cleaner)
 	encoded := params.Encode()
 	if encoded != "" {
@@ -188,11 +182,13 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 }
 
 func (c *ApiClient) RecordAnalyticsEvents(events *analytics.Events) error {
+	params := url.Values{}
+	c.addTeamParam(&params)
 	body, err := json.Marshal(events)
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/artifacts/events"), body)
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/artifacts/events?"+params.Encode()), body)
 	if err != nil {
 		return err
 	}
@@ -201,6 +197,15 @@ func (c *ApiClient) RecordAnalyticsEvents(events *analytics.Events) error {
 	req.Header.Set("User-Agent", c.UserAgent())
 	_, err = c.HttpClient.Do(req)
 	return err
+}
+
+func (c *ApiClient) addTeamParam(params *url.Values) {
+	if c.teamID != "" && strings.HasPrefix(c.teamID, "team_") {
+		params.Add("teamId", c.teamID)
+	}
+	if c.teamSlug != "" {
+		params.Add("slug", c.teamSlug)
+	}
 }
 
 // Team is a Vercel Team object
