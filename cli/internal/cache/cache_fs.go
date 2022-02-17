@@ -14,12 +14,12 @@ import (
 // fsCache is a local filesystem cache
 type fsCache struct {
 	cacheDirectory string
-	sink           analytics.Sink
+	recorder       analytics.Recorder
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(config *config.Config, sink analytics.Sink) Cache {
-	return &fsCache{cacheDirectory: config.Cache.Dir, sink: sink}
+func newFsCache(config *config.Config, recorder analytics.Recorder) Cache {
+	return &fsCache{cacheDirectory: config.Cache.Dir, recorder: recorder}
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
@@ -53,7 +53,7 @@ func (f *fsCache) logFetch(hit bool, hash string) {
 		event,
 		hash,
 	}
-	f.sink.LogEvent(payload)
+	f.recorder.LogEvent(payload)
 }
 
 func (f *fsCache) Put(target, hash string, duration int, files []string) error {

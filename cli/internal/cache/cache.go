@@ -28,22 +28,22 @@ type cacheEvent struct {
 }
 
 // New creates a new cache
-func New(config *config.Config, sink analytics.Sink) Cache {
-	c := newSyncCache(config, false, sink)
+func New(config *config.Config, recorder analytics.Recorder) Cache {
+	c := newSyncCache(config, false, recorder)
 	if config.Cache.Workers > 0 {
 		return newAsyncCache(c, config)
 	}
 	return c
 }
 
-func newSyncCache(config *config.Config, remoteOnly bool, sink analytics.Sink) Cache {
+func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Recorder) Cache {
 	mplex := &cacheMultiplexer{}
 	if config.Cache.Dir != "" && !remoteOnly {
-		mplex.caches = append(mplex.caches, newFsCache(config, sink))
+		mplex.caches = append(mplex.caches, newFsCache(config, recorder))
 	}
 	if (config.Token != "" && config.TeamId != "") || (config.Token != "" && config.TeamSlug != "") {
 		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
-		mplex.caches = append(mplex.caches, newHTTPCache(config, sink))
+		mplex.caches = append(mplex.caches, newHTTPCache(config, recorder))
 	}
 	if len(mplex.caches) == 0 {
 		return nil

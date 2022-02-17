@@ -21,7 +21,7 @@ type httpCache struct {
 	writable       bool
 	config         *config.Config
 	requestLimiter limiter
-	sink           analytics.Sink
+	recorder       analytics.Recorder
 }
 
 type limiter chan struct{}
@@ -126,7 +126,7 @@ func (cache *httpCache) logFetch(hit bool, hash string) {
 		event,
 		hash,
 	}
-	cache.sink.LogEvent(payload)
+	cache.recorder.LogEvent(payload)
 }
 
 func (cache *httpCache) retrieve(key string) (bool, []string, error) {
@@ -216,11 +216,11 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(config *config.Config, sink analytics.Sink) *httpCache {
+func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
 		config:         config,
 		requestLimiter: make(limiter, 20),
-		sink:           sink,
+		recorder:       recorder,
 	}
 }

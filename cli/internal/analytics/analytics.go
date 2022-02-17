@@ -9,16 +9,16 @@ import (
 
 type EventPayload = interface{}
 
-type Sink interface {
+type Recorder interface {
 	LogEvent(payload EventPayload)
 }
 
 type Client interface {
-	Sink
+	Recorder
 	Close()
 }
 
-type sink struct {
+type client struct {
 	ch     chan<- EventPayload
 	cancel func()
 
@@ -57,7 +57,7 @@ func NewClient(parent context.Context) Client {
 	ctx, cancel := context.WithCancel(parent)
 	// creates and starts the worker
 	worker := newWorker(ctx, ch)
-	s := &sink{
+	s := &client{
 		ch:     ch,
 		cancel: cancel,
 		worker: worker,
@@ -65,11 +65,11 @@ func NewClient(parent context.Context) Client {
 	return s
 }
 
-func (s *sink) LogEvent(event EventPayload) {
+func (s *client) LogEvent(event EventPayload) {
 	s.ch <- event
 }
 
-func (s *sink) Close() {
+func (s *client) Close() {
 	s.cancel()
 	s.worker.Wait()
 }
