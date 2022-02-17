@@ -1,3 +1,4 @@
 import './other';
-import './shared.js';
+import('./shared.js');
+require('./commonjs');
 console.log('yeah');
