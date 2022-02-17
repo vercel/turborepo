@@ -48,6 +48,11 @@ type Config struct {
 	Cache        *CacheConfig
 }
 
+// IsLoggedIn returns true if we have a token and either a team id or team slug
+func (c *Config) IsLoggedIn() bool {
+	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
+}
+
 // CacheConfig
 type CacheConfig struct {
 	// Number of async workers

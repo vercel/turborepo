@@ -324,7 +324,13 @@ func (c *RunCommand) Run(args []string) int {
 
 func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
 	goctx := gocontext.Background()
-	analyticsClient := analytics.NewClient(goctx, c.Config.ApiClient)
+	var analyticsSink analytics.Sink
+	if c.Config.IsLoggedIn() {
+		analyticsSink = c.Config.ApiClient
+	} else {
+		analyticsSink = analytics.NullSink
+	}
+	analyticsClient := analytics.NewClient(goctx, analyticsSink)
 	defer analyticsClient.Close()
 	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()

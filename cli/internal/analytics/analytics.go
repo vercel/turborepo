@@ -27,6 +27,16 @@ type Sink interface {
 	RecordAnalyticsEvents(events *Events) error
 }
 
+type nullSink struct{}
+
+func (n *nullSink) RecordAnalyticsEvents(events *Events) error {
+	return nil
+}
+
+// NullSink is an analytics sink to use in the event that we don't want to send
+// analytics
+var NullSink = &nullSink{}
+
 type client struct {
 	ch     chan<- EventPayload
 	cancel func()
