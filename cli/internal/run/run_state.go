@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -82,9 +83,11 @@ type RunState struct {
 	runOptions *RunOptions
 	cursor     *cursor.Cursor
 	ticker     *time.Ticker
+
+	startedAt time.Time
 }
 
-func NewRunState(runOptions *RunOptions) *RunState {
+func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
 	return &RunState{
 		Success:   0,
 		Failure:   0,
@@ -94,6 +97,7 @@ func NewRunState(runOptions *RunOptions) *RunState {
 
 		cursor:     cursor.New(),
 		runOptions: runOptions,
+		startedAt:  startedAt,
 	}
 }
 
@@ -268,7 +272,7 @@ func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuf
 	}
 }
 
-func (r *RunState) Close(Ui cli.Ui, startAt time.Time, filename string) error {
+func (r *RunState) Close(Ui cli.Ui, filename string) error {
 	outputPath := chrometracing.Path()
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
 	if filename != "" {
@@ -292,17 +296,17 @@ func (r *RunState) Close(Ui cli.Ui, startAt time.Time, filename string) error {
 		Ui.Output("") // Clear the line
 		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total", r.Cached+r.Success, r.Attempted))
 		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total", r.Cached, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v", time.Since(startAt).Truncate(time.Millisecond), maybeFullTurbo))
+		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 		Ui.Output("")
 	} else {
 
 		incrementality := fmt.Sprintf("%.f%% incremental", math.Round(float64(r.Cached)/float64(r.Attempted)*100))
 		if r.Failure > 0 {
-			r.Render(Ui, startAt, 3, len(r.Ordered))
-			Ui.Output(util.Sprintf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(startAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
+			r.Render(Ui, r.startedAt, 3, len(r.Ordered))
+			Ui.Output(util.Sprintf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
 		} else {
 			Ui.Output(util.Sprintf("${BOLD}>>> TURBO${RESET}"))
-			Ui.Output(util.Sprintf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(startAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
+			Ui.Output(util.Sprintf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
 		}
 
 	}

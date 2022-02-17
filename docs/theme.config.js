@@ -187,7 +187,7 @@ const theme = {
           className="font-medium text-white no-underline dark:text-black "
           title="Go to the Vercel website"
         >
-          Turborepo is joining Vercel. Read More →
+          Turborepo has joined Vercel. Read More →
         </a>
       </div>
     );
