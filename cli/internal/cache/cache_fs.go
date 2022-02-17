@@ -45,9 +45,9 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 func (f *fsCache) logFetch(hit bool, hash string) {
 	var event string
 	if hit {
-		event = "local-hit"
+		event = "hit-local"
 	} else {
-		event = "local-miss"
+		event = "miss-local"
 	}
 	payload := &cacheEvent{
 		event,
