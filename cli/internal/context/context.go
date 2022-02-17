@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/backends"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -28,22 +29,20 @@ const GLOBAL_CACHE_KEY = "snozzberries"
 
 // Context of the CLI
 type Context struct {
-	Args                   []string
-	PackageInfos           map[interface{}]*fs.PackageJSON
-	PackageNames           []string
-	TopologicalGraph       dag.AcyclicGraph
-	Dir                    string
-	RootNode               string
-	RootPackageJSON        *fs.PackageJSON
-	TurboConfig            *fs.TurboConfigJSON
-	GlobalHashableEnvPairs []string
-	GlobalHashableEnvNames []string
-	GlobalHash             string
-	TraceFilePath          string
-	Lockfile               *fs.YarnLockfile
-	SCC                    [][]dag.Vertex
-	Targets                []string
-	Backend                *api.LanguageBackend
+	Args             []string
+	PackageInfos     map[interface{}]*fs.PackageJSON
+	PackageNames     []string
+	TopologicalGraph dag.AcyclicGraph
+	Dir              string
+	RootNode         string
+	RootPackageJSON  *fs.PackageJSON
+	TurboConfig      *fs.TurboConfigJSON
+	GlobalHash       string
+	TraceFilePath    string
+	Lockfile         *fs.YarnLockfile
+	SCC              [][]dag.Vertex
+	Targets          []string
+	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -146,65 +145,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
-		// Calculate the global hash
-		globalDeps := make(util.Set)
-
-		// Calculate global file and env var dependencies
-		if len(c.TurboConfig.GlobalDependencies) > 0 {
-			var globs []string
-			for _, v := range c.TurboConfig.GlobalDependencies {
-				if strings.HasPrefix(v, "$") {
-					trimmed := strings.TrimPrefix(v, "$")
-					c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, trimmed)
-					c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-				} else {
-					globs = append(globs, v)
-				}
-			}
-
-			if len(globs) > 0 {
-				f := globby.GlobFiles(rootpath, globs, []string{})
-				for _, val := range f {
-					globalDeps.Add(val)
-				}
-			}
-		}
-
-		// get system env vars for hashing purposes, these include any variable that includes "TURBO"
-		// that is NOT TURBO_TOKEN or TURBO_TEAM or TURBO_BINARY_PATH.
-		names, pairs := getHashableTurboEnvVarsFromOs()
-		c.GlobalHashableEnvNames = append(c.GlobalHashableEnvNames, names...)
-		c.GlobalHashableEnvPairs = append(c.GlobalHashableEnvPairs, pairs...)
-		// sort them for consistent hashing
-		sort.Strings(c.GlobalHashableEnvNames)
-		sort.Strings(c.GlobalHashableEnvPairs)
-		config.Logger.Debug("global hash env vars", "vars", c.GlobalHashableEnvNames)
-
-		if !util.IsYarn(c.Backend.Name) {
-			// If we are not in Yarn, add the specfile and lockfile to global deps
-			globalDeps.Add(c.Backend.Specfile)
-			globalDeps.Add(c.Backend.Lockfile)
-		}
-
-		globalFileHashMap, err := fs.GitHashForFiles(globalDeps.UnsafeListOfStrings(), rootpath)
-		if err != nil {
-			return fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
-		}
-		globalHashable := struct {
-			globalFileHashMap    map[string]string
-			rootExternalDepsHash string
-			hashedSortedEnvPairs []string
-			globalCacheKey       string
-		}{
-			globalFileHashMap:    globalFileHashMap,
-			rootExternalDepsHash: pkg.ExternalDepsHash,
-			hashedSortedEnvPairs: c.GlobalHashableEnvPairs,
-			globalCacheKey:       GLOBAL_CACHE_KEY,
-		}
-		globalHash, err := fs.HashObject(globalHashable)
-		if err != nil {
-			return fmt.Errorf("error hashing global dependencies %w", err)
-		}
+		globalHash, err := calculateGlobalHash(rootpath, pkg, c.TurboConfig.GlobalDependencies, c.Backend, config.Logger, os.Environ())
 		c.GlobalHash = globalHash
 		targets, err := GetTargetsFromArguments(c.Args, c.TurboConfig)
 		if err != nil {
@@ -534,10 +475,10 @@ func getWorkspaceIgnores() []string {
 
 // getHashableTurboEnvVarsFromOs returns a list of environment variables names and
 // that are safe to include in the global hash
-func getHashableTurboEnvVarsFromOs() ([]string, []string) {
+func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	var justNames []string
 	var pairs []string
-	for _, e := range os.Environ() {
+	for _, e := range env {
 		kv := strings.SplitN(e, "=", 2)
 		if strings.Contains(kv[0], "THASH") {
 			justNames = append(justNames, kv[0])
@@ -546,4 +487,69 @@ func getHashableTurboEnvVarsFromOs() ([]string, []string) {
 	}
 
 	return justNames, pairs
+}
+
+func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *api.LanguageBackend, logger hclog.Logger, env []string) (string, error) {
+	// Calculate the global hash
+	globalDeps := make(util.Set)
+
+	globalHashableEnvNames := []string{}
+	globalHashableEnvPairs := []string{}
+	// Calculate global file and env var dependencies
+	if len(externalGlobalDependencies) > 0 {
+		var globs []string
+		for _, v := range externalGlobalDependencies {
+			if strings.HasPrefix(v, "$") {
+				trimmed := strings.TrimPrefix(v, "$")
+				globalHashableEnvNames = append(globalHashableEnvNames, trimmed)
+				globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+			} else {
+				globs = append(globs, v)
+			}
+		}
+
+		if len(globs) > 0 {
+			f := globby.GlobFiles(rootpath, globs, []string{})
+			for _, val := range f {
+				globalDeps.Add(val)
+			}
+		}
+	}
+
+	// get system env vars for hashing purposes, these include any variable that includes "TURBO"
+	// that is NOT TURBO_TOKEN or TURBO_TEAM or TURBO_BINARY_PATH.
+	names, pairs := getHashableTurboEnvVarsFromOs(env)
+	globalHashableEnvNames = append(globalHashableEnvNames, names...)
+	globalHashableEnvPairs = append(globalHashableEnvPairs, pairs...)
+	// sort them for consistent hashing
+	sort.Strings(globalHashableEnvNames)
+	sort.Strings(globalHashableEnvPairs)
+	logger.Debug("global hash env vars", "vars", globalHashableEnvNames)
+
+	if !util.IsYarn(backend.Name) {
+		// If we are not in Yarn, add the specfile and lockfile to global deps
+		globalDeps.Add(backend.Specfile)
+		globalDeps.Add(backend.Lockfile)
+	}
+
+	globalFileHashMap, err := fs.GitHashForFiles(globalDeps.UnsafeListOfStrings(), rootpath)
+	if err != nil {
+		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
+	}
+	globalHashable := struct {
+		globalFileHashMap    map[string]string
+		rootExternalDepsHash string
+		hashedSortedEnvPairs []string
+		globalCacheKey       string
+	}{
+		globalFileHashMap:    globalFileHashMap,
+		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
+		hashedSortedEnvPairs: globalHashableEnvPairs,
+		globalCacheKey:       GLOBAL_CACHE_KEY,
+	}
+	globalHash, err := fs.HashObject(globalHashable)
+	if err != nil {
+		return "", fmt.Errorf("error hashing global dependencies %w", err)
+	}
+	return globalHash, nil
 }
