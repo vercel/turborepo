@@ -23,19 +23,19 @@ pub async fn copy_all(input: FileSystemPathRef, options: CopyAllOptionsRef) {
 #[turbo_tasks::function]
 async fn copy_module(module: ModuleRef, options: CopyAllOptionsRef) {
     let resource = &module.await.resource;
-    let content = resource.clone().read().await;
+    let content = resource.clone().read();
     let options_value = options.await;
     let output = rebase(
         resource.clone(),
         options_value.input_dir.clone(),
         options_value.output_dir.clone(),
     );
-    output.write(content).await;
+    output.write(content);
 }
 
 #[turbo_tasks::function]
 async fn module(fs_path: FileSystemPathRef) -> ModuleRef {
-    let source = fs_path.clone().read().await;
+    let source = fs_path.clone().read();
     let content = parse(source);
     Module {
         resource: fs_path,

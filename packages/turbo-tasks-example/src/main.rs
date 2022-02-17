@@ -107,13 +107,13 @@ async fn ls(fs: FileSystemRef) {
 
 #[turbo_tasks::function]
 async fn print_sizes(directory: FileSystemPathRef) {
-    let content = directory.clone().read_dir().await;
+    let content = directory.clone().read_dir();
     match &*content.await {
         DirectoryContent::Entries(entries) => {
             for entry in entries.iter() {
                 match &*entry.get().await {
                     DirectoryEntry::File(path) => {
-                        print_size(path.clone(), path.clone().read().await);
+                        print_size(path.clone(), path.clone().read());
                     }
                     DirectoryEntry::Directory(path) => {
                         print_sizes(path.clone());
