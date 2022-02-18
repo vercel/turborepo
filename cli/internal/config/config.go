@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
 	"github.com/vercel/turborepo/cli/internal/client"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -49,8 +50,6 @@ type Config struct {
 
 // CacheConfig
 type CacheConfig struct {
-	// Number of failed requests before we stop trying to upload/download artifacts to the remote cache
-	MaxRemoteFailCount uint64
 	// Number of async workers
 	Workers int
 	// Cache directory
@@ -162,7 +161,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Output: output,
 	})
 
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion)
+	maxRemoteFailCount := 3
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, uint64(maxRemoteFailCount))
 
 	c = &Config{
 		Logger:       logger,
@@ -174,9 +174,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		ApiClient:    apiClient,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
-			MaxRemoteFailCount: 3,
-			Workers:            runtime.NumCPU() + 2,
-			Dir:                filepath.Join("node_modules", ".cache", "turbo"),
+			Workers: runtime.NumCPU() + 2,
+			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
 	}
 

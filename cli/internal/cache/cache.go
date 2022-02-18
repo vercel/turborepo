@@ -3,11 +3,10 @@ package cache
 
 import (
 	"fmt"
-	"sync"
-  "golang.org/x/sync/errgroup"
+
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
-
+	"golang.org/x/sync/errgroup"
 )
 
 // Cache is abstracted way to cache/fetch previously run tasks
@@ -65,7 +64,7 @@ func (mplex cacheMultiplexer) Put(target string, key string, duration int, files
 // but it's hard to fix that without breaking the cache abstraction.
 func (mplex cacheMultiplexer) storeUntil(target string, key string, duration int, outputGlobs []string, stopAt int) error {
 	// Attempt to store on all caches simultaneously.
-	g := new(errgroup.Group)
+	g := &errgroup.Group{}
 	for i, cache := range mplex.caches {
 		if i == stopAt {
 			break
