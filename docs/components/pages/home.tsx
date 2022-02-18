@@ -25,7 +25,7 @@ import shadcn from "../../images/shadcn.jpeg";
 import christian from "../../images/christian.jpeg";
 import yangshunz from "../../images/yangshunz.jpeg";
 import nmoore from "../../images/nmoore.jpeg";
-import sseraphini from "../../images/sseraphini.jpeg";
+import joshlarson from "../../images/joshlarson.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import { Footer } from "../Footer";
@@ -151,6 +151,13 @@ function Page() {
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6"
+                src="/images/logos/shopify.svg"
+                alt="Shopify"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="h-6"
                 src="/images/logos/twilio.svg"
                 alt="Twilio"
               />
@@ -160,13 +167,6 @@ function Page() {
                 className="w-auto h-7"
                 src="/images/logos/washingtonpost.svg"
                 alt="The Washington Post"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img
-                className="h-6 "
-                src="/images/logos/lattice.svg"
-                alt="Lattice"
               />
             </div>
           </div>
@@ -460,12 +460,19 @@ function Page() {
               }
             />
             <Tweet
-              url="https://twitter.com/sseraphini/status/1470501625580208139"
-              username="sseraphini"
-              name="Sibelius Seraphini"
-              date="Dec 13"
-              avatar={sseraphini}
-              text={<>Turborepo is sweet</>}
+              url="https://twitter.com/jplhomer/status/1494080248845062154"
+              username="jplhomer"
+              name="Josh Larson"
+              date="Feb 16"
+              avatar={joshlarson}
+              text={
+                <>
+                  Living that <Mention>@turborepo</Mention> life{" "}
+                  <span role="img" aria-label="Smiling face with sunglasses">
+                    😎
+                  </span>
+                </>
+              }
             />
           </div>
         </div>
@@ -487,16 +494,23 @@ function Page() {
   );
 }
 
-function Mention({ children }) {
+function TweetLink({ href, children }) {
   return (
     <a
-      href={`https://twitter.com/${children.replace("@", "")}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-block text-[#35ACDF]"
     >
       {children}
     </a>
+  );
+}
+function Mention({ children }) {
+  return (
+    <TweetLink href={`https://twitter.com/${children.replace("@", "")}`}>
+      {children}
+    </TweetLink>
   );
 }
 
