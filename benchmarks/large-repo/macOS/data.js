@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1645032269630,
+  "lastUpdate": 1645145154865,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -192,6 +192,52 @@ window.BENCHMARK_DATA = {
             "value": 51623.4,
             "unit": "ms",
             "range": "11751"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "09223bf43e4f3668bfd4f9b8a9599c836fbd6692",
+          "message": "Start splitting the Run command up (#752)\n\nThis PR makes a few changes to `Run`. The intention is to separate out a few distinct pieces:\n * The complete graph, inferred from the the filesystem and pipeline configuration. This should be reusable across multiple runs on the same filesystem / pipeline\n * Run specific configuration: what tasks to run, whether to include dependencies, etc.\n * The mechanics of how to execute the run. In parallel? Cache the output? etc.\n\nReview note: it may be easier to go commit by commit.",
+          "timestamp": "2022-02-17T17:34:44Z",
+          "url": "https://github.com/vercel/turborepo/commit/09223bf43e4f3668bfd4f9b8a9599c836fbd6692"
+        },
+        "date": 1645145153332,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 244807.4,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 15653.8,
+            "unit": "ms",
+            "range": "3289"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 75407.4,
+            "unit": "ms",
+            "range": "38295"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 58223.6,
+            "unit": "ms",
+            "range": "14269"
           }
         ]
       }
