@@ -61,12 +61,12 @@ struct ModuleContent {
 #[derive(PartialEq, Eq)]
 enum ModuleItem {
     Comment(String),
-    Reference(ModuleReferenceRef),
+    Reference(AssetReferenceRef),
 }
 
 #[turbo_tasks::value]
 #[derive(PartialEq, Eq)]
-struct ModuleReference {
+struct AssetReference {
     request: String,
 }
 
@@ -83,7 +83,7 @@ async fn parse(content: FileContentRef) -> ModuleContentRef {
                         ModuleItem::Comment(line[1..].to_string()).into()
                     } else {
                         ModuleItem::Reference(
-                            ModuleReference {
+                            AssetReference {
                                 request: line.to_string(),
                             }
                             .into(),
@@ -148,13 +148,13 @@ async fn referenced_modules(origin: ModuleRef) -> ModulesSetRef {
 }
 
 #[turbo_tasks::function]
-async fn referenced_module(origin: ModuleRef, reference: ModuleReferenceRef) -> ModuleRef {
+async fn referenced_module(origin: ModuleRef, reference: AssetReferenceRef) -> ModuleRef {
     let resolved = resolve(origin.await.resource.clone(), reference.clone());
     module(resolved)
 }
 
 #[turbo_tasks::function]
-async fn resolve(origin: FileSystemPathRef, reference: ModuleReferenceRef) -> FileSystemPathRef {
+async fn resolve(origin: FileSystemPathRef, reference: AssetReferenceRef) -> FileSystemPathRef {
     let FileSystemPath { fs, path } = &*origin.await;
     let mut request = reference.await.request.to_string();
     let mut p = path.to_string();

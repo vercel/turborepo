@@ -66,7 +66,7 @@ fn main() {
             })
         });
         task.wait_done().await;
-        println!("done in {}ms", start.elapsed().as_millis());
+        println!("done in {} ms", start.elapsed().as_millis());
         loop {
             // create a graph
             let mut graph_viz = GraphViz::new();
