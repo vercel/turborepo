@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
 	"github.com/vercel/turborepo/cli/internal/client"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -53,8 +54,6 @@ type CacheConfig struct {
 	Workers int
 	// Cache directory
 	Dir string
-	// HTTP URI of the cache
-	Url string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
@@ -162,7 +161,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Output: output,
 	})
 
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion)
+	maxRemoteFailCount := 3
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, uint64(maxRemoteFailCount))
 
 	c = &Config{
 		Logger:       logger,
