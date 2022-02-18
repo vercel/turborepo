@@ -118,13 +118,14 @@ func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (
 func (cache *httpCache) logFetch(hit bool, hash string) {
 	var event string
 	if hit {
-		event = "hit-remote"
+		event = cacheEventHit
 	} else {
-		event = "miss-remote"
+		event = cacheEventMiss
 	}
 	payload := &CacheEvent{
-		event,
-		hash,
+		Source: "remote",
+		Event: event,
+		Hash: hash,
 	}
 	cache.recorder.LogEvent(payload)
 }
