@@ -50,7 +50,7 @@ func (f *fsCache) logFetch(hit bool, hash string) {
 		event = cacheEventMiss
 	}
 	payload := &CacheEvent{
-		Source: "local",
+		Source: "LOCAL",
 		Event:  event,
 		Hash:   hash,
 	}
