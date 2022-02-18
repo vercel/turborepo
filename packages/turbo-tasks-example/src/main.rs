@@ -2,8 +2,10 @@
 #![feature(once_cell)]
 #![feature(into_future)]
 
+use async_std::task::{block_on, spawn};
 use math::{add, max_new};
 use random::RandomIdRef;
+use std::time::Instant;
 use std::{env::current_dir, fs, thread, time::Duration};
 use turbo_pack::emit;
 use turbo_pack::module::Module;
@@ -30,58 +32,65 @@ mod utils;
 
 fn main() {
     let tt = TurboTasks::new();
-    let task = tt.spawn_root_task(|| {
-        Box::pin(async {
-            // make_math().await;
+    block_on(async {
+        let start = Instant::now();
 
-            let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
+        let task = tt.spawn_root_task(|| {
+            Box::pin(async {
+                // make_math().await;
 
-            // TODO add casts to Smart Pointers
-            let fs = FileSystemRef::from_slot_ref(disk_fs.clone().into());
+                let root = current_dir().unwrap().to_str().unwrap().to_string();
+                let disk_fs = DiskFileSystemRef::new("project".to_string(), root);
 
-            // ls(fs).await;
-            let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
-            let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
-            let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
+                // Smart Pointer cast
+                let fs: FileSystemRef = disk_fs.into();
 
-            emit(Module { path: entry }.into(), input, output);
+                // ls(fs).await;
+                let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
+                let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
+                let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
 
-            // copy_all(
-            //     entry,
-            //     CopyAllOptions {
-            //         input_dir: input,
-            //         output_dir: output,
-            //     }
-            //     .into(),
-            // )
-            // .await;
+                emit(Module { path: entry }.into(), input, output);
 
-            SlotRef::Nothing
-        })
-    });
-    loop {
-        // create a graph
-        let mut graph_viz = GraphViz::new();
+                // copy_all(
+                //     entry,
+                //     CopyAllOptions {
+                //         input_dir: input,
+                //         output_dir: output,
+                //     }
+                //     .into(),
+                // )
+                // .await;
 
-        // graph root node
-        graph_viz.add_task(&task);
+                SlotRef::Nothing
+            })
+        });
+        task.wait_done().await;
+        println!("done in {}ms", start.elapsed().as_millis());
+        loop {
+            // create a graph
+            let mut graph_viz = GraphViz::new();
 
-        // graph tasks in cache
-        for task in tt.cached_tasks_iter() {
+            // graph root node
             graph_viz.add_task(&task);
+
+            // graph tasks in cache
+            for task in tt.cached_tasks_iter() {
+                graph_viz.add_task(&task);
+            }
+
+            // prettify graph
+            graph_viz.merge_edges();
+            graph_viz.drop_unchanged_slots();
+            graph_viz.skip_loney_resolve();
+            graph_viz.drop_inactive_tasks();
+
+            // write HTML
+            fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
+            println!("graph.html written");
+            thread::sleep(Duration::from_secs(3));
         }
-
-        // prettify graph
-        graph_viz.merge_edges();
-        graph_viz.drop_unchanged_slots();
-        graph_viz.skip_loney_resolve();
-
-        // write HTML
-        fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
-        println!("graph.html written");
-        thread::sleep(Duration::from_secs(3));
-    }
+    });
 }
 
 #[turbo_tasks::function]
