@@ -24,10 +24,11 @@ type Cache interface {
 
 const cacheEventHit = "HIT"
 const cacheEventMiss = "MISS"
+
 type CacheEvent struct {
-	Source string
-	Event  string
-	Hash   string
+	Source string `json:"source"`
+	Event  string `json:"event"`
+	Hash   string `json:"hash"`
 }
 
 // New creates a new cache
