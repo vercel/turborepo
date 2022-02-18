@@ -2,9 +2,11 @@ package analytics
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -51,13 +53,15 @@ type worker struct {
 	doneSemaphore util.Semaphore
 	sessionID     uuid.UUID
 	sink          Sink
+	wg            sync.WaitGroup
+	logger        hclog.Logger
 }
 
 const bufferThreshold = 10
 const eventTimeout = 200 * time.Millisecond
 const noTimeout = 24 * time.Hour
 
-func newWorker(ctx context.Context, ch <-chan EventPayload, sink Sink) *worker {
+func newWorker(ctx context.Context, ch <-chan EventPayload, sink Sink, logger hclog.Logger) *worker {
 	buffer := []EventPayload{}
 	sessionID := uuid.New()
 	w := &worker{
@@ -67,17 +71,18 @@ func newWorker(ctx context.Context, ch <-chan EventPayload, sink Sink) *worker {
 		doneSemaphore: util.NewSemaphore(1),
 		sessionID:     sessionID,
 		sink:          sink,
+		logger:        logger,
 	}
 	w.doneSemaphore.Acquire()
 	go w.analyticsClient()
 	return w
 }
 
-func NewClient(parent context.Context, sink Sink) Client {
+func NewClient(parent context.Context, sink Sink, logger hclog.Logger) Client {
 	ch := make(chan EventPayload)
 	ctx, cancel := context.WithCancel(parent)
 	// creates and starts the worker
-	worker := newWorker(ctx, ch, sink)
+	worker := newWorker(ctx, ch, sink, logger)
 	s := &client{
 		ch:     ch,
 		cancel: cancel,
@@ -97,6 +102,7 @@ func (s *client) Close() {
 
 func (w *worker) Wait() {
 	w.doneSemaphore.Acquire()
+	w.wg.Wait()
 }
 
 func (w *worker) analyticsClient() {
@@ -124,18 +130,20 @@ func (w *worker) analyticsClient() {
 
 func (w *worker) flush() {
 	if len(w.buffer) > 0 {
-		err := w.sendEvents(w.buffer)
-		if err != nil {
-			// TODO: log error? error count and stop sending?
-		}
+		w.sendEvents(w.buffer)
 		w.buffer = []EventPayload{}
 	}
 }
 
-func (w *worker) sendEvents(payloads []EventPayload) error {
+func (w *worker) sendEvents(payloads []EventPayload) {
 	events := &Events{
 		SessionID: w.sessionID,
 		Payloads:  payloads,
 	}
-	return w.sink.RecordAnalyticsEvents(events)
+	w.wg.Add(1)
+	go func() {
+		err := w.sink.RecordAnalyticsEvents(events)
+		w.logger.Debug("failed to record cache usage analytics: %v", err)
+		w.wg.Done()
+	}()
 }

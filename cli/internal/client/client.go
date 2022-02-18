@@ -182,6 +182,9 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 }
 
 func (c *ApiClient) RecordAnalyticsEvents(events *analytics.Events) error {
+	if err := c.okToRequest(); err != nil {
+		return err
+	}
 	params := url.Values{}
 	c.addTeamParam(&params)
 	body, err := json.Marshal(events)

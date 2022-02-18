@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 type dummySink struct {
@@ -62,7 +64,7 @@ func (d *dummySink) ExpectTimeoutThenMessage(t *testing.T) {
 func Test_batching(t *testing.T) {
 	d := newDummySink()
 	ctx := context.Background()
-	c := NewClient(ctx, d)
+	c := NewClient(ctx, d, hclog.Default())
 	for i := 0; i < 2; i++ {
 		c.LogEvent(&evt{i})
 	}
@@ -85,7 +87,7 @@ func Test_batching(t *testing.T) {
 func Test_batchingAcrossTwoBatches(t *testing.T) {
 	d := newDummySink()
 	ctx := context.Background()
-	c := NewClient(ctx, d)
+	c := NewClient(ctx, d, hclog.Default())
 	for i := 0; i < 12; i++ {
 		c.LogEvent(&evt{i})
 	}
@@ -114,7 +116,7 @@ func Test_batchingAcrossTwoBatches(t *testing.T) {
 func Test_closing(t *testing.T) {
 	d := newDummySink()
 	ctx := context.Background()
-	c := NewClient(ctx, d)
+	c := NewClient(ctx, d, hclog.Default())
 	for i := 0; i < 2; i++ {
 		c.LogEvent(&evt{i})
 	}
@@ -136,7 +138,7 @@ func Test_closing(t *testing.T) {
 func Test_closingByContext(t *testing.T) {
 	d := newDummySink()
 	ctx, cancel := context.WithCancel(context.Background())
-	c := NewClient(ctx, d)
+	c := NewClient(ctx, d, hclog.Default())
 	for i := 0; i < 2; i++ {
 		c.LogEvent(&evt{i})
 	}
