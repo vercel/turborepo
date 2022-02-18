@@ -132,7 +132,7 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
+func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) error {
 	if err := c.okToRequest(); err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBody interface{}) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
