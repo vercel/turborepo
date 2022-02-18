@@ -15,7 +15,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"sync"
 	"syscall"
@@ -108,7 +107,9 @@ type NewInput struct {
 // sending signals to the child process, restarting the child process, and
 // gracefully terminating the child process.
 func newChild(i NewInput) (*Child, error) {
-	label := fmt.Sprintf("(%v) %v %v", i.Cmd.Dir, path.Base(i.Cmd.Path), strings.Join(i.Cmd.Args, " "))
+	// exec.Command prepends the command to be run to the arguments list, so
+	// we only need the arguments here, it will include the command itself.
+	label := fmt.Sprintf("(%v) %v", i.Cmd.Dir, strings.Join(i.Cmd.Args, " "))
 	child := &Child{
 		cmd:         i.Cmd,
 		timeout:     i.Timeout,
