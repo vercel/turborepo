@@ -87,7 +87,9 @@ func (mplex cacheMultiplexer) Fetch(target string, key string, files []string) (
 	// easily write the same file from two goroutines at once.
 	for i, cache := range mplex.caches {
 		if ok, actualFiles, err := cache.Fetch(target, key, files); ok {
-			// Store this into other caches
+			// Store this into other caches. We can ignore errors here because we know
+			// we have previously successfully stored in a higher-priority cache, and so the overall
+			// result is a success at fetching. Storing in lower-priority caches is an optimization.
 			mplex.storeUntil(target, key, 0, actualFiles, i)
 			return ok, actualFiles, err
 		}
