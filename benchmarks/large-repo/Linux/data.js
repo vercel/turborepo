@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1645144121041,
+  "lastUpdate": 1645230855946,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -238,6 +238,52 @@ window.BENCHMARK_DATA = {
             "value": 33389.6,
             "unit": "ms",
             "range": "8642"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Weyert de Boer",
+            "username": "weyert",
+            "email": "weyert@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "4b28b180dda7f6646b5d603ef5c5f534a82219ca",
+          "message": "feat: add support for JSON with comments `turbo.json` file (#745)\n\nAllow the `turbo.json` file to contain comments\n\nMakes it easier to explain the pipeline when they are quite large :)\nSo that future @weyert and his colleagues know what's going on!\n\nFixes #644\n\nCo-authored-by: tapico-weyert <70971917+tapico-weyert@users.noreply.github.com>",
+          "timestamp": "2022-02-18T20:49:13Z",
+          "url": "https://github.com/vercel/turborepo/commit/4b28b180dda7f6646b5d603ef5c5f534a82219ca"
+        },
+        "date": 1645230854683,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 153591.8,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 10734.6,
+            "unit": "ms",
+            "range": "250"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 36974.8,
+            "unit": "ms",
+            "range": "10113"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 37224,
+            "unit": "ms",
+            "range": "8635"
           }
         ]
       }
