@@ -144,10 +144,10 @@ platform-neutral: | turbo
 	node ./scripts/bump-version.js
 
 platform-create-turbo: 
-	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+	cd ../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 platform-turbo-codemod: 
-	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
 	rm -rf demo/turbo
@@ -230,10 +230,10 @@ publish-neutral: platform-neutral
 	make test && cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
 
 publish-create-turbo: platform-create-turbo
-	cd ../create-turbo && npm publish --tag $(TURBO_TAG)
+	cd ../packages/create-turbo && npm publish --tag $(TURBO_TAG)
 
 publish-turbo-codemod: platform-turbo-codemod
-	cd ../turbo-codemod && npm publish --tag $(TURBO_TAG)
+	cd ../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
 
 demo/lage: | scripts/node_modules
 	node scripts/generate.mjs lage
@@ -256,11 +256,11 @@ bench/lage: demo/lage
 bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
-bench/turbo: demo/turbo
+bench/turbo: demo/turbo turbo
 	cd demo/turbo && ../../turbo run test 
 
 bench/turbo-new: demo/turbo
-	cd demo/turbo && ../../turbo-new run build test 
+	cd demo/turbo && ../../turbo-new run build test
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 

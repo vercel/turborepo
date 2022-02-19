@@ -9,13 +9,14 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"turbo/internal/api"
-	"turbo/internal/backends"
-	"turbo/internal/config"
-	"turbo/internal/core"
-	"turbo/internal/fs"
-	"turbo/internal/globby"
-	"turbo/internal/util"
+
+	"github.com/vercel/turborepo/cli/internal/api"
+	"github.com/vercel/turborepo/cli/internal/backends"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/core"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/google/chrometracing"
@@ -30,7 +31,6 @@ const GLOBAL_CACHE_KEY = "snozzberries"
 type Context struct {
 	Args                   []string
 	PackageInfos           map[interface{}]*fs.PackageJSON
-	ColorCache             *ColorCache
 	PackageNames           []string
 	TopologicalGraph       dag.AcyclicGraph
 	TaskGraph              dag.AcyclicGraph
@@ -89,7 +89,6 @@ func WithTracer(filename string) Option {
 func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
-		c.ColorCache = NewColorCache()
 		c.RootNode = core.ROOT_NODE_NAME
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(core.ROOT_NODE_NAME)

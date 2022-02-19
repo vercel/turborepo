@@ -1,5 +1,6 @@
 ---
 title: Caching
+description: Caching allows Turborepo to skip work that's already been done, for the fastest builds.
 ---
 
 import Callout from "../../../components/callout";
@@ -18,6 +19,7 @@ To override the default cache output behavior, pass an array of globs to a [`pip
 
 ```jsonc
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**"],
@@ -63,6 +65,7 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 
 ```json
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "dev": {
       "cache": false
@@ -84,6 +87,7 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
 
 ```jsonc
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": {
@@ -106,7 +110,7 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
     "docs#build": { // override settings for the "build" task for the "docs" app
       "dependsOn": [
         "^build",
-          // env vars that will impact the hash of "build" task for only "web" app
+          // env vars that will impact the hash of "build" task for only "docs" app
           "$STRIPE_SECRET_KEY",
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
           "$NEXT_PUBLIC_ANALYTICS_ID",
@@ -124,7 +128,7 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
 ```
 
 <Callout type="info">
-  Pro Tip: In most monorepos, you're don't often use environment variables in shared packages, but mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the app-specific tasks where they are used/inlined.
+  Pro Tip: In most monorepos, you don't often use environment variables in shared packages, but mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the app-specific tasks where they are used/inlined.
 </Callout>
 
 ## Force overwrite cache

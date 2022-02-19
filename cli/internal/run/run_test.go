@@ -2,10 +2,13 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
-	"turbo/internal/context"
-	"turbo/internal/util"
+
+	"github.com/mitchellh/cli"
+	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -134,10 +137,16 @@ func TestParseConfig(t *testing.T) {
 		},
 	}
 
+	ui := &cli.BasicUi{
+		Reader:      os.Stdin,
+		Writer:      os.Stdout,
+		ErrorWriter: os.Stderr,
+	}
+
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ".")
+			actual, err := parseRunArgs(tc.Args, ".", ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}

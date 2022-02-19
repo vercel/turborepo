@@ -2,7 +2,7 @@ package cache
 
 import (
 	"sync"
-	"turbo/internal/config"
+	"github.com/vercel/turborepo/cli/internal/config"
 )
 
 // An asyncCache is a wrapper around a Cache interface that handles incoming
