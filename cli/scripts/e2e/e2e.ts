@@ -63,9 +63,9 @@ function runSmokeTests<T>(
   });
 
   suite(
-    `${npmClient} runs tests and logs ${
+    `${npmClient} runs tests and logs${
       options.cwd ? " from " + options.cwd : ""
-    } `,
+    }`,
     async () => {
       const results = repo.turbo("run", ["test", "--stream"], options);
       assert.equal(0, results.exitCode, "exit code should be 0");
@@ -85,14 +85,45 @@ function runSmokeTests<T>(
   );
 
   suite(
-    `${npmClient} handles filesystem changes ${
+    `${npmClient} handles filesystem changes${
       options.cwd ? " from " + options.cwd : ""
-    } `,
+    }`,
     async () => {
       repo.newBranch("my-feature-branch");
       repo.commitFiles({
         [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
       });
+
+      const sinceCommandOutputNoCache = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["test", "--since=main", "--stream", "--no-cache"],
+          options
+        )
+      );
+      assert.fixture(
+        `• Packages changed since main: a`,
+        sinceCommandOutputNoCache[0],
+        "Calculates changed packages (--since)"
+      );
+      assert.fixture(
+        `• Packages in scope: a`,
+        sinceCommandOutputNoCache[1],
+        "Packages in scope"
+      );
+      assert.fixture(
+        `• Running test in 1 packages`,
+        sinceCommandOutputNoCache[2],
+        "Runs only in changed packages"
+      );
+      assert.fixture(
+        sinceCommandOutputNoCache[3],
+        `a:test: cache miss, executing ${getHashFromOutput(
+          sinceCommandOutputNoCache,
+          "a#test"
+        )}`,
+        "Cache miss in changed package"
+      );
 
       const sinceCommandOutput = getCommandOutputAsArray(
         repo.turbo("run", ["test", "--since=main", "--stream"], options)
@@ -211,9 +242,7 @@ function runSmokeTests<T>(
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
     suite(
-      `${npmClient} + turbo prune ${
-        options.cwd ? " from " + options.cwd : ""
-      } `,
+      `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
         const pruneCommandOutput = getCommandOutputAsArray(
           repo.turbo("prune", ["--scope=a"], options)
