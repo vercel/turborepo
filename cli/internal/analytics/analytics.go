@@ -7,13 +7,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
+	"github.com/mitchellh/mapstructure"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-type Events struct {
-	SessionID uuid.UUID      `json:"sessionId"`
-	Payloads  []EventPayload `json:"events"`
-}
+type Events = []map[string]interface{}
+
 type EventPayload = interface{}
 
 type Recorder interface {
@@ -26,12 +25,12 @@ type Client interface {
 }
 
 type Sink interface {
-	RecordAnalyticsEvents(events *Events) error
+	RecordAnalyticsEvents(events Events) error
 }
 
 type nullSink struct{}
 
-func (n *nullSink) RecordAnalyticsEvents(events *Events) error {
+func (n *nullSink) RecordAnalyticsEvents(events Events) error {
 	return nil
 }
 
@@ -135,15 +134,27 @@ func (w *worker) flush() {
 	}
 }
 
-func (w *worker) sendEvents(payloads []EventPayload) {
-	events := &Events{
-		SessionID: w.sessionID,
-		Payloads:  payloads,
-	}
+func (w *worker) sendEvents(events []EventPayload) {
 	w.wg.Add(1)
 	go func() {
-		err := w.sink.RecordAnalyticsEvents(events)
+		payload, err := addSessionID(w.sessionID.String(), events)
+		if err != nil {
+			w.logger.Debug("failed to encode cache usage analytics: %v", err)
+		}
+		err = w.sink.RecordAnalyticsEvents(payload)
 		w.logger.Debug("failed to record cache usage analytics: %v", err)
 		w.wg.Done()
 	}()
+}
+
+func addSessionID(sessionID string, events []EventPayload) (Events, error) {
+	eventMaps := []map[string]interface{}{}
+	err := mapstructure.Decode(events, &eventMaps)
+	if err != nil {
+		return nil, err
+	}
+	for _, event := range eventMaps {
+		event["sessionId"] = sessionID
+	}
+	return eventMaps, nil
 }

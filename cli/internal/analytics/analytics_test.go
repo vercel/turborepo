@@ -27,13 +27,13 @@ func newDummySink() *dummySink {
 	}
 }
 
-func (d *dummySink) RecordAnalyticsEvents(events *Events) error {
+func (d *dummySink) RecordAnalyticsEvents(events Events) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	// Make a copy in case a test is holding a copy too
 	eventsCopy := make([]*Events, len(d.events))
 	copy(eventsCopy, d.events)
-	d.events = append(eventsCopy, events)
+	d.events = append(eventsCopy, &events)
 	d.ch <- struct{}{}
 	return d.err
 }
@@ -78,7 +78,7 @@ func Test_batching(t *testing.T) {
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
 	}
-	payloads := found[0].Payloads
+	payloads := *found[0]
 	if len(payloads) != 2 {
 		t.Errorf("got %v, want 2 payloads to have been flushed", len(payloads))
 	}
@@ -97,7 +97,7 @@ func Test_batchingAcrossTwoBatches(t *testing.T) {
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
 	}
-	payloads := found[0].Payloads
+	payloads := *found[0]
 	if len(payloads) != 10 {
 		t.Errorf("got %v, want 10 payloads to have been flushed", len(payloads))
 	}
@@ -107,7 +107,7 @@ func Test_batchingAcrossTwoBatches(t *testing.T) {
 	if len(found) != 2 {
 		t.Errorf("got %v, want 2 batches to have been flushed", len(found))
 	}
-	payloads = found[1].Payloads
+	payloads = *found[1]
 	if len(payloads) != 2 {
 		t.Errorf("got %v, want 2 payloads to have been flushed", len(payloads))
 	}
@@ -129,7 +129,7 @@ func Test_closing(t *testing.T) {
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
 	}
-	payloads := found[0].Payloads
+	payloads := *found[0]
 	if len(payloads) != 2 {
 		t.Errorf("got %v, want 2 payloads to have been flushed", len(payloads))
 	}
@@ -152,8 +152,41 @@ func Test_closingByContext(t *testing.T) {
 	if len(found) != 1 {
 		t.Errorf("got %v, want 1 batch to have been flushed", len(found))
 	}
-	payloads := found[0].Payloads
+	payloads := *found[0]
 	if len(payloads) != 2 {
 		t.Errorf("got %v, want 2 payloads to have been flushed", len(payloads))
+	}
+}
+
+func Test_addSessionId(t *testing.T) {
+	events := []struct {
+		Foo string `mapstructure:"foo"`
+	}{
+		{
+			Foo: "foo1",
+		},
+		{
+			Foo: "foo2",
+		},
+	}
+	arr := make([]interface{}, len(events))
+	for i, event := range events {
+		arr[i] = event
+	}
+	sessionID := "my-uuid"
+	output, err := addSessionID(sessionID, arr)
+	if err != nil {
+		t.Errorf("failed to encode analytics events: %v", err)
+	}
+	if len(output) != 2 {
+		t.Errorf("len output got %v, want 2", len(output))
+	}
+	if output[0]["foo"] != "foo1" {
+		t.Errorf("first event foo got %v, want foo1", output[0]["foo"])
+	}
+	for i, event := range output {
+		if event["sessionId"] != "my-uuid" {
+			t.Errorf("event %v sessionId got %v, want %v", i, event["sessionId"], sessionID)
+		}
 	}
 }

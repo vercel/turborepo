@@ -17,7 +17,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/vercel/turborepo/cli/internal/analytics"
 )
 
 type ApiClient struct {
@@ -181,7 +180,7 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 	return c.HttpClient.Do(req)
 }
 
-func (c *ApiClient) RecordAnalyticsEvents(events *analytics.Events) error {
+func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error {
 	if err := c.okToRequest(); err != nil {
 		return err
 	}

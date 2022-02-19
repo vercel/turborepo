@@ -26,9 +26,9 @@ const cacheEventHit = "HIT"
 const cacheEventMiss = "MISS"
 
 type CacheEvent struct {
-	Source string `json:"source"`
-	Event  string `json:"event"`
-	Hash   string `json:"hash"`
+	Source string `mapstructure:"source"`
+	Event  string `mapstructure:"event"`
+	Hash   string `mapstructure:"hash"`
 }
 
 // New creates a new cache
