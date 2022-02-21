@@ -2,11 +2,11 @@
 #![feature(once_cell)]
 #![feature(into_future)]
 
-use async_std::task::{block_on, spawn};
+use async_std::task::block_on;
 use math::{add, max_new};
 use random::RandomIdRef;
 use std::time::Instant;
-use std::{env::current_dir, fs, thread, time::Duration};
+use std::{env::current_dir, time::Duration};
 use turbo_pack::emit;
 use turbo_pack::module::Module;
 use turbo_tasks::viz::GraphViz;
@@ -17,7 +17,6 @@ use turbo_tasks_fs::{
     FileSystemPathRef, FileSystemRef,
 };
 
-use crate::trace::{copy_all, CopyAllOptions};
 use crate::{
     log::{log, LoggingOptionsRef},
     math::I32ValueRef,

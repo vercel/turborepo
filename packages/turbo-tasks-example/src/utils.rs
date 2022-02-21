@@ -31,9 +31,3 @@ impl<'a, T, F: Future<Output = T> + Unpin> Future for FutureRacePop<'a, T, F> {
         }
     }
 }
-
-pub async fn all<F: Future<Output = ()>>(futures: impl Iterator<Item = F>) {
-    for future in futures {
-        future.await;
-    }
-}
