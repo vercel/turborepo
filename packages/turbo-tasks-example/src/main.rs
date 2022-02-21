@@ -67,7 +67,13 @@ fn main() {
         });
         task.wait_done().await;
         println!("done in {} ms", start.elapsed().as_millis());
+
+        for task in tt.cached_tasks_iter() {
+            task.reset_executions();
+        }
+
         loop {
+            thread::sleep(Duration::from_secs(3));
             // create a graph
             let mut graph_viz = GraphViz::new();
 
@@ -88,6 +94,7 @@ fn main() {
             // write HTML
             fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
             println!("graph.html written");
+
             thread::sleep(Duration::from_secs(3));
         }
     });
