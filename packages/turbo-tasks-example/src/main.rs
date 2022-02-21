@@ -72,30 +72,38 @@ fn main() {
             task.reset_executions();
         }
 
+        let mut i = 10;
         loop {
-            thread::sleep(Duration::from_secs(3));
-            // create a graph
-            let mut graph_viz = GraphViz::new();
+            // if i == 0 {
+            //     println!("writing graph.html...");
+            //     // create a graph
+            //     let mut graph_viz = GraphViz::new();
 
-            // graph root node
-            graph_viz.add_task(&task);
+            //     // graph root node
+            //     graph_viz.add_task(&task);
 
-            // graph tasks in cache
-            for task in tt.cached_tasks_iter() {
-                graph_viz.add_task(&task);
-            }
+            //     // graph tasks in cache
+            //     for task in tt.cached_tasks_iter() {
+            //         graph_viz.add_task(&task);
+            //     }
 
-            // prettify graph
-            graph_viz.merge_edges();
-            graph_viz.drop_unchanged_slots();
-            graph_viz.skip_loney_resolve();
-            graph_viz.drop_inactive_tasks();
+            //     // prettify graph
+            //     graph_viz.merge_edges();
+            //     graph_viz.drop_unchanged_slots();
+            //     graph_viz.skip_loney_resolve();
+            //     graph_viz.drop_inactive_tasks();
 
-            // write HTML
-            fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
-            println!("graph.html written");
+            //     // write HTML
+            //     fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
+            //     println!("graph.html written");
+            //     i = 10;
+            // }
 
-            thread::sleep(Duration::from_secs(3));
+            task.root_wait_dirty().await;
+            let start = Instant::now();
+            task.wait_done().await;
+            println!("updated in {} µs", start.elapsed().as_micros());
+            i -= 1;
         }
     });
 }
