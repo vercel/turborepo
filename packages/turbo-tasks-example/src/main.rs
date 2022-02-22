@@ -8,7 +8,7 @@ use random::RandomIdRef;
 use std::time::Instant;
 use std::{env::current_dir, time::Duration};
 use turbo_pack::emit;
-use turbo_pack::module::Module;
+use turbo_pack::source_asset::SourceAssetRef;
 use turbo_tasks::viz::GraphViz;
 use turbo_tasks::{SlotRef, TurboTasks};
 
@@ -49,7 +49,7 @@ fn main() {
                 let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
                 let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
 
-                emit(Module { path: entry }.into(), input, output);
+                emit(SourceAssetRef::new(entry).into(), input, output);
 
                 // copy_all(
                 //     entry,
