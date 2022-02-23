@@ -7,15 +7,8 @@ pub async fn log(a: I32ValueRef, options: LoggingOptionsRef) {
     println!("{}: {}", options.name, a.value);
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
+#[derive(PartialEq, Eq)]
 pub struct LoggingOptions {
-    name: String,
-}
-
-#[turbo_tasks::value_impl]
-impl LoggingOptions {
-    #[turbo_tasks::constructor(compare)]
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
+    pub name: String,
 }

@@ -44,27 +44,27 @@ async fn module(fs_path: FileSystemPathRef) -> ModuleRef {
     .into()
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 #[derive(PartialEq, Eq)]
 struct Module {
     resource: FileSystemPathRef,
     content: ModuleContentRef,
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 #[derive(PartialEq, Eq)]
 struct ModuleContent {
     items: Vec<ModuleItemRef>,
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 #[derive(PartialEq, Eq)]
 enum ModuleItem {
     Comment(String),
     Reference(AssetReferenceRef),
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 #[derive(PartialEq, Eq)]
 struct AssetReference {
     request: String,
@@ -101,7 +101,7 @@ async fn parse(content: FileContentRef) -> ModuleContentRef {
     }
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 #[derive(PartialEq, Eq)]
 struct ModulesSet {
     modules: HashSet<ModuleRef>,

@@ -2,9 +2,11 @@
 #![feature(once_cell)]
 #![feature(into_future)]
 
-use async_std::task::block_on;
+use async_std::task::{block_on, sleep, spawn};
+use log::LoggingOptions;
 use math::{add, max_new};
 use random::RandomIdRef;
+use std::fs;
 use std::time::Instant;
 use std::{env::current_dir, time::Duration};
 use turbo_pack::emit;
@@ -71,38 +73,46 @@ fn main() {
             task.reset_executions();
         }
 
-        let mut i = 10;
+        let task_clone = task.clone();
+        spawn(async move {
+            loop {
+                task_clone.root_wait_dirty().await;
+                let start = Instant::now();
+                task_clone.wait_done().await;
+                let elapsed = start.elapsed();
+                if elapsed.as_millis() >= 100 {
+                    println!("updated in {} ms", elapsed.as_millis());
+                } else {
+                    println!("updated in {} µs", elapsed.as_micros());
+                }
+            }
+        })
+        .await;
+
         loop {
-            // if i == 0 {
-            //     println!("writing graph.html...");
-            //     // create a graph
-            //     let mut graph_viz = GraphViz::new();
+            println!("writing graph.html...");
+            // create a graph
+            let mut graph_viz = GraphViz::new();
 
-            //     // graph root node
-            //     graph_viz.add_task(&task);
+            // graph root node
+            graph_viz.add_task(&task);
 
-            //     // graph tasks in cache
-            //     for task in tt.cached_tasks_iter() {
-            //         graph_viz.add_task(&task);
-            //     }
+            // graph tasks in cache
+            for task in tt.cached_tasks_iter() {
+                graph_viz.add_task(&task);
+            }
 
-            //     // prettify graph
-            //     graph_viz.merge_edges();
-            //     graph_viz.drop_unchanged_slots();
-            //     graph_viz.skip_loney_resolve();
-            //     graph_viz.drop_inactive_tasks();
+            // prettify graph
+            graph_viz.merge_edges();
+            graph_viz.drop_unchanged_slots();
+            graph_viz.skip_loney_resolve();
+            graph_viz.drop_inactive_tasks();
 
-            //     // write HTML
-            //     fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
-            //     println!("graph.html written");
-            //     i = 10;
-            // }
+            // write HTML
+            fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
+            println!("graph.html written");
 
-            task.root_wait_dirty().await;
-            let start = Instant::now();
-            task.wait_done().await;
-            println!("updated in {} µs", start.elapsed().as_micros());
-            i -= 1;
+            sleep(Duration::from_secs(10)).await;
         }
     });
 }
@@ -114,12 +124,24 @@ fn make_math() {
     let max = max_new(r1.clone(), r2);
     let a = add(I32ValueRef::new(42), I32ValueRef::new(1));
     let b = add(I32ValueRef::new(2), I32ValueRef::new(3));
-    log(a.clone(), LoggingOptionsRef::new("value of a".to_string()));
+    log(
+        a.clone(),
+        LoggingOptions {
+            name: "value of a".to_string(),
+        }
+        .into(),
+    );
     let c = add(max.clone(), a);
     let d = add(max, b);
     let e = add(c, d);
     let r = add(r1, e);
-    log(r, LoggingOptionsRef::new("value of r".to_string()));
+    log(
+        r,
+        LoggingOptions {
+            name: "value of r".to_string(),
+        }
+        .into(),
+    );
 }
 
 #[turbo_tasks::function]
