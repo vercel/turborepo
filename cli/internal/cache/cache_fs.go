@@ -40,11 +40,10 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 		// TODO: what event to log here?
 		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
 	}
-	// TODO: duration := readJSON(cachedFolder, target, meta.json)
 
-	meta, error := ReadCacheMetaFile(filepath.Join(cachedFolder, target, hash+"-meta.json"))
-	if error != nil {
-		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", error)
+	meta, err := ReadCacheMetaFile(filepath.Join(f.cacheDirectory, hash+"-meta.json"))
+	if err != nil {
+		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
 	}
 	f.logFetch(true, hash, meta.Duration)
 	return true, nil, meta.Duration, nil
