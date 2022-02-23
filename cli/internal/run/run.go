@@ -331,7 +331,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		analyticsSink = analytics.NullSink
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
-	defer analyticsClient.Close()
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()
 
