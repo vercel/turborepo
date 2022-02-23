@@ -243,7 +243,6 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
-	c.HttpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -288,7 +287,6 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
-	c.HttpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
