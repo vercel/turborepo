@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1645489987621,
+  "lastUpdate": 1645576233692,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -422,6 +422,52 @@ window.BENCHMARK_DATA = {
             "value": 36244.6,
             "unit": "ms",
             "range": "7669"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Shu Ding",
+            "username": "shuding",
+            "email": "g@shud.in"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "9ee851eadeb8531bcd8cd6c5706d7520a91c0e2f",
+          "message": "Upgrade Nextra (#760)",
+          "timestamp": "2022-02-19T20:27:34Z",
+          "url": "https://github.com/vercel/turborepo/commit/9ee851eadeb8531bcd8cd6c5706d7520a91c0e2f"
+        },
+        "date": 1645576232404,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 120646,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 9951.2,
+            "unit": "ms",
+            "range": "425"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 30780,
+            "unit": "ms",
+            "range": "8205"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 30025.8,
+            "unit": "ms",
+            "range": "7887"
           }
         ]
       }
