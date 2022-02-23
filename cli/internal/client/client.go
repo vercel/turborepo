@@ -92,7 +92,8 @@ func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, erro
 		return true, fmt.Errorf("unexpected HTTP status %s", resp.Status)
 	}
 
-	return false, fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	// swallow the error and stop retrying
+	return false, nil
 }
 
 func (c *ApiClient) checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
