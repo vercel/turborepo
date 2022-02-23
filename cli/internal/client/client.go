@@ -150,7 +150,6 @@ func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) 
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
-
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -243,6 +242,7 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.HttpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -287,6 +287,7 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.HttpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
