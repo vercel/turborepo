@@ -110,7 +110,8 @@ func (f *fsCache) CleanAll() {
 
 func (cache *fsCache) Shutdown() {}
 
-// CacheEvent is a cache event
+// CacheMetadata stores duration and hash information for a cache entry so that aggregate Time Saved calculations
+// can be made from artifacts from various caches
 type CacheMetadata struct {
 	Hash     string `json:"hash"`
 	Duration int    `json:"duration"`
