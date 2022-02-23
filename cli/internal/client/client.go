@@ -189,7 +189,7 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/artifacts/events?"+params.Encode()), body)
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events?"+params.Encode()), body)
 	if err != nil {
 		return err
 	}
