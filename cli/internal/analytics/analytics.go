@@ -139,10 +139,10 @@ func (w *worker) sendEvents(events []EventPayload) {
 	go func() {
 		payload, err := addSessionID(w.sessionID.String(), events)
 		if err != nil {
-			w.logger.Debug("failed to encode cache usage analytics: %v", err)
+			w.logger.Debug("failed to encode cache usage analytics", "error", err)
 		}
 		err = w.sink.RecordAnalyticsEvents(payload)
-		w.logger.Debug("failed to record cache usage analytics: %v", err)
+		w.logger.Debug("failed to record cache usage analytics", "error", err)
 		w.wg.Done()
 	}()
 }
