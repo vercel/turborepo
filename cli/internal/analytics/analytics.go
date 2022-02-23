@@ -22,6 +22,7 @@ type Recorder interface {
 type Client interface {
 	Recorder
 	Close()
+	CloseWithTimeout(timeout time.Duration)
 }
 
 type Sink interface {
@@ -97,6 +98,18 @@ func (s *client) LogEvent(event EventPayload) {
 func (s *client) Close() {
 	s.cancel()
 	s.worker.Wait()
+}
+
+func (s *client) CloseWithTimeout(timeout time.Duration) {
+	ch := make(chan struct{})
+	go func() {
+		s.Close()
+		close(ch)
+	}()
+	select {
+	case <-ch:
+	case <-time.After(timeout):
+	}
 }
 
 func (w *worker) Wait() {
