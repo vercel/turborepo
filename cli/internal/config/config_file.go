@@ -49,7 +49,7 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 	var config = &TurborepoConfig{
 		Token:    "",
 		TeamId:   "",
-		ApiUrl:   "https://api.vercel.com",
+		ApiUrl:   "https://vercel.com/api",
 		LoginUrl: "https://vercel.com",
 		TeamSlug: "",
 	}
@@ -61,6 +61,9 @@ func ReadConfigFile(path string) (*TurborepoConfig, error) {
 	if jsonErr != nil {
 		return config, jsonErr
 	}
+	if config.ApiUrl == "https://api.vercel.com" {
+		config.ApiUrl = "https://vercel.com/api"
+	}
 	return config, nil
 }
 
@@ -71,7 +74,7 @@ func ReadUserConfigFile() (*TurborepoConfig, error) {
 		return &TurborepoConfig{
 			Token:    "",
 			TeamId:   "",
-			ApiUrl:   "https://api.vercel.com",
+			ApiUrl:   "https://vercel.com/api",
 			LoginUrl: "https://vercel.com",
 			TeamSlug: "",
 		}, err
