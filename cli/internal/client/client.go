@@ -92,7 +92,8 @@ func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, erro
 		return true, fmt.Errorf("unexpected HTTP status %s", resp.Status)
 	}
 
-	return false, fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	// swallow the error and stop retrying
+	return false, nil
 }
 
 func (c *ApiClient) checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
@@ -150,7 +151,6 @@ func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) 
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
-
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -190,7 +190,7 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/artifacts/events?"+params.Encode()), body)
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events?"+params.Encode()), body)
 	if err != nil {
 		return err
 	}

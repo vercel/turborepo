@@ -2,6 +2,7 @@ package cache
 
 import (
 	"sync"
+
 	"github.com/vercel/turborepo/cli/internal/config"
 )
 
@@ -46,7 +47,7 @@ func (c *asyncCache) Put(target string, key string, duration int, files []string
 	return nil
 }
 
-func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, error) {
+func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
 	return c.realCache.Fetch(target, key, files)
 }
 
