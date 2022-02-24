@@ -186,18 +186,26 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	}
 	params := url.Values{}
 	c.addTeamParam(&params)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
+	}
 	body, err := json.Marshal(events)
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events?"+params.Encode()), body)
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events"+encoded), body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
-	_, err = c.HttpClient.Do(req)
+	resp, err := c.HttpClient.Do(req)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("%s", string(b))
+	}
 	return err
 }
 

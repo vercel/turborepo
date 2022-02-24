@@ -155,7 +155,9 @@ func (w *worker) sendEvents(events []EventPayload) {
 			w.logger.Debug("failed to encode cache usage analytics", "error", err)
 		}
 		err = w.sink.RecordAnalyticsEvents(payload)
-		w.logger.Debug("failed to record cache usage analytics", "error", err)
+		if err != nil {
+			w.logger.Debug("failed to record cache usage analytics", "error", err)
+		}
 		w.wg.Done()
 	}()
 }
