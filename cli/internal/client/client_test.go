@@ -14,7 +14,7 @@ import (
 func Test_sendToServer(t *testing.T) {
 	handler := http.NewServeMux()
 	ch := make(chan []byte, 1)
-	handler.HandleFunc("/artifacts/events", func(w http.ResponseWriter, req *http.Request) {
+	handler.HandleFunc("/v8/artifacts/events", func(w http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
 		b, err := ioutil.ReadAll(req.Body)
 		if err != nil {
