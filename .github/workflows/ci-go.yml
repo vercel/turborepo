@@ -6,11 +6,10 @@ on:
   pull_request:
     types: [opened, synchronize]
 
-
 jobs:
   build:
     name: build and test
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
