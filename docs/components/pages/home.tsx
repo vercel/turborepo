@@ -25,7 +25,7 @@ import shadcn from "../../images/shadcn.jpeg";
 import christian from "../../images/christian.jpeg";
 import yangshunz from "../../images/yangshunz.jpeg";
 import nmoore from "../../images/nmoore.jpeg";
-import sseraphini from "../../images/sseraphini.jpeg";
+import joshlarson from "../../images/joshlarson.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import { Footer } from "../Footer";
@@ -125,12 +125,12 @@ function Page() {
       </div>
 
       <div className="py-16 dark:bg-black ">
-        <div className="max-w-4xl px-4 mx-auto sm:px-6 lg:px-8">
+        <div className="max-w-5xl px-4 mx-auto sm:px-6 lg:px-8">
           <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
 
-          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6 "
@@ -139,24 +139,34 @@ function Page() {
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img className="h-8" src="/images/logos/aws.svg" alt="AWS" />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
-                className="h-6 "
-                src="/images/logos/lattice.svg"
-                alt="Lattice"
+                className="h-7"
+                src="/images/logos/paypal.svg"
+                alt="PayPal"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6"
-                src="/images/logos/teespring.svg"
-                alt="TeeSpring"
+                src="/images/logos/shopify.svg"
+                alt="Shopify"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6"
-                src="/images/logos/makeswift.svg"
-                alt="Makeswift"
+                src="/images/logos/twilio.svg"
+                alt="Twilio"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="w-auto h-7"
+                src="/images/logos/washingtonpost.svg"
+                alt="The Washington Post"
               />
             </div>
           </div>
@@ -450,12 +460,19 @@ function Page() {
               }
             />
             <Tweet
-              url="https://twitter.com/sseraphini/status/1470501625580208139"
-              username="sseraphini"
-              name="Sibelius Seraphini"
-              date="Dec 13"
-              avatar={sseraphini}
-              text={<>Turborepo is sweet</>}
+              url="https://twitter.com/jplhomer/status/1494080248845062154"
+              username="jplhomer"
+              name="Josh Larson"
+              date="Feb 16"
+              avatar={joshlarson}
+              text={
+                <>
+                  Living that <Mention>@turborepo</Mention> life{" "}
+                  <span role="img" aria-label="Smiling face with sunglasses">
+                    😎
+                  </span>
+                </>
+              }
             />
           </div>
         </div>
@@ -477,16 +494,23 @@ function Page() {
   );
 }
 
-function Mention({ children }) {
+function TweetLink({ href, children }) {
   return (
     <a
-      href={`https://twitter.com/${children.replace("@", "")}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-block text-[#35ACDF]"
     >
       {children}
     </a>
+  );
+}
+function Mention({ children }) {
+  return (
+    <TweetLink href={`https://twitter.com/${children.replace("@", "")}`}>
+      {children}
+    </TweetLink>
   );
 }
 
