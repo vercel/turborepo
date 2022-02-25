@@ -44,9 +44,9 @@ const Item = ({ page, first, title, active, href, onHover, excerpt }) => {
 const MemoedStringWithMatchHighlights = memo(
   function StringWithMatchHighlights({ content, search }) {
     const splittedText = content.split("");
-    const escappedSearch = search.trim().replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
+    const escapedSearch = search.trim().replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
     const regexp = RegExp(
-      "(" + escappedSearch.split(" ").join("|") + ")",
+      "(" + escapedSearch.split(" ").join("|") + ")",
       "ig"
     );
     let match;
