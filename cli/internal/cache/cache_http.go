@@ -41,6 +41,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
+
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
 	return cache.config.ApiClient.PutArtifact(hash, cache.config.TeamId, cache.config.TeamSlug, duration, r)
