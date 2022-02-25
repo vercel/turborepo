@@ -119,9 +119,9 @@ type CacheMetadata struct {
 
 // WriteCacheMetaFile writes cache metadata file at a path
 func WriteCacheMetaFile(path string, config *CacheMetadata) error {
-	jsonBytes, marhsallError := json.Marshal(config)
-	if marhsallError != nil {
-		return marhsallError
+	jsonBytes, marshalErr := json.Marshal(config)
+	if marshalErr != nil {
+		return marshalErr
 	}
 	writeFilErr := ioutil.WriteFile(path, jsonBytes, 0644)
 	if writeFilErr != nil {
@@ -137,9 +137,9 @@ func ReadCacheMetaFile(path string) (*CacheMetadata, error) {
 		return nil, readFileErr
 	}
 	var config CacheMetadata
-	unmarshallErr := json.Unmarshal(jsonBytes, &config)
-	if unmarshallErr != nil {
-		return nil, unmarshallErr
+	marshalErr := json.Unmarshal(jsonBytes, &config)
+	if marshalErr != nil {
+		return nil, marshalErr
 	}
 	return &config, nil
 }
