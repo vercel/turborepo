@@ -499,19 +499,19 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				}
 
 				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
-				var hashabledEnvVars []string
-				var hashabledEnvPairs []string
+				var hashableEnvVars []string
+				var hashableEnvPairs []string
 				if len(pipeline.DependsOn) > 0 {
 					for _, v := range pipeline.DependsOn {
 						if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
 							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
-							hashabledEnvPairs = append(hashabledEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-							hashabledEnvVars = append(hashabledEnvVars, trimmed)
+							hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashableEnvVars = append(hashableEnvVars, trimmed)
 						}
 					}
-					sort.Strings(hashabledEnvVars) // always sort them
+					sort.Strings(hashableEnvVars) // always sort them
 				}
-				targetLogger.Debug("hashable env vars", "vars", hashabledEnvVars)
+				targetLogger.Debug("hashable env vars", "vars", hashableEnvVars)
 				hashable := struct {
 					Hash             string
 					Task             string
@@ -523,7 +523,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					Task:             task,
 					Outputs:          outputs,
 					PassThruArgs:     passThroughArgs,
-					HashableEnvPairs: hashabledEnvPairs,
+					HashableEnvPairs: hashableEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
