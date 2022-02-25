@@ -221,7 +221,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		}
 		c.Targets = targets
 		// We will parse all package.json's simultaneously. We use a
-		// waitgroup because we cannot fully populate the graph (the next step)
+		// wait group because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
 		parseJSONWaitGroup := new(errgroup.Group)
 		justJsons := make([]string, 0, len(spaces))
