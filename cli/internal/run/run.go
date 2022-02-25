@@ -959,6 +959,10 @@ func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs 
 		}
 	}
 
+	if len(include) > 0 && scopedPkgs.Len() == 0 {
+		return nil, errors.Errorf("No packages found matching the provided scope pattern.")
+	}
+
 	return scopedPkgs, nil
 }
 
