@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1645663336747,
+  "lastUpdate": 1645749814576,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -514,6 +514,52 @@ window.BENCHMARK_DATA = {
             "value": 49328.8,
             "unit": "ms",
             "range": "10612"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jared Palmer",
+            "username": "jaredpalmer",
+            "email": "jared@jaredpalmer.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "996fd3b015d47dcc7581a0921b0e936ba18aa33d",
+          "message": "Switch default api url to https://vercel.com/api by default (#776)",
+          "timestamp": "2022-02-24T20:40:30Z",
+          "url": "https://github.com/vercel/turborepo/commit/996fd3b015d47dcc7581a0921b0e936ba18aa33d"
+        },
+        "date": 1645749813257,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 228313.8,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 16128.4,
+            "unit": "ms",
+            "range": "14023"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 50045.4,
+            "unit": "ms",
+            "range": "10430"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 47745,
+            "unit": "ms",
+            "range": "11009"
           }
         ]
       }
