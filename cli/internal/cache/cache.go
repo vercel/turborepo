@@ -4,6 +4,7 @@ package cache
 import (
 	"fmt"
 
+	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"golang.org/x/sync/errgroup"
@@ -13,7 +14,7 @@ import (
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(target string, hash string, files []string) (bool, []string, error)
+	Fetch(target string, hash string, files []string) (bool, []string, int, error)
 	// Put caches files for a given hash
 	Put(target string, hash string, duration int, files []string) error
 	Clean(target string)
@@ -21,23 +22,33 @@ type Cache interface {
 	Shutdown()
 }
 
+const cacheEventHit = "HIT"
+const cacheEventMiss = "MISS"
+
+type CacheEvent struct {
+	Source   string `mapstructure:"source"`
+	Event    string `mapstructure:"event"`
+	Hash     string `mapstructure:"hash"`
+	Duration int    `mapstructure:"duration"`
+}
+
 // New creates a new cache
-func New(config *config.Config) Cache {
-	c := newSyncCache(config, false)
+func New(config *config.Config, recorder analytics.Recorder) Cache {
+	c := newSyncCache(config, false, recorder)
 	if config.Cache.Workers > 0 {
 		return newAsyncCache(c, config)
 	}
 	return c
 }
 
-func newSyncCache(config *config.Config, remoteOnly bool) Cache {
+func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Recorder) Cache {
 	mplex := &cacheMultiplexer{}
 	if config.Cache.Dir != "" && !remoteOnly {
-		mplex.caches = append(mplex.caches, newFsCache(config))
+		mplex.caches = append(mplex.caches, newFsCache(config, recorder))
 	}
-	if (config.Token != "" && config.TeamId != "") || (config.Token != "" && config.TeamSlug != "") {
+	if config.IsLoggedIn() {
 		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
-		mplex.caches = append(mplex.caches, newHTTPCache(config))
+		mplex.caches = append(mplex.caches, newHTTPCache(config, recorder))
 	}
 	if len(mplex.caches) == 0 {
 		return nil
@@ -82,19 +93,19 @@ func (mplex cacheMultiplexer) storeUntil(target string, key string, duration int
 	return nil
 }
 
-func (mplex cacheMultiplexer) Fetch(target string, key string, files []string) (bool, []string, error) {
+func (mplex cacheMultiplexer) Fetch(target string, key string, files []string) (bool, []string, int, error) {
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range mplex.caches {
-		if ok, actualFiles, err := cache.Fetch(target, key, files); ok {
+		if ok, actualFiles, duration, err := cache.Fetch(target, key, files); ok {
 			// Store this into other caches. We can ignore errors here because we know
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
-			mplex.storeUntil(target, key, 0, actualFiles, i)
-			return ok, actualFiles, err
+			mplex.storeUntil(target, key, duration, actualFiles, i)
+			return ok, actualFiles, duration, err
 		}
 	}
-	return false, files, nil
+	return false, files, 0, nil
 }
 
 func (mplex cacheMultiplexer) Clean(target string) {

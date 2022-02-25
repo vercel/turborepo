@@ -30,6 +30,8 @@ type ApiClient struct {
 	currentFailCount uint64
 	// An http client
 	HttpClient *retryablehttp.Client
+	teamID     string
+	teamSlug   string
 }
 
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
@@ -40,7 +42,7 @@ func (api *ApiClient) SetToken(token string) {
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, maxRemoteFailCount uint64) *ApiClient {
+func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
 	client := &ApiClient{
 		baseUrl:            baseUrl,
 		turboVersion:       turboVersion,
@@ -55,6 +57,8 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, maxRemo
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
+		teamID:   teamID,
+		teamSlug: teamSlug,
 	}
 	client.HttpClient.CheckRetry = client.checkRetry
 	return client
@@ -88,7 +92,8 @@ func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, erro
 		return true, fmt.Errorf("unexpected HTTP status %s", resp.Status)
 	}
 
-	return false, fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	// swallow the error and stop retrying
+	return false, nil
 }
 
 func (c *ApiClient) checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
@@ -127,17 +132,12 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
+func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) error {
 	if err := c.okToRequest(); err != nil {
 		return err
 	}
 	params := url.Values{}
-	if teamId != "" && strings.HasPrefix(teamId, "team_") {
-		params.Add("teamId", teamId)
-	}
-	if slug != "" {
-		params.Add("slug", slug)
-	}
+	c.addTeamParam(&params)
 	// only add a ? if it's actually needed (makes logging cleaner)
 	encoded := params.Encode()
 	if encoded != "" {
@@ -151,7 +151,6 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
-
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -160,17 +159,12 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBody interface{}) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
 	params := url.Values{}
-	if teamId != "" && strings.HasPrefix(teamId, "team_") {
-		params.Add("teamId", teamId)
-	}
-	if slug != "" {
-		params.Add("slug", slug)
-	}
+	c.addTeamParam(&params)
 	// only add a ? if it's actually needed (makes logging cleaner)
 	encoded := params.Encode()
 	if encoded != "" {
@@ -184,6 +178,44 @@ func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBo
 	}
 
 	return c.HttpClient.Do(req)
+}
+
+func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error {
+	if err := c.okToRequest(); err != nil {
+		return err
+	}
+	params := url.Values{}
+	c.addTeamParam(&params)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
+	}
+	body, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events"+encoded), body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("User-Agent", c.UserAgent())
+	resp, err := c.HttpClient.Do(req)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("%s", string(b))
+	}
+	return err
+}
+
+func (c *ApiClient) addTeamParam(params *url.Values) {
+	if c.teamID != "" && strings.HasPrefix(c.teamID, "team_") {
+		params.Add("teamId", c.teamID)
+	}
+	if c.teamSlug != "" {
+		params.Add("slug", c.teamSlug)
+	}
 }
 
 // Team is a Vercel Team object
