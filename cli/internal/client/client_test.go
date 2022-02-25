@@ -40,6 +40,7 @@ func Test_sendToServer(t *testing.T) {
 			"hash":      "foo",
 			"source":    "LOCAL",
 			"event":     "hit",
+			"duration":  1000,
 		},
 		{
 			"sessionId": myUUID.String(),
