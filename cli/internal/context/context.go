@@ -19,7 +19,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/google/chrometracing"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
@@ -29,19 +28,15 @@ const GLOBAL_CACHE_KEY = "snozzberries"
 
 // Context of the CLI
 type Context struct {
-	Args             []string
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
-	Dir              string
 	RootNode         string
 	RootPackageJSON  *fs.PackageJSON
 	TurboConfig      *fs.TurboConfigJSON
 	GlobalHash       string
-	TraceFilePath    string
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
-	Targets          []string
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -61,26 +56,6 @@ func New(opts ...Option) (*Context, error) {
 	}
 
 	return &m, nil
-}
-
-// WithArgs sets the arguments to the command that are used for parsing.
-// Remaining arguments can be accessed using your flag set and asking for Args.
-// Example: c.Flags().Args().
-func WithArgs(args []string) Option {
-	return func(c *Context) error {
-		c.Args = args
-		return nil
-	}
-}
-
-func WithTracer(filename string) Option {
-	return func(c *Context) error {
-		if filename != "" {
-			chrometracing.EnableTracing()
-			c.TraceFilePath = filename
-		}
-		return nil
-	}
 }
 
 func WithGraph(rootpath string, config *config.Config) Option {
@@ -147,11 +122,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		globalHash, err := calculateGlobalHash(rootpath, pkg, c.TurboConfig.GlobalDependencies, c.Backend, config.Logger, os.Environ())
 		c.GlobalHash = globalHash
-		targets, err := GetTargetsFromArguments(c.Args, c.TurboConfig)
-		if err != nil {
-			return err
-		}
-		c.Targets = targets
 		// We will parse all package.json's simultaneously. We use a
 		// waitgroup because we cannot fully populate the graph (the next step)
 		// until all parsing is complete

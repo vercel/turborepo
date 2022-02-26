@@ -100,7 +100,7 @@ func (c *PruneCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	ctx, err := context.New(context.WithTracer(""), context.WithArgs(args), context.WithGraph(pruneOptions.cwd, c.Config))
+	ctx, err := context.New(context.WithGraph(pruneOptions.cwd, c.Config))
 
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not construct graph: %w", err))
