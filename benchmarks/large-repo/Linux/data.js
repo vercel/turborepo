@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1645835974244,
+  "lastUpdate": 1645922262906,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -606,6 +606,52 @@ window.BENCHMARK_DATA = {
             "value": 46848.4,
             "unit": "ms",
             "range": "10762"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "kokoaj",
+            "username": "kokiebisu",
+            "email": "43525282+kokiebisu@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "ca5a2284d60134096ffcccbd4fd4a9655c8911f4",
+          "message": "document fixes for the cache section (#782)",
+          "timestamp": "2022-02-26T21:22:54Z",
+          "url": "https://github.com/vercel/turborepo/commit/ca5a2284d60134096ffcccbd4fd4a9655c8911f4"
+        },
+        "date": 1645922262033,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 168815.4,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 11127,
+            "unit": "ms",
+            "range": "344"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 41280.4,
+            "unit": "ms",
+            "range": "10360"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 41530.4,
+            "unit": "ms",
+            "range": "13399"
           }
         ]
       }
