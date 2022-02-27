@@ -185,7 +185,7 @@ async function run() {
 
   if (flags.install) {
     console.log();
-    console.log(`>>> Bootstrapping a new turborepo with the following:`);
+    console.log(`>>> Creating a new turborepo with the following:`);
     console.log();
     console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
     console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);

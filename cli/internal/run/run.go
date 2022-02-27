@@ -2,6 +2,7 @@ package run
 
 import (
 	"bufio"
+	gocontext "context"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -321,7 +323,16 @@ func (c *RunCommand) Run(args []string) int {
 }
 
 func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
-	turboCache := cache.New(c.Config)
+	goctx := gocontext.Background()
+	var analyticsSink analytics.Sink
+	if c.Config.IsLoggedIn() {
+		analyticsSink = c.Config.ApiClient
+	} else {
+		analyticsSink = analytics.NullSink
+	}
+	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()
 
 	var topoVisit []interface{}
@@ -526,7 +537,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				// Cache ---------------------------------------------
 				var hit bool
 				if !rs.Opts.forceExecution {
-					hit, _, err = turboCache.Fetch(pack.Dir, hash, nil)
+					hit, _, _, err = turboCache.Fetch(pack.Dir, hash, nil)
 					if err != nil {
 						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 					} else if hit {
@@ -946,6 +957,10 @@ func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs 
 		if glob.Match(f) {
 			scopedPkgs.Add(f)
 		}
+	}
+
+	if len(include) > 0 && scopedPkgs.Len() == 0 {
+		return nil, errors.Errorf("No packages found matching the provided scope pattern.")
 	}
 
 	return scopedPkgs, nil
