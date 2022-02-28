@@ -26,11 +26,11 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 		Short: "Login to your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var rawToken string
-			
+
 			ch.Config.Logger.Debug(fmt.Sprintf("turbo v%v", ch.Config.Version))
 			ch.Config.Logger.Debug(fmt.Sprintf("api url: %v", ch.Config.ApiUrl))
 			ch.Config.Logger.Debug(fmt.Sprintf("login url: %v", ch.Config.LoginUrl))
-			
+
 			redirectUrl := fmt.Sprintf("http://%v:%v", DEFAULT_HOSTNAME, DEFAULT_PORT)
 			loginUrl := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", ch.Config.LoginUrl, redirectUrl)
 			ch.Logger.Printf(util.Sprintf(">>> Opening browser to %v", ch.Config.LoginUrl))

@@ -145,7 +145,5 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 
 	cmd.Flags().BoolVarP(&opts.noGitignore, "no-gitignore", "n", false, "Do not create or modify .gitignore")
 
-	ch.Config.Logger.Named(cmd.Name())
-
 	return cmd
 }

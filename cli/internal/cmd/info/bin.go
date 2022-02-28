@@ -13,7 +13,7 @@ func BinCmd(ch *cmdutil.Helper) *cobra.Command {
 		Short:  "Get the path to the Turbo binary",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := os.Executable()
-			if err == nil {
+			if err != nil {
 				return ch.LogError("could not get path to turbo binary: %w", err)
 			}
 

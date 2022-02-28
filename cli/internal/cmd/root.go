@@ -38,11 +38,6 @@ func Execute(ctx context.Context, version string) int {
 }
 
 func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
-	var opts struct {
-		debug bool
-		level int
-	}
-
 	rootCmd.SilenceUsage = true
 	rootCmd.SilenceErrors = true
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
@@ -57,7 +52,7 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 	}
 
 	rootCmd.PersistentFlags().CountVarP(&cfg.Level, "level", "l", "set log level")
-	rootCmd.PersistentFlags().BoolVarP(&opts.debug, "debug", "d", false, "enable debug mode")
+	rootCmd.PersistentFlags().BoolVar(&cfg.NoColor, "no-color", false, "disable color output")
 	rootCmd.PersistentFlags().StringVar(&cfg.Token, "token", cfg.Token, "vercel token")
 	rootCmd.PersistentFlags().StringVar(&cfg.TeamSlug, "team", cfg.TeamSlug, "vercel team slug")
 	rootCmd.PersistentFlags().StringVar(&cfg.ApiUrl, "api", cfg.ApiUrl, "vercel api url")
@@ -69,10 +64,8 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 		Logger: logger,
 		Config: cfg,
 	}
-	ch.SetDebug(&opts.debug)
-	cfg.SetLogOptions(logger)
 
-	rootCmd.PersistentPreRun = ch.Config.SetLoggerName()
+	rootCmd.PersistentPreRunE = ch.PreRun()
 
 	rootCmd.AddCommand(info.BinCmd(ch))
 	rootCmd.AddCommand(auth.LinkCmd(ch))
