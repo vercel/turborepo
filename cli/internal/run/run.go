@@ -121,6 +121,8 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
+  --silence-cached-logs  Do not replay logs of all cached tasks. Useful for
+                         reducing output in the terminal. (default false)
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -542,7 +544,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					} else if hit {
 						if rs.Opts.stream && fs.FileExists(filepath.Join(rs.Opts.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false, rs.Opts.silenceCached)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
@@ -796,6 +798,8 @@ type RunOptions struct {
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
 	only bool
+	// Do not replay cached tasks
+	silenceCached bool
 }
 
 func getDefaultRunOptions() *RunOptions {
@@ -811,6 +815,7 @@ func getDefaultRunOptions() *RunOptions {
 		forceExecution:      false,
 		stream:              true,
 		only:                false,
+		silenceCached:       false,
 	}
 }
 
@@ -906,6 +911,8 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				runOptions.includeDependencies = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
+			case strings.HasPrefix(arg, "--silence-cached-logs"):
+				runOptions.silenceCached = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
@@ -997,7 +1004,7 @@ func hasGraphViz() bool {
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, silentOutput bool) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
@@ -1007,8 +1014,14 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 	}
 	defer f.Close()
 	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+	if silentOutput {
+		//Writing to Stdout only the "cache hit, replaying output" line
+		scan.Scan()
+		prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
+	} else {
+		for scan.Scan() {
+			prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+		}
 	}
 	logger.Debug("finish replaying logs")
 }

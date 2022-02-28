@@ -169,6 +169,14 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--silence-cached-logs`
+
+Default false. Do not replay cached logs of all tasks. This is useful for minimizing output in the terminal to only show what changed.
+
+```shell
+turbo run build --silence-cached-logs
+```
+
 #### `--only`
 
 Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
