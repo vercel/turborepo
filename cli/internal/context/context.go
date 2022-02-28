@@ -226,10 +226,13 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
 
-		for i, val := range f {
-			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
+		for _, val := range f {
+			relativePkgPath, err := filepath.Rel(rootpath, val)
+			if err != nil {
+				return fmt.Errorf("non-nested package.json path %w", err)
+			}
 			parseJSONWaitGroup.Go(func() error {
-				return c.parsePackageJSON(val)
+				return c.parsePackageJSON(relativePkgPath)
 			})
 		}
 

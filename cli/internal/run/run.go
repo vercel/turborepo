@@ -820,6 +820,7 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid working directory: %w", err)
 	}
+	runOptions.cwd = cwd
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
@@ -848,8 +849,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--cwd="):
 				if len(arg[len("--cwd="):]) > 0 {
 					runOptions.cwd = arg[len("--cwd="):]
-				} else {
-					runOptions.cwd = cwd
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
