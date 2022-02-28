@@ -818,7 +818,7 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("invalid working directory?: %w", err)
+		return nil, fmt.Errorf("invalid working directory: %w", err)
 	}
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
