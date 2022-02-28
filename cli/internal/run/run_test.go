@@ -3,7 +3,6 @@ package run
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
@@ -19,7 +18,7 @@ func TestParseConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	defaultCacheFolder := path.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
+	defaultCacheFolder := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
 		Name     string
 		Args     []string
