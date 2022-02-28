@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -131,7 +130,7 @@ func (c *PruneCommand) Run(args []string) int {
 	workspaces := []string{}
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
-	pkg, err := fs.ReadPackageJSON(path.Join(pruneOptions.cwd, "package.json"))
+	pkg, err := fs.ReadPackageJSON(filepath.Join(pruneOptions.cwd, "package.json"))
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not read package.json: %w", err))
 		return 1

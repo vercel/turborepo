@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"path"
 	"path/filepath"
 
 	"github.com/vercel/turborepo/cli/internal/api"
@@ -23,7 +22,7 @@ var NodejsYarnBackend = api.LanguageBackend{
 	Lockfile:         "yarn.lock",
 	FilenamePatterns: nodejsPatterns,
 	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(path.Join(rootpath, "package.json"))
+		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -84,7 +83,7 @@ var NodejsBerryBackend = api.LanguageBackend{
 	Lockfile:         "yarn.lock",
 	FilenamePatterns: nodejsPatterns,
 	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(path.Join(rootpath, "package.json"))
+		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -164,7 +163,7 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	Lockfile:         "pnpm-lock.yaml",
 	FilenamePatterns: nodejsPatterns,
 	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
-		bytes, err := ioutil.ReadFile(path.Join(rootpath, "pnpm-workspace.yaml"))
+		bytes, err := ioutil.ReadFile(filepath.Join(rootpath, "pnpm-workspace.yaml"))
 		if err != nil {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
 		}
@@ -215,7 +214,7 @@ var NodejsNpmBackend = api.LanguageBackend{
 	Lockfile:         "package-lock.json",
 	FilenamePatterns: nodejsPatterns,
 	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(path.Join(rootpath, "package.json"))
+		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}

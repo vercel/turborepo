@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,13 +15,13 @@ import (
 func ReadLockfile(rootpath string, backendName string, cacheDir string) (*YarnLockfile, error) {
 	var lockfile YarnLockfile
 	var prettyLockFile = YarnLockfile{}
-	hash, err := HashFile(path.Join(rootpath, "yarn.lock"))
+	hash, err := HashFile(filepath.Join(rootpath, "yarn.lock"))
 	if err != nil {
 		return &YarnLockfile{}, fmt.Errorf("failed to hash lockfile: %w", err)
 	}
 	contentsOfLock, err := ioutil.ReadFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
 	if err != nil {
-		contentsB, err := ioutil.ReadFile(path.Join(rootpath, "yarn.lock"))
+		contentsB, err := ioutil.ReadFile(filepath.Join(rootpath, "yarn.lock"))
 		if err != nil {
 			return nil, fmt.Errorf("reading yarn.lock: %w", err)
 		}

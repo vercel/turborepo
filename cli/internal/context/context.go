@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -93,7 +92,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
-		packageJSONPath := path.Join(rootpath, "package.json")
+		packageJSONPath := filepath.Join(rootpath, "package.json")
 		pkg, err := fs.ReadPackageJSON(packageJSONPath)
 		if err != nil {
 			return fmt.Errorf("package.json: %w", err)
@@ -104,7 +103,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// If pkg.Turbo exists, we warn about running the migration
 		// Use pkg.Turbo if turbo.json doesn't exist
 		// If neither exists, it's a fatal error
-		turboJSONPath := path.Join(rootpath, "turbo.json")
+		turboJSONPath := filepath.Join(rootpath, "turbo.json")
 		if !fs.FileExists(turboJSONPath) {
 			if pkg.LegacyTurboConfig == nil {
 				// TODO: suggestion on how to create one
@@ -221,7 +220,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		parseJSONWaitGroup := new(errgroup.Group)
 		justJsons := make([]string, 0, len(spaces))
 		for _, space := range spaces {
-			justJsons = append(justJsons, path.Join(space, "package.json"))
+			justJsons = append(justJsons, filepath.Join(space, "package.json"))
 		}
 
 		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
