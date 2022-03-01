@@ -107,7 +107,7 @@ by turbo to install the correct binary executable for your current platform.`);
     isYarnPnP = true;
   } catch (e) {}
   if (isYarnPnP) {
-    const turboLibDir = path.dirname(require.resolve("turbo"));
+    const turboLibDir = path.dirname(require.resolve("turbo/package.json"));
     const binTargetPath = path.join(
       turboLibDir,
       `pnpapi-${pkg}-${path.basename(subpath)}`
