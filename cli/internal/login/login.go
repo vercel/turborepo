@@ -3,6 +3,7 @@ package login
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -91,38 +92,52 @@ func run(c *config.Config, deps loginDeps) error {
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginUrl, redirectURL)
 	deps.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
-	s := ui.NewSpinner(os.Stdout)
-	err := deps.openURL(loginURL)
-	if err != nil {
-		return errors.Wrapf(err, "failed to open %v", loginURL)
-	}
-	s.Start("Waiting for your authorization...")
 
 	var query url.Values
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+
+	// Start listening immediately to handle race with user interaction
+	// This is mostly for testing, but would otherwise still technically be
+	// a race condition.
+	addr := defaultHostname + ":" + fmt.Sprint(defaultPort)
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
 		http.Redirect(w, r, c.LoginUrl+"/turborepo/success", http.StatusFound)
 		cancel()
 	})
 
-	srv := &http.Server{Addr: defaultHostname + ":" + fmt.Sprint(defaultPort)}
+	srv := &http.Server{Handler: http.DefaultServeMux}
 	var serverErr error
+	serverDone := make(chan struct{})
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			if err != nil {
-				serverErr = errors.Wrap(err, "could not activate device. Please try again")
-			}
+		if err := srv.Serve(l); err != nil {
+			serverErr = errors.Wrap(err, "could not activate device. Please try again")
 		}
+		close(serverDone)
 	}()
-	<-ctx.Done()
-	s.Stop("")
-	if serverErr != nil {
-		return serverErr
+
+	s := ui.NewSpinner(os.Stdout)
+	err = deps.openURL(loginURL)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %v", loginURL)
 	}
+	s.Start("Waiting for your authorization...")
+
+	<-ctx.Done()
 	err = srv.Close()
+	// Stop the spinner before we return to ensure terminal is left in a good state
+	s.Stop("")
 	if err != nil {
 		return err
+	}
+	<-serverDone
+	if !errors.Is(serverErr, http.ErrServerClosed) {
+		return serverErr
 	}
 	deps.writeConfig(&config.TurborepoConfig{Token: query.Get("token")})
 	rawToken = query.Get("token")
