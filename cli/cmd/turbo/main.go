@@ -92,7 +92,7 @@ func main() {
 			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
 		},
 		"login": func() (cli.Command, error) {
-			return &login.LoginCommand{Config: cf, Ui: ui}, nil
+			return &login.LoginCommand{Config: cf, UI: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
