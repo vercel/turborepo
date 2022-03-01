@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -75,7 +76,7 @@ func run(c *config.Config, tui *cli.ColoredUi) error {
 	s.Start("Waiting for your authorization...")
 
 	var query url.Values
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	fmt.Println(query.Encode())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
@@ -96,6 +97,10 @@ func run(c *config.Config, tui *cli.ColoredUi) error {
 	s.Stop("")
 	if serverErr != nil {
 		return serverErr
+	}
+	err := srv.Close()
+	if err != nil {
+		return err
 	}
 	config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
 	rawToken = query.Get("token")
