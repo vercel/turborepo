@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -50,7 +51,12 @@ func (c *LoginCommand) Run(args []string) int {
 		Use:   "turbo login",
 		Short: "Login to your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(c.Config, c.UI)
+			return run(c.Config, loginDeps{
+				ui:          c.UI,
+				openURL:     browser.OpenBrowser,
+				client:      c.Config.ApiClient,
+				writeConfig: config.WriteUserConfigFile,
+			})
 		},
 	}
 	loginCommand.SetArgs(args)
@@ -63,21 +69,37 @@ func (c *LoginCommand) Run(args []string) int {
 	return 0
 }
 
-func run(c *config.Config, tui *cli.ColoredUi) error {
+type browserClient = func(url string) error
+type userClient interface {
+	SetToken(token string)
+	GetUser() (*client.UserResponse, error)
+}
+type configWriter = func(cf *config.TurborepoConfig) error
+
+type loginDeps struct {
+	ui          *cli.ColoredUi
+	openURL     browserClient
+	client      userClient
+	writeConfig configWriter
+}
+
+func run(c *config.Config, deps loginDeps) error {
 	var rawToken string
 	c.Logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
 	c.Logger.Debug(fmt.Sprintf("api url: %v", c.ApiUrl))
 	c.Logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginUrl, redirectURL)
-	tui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
+	deps.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
 	s := ui.NewSpinner(os.Stdout)
-	browser.OpenBrowser(loginURL)
+	err := deps.openURL(loginURL)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %v", loginURL)
+	}
 	s.Start("Waiting for your authorization...")
 
 	var query url.Values
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	fmt.Println(query.Encode())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
 		http.Redirect(w, r, c.LoginUrl+"/turborepo/success", http.StatusFound)
@@ -98,24 +120,24 @@ func run(c *config.Config, tui *cli.ColoredUi) error {
 	if serverErr != nil {
 		return serverErr
 	}
-	err := srv.Close()
+	err = srv.Close()
 	if err != nil {
 		return err
 	}
-	config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
+	deps.writeConfig(&config.TurborepoConfig{Token: query.Get("token")})
 	rawToken = query.Get("token")
-	c.ApiClient.SetToken(rawToken)
-	userResponse, err := c.ApiClient.GetUser()
+	deps.client.SetToken(rawToken)
+	userResponse, err := deps.client.GetUser()
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	tui.Info("")
-	tui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
-	tui.Info("")
-	tui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-	tui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
-	tui.Info("")
-	tui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
-	tui.Info("")
+	deps.ui.Info("")
+	deps.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
+	deps.ui.Info("")
+	deps.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
+	deps.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
+	deps.ui.Info("")
+	deps.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+	deps.ui.Info("")
 	return nil
 }
