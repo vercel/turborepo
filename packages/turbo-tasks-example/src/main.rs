@@ -66,24 +66,20 @@ fn main() {
                 SlotRef::Nothing
             })
         });
-        task.wait_done().await;
-        println!("done in {} ms", start.elapsed().as_millis());
-
-        for task in tt.cached_tasks_iter() {
-            task.reset_executions();
-        }
-
-        let task_clone = task.clone();
         spawn(async move {
+            tt.wait_done().await;
+            println!("done in {} ms", start.elapsed().as_millis());
+
+            for task in tt.cached_tasks_iter() {
+                task.reset_executions();
+            }
+
             loop {
-                task_clone.root_wait_dirty().await;
-                let start = Instant::now();
-                task_clone.wait_done().await;
-                let elapsed = start.elapsed();
+                let (elapsed, count) = tt.wait_done().await;
                 if elapsed.as_millis() >= 100 {
-                    println!("updated in {} ms", elapsed.as_millis());
+                    println!("updated {} tasks in {} ms", count, elapsed.as_millis());
                 } else {
-                    println!("updated in {} µs", elapsed.as_micros());
+                    println!("updated {} tasks in {} µs", count, elapsed.as_micros());
                 }
             }
         })
