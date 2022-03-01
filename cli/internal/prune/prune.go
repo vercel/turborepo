@@ -116,6 +116,15 @@ func (c *PruneCommand) Run(args []string) int {
 	if !util.IsYarn(ctx.Backend.Name) {
 		c.logError(c.Config.Logger, "", fmt.Errorf("this command is not yet implemented for %s", ctx.Backend.Name))
 		return 1
+	} else if ctx.Backend.Name == "nodejs-berry" {
+		isNMLinker, err := util.IsNMLinker(pruneOptions.cwd)
+		if err != nil {
+			c.logError(c.Config.Logger, "", fmt.Errorf("could not determine if yarn is using `nodeLinker: node-modules`: %w", err))
+			return 1
+		} else if !isNMLinker {
+			c.logError(c.Config.Logger, "", fmt.Errorf("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time"))
+			return 1
+		}
 	}
 
 	logger.Printf("Generating pruned monorepo for %v in %v", ui.Bold(pruneOptions.scope), ui.Bold(filepath.Join(pruneOptions.cwd, "out")))
