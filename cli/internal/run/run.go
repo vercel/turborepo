@@ -143,9 +143,14 @@ func (c *RunCommand) Run(args []string) int {
 
 	c.Config.Cache.Dir = runOptions.cacheFolder
 
-	ctx, err := context.New(context.WithTracer(runOptions.profile), context.WithArgs(args), context.WithGraph(runOptions.cwd, c.Config))
+	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
+		return 1
+	}
+	targets, err := context.GetTargetsFromArguments(args, ctx.TurboConfig)
+	if err != nil {
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
 	}
 
@@ -308,7 +313,7 @@ func (c *RunCommand) Run(args []string) int {
 		RootNode:         ctx.RootNode,
 	}
 	rs := &runSpec{
-		Targets:      ctx.Targets,
+		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
 		Opts:         runOptions,
 	}
