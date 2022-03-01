@@ -32,7 +32,7 @@ func Test_run(t *testing.T) {
 		LoginUrl:     "login-url",
 	}
 
-	ch := make(chan struct{})
+	ch := make(chan struct{}, 1)
 	openedURL := ""
 	urlOpener := func(url string) error {
 		openedURL = url
@@ -44,13 +44,18 @@ func Test_run(t *testing.T) {
 	var clientErr error
 	go func() {
 		<-ch
-		resp, err := http.Get("http://127.0.0.1:9789/?token=my-token")
+		client := &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		resp, err := client.Get("http://127.0.0.1:9789/?token=my-token")
 		if err != nil {
 			clientErr = err
-		}
-		if resp.StatusCode != http.StatusFound {
+		} else if resp != nil && resp.StatusCode != http.StatusFound {
 			clientErr = fmt.Errorf("invalid status %v", resp.StatusCode)
 		}
+		ch <- struct{}{}
 	}()
 
 	var writtenConfig *config.TurborepoConfig
@@ -69,6 +74,7 @@ func Test_run(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
+	<-ch
 	if clientErr != nil {
 		t.Errorf("test client had error %v", clientErr)
 	}

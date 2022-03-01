@@ -93,9 +93,8 @@ func run(c *config.Config, deps loginDeps) error {
 	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginUrl, redirectURL)
 	deps.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
 
-	var query url.Values
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-
+	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	// Start listening immediately to handle race with user interaction
 	// This is mostly for testing, but would otherwise still technically be
 	// a race condition.
@@ -104,12 +103,14 @@ func run(c *config.Config, deps loginDeps) error {
 	if err != nil {
 		return err
 	}
-
+	
+	redirectDone := make(chan struct{})
 	mux := http.NewServeMux()
+	var query url.Values
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
 		http.Redirect(w, r, c.LoginUrl+"/turborepo/success", http.StatusFound)
-		cancel()
+		close(redirectDone)
 	})
 
 	srv := &http.Server{Handler: mux}
@@ -129,8 +130,8 @@ func run(c *config.Config, deps loginDeps) error {
 	}
 	s.Start("Waiting for your authorization...")
 
-	<-ctx.Done()
-	err = srv.Close()
+	<-redirectDone
+	err = srv.Shutdown(rootctx)
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 	if err != nil {
