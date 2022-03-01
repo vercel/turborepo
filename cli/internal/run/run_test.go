@@ -14,6 +14,11 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
+	defaultCwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	defaultCacheFolder := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
 		Name     string
 		Args     []string
@@ -32,7 +37,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -66,7 +72,8 @@ func TestParseConfig(t *testing.T) {
 				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -82,7 +89,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -98,7 +106,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -114,7 +123,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{"--boop", "zoop"},
 			},
 		},
@@ -131,7 +141,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{},
 			},
 		},
@@ -146,7 +157,7 @@ func TestParseConfig(t *testing.T) {
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ".", ui)
+			actual, err := parseRunArgs(tc.Args, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
