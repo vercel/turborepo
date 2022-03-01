@@ -3,6 +3,8 @@ package login
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
@@ -12,7 +14,8 @@ import (
 )
 
 type dummyClient struct {
-	setToken string
+	setToken            string
+	createdSSOTokenName string
 }
 
 func (d *dummyClient) SetToken(t string) {
@@ -23,71 +26,134 @@ func (d *dummyClient) GetUser() (*client.UserResponse, error) {
 	return &client.UserResponse{}, nil
 }
 
-func Test_run(t *testing.T) {
-	logger := hclog.Default()
-	cf := &config.Config{
-		Logger:       logger,
-		TurboVersion: "test",
-		ApiUrl:       "api-url",
-		LoginUrl:     "login-url",
-	}
+func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.VerifiedSSOUser, error) {
+	d.createdSSOTokenName = tokenName
+	return &client.VerifiedSSOUser{
+		Token:  "actual-sso-token",
+		TeamID: "sso-team-id",
+	}, nil
+}
 
-	ch := make(chan struct{}, 1)
-	openedURL := ""
+var logger = hclog.Default()
+var cf = &config.Config{
+	Logger:       logger,
+	TurboVersion: "test",
+	ApiUrl:       "api-url",
+	LoginUrl:     "login-url",
+}
+
+type testResult struct {
+	clientErr          error
+	userConfigWritten  *config.TurborepoConfig
+	repoConfigWritten  *config.TurborepoConfig
+	clientTokenWritten string
+	openedURL          string
+	stepCh             chan struct{}
+	client             dummyClient
+}
+
+func (tr *testResult) Deps() loginDeps {
 	urlOpener := func(url string) error {
-		openedURL = url
-		ch <- struct{}{}
+		tr.openedURL = url
+		tr.stepCh <- struct{}{}
 		return nil
 	}
+	return loginDeps{
+		ui:      ui.Default(),
+		openURL: urlOpener,
+		client:  &tr.client,
+		writeUserConfig: func(cf *config.TurborepoConfig) error {
+			tr.userConfigWritten = cf
+			return nil
+		},
+		writeRepoConfig: func(cf *config.TurborepoConfig) error {
+			tr.repoConfigWritten = cf
+			return nil
+		},
+	}
+}
 
-	// When we get the ping, send a token
-	var clientErr error
+func newTest(redirectedURL string) *testResult {
+	stepCh := make(chan struct{}, 1)
+	tr := &testResult{
+		stepCh: stepCh,
+	}
+	// When it's time, do the redirect
 	go func() {
-		<-ch
+		<-tr.stepCh
 		client := &http.Client{
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
 		}
-		resp, err := client.Get("http://127.0.0.1:9789/?token=my-token")
+		resp, err := client.Get(redirectedURL)
 		if err != nil {
-			clientErr = err
+			tr.clientErr = err
 		} else if resp != nil && resp.StatusCode != http.StatusFound {
-			clientErr = fmt.Errorf("invalid status %v", resp.StatusCode)
+			tr.clientErr = fmt.Errorf("invalid status %v", resp.StatusCode)
 		}
-		ch <- struct{}{}
+		tr.stepCh <- struct{}{}
 	}()
+	return tr
+}
 
-	var writtenConfig *config.TurborepoConfig
-	writeConfig := func(cf *config.TurborepoConfig) error {
-		writtenConfig = cf
-		return nil
-	}
-
-	client := &dummyClient{}
-	err := run(cf, loginDeps{
-		openURL:     urlOpener,
-		ui:          ui.Default(),
-		writeConfig: writeConfig,
-		client:      client,
-	})
+func Test_run(t *testing.T) {
+	test := newTest("http://127.0.0.1:9789/?token=my-token")
+	err := run(cf, test.Deps())
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
-	<-ch
-	if clientErr != nil {
-		t.Errorf("test client had error %v", clientErr)
+	<-test.stepCh
+	if test.clientErr != nil {
+		t.Errorf("test client had error %v", test.clientErr)
 	}
 
 	expectedURL := "login-url/turborepo/token?redirect_uri=http://127.0.0.1:9789"
-	if openedURL != expectedURL {
-		t.Errorf("openedURL got %v, want %v", openedURL, expectedURL)
+	if test.openedURL != expectedURL {
+		t.Errorf("openedURL got %v, want %v", test.openedURL, expectedURL)
 	}
 
-	if writtenConfig.Token != "my-token" {
-		t.Errorf("config token got %v, want my-token", writtenConfig.Token)
+	if test.userConfigWritten.Token != "my-token" {
+		t.Errorf("config token got %v, want my-token", test.userConfigWritten.Token)
 	}
-	if client.setToken != "my-token" {
-		t.Errorf("user client token got %v, want my-token", client.setToken)
+	if test.client.setToken != "my-token" {
+		t.Errorf("user client token got %v, want my-token", test.client.setToken)
+	}
+}
+
+func Test_sso(t *testing.T) {
+	redirectParams := make(url.Values)
+	redirectParams.Add("token", "verification-token")
+	redirectParams.Add("email", "test@example.com")
+	test := newTest("http://127.0.0.1:9789/?" + redirectParams.Encode())
+	err := loginSSO(cf, "my-team", test.Deps())
+	if err != nil {
+		t.Errorf("expected to succeed, got error %v", err)
+	}
+	<-test.stepCh
+	if test.clientErr != nil {
+		t.Errorf("test client had error %v", test.clientErr)
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		t.Errorf("failed to get hostname %v", err)
+	}
+	expectedTokenName := fmt.Sprintf("Turbo CLI on %v via SAML Single Sign-On", host)
+	if test.client.createdSSOTokenName != expectedTokenName {
+		t.Errorf("created sso token got %v want %v", test.client.createdSSOTokenName, expectedTokenName)
+	}
+	expectedToken := "actual-sso-token"
+	if test.client.setToken != expectedToken {
+		t.Errorf("user client token got %v, want %v", test.client.setToken, expectedToken)
+	}
+	if test.userConfigWritten.Token != expectedToken {
+		t.Errorf("user config token got %v want %v", test.userConfigWritten.Token, expectedToken)
+	}
+	expectedTeamID := "sso-team-id"
+	if test.repoConfigWritten.TeamId != expectedTeamID {
+		t.Errorf("repo config team id got %v want %v", test.repoConfigWritten.TeamId, expectedTeamID)
+	}
+	if test.repoConfigWritten.Token != "" {
+		t.Errorf("repo config file token, got %v want empty string", test.repoConfigWritten.Token)
 	}
 }

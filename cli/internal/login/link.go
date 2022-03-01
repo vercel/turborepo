@@ -142,7 +142,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}
 	}
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	fsErr := config.WriteConfigFile(filepath.Join(".turbo", "config.json"), &config.TurborepoConfig{
+	fsErr := config.WriteRepoConfigFile(&config.TurborepoConfig{
 		TeamId: chosenTeam.ID,
 		ApiUrl: c.Config.ApiUrl,
 	})
