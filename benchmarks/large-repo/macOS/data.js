@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1646009007237,
+  "lastUpdate": 1646095768514,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -698,6 +698,52 @@ window.BENCHMARK_DATA = {
             "value": 50359.2,
             "unit": "ms",
             "range": "9995"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "43b057ce2a75fb16e825263d997ed5fac35ba593",
+          "message": "Running build with --cwd works (#783)\n\nCo-authored-by: Jared Palmer <jared@jaredpalmer.com>",
+          "timestamp": "2022-02-28T22:53:07Z",
+          "url": "https://github.com/vercel/turborepo/commit/43b057ce2a75fb16e825263d997ed5fac35ba593"
+        },
+        "date": 1646095767617,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 250343.4,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 14141.6,
+            "unit": "ms",
+            "range": "1702"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 54115,
+            "unit": "ms",
+            "range": "15529"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 49655.2,
+            "unit": "ms",
+            "range": "9425"
           }
         ]
       }
