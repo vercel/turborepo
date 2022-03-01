@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1646009003126,
+  "lastUpdate": 1646094725959,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -698,6 +698,52 @@ window.BENCHMARK_DATA = {
             "value": 51098,
             "unit": "ms",
             "range": "10802"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "43b057ce2a75fb16e825263d997ed5fac35ba593",
+          "message": "Running build with --cwd works (#783)\n\nCo-authored-by: Jared Palmer <jared@jaredpalmer.com>",
+          "timestamp": "2022-02-28T22:53:07Z",
+          "url": "https://github.com/vercel/turborepo/commit/43b057ce2a75fb16e825263d997ed5fac35ba593"
+        },
+        "date": 1646094725206,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 125748,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 10689.2,
+            "unit": "ms",
+            "range": "449"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 32015.6,
+            "unit": "ms",
+            "range": "7976"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 32862.6,
+            "unit": "ms",
+            "range": "7878"
           }
         ]
       }
