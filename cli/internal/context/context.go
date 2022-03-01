@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/backends"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -30,7 +30,6 @@ const GLOBAL_CACHE_KEY = "snozzberries"
 type Context struct {
 	Args                   []string
 	PackageInfos           map[interface{}]*fs.PackageJSON
-	ColorCache             *ColorCache
 	PackageNames           []string
 	TopologicalGraph       dag.AcyclicGraph
 	TaskGraph              dag.AcyclicGraph
@@ -89,17 +88,11 @@ func WithTracer(filename string) Option {
 func WithGraph(rootpath string, config *config.Config) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
-		c.ColorCache = NewColorCache()
 		c.RootNode = core.ROOT_NODE_NAME
 		// Need to ALWAYS have a root node, might as well do it now
 		c.TaskGraph.Add(core.ROOT_NODE_NAME)
 
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("could not get cwd: %w", err)
-		}
-
-		packageJSONPath := path.Join(rootpath, "package.json")
+		packageJSONPath := filepath.Join(rootpath, "package.json")
 		pkg, err := fs.ReadPackageJSON(packageJSONPath)
 		if err != nil {
 			return fmt.Errorf("package.json: %w", err)
@@ -110,7 +103,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// If pkg.Turbo exists, we warn about running the migration
 		// Use pkg.Turbo if turbo.json doesn't exist
 		// If neither exists, it's a fatal error
-		turboJSONPath := path.Join(rootpath, "turbo.json")
+		turboJSONPath := filepath.Join(rootpath, "turbo.json")
 		if !fs.FileExists(turboJSONPath) {
 			if pkg.LegacyTurboConfig == nil {
 				// TODO: suggestion on how to create one
@@ -131,7 +124,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			}
 		}
 
-		if backend, err := backends.GetBackend(cwd, pkg); err != nil {
+		if backend, err := backends.GetBackend(rootpath, pkg); err != nil {
 			return err
 		} else {
 			c.Backend = backend
@@ -139,7 +132,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		// this should go into the bacend abstraction
 		if util.IsYarn(c.Backend.Name) {
-			lockfile, err := fs.ReadLockfile(c.Backend.Name, config.Cache.Dir)
+			lockfile, err := fs.ReadLockfile(rootpath, c.Backend.Name, config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}
@@ -150,7 +143,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 
-		spaces, err := c.Backend.GetWorkspaceGlobs()
+		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
 
 		if err != nil {
 			return fmt.Errorf("could not detect workspaces: %w", err)
@@ -227,15 +220,18 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		parseJSONWaitGroup := new(errgroup.Group)
 		justJsons := make([]string, 0, len(spaces))
 		for _, space := range spaces {
-			justJsons = append(justJsons, path.Join(space, "package.json"))
+			justJsons = append(justJsons, filepath.Join(space, "package.json"))
 		}
 
 		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
 
-		for i, val := range f {
-			_, val := i, val // https://golang.org/doc/faq#closures_and_goroutines
+		for _, val := range f {
+			relativePkgPath, err := filepath.Rel(rootpath, val)
+			if err != nil {
+				return fmt.Errorf("non-nested package.json path %w", err)
+			}
 			parseJSONWaitGroup.Go(func() error {
-				return c.parsePackageJSON(val)
+				return c.parsePackageJSON(relativePkgPath)
 			})
 		}
 

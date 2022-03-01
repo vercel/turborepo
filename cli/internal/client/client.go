@@ -1,7 +1,10 @@
 package client
 
 import (
+	"context"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -9,6 +12,7 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
@@ -20,31 +24,104 @@ type ApiClient struct {
 	baseUrl      string
 	Token        string
 	turboVersion string
+	// Number of failed requests before we stop trying to upload/download artifacts to the remote cache
+	maxRemoteFailCount uint64
+	// Must be used via atomic package
+	currentFailCount uint64
 	// An http client
 	HttpClient *retryablehttp.Client
+	teamID     string
+	teamSlug   string
 }
+
+// ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
+var ErrTooManyFailures = errors.New("skipping HTTP Request, too many failures have occurred")
 
 func (api *ApiClient) SetToken(token string) {
 	api.Token = token
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger, turboVersion string) *ApiClient {
-	return &ApiClient{
-		baseUrl:      baseUrl,
-		turboVersion: turboVersion,
+func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
+	client := &ApiClient{
+		baseUrl:            baseUrl,
+		turboVersion:       turboVersion,
+		maxRemoteFailCount: maxRemoteFailCount,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(60 * time.Second),
+				Timeout: time.Duration(20 * time.Second),
 			},
-			RetryWaitMin: 10 * time.Second,
-			RetryWaitMax: 20 * time.Second,
-			RetryMax:     5,
-			CheckRetry:   retryablehttp.DefaultRetryPolicy,
+			RetryWaitMin: 2 * time.Second,
+			RetryWaitMax: 10 * time.Second,
+			RetryMax:     2,
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
+		teamID:   teamID,
+		teamSlug: teamSlug,
 	}
+	client.HttpClient.CheckRetry = client.checkRetry
+	return client
+}
+
+func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
+	if err != nil {
+		if errors.As(err, &x509.UnknownAuthorityError{}) {
+			// Don't retry if the error was due to TLS cert verification failure.
+			atomic.AddUint64(&c.currentFailCount, 1)
+			return false, err
+		}
+		atomic.AddUint64(&c.currentFailCount, 1)
+		return true, nil
+	}
+
+	// 429 Too Many Requests is recoverable. Sometimes the server puts
+	// a Retry-After response header to indicate when the server is
+	// available to start processing request from client.
+	if resp.StatusCode == http.StatusTooManyRequests {
+		atomic.AddUint64(&c.currentFailCount, 1)
+		return true, nil
+	}
+
+	// Check the response code. We retry on 500-range responses to allow
+	// the server time to recover, as 500's are typically not permanent
+	// errors and may relate to outages on the server side. This will catch
+	// invalid response codes as well, like 0 and 999.
+	if resp.StatusCode == 0 || (resp.StatusCode >= 500 && resp.StatusCode != 501) {
+		atomic.AddUint64(&c.currentFailCount, 1)
+		return true, fmt.Errorf("unexpected HTTP status %s", resp.Status)
+	}
+
+	// swallow the error and stop retrying
+	return false, nil
+}
+
+func (c *ApiClient) checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	// do not retry on context.Canceled or context.DeadlineExceeded
+	if ctx.Err() != nil {
+		atomic.AddUint64(&c.currentFailCount, 1)
+		return false, ctx.Err()
+	}
+
+	// we're squashing the error from the request and substituting any error that might come
+	// from our retry policy.
+	shouldRetry, err := c.retryCachePolicy(resp, err)
+	if shouldRetry {
+		// Our policy says it's ok to retry, but we need to check the failure count
+		if retryErr := c.okToRequest(); retryErr != nil {
+			return false, retryErr
+		}
+	}
+	return shouldRetry, err
+}
+
+// okToRequest returns nil if it's ok to make a request, and returns the error to
+// return to the caller if a request is not allowed
+func (c *ApiClient) okToRequest() error {
+	if atomic.LoadUint64(&c.currentFailCount) < c.maxRemoteFailCount {
+		return nil
+	}
+	return ErrTooManyFailures
 }
 
 func (c *ApiClient) makeUrl(endpoint string) string {
@@ -55,15 +132,18 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duration int, rawBody interface{}) error {
+func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) error {
+	if err := c.okToRequest(); err != nil {
+		return err
+	}
 	params := url.Values{}
-	if teamId != "" && strings.HasPrefix(teamId, "team_") {
-		params.Add("teamId", teamId)
+	c.addTeamParam(&params)
+	// only add a ? if it's actually needed (makes logging cleaner)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
 	}
-	if slug != "" {
-		params.Add("slug", slug)
-	}
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), rawBody)
+	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -79,21 +159,63 @@ func (c *ApiClient) PutArtifact(hash string, teamId string, slug string, duratio
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, teamId string, slug string, rawBody interface{}) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
+	if err := c.okToRequest(); err != nil {
+		return nil, err
+	}
 	params := url.Values{}
-	if teamId != "" && strings.HasPrefix(teamId, "team_") {
-		params.Add("teamId", teamId)
+	c.addTeamParam(&params)
+	// only add a ? if it's actually needed (makes logging cleaner)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
 	}
-	if slug != "" {
-		params.Add("slug", slug)
-	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+"?"+params.Encode()), nil)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded), nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
-		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
+		return nil, fmt.Errorf("invalid cache URL: %w", err)
 	}
+
 	return c.HttpClient.Do(req)
+}
+
+func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error {
+	if err := c.okToRequest(); err != nil {
+		return err
+	}
+	params := url.Values{}
+	c.addTeamParam(&params)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
+	}
+	body, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events"+encoded), body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("User-Agent", c.UserAgent())
+	resp, err := c.HttpClient.Do(req)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("%s", string(b))
+	}
+	return err
+}
+
+func (c *ApiClient) addTeamParam(params *url.Values) {
+	if c.teamID != "" && strings.HasPrefix(c.teamID, "team_") {
+		params.Add("teamId", c.teamID)
+	}
+	if c.teamSlug != "" {
+		params.Add("slug", c.teamSlug)
+	}
 }
 
 // Team is a Vercel Team object

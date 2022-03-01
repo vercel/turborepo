@@ -2,8 +2,11 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mitchellh/cli"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/util"
 
@@ -11,6 +14,11 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
+	defaultCwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	defaultCacheFolder := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
 		Name     string
 		Args     []string
@@ -29,7 +37,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -63,7 +72,8 @@ func TestParseConfig(t *testing.T) {
 				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -79,7 +89,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -95,7 +106,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -111,7 +123,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{"--boop", "zoop"},
 			},
 		},
@@ -128,16 +141,23 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{},
 			},
 		},
 	}
 
+	ui := &cli.BasicUi{
+		Reader:      os.Stdin,
+		Writer:      os.Stdout,
+		ErrorWriter: os.Stderr,
+	}
+
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ".")
+			actual, err := parseRunArgs(tc.Args, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
@@ -150,7 +170,7 @@ func TestScopedPackages(t *testing.T) {
 	cases := []struct {
 		Name     string
 		Ctx      *context.Context
-		Patttern []string
+		Pattern  []string
 		Expected util.Set
 	}{
 		{
@@ -189,11 +209,16 @@ func TestScopedPackages(t *testing.T) {
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			actual, err := getScopedPackages(tc.Ctx, tc.Patttern)
+			actual, err := getScopedPackages(tc.Ctx, tc.Pattern)
 			if err != nil {
 				t.Fatalf("invalid scope parse: %#v", err)
 			}
 			assert.EqualValues(t, tc.Expected, actual)
 		})
 	}
+
+	t.Run(fmt.Sprintf("%d-%s", len(cases), "throws an error if no package matches the provided scope pattern"), func(t *testing.T) {
+		_, err := getScopedPackages(&context.Context{PackageNames: []string{"foo", "bar"}}, []string{"baz"})
+		assert.Error(t, err)
+	})
 }

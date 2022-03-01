@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
 	"github.com/vercel/turborepo/cli/internal/client"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -47,14 +48,17 @@ type Config struct {
 	Cache        *CacheConfig
 }
 
+// IsLoggedIn returns true if we have a token and either a team id or team slug
+func (c *Config) IsLoggedIn() bool {
+	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
+}
+
 // CacheConfig
 type CacheConfig struct {
 	// Number of async workers
 	Workers int
 	// Cache directory
 	Dir string
-	// HTTP URI of the cache
-	Url string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
@@ -162,7 +166,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Output: output,
 	})
 
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion)
+	maxRemoteFailCount := 3
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
 
 	c = &Config{
 		Logger:       logger,
