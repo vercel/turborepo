@@ -105,13 +105,14 @@ func run(c *config.Config, deps loginDeps) error {
 		return err
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
 		http.Redirect(w, r, c.LoginUrl+"/turborepo/success", http.StatusFound)
 		cancel()
 	})
 
-	srv := &http.Server{Handler: http.DefaultServeMux}
+	srv := &http.Server{Handler: mux}
 	var serverErr error
 	serverDone := make(chan struct{})
 	go func() {

@@ -1,6 +1,7 @@
 package login
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -40,9 +41,16 @@ func Test_run(t *testing.T) {
 	}
 
 	// When we get the ping, send a token
+	var clientErr error
 	go func() {
 		<-ch
-		http.Get("http://127.0.0.1:9789/?token=my-token")
+		resp, err := http.Get("http://127.0.0.1:9789/?token=my-token")
+		if err != nil {
+			clientErr = err
+		}
+		if resp.StatusCode != http.StatusFound {
+			clientErr = fmt.Errorf("invalid status %v", resp.StatusCode)
+		}
 	}()
 
 	var writtenConfig *config.TurborepoConfig
@@ -60,6 +68,9 @@ func Test_run(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
+	}
+	if clientErr != nil {
+		t.Errorf("test client had error %v", clientErr)
 	}
 
 	expectedURL := "login-url/turborepo/token?redirect_uri=http://127.0.0.1:9789"
