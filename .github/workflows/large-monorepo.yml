@@ -30,12 +30,15 @@ jobs:
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: pnpm
 
       - name: Install dependencies
-        run: cd benchmark && yarn
+        run: pnpm install --filter=benchmark
 
       - name: Run benchmarks
-        run: cd benchmark && yarn benchmark
+        run: cd benchmark && pnpm benchmark
 
       - name: Store Benchmark Result
         uses: benchmark-action/github-action-benchmark@v1

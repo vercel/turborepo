@@ -30,19 +30,20 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
-          cache: yarn
-          cache-dependency-path: yarn.lock
           node-version: 16
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --filter=\!docs --filter=\!benchmark
 
       - name: Build & Unit Test
-        run: yarn turbo run test --scope=cli
+        run: pnpm turbo run test --scope=cli
 
       - name: Lint
-        run: yarn turbo run lint --scope=cli
+        run: pnpm turbo run lint --scope=cli
 
       - name: E2E Tests
         run: |
-          npm install -g pnpm
           cd cli && make e2e
 
       - name: Benchmark and Smoke Tests
@@ -71,9 +72,8 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
-          cache: yarn
-          cache-dependency-path: yarn.lock
           node-version: 16
+          cache: pnpm
 
       - name: go test
         run: cd cli && go test ./cmd/... ./internal/...
@@ -85,9 +85,7 @@ jobs:
         run: cd cli && go build ./cmd/turbo/...
 
       - name: E2E Tests
-        run: |
-          npm install -g pnpm
-          cd cli && make e2e
+        run: cd cli && make e2e
 
       - name: Benchmark and Smoke Tests
         run: cd cli && make bench/turbo
@@ -124,15 +122,6 @@ jobs:
         with:
           go-version: 1.17.6
         id: go
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2
-        with:
-          cache: yarn
-          cache-dependency-path: yarn.lock
-          node-version: 16
-
-      - run: npm i -g pnpm
 
       - name: Check examples
         shell: bash
