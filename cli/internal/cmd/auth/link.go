@@ -117,7 +117,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 				}
 			}
 			fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-			fsErr := config.WriteConfigFile(filepath.Join(".turbo", "config.json"), &config.TurborepoConfig{
+			fsErr := config.WriteRepoConfigFile(&config.TurborepoConfig{
 				TeamId: chosenTeam.ID,
 				ApiUrl: ch.Config.ApiUrl,
 			})
