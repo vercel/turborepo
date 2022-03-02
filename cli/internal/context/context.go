@@ -254,32 +254,6 @@ func (c *Context) ResolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	return nil
 }
 
-// GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
-// Return targets are always unique sorted alphabetically.
-func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
-	targets := make(util.Set)
-	for _, arg := range arguments {
-		if arg == "--" {
-			break
-		}
-		if !strings.HasPrefix(arg, "-") {
-			targets.Add(arg)
-			found := false
-			for task := range configJson.Pipeline {
-				if task == arg {
-					found = true
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
-			}
-		}
-	}
-	stringTargets := targets.UnsafeListOfStrings()
-	sort.Strings(stringTargets)
-	return stringTargets, nil
-}
-
 func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
