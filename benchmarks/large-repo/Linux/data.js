@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1646094725959,
+  "lastUpdate": 1646181225647,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -744,6 +744,52 @@ window.BENCHMARK_DATA = {
             "value": 32862.6,
             "unit": "ms",
             "range": "7878"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "c9f7264d494b8cfc1c9f1f2c0762e2a2175b725c",
+          "message": "Continue evolving `Context` towards a data structure that can be sent over the wire (#788)\n\n * `Args` doesn't need to hang off of `Context`\n * `TraceFilePath` isn't used, tracing is done via `RunState` instead.\n * global hash calculations and root `package.json` calculations can use local variables\n * `TaskGraph` is unused.",
+          "timestamp": "2022-03-01T18:25:06Z",
+          "url": "https://github.com/vercel/turborepo/commit/c9f7264d494b8cfc1c9f1f2c0762e2a2175b725c"
+        },
+        "date": 1646181224323,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 150454.8,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 11163.2,
+            "unit": "ms",
+            "range": "313"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 39072.8,
+            "unit": "ms",
+            "range": "8326"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 36665.4,
+            "unit": "ms",
+            "range": "8079"
           }
         ]
       }
