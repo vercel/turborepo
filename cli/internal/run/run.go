@@ -40,8 +40,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-const TOPOLOGICAL_PIPELINE_DELMITER = "^"
-const ENV_PIPELINE_DELMITER = "$"
+const TOPOLOGICAL_PIPELINE_DELIMITER = "^"
+const ENV_PIPELINE_DELIMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
@@ -268,7 +268,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
 			for _, d := range descenders {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
@@ -287,7 +287,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
 			for _, d := range ancestors {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
@@ -407,13 +407,13 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		deps := make(util.Set)
 		if util.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
 					continue
 				}
 				if util.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
-				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
 					topoDeps.Add(from[1:])
 				} else {
 					deps.Add(from)
@@ -423,10 +423,10 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
 					continue
 				}
-				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
 					topoDeps.Add(from[1:])
 				} else {
 					deps.Add(from)
@@ -498,19 +498,19 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				}
 
 				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
-				var hashabledEnvVars []string
-				var hashabledEnvPairs []string
+				var hashableEnvVars []string
+				var hashableEnvPairs []string
 				if len(pipeline.DependsOn) > 0 {
 					for _, v := range pipeline.DependsOn {
-						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
-							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
-							hashabledEnvPairs = append(hashabledEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-							hashabledEnvVars = append(hashabledEnvVars, trimmed)
+						if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
+							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
+							hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashableEnvVars = append(hashableEnvVars, trimmed)
 						}
 					}
-					sort.Strings(hashabledEnvVars) // always sort them
+					sort.Strings(hashableEnvVars) // always sort them
 				}
-				targetLogger.Debug("hashable env vars", "vars", hashabledEnvVars)
+				targetLogger.Debug("hashable env vars", "vars", hashableEnvVars)
 				hashable := struct {
 					Hash             string
 					Task             string
@@ -522,7 +522,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					Task:             task,
 					Outputs:          outputs,
 					PassThruArgs:     passThroughArgs,
-					HashableEnvPairs: hashabledEnvPairs,
+					HashableEnvPairs: hashableEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
@@ -765,7 +765,7 @@ type RunOptions struct {
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
 	includeDependencies bool
-	// List of globs of file paths to ignore from exection scope calculation
+	// List of globs of file paths to ignore from execution scope calculation
 	ignore []string
 	// Whether to stream log outputs
 	stream bool

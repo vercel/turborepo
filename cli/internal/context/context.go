@@ -99,7 +99,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			c.Backend = backend
 		}
 
-		// this should go into the bacend abstraction
+		// this should go into the backend abstraction
 		if util.IsYarn(c.Backend.Name) {
 			lockfile, err := fs.ReadLockfile(rootpath, c.Backend.Name, config.Cache.Dir)
 			if err != nil {
@@ -121,7 +121,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		globalHash, err := calculateGlobalHash(rootpath, rootPackageJSON, c.TurboConfig.GlobalDependencies, c.Backend, config.Logger, os.Environ())
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a
-		// waitgroup because we cannot fully populate the graph (the next step)
+		// wait group because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
 		parseJSONWaitGroup := new(errgroup.Group)
 		justJsons := make([]string, 0, len(spaces))
