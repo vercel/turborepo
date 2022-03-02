@@ -3,9 +3,8 @@ package run
 import (
 	"sync"
 
-	"github.com/vercel/turborepo/cli/internal/util"
-
 	"github.com/fatih/color"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type colorFn = func(format string, a ...interface{}) string

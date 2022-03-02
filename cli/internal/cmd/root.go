@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
+	"github.com/vercel/turborepo/cli/internal/cmd/prune"
+	"github.com/vercel/turborepo/cli/internal/cmd/run"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/logger"
@@ -27,7 +29,7 @@ func Execute(ctx context.Context, version string) int {
 		return 0
 	}
 
-	logger.Printf(err)
+	logger.Printf(err.Error())
 
 	var cmdErr *cmdutil.Error
 	if errors.As(err, &cmdErr) {
@@ -67,11 +69,19 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 
 	rootCmd.PersistentPreRunE = ch.PreRun()
 
+	runCmd := run.RunCmd(ch)
+	pruneCmd := prune.PruneCmd(ch)
+	if runCmd == nil || pruneCmd == nil {
+		return ch.Logger.Errorf("could not determine cwd")
+	}
+
 	rootCmd.AddCommand(info.BinCmd(ch))
 	rootCmd.AddCommand(auth.LinkCmd(ch))
 	rootCmd.AddCommand(auth.UnlinkCmd(ch))
 	rootCmd.AddCommand(auth.LoginCmd(ch))
 	rootCmd.AddCommand(auth.LogoutCmd(ch))
+	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(pruneCmd)
 
 	return rootCmd.ExecuteContext(ctx)
 }

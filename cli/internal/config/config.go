@@ -17,17 +17,17 @@ func IsCI() bool {
 }
 
 type Config struct {
-	Level      int
-	Token      string
-	TeamId     string
-	TeamSlug   string
-	ApiUrl     string
-	LoginUrl   string
-	Version    string
-	NoColor    bool
-	Logger     hclog.Logger
-	ApiClient  *client.ApiClient
-	Cache      *CacheConfig
+	Level     int
+	Token     string
+	TeamId    string
+	TeamSlug  string
+	ApiUrl    string
+	LoginUrl  string
+	Version   string
+	NoColor   bool
+	Logger    hclog.Logger
+	ApiClient *client.ApiClient
+	Cache     *CacheConfig
 }
 
 type CacheConfig struct {
@@ -51,12 +51,12 @@ func New(logger *logger.Logger, version string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Token:      partialConfig.Token,
-		TeamSlug:   partialConfig.TeamSlug,
-		TeamId:     partialConfig.TeamId,
-		ApiUrl:     partialConfig.ApiUrl,
-		LoginUrl:   partialConfig.LoginUrl,
-		Version:    version,
+		Token:    partialConfig.Token,
+		TeamSlug: partialConfig.TeamSlug,
+		TeamId:   partialConfig.TeamId,
+		ApiUrl:   partialConfig.ApiUrl,
+		LoginUrl: partialConfig.LoginUrl,
+		Version:  version,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),

@@ -3,21 +3,23 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 )
 
 const (
-	DEFAULT_HOSTNAME = "127.0.0.1"
-	DEFAULT_PORT     = 9789
+	defaultHostname = "127.0.0.1"
+	defaultPort     = 9789
 )
 
 func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
@@ -31,49 +33,75 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 			ch.Config.Logger.Debug(fmt.Sprintf("api url: %v", ch.Config.ApiUrl))
 			ch.Config.Logger.Debug(fmt.Sprintf("login url: %v", ch.Config.LoginUrl))
 
-			redirectUrl := fmt.Sprintf("http://%v:%v", DEFAULT_HOSTNAME, DEFAULT_PORT)
-			loginUrl := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", ch.Config.LoginUrl, redirectUrl)
-			ch.Logger.Printf(util.Sprintf(">>> Opening browser to %v", ch.Config.LoginUrl))
-			s := ui.NewSpinner(os.Stdout)
-			browser.OpenBrowser(loginUrl)
-			s.Start("Waiting for your authorization...")
+			redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
+			loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", ch.Config.LoginUrl, redirectURL)
+			ch.Logger.Printf(">>> Opening browser to %v", ch.Config.LoginUrl)
 
+			rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer cancel()
+			// Start listening immediately to handle race with user interaction
+			// This is mostly for testing, but would otherwise still technically be
+			// a race condition.
+			addr := defaultHostname + ":" + fmt.Sprint(defaultPort)
+			l, err := net.Listen("tcp", addr)
+			if err != nil {
+				return err
+			}
+
+			redirectDone := make(chan struct{})
+			mux := http.NewServeMux()
 			var query url.Values
-			ctx, cancel := context.WithCancel(context.Background())
-			fmt.Println(query.Encode())
-			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 				query = r.URL.Query()
 				http.Redirect(w, r, ch.Config.LoginUrl+"/turborepo/success", http.StatusFound)
-				cancel()
+				close(redirectDone)
 			})
 
-			srv := &http.Server{Addr: DEFAULT_HOSTNAME + ":" + fmt.Sprint(DEFAULT_PORT)}
+			srv := &http.Server{Handler: mux}
+			var serverErr error
+			serverDone := make(chan struct{})
 			go func() {
-				if err := srv.ListenAndServe(); err != nil {
-					if err != nil {
-						ch.Logger.Printf(ch.LogError("could not activate device. Please try again: %w", err))
-					}
+				if err := srv.Serve(l); err != nil {
+					serverErr = errors.Wrap(err, "could not activate device. Please try again")
 				}
+				close(serverDone)
 			}()
-			<-ctx.Done()
-			s.Stop("")
 
-			config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
+			s := ui.NewSpinner(os.Stdout)
+			err = browser.OpenBrowser(loginURL)
+			if err != nil {
+				return errors.Wrapf(err, "failed to open %v", loginURL)
+			}
+			s.Start("Waiting for your authorization...")
+
+			<-redirectDone
+			err = srv.Shutdown(rootctx)
+			// Stop the spinner before we return to ensure terminal is left in a good state
+			s.Stop("")
+			if err != nil {
+				return err
+			}
+			<-serverDone
+			if !errors.Is(serverErr, http.ErrServerClosed) {
+				return serverErr
+			}
+
 			rawToken = query.Get("token")
+			config.WriteUserConfigFile(&config.TurborepoConfig{Token: rawToken})
 			ch.Config.ApiClient.SetToken(rawToken)
 
 			userResponse, err := ch.Config.ApiClient.GetUser()
 			if err != nil {
-				return ch.LogError("could not get user information.\n%w", err)
+				return errors.Wrap(err, "could not get user information")
 			}
 
 			ch.Logger.Printf("")
-			ch.Logger.Printf(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
+			ch.Logger.Printf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email)
 			ch.Logger.Printf("")
-			ch.Logger.Printf(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-			ch.Logger.Printf(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
+			ch.Logger.Printf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}")
+			ch.Logger.Printf("${CYAN}root of any turborepo:${RESET}")
 			ch.Logger.Printf("")
-			ch.Logger.Printf(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+			ch.Logger.Printf("  ${BOLD}npx turbo link${RESET}")
 			ch.Logger.Printf("")
 
 			return nil

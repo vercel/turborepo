@@ -11,17 +11,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/deckarep/golang-set"
+	"github.com/fatih/color"
+	"github.com/hashicorp/go-hclog"
+	"github.com/mitchellh/cli"
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
-
-	mapset "github.com/deckarep/golang-set"
-	"github.com/fatih/color"
-	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
-	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 

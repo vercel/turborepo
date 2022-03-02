@@ -10,16 +10,15 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/fatih/color"
+	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
-
-	"github.com/fatih/color"
-	"github.com/mitchellh/cli"
-	"github.com/spf13/cobra"
 )
 
 // LoginCommand is a Command implementation allows the user to login to turbo
@@ -100,7 +99,7 @@ type loginDeps struct {
 }
 
 func run(c *config.Config, deps loginDeps) error {
-	c.Logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
+	c.Logger.Debug(fmt.Sprintf("turbo v%v", c.Version))
 	c.Logger.Debug(fmt.Sprintf("api url: %v", c.ApiUrl))
 	c.Logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
@@ -109,7 +108,6 @@ func run(c *config.Config, deps loginDeps) error {
 
 	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-
 	var query url.Values
 	oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()

@@ -7,10 +7,9 @@ import (
 	"testing"
 
 	"github.com/mitchellh/cli"
+	"github.com/stretchr/testify/assert"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/util"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParseConfig(t *testing.T) {

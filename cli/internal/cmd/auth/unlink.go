@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func UnlinkCmd(ch *cmdutil.Helper) *cobra.Command {
@@ -18,7 +17,7 @@ func UnlinkCmd(ch *cmdutil.Helper) *cobra.Command {
 				return ch.LogError("could not unlink. Something went wrong: %w", err)
 			}
 
-			ch.Logger.Printf(util.Sprintf("${GREY}> Disabled Remote Caching${RESET}"))
+			ch.Logger.Printf("${GREY}> Disabled Remote Caching${RESET}")
 			return nil
 		},
 	}

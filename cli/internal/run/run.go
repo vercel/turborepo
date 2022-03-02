@@ -16,6 +16,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fatih/color"
+	"github.com/hashicorp/go-hclog"
+	"github.com/mitchellh/cli"
+	"github.com/pkg/errors"
+	"github.com/pyr-sh/dag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
@@ -31,13 +36,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 	"github.com/vercel/turborepo/cli/internal/util/filter"
-
-	"github.com/pyr-sh/dag"
-
-	"github.com/fatih/color"
-	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
-	"github.com/pkg/errors"
 )
 
 const TOPOLOGICAL_PIPELINE_DELMITER = "^"
@@ -324,7 +322,7 @@ func (c *RunCommand) Run(args []string) int {
 func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
-	if c.Config.IsLoggedIn() {
+	if c.Config.IsAuthenticated() {
 		analyticsSink = c.Config.ApiClient
 	} else {
 		analyticsSink = analytics.NullSink

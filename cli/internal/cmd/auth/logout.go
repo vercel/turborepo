@@ -4,7 +4,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func LogoutCmd(ch *cmdutil.Helper) *cobra.Command {
@@ -16,7 +15,7 @@ func LogoutCmd(ch *cmdutil.Helper) *cobra.Command {
 				return ch.LogError("could not logout. Something went wrong: %w", err)
 			}
 
-			ch.Logger.Printf(util.Sprintf("${GREY}>>> Logged out${RESET}"))
+			ch.Logger.Printf("${GREY}>>> Logged out${RESET}")
 			return nil
 		},
 	}

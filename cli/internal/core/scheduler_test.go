@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func TestSchedulerDefault(t *testing.T) {

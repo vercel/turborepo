@@ -37,7 +37,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 			ch.Logger.Printf("  across all your team’s Vercel projects. It also can share outputs")
 			ch.Logger.Printf("  with other services that enable Remote Caching, like CI/CD systems.")
 			ch.Logger.Printf("  This results in faster build times and deployments for your team.")
-			ch.Logger.Printf(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+			ch.Logger.Printf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}")
 			ch.Logger.Printf("")
 			currentDir, fpErr := filepath.Abs(".")
 			if fpErr != nil {
@@ -61,7 +61,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 			}
 
 			if ch.Config.Token == "" {
-				return ch.LogError(util.Sprintf("user not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}."))
+				return ch.LogError("user not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}.")
 			}
 
 			teamsResponse, err := ch.Config.ApiClient.GetTeams()
@@ -134,9 +134,9 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 			}
 
 			ch.Logger.Printf("")
-			ch.Logger.Printf(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeam.Name))
+			ch.Logger.Printf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeam.Name)
 			ch.Logger.Printf("")
-			ch.Logger.Printf(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
+			ch.Logger.Printf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}")
 			ch.Logger.Printf("")
 
 			return nil

@@ -7,9 +7,11 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
 
 type Logger struct {
 	out io.Writer
@@ -21,8 +23,8 @@ func NewLogger() *Logger {
 	}
 }
 
-func (l *Logger) Printf(args ...interface{}) {
-	fmt.Fprintln(l.out, args...)
+func (l *Logger) Printf(format string, args ...interface{}) {
+	fmt.Fprintln(l.out, util.Sprintf(format, args...))
 }
 
 func (l *Logger) Sucessf(format string, args ...interface{}) string {

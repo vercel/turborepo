@@ -9,8 +9,8 @@ import (
 
 func BinCmd(ch *cmdutil.Helper) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "bin",
-		Short:  "Get the path to the Turbo binary",
+		Use:   "bin",
+		Short: "Get the path to the Turbo binary",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := os.Executable()
 			if err != nil {
