@@ -19,7 +19,7 @@ const keys = {
 
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
 const testDir = path.join(__dirname, "../my-turborepo");
-const DEFAULT_JEST_TIMEOUT = 5000;
+const DEFAULT_JEST_TIMEOUT = 10000;
 
 describe("create-turbo cli", () => {
   beforeAll(() => {

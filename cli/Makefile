@@ -178,6 +178,7 @@ publish-all: cmd/turbo/version.go
 	@echo Confirm release:
 	make publish-neutral
 	make publish-create-turbo
+	make publish-turbo-codemod
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
