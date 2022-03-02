@@ -76,7 +76,7 @@ fn main() {
 
             loop {
                 let (elapsed, count) = tt.wait_done().await;
-                if elapsed.as_millis() >= 100 {
+                if elapsed.as_millis() >= 10 {
                     println!("updated {} tasks in {} ms", count, elapsed.as_millis());
                 } else {
                     println!("updated {} tasks in {} µs", count, elapsed.as_micros());
