@@ -6,4 +6,7 @@ module.exports = {
       rootDir: ["docs/", "create-turbo/"],
     },
   },
+  rules: {
+    "@next/next/no-html-link-for-pages": "off",
+  },
 };

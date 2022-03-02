@@ -1,9 +1,9 @@
 package context
 
 import (
-	"os"
 	"reflect"
 	"testing"
+
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
@@ -96,14 +96,15 @@ func TestGetTargetsFromArguments(t *testing.T) {
 }
 
 func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
-	os.Setenv("SOME_ENV_VAR", "excluded")
-	os.Setenv("SOME_OTHER_ENV_VAR", "excluded")
-	os.Setenv("FIRST_THASH_ENV_VAR", "first")
-	os.Setenv("TURBO_TOKEN", "never")
-	os.Setenv("SOME_OTHER_THASH_ENV_VAR", "second")
-	os.Setenv("TURBO_TEAM", "never")
-
-	gotNames, gotPairs := getHashableTurboEnvVarsFromOs()
+	env := []string{
+		"SOME_ENV_VAR=excluded",
+		"SOME_OTHER_ENV_VAR=excluded",
+		"FIRST_THASH_ENV_VAR=first",
+		"TURBO_TOKEN=never",
+		"SOME_OTHER_THASH_ENV_VAR=second",
+		"TURBO_TEAM=never",
+	}
+	gotNames, gotPairs := getHashableTurboEnvVarsFromOs(env)
 	wantNames := []string{"FIRST_THASH_ENV_VAR", "SOME_OTHER_THASH_ENV_VAR"}
 	wantPairs := []string{"FIRST_THASH_ENV_VAR=first", "SOME_OTHER_THASH_ENV_VAR=second"}
 	if !reflect.DeepEqual(wantNames, gotNames) {

@@ -6,12 +6,14 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/info"
 	"github.com/vercel/turborepo/cli/internal/login"
 	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
 	"github.com/vercel/turborepo/cli/internal/run"
+	"github.com/vercel/turborepo/cli/internal/ui"
 	uiPkg "github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
@@ -45,17 +47,7 @@ func main() {
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
-	ui := &cli.ColoredUi{
-		Ui: &cli.BasicUi{
-			Reader:      os.Stdin,
-			Writer:      os.Stdout,
-			ErrorWriter: os.Stderr,
-		},
-		OutputColor: cli.UiColorNone,
-		InfoColor:   cli.UiColorNone,
-		WarnColor:   cli.UiColorYellow,
-		ErrorColor:  cli.UiColorRed,
-	}
+	ui := ui.Default()
 
 	c.Args = args
 	c.HelpWriter = os.Stdout
@@ -92,7 +84,7 @@ func main() {
 			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
 		},
 		"login": func() (cli.Command, error) {
-			return &login.LoginCommand{Config: cf, Ui: ui}, nil
+			return &login.LoginCommand{Config: cf, UI: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil

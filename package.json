@@ -2,13 +2,6 @@
   "name": "turbo",
   "version": "0.0.0",
   "private": true,
-  "workspaces": {
-    "packages": [
-      "docs",
-      "cli",
-      "packages/*"
-    ]
-  },
   "scripts": {
     "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
@@ -33,5 +26,5 @@
   "simple-git-hooks": {
     "pre-commit": "lint-staged"
   },
-  "packageManager": "yarn@1.22.17"
+  "packageManager": "pnpm@6.32.2"
 }

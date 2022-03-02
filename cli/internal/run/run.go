@@ -135,13 +135,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid working directory?: %w", err))
-		return 1
-	}
-
-	runOptions, err := parseRunArgs(args, cwd, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -149,13 +143,18 @@ func (c *RunCommand) Run(args []string) int {
 
 	c.Config.Cache.Dir = runOptions.cacheFolder
 
-	ctx, err := context.New(context.WithTracer(runOptions.profile), context.WithArgs(args), context.WithGraph(".", c.Config))
+	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
+	targets, err := context.GetTargetsFromArguments(args, ctx.TurboConfig)
+	if err != nil {
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
+		return 1
+	}
 
-	gitRepoRoot, err := fs.FindupFrom(".git", cwd)
+	gitRepoRoot, err := fs.FindupFrom(".git", runOptions.cwd)
 	if err != nil {
 		c.logWarning(c.Config.Logger, "Cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.", err)
 	}
@@ -177,7 +176,7 @@ func (c *RunCommand) Run(args []string) int {
 	hasRepoGlobalFileChanged := false
 	var changedFiles []string
 	if runOptions.since != "" {
-		changedFiles = git.ChangedFiles(runOptions.since, true, cwd)
+		changedFiles = git.ChangedFiles(runOptions.since, true, runOptions.cwd)
 	}
 
 	ignoreSet := make(util.Set)
@@ -314,15 +313,15 @@ func (c *RunCommand) Run(args []string) int {
 		RootNode:         ctx.RootNode,
 	}
 	rs := &runSpec{
-		Targets:      ctx.Targets,
+		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
 		Opts:         runOptions,
 	}
 	backend := ctx.Backend
-	return c.runOperation(g, rs, backend, cwd, startAt)
+	return c.runOperation(g, rs, backend, startAt)
 }
 
-func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
+func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -685,7 +684,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		}))
 		ext := filepath.Ext(rs.Opts.dotGraph)
 		if ext == ".html" {
-			f, err := os.Create(filepath.Join(cwd, rs.Opts.dotGraph))
+			f, err := os.Create(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 			if err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
 				return 1
@@ -709,7 +708,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			c.Ui.Output("")
 			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
 			if ui.IsTTY {
-				browser.OpenBrowser(filepath.Join(cwd, rs.Opts.dotGraph))
+				browser.OpenBrowser(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 			}
 			return 0
 		}
@@ -815,12 +814,18 @@ func getDefaultRunOptions() *RunOptions {
 	}
 }
 
-func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("invalid working directory: %w", err)
+	}
+	runOptions.cwd = cwd
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
@@ -849,8 +854,6 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 			case strings.HasPrefix(arg, "--cwd="):
 				if len(arg[len("--cwd="):]) > 0 {
 					runOptions.cwd = arg[len("--cwd="):]
-				} else {
-					runOptions.cwd = cwd
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
