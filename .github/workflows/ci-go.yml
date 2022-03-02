@@ -38,7 +38,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --filter=\!docs --filter=\!benchmark
+        run: pnpm install
 
       - name: Build & Unit Test
         run: pnpm turbo run test --scope=cli
