@@ -2,5 +2,5 @@
 module.exports = {
   preset: "ts-jest/presets/js-with-ts",
   testEnvironment: "node",
-  transformIgnorePatterns: ["/node_modules/(?!(strip-ansi|ansi-regex)/)"],
+  transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],
 };
