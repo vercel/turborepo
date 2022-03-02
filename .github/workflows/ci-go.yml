@@ -27,6 +27,10 @@ jobs:
           go-version: 1.17.6
         id: go
 
+      - uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.32.2
+
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
@@ -68,6 +72,10 @@ jobs:
         with:
           go-version: 1.17.6
         id: wingo
+
+      - uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.32.2
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
@@ -122,6 +130,16 @@ jobs:
         with:
           go-version: 1.17.6
         id: go
+
+      - uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.32.2
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: pnpm
 
       - name: Check examples
         shell: bash

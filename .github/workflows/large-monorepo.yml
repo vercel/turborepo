@@ -1,8 +1,8 @@
 name: Large Repo Benchmark
 
-on: 
+on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
 
 jobs:
   build:
@@ -25,14 +25,18 @@ jobs:
           go-version: 1.17.6
         id: go
 
-      - name: Build
-        run: cd cli && make turbo
+      - uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.32.2
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
           node-version: 16
           cache: pnpm
+
+      - name: Build
+        run: cd cli && make turbo
 
       - name: Install dependencies
         run: pnpm install --filter=benchmark
