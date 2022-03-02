@@ -138,7 +138,7 @@ func Test_sso(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to get hostname %v", err)
 	}
-	expectedTokenName := fmt.Sprintf("Turbo CLI on %v via SAML Single Sign-On", host)
+	expectedTokenName := fmt.Sprintf("Turbo CLI on %v via SAML/OIDC Single Sign-On", host)
 	if test.client.createdSSOTokenName != expectedTokenName {
 		t.Errorf("created sso token got %v want %v", test.client.createdSSOTokenName, expectedTokenName)
 	}

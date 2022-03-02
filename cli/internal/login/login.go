@@ -50,7 +50,7 @@ Flags:
 
 const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
-const defaultSSOProvider = "SAML Single Sign-On"
+const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
 // Run logs into the api with PKCE and writes the token to turbo user config directory
 func (c *LoginCommand) Run(args []string) int {
