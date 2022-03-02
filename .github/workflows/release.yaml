@@ -29,11 +29,11 @@ jobs:
           env-file: .env
       - name: Define and set tags
         shell: bash
-        id: set_tags
+        id: meta
         run: |
           export cross_tags="$(./scripts/image-tags.sh cross)"
           export cross_base_tags="$(./scripts/image-tags.sh cross-base)"
-          
+
           cross_tags="${cross_tags//'%'/'%25'}"
           cross_tags="${cross_tags//$'\n'/'%0A'}"
           cross_tags="${cross_tags//$'\r'/'%0D'}"
@@ -62,8 +62,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           file: Dockerfile.base
-          tags: |
-            ${{ steps.set_tags.outputs.cross_base_tags }}
+          tags: ${{ steps.meta.outputs.cross_base_tags }}
           build-args: |
             "GO_VERSION=${{env.GO_VERSION}}"
             "GORELEASER_VERSION=${{env.GORELEASER_VERSION}}"
@@ -77,8 +76,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ steps.set_tags.outputs.cross_tags }}
+          tags: ${{ steps.meta.outputs.cross_tags }}
           build-args: |
             "GO_VERSION=${{env.GO_VERSION}}"
             "OSX_SDK=${{env.OSX_SDK}}"

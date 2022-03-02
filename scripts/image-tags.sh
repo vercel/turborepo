@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+
 # in akash even minor part of the tag indicates release belongs to the MAINNET
 # using it as scripts simplifies debugging as well as portability
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -21,6 +22,7 @@ function generate_tags {
 		echo "$hub:$tag"
 		echo "$hub:$tag-$GORELEASER_VERSION"
 		echo "$ghcr:latest"
+		echo "$ghcr:$tag"
 		echo "$ghcr:$tag-$GORELEASER_VERSION"
 	fi
 
