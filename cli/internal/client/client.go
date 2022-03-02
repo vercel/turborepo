@@ -317,3 +317,52 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 	}
 	return userResponse, nil
 }
+
+type verificationResponse struct {
+	Token  string `json:"token"`
+	Email  string `json:"email"`
+	TeamID string `json:"teamId,omitempty"`
+}
+
+// VerifiedSSOUser contains data returned from the SSO token verification endpoint
+type VerifiedSSOUser struct {
+	Token  string
+	TeamID string
+}
+
+func (c *ApiClient) VerifySSOToken(token string, tokenName string) (*VerifiedSSOUser, error) {
+	query := make(url.Values)
+	query.Add("token", token)
+	query.Add("tokenName", tokenName)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/registration/verify")+"?"+query.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.UserAgent())
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		io.Copy(ioutil.Discard, resp.Body)
+		return nil, fmt.Errorf("404 - Not found") // doesn't exist - not an error
+	} else if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return nil, fmt.Errorf("%s", string(b))
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("could not read JSON response: %s", string(body))
+	}
+	verificationResponse := &verificationResponse{}
+	err = json.Unmarshal(body, verificationResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshall json response: %v", err)
+	}
+	vu := &VerifiedSSOUser{
+		Token:  verificationResponse.Token,
+		TeamID: verificationResponse.TeamID,
+	}
+	return vu, nil
+}
