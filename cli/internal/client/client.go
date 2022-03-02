@@ -202,7 +202,7 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
 	resp, err := c.HttpClient.Do(req)
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	if resp != nil && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		b, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("%s", string(b))
 	}
