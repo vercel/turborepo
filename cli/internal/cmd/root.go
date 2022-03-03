@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
@@ -23,18 +24,18 @@ Complete documentation is available at https://turborepo.com.`,
 }
 
 func Execute(ctx context.Context, version string) int {
-	logger := logger.NewLogger()
+	logger := logger.New()
 
 	err := runCmd(ctx, logger, version)
 	if err == nil {
 		return 0
 	}
 
-	logger.Printf(err.Error())
-
 	var cmdErr *cmdutil.Error
 	if errors.As(err, &cmdErr) {
 		return cmdErr.ExitCode
+	} else {
+		logger.Printf(err.Error())
 	}
 
 	return 1
@@ -66,7 +67,9 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 	ch := &cmdutil.Helper{
 		Logger: logger,
 		Config: cfg,
-		Processes: process.NewManager(cfg.Logger.Named("processes")),
+		Processes: process.NewManager( /* cfg.Logger.Named("processes") */ hclog.New(&hclog.LoggerOptions{
+			Name: "processes",
+		})),
 	}
 
 	rootCmd.PersistentPreRunE = ch.PreRun()

@@ -44,133 +44,10 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 		Short: "Login to your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.ssoTeam != "" {
-				redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
-				query := make(url.Values)
-				query.Add("teamId", opts.ssoTeam)
-				query.Add("mode", "login")
-				query.Add("next", redirectURL)
-				loginURL := fmt.Sprintf("%v/api/auth/sso?%v", ch.Config.LoginUrl, query.Encode())
-
-				rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-				defer cancel()
-
-				var verificationToken string
-				oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
-					token, location := getTokenAndRedirect(r.URL.Query())
-					verificationToken = token
-					http.Redirect(w, r, location, http.StatusFound)
-				}, defaultPort)
-				if err != nil {
-					return errors.Wrap(err, "failed to start local server")
-				}
-				s := ui.NewSpinner(os.Stdout)
-				err = browser.OpenBrowser(loginURL)
-				if err != nil {
-					return errors.Wrapf(err, "failed to open %v", loginURL)
-				}
-				s.Start("Waiting for your authorization...")
-				err = oss.Wait()
-				if err != nil {
-					return errors.Wrap(err, "failed to shut down local server")
-				}
-				// Stop the spinner before we return to ensure terminal is left in a good state
-				s.Stop("")
-				// open https://vercel.com/api/auth/sso?teamId=<TEAM_ID>&mode=login
-				if verificationToken == "" {
-					return errors.New("no token auth token found")
-				}
-
-				// We now have a verification token. We need to pass it to the verification endpoint
-				// to get an actual token.
-				tokenName, err := makeTokenName()
-				if err != nil {
-					return errors.Wrap(err, "failed to make sso token name")
-				}
-				verifiedUser, err := ch.Config.ApiClient.VerifySSOToken(verificationToken, tokenName)
-				if err != nil {
-					return errors.Wrap(err, "failed to verify SSO token")
-				}
-
-				ch.Config.ApiClient.SetToken(verifiedUser.Token)
-				userResponse, err := ch.Config.ApiClient.GetUser()
-				if err != nil {
-					return errors.Wrap(err, "could not get user information")
-				}
-				err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: verifiedUser.Token})
-				if err != nil {
-					return errors.Wrap(err, "failed to save auth token")
-				}
-
-				ch.Logger.Printf("")
-				ch.Logger.Printf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email)
-				ch.Logger.Printf("")
-
-				if verifiedUser.TeamID != "" {
-					err = config.WriteRepoConfigFile(&config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: ch.Config.ApiUrl})
-					if err != nil {
-						return errors.Wrap(err, ch.Logger.Errorf("failed to save teamId").Error())
-					}
-				} else {
-					ch.Logger.Printf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}")
-					ch.Logger.Printf("${CYAN}root of any turborepo:${RESET}")
-					ch.Logger.Printf("")
-					ch.Logger.Printf("  ${BOLD}npx turbo link${RESET}")
-				}
-
-				ch.Logger.Printf("")
-
-				return nil
+				return loginSSO(ch, opts.ssoTeam)
 			} else {
-				ch.Config.Logger.Debug(fmt.Sprintf("turbo v%v", ch.Config.Version))
-				ch.Config.Logger.Debug(fmt.Sprintf("api url: %v", ch.Config.ApiUrl))
-				ch.Config.Logger.Debug(fmt.Sprintf("login url: %v", ch.Config.LoginUrl))
-				redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
-				loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", ch.Config.LoginUrl, redirectURL)
-				ch.Logger.Printf(">>> Opening browser to %v", ch.Config.LoginUrl)
-
-				rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-				defer cancel()
-
-				var query url.Values
-				oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
-					query = r.URL.Query()
-					http.Redirect(w, r, ch.Config.LoginUrl+"/turborepo/success", http.StatusFound)
-				}, defaultPort)
-				if err != nil {
-					return errors.Wrap(err, "failed to start local server")
-				}
-
-				s := ui.NewSpinner(os.Stdout)
-				err = browser.OpenBrowser(loginURL)
-				if err != nil {
-					return errors.Wrapf(err, "failed to open %v", loginURL)
-				}
-				s.Start("Waiting for your authorization...")
-				err = oss.Wait()
-				if err != nil {
-					return errors.Wrap(err, "failed to shut down local server")
-				}
-				// Stop the spinner before we return to ensure terminal is left in a good state
-				s.Stop("")
-
-				config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
-				rawToken := query.Get("token")
-				ch.Config.ApiClient.SetToken(rawToken)
-				userResponse, err := ch.Config.ApiClient.GetUser()
-				if err != nil {
-					return errors.Wrap(err, "could not get user information")
-				}
-
-				ch.Logger.Printf("")
-				ch.Logger.Printf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email)
-				ch.Logger.Printf("")
-				ch.Logger.Printf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}")
-				ch.Logger.Printf("${CYAN}root of any turborepo:${RESET}")
-				ch.Logger.Printf("")
-				ch.Logger.Printf("  ${BOLD}npx turbo link${RESET}")
-				ch.Logger.Printf("")
-
-				return nil
+				
+				return login(ch)
 			}
 		},
 	}
@@ -178,6 +55,138 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 	cmd.Flags().StringVar(&opts.ssoTeam, "sso-team", "", "attempt to authenticate to the specified team using SSO")
 
 	return cmd
+}
+
+func login(ch *cmdutil.Helper) error {
+	ch.Config.Logger.Debug(fmt.Sprintf("turbo v%v", ch.Config.Version))
+	ch.Config.Logger.Debug(fmt.Sprintf("api url: %v", ch.Config.ApiUrl))
+	ch.Config.Logger.Debug(fmt.Sprintf("login url: %v", ch.Config.LoginUrl))
+	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
+	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", ch.Config.LoginUrl, redirectURL)
+	ch.Logger.Printf(">>> Opening browser to %v", ch.Config.LoginUrl)
+
+	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	var query url.Values
+	oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		http.Redirect(w, r, ch.Config.LoginUrl+"/turborepo/success", http.StatusFound)
+	}, defaultPort)
+	if err != nil {
+		return errors.Wrap(err, "failed to start local server")
+	}
+
+	s := ui.NewSpinner(os.Stdout)
+	err = browser.OpenBrowser(loginURL)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %v", loginURL)
+	}
+	s.Start("Waiting for your authorization...")
+	err = oss.Wait()
+	if err != nil {
+		return errors.Wrap(err, "failed to shut down local server")
+	}
+	// Stop the spinner before we return to ensure terminal is left in a good state
+	s.Stop("")
+
+	config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
+	rawToken := query.Get("token")
+	ch.Config.ApiClient.SetToken(rawToken)
+	userResponse, err := ch.Config.ApiClient.GetUser()
+	if err != nil {
+		return errors.Wrap(err, "could not get user information")
+	}
+
+	ch.Logger.Printf("")
+	ch.Logger.Printf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email)
+	ch.Logger.Printf("")
+	ch.Logger.Printf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}")
+	ch.Logger.Printf("${CYAN}root of any turborepo:${RESET}")
+	ch.Logger.Printf("")
+	ch.Logger.Printf("  ${BOLD}npx turbo link${RESET}")
+	ch.Logger.Printf("")
+
+	return nil
+}
+
+func loginSSO(ch *cmdutil.Helper, ssoTeam string) error {
+	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
+	query := make(url.Values)
+	query.Add("teamId", ssoTeam)
+	query.Add("mode", "login")
+	query.Add("next", redirectURL)
+	loginURL := fmt.Sprintf("%v/api/auth/sso?%v", ch.Config.LoginUrl, query.Encode())
+
+	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	var verificationToken string
+	oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
+		token, location := getTokenAndRedirect(r.URL.Query())
+		verificationToken = token
+		http.Redirect(w, r, location, http.StatusFound)
+	}, defaultPort)
+	if err != nil {
+		return errors.Wrap(err, "failed to start local server")
+	}
+	s := ui.NewSpinner(os.Stdout)
+	err = browser.OpenBrowser(loginURL)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %v", loginURL)
+	}
+	s.Start("Waiting for your authorization...")
+	err = oss.Wait()
+	if err != nil {
+		return errors.Wrap(err, "failed to shut down local server")
+	}
+	// Stop the spinner before we return to ensure terminal is left in a good state
+	s.Stop("")
+	// open https://vercel.com/api/auth/sso?teamId=<TEAM_ID>&mode=login
+	if verificationToken == "" {
+		return errors.New("no token auth token found")
+	}
+
+	// We now have a verification token. We need to pass it to the verification endpoint
+	// to get an actual token.
+	tokenName, err := makeTokenName()
+	if err != nil {
+		return errors.Wrap(err, "failed to make sso token name")
+	}
+	verifiedUser, err := ch.Config.ApiClient.VerifySSOToken(verificationToken, tokenName)
+	if err != nil {
+		return errors.Wrap(err, "failed to verify SSO token")
+	}
+
+	ch.Config.ApiClient.SetToken(verifiedUser.Token)
+	userResponse, err := ch.Config.ApiClient.GetUser()
+	if err != nil {
+		return errors.Wrap(err, "could not get user information")
+	}
+	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: verifiedUser.Token})
+	if err != nil {
+		return errors.Wrap(err, "failed to save auth token")
+	}
+
+	ch.Logger.Printf("")
+	ch.Logger.Printf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email)
+	ch.Logger.Printf("")
+
+	if verifiedUser.TeamID != "" {
+		err = config.WriteRepoConfigFile(&config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: ch.Config.ApiUrl})
+		if err != nil {
+			return errors.Wrap(err, ch.Logger.Errorf("failed to save teamId").Error())
+		}
+	} else {
+		ch.Logger.Printf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}")
+		ch.Logger.Printf("${CYAN}root of any turborepo:${RESET}")
+		ch.Logger.Printf("")
+		ch.Logger.Printf("  ${BOLD}npx turbo link${RESET}")
+	}
+
+	ch.Logger.Printf("")
+
+	return nil
 }
 
 func getTokenAndRedirect(params url.Values) (string, string) {

@@ -1,4 +1,4 @@
-package login
+package auth
 
 import (
 	"fmt"
@@ -9,8 +9,8 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/client"
+	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/ui"
 )
 
 type dummyClient struct {
@@ -46,31 +46,9 @@ type testResult struct {
 	clientErr          error
 	userConfigWritten  *config.TurborepoConfig
 	repoConfigWritten  *config.TurborepoConfig
-	clientTokenWritten string
 	openedURL          string
 	stepCh             chan struct{}
 	client             dummyClient
-}
-
-func (tr *testResult) Deps() loginDeps {
-	urlOpener := func(url string) error {
-		tr.openedURL = url
-		tr.stepCh <- struct{}{}
-		return nil
-	}
-	return loginDeps{
-		ui:      ui.Default(),
-		openURL: urlOpener,
-		client:  &tr.client,
-		writeUserConfig: func(cf *config.TurborepoConfig) error {
-			tr.userConfigWritten = cf
-			return nil
-		},
-		writeRepoConfig: func(cf *config.TurborepoConfig) error {
-			tr.repoConfigWritten = cf
-			return nil
-		},
-	}
 }
 
 func newTest(redirectedURL string) *testResult {
@@ -99,7 +77,9 @@ func newTest(redirectedURL string) *testResult {
 
 func Test_run(t *testing.T) {
 	test := newTest("http://127.0.0.1:9789/?token=my-token")
-	err := run(cf, test.Deps())
+	err := login(&cmdutil.Helper{
+		Config: cf,
+	})
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
@@ -126,7 +106,9 @@ func Test_sso(t *testing.T) {
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
 	test := newTest("http://127.0.0.1:9789/?" + redirectParams.Encode())
-	err := loginSSO(cf, "my-team", test.Deps())
+	err := loginSSO(&cmdutil.Helper{
+		Config: cf,
+	}, "my-team")
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}

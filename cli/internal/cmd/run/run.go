@@ -14,9 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"
@@ -64,6 +62,7 @@ type runSpec struct {
 }
 
 func RunCmd(ch *cmdutil.Helper) *cobra.Command {
+	passThroughArgs := strings.SplitN(strings.Join(os.Args, " "), " -- ", 2)
 	opts := &run.RunOptions{
 		Bail:              true,
 		IncludeDependents: true,
@@ -88,6 +87,16 @@ occurred again).
 			}
 			// We can only set this cache folder after we know actual cwd
 			opts.CacheDir = filepath.Join(opts.Cwd, opts.CacheDir)
+			if !opts.Graph {
+				opts.DotGraph = ""
+			} else {
+				if opts.DotGraph == "" {
+					opts.DotGraph = fmt.Sprintf("graph-%v.jpg", time.Now().UnixNano())
+				}
+			}
+			if len(passThroughArgs) == 2 {
+				opts.PassThroughArgs = strings.Split(passThroughArgs[1], " ")
+			}
 
 			startAt := time.Now()
 
@@ -276,7 +285,7 @@ occurred again).
 	cmd.Flags().BoolVarP(&opts.Force, "force", "f", false, "ignore the existing cache")
 	cmd.Flags().StringVar(&opts.Profile, "profile", "", "file to write turbo's performance profile output into")
 	cmd.Flags().BoolVarP(&opts.Graph, "graph", "g", false, "generate a Dot graph of the task execution")
-	cmd.Flags().StringVarP(&opts.DotGraph, "graph", "g", "", "generate a Dot graph of the task execution")
+	cmd.Flags().StringVar(&opts.DotGraph, "graph-path", "", "path for Dot graph")
 	cmd.Flags().StringArrayVar(&opts.GlobalDeps, "global-deps", []string{}, "glob of global filesystem dependencies to be hashed")
 	cmd.Flags().StringVar(&opts.Since, "since", "", "limit/set scope to changed packages since a mergebase")
 	cmd.Flags().StringArrayVar(&opts.Ignore, "ignore", []string{}, "files to ignore when calculating changed files, supports globs")
@@ -285,7 +294,7 @@ occurred again).
 	cmd.Flags().BoolVar(&opts.NoDeps, "no-deps", false, "exclude dependent task consumers from execution")
 	cmd.Flags().BoolVar(&opts.NoCache, "no-cache", false, "avoid saving task results to the cache")
 	cmd.Flags().StringVar(&opts.Cwd, "cwd", path, "directory to execute command in")
-	cmd.Flags().BoolVar(&opts.Stream, "stream", false, "stream???")
+	cmd.Flags().BoolVar(&opts.Stream, "stream", true, "stream???")
 	cmd.Flags().BoolVar(&opts.Only, "only", true, "only???")
 
 	cmd.Flags().MarkHidden("stream")
@@ -406,7 +415,7 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 			}
 		}
 
-		targetBaseUI := &cli.ConcurrentUi{Ui: ch.Ui}
+		cLogger := logger.NewConcurrent(ch.Logger)
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
@@ -431,15 +440,9 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 				tracer := runState.Run(util.GetTaskId(pack.Name, task))
 
 				// Create a logger
+				// TODO(@Xenfo)
 				pref := colorCache.PrefixColor(pack.Name)
 				actualPrefix := pref("%s:%s: ", pack.Name, task)
-				targetUi := &cli.PrefixedUi{
-					Ui:           targetBaseUI,
-					OutputPrefix: actualPrefix,
-					InfoPrefix:   actualPrefix,
-					ErrorPrefix:  actualPrefix,
-					WarnPrefix:   actualPrefix,
-				}
 				// Hash ---------------------------------------------
 				// first check for package-tasks
 				pipeline, ok := g.Pipeline[fmt.Sprintf("%v", id)]
@@ -499,22 +502,22 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
 				if err != nil {
-					targetUi.Error(fmt.Sprintf("Hashing error: %v", err))
+					cLogger.Printf("%v", cLogger.Errorf("hashing error: %v", err))
 					// @TODO probably should abort fatally???
 				}
 				logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
-				targetLogger.Debug("log file", "path", filepath.Join(rs.Opts.cwd, logFileName))
+				targetLogger.Debug("log file", "path", filepath.Join(rs.Opts.Cwd, logFileName))
 
 				// Cache ---------------------------------------------
 				var hit bool
 				if !rs.Opts.Force {
 					hit, _, _, err = turboCache.Fetch(pack.Dir, hash, nil)
 					if err != nil {
-						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
+						cLogger.Printf("%v", cLogger.Errorf("error fetching from cache: %s", err))
 					} else if hit {
-						if rs.Opts.Stream && fs.FileExists(filepath.Join(rs.Opts.cwd, logFileName)) {
+						if rs.Opts.Stream && fs.FileExists(filepath.Join(rs.Opts.Cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false)
+							go replayLogs(targetLogger, cLogger, rs.Opts, logFileName, hash, &logReplayWaitGroup, false)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(run.TargetCached, nil)
@@ -522,11 +525,11 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 						return nil
 					}
 					if rs.Opts.Stream {
-						targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
+						cLogger.Printf("cache miss, executing %s", ui.Dim(hash))
 					}
 				} else {
 					if rs.Opts.Stream {
-						targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
+						cLogger.Printf("cache bypass, force executing %s", ui.Dim(hash))
 					}
 				}
 
@@ -596,25 +599,25 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 					targetLogger.Error("Error: command finished with error: %w", err)
 					if rs.Opts.Bail {
 						if rs.Opts.Stream {
-							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
+							cLogger.Errorf("Error: command finished with error: %s", err)
 						} else {
-							f, err := os.Open(filepath.Join(rs.Opts.cwd, logFileName))
+							f, err := os.Open(filepath.Join(rs.Opts.Cwd, logFileName))
 							if err != nil {
-								targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
+								cLogger.Warnf(fmt.Sprintf("failed reading logs: %v", err))
 							}
 							defer f.Close()
 							scan := bufio.NewScanner(f)
-							targetBaseUI.Error("")
-							targetBaseUI.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
-							targetBaseUI.Error("")
+							cLogger.Errorf("")
+							cLogger.Errorf(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
+							cLogger.Errorf("")
 							for scan.Scan() {
-								targetBaseUI.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
+								cLogger.Printf(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
 							}
 						}
 						ch.Processes.Close()
 					} else {
 						if rs.Opts.Stream {
-							targetUi.Warn("command finished with error, but continuing...")
+							cLogger.Warnf("command finished with error, but continuing...")
 						}
 					}
 					return err
@@ -641,25 +644,23 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 	if err := engine.Prepare(&core.SchedulerExecutionOptions{
 		Packages:    rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames:   rs.Targets,
-		Concurrency: rs.Opts.concurrency,
-		Parallel:    rs.Opts.parallel,
-		TasksOnly:   rs.Opts.only,
+		Concurrency: rs.Opts.Concurrency,
+		Parallel:    rs.Opts.Parallel,
+		TasksOnly:   rs.Opts.Only,
 	}); err != nil {
-		ch.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
-		return 1
+		return ch.LogError("error preparing engine: %s", err)
 	}
 
-	if rs.Opts.dotGraph != "" {
+	if rs.Opts.DotGraph != "" {
 		graphString := string(engine.TaskGraph.Dot(&dag.DotOpts{
 			Verbose:    true,
 			DrawCycles: true,
 		}))
-		ext := filepath.Ext(rs.Opts.dotGraph)
+		ext := filepath.Ext(rs.Opts.DotGraph)
 		if ext == ".html" {
-			f, err := os.Create(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
+			f, err := os.Create(filepath.Join(rs.Opts.Cwd, rs.Opts.DotGraph))
 			if err != nil {
-				ch.logError(ch.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
-				return 1
+				return ch.LogError("error writing graph: %w", err)
 			}
 			defer f.Close()
 			f.WriteString(`<!DOCTYPE html>
@@ -677,32 +678,31 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
       </script>
     </body>
     </html>`)
-			ch.Ui.Output("")
-			ch.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
+			ch.Logger.Printf("")
+			ch.Logger.Printf("✔ Generated task graph in %s", ui.Bold(rs.Opts.DotGraph))
 			if ui.IsTTY {
-				browser.OpenBrowser(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
+				browser.OpenBrowser(filepath.Join(rs.Opts.Cwd, rs.Opts.DotGraph))
 			}
-			return 0
+			return nil
 		}
 		hasDot := hasGraphViz()
 		if hasDot {
-			dotArgs := []string{"-T" + ext[1:], "-o", rs.Opts.Graph}
+			dotArgs := []string{"-T" + ext[1:], "-o", rs.Opts.DotGraph}
 			cmd := exec.Command("dot", dotArgs...)
 			cmd.Stdin = strings.NewReader(graphString)
 			if err := cmd.Run(); err != nil {
-				ch.logError(ch.Config.Logger, "", fmt.Errorf("could not generate task graphfile %v:  %w", rs.Opts.Graph, err))
-				return 1
+				return ch.LogError("could not generate task graphfile %v:  %w", rs.Opts.Graph, err)
 			} else {
-				ch.Ui.Output("")
-				ch.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.Graph)))
+				ch.Logger.Printf("")
+				ch.Logger.Printf("✔ Generated task graph in %s", ui.Bold(rs.Opts.DotGraph))
 			}
 		} else {
-			ch.Ui.Output("")
-			ch.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
-			ch.Ui.Output("")
-			ch.Ui.Output(graphString)
+			ch.Logger.Printf("")
+			ch.LogWarning("`turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")
+			ch.Logger.Printf("")
+			ch.Logger.Printf(graphString)
 		}
-		return 0
+		return nil
 	}
 
 	// run the thing
@@ -717,17 +717,16 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 				exitCode = exitCodeErr.ExitCode
 			}
 		}
-		ch.Ui.Error(err.Error())
+		ch.LogError(err.Error())
 	}
 
 	logReplayWaitGroup.Wait()
 
-	if err := runState.Close(ch.Ui, rs.Opts.profile); err != nil {
-		ch.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
-		return 1
+	if err := runState.Close(*ch.Logger, rs.Opts.Profile); err != nil {
+		return ch.LogError("error with profiler: %s", err.Error())
 	}
 
-	return exitCode
+	return &cmdutil.Error{ExitCode: exitCode}
 }
 
 func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs util.Set, err error) {
@@ -773,18 +772,18 @@ func hasGraphViz() bool {
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *run.RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
+func replayLogs(logger hclog.Logger, cLogger *logger.ConcurrentLogger, runOptions *run.RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.Cwd, logFileName))
 	if err != nil && !silent {
-		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
+		cLogger.Printf("%v", cLogger.Warnf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
-		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+		cLogger.Printf(ui.StripAnsi(string(scan.Bytes()))) // Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }

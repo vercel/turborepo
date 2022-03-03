@@ -17,14 +17,14 @@ type Logger struct {
 	out io.Writer
 }
 
-func NewLogger() *Logger {
+func New() *Logger {
 	return &Logger{
 		out: os.Stdout,
 	}
 }
 
 func (l *Logger) Printf(format string, args ...interface{}) {
-	fmt.Fprintln(l.out, util.Sprintf(format, args...))
+	fmt.Fprintln(os.Stdout, util.Sprintf(format, args...))
 }
 
 func (l *Logger) Sucessf(format string, args ...interface{}) string {
