@@ -220,7 +220,7 @@ func (c *RunCommand) Run(args []string) int {
 
 	// Scoped packages
 	// Unwind scope globs
-	scopePkgs, err := getScopedPackages(ctx, runOptions.scope)
+	scopePkgs, err := getScopedPackages(ctx.PackageNames, runOptions.scope)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("invalid scope: %w", err))
 		return 1
@@ -932,13 +932,10 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 }
 
 // getScopedPackages returns a set of package names in scope for a given list of glob patterns
-func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs util.Set, err error) {
-	if err != nil {
-		return nil, fmt.Errorf("invalid glob pattern %w", err)
-	}
-	var scopedPkgs = make(util.Set)
+func getScopedPackages(packageNames []string, scopePatterns []string) (util.Set, error) {
+	scopedPkgs := make(util.Set)
 	if len(scopePatterns) == 0 {
-		return scopePkgs, nil
+		return scopedPkgs, nil
 	}
 
 	include := make([]string, 0, len(scopePatterns))
@@ -956,7 +953,7 @@ func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs 
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range ctx.PackageNames {
+	for _, f := range packageNames {
 		if glob.Match(f) {
 			scopedPkgs.Add(f)
 		}
