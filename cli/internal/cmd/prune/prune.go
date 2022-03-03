@@ -11,7 +11,7 @@ func PruneCmd(ch *cmdutil.Helper) *cobra.Command {
 	var opts struct {
 		scope  string
 		docker bool
-		cwd		string
+		cwd    string
 	}
 
 	cmd := &cobra.Command{

@@ -100,11 +100,11 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 				if err != nil {
 					return errors.Wrap(err, "failed to save auth token")
 				}
-				
+
 				ch.Logger.Printf("")
 				ch.Logger.Printf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email)
 				ch.Logger.Printf("")
-				
+
 				if verifiedUser.TeamID != "" {
 					err = config.WriteRepoConfigFile(&config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: ch.Config.ApiUrl})
 					if err != nil {

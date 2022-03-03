@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/logger"
+	"github.com/vercel/turborepo/cli/internal/process"
 )
 
 const (
@@ -19,8 +20,9 @@ const (
 )
 
 type Helper struct {
-	Config *config.Config
-	Logger *logger.Logger
+	Config    *config.Config
+	Logger    *logger.Logger
+	Processes *process.Manager
 }
 
 func (h *Helper) LogWarning(format string, args ...interface{}) error {

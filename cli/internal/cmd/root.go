@@ -12,6 +12,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/logger"
+	"github.com/vercel/turborepo/cli/internal/process"
 )
 
 var rootCmd = &cobra.Command{
@@ -65,6 +66,7 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 	ch := &cmdutil.Helper{
 		Logger: logger,
 		Config: cfg,
+		Processes: process.NewManager(cfg.Logger.Named("processes")),
 	}
 
 	rootCmd.PersistentPreRunE = ch.PreRun()

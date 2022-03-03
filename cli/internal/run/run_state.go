@@ -10,12 +10,35 @@ import (
 	"time"
 
 	"github.com/google/chrometracing"
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	tlogger "github.com/vercel/turborepo/cli/internal/logger"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/ui/term"
-	"github.com/vercel/turborepo/cli/internal/util"
 )
+
+type RunOptions struct {
+	IncludeDependents bool
+	Scope             []string
+	CacheDir          string
+	Concurrency       int
+	ShouldContinue    bool
+	Force             bool
+	DotGraph          string
+	Graph             bool
+	GlobalDeps        []string
+	Since             string
+	Ignore            []string
+	Profile           string
+	Parallel          bool
+	IncludeDeps       bool
+	NoDeps            bool
+	NoCache           bool
+	Cwd               string
+	Stream            bool
+	Only              bool
+	Bail              bool
+	PassThroughArgs   []string
+}
 
 // A RunResult represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
@@ -173,7 +196,7 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	case result.Status == TargetBuildFailed:
 		r.Failure++
 		r.Attempted++
-		if r.runOptions.bail && !r.runOptions.stream {
+		if r.runOptions.Bail && !r.runOptions.Stream {
 			r.done <- result.Label
 		}
 	case result.Status == TargetCached:
@@ -185,20 +208,20 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	}
 }
 
-func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
-	if r.runOptions.stream {
+func (r *RunState) Listen(logger tlogger.Logger, startAt time.Time) {
+	if r.runOptions.Stream {
 		return
 	}
 	r.ticker = time.NewTicker(100 * time.Millisecond)
 	r.done = make(chan string)
 	lineBuffer := 10
-	go func(r *RunState, Ui cli.Ui) {
+	go func(r *RunState, logger tlogger.Logger) {
 		z := r
 		i := 0
 		for {
 			select {
 			case outcome := <-z.done:
-				if !r.runOptions.stream {
+				if !r.runOptions.Stream {
 					if outcome == "done" {
 						if i != 0 {
 							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
@@ -207,26 +230,26 @@ func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
 						if i != 0 {
 							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
 						}
-						z.Render(Ui, startAt, i, lineBuffer)
+						z.Render(logger, startAt, i, lineBuffer)
 					}
 				}
 			case <-z.ticker.C:
-				if !r.runOptions.stream {
+				if !r.runOptions.Stream {
 					if i != 0 {
 						cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
 					}
-					z.Render(Ui, startAt, i, lineBuffer)
+					z.Render(logger, startAt, i, lineBuffer)
 					i++
 				}
 			default:
 				continue
 			}
 		}
-	}(r, Ui)
+	}(r, logger)
 
 }
 
-func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuffer int) {
+func (r *RunState) Render(logger tlogger.Logger, startAt time.Time, renderCount int, lineBuffer int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	idx := 0
@@ -235,8 +258,8 @@ func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuf
 		idx = buf - lineBuffer
 	}
 	tStr := fmt.Sprintf("%.2fs", time.Since(startAt).Seconds())
-	ui.Output(util.Sprintf("${BOLD}>>> TURBO${RESET}"))
-	ui.Output(util.Sprintf("${BOLD}>>> BUILDING%s(%s)${RESET}", strings.Repeat(".", 52-len(tStr)), tStr))
+	logger.Printf("${BOLD}>>> TURBO${RESET}")
+	logger.Printf("${BOLD}>>> BUILDING%s(%s)${RESET}", strings.Repeat(".", 52-len(tStr)), tStr)
 
 	// In order to simplify the output, we want to fill in n < 10 with IDLE
 	// TODO: we might want to match this up with --concurrency flag
@@ -253,24 +276,24 @@ func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuf
 			fill := 60 - len(item.Label)
 			switch r.state[k].Status {
 			case TargetBuilding:
-				ui.Output(util.Sprintf("${WHITE}%s %s%s(%s)${RESET}", " • ", k, strings.Repeat(".", fill-len(t)), t))
+				logger.Printf("${WHITE}%s %s%s(%s)${RESET}", " • ", k, strings.Repeat(".", fill-len(t)), t)
 			case TargetCached:
 				d = item.Duration.Truncate(time.Millisecond * 100).String()
-				ui.Output(util.Sprintf("${GREY}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d))
+				logger.Printf("${GREY}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d)
 			case TargetBuilt:
-				ui.Output(util.Sprintf("${GREEN}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d))
+				logger.Printf("${GREEN}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d)
 			case TargetBuildFailed:
-				ui.Output(util.Sprintf("${RED}%s %s%s(%s)${RESET}", " ˣ ", k, strings.Repeat(".", fill-len(d)), d))
+				logger.Printf("${RED}%s %s%s(%s)${RESET}", " ˣ ", k, strings.Repeat(".", fill-len(d)), d)
 			default:
-				ui.Output(util.Sprintf("${GREY}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d))
+				logger.Printf("${GREY}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d)
 			}
 		} else {
-			ui.Output(util.Sprintf("${GREY}%s %s%s${RESET}", " - ", k, strings.Repeat(".", 62-len(k))))
+			logger.Printf("${GREY}%s %s%s${RESET}", " - ", k, strings.Repeat(".", 62-len(k)))
 		}
 	}
 }
 
-func (r *RunState) Close(Ui cli.Ui, filename string) error {
+func (r *RunState) Close(logger tlogger.Logger, filename string) error {
 	outputPath := chrometracing.Path()
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
 	if filename != "" {
@@ -282,7 +305,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		}
 	}
 
-	if !r.runOptions.stream {
+	if !r.runOptions.Stream {
 		r.ticker.Stop()
 		r.done <- "done"
 	}
@@ -290,21 +313,21 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 	if r.Cached == r.Attempted {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
-	if r.runOptions.stream {
-		Ui.Output("") // Clear the line
-		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total", r.Cached+r.Success, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total", r.Cached, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
-		Ui.Output("")
+	if r.runOptions.Stream {
+		logger.Printf("") // Clear the line
+		logger.Printf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total", r.Cached+r.Success, r.Attempted)
+		logger.Printf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total", r.Cached, r.Attempted)
+		logger.Printf("${BOLD}  Time:    %v${RESET} %v", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo)
+		logger.Printf("")
 	} else {
 
 		incrementality := fmt.Sprintf("%.f%% incremental", math.Round(float64(r.Cached)/float64(r.Attempted)*100))
 		if r.Failure > 0 {
-			r.Render(Ui, r.startedAt, 3, len(r.Ordered))
-			Ui.Output(util.Sprintf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
+			r.Render(logger, r.startedAt, 3, len(r.Ordered))
+			logger.Printf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo)
 		} else {
-			Ui.Output(util.Sprintf("${BOLD}>>> TURBO${RESET}"))
-			Ui.Output(util.Sprintf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
+			logger.Printf("${BOLD}>>> TURBO${RESET}")
+			logger.Printf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo)
 		}
 
 	}

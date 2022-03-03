@@ -3,9 +3,10 @@ package cache
 import (
 	"encoding/json"
 	"fmt"
-	"runtime"
-	"path/filepath"
 	"io/ioutil"
+	"path/filepath"
+	"runtime"
+
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -67,7 +68,7 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	g := new(errgroup.Group)
 
-  numDigesters := runtime.NumCPU()
+	numDigesters := runtime.NumCPU()
 	fileQueue := make(chan string, numDigesters)
 
 	for i := 0; i < numDigesters; i++ {
