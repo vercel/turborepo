@@ -26,7 +26,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/process"
-	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
@@ -154,147 +153,9 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	gitRepoRoot, err := fs.FindupFrom(".git", runOptions.cwd)
+	filteredPkgs, err := resolvePackagesInScope(runOptions, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
-		c.logWarning(c.Config.Logger, "Cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.", err)
-	}
-	git, err := scm.NewFallback(filepath.Dir(gitRepoRoot))
-	if err != nil {
-		c.logWarning(c.Config.Logger, "", err)
-	}
-
-	ignoreGlob, err := filter.Compile(runOptions.ignore)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid ignore globs: %w", err))
-		return 1
-	}
-	globalDepsGlob, err := filter.Compile(runOptions.globalDeps)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid global deps glob: %w", err))
-		return 1
-	}
-	hasRepoGlobalFileChanged := false
-	var changedFiles []string
-	if runOptions.since != "" {
-		changedFiles = git.ChangedFiles(runOptions.since, true, runOptions.cwd)
-	}
-
-	ignoreSet := make(util.Set)
-	if globalDepsGlob != nil {
-		for _, f := range changedFiles {
-			if globalDepsGlob.Match(f) {
-				hasRepoGlobalFileChanged = true
-				break
-			}
-		}
-	}
-
-	if ignoreGlob != nil {
-		for _, f := range changedFiles {
-			if ignoreGlob.Match(f) {
-				ignoreSet.Add(f)
-			}
-		}
-	}
-
-	filteredChangedFiles := make(util.Set)
-	// Ignore any changed files in the ignore set
-	for _, c := range changedFiles {
-		if !ignoreSet.Includes(c) {
-			filteredChangedFiles.Add(c)
-		}
-	}
-
-	changedPackages := make(util.Set)
-	// Be specific with the changed packages only if no repo-wide changes occurred
-	if !hasRepoGlobalFileChanged {
-		for k, pkgInfo := range ctx.PackageInfos {
-			partialPath := pkgInfo.Dir
-			if filteredChangedFiles.Some(func(v interface{}) bool {
-				return strings.HasPrefix(fmt.Sprintf("%v", v), partialPath) // true
-			}) {
-				changedPackages.Add(k)
-			}
-		}
-	}
-
-	// Scoped packages
-	// Unwind scope globs
-	scopePkgs, err := getScopedPackages(ctx.PackageNames, runOptions.scope)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid scope: %w", err))
-		return 1
-	}
-
-	// Filter Packages
-	filteredPkgs := make(util.Set)
-
-	// If both scoped and since are specified, we have to merge two lists:
-	// 1. changed packages that ARE themselves the scoped packages
-	// 2. changed package consumers (package dependents) that are within the scoped subgraph
-	if scopePkgs.Len() > 0 && changedPackages.Len() > 0 {
-		filteredPkgs = scopePkgs.Intersection(changedPackages)
-		for _, changed := range changedPackages {
-			descenders, err := ctx.TopologicalGraph.Descendents(changed)
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("could not determine dependency: %w", err))
-				return 1
-			}
-
-			filteredPkgs.Add(changed)
-			for _, d := range descenders {
-				filteredPkgs.Add(d)
-			}
-		}
-		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
-	} else if changedPackages.Len() > 0 {
-		filteredPkgs = changedPackages
-		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
-	} else if scopePkgs.Len() > 0 {
-		filteredPkgs = scopePkgs
-	} else if runOptions.since == "" {
-		for _, f := range ctx.PackageNames {
-			filteredPkgs.Add(f)
-		}
-	}
-
-	if runOptions.includeDependents {
-		// perf??? this is duplicative from the step above
-		for _, pkg := range filteredPkgs {
-			descenders, err := ctx.TopologicalGraph.Descendents(pkg)
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("error calculating affected packages: %w", err))
-				return 1
-			}
-			c.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
-			for _, d := range descenders {
-				// we need to exclude the fake root node
-				// since it is not a real package
-				if d != ctx.RootNode {
-					filteredPkgs.Add(d)
-				}
-			}
-		}
-		c.Config.Logger.Debug("running with dependents")
-	}
-
-	if runOptions.includeDependencies {
-		for _, pkg := range filteredPkgs {
-			ancestors, err := ctx.TopologicalGraph.Ancestors(pkg)
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("error getting dependency %v", err))
-				return 1
-			}
-			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
-			for _, d := range ancestors {
-				// we need to exclude the fake root node
-				// since it is not a real package
-				if d != ctx.RootNode {
-					filteredPkgs.Add(d)
-				}
-			}
-		}
-		c.Config.Logger.Debug(ui.Dim("running with dependencies"))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	packagesInScope := filteredPkgs.UnsafeListOfStrings()
