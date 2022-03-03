@@ -63,8 +63,8 @@ func runCmd(logger *logger.Logger, version string, processes *process.Manager) e
 	rootCmd.PersistentFlags().Lookup("token").DefValue = ""
 
 	ch := &cmdutil.Helper{
-		Logger: logger,
-		Config: cfg,
+		Logger:    logger,
+		Config:    cfg,
 		Processes: processes,
 	}
 

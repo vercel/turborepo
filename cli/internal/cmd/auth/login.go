@@ -46,7 +46,7 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 			if opts.ssoTeam != "" {
 				return loginSSO(ch, opts.ssoTeam)
 			} else {
-				
+
 				return login(ch)
 			}
 		},

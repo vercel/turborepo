@@ -43,12 +43,12 @@ var cf = &config.Config{
 }
 
 type testResult struct {
-	clientErr          error
-	userConfigWritten  *config.TurborepoConfig
-	repoConfigWritten  *config.TurborepoConfig
-	openedURL          string
-	stepCh             chan struct{}
-	client             dummyClient
+	clientErr         error
+	userConfigWritten *config.TurborepoConfig
+	repoConfigWritten *config.TurborepoConfig
+	openedURL         string
+	stepCh            chan struct{}
+	client            dummyClient
 }
 
 func newTest(redirectedURL string) *testResult {
