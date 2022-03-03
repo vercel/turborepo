@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
@@ -221,4 +223,92 @@ func TestScopedPackages(t *testing.T) {
 		_, err := getScopedPackages(&context.Context{PackageNames: []string{"foo", "bar"}}, []string{"baz"})
 		assert.Error(t, err)
 	})
+}
+
+func TestGetTargetsFromArguments(t *testing.T) {
+	type args struct {
+		arguments  []string
+		configJson *fs.TurboConfigJSON
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "handles one defined target",
+			args: args{
+				arguments: []string{"build"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    []string{"build"},
+			wantErr: false,
+		},
+		{
+			name: "handles multiple targets and ignores flags",
+			args: args{
+				arguments: []string{"build", "test", "--foo", "--bar"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    []string{"build", "test"},
+			wantErr: false,
+		},
+		{
+			name: "handles pass through arguments after -- ",
+			args: args{
+				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    []string{"build", "test"},
+			wantErr: false,
+		},
+		{
+			name: "handles unknown pipeline targets ",
+			args: args{
+				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJson)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
