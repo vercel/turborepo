@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
@@ -23,10 +21,10 @@ var rootCmd = &cobra.Command{
 Complete documentation is available at https://turborepo.com.`,
 }
 
-func Execute(ctx context.Context, version string) int {
+func Execute(version string, processes *process.Manager) int {
 	logger := logger.New()
 
-	err := runCmd(ctx, logger, version)
+	err := runCmd(logger, version, processes)
 	if err == nil {
 		return 0
 	}
@@ -41,7 +39,7 @@ func Execute(ctx context.Context, version string) int {
 	return 1
 }
 
-func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
+func runCmd(logger *logger.Logger, version string, processes *process.Manager) error {
 	rootCmd.SilenceUsage = true
 	rootCmd.SilenceErrors = true
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
@@ -67,9 +65,7 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 	ch := &cmdutil.Helper{
 		Logger: logger,
 		Config: cfg,
-		Processes: process.NewManager( /* cfg.Logger.Named("processes") */ hclog.New(&hclog.LoggerOptions{
-			Name: "processes",
-		})),
+		Processes: processes,
 	}
 
 	rootCmd.PersistentPreRunE = ch.PreRun()
@@ -88,5 +84,5 @@ func runCmd(ctx context.Context, logger *logger.Logger, version string) error {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(pruneCmd)
 
-	return rootCmd.ExecuteContext(ctx)
+	return rootCmd.Execute()
 }
