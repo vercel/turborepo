@@ -77,3 +77,29 @@ func Default() *cli.ColoredUi {
 		ErrorColor:  cli.UiColorRed,
 	}
 }
+
+type nullUI struct{}
+
+// Ask implements cli.Ui
+func (*nullUI) Ask(string) (string, error) {
+	panic("unimplemented")
+}
+
+// AskSecret implements cli.Ui
+func (*nullUI) AskSecret(string) (string, error) {
+	panic("unimplemented")
+}
+
+// Error implements cli.Ui
+func (*nullUI) Error(string) {}
+
+// Info implements cli.Ui
+func (*nullUI) Info(string) {}
+
+// Output implements cli.Ui
+func (*nullUI) Output(string) {}
+
+// Warn implements cli.Ui
+func (*nullUI) Warn(string) {}
+
+var NullUI cli.Ui = &nullUI{}

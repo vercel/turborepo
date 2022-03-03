@@ -10,6 +10,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/info"
 	"github.com/vercel/turborepo/cli/internal/login"
+	"github.com/vercel/turborepo/cli/internal/plan"
 	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
 	"github.com/vercel/turborepo/cli/internal/run"
@@ -73,6 +74,9 @@ func main() {
 		"run": func() (cli.Command, error) {
 			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes},
 				nil
+		},
+		"plan": func() (cli.Command, error) {
+			return plan.NewCmd(cf, ui), nil
 		},
 		"prune": func() (cli.Command, error) {
 			return &prune.PruneCommand{Config: cf, Ui: ui}, nil
