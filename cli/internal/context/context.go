@@ -27,6 +27,7 @@ const GLOBAL_CACHE_KEY = "snozzberries"
 
 // Context of the CLI
 type Context struct {
+	RootPackageInfo  *fs.PackageJSON // TODO(gsoltis): should this be included in PackageInfos?
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
@@ -107,9 +108,10 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			c.Lockfile = lockfile
 		}
 
-		if c.ResolveWorkspaceRootDeps(rootPackageJSON) != nil {
+		if c.resolveWorkspaceRootDeps(rootPackageJSON) != nil {
 			return err
 		}
+		c.RootPackageInfo = rootPackageJSON
 
 		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
 		if err != nil {
@@ -215,7 +217,7 @@ func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
 	return nil
 }
 
-func (c *Context) ResolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
+func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	pkg := rootPackageJSON
@@ -235,7 +237,7 @@ func (c *Context) ResolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	}
 	if util.IsYarn(c.Backend.Name) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
-		c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
+		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
 		for _, v := range depSet.ToSlice() {
@@ -253,32 +255,6 @@ func (c *Context) ResolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	}
 
 	return nil
-}
-
-// GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
-// Return targets are always unique sorted alphabetically.
-func GetTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
-	targets := make(util.Set)
-	for _, arg := range arguments {
-		if arg == "--" {
-			break
-		}
-		if !strings.HasPrefix(arg, "-") {
-			targets.Add(arg)
-			found := false
-			for task := range configJson.Pipeline {
-				if task == arg {
-					found = true
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
-			}
-		}
-	}
-	stringTargets := targets.UnsafeListOfStrings()
-	sort.Strings(stringTargets)
-	return stringTargets, nil
 }
 
 func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
@@ -331,7 +307,7 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	pkg.SubLockfile = make(fs.YarnLockfile)
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
-	c.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
+	c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
 	lockfileWg.Wait()
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
@@ -377,7 +353,7 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 	return nil
 }
 
-func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
+func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
 	if !util.IsYarn(c.Backend.Name) {
 		return
 	}
@@ -415,10 +391,10 @@ func (c *Context) ResolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
 
 			if len(entry.Dependencies) > 0 {
-				c.ResolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
+				c.resolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
 			}
 			if len(entry.OptionalDependencies) > 0 {
-				c.ResolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
+				c.resolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
 			}
 
 		}(directDepName, unresolvedVersion)

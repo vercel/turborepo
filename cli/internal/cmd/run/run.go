@@ -106,7 +106,7 @@ occurred again).
 			if err != nil {
 				return ch.LogError("%w", err)
 			}
-			targets, err := context.GetTargetsFromArguments(args, ctx.TurboConfig)
+			targets, err := getTargetsFromArguments(args, ctx.TurboConfig)
 			if err != nil {
 				return ch.LogError("failed to resolve targets: %w", err)
 			}
@@ -786,4 +786,30 @@ func replayLogs(logger hclog.Logger, cLogger *logger.ConcurrentLogger, runOption
 		cLogger.Printf(ui.StripAnsi(string(scan.Bytes()))) // Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
+}
+
+// GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
+// Return targets are always unique sorted alphabetically.
+func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+	targets := make(util.Set)
+	for _, arg := range arguments {
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			targets.Add(arg)
+			found := false
+			for task := range configJson.Pipeline {
+				if task == arg {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			}
+		}
+	}
+	stringTargets := targets.UnsafeListOfStrings()
+	sort.Strings(stringTargets)
+	return stringTargets, nil
 }

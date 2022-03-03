@@ -9,9 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
-	"github.com/deckarep/golang-set"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
@@ -127,33 +125,7 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	workspaces := []string{}
-	seen := mapset.NewSet()
-	var lockfileWg sync.WaitGroup
-	pkg, err := fs.ReadPackageJSON(filepath.Join(pruneOptions.cwd, "package.json"))
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could not read package.json: %w", err))
-		return 1
-	}
-	depSet := mapset.NewSet()
-	pkg.UnresolvedExternalDeps = make(map[string]string)
-	for dep, version := range pkg.Dependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.DevDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.OptionalDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.PeerDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-
-	pkg.SubLockfile = make(fs.YarnLockfile)
-	ctx.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
-
-	lockfileWg.Wait()
-	lockfile := pkg.SubLockfile
+	lockfile := ctx.RootPackageInfo.SubLockfile
 	targets := []interface{}{pruneOptions.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(pruneOptions.scope)
 	if err != nil {
