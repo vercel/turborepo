@@ -204,7 +204,7 @@ func (c *PruneCommand) Run(args []string) int {
 
 		logger.Printf(" - Added %v", ctx.PackageInfos[internalDep].Name)
 	}
-	c.Config.Logger.Trace("new worksapces", "value", workspaces)
+	c.Config.Logger.Trace("new workspaces", "value", workspaces)
 	if pruneOptions.docker {
 		if fs.FileExists(".gitignore") {
 			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), fs.DirPermissions); err != nil {
@@ -268,7 +268,7 @@ func (c *PruneCommand) Run(args []string) int {
 	tmpGeneratedLockfile, err := os.Create(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"))
 	tmpGeneratedLockfileWriter := bufio.NewWriter(tmpGeneratedLockfile)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed create tempory lockfile: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed create temporary lockfile: %w", err))
 		return 1
 	}
 
