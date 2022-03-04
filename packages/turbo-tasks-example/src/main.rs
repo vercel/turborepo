@@ -6,13 +6,17 @@ use async_std::task::{block_on, sleep, spawn};
 use log::LoggingOptions;
 use math::{add, max_new};
 use random::RandomIdRef;
+use std::borrow::{Borrow, Cow};
+use std::collections::HashMap;
 use std::fs;
 use std::time::Instant;
 use std::{env::current_dir, time::Duration};
-use turbo_pack::emit;
+use turbo_pack::ecmascript::ModuleAssetRef;
+use turbo_pack::rebase::RebasedAssetRef;
 use turbo_pack::source_asset::SourceAssetRef;
+use turbo_pack::{emit, print_most_referenced};
 use turbo_tasks::viz::GraphViz;
-use turbo_tasks::{SlotRef, TurboTasks};
+use turbo_tasks::{dynamic_call, SlotRef, TurboTasks};
 
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemRef, FileContent, FileContentRef,
@@ -51,7 +55,10 @@ fn main() {
                 let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
                 let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
 
-                emit(SourceAssetRef::new(entry).into(), input, output);
+                let source = SourceAssetRef::new(entry);
+                let module = ModuleAssetRef::new(&source.into());
+                let rebased = RebasedAssetRef::new(&module.into(), &input, &output);
+                emit(rebased.into());
 
                 // copy_all(
                 //     entry,
