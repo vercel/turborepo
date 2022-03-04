@@ -26,10 +26,10 @@ import (
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/process"
+	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
-	"github.com/vercel/turborepo/cli/internal/util/filter"
 
 	"github.com/pyr-sh/dag"
 
@@ -153,7 +153,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	filteredPkgs, err := resolvePackagesInScope(runOptions, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
@@ -659,6 +659,18 @@ type RunOptions struct {
 	only bool
 }
 
+func (ro *RunOptions) ScopeOpts() *scope.Opts {
+	return &scope.Opts{
+		IncludeDependencies: ro.includeDependencies,
+		IncludeDependents:   ro.includeDependents,
+		Patterns:            ro.scope,
+		Since:               ro.since,
+		Cwd:                 ro.cwd,
+		IgnorePatterns:      ro.ignore,
+		GlobalDepPatterns:   ro.globalDeps,
+	}
+}
+
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
 		bail:                true,
@@ -790,41 +802,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	runOptions.cacheFolder = filepath.Join(runOptions.cwd, unresolvedCacheFolder)
 
 	return runOptions, nil
-}
-
-// getScopedPackages returns a set of package names in scope for a given list of glob patterns
-func getScopedPackages(packageNames []string, scopePatterns []string) (util.Set, error) {
-	scopedPkgs := make(util.Set)
-	if len(scopePatterns) == 0 {
-		return scopedPkgs, nil
-	}
-
-	include := make([]string, 0, len(scopePatterns))
-	exclude := make([]string, 0, len(scopePatterns))
-
-	for _, pattern := range scopePatterns {
-		if strings.HasPrefix(pattern, "!") {
-			exclude = append(exclude, pattern[1:])
-		} else {
-			include = append(include, pattern)
-		}
-	}
-
-	glob, err := filter.NewIncludeExcludeFilter(include, exclude)
-	if err != nil {
-		return nil, err
-	}
-	for _, f := range packageNames {
-		if glob.Match(f) {
-			scopedPkgs.Add(f)
-		}
-	}
-
-	if len(include) > 0 && scopedPkgs.Len() == 0 {
-		return nil, errors.Errorf("No packages found matching the provided scope pattern.")
-	}
-
-	return scopedPkgs, nil
 }
 
 // logError logs an error and outputs it to the UI.

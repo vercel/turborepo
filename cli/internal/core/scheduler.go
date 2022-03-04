@@ -2,8 +2,9 @@ package core
 
 import (
 	"fmt"
-	"github.com/vercel/turborepo/cli/internal/util"
 	"strings"
+
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
 )
@@ -63,6 +64,7 @@ type SchedulerExecutionOptions struct {
 func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
 	if len(pkgs) == 0 {
+		// TODO(gsoltis): Is this behavior only used in tests?
 		for _, v := range p.TopologicGraph.Vertices() {
 			pkgs = append(pkgs, dag.VertexName(v))
 		}

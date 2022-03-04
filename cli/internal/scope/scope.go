@@ -1,4 +1,4 @@
-package run
+package scope
 
 import (
 	"fmt"
@@ -16,8 +16,18 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util/filter"
 )
 
-func resolvePackagesInScope(runOptions *RunOptions, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
-	changedFiles, err := getChangedFiles(runOptions)
+type Opts struct {
+	IncludeDependencies bool
+	IncludeDependents   bool
+	Patterns            []string
+	Since               string
+	Cwd                 string
+	IgnorePatterns      []string
+	GlobalDepPatterns   []string
+}
+
+func ResolvePackages(opts *Opts, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
+	changedFiles, err := getChangedFiles(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -26,11 +36,11 @@ func resolvePackagesInScope(runOptions *RunOptions, ctx *context.Context, tui cl
 	// The user can technically specify both that a file is a global dependency and
 	// that it should be ignored, and currently we treat a change to that file as a
 	// global change.
-	hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(runOptions, changedFiles)
+	hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(opts, changedFiles)
 	if err != nil {
 		return nil, err
 	}
-	filteredChangedFiles, err := filterIgnoredFiles(runOptions, changedFiles)
+	filteredChangedFiles, err := filterIgnoredFiles(opts, changedFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -43,15 +53,15 @@ func resolvePackagesInScope(runOptions *RunOptions, ctx *context.Context, tui cl
 
 	// Scoped packages
 	// Unwind scope globs
-	scopePkgs, err := getScopedPackages(ctx.PackageNames, runOptions.scope)
+	scopePkgs, err := getScopedPackages(ctx.PackageNames, opts.Patterns)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid scope")
 	}
 
 	// Filter Packages
 	filteredPkgs := make(util.Set)
-	includeDependencies := runOptions.includeDependencies
-	includeDependents := runOptions.includeDependents
+	includeDependencies := opts.IncludeDependencies
+	includeDependents := opts.IncludeDependents
 	// If there has been a global change, changedPackages.Len() will be 0
 	// If both scoped and since are specified, we have to merge two lists:
 	// 1. changed packages that ARE themselves the scoped packages
@@ -63,17 +73,17 @@ func resolvePackagesInScope(runOptions *RunOptions, ctx *context.Context, tui cl
 			includeDependents = true
 
 		}
-		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
+		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if changedPackages.Len() > 0 {
 		// --since was specified, there are changes, but no scope was specified.
 		// Run the packages that have changed
 		filteredPkgs = changedPackages
-		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
+		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if scopePkgs.Len() > 0 {
 		// There was either a global change, or no changes, or no --since flag
 		// There was a --scope flag, run the desired scopes
 		filteredPkgs = scopePkgs
-	} else if runOptions.since == "" {
+	} else if opts.Since == "" {
 		// No scope was specified, and no diff base was specified
 		// Run every package
 		for _, f := range ctx.PackageNames {
@@ -109,11 +119,11 @@ func resolvePackagesInScope(runOptions *RunOptions, ctx *context.Context, tui cl
 	return filteredPkgs, nil
 }
 
-func getChangedFiles(runOptions *RunOptions) ([]string, error) {
-	if runOptions.since == "" {
+func getChangedFiles(opts *Opts) ([]string, error) {
+	if opts.Since == "" {
 		return []string{}, nil
 	}
-	gitRepoRoot, err := fs.FindupFrom(".git", runOptions.cwd)
+	gitRepoRoot, err := fs.FindupFrom(".git", opts.Cwd)
 	if err != nil {
 		errors.Wrap(err, "Cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.")
 	}
@@ -121,11 +131,11 @@ func getChangedFiles(runOptions *RunOptions) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return git.ChangedFiles(runOptions.since, true, runOptions.cwd), nil
+	return git.ChangedFiles(opts.Since, true, opts.Cwd), nil
 }
 
-func repoGlobalFileHasChanged(runOptions *RunOptions, changedFiles []string) (bool, error) {
-	globalDepsGlob, err := filter.Compile(runOptions.globalDeps)
+func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
+	globalDepsGlob, err := filter.Compile(opts.GlobalDepPatterns)
 	if err != nil {
 		return false, errors.Wrap(err, "invalid global deps glob")
 	}
@@ -140,8 +150,8 @@ func repoGlobalFileHasChanged(runOptions *RunOptions, changedFiles []string) (bo
 	return false, nil
 }
 
-func filterIgnoredFiles(runOptions *RunOptions, changedFiles []string) (util.Set, error) {
-	ignoreGlob, err := filter.Compile(runOptions.ignore)
+func filterIgnoredFiles(opts *Opts, changedFiles []string) (util.Set, error) {
+	ignoreGlob, err := filter.Compile(opts.IgnorePatterns)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid ignore globs")
 	}
@@ -199,4 +209,39 @@ func addDependencies(deps util.Set, pkg interface{}, ctx *context.Context, logge
 		}
 	}
 	return nil
+}
+
+// getScopedPackages returns a set of package names in scope for a given list of glob patterns
+func getScopedPackages(packageNames []string, scopePatterns []string) (util.Set, error) {
+	scopedPkgs := make(util.Set)
+	if len(scopePatterns) == 0 {
+		return scopedPkgs, nil
+	}
+
+	include := make([]string, 0, len(scopePatterns))
+	exclude := make([]string, 0, len(scopePatterns))
+
+	for _, pattern := range scopePatterns {
+		if strings.HasPrefix(pattern, "!") {
+			exclude = append(exclude, pattern[1:])
+		} else {
+			include = append(include, pattern)
+		}
+	}
+
+	glob, err := filter.NewIncludeExcludeFilter(include, exclude)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range packageNames {
+		if glob.Match(f) {
+			scopedPkgs.Add(f)
+		}
+	}
+
+	if len(include) > 0 && scopedPkgs.Len() == 0 {
+		return nil, errors.Errorf("No packages found matching the provided scope pattern.")
+	}
+
+	return scopedPkgs, nil
 }
