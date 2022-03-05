@@ -169,12 +169,15 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
-#### `--silence-cached-logs`
+#### `--progress`
 
-Default false. Do not replay cached logs of all tasks. This is useful for minimizing output in the terminal to only show what changed.
+`type: string`
+
+Default standard. Set type of progress output. Use standard for normal output. Use reduced to hide cached task logs and only show what changed.
 
 ```shell
-turbo run build --silence-cached-logs
+turbo run build --progress=standard
+turbo run build --progress=reduced
 ```
 
 #### `--only`

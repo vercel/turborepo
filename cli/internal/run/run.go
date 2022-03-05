@@ -121,8 +121,9 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
-  --silence-cached-logs  Do not replay logs of all cached tasks. Useful for
-                         reducing output in the terminal. (default false)
+  --progress             Set type of progress output (standard|reduced).
+                         Use reduced to hide cached task logs.
+                         (default standard)
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -544,7 +545,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					} else if hit {
 						if rs.Opts.stream && fs.FileExists(filepath.Join(rs.Opts.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false, rs.Opts.silenceCached)
+							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false, rs.Opts.progressType == "reduced")
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
@@ -798,8 +799,8 @@ type RunOptions struct {
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
 	only bool
-	// Do not replay cached tasks
-	silenceCached bool
+	// Task logs output mode
+	progressType string
 }
 
 func getDefaultRunOptions() *RunOptions {
@@ -815,7 +816,7 @@ func getDefaultRunOptions() *RunOptions {
 		forceExecution:      false,
 		stream:              true,
 		only:                false,
-		silenceCached:       false,
+		progressType:        "standard",
 	}
 }
 
@@ -911,8 +912,15 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				runOptions.includeDependencies = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
-			case strings.HasPrefix(arg, "--silence-cached-logs"):
-				runOptions.silenceCached = true
+			case strings.HasPrefix(arg, "--progress"):
+				if len(arg[len("--progress="):]) > 0 {
+					progressType := arg[len("--progress="):]
+					if progressType != "standard" && progressType != "reduced" {
+						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --progress CLI flag. Falling back to standard", progressType))
+						progressType = "standard"
+					}
+					runOptions.progressType = progressType
+				}
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
