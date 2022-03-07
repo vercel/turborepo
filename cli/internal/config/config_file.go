@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
@@ -38,6 +39,7 @@ func writeConfigFile(path string, config *TurborepoConfig) error {
 // WriteRepoConfigFile is used to write the portion of the config file that is saved
 // within the repository itself.
 func WriteRepoConfigFile(config *TurborepoConfig) error {
+	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
 	path := filepath.Join(".turbo", "config.json")
 	return writeConfigFile(path, config)
 }
