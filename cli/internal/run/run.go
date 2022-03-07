@@ -331,6 +331,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	os.Remove(filepath.Join(rs.Opts.cacheFolder, "last-run.log"))
 	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()
 
@@ -532,6 +533,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				}
 				logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
 				targetLogger.Debug("log file", "path", filepath.Join(rs.Opts.cwd, logFileName))
+				cache.AppendHashesFile(filepath.Join(rs.Opts.cacheFolder, "last-run.log"), hash)
 
 				// Cache ---------------------------------------------
 				var hit bool

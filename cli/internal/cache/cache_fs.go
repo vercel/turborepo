@@ -1,11 +1,14 @@
 package cache
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
-	"runtime"
-	"path/filepath"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"runtime"
+
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -67,7 +70,7 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	g := new(errgroup.Group)
 
-  numDigesters := runtime.NumCPU()
+	numDigesters := runtime.NumCPU()
 	fileQueue := make(chan string, numDigesters)
 
 	for i := 0; i < numDigesters; i++ {
@@ -150,4 +153,38 @@ func ReadCacheMetaFile(path string) (*CacheMetadata, error) {
 		return nil, marshalErr
 	}
 	return &config, nil
+}
+
+// AppendHashesFile adds a hash to a file at path
+// Note: naively assuming locks are not needed
+func AppendHashesFile(path string, hash string) error {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	if _, err = file.WriteString(hash + "\n"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ReadHashesFile reads hashes stored line by line from a file at path
+func ReadHashesFile(path string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+
+	var hashes []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		hashes = append(hashes, scanner.Text())
+	}
+	return hashes, scanner.Err()
 }
