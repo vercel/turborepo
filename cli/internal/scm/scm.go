@@ -38,9 +38,9 @@ func NewFallback(repoRoot string) (SCM, error) {
 }
 
 func FromInRepo(cwd string) (SCM, error) {
-	repoRoot, err := fs.FindupFrom(".git", cwd)
+	dotGitDir, err := fs.FindupFrom(".git", cwd)
 	if err != nil {
 		return nil, err
 	}
-	return NewFallback(repoRoot)
+	return NewFallback(filepath.Dir(dotGitDir))
 }
