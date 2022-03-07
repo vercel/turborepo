@@ -1,6 +1,6 @@
 {
   "name": "@turbo/codemod",
-  "version": "1.1.0-canary.3",
+  "version": "1.1.5",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turborepo.org",
   "license": "MPL-2.0",
@@ -15,7 +15,6 @@
   "bin": "dist/index.js",
   "scripts": {
     "build": "tsup src/*.ts src/transforms/*.ts --format cjs",
-    "test": "jest",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
@@ -23,6 +22,7 @@
     "execa": "5.0.0",
     "find-up": "4.1.0",
     "fs-extra": "^10.0.0",
+    "globby": "11.1.0",
     "gradient-string": "^2.0.0",
     "inquirer": "^8.0.0",
     "is-git-clean": "^1.1.0",
@@ -40,9 +40,10 @@
     "@types/jest": "^27.4.0",
     "@types/node": "^16.11.12",
     "@types/semver": "^7.3.9",
+    "eslint": "^7.23.0",
     "jest": "^27.4.3",
     "semver": "^7.3.5",
-    "strip-ansi": "^7.0.1",
+    "strip-ansi": "^6.0.1",
     "ts-jest": "^27.1.1",
     "tsup": "^5.10.3",
     "typescript": "^4.5.5"

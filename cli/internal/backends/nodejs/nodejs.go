@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -20,8 +21,8 @@ var NodejsYarnBackend = api.LanguageBackend{
 	Specfile:         "package.json",
 	Lockfile:         "yarn.lock",
 	FilenamePatterns: nodejsPatterns,
-	GetWorkspaceGlobs: func() ([]string, error) {
-		pkg, err := fs.ReadPackageJSON("package.json")
+	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -84,8 +85,8 @@ var NodejsBerryBackend = api.LanguageBackend{
 	Specfile:         "package.json",
 	Lockfile:         "yarn.lock",
 	FilenamePatterns: nodejsPatterns,
-	GetWorkspaceGlobs: func() ([]string, error) {
-		pkg, err := fs.ReadPackageJSON("package.json")
+	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -167,8 +168,8 @@ var NodejsPnpmBackend = api.LanguageBackend{
 	Specfile:         "package.json",
 	Lockfile:         "pnpm-lock.yaml",
 	FilenamePatterns: nodejsPatterns,
-	GetWorkspaceGlobs: func() ([]string, error) {
-		bytes, err := ioutil.ReadFile("pnpm-workspace.yaml")
+	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+		bytes, err := ioutil.ReadFile(filepath.Join(rootpath, "pnpm-workspace.yaml"))
 		if err != nil {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
 		}
@@ -221,8 +222,8 @@ var NodejsNpmBackend = api.LanguageBackend{
 	Specfile:         "package.json",
 	Lockfile:         "package-lock.json",
 	FilenamePatterns: nodejsPatterns,
-	GetWorkspaceGlobs: func() ([]string, error) {
-		pkg, err := fs.ReadPackageJSON("package.json")
+	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}

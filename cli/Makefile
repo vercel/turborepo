@@ -14,9 +14,7 @@ turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
 # These tests are for development
 test: test-go vet-go
 
-
-
-ewatch: | scripts/node_modules
+ewatch: scripts/...
 	nodemon --exec "make turbo && make e2e" -e .ts,.go
 
 check-go-version:
@@ -37,14 +35,11 @@ vet-go:
 fmt-go:
 	go fmt ./cmd/... ./internal/...
 
-scripts/node_modules:
-	cd scripts && yarn
-	
-scripts: | scripts/node_modules
-	cd scripts && yarn install
+install: | ./package.json
+	pnpm i --filter=cli...
 
-e2e: | scripts/node_modules
-	cd scripts && yarn uvu -r esbuild-register e2e
+e2e: install 
+	pnpm e2e
 
 cmd/turbo/version.go: version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
@@ -183,6 +178,7 @@ publish-all: cmd/turbo/version.go
 	@echo Confirm release:
 	make publish-neutral
 	make publish-create-turbo
+	make publish-turbo-codemod
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
@@ -235,16 +231,16 @@ publish-create-turbo: platform-create-turbo
 publish-turbo-codemod: platform-turbo-codemod
 	cd ../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
 
-demo/lage: | scripts/node_modules
+demo/lage: | node_modules
 	node scripts/generate.mjs lage
 
-demo/lerna: | scripts/node_modules
+demo/lerna: | node_modules
 	node scripts/generate.mjs lerna
 
-demo/nx: | scripts/node_modules
+demo/nx: | node_modules
 	node scripts/generate.mjs nx
 
-demo/turbo: | scripts/node_modules
+demo/turbo: | node_modules
 	node scripts/generate.mjs turbo
 
 bench/lerna: demo/lerna

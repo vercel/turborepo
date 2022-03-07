@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
@@ -22,11 +23,11 @@ type TurborepoConfig struct {
 	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
 }
 
-// WriteUserConfigFile writes config file at a path
-func WriteConfigFile(path string, config *TurborepoConfig) error {
-	jsonBytes, marhsallError := json.Marshal(config)
-	if marhsallError != nil {
-		return marhsallError
+// writeConfigFile writes config file at a path
+func writeConfigFile(path string, config *TurborepoConfig) error {
+	jsonBytes, marshallError := json.Marshal(config)
+	if marshallError != nil {
+		return marshallError
 	}
 	writeFilErr := ioutil.WriteFile(path, jsonBytes, 0644)
 	if writeFilErr != nil {
@@ -35,13 +36,22 @@ func WriteConfigFile(path string, config *TurborepoConfig) error {
 	return nil
 }
 
-// WriteUserConfigFile writes a user config file
+// WriteRepoConfigFile is used to write the portion of the config file that is saved
+// within the repository itself.
+func WriteRepoConfigFile(config *TurborepoConfig) error {
+	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
+	path := filepath.Join(".turbo", "config.json")
+	return writeConfigFile(path, config)
+}
+
+// WriteUserConfigFile writes a user config file. This may contain a token and so should
+// not be saved within the repository to avoid committing sensitive data
 func WriteUserConfigFile(config *TurborepoConfig) error {
 	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return err
 	}
-	return WriteConfigFile(path, config)
+	return writeConfigFile(path, config)
 }
 
 // ReadConfigFile reads a config file at a path

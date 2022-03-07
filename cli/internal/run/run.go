@@ -40,8 +40,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-const TOPOLOGICAL_PIPELINE_DELMITER = "^"
-const ENV_PIPELINE_DELMITER = "$"
+const TOPOLOGICAL_PIPELINE_DELIMITER = "^"
+const ENV_PIPELINE_DELIMITER = "$"
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
@@ -135,13 +135,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid working directory?: %w", err))
-		return 1
-	}
-
-	runOptions, err := parseRunArgs(args, cwd, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -149,13 +143,18 @@ func (c *RunCommand) Run(args []string) int {
 
 	c.Config.Cache.Dir = runOptions.cacheFolder
 
-	ctx, err := context.New(context.WithTracer(runOptions.profile), context.WithArgs(args), context.WithGraph(".", c.Config))
+	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
+	targets, err := getTargetsFromArguments(args, ctx.TurboConfig)
+	if err != nil {
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
+		return 1
+	}
 
-	gitRepoRoot, err := fs.FindupFrom(".git", cwd)
+	gitRepoRoot, err := fs.FindupFrom(".git", runOptions.cwd)
 	if err != nil {
 		c.logWarning(c.Config.Logger, "Cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.", err)
 	}
@@ -177,7 +176,7 @@ func (c *RunCommand) Run(args []string) int {
 	hasRepoGlobalFileChanged := false
 	var changedFiles []string
 	if runOptions.since != "" {
-		changedFiles = git.ChangedFiles(runOptions.since, true, cwd)
+		changedFiles = git.ChangedFiles(runOptions.since, true, runOptions.cwd)
 	}
 
 	ignoreSet := make(util.Set)
@@ -269,7 +268,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
 			for _, d := range descenders {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
@@ -288,7 +287,7 @@ func (c *RunCommand) Run(args []string) int {
 			}
 			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
 			for _, d := range ancestors {
-				// we need to exlcude the fake root node
+				// we need to exclude the fake root node
 				// since it is not a real package
 				if d != ctx.RootNode {
 					filteredPkgs.Add(d)
@@ -314,15 +313,15 @@ func (c *RunCommand) Run(args []string) int {
 		RootNode:         ctx.RootNode,
 	}
 	rs := &runSpec{
-		Targets:      ctx.Targets,
+		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
 		Opts:         runOptions,
 	}
 	backend := ctx.Backend
-	return c.runOperation(g, rs, backend, cwd, startAt)
+	return c.runOperation(g, rs, backend, startAt)
 }
 
-func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, cwd string, startAt time.Time) int {
+func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -408,13 +407,13 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		deps := make(util.Set)
 		if util.IsPackageTask(taskName) {
 			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
 					continue
 				}
 				if util.IsPackageTask(from) {
 					engine.AddDep(from, taskName)
 					continue
-				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
 					topoDeps.Add(from[1:])
 				} else {
 					deps.Add(from)
@@ -424,10 +423,10 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELMITER) {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
 					continue
 				}
-				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELMITER) {
+				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
 					topoDeps.Add(from[1:])
 				} else {
 					deps.Add(from)
@@ -499,19 +498,19 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				}
 
 				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
-				var hashabledEnvVars []string
-				var hashabledEnvPairs []string
+				var hashableEnvVars []string
+				var hashableEnvPairs []string
 				if len(pipeline.DependsOn) > 0 {
 					for _, v := range pipeline.DependsOn {
-						if strings.Contains(v, ENV_PIPELINE_DELMITER) {
-							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELMITER)
-							hashabledEnvPairs = append(hashabledEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-							hashabledEnvVars = append(hashabledEnvVars, trimmed)
+						if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
+							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
+							hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+							hashableEnvVars = append(hashableEnvVars, trimmed)
 						}
 					}
-					sort.Strings(hashabledEnvVars) // always sort them
+					sort.Strings(hashableEnvVars) // always sort them
 				}
-				targetLogger.Debug("hashable env vars", "vars", hashabledEnvVars)
+				targetLogger.Debug("hashable env vars", "vars", hashableEnvVars)
 				hashable := struct {
 					Hash             string
 					Task             string
@@ -523,7 +522,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					Task:             task,
 					Outputs:          outputs,
 					PassThruArgs:     passThroughArgs,
-					HashableEnvPairs: hashabledEnvPairs,
+					HashableEnvPairs: hashableEnvPairs,
 				}
 				hash, err := fs.HashObject(hashable)
 				targetLogger.Debug("task hash", "value", hash)
@@ -685,7 +684,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		}))
 		ext := filepath.Ext(rs.Opts.dotGraph)
 		if ext == ".html" {
-			f, err := os.Create(filepath.Join(cwd, rs.Opts.dotGraph))
+			f, err := os.Create(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 			if err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
 				return 1
@@ -709,7 +708,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			c.Ui.Output("")
 			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
 			if ui.IsTTY {
-				browser.OpenBrowser(filepath.Join(cwd, rs.Opts.dotGraph))
+				browser.OpenBrowser(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 			}
 			return 0
 		}
@@ -766,7 +765,7 @@ type RunOptions struct {
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
 	includeDependencies bool
-	// List of globs of file paths to ignore from exection scope calculation
+	// List of globs of file paths to ignore from execution scope calculation
 	ignore []string
 	// Whether to stream log outputs
 	stream bool
@@ -815,12 +814,18 @@ func getDefaultRunOptions() *RunOptions {
 	}
 }
 
-func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("invalid working directory: %w", err)
+	}
+	runOptions.cwd = cwd
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
@@ -849,8 +854,6 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 			case strings.HasPrefix(arg, "--cwd="):
 				if len(arg[len("--cwd="):]) > 0 {
 					runOptions.cwd = arg[len("--cwd="):]
-				} else {
-					runOptions.cwd = cwd
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
@@ -1008,4 +1011,30 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
+}
+
+// GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
+// Return targets are always unique sorted alphabetically.
+func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+	targets := make(util.Set)
+	for _, arg := range arguments {
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			targets.Add(arg)
+			found := false
+			for task := range configJson.Pipeline {
+				if task == arg {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			}
+		}
+	}
+	stringTargets := targets.UnsafeListOfStrings()
+	sort.Strings(stringTargets)
+	return stringTargets, nil
 }

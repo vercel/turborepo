@@ -9,14 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
+
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
@@ -99,7 +98,7 @@ func (c *PruneCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	ctx, err := context.New(context.WithTracer(""), context.WithArgs(args), context.WithGraph(".", c.Config))
+	ctx, err := context.New(context.WithGraph(pruneOptions.cwd, c.Config))
 
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not construct graph: %w", err))
@@ -127,33 +126,7 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	workspaces := []string{}
-	seen := mapset.NewSet()
-	var lockfileWg sync.WaitGroup
-	pkg, err := fs.ReadPackageJSON("package.json")
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could not read package.json: %w", err))
-		return 1
-	}
-	depSet := mapset.NewSet()
-	pkg.UnresolvedExternalDeps = make(map[string]string)
-	for dep, version := range pkg.Dependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.DevDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.OptionalDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.PeerDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-
-	pkg.SubLockfile = make(fs.YarnLockfile)
-	ctx.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
-
-	lockfileWg.Wait()
-	lockfile := pkg.SubLockfile
+	lockfile := ctx.RootPackageInfo.SubLockfile
 	targets := []interface{}{pruneOptions.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(pruneOptions.scope)
 	if err != nil {
@@ -204,7 +177,7 @@ func (c *PruneCommand) Run(args []string) int {
 
 		logger.Printf(" - Added %v", ctx.PackageInfos[internalDep].Name)
 	}
-	c.Config.Logger.Trace("new worksapces", "value", workspaces)
+	c.Config.Logger.Trace("new workspaces", "value", workspaces)
 	if pruneOptions.docker {
 		if fs.FileExists(".gitignore") {
 			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), fs.DirPermissions); err != nil {
@@ -268,7 +241,7 @@ func (c *PruneCommand) Run(args []string) int {
 	tmpGeneratedLockfile, err := os.Create(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"))
 	tmpGeneratedLockfileWriter := bufio.NewWriter(tmpGeneratedLockfile)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed create tempory lockfile: %w", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed create temporary lockfile: %w", err))
 		return 1
 	}
 

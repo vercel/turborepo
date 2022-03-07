@@ -4,16 +4,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestParseConfig(t *testing.T) {
+	defaultCwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	defaultCacheFolder := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
 		Name     string
 		Args     []string
@@ -32,7 +39,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -66,7 +74,8 @@ func TestParseConfig(t *testing.T) {
 				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -82,7 +91,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -98,7 +108,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 			},
 		},
 		{
@@ -114,7 +125,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{"--boop", "zoop"},
 			},
 		},
@@ -131,7 +143,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{},
 			},
 		},
@@ -146,7 +159,7 @@ func TestParseConfig(t *testing.T) {
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ".", ui)
+			actual, err := parseRunArgs(tc.Args, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
@@ -210,4 +223,92 @@ func TestScopedPackages(t *testing.T) {
 		_, err := getScopedPackages(&context.Context{PackageNames: []string{"foo", "bar"}}, []string{"baz"})
 		assert.Error(t, err)
 	})
+}
+
+func TestGetTargetsFromArguments(t *testing.T) {
+	type args struct {
+		arguments  []string
+		configJson *fs.TurboConfigJSON
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "handles one defined target",
+			args: args{
+				arguments: []string{"build"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    []string{"build"},
+			wantErr: false,
+		},
+		{
+			name: "handles multiple targets and ignores flags",
+			args: args{
+				arguments: []string{"build", "test", "--foo", "--bar"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    []string{"build", "test"},
+			wantErr: false,
+		},
+		{
+			name: "handles pass through arguments after -- ",
+			args: args{
+				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    []string{"build", "test"},
+			wantErr: false,
+		},
+		{
+			name: "handles unknown pipeline targets ",
+			args: args{
+				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.Pipeline{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJson)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

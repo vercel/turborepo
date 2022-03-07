@@ -32,7 +32,7 @@ const help = `
   Flags:    
     --use-npm           Explicitly tell the CLI to bootstrap the app using npm
     --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
-    --no-install        Explicitly do not run the package mananger's install command
+    --no-install        Explicitly do not run the package manager's install command
     --help, -h          Show this help message
     --version, -v       Show the version of this script
 `;

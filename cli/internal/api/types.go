@@ -32,7 +32,7 @@ type LanguageBackend struct {
 	GetPackageDir func() string
 
 	// Return the list of workspace glob
-	GetWorkspaceGlobs func() ([]string, error)
+	GetWorkspaceGlobs func(rootpath string) ([]string, error)
 	// Returns run command
 	GetRunCommand func() []string
 
