@@ -73,20 +73,23 @@ fn main() {
                 SlotRef::Nothing
             })
         });
-        spawn(async move {
-            tt.wait_done().await;
-            println!("done in {} ms", start.elapsed().as_millis());
+        spawn({
+            let tt = tt.clone();
+            async move {
+                tt.wait_done().await;
+                println!("done in {} ms", start.elapsed().as_millis());
 
-            for task in tt.cached_tasks_iter() {
-                task.reset_executions();
-            }
+                for task in tt.cached_tasks_iter() {
+                    task.reset_executions();
+                }
 
-            loop {
-                let (elapsed, count) = tt.wait_done().await;
-                if elapsed.as_millis() >= 10 {
-                    println!("updated {} tasks in {} ms", count, elapsed.as_millis());
-                } else {
-                    println!("updated {} tasks in {} µs", count, elapsed.as_micros());
+                loop {
+                    let (elapsed, count) = tt.wait_done().await;
+                    if elapsed.as_millis() >= 10 {
+                        println!("updated {} tasks in {} ms", count, elapsed.as_millis());
+                    } else {
+                        println!("updated {} tasks in {} µs", count, elapsed.as_micros());
+                    }
                 }
             }
         })
