@@ -2,7 +2,6 @@ package scope
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -26,8 +25,8 @@ type Opts struct {
 	GlobalDepPatterns   []string
 }
 
-func ResolvePackages(opts *Opts, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
-	changedFiles, err := getChangedFiles(opts)
+func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
+	changedFiles, err := getChangedFiles(opts, scm)
 	if err != nil {
 		return nil, err
 	}
@@ -119,19 +118,11 @@ func ResolvePackages(opts *Opts, ctx *context.Context, tui cli.Ui, logger hclog.
 	return filteredPkgs, nil
 }
 
-func getChangedFiles(opts *Opts) ([]string, error) {
+func getChangedFiles(opts *Opts, scm scm.SCM) ([]string, error) {
 	if opts.Since == "" {
 		return []string{}, nil
 	}
-	gitRepoRoot, err := fs.FindupFrom(".git", opts.Cwd)
-	if err != nil {
-		errors.Wrap(err, "Cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.")
-	}
-	git, err := scm.NewFallback(filepath.Dir(gitRepoRoot))
-	if err != nil {
-		return nil, err
-	}
-	return git.ChangedFiles(opts.Since, true, opts.Cwd), nil
+	return scm.ChangedFiles(opts.Since, true, opts.Cwd), nil
 }
 
 func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {

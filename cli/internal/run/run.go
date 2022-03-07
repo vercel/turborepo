@@ -26,6 +26,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/process"
+	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -153,7 +154,12 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), ctx, c.Ui, c.Config.Logger)
+	scm, err := scm.FromInRepo(runOptions.cwd)
+	if err != nil {
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed to create SCM: %w", err))
+		return 1
+	}
+	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scm, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
