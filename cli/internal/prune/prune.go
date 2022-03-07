@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -17,7 +16,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
@@ -107,7 +105,11 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	c.Config.Logger.Trace("scope", "value", pruneOptions.scope)
-	target := ctx.PackageInfos[pruneOptions.scope]
+	target, scopeIsValid := ctx.PackageInfos[pruneOptions.scope]
+	if !scopeIsValid {
+		c.logError(c.Config.Logger, "", errors.Errorf("invalid scope: package not found"))
+		return 1
+	}
 	c.Config.Logger.Trace("target", "value", target.Name)
 	c.Config.Logger.Trace("directory", "value", target.Dir)
 	c.Config.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
@@ -128,33 +130,7 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	workspaces := []string{}
-	seen := mapset.NewSet()
-	var lockfileWg sync.WaitGroup
-	pkg, err := fs.ReadPackageJSON(filepath.Join(pruneOptions.cwd, "package.json"))
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could not read package.json: %w", err))
-		return 1
-	}
-	depSet := mapset.NewSet()
-	pkg.UnresolvedExternalDeps = make(map[string]string)
-	for dep, version := range pkg.Dependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.DevDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.OptionalDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-	for dep, version := range pkg.PeerDependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
-
-	pkg.SubLockfile = make(fs.YarnLockfile)
-	ctx.ResolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
-
-	lockfileWg.Wait()
-	lockfile := pkg.SubLockfile
+	lockfile := ctx.RootPackageInfo.SubLockfile
 	targets := []interface{}{pruneOptions.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(pruneOptions.scope)
 	if err != nil {
