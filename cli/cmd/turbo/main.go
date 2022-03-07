@@ -74,6 +74,9 @@ func main() {
 			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes},
 				nil
 		},
+		"logs": func() (cli.Command, error) {
+			return &run.LogsCommand{Config: cf, Ui: ui}, nil
+		},
 		"prune": func() (cli.Command, error) {
 			return &prune.PruneCommand{Config: cf, Ui: ui}, nil
 		},

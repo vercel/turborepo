@@ -450,3 +450,99 @@ Unlink the current directory from the Remote Cache.
 ## `turbo bin`
 
 Get the path to the Turbo binary.
+
+## `turbo logs <hash1> <hash2>`
+
+Review the most recently run tasks logs. Looks for cached logs in [`--cache-dir`](#--cache-dir) and previous run history in [`--last-run-path`](#--last-run-path).
+
+### Options
+
+#### `--cache-dir`
+
+`type: string`
+
+Defaults to `./node_modules/.cache/turbo`. Specify local filesystem cache directory.
+
+```sh
+turbo logs --cache-dir="./my-cache"
+```
+
+#### `--last-run-path`
+
+`type: string`
+
+Defaults to `<--cache-dir>/last-run.log`. Specify local filesystem log file. Not for general use cases. Useful for processing backed up or manually-created last run log files.
+
+```sh
+turbo logs --last-run-path="./my-cache/my-log.txt"
+turbo logs --cache-dir="./my-cache" --last-run-path="./my-logs/my-log.txt"
+```
+
+#### `--list`
+
+`type: boolean`
+
+Defaults to `false`. Only list the hashes available for viewing from the cache.
+
+```sh
+turbo logs --list
+```
+
+#### `--list-format`
+
+`type: string`
+
+Defaults to `hash`. Specify output format for [`--list`](#--list). Use `hash` to only show the hashes. Use `relevant` to include metadata relevant to sorting if any.
+
+```sh
+turbo logs --list --list-format=hash
+turbo logs --list --list-format=relevant --sort=duration
+```
+
+#### `--all`
+
+`type: boolean`
+
+Defaults to `false`. Show all results, not just results from the most recent run command execution.
+
+```sh
+turbo logs --all
+turbo logs --list --all
+```
+
+#### `--sort`
+
+`type: string`
+
+Defaults to `task`. Set mode to order results. Use `task` to sort by the previous run's execution order (requires the file at [`--last-run-path`](#--last-run-path) to exist). Use `duration` to sort by time taken per task hash (lowest to highest). Use `alnum` to order by hash alphanumerically. Normally defaults to task. If specific hashes are given, defaults to the order they are given in. If [`--all`](#--all), defaults to alnum.
+
+```sh
+turbo logs --sort=task
+turbo logs --sort=duration
+turbo logs --sort=alnum
+turbo logs hash1 hash2 hash3
+turbo logs --list --sort=duration
+```
+
+#### `--reverse`
+
+`type: boolean`
+
+Defaults to `false`. Reverse order while sorting.
+
+```sh
+turbo logs --sort=task --reverse
+turbo logs hash1 hash2 hash3 --reverse
+turbo logs --list --sort=duration --reverse
+```
+
+#### `--progress`
+
+`type: string`
+
+Defaults to `standard`. Set type of replay output. Use `standard` for normal output. Use `reduced` to hide cached task logs and only show what changed. Has no effect when [`--list`](#--list) is given.
+
+```shell
+turbo logs --progress=standard
+turbo logs --progress=reduced
+```
