@@ -81,24 +81,35 @@ func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativ
 func TestResolvePackages(t *testing.T) {
 	tui := ui.Default()
 	logger := hclog.Default()
-	// app1 -> libA -> libB
 	//
-	//        / libB
-	// app2 <
-	//        \ libC
+	// app0 -
+	//        \
+	// app1 -> libA
+	//              \
+	//                > libB -> libD
+	//              /
+	//       app2 <
+	//              \ libC
 	//
 	graph := dag.AcyclicGraph{}
+	graph.Add("app0")
 	graph.Add("app1")
 	graph.Add("app2")
 	graph.Add("libA")
 	graph.Add("libB")
 	graph.Add("libC")
+	graph.Add("libD")
 	graph.Connect(dag.BasicEdge("libA", "libB"))
+	graph.Connect(dag.BasicEdge("libB", "libD"))
+	graph.Connect(dag.BasicEdge("app0", "libA"))
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 	scc := dag.StronglyConnected(&graph.Graph)
 	packagesInfos := map[interface{}]*fs.PackageJSON{
+		"app0": {
+			Dir: "app/app0",
+		},
 		"app1": {
 			Dir: "app/app1",
 		},
@@ -114,6 +125,9 @@ func TestResolvePackages(t *testing.T) {
 		"libC": {
 			Dir: "libs/libC",
 		},
+		"libD": {
+			Dir: "libs/libD",
+		},
 	}
 	packageNames := []string{}
 	for name := range packagesInfos {
@@ -121,6 +135,7 @@ func TestResolvePackages(t *testing.T) {
 	}
 
 	testCases := []struct {
+		name                string
 		changed             []string
 		expected            []string
 		scope               []string
@@ -131,51 +146,106 @@ func TestResolvePackages(t *testing.T) {
 		includeDependents   bool
 	}{
 		{
+			name:     "One package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
 			expected: []string{"libB"},
 			since:    "dummy",
 		},
 		{
+			name:     "An ignored package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
 			expected: []string{},
 			since:    "dummy",
 			ignore:   "libs/libB/**/*.ts",
 		},
 		{
-			// a non-dependent lib changed
-			changed:  []string{"libs/libC/src/index.ts"},
-			expected: []string{},
-			since:    "dummy",
-			scope:    []string{"app1"},
+			// nothing in scope depends on the change
+			name:                "unrelated library changed",
+			changed:             []string{"libs/libC/src/index.ts"},
+			expected:            []string{},
+			since:               "dummy",
+			scope:               []string{"app1"},
+			includeDependencies: true, // scope implies include-dependencies
 		},
 		{
-			changed: []string{"libs/libB/src/index.ts"},
-			// expect everything, global changed, no scope
-			expected:   []string{"app1", "app2", "libA", "libB", "libC"},
+			// a dependent lib changed, scope implies include-dependencies,
+			// so all deps of app1 get built
+			name:                "dependency of scope changed",
+			changed:             []string{"libs/libA/src/index.ts"},
+			expected:            []string{"libA", "libB", "libD", "app1"},
+			since:               "dummy",
+			scope:               []string{"app1"},
+			includeDependencies: true, // scope implies include-dependencies
+		},
+		{
+			// a dependent lib changed, user explicitly asked to not build dependencies
+			// note: this is not yet supported by the CLI, as you cannot specify --include-dependencies=false
+			name:                "dependency of scope changed, user asked to not include depedencies",
+			changed:             []string{"libs/libA/src/index.ts"},
+			expected:            []string{"libA", "app1"},
+			since:               "dummy",
+			scope:               []string{"app1"},
+			includeDependencies: false,
+		},
+		{
+			// a nested dependent lib changed, user explicitly asked to not build dependencies
+			// note: this is not yet supported by the CLI, as you cannot specify --include-dependencies=false
+			name:                "nested dependency of scope changed, user asked to not include dependencies",
+			changed:             []string{"libs/libB/src/index.ts"},
+			expected:            []string{"libA", "libB", "app1"},
+			since:               "dummy",
+			scope:               []string{"app1"},
+			includeDependencies: false,
+		},
+		{
+			name:       "global dependency changed, even though it was ignored, forcing a build of everything",
+			changed:    []string{"libs/libB/src/index.ts"},
+			expected:   []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
 			since:      "dummy",
 			ignore:     "libs/libB/**/*.ts",
 			globalDeps: []string{"libs/**/*.ts"},
 		},
 		{
+			name:                "an app changed, user asked for dependencies to build",
 			changed:             []string{"app/app2/src/index.ts"},
 			since:               "dummy",
 			includeDependencies: true,
-			expected:            []string{"app2", "libB", "libC"},
+			expected:            []string{"app2", "libB", "libC", "libD"},
 		},
 		{
+			name:              "a library changed, user asked for dependents to be built",
 			changed:           []string{"libs/libB"},
 			since:             "dummy",
 			includeDependents: true,
-			expected:          []string{"app1", "app2", "libA", "libB"},
+			expected:          []string{"app0", "app1", "app2", "libA", "libB"},
 		},
 		{
 			// no changes, no base to compare against, defaults to everything
+			name:     "no changes or scope specified, build everything",
 			since:    "",
-			expected: []string{"app1", "app2", "libA", "libB", "libC"},
+			expected: []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+		},
+		{
+			// a dependent library changed, no deps beyond the scope are build
+			// "libB" is still built because it is a dependent within the scope, but libB's dependents
+			// are skipped
+			name:                "a dependent library changed, build up to scope",
+			changed:             []string{"libs/libD/src/index.ts"},
+			since:               "dummy",
+			scope:               []string{"libB"},
+			expected:            []string{"libB", "libD"},
+			includeDependencies: true, // scope implies include-dependencies
+		},
+		{
+			name:              "library change, no scope",
+			changed:           []string{"libs/libA/src/index.ts"},
+			expected:          []string{"libA", "app0", "app1"},
+			includeDependents: true,
+			since:             "dummy",
 		},
 	}
 	for i, tc := range testCases {
-		t.Run(fmt.Sprintf("test #%v", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("test #%v %v", i, tc.name), func(t *testing.T) {
 			scm := &mockSCM{
 				changed: tc.changed,
 			}

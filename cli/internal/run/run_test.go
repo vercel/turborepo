@@ -146,6 +146,22 @@ func TestParseConfig(t *testing.T) {
 				passThroughArgs:     []string{},
 			},
 		},
+		{
+			"since and scope imply including dependencies for backwards compatibility",
+			[]string{"foo", "--scope=bar", "--since=some-ref"},
+			&RunOptions{
+				includeDependents:   true,
+				stream:              true,
+				bail:                true,
+				concurrency:         10,
+				includeDependencies: true,
+				cache:               true,
+				cwd:                 defaultCwd,
+				cacheFolder:         defaultCacheFolder,
+				scope:               []string{"bar"},
+				since:               "some-ref",
+			},
+		},
 	}
 
 	ui := &cli.BasicUi{

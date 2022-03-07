@@ -154,12 +154,16 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	scm, err := scm.FromInRepo(runOptions.cwd)
+	scmInstance, err := scm.FromInRepo(runOptions.cwd)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed to create SCM: %w", err))
-		return 1
+		if errors.Is(err, scm.ErrFallback) {
+			c.logWarning(c.Config.Logger, "", err)
+		} else {
+			c.logError(c.Config.Logger, "", fmt.Errorf("failed to create SCM: %w", err))
+			return 1
+		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scm, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
@@ -708,6 +712,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
+	// --scope and --since implies --include-dependencies for backwards compatibility
+	// When we switch to cobra we will need to track if it's been set manually. Currently
+	// it's only possible to set to true, but in the future a user could theoretically set
+	// it to false and override the default behavior.
+	includDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
@@ -781,8 +790,10 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
+				includDepsSet = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
+				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--team"):
@@ -797,6 +808,9 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
 		}
+	}
+	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
+		runOptions.includeDependencies = true
 	}
 
 	// Force streaming output in CI/CD non-interactive mode

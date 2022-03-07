@@ -61,16 +61,55 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 	filteredPkgs := make(util.Set)
 	includeDependencies := opts.IncludeDependencies
 	includeDependents := opts.IncludeDependents
-	// If there has been a global change, changedPackages.Len() will be 0
-	// If both scoped and since are specified, we have to merge two lists:
-	// 1. changed packages that ARE themselves the scoped packages
-	// 2. changed package consumers (package dependents) that are within the scoped subgraph
-	if scopePkgs.Len() > 0 && changedPackages.Len() > 0 {
-		filteredPkgs = scopePkgs.Intersection(changedPackages)
-		for _, changed := range changedPackages {
-			filteredPkgs.Add(changed)
-			includeDependents = true
+	// If there has been a global change, run everything in scope
+	// 		(this may be every package if no scope is provider)
+	if hasRepoGlobalFileChanged {
+		// If a global dependency has changed, run everything in scope.
+		// If no scope was provided, run everything
+		if scopePkgs.Len() > 0 {
+			filteredPkgs = scopePkgs
+		} else {
+			for _, f := range ctx.PackageNames {
+				filteredPkgs.Add(f)
+			}
+		}
+	} else if scopePkgs.Len() > 0 && changedPackages.Len() > 0 {
+		// If we have both a scope and changed packages:
+		// We want the intersection of two sets:
+		// 1. the scopes and all of their dependencies
+		// 2. the changed packages and all of their dependents
+		//
+		// Note that other commandline flags can cause including dependents / dependencies
+		// beyond this set
 
+		// scopes and all deps
+		rootsAndDeps := make(util.Set)
+		for _, pkg := range scopePkgs {
+			rootsAndDeps.Add(pkg)
+			deps, err := ctx.TopologicalGraph.Ancestors(pkg)
+			if err != nil {
+				return nil, err
+			}
+			for _, dep := range deps {
+				rootsAndDeps.Add(dep)
+			}
+		}
+
+		// changed packages and all dependents
+		for _, pkg := range changedPackages {
+			// do the intersection inline, rather than building up the set
+			if rootsAndDeps.Includes(pkg) {
+				filteredPkgs.Add(pkg)
+			}
+			dependents, err := ctx.TopologicalGraph.Descendents(pkg)
+			if err != nil {
+				return nil, err
+			}
+			for _, dependent := range dependents {
+				if rootsAndDeps.Includes(dependent) {
+					filteredPkgs.Add(dependent)
+				}
+			}
 		}
 		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if changedPackages.Len() > 0 {

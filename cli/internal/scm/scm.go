@@ -3,11 +3,14 @@
 package scm
 
 import (
-	"fmt"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
+
+var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo")
 
 // An SCM represents an SCM implementation that we can ask for various things.
 type SCM interface {
@@ -31,7 +34,7 @@ func NewFallback(repoRoot string) (SCM, error) {
 		return scm, nil
 	}
 
-	return &stub{}, fmt.Errorf("cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo")
+	return &stub{}, ErrFallback
 }
 
 func FromInRepo(cwd string) (SCM, error) {
