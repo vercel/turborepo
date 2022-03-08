@@ -51,7 +51,6 @@ describe("create-turbo cli", () => {
     cli.stdout.on("data", async (data) => {
       let prompt = cleanPrompt(data);
 
-      console.log(new Date().getTime(), `got |${prompt}|`);
       if (
         !prompt ||
         prompt.startsWith(">>> TURBOREPO") ||
@@ -103,7 +102,7 @@ describe("create-turbo cli", () => {
       }
       return;
     });
-  }, 15000);
+  }, 10000);
 
   describe("the --version flag", () => {
     it("prints the current version", async () => {
