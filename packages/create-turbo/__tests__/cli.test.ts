@@ -102,7 +102,7 @@ describe("create-turbo cli", () => {
       }
       return;
     });
-  });
+  }, 10000);
 
   describe("the --version flag", () => {
     it("prints the current version", async () => {
