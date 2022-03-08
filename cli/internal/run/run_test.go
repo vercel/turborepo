@@ -62,12 +62,12 @@ func TestParseConfig(t *testing.T) {
 			"scope",
 			[]string{"foo", "--scope=foo", "--scope=blah"},
 			&RunOptions{
-				includeDependents:   true,
+				includeDependents:   false,
 				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         10,
-				includeDependencies: false,
+				includeDependencies: true,
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
@@ -150,7 +150,7 @@ func TestParseConfig(t *testing.T) {
 			"since and scope imply including dependencies for backwards compatibility",
 			[]string{"foo", "--scope=bar", "--since=some-ref"},
 			&RunOptions{
-				includeDependents:   true,
+				includeDependents:   false,
 				stream:              true,
 				bail:                true,
 				concurrency:         10,

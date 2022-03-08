@@ -142,6 +142,7 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 		logger.Debug("running with dependents")
 	}
 
+	// ordered after includeDependents so that we pick up the dependencies of our dependents
 	if includeDependencies {
 		// TODO(gsoltis): we're concurrently iterating and adding to a map, potentially
 		// resulting in a bunch of duplicate work as we look for dependencies of something

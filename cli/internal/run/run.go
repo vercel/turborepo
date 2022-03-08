@@ -717,6 +717,7 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	// it's only possible to set to true, but in the future a user could theoretically set
 	// it to false and override the default behavior.
 	includDepsSet := false
+	noDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
@@ -754,6 +755,7 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 
 			case strings.HasPrefix(arg, "--no-deps"):
 				runOptions.includeDependents = false
+				noDepsSet = true
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.cache = false
 			case strings.HasPrefix(arg, "--cacheFolder"):
@@ -809,8 +811,13 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			}
 		}
 	}
-	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
-		runOptions.includeDependencies = true
+	if len(runOptions.scope) != 0 || runOptions.since != "" {
+		if !includDepsSet {
+			runOptions.includeDependencies = true
+		}
+		if !noDepsSet {
+			runOptions.includeDependents = false
+		}
 	}
 
 	// Force streaming output in CI/CD non-interactive mode

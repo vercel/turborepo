@@ -146,17 +146,21 @@ func TestResolvePackages(t *testing.T) {
 		includeDependents   bool
 	}{
 		{
-			name:     "One package changed",
-			changed:  []string{"libs/libB/src/index.ts"},
-			expected: []string{"libB"},
-			since:    "dummy",
+			name:                "One package changed",
+			changed:             []string{"libs/libB/src/index.ts"},
+			expected:            []string{"libB", "libD"},
+			since:               "dummy",
+			includeDependencies: true,
+			includeDependents:   false,
 		},
 		{
-			name:     "An ignored package changed",
-			changed:  []string{"libs/libB/src/index.ts"},
-			expected: []string{},
-			since:    "dummy",
-			ignore:   "libs/libB/**/*.ts",
+			name:                "An ignored package changed",
+			changed:             []string{"libs/libB/src/index.ts"},
+			expected:            []string{},
+			since:               "dummy",
+			ignore:              "libs/libB/**/*.ts",
+			includeDependencies: true,
+			includeDependents:   false,
 		},
 		{
 			// nothing in scope depends on the change
@@ -166,6 +170,7 @@ func TestResolvePackages(t *testing.T) {
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: true, // scope implies include-dependencies
+			includeDependents:   false,
 		},
 		{
 			// a dependent lib changed, scope implies include-dependencies,
@@ -176,6 +181,7 @@ func TestResolvePackages(t *testing.T) {
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: true, // scope implies include-dependencies
+			includeDependents:   false,
 		},
 		{
 			// a dependent lib changed, user explicitly asked to not build dependencies
@@ -186,6 +192,7 @@ func TestResolvePackages(t *testing.T) {
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: false,
+			includeDependents:   false,
 		},
 		{
 			// a nested dependent lib changed, user explicitly asked to not build dependencies
@@ -196,28 +203,34 @@ func TestResolvePackages(t *testing.T) {
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: false,
+			includeDependents:   false,
 		},
 		{
-			name:       "global dependency changed, even though it was ignored, forcing a build of everything",
-			changed:    []string{"libs/libB/src/index.ts"},
-			expected:   []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
-			since:      "dummy",
-			ignore:     "libs/libB/**/*.ts",
-			globalDeps: []string{"libs/**/*.ts"},
+			name:                "global dependency changed, even though it was ignored, forcing a build of everything",
+			changed:             []string{"libs/libB/src/index.ts"},
+			expected:            []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			since:               "dummy",
+			ignore:              "libs/libB/**/*.ts",
+			globalDeps:          []string{"libs/**/*.ts"},
+			includeDependents:   false,
+			includeDependencies: true,
 		},
 		{
 			name:                "an app changed, user asked for dependencies to build",
 			changed:             []string{"app/app2/src/index.ts"},
 			since:               "dummy",
 			includeDependencies: true,
+			includeDependents:   false,
 			expected:            []string{"app2", "libB", "libC", "libD"},
 		},
 		{
-			name:              "a library changed, user asked for dependents to be built",
-			changed:           []string{"libs/libB"},
-			since:             "dummy",
-			includeDependents: true,
-			expected:          []string{"app0", "app1", "app2", "libA", "libB"},
+			name:                "a library changed, user asked for dependents to be built",
+			changed:             []string{"libs/libB"},
+			since:               "dummy",
+			includeDependents:   true,
+			includeDependencies: true,
+			// note that libC is pulled in as a dependency of a dependent
+			expected: []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
 		},
 		{
 			// no changes, no base to compare against, defaults to everything
@@ -235,13 +248,15 @@ func TestResolvePackages(t *testing.T) {
 			scope:               []string{"libB"},
 			expected:            []string{"libB", "libD"},
 			includeDependencies: true, // scope implies include-dependencies
+			includeDependents:   false,
 		},
 		{
-			name:              "library change, no scope",
-			changed:           []string{"libs/libA/src/index.ts"},
-			expected:          []string{"libA", "app0", "app1"},
-			includeDependents: true,
-			since:             "dummy",
+			name:                "library change, no scope",
+			changed:             []string{"libs/libA/src/index.ts"},
+			expected:            []string{"libA", "libB", "libD", "app0", "app1"},
+			includeDependents:   true,
+			includeDependencies: true,
+			since:               "dummy",
 		},
 	}
 	for i, tc := range testCases {
