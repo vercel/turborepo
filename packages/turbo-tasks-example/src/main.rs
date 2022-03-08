@@ -2,32 +2,27 @@
 #![feature(once_cell)]
 #![feature(into_future)]
 
+use anyhow::Result;
 use async_std::task::{block_on, sleep, spawn};
 use log::LoggingOptions;
 use math::{add, max_new};
 use random::RandomIdRef;
-use std::borrow::{Borrow, Cow};
-use std::collections::HashMap;
 use std::fs;
 use std::time::Instant;
 use std::{env::current_dir, time::Duration};
 use turbo_pack::ecmascript::ModuleAssetRef;
+use turbo_pack::emit;
 use turbo_pack::rebase::RebasedAssetRef;
 use turbo_pack::source_asset::SourceAssetRef;
-use turbo_pack::{emit, print_most_referenced};
 use turbo_tasks::viz::GraphViz;
-use turbo_tasks::{dynamic_call, SlotRef, TurboTasks};
+use turbo_tasks::{NothingRef, TurboTasks};
 
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemRef, FileContent, FileContentRef,
     FileSystemPathRef, FileSystemRef,
 };
 
-use crate::{
-    log::{log, LoggingOptionsRef},
-    math::I32ValueRef,
-    random::random,
-};
+use crate::{log::log, math::I32ValueRef, random::random};
 
 mod log;
 mod math;
@@ -56,8 +51,8 @@ fn main() {
                 let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
 
                 let source = SourceAssetRef::new(entry);
-                let module = ModuleAssetRef::new(&source.into());
-                let rebased = RebasedAssetRef::new(&module.into(), &input, &output);
+                let module = ModuleAssetRef::new(source.into());
+                let rebased = RebasedAssetRef::new(module.into(), input, output);
                 emit(rebased.into());
 
                 // copy_all(
@@ -70,7 +65,7 @@ fn main() {
                 // )
                 // .await;
 
-                SlotRef::Nothing
+                Ok(NothingRef::new().into())
             })
         });
         spawn({
@@ -112,7 +107,7 @@ fn main() {
             graph_viz.merge_edges();
             graph_viz.drop_unchanged_slots();
             graph_viz.skip_loney_resolve();
-            graph_viz.drop_inactive_tasks();
+            // graph_viz.drop_inactive_tasks();
 
             // write HTML
             fs::write("graph.html", GraphViz::wrap_html(&graph_viz.get_graph())).unwrap();
@@ -157,12 +152,12 @@ async fn ls(fs: FileSystemRef) {
 }
 
 #[turbo_tasks::function]
-async fn print_sizes(directory: FileSystemPathRef) {
+async fn print_sizes(directory: FileSystemPathRef) -> Result<()> {
     let content = directory.clone().read_dir();
-    match &*content.await {
+    match &*content.await? {
         DirectoryContent::Entries(entries) => {
             for entry in entries.iter() {
-                match &*entry.get().await {
+                match &*entry.get().await? {
                     DirectoryEntry::File(path) => {
                         print_size(path.clone(), path.clone().read());
                     }
@@ -174,19 +169,21 @@ async fn print_sizes(directory: FileSystemPathRef) {
             }
         }
         DirectoryContent::NotFound => {
-            println!("{}: not found", directory.await.path);
+            println!("{}: not found", directory.await?.path);
         }
     };
+    Ok(())
 }
 
 #[turbo_tasks::function]
-async fn print_size(path: FileSystemPathRef, content: FileContentRef) {
-    match &*content.await {
+async fn print_size(path: FileSystemPathRef, content: FileContentRef) -> Result<()> {
+    match &*content.await? {
         FileContent::Content(buffer) => {
-            println!("{:?}: Size {}", *path.await, buffer.len());
+            println!("{:?}: Size {}", *path.await?, buffer.len());
         }
         FileContent::NotFound => {
-            println!("{:?}: not found", *path.await);
+            println!("{:?}: not found", *path.await?);
         }
     }
+    Ok(())
 }
