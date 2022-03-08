@@ -51,7 +51,7 @@ describe("create-turbo cli", () => {
     cli.stdout.on("data", async (data) => {
       let prompt = cleanPrompt(data);
 
-      console.log(`got |${prompt}|`);
+      console.log(new Date().getTime(), `got |${prompt}|`);
       if (
         !prompt ||
         prompt.startsWith(">>> TURBOREPO") ||
