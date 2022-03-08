@@ -17,8 +17,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 )
 
-// TODO(@Xenfo): Properly handle errors (errors.Wrap() -> errors.Wrap() & ch.LogError())
-
 const (
 	defaultHostname    = "127.0.0.1"
 	defaultPort        = 9789
@@ -46,7 +44,6 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 			if opts.ssoTeam != "" {
 				return loginSSO(ch, opts.ssoTeam)
 			} else {
-
 				return login(ch)
 			}
 		},
@@ -74,28 +71,29 @@ func login(ch *cmdutil.Helper) error {
 		http.Redirect(w, r, ch.Config.LoginUrl+"/turborepo/success", http.StatusFound)
 	}, defaultPort)
 	if err != nil {
-		return errors.Wrap(err, "failed to start local server")
+		return ch.LogError("failed to start local server: %w", err)
 	}
 
 	s := ui.NewSpinner(os.Stdout)
 	err = browser.OpenBrowser(loginURL)
 	if err != nil {
-		return errors.Wrapf(err, "failed to open %v", loginURL)
+		return ch.LogError("failed to open %v: %w", loginURL, err)
 	}
 	s.Start("Waiting for your authorization...")
 	err = oss.Wait()
 	if err != nil {
-		return errors.Wrap(err, "failed to shut down local server")
+		return ch.LogError("failed to shut down local server: %w", err)
 	}
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
 	rawToken := query.Get("token")
+	config.WriteUserConfigFile(&config.TurborepoConfig{Token: rawToken})
 	ch.Config.ApiClient.SetToken(rawToken)
+
 	userResponse, err := ch.Config.ApiClient.GetUser()
 	if err != nil {
-		return errors.Wrap(err, "could not get user information")
+		return ch.LogError("could not get user information: %w", err)
 	}
 
 	ch.Logger.Printf("")
@@ -128,44 +126,48 @@ func loginSSO(ch *cmdutil.Helper, ssoTeam string) error {
 		http.Redirect(w, r, location, http.StatusFound)
 	}, defaultPort)
 	if err != nil {
-		return errors.Wrap(err, "failed to start local server")
+		return ch.LogError("failed to start local server: ", err)
 	}
+
 	s := ui.NewSpinner(os.Stdout)
 	err = browser.OpenBrowser(loginURL)
 	if err != nil {
-		return errors.Wrapf(err, "failed to open %v", loginURL)
+		return ch.LogError("failed to open %v: %w", loginURL, err)
 	}
+
 	s.Start("Waiting for your authorization...")
 	err = oss.Wait()
 	if err != nil {
-		return errors.Wrap(err, "failed to shut down local server")
+		return ch.LogError("failed to shut down local server: %w", err)
 	}
+
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 	// open https://vercel.com/api/auth/sso?teamId=<TEAM_ID>&mode=login
 	if verificationToken == "" {
-		return errors.New("no token auth token found")
+		return ch.LogError("no token auth token found")
 	}
 
 	// We now have a verification token. We need to pass it to the verification endpoint
 	// to get an actual token.
 	tokenName, err := makeTokenName()
 	if err != nil {
-		return errors.Wrap(err, "failed to make sso token name")
+		return ch.LogError("failed to make sso token name: %w", err)
 	}
 	verifiedUser, err := ch.Config.ApiClient.VerifySSOToken(verificationToken, tokenName)
 	if err != nil {
-		return errors.Wrap(err, "failed to verify SSO token")
+		return ch.LogError("failed to verify SSO token: %w", err)
 	}
 
 	ch.Config.ApiClient.SetToken(verifiedUser.Token)
 	userResponse, err := ch.Config.ApiClient.GetUser()
 	if err != nil {
-		return errors.Wrap(err, "could not get user information")
+		return ch.LogError("could not get user information: %w", err)
 	}
+
 	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: verifiedUser.Token})
 	if err != nil {
-		return errors.Wrap(err, "failed to save auth token")
+		return ch.LogError("failed to save auth token: %w", err)
 	}
 
 	ch.Logger.Printf("")
@@ -175,16 +177,15 @@ func loginSSO(ch *cmdutil.Helper, ssoTeam string) error {
 	if verifiedUser.TeamID != "" {
 		err = config.WriteRepoConfigFile(&config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: ch.Config.ApiUrl})
 		if err != nil {
-			return errors.Wrap(err, ch.Logger.Errorf("failed to save teamId").Error())
+			return ch.LogError("failed to save teamId: %w", err)
 		}
 	} else {
 		ch.Logger.Printf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}")
 		ch.Logger.Printf("${CYAN}root of any turborepo:${RESET}")
 		ch.Logger.Printf("")
 		ch.Logger.Printf("  ${BOLD}npx turbo link${RESET}")
+		ch.Logger.Printf("")
 	}
-
-	ch.Logger.Printf("")
 
 	return nil
 }

@@ -19,6 +19,8 @@ func main() {
 		exitCode = cmd.Execute(turboVersion, processes)
 	}()
 
+	// Wait for either our command to finish, in which case we need to clean up,
+	// or to receive a signal, in which case the signal handler above does the cleanup
 	select {
 	case <-doneCh:
 		processes.Close()
