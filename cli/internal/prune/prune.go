@@ -105,7 +105,11 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	c.Config.Logger.Trace("scope", "value", pruneOptions.scope)
-	target := ctx.PackageInfos[pruneOptions.scope]
+	target, scopeIsValid := ctx.PackageInfos[pruneOptions.scope]
+	if !scopeIsValid {
+		c.logError(c.Config.Logger, "", errors.Errorf("invalid scope: package not found"))
+		return 1
+	}
 	c.Config.Logger.Trace("target", "value", target.Name)
 	c.Config.Logger.Trace("directory", "value", target.Dir)
 	c.Config.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
