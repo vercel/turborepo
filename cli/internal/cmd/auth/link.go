@@ -56,7 +56,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 				}))
 
 			if !shouldSetup {
-				ch.Logger.Printf("> Aborted.")
+				ch.Logger.Printf("> Canceled.")
 				return nil
 			}
 
@@ -100,7 +100,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 				}))
 
 			if chosenTeamName == "" {
-				ch.Logger.Printf("Aborted. Turborepo not set up.")
+				ch.Logger.Printf("Canceled. Turborepo not set up.")
 				return nil
 			} else if (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username) {
 				chosenTeam = client.Team{
@@ -129,7 +129,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 				fs.EnsureDir(".gitignore")
 				_, gitIgnoreErr := exec.Command("sh", "-c", "grep -qxF '.turbo' .gitignore || echo '.turbo' >> .gitignore").CombinedOutput()
 				if err != nil {
-					return ch.LogError("could find or update .gitignore.\n%w", gitIgnoreErr)
+					return ch.LogError("could not find or update .gitignore.\n%w", gitIgnoreErr)
 				}
 			}
 
@@ -143,7 +143,7 @@ func LinkCmd(ch *cmdutil.Helper) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&opts.noGitignore, "no-gitignore", "n", false, "Do not create or modify .gitignore")
+	cmd.Flags().BoolVarP(&opts.noGitignore, "no-gitignore", "n", false, "do not create or modify .gitignore")
 
 	return cmd
 }

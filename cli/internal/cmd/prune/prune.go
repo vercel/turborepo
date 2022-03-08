@@ -38,7 +38,11 @@ func PruneCmd(ch *cmdutil.Helper) *cobra.Command {
 			}
 
 			ch.Config.Logger.Trace("scope", "value", opts.scope)
-			target := ctx.PackageInfos[opts.scope]
+			target, scopeIsValid := ctx.PackageInfos[opts.scope]
+			if !scopeIsValid {
+				return ch.LogError("invalid scope: package not found")
+			}
+
 			ch.Config.Logger.Trace("target", "value", target.Name)
 			ch.Config.Logger.Trace("directory", "value", target.Dir)
 			ch.Config.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)

@@ -27,6 +27,11 @@ module.exports = withNextra({
         permanent: true,
         destination: "https://github.com/vercel/turborepo/releases",
       },
+      {
+        source: "/docs/guides/complimentary-tools",
+        permanent: true,
+        destination: "/docs/guides/monorepo-tools",
+      },
     ];
   },
 });
