@@ -95,7 +95,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 			// TODO(gsoltis): log this?
 			return true
 		}
-		isWithinRepo, err := fs.DirContainsPath(rootpath, abs)
+		isWithinRepo, err := fs.DirContainsPath(rootpath, filepath.FromSlash(abs))
 		if err != nil {
 			// Default to internal if we have the package but somehow cannot get the path
 			// TODO(gsoltis): log this?
