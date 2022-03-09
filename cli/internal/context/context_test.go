@@ -1,6 +1,7 @@
 package context
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -26,6 +27,14 @@ func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
 }
 
 func Test_isWorkspaceReference(t *testing.T) {
+	rootpath, err := filepath.Abs(filepath.FromSlash("/some/repo"))
+	if err != nil {
+		t.Fatalf("failed to create absolute root path %v", err)
+	}
+	pkgDir, err := filepath.Abs(filepath.FromSlash("/some/repo/packages/libA"))
+	if err != nil {
+		t.Fatalf("failed to create absolute pkgDir %v", err)
+	}
 	tests := []struct {
 		name              string
 		packageVersion    string
@@ -92,13 +101,25 @@ func Test_isWorkspaceReference(t *testing.T) {
 			dependencyVersion: "sometag",
 			want:              true, // for backwards compatability with the code before versions were verified
 		},
+		{
+			name:              "handles file:... inside repo",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "file:../libB",
+			want:              true, // this is a sibling package
+		},
+		{
+			name:              "handles file:... outside repo",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "file:../../../otherproject",
+			want:              false, // this is not within the repo root
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion)
+			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath)
 			if got != tt.want {
-				t.Errorf("isWorkspaceReference() got = %v, want %v", got, tt.want)
+				t.Errorf("isWorkspaceReference(%v, %v, %v, %v) got = %v, want %v", tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath, got, tt.want)
 			}
 		})
 	}
