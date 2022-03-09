@@ -27,8 +27,14 @@ func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
 }
 
 func Test_isWorkspaceReference(t *testing.T) {
-	rootpath := filepath.FromSlash("/some/repo")
-	pkgDir := filepath.FromSlash("/some/repo/packages/libA")
+	rootpath, err := filepath.Abs(filepath.FromSlash("/some/repo"))
+	if err != nil {
+		t.Fatalf("failed to create absolute root path %v", err)
+	}
+	pkgDir, err := filepath.Abs(filepath.FromSlash("/some/repo/packages/libA"))
+	if err != nil {
+		t.Fatalf("failed to create absolute pkgDir %v", err)
+	}
 	tests := []struct {
 		name              string
 		packageVersion    string
