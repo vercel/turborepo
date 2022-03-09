@@ -26,6 +26,8 @@ func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
 }
 
 func Test_isWorkspaceReference(t *testing.T) {
+	rootpath := "/some/repo"
+	pkgDir := "/some/repo/packages/libA"
 	tests := []struct {
 		name              string
 		packageVersion    string
@@ -92,11 +94,23 @@ func Test_isWorkspaceReference(t *testing.T) {
 			dependencyVersion: "sometag",
 			want:              true, // for backwards compatability with the code before versions were verified
 		},
+		{
+			name:              "handles file:... inside repo",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "file:../libB",
+			want:              true, // this is a sibling package
+		},
+		{
+			name:              "handles file:... outside repo",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "file:../../../otherproject",
+			want:              false, // this is not within the repo root
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion)
+			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath)
 			if got != tt.want {
 				t.Errorf("isWorkspaceReference() got = %v, want %v", got, tt.want)
 			}
