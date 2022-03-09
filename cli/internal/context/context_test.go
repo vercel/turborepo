@@ -1,6 +1,7 @@
 package context
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -26,8 +27,8 @@ func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
 }
 
 func Test_isWorkspaceReference(t *testing.T) {
-	rootpath := "/some/repo"
-	pkgDir := "/some/repo/packages/libA"
+	rootpath := filepath.FromSlash("/some/repo")
+	pkgDir := filepath.FromSlash("/some/repo/packages/libA")
 	tests := []struct {
 		name              string
 		packageVersion    string
