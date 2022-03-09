@@ -52,26 +52,19 @@ func (pc *PlanCommand) Synopsis() string {
 }
 
 type planOpts struct {
-	Scope                []string
-	GlobalDeps           []string
-	Since                string
-	Ignore               []string
-	Cwd                  string
-	IncludeDepdendencies bool
-	NoDependents         bool
-	OutputJSON           bool
+	Scope               []string
+	GlobalDeps          []string
+	Since               string
+	Ignore              []string
+	Cwd                 string
+	IncludeDependencies bool
+	NoDependents        bool
+	OutputJSON          bool
 }
 
 func (po *planOpts) ScopeOpts() *scope.Opts {
-
-	// includeDependencies := false
-	// if po.IncludeDepdendencies != nil {
-	// 	includeDependencies = po.IncludeDepdendencies
-	// } else if po.Since != "" && len(po.Scope) != 0 {
-	// 	includeDependencies = true
-	// }
 	return &scope.Opts{
-		IncludeDependencies: po.IncludeDepdendencies,
+		IncludeDependencies: po.IncludeDependencies,
 		IncludeDependents:   !po.NoDependents,
 		Patterns:            po.Scope,
 		Since:               po.Since,
@@ -93,7 +86,7 @@ func (pc *PlanCommand) getCmd() *cobra.Command {
 			// use the user's value.
 			depsWasSet := cmd.Flags().Changed("include-dependencies")
 			if !depsWasSet && opts.Since != "" && len(opts.Scope) != 0 {
-				opts.IncludeDepdendencies = true
+				opts.IncludeDependencies = true
 			}
 			return plan(pc.config, pc.ui, opts)
 		},
@@ -103,7 +96,7 @@ func (pc *PlanCommand) getCmd() *cobra.Command {
 	flags.StringSliceVar(&opts.GlobalDeps, "global-deps", nil, "Specify glob of global filesystem dependencies to\nbe hashed. Useful for .env and files in the root\ndirectory. Can be specified multiple times.")
 	flags.StringVar(&opts.Since, "since", "", "Limit/Set scope to changed packages since a\nmergebase. This uses the git diff ${target_branch}...\nmechanism to identify which packages have changed.")
 	flags.StringSliceVar(&opts.Ignore, "ignore", nil, "Files to ignore when calculating changed files\n(i.e. --since). Supports globs.")
-	flags.BoolVar(&opts.IncludeDepdendencies, "include-dependencies", false, "Include the dependencies of tasks in execution.\n(default false)")
+	flags.BoolVar(&opts.IncludeDependencies, "include-dependencies", false, "Include the dependencies of tasks in execution.\n(default false)")
 	flags.BoolVar(&opts.NoDependents, "no-deps", false, "Exclude dependent task consumers from execution.\n(default false)")
 	flags.BoolVar(&opts.OutputJSON, "json", false, "If set, output the list of affected packages as a json array")
 	// TODO(gsoltis): this should probably be a permanent flag
