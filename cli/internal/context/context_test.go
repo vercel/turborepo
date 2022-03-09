@@ -113,6 +113,12 @@ func Test_isWorkspaceReference(t *testing.T) {
 			dependencyVersion: "file:../../../otherproject",
 			want:              false, // this is not within the repo root
 		},
+		{
+			name:              "handles development versions",
+			packageVersion:    "0.0.0-development",
+			dependencyVersion: "*",
+			want:              true, // "*" should always match
+		},
 	}
 
 	for _, tt := range tests {
