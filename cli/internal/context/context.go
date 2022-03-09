@@ -105,7 +105,9 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 	} else if isProtocolExternal(protocol) {
 		// Other protocols are assumed to be external references ("github:", "link:", "file:" etc)
 		return false
-	}
+	} else if dependencyVersion == "*" {
+    return true
+  }
 
 	// If we got this far, then we need to check the workspace package version to see it satisfies
 	// the dependencies range to determin whether or not its an internal or external dependency.
