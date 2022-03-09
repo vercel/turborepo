@@ -113,7 +113,7 @@ func Test_isWorkspaceReference(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath)
 			if got != tt.want {
-				t.Errorf("isWorkspaceReference() got = %v, want %v", got, tt.want)
+				t.Errorf("isWorkspaceReference(%v, %v, %v, %v) got = %v, want %v", tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath, got, tt.want)
 			}
 		})
 	}
