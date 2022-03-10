@@ -57,8 +57,6 @@ var NodejsYarnBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
-			// log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
