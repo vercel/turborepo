@@ -7,7 +7,7 @@ export default async function handle(
   if (req.method === "POST") {
     const user = {
       email: req.body.email,
-      campaign_id: req.body.campaignId,
+      campaign_id: process.env.TURBOREPO_SFDC_CAMPAIGN_ID,
     };
 
     try {
