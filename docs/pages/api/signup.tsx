@@ -9,7 +9,6 @@ export default async function handle(
   if (req.method === "POST") {
     const user = {
       email: req.body.email,
-      name: `${req.body.firstName} ${req.body.lastName}`,
       campaign_id: req.body.campaignId,
     };
 
@@ -20,7 +19,7 @@ export default async function handle(
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify(user),
+        body: JSON.stringify({ user: user }),
       });
 
       return res.status(201).json(user);
