@@ -1,5 +1,4 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { useToasterStore } from "react-hot-toast";
 
 const CAMPAIGN_ID = process.env.TURBOREPO_SFDC_CAMPAIGN_ID;
 const TRAY_URL = process.env.TRAY_URL;
