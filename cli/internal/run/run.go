@@ -818,7 +818,7 @@ func (e *execContext) exec(id string) error {
 	// Cache ---------------------------------------------
 	var hit bool
 	if !e.rs.Opts.forceExecution {
-		hit, _, _, err = turboCache.Fetch(rs.Opts.cwd, hash, nil)
+		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
