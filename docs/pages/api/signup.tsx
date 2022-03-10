@@ -1,4 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
+import { useToasterStore } from "react-hot-toast";
+
+const CAMPAIGN_ID = process.env.TURBOREPO_SFDC_CAMPAIGN_ID;
+const TRAY_URL = process.env.TRAY_URL;
 
 export default async function handle(
   req: NextApiRequest,
@@ -7,11 +11,11 @@ export default async function handle(
   if (req.method === "POST") {
     const user = {
       email: req.body.email,
-      campaign_id: process.env.TURBOREPO_SFDC_CAMPAIGN_ID,
+      campaign_id: CAMPAIGN_ID,
     };
-
+    console.log(user);
     try {
-      await fetch(process.env.TRAY_URL, {
+      const trayRes = await fetch(TRAY_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -19,6 +23,7 @@ export default async function handle(
         },
         body: JSON.stringify({ user: user }),
       });
+      console.log(trayRes);
 
       return res.status(201).json(user);
     } catch (error) {
