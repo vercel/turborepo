@@ -407,7 +407,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				// Cache ---------------------------------------------
 				var hit bool
 				if !rs.Opts.forceExecution {
-					hit, _, _, err = turboCache.Fetch(pack.Dir, hash, nil)
+					hit, _, _, err = turboCache.Fetch(rs.Opts.cwd, hash, nil)
 					if err != nil {
 						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 					} else if hit {
