@@ -1,23 +1,32 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { subscribeToForm } from "../../lib/ConvertKitApi";
 
-const FORM_ID = process.env.CONVERTKIT_FORM_ID;
+const TRAY_URL = "https://39dca6c2-9ca4-41b4-82c9-e48202f221f8.trayapp.io";
 
 export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   if (req.method === "POST") {
-    const subscriber = await subscribeToForm({
-      formId: FORM_ID,
+    const user = {
       email: req.body.email,
-      firstName: req.body.firstName,
-      fields: {
-        last_name: req.body.lastName,
-      },
-    });
+      name: `${req.body.firstName} ${req.body.lastName}`,
+      campaign_id: req.body.campaignId,
+    };
 
-    return res.status(201).json(subscriber);
+    try {
+      await fetch(TRAY_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(user),
+      });
+
+      return res.status(201).json(user);
+    } catch (error) {
+      return res.status(500).json(error);
+    }
   } else {
     return res.status(404).send(null);
   }
