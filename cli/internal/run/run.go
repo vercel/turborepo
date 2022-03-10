@@ -193,18 +193,6 @@ func (c *RunCommand) Run(args []string) int {
 }
 
 func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
-	goctx := gocontext.Background()
-	var analyticsSink analytics.Sink
-	if c.Config.IsLoggedIn() {
-		analyticsSink = c.Config.ApiClient
-	} else {
-		analyticsSink = analytics.NullSink
-	}
-	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
-	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, analyticsClient)
-	defer turboCache.Shutdown()
-
 	var topoVisit []interface{}
 	for _, node := range g.SCC {
 		v := node[0]
@@ -266,13 +254,8 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	if rs.Opts.stream {
 		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 	}
-	// TODO(gsoltis): I think this should be passed in, and close called from the calling function
-	// however, need to handle the graph case, which early-returns
-	runState := NewRunState(rs.Opts, startAt)
-	runState.Listen(c.Ui, time.Now())
+
 	engine := core.NewScheduler(&g.TopologicalGraph)
-	colorCache := NewColorCache()
-	var logReplayWaitGroup sync.WaitGroup
 	for taskName, value := range g.Pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
@@ -305,307 +288,61 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			}
 		}
 
-		targetBaseUI := &cli.ConcurrentUi{Ui: c.Ui}
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
 			Deps:     deps,
-			Cache:    value.Cache,
-			Run: func(id string) error {
-				cmdTime := time.Now()
-				name, task := util.GetPackageTaskFromId(id)
-				pack := g.PackageInfos[name]
-				targetLogger := c.Config.Logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
-				defer targetLogger.ResetNamed(pack.Name)
-				targetLogger.Debug("start")
-
-				// bail if the script doesn't exist
-				if _, ok := pack.Scripts[task]; !ok {
-					targetLogger.Debug("no task in package, skipping")
-					targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-					return nil
-				}
-
-				// Setup tracer
-				tracer := runState.Run(util.GetTaskId(pack.Name, task))
-
-				// Create a logger
-				pref := colorCache.PrefixColor(pack.Name)
-				actualPrefix := pref("%s:%s: ", pack.Name, task)
-				targetUi := &cli.PrefixedUi{
-					Ui:           targetBaseUI,
-					OutputPrefix: actualPrefix,
-					InfoPrefix:   actualPrefix,
-					ErrorPrefix:  actualPrefix,
-					WarnPrefix:   actualPrefix,
-				}
-				// Hash ---------------------------------------------
-				// first check for package-tasks
-				pipeline, ok := g.Pipeline[fmt.Sprintf("%v", id)]
-				if !ok {
-					// then check for regular tasks
-					altpipe, notcool := g.Pipeline[task]
-					// if neither, then bail
-					if !notcool && !ok {
-						return nil
-					}
-					// override if we need to...
-					pipeline = altpipe
-				}
-
-				outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-				if pipeline.Outputs == nil {
-					outputs = append(outputs, "dist/**/*", "build/**/*")
-				} else {
-					outputs = append(outputs, pipeline.Outputs...)
-				}
-				targetLogger.Debug("task output globs", "outputs", outputs)
-
-				passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
-				for _, target := range rs.Targets {
-					if target == task {
-						passThroughArgs = append(passThroughArgs, rs.Opts.passThroughArgs...)
-					}
-				}
-
-				// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
-				var hashableEnvVars []string
-				var hashableEnvPairs []string
-				if len(pipeline.DependsOn) > 0 {
-					for _, v := range pipeline.DependsOn {
-						if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
-							trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
-							hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-							hashableEnvVars = append(hashableEnvVars, trimmed)
-						}
-					}
-					sort.Strings(hashableEnvVars) // always sort them
-				}
-				targetLogger.Debug("hashable env vars", "vars", hashableEnvVars)
-				hashable := struct {
-					Hash             string
-					Task             string
-					Outputs          []string
-					PassThruArgs     []string
-					HashableEnvPairs []string
-				}{
-					Hash:             pack.Hash,
-					Task:             task,
-					Outputs:          outputs,
-					PassThruArgs:     passThroughArgs,
-					HashableEnvPairs: hashableEnvPairs,
-				}
-				hash, err := fs.HashObject(hashable)
-				targetLogger.Debug("task hash", "value", hash)
-				if err != nil {
-					targetUi.Error(fmt.Sprintf("Hashing error: %v", err))
-					// @TODO probably should abort fatally???
-				}
-				logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
-				targetLogger.Debug("log file", "path", filepath.Join(rs.Opts.cwd, logFileName))
-
-				// Cache ---------------------------------------------
-				var hit bool
-				if !rs.Opts.forceExecution {
-					hit, _, _, err = turboCache.Fetch(rs.Opts.cwd, hash, nil)
-					if err != nil {
-						targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
-					} else if hit {
-						if rs.Opts.stream && fs.FileExists(filepath.Join(rs.Opts.cwd, logFileName)) {
-							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false)
-						}
-						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
-						tracer(TargetCached, nil)
-
-						return nil
-					}
-					if rs.Opts.stream {
-						targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
-					}
-				} else {
-					if rs.Opts.stream {
-						targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
-					}
-				}
-
-				// Setup command execution
-				argsactual := append([]string{"run"}, task)
-				argsactual = append(argsactual, passThroughArgs...)
-				// @TODO: @jaredpalmer fix this hack to get the package manager's name
-				var cmd *exec.Cmd
-				if backend.Name == "nodejs-berry" {
-					cmd = exec.Command("yarn", argsactual...)
-				} else {
-					cmd = exec.Command(strings.TrimPrefix(backend.Name, "nodejs-"), argsactual...)
-				}
-				cmd.Dir = pack.Dir
-				envs := fmt.Sprintf("TURBO_HASH=%v", hash)
-				cmd.Env = append(os.Environ(), envs)
-
-				// Setup stdout/stderr
-				// If we are not caching anything, then we don't need to write logs to disk
-				// be careful about this conditional given the default of cache = true
-				var writer io.Writer
-				if !rs.Opts.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
-					writer = os.Stdout
-				} else {
-					// Setup log file
-					if err := fs.EnsureDir(logFileName); err != nil {
-						tracer(TargetBuildFailed, err)
-						c.logError(targetLogger, actualPrefix, err)
-						if rs.Opts.bail {
-							os.Exit(1)
-						}
-					}
-					output, err := os.Create(logFileName)
-					if err != nil {
-						tracer(TargetBuildFailed, err)
-						c.logError(targetLogger, actualPrefix, err)
-						if rs.Opts.bail {
-							os.Exit(1)
-						}
-					}
-					defer output.Close()
-					bufWriter := bufio.NewWriter(output)
-					bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
-					defer bufWriter.Flush()
-					writer = io.MultiWriter(os.Stdout, bufWriter)
-				}
-
-				logger := log.New(writer, "", 0)
-				// Setup a streamer that we'll pipe cmd.Stdout to
-				logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
-				// Setup a streamer that we'll pipe cmd.Stderr to.
-				logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
-				cmd.Stderr = logStreamerErr
-				cmd.Stdout = logStreamerOut
-				// Flush/Reset any error we recorded
-				logStreamerErr.FlushRecord()
-				logStreamerOut.FlushRecord()
-
-				// Run the command
-				if err := c.Processes.Exec(cmd); err != nil {
-					// if we already know we're in the process of exiting,
-					// we don't need to record an error to that effect.
-					if errors.Is(err, process.ErrClosing) {
-						return nil
-					}
-					tracer(TargetBuildFailed, err)
-					targetLogger.Error("Error: command finished with error: %w", err)
-					if rs.Opts.bail {
-						if rs.Opts.stream {
-							targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
-						} else {
-							f, err := os.Open(filepath.Join(rs.Opts.cwd, logFileName))
-							if err != nil {
-								targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
-							}
-							defer f.Close()
-							scan := bufio.NewScanner(f)
-							targetBaseUI.Error("")
-							targetBaseUI.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
-							targetBaseUI.Error("")
-							for scan.Scan() {
-								targetBaseUI.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
-							}
-						}
-						c.Processes.Close()
-					} else {
-						if rs.Opts.stream {
-							targetUi.Warn("command finished with error, but continuing...")
-						}
-					}
-					return err
-				}
-
-				// Cache command outputs
-				if rs.Opts.cache && (pipeline.Cache == nil || *pipeline.Cache) {
-					targetLogger.Debug("caching output", "outputs", outputs)
-					ignore := []string{}
-					filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
-					if err := turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
-						c.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
-					}
-				}
-
-				// Clean up tracing
-				tracer(TargetBuilt, nil)
-				targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
-				return nil
-			},
 		})
 	}
 
 	if err := engine.Prepare(&core.SchedulerExecutionOptions{
-		Packages:    rs.FilteredPkgs.UnsafeListOfStrings(),
-		TaskNames:   rs.Targets,
-		Concurrency: rs.Opts.concurrency,
-		Parallel:    rs.Opts.parallel,
-		TasksOnly:   rs.Opts.only,
+		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
+		TaskNames: rs.Targets,
+		TasksOnly: rs.Opts.only,
 	}); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
 
 	if rs.Opts.dotGraph != "" {
-		graphString := string(engine.TaskGraph.Dot(&dag.DotOpts{
-			Verbose:    true,
-			DrawCycles: true,
-		}))
-		ext := filepath.Ext(rs.Opts.dotGraph)
-		if ext == ".html" {
-			f, err := os.Create(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("error writing graph: %w", err))
-				return 1
-			}
-			defer f.Close()
-			f.WriteString(`<!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Graph</title>
-      </head>
-      <body>
-        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
-        <script>`)
-			f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
-			f.WriteString(`
-      </script>
-    </body>
-    </html>`)
-			c.Ui.Output("")
-			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
-			if ui.IsTTY {
-				browser.OpenBrowser(filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
-			}
-			return 0
-		}
-		hasDot := hasGraphViz()
-		if hasDot {
-			dotArgs := []string{"-T" + ext[1:], "-o", rs.Opts.dotGraph}
-			cmd := exec.Command("dot", dotArgs...)
-			cmd.Stdin = strings.NewReader(graphString)
-			if err := cmd.Run(); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("could not generate task graphfile %v:  %w", rs.Opts.dotGraph, err))
-				return 1
-			} else {
-				c.Ui.Output("")
-				c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(rs.Opts.dotGraph)))
-			}
-		} else {
-			c.Ui.Output("")
-			c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
-			c.Ui.Output("")
-			c.Ui.Output(graphString)
+		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
+		if err != nil {
+			c.logError(c.Config.Logger, "", err)
+			return 1
 		}
 		return 0
 	}
 
+	goctx := gocontext.Background()
+	var analyticsSink analytics.Sink
+	if c.Config.IsLoggedIn() {
+		analyticsSink = c.Config.ApiClient
+	} else {
+		analyticsSink = analytics.NullSink
+	}
+	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	turboCache := cache.New(c.Config, analyticsClient)
+	defer turboCache.Shutdown()
+	runState := NewRunState(rs.Opts, startAt)
+	runState.Listen(c.Ui, time.Now())
+	ec := &execContext{
+		g:          g,
+		colorCache: NewColorCache(),
+		runState:   runState,
+		rs:         rs,
+		ui:         &cli.ConcurrentUi{Ui: c.Ui},
+		turboCache: turboCache,
+		logger:     c.Config.Logger,
+		backend:    backend,
+		processes:  c.Processes,
+	}
+
 	// run the thing
-	errs := engine.Execute()
+	errs := engine.Execute(ec.exec, core.ExecOpts{
+		Parallel:    rs.Opts.parallel,
+		Concurrency: rs.Opts.concurrency,
+	})
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
@@ -619,7 +356,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		c.Ui.Error(err.Error())
 	}
 
-	logReplayWaitGroup.Wait()
+	ec.logReplayWaitGroup.Wait()
 
 	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
@@ -892,4 +629,305 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 	stringTargets := targets.UnsafeListOfStrings()
 	sort.Strings(stringTargets)
 	return stringTargets, nil
+}
+
+type execContext struct {
+	g                  *completeGraph
+	colorCache         *ColorCache
+	runState           *RunState
+	rs                 *runSpec
+	logReplayWaitGroup sync.WaitGroup
+	ui                 cli.Ui
+	turboCache         cache.Cache
+	logger             hclog.Logger
+	backend            *api.LanguageBackend
+	processes          *process.Manager
+}
+
+func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
+	e.logger.Error(prefix, "error", err)
+
+	if prefix != "" {
+		prefix += ": "
+	}
+
+	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
+}
+
+func (e *execContext) exec(id string) error {
+	cmdTime := time.Now()
+	name, task := util.GetPackageTaskFromId(id)
+	pack := e.g.PackageInfos[name]
+	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
+	defer targetLogger.ResetNamed(pack.Name)
+	targetLogger.Debug("start")
+
+	// bail if the script doesn't exist
+	if _, ok := pack.Scripts[task]; !ok {
+		targetLogger.Debug("no task in package, skipping")
+		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
+		return nil
+	}
+
+	// Setup tracer
+	tracer := e.runState.Run(util.GetTaskId(pack.Name, task))
+
+	// Create a logger
+	pref := e.colorCache.PrefixColor(pack.Name)
+	actualPrefix := pref("%s:%s: ", pack.Name, task)
+	targetUi := &cli.PrefixedUi{
+		Ui:           e.ui,
+		OutputPrefix: actualPrefix,
+		InfoPrefix:   actualPrefix,
+		ErrorPrefix:  actualPrefix,
+		WarnPrefix:   actualPrefix,
+	}
+	// Hash ---------------------------------------------
+	// first check for package-tasks
+	pipeline, ok := e.g.Pipeline[fmt.Sprintf("%v", id)]
+	if !ok {
+		// then check for regular tasks
+		altpipe, notcool := e.g.Pipeline[task]
+		// if neither, then bail
+		if !notcool && !ok {
+			return nil
+		}
+		// override if we need to...
+		pipeline = altpipe
+	}
+
+	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
+	if pipeline.Outputs == nil {
+		outputs = append(outputs, "dist/**/*", "build/**/*")
+	} else {
+		outputs = append(outputs, pipeline.Outputs...)
+	}
+	targetLogger.Debug("task output globs", "outputs", outputs)
+
+	passThroughArgs := make([]string, 0, len(e.rs.Opts.passThroughArgs))
+	for _, target := range e.rs.Targets {
+		if target == task {
+			passThroughArgs = append(passThroughArgs, e.rs.Opts.passThroughArgs...)
+		}
+	}
+
+	// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
+	var hashableEnvVars []string
+	var hashableEnvPairs []string
+	if len(pipeline.DependsOn) > 0 {
+		for _, v := range pipeline.DependsOn {
+			if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
+				trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
+				hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+				hashableEnvVars = append(hashableEnvVars, trimmed)
+			}
+		}
+		sort.Strings(hashableEnvVars) // always sort them
+	}
+	targetLogger.Debug("hashable env vars", "vars", hashableEnvVars)
+	hashable := struct {
+		Hash             string
+		Task             string
+		Outputs          []string
+		PassThruArgs     []string
+		HashableEnvPairs []string
+	}{
+		Hash:             pack.Hash,
+		Task:             task,
+		Outputs:          outputs,
+		PassThruArgs:     passThroughArgs,
+		HashableEnvPairs: hashableEnvPairs,
+	}
+	hash, err := fs.HashObject(hashable)
+	targetLogger.Debug("task hash", "value", hash)
+	if err != nil {
+		targetUi.Error(fmt.Sprintf("Hashing error: %v", err))
+		// @TODO probably should abort fatally???
+	}
+	logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
+	targetLogger.Debug("log file", "path", filepath.Join(e.rs.Opts.cwd, logFileName))
+
+	// Cache ---------------------------------------------
+	var hit bool
+	if !e.rs.Opts.forceExecution {
+		hit, _, _, err = turboCache.Fetch(rs.Opts.cwd, hash, nil)
+		if err != nil {
+			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
+		} else if hit {
+			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
+				e.logReplayWaitGroup.Add(1)
+				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false)
+			}
+			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
+			tracer(TargetCached, nil)
+
+			return nil
+		}
+		if e.rs.Opts.stream {
+			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
+		}
+	} else {
+		if e.rs.Opts.stream {
+			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
+		}
+	}
+
+	// Setup command execution
+	argsactual := append([]string{"run"}, task)
+	argsactual = append(argsactual, passThroughArgs...)
+	// @TODO: @jaredpalmer fix this hack to get the package manager's name
+	var cmd *exec.Cmd
+	if e.backend.Name == "nodejs-berry" {
+		cmd = exec.Command("yarn", argsactual...)
+	} else {
+		cmd = exec.Command(strings.TrimPrefix(e.backend.Name, "nodejs-"), argsactual...)
+	}
+	cmd.Dir = pack.Dir
+	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
+	cmd.Env = append(os.Environ(), envs)
+
+	// Setup stdout/stderr
+	// If we are not caching anything, then we don't need to write logs to disk
+	// be careful about this conditional given the default of cache = true
+	var writer io.Writer
+	if !e.rs.Opts.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
+		writer = os.Stdout
+	} else {
+		// Setup log file
+		if err := fs.EnsureDir(logFileName); err != nil {
+			tracer(TargetBuildFailed, err)
+			e.logError(targetLogger, actualPrefix, err)
+			if e.rs.Opts.bail {
+				os.Exit(1)
+			}
+		}
+		output, err := os.Create(logFileName)
+		if err != nil {
+			tracer(TargetBuildFailed, err)
+			e.logError(targetLogger, actualPrefix, err)
+			if e.rs.Opts.bail {
+				os.Exit(1)
+			}
+		}
+		defer output.Close()
+		bufWriter := bufio.NewWriter(output)
+		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
+		defer bufWriter.Flush()
+		writer = io.MultiWriter(os.Stdout, bufWriter)
+	}
+
+	logger := log.New(writer, "", 0)
+	// Setup a streamer that we'll pipe cmd.Stdout to
+	logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+	// Setup a streamer that we'll pipe cmd.Stderr to.
+	logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+	cmd.Stderr = logStreamerErr
+	cmd.Stdout = logStreamerOut
+	// Flush/Reset any error we recorded
+	logStreamerErr.FlushRecord()
+	logStreamerOut.FlushRecord()
+
+	// Run the command
+	if err := e.processes.Exec(cmd); err != nil {
+		// if we already know we're in the process of exiting,
+		// we don't need to record an error to that effect.
+		if errors.Is(err, process.ErrClosing) {
+			return nil
+		}
+		tracer(TargetBuildFailed, err)
+		targetLogger.Error("Error: command finished with error: %w", err)
+		if e.rs.Opts.bail {
+			if e.rs.Opts.stream {
+				targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
+			} else {
+				f, err := os.Open(filepath.Join(e.rs.Opts.cwd, logFileName))
+				if err != nil {
+					targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
+				}
+				defer f.Close()
+				scan := bufio.NewScanner(f)
+				e.ui.Error("")
+				e.ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
+				e.ui.Error("")
+				for scan.Scan() {
+					e.ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
+				}
+			}
+			e.processes.Close()
+		} else {
+			if e.rs.Opts.stream {
+				targetUi.Warn("command finished with error, but continuing...")
+			}
+		}
+		return err
+	}
+
+	// Cache command outputs
+	if e.rs.Opts.cache && (pipeline.Cache == nil || *pipeline.Cache) {
+		targetLogger.Debug("caching output", "outputs", outputs)
+		ignore := []string{}
+		filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
+		if err := e.turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
+			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
+		}
+	}
+
+	// Clean up tracing
+	tracer(TargetBuilt, nil)
+	targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
+	return nil
+}
+
+func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename string) error {
+	graphString := string(taskGraph.Dot(&dag.DotOpts{
+		Verbose:    true,
+		DrawCycles: true,
+	}))
+	ext := filepath.Ext(outputFilename)
+	if ext == ".html" {
+		f, err := os.Create(outputFilename)
+		if err != nil {
+			return fmt.Errorf("error writing graph: %w", err)
+		}
+		defer f.Close()
+		f.WriteString(`<!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Graph</title>
+    </head>
+    <body>
+      <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
+      <script>`)
+		f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
+		f.WriteString(`
+    </script>
+  </body>
+  </html>`)
+		c.Ui.Output("")
+		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename)))
+		if ui.IsTTY {
+			browser.OpenBrowser(outputFilename)
+		}
+		return nil
+	}
+	hasDot := hasGraphViz()
+	if hasDot {
+		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename}
+		cmd := exec.Command("dot", dotArgs...)
+		cmd.Stdin = strings.NewReader(graphString)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
+		} else {
+			c.Ui.Output("")
+			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename)))
+		}
+	} else {
+		c.Ui.Output("")
+		c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
+		c.Ui.Output("")
+		c.Ui.Output(graphString)
+	}
+	return nil
 }
