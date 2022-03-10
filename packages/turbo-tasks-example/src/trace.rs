@@ -181,5 +181,5 @@ async fn resolve(
             break;
         }
     }
-    Ok(FileSystemPathRef::new(fs.clone(), p + "/" + &request))
+    Ok(FileSystemPathRef::new(fs.clone(), &(p + "/" + &request)))
 }

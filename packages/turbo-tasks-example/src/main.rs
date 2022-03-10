@@ -46,9 +46,9 @@ fn main() {
                 let fs: FileSystemRef = disk_fs.into();
 
                 // ls(fs).await;
-                let input = FileSystemPathRef::new(fs.clone(), "demo".to_string());
-                let output = FileSystemPathRef::new(fs.clone(), "out".to_string());
-                let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js".to_string());
+                let input = FileSystemPathRef::new(fs.clone(), "demo");
+                let output = FileSystemPathRef::new(fs.clone(), "out");
+                let entry = FileSystemPathRef::new(fs.clone(), "demo/index.js");
 
                 let source = SourceAssetRef::new(entry);
                 let module = ModuleAssetRef::new(source.into());
@@ -147,7 +147,7 @@ fn make_math() {
 
 #[turbo_tasks::function]
 async fn ls(fs: FileSystemRef) {
-    let directory_ref = FileSystemPathRef::new(fs, ".".to_string());
+    let directory_ref = FileSystemPathRef::new(fs, "");
     print_sizes(directory_ref.clone());
 }
 
