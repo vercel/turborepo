@@ -74,6 +74,7 @@ function runSmokeTests<T>(
       assert.ok(!!hash, "No hash for c#test");
       const cachedLogFilePath = getCachedLogFilePathForTask(
         getCachedDirForHash(repo, hash),
+        path.join("packages", "c"),
         "test"
       );
       let text = "";
@@ -334,7 +335,8 @@ function getCachedDirForHash(repo: Monorepo, hash: string): string {
 
 function getCachedLogFilePathForTask(
   cacheDir: string,
+  pathToPackage: string,
   taskName: string
 ): string {
-  return path.join(cacheDir, ".turbo", `turbo-${taskName}.log`);
+  return path.join(cacheDir, pathToPackage, ".turbo", `turbo-${taskName}.log`);
 }
