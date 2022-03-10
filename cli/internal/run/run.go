@@ -27,10 +27,10 @@ import (
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/scm"
+	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
-	"github.com/vercel/turborepo/cli/internal/util/filter"
 
 	"github.com/pyr-sh/dag"
 
@@ -154,147 +154,18 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	gitRepoRoot, err := fs.FindupFrom(".git", runOptions.cwd)
+	scmInstance, err := scm.FromInRepo(runOptions.cwd)
 	if err != nil {
-		c.logWarning(c.Config.Logger, "Cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.", err)
+		if errors.Is(err, scm.ErrFallback) {
+			c.logWarning(c.Config.Logger, "", err)
+		} else {
+			c.logError(c.Config.Logger, "", fmt.Errorf("failed to create SCM: %w", err))
+			return 1
+		}
 	}
-	git, err := scm.NewFallback(filepath.Dir(gitRepoRoot))
+	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
-		c.logWarning(c.Config.Logger, "", err)
-	}
-
-	ignoreGlob, err := filter.Compile(runOptions.ignore)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid ignore globs: %w", err))
-		return 1
-	}
-	globalDepsGlob, err := filter.Compile(runOptions.globalDeps)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid global deps glob: %w", err))
-		return 1
-	}
-	hasRepoGlobalFileChanged := false
-	var changedFiles []string
-	if runOptions.since != "" {
-		changedFiles = git.ChangedFiles(runOptions.since, true, runOptions.cwd)
-	}
-
-	ignoreSet := make(util.Set)
-	if globalDepsGlob != nil {
-		for _, f := range changedFiles {
-			if globalDepsGlob.Match(f) {
-				hasRepoGlobalFileChanged = true
-				break
-			}
-		}
-	}
-
-	if ignoreGlob != nil {
-		for _, f := range changedFiles {
-			if ignoreGlob.Match(f) {
-				ignoreSet.Add(f)
-			}
-		}
-	}
-
-	filteredChangedFiles := make(util.Set)
-	// Ignore any changed files in the ignore set
-	for _, c := range changedFiles {
-		if !ignoreSet.Includes(c) {
-			filteredChangedFiles.Add(c)
-		}
-	}
-
-	changedPackages := make(util.Set)
-	// Be specific with the changed packages only if no repo-wide changes occurred
-	if !hasRepoGlobalFileChanged {
-		for k, pkgInfo := range ctx.PackageInfos {
-			partialPath := pkgInfo.Dir
-			if filteredChangedFiles.Some(func(v interface{}) bool {
-				return strings.HasPrefix(fmt.Sprintf("%v", v), partialPath) // true
-			}) {
-				changedPackages.Add(k)
-			}
-		}
-	}
-
-	// Scoped packages
-	// Unwind scope globs
-	scopePkgs, err := getScopedPackages(ctx, runOptions.scope)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("invalid scope: %w", err))
-		return 1
-	}
-
-	// Filter Packages
-	filteredPkgs := make(util.Set)
-
-	// If both scoped and since are specified, we have to merge two lists:
-	// 1. changed packages that ARE themselves the scoped packages
-	// 2. changed package consumers (package dependents) that are within the scoped subgraph
-	if scopePkgs.Len() > 0 && changedPackages.Len() > 0 {
-		filteredPkgs = scopePkgs.Intersection(changedPackages)
-		for _, changed := range changedPackages {
-			descenders, err := ctx.TopologicalGraph.Descendents(changed)
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("could not determine dependency: %w", err))
-				return 1
-			}
-
-			filteredPkgs.Add(changed)
-			for _, d := range descenders {
-				filteredPkgs.Add(d)
-			}
-		}
-		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
-	} else if changedPackages.Len() > 0 {
-		filteredPkgs = changedPackages
-		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), runOptions.since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
-	} else if scopePkgs.Len() > 0 {
-		filteredPkgs = scopePkgs
-	} else if runOptions.since == "" {
-		for _, f := range ctx.PackageNames {
-			filteredPkgs.Add(f)
-		}
-	}
-
-	if runOptions.includeDependents {
-		// perf??? this is duplicative from the step above
-		for _, pkg := range filteredPkgs {
-			descenders, err := ctx.TopologicalGraph.Descendents(pkg)
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("error calculating affected packages: %w", err))
-				return 1
-			}
-			c.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
-			for _, d := range descenders {
-				// we need to exclude the fake root node
-				// since it is not a real package
-				if d != ctx.RootNode {
-					filteredPkgs.Add(d)
-				}
-			}
-		}
-		c.Config.Logger.Debug("running with dependents")
-	}
-
-	if runOptions.includeDependencies {
-		for _, pkg := range filteredPkgs {
-			ancestors, err := ctx.TopologicalGraph.Ancestors(pkg)
-			if err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("error getting dependency %v", err))
-				return 1
-			}
-			c.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
-			for _, d := range ancestors {
-				// we need to exclude the fake root node
-				// since it is not a real package
-				if d != ctx.RootNode {
-					filteredPkgs.Add(d)
-				}
-			}
-		}
-		c.Config.Logger.Debug(ui.Dim("running with dependencies"))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	packagesInScope := filteredPkgs.UnsafeListOfStrings()
@@ -800,6 +671,18 @@ type RunOptions struct {
 	only bool
 }
 
+func (ro *RunOptions) ScopeOpts() *scope.Opts {
+	return &scope.Opts{
+		IncludeDependencies: ro.includeDependencies,
+		IncludeDependents:   ro.includeDependents,
+		Patterns:            ro.scope,
+		Since:               ro.since,
+		Cwd:                 ro.cwd,
+		IgnorePatterns:      ro.ignore,
+		GlobalDepPatterns:   ro.globalDeps,
+	}
+}
+
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
 		bail:                true,
@@ -831,6 +714,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
+	// --scope and --since implies --include-dependencies for backwards compatibility
+	// When we switch to cobra we will need to track if it's been set manually. Currently
+	// it's only possible to set to true, but in the future a user could theoretically set
+	// it to false and override the default behavior.
+	includDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
@@ -904,8 +792,10 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
+				includDepsSet = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
+				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--team"):
@@ -921,6 +811,9 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			}
 		}
 	}
+	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
+		runOptions.includeDependencies = true
+	}
 
 	// Force streaming output in CI/CD non-interactive mode
 	if !ui.IsTTY || ui.IsCI {
@@ -931,44 +824,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	runOptions.cacheFolder = filepath.Join(runOptions.cwd, unresolvedCacheFolder)
 
 	return runOptions, nil
-}
-
-// getScopedPackages returns a set of package names in scope for a given list of glob patterns
-func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs util.Set, err error) {
-	if err != nil {
-		return nil, fmt.Errorf("invalid glob pattern %w", err)
-	}
-	var scopedPkgs = make(util.Set)
-	if len(scopePatterns) == 0 {
-		return scopePkgs, nil
-	}
-
-	include := make([]string, 0, len(scopePatterns))
-	exclude := make([]string, 0, len(scopePatterns))
-
-	for _, pattern := range scopePatterns {
-		if strings.HasPrefix(pattern, "!") {
-			exclude = append(exclude, pattern[1:])
-		} else {
-			include = append(include, pattern)
-		}
-	}
-
-	glob, err := filter.NewIncludeExcludeFilter(include, exclude)
-	if err != nil {
-		return nil, err
-	}
-	for _, f := range ctx.PackageNames {
-		if glob.Match(f) {
-			scopedPkgs.Add(f)
-		}
-	}
-
-	if len(include) > 0 && scopedPkgs.Len() == 0 {
-		return nil, errors.Errorf("No packages found matching the provided scope pattern.")
-	}
-
-	return scopedPkgs, nil
 }
 
 // logError logs an error and outputs it to the UI.

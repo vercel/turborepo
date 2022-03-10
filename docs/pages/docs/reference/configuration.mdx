@@ -113,10 +113,10 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": {
+      "dependsOn": [
         "^build",
         "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
-      },
+      ],
       "outputs": ["dist/**", ".next/**"]
     },
     "web#build": {
