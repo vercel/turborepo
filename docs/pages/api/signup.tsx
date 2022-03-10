@@ -12,7 +12,7 @@ export default async function handle(
       email: req.body.email,
       campaign_id: CAMPAIGN_ID,
     };
-    console.log(user);
+
     try {
       const trayRes = await fetch(TRAY_URL, {
         method: "POST",
@@ -22,7 +22,6 @@ export default async function handle(
         },
         body: JSON.stringify({ user: user }),
       });
-      console.log(trayRes);
 
       return res.status(201).json(user);
     } catch (error) {
