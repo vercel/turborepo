@@ -3,6 +3,7 @@ package run
 import (
 	"bufio"
 	gocontext "context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -121,6 +122,9 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
+  --dry-run[=json]       List the packages in scope and the tasks that would be run, 
+                         but don't actually run them.
+                         Passing --dry-run=json will render the output in JSON format.
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -168,9 +172,6 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
-	packagesInScope := filteredPkgs.UnsafeListOfStrings()
-	sort.Strings(packagesInScope)
-	c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
 	fs.EnsureDir(runOptions.cacheFolder)
 
@@ -251,72 +252,54 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		}
 	}
 
-	if rs.Opts.stream {
-		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-	}
-
 	engine, err := buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
+	exitCode := 0
 	if rs.Opts.dotGraph != "" {
 		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
 			return 1
 		}
-		return 0
-	}
-
-	goctx := gocontext.Background()
-	var analyticsSink analytics.Sink
-	if c.Config.IsLoggedIn() {
-		analyticsSink = c.Config.ApiClient
-	} else {
-		analyticsSink = analytics.NullSink
-	}
-	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
-	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, analyticsClient)
-	defer turboCache.Shutdown()
-	runState := NewRunState(rs.Opts, startAt)
-	runState.Listen(c.Ui, time.Now())
-	ec := &execContext{
-		g:          g,
-		colorCache: NewColorCache(),
-		runState:   runState,
-		rs:         rs,
-		ui:         &cli.ConcurrentUi{Ui: c.Ui},
-		turboCache: turboCache,
-		logger:     c.Config.Logger,
-		backend:    backend,
-		processes:  c.Processes,
-	}
-
-	// run the thing
-	errs := engine.Execute(ec.exec, core.ExecOpts{
-		Parallel:    rs.Opts.parallel,
-		Concurrency: rs.Opts.concurrency,
-	})
-
-	// Track if we saw any child with a non-zero exit code
-	exitCode := 0
-	exitCodeErr := &process.ChildExit{}
-	for _, err := range errs {
-		if errors.As(err, &exitCodeErr) {
-			if exitCodeErr.ExitCode > exitCode {
-				exitCode = exitCodeErr.ExitCode
+	} else if rs.Opts.dryRun {
+		tasksRun, err := c.executeDryRun(engine)
+		if err != nil {
+			c.logError(c.Config.Logger, "", err)
+			return 1
+		}
+		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
+		sort.Strings(packagesInScope)
+		if rs.Opts.dryRunJson {
+			dryRun := make(map[string][]string)
+			dryRun["packages"] = packagesInScope
+			dryRun["tasks"] = tasksRun
+			bytes, err := json.MarshalIndent(dryRun, "", "  ")
+			if err != nil {
+				c.logError(c.Config.Logger, "", errors.Wrap(err, "failed to render to JSON"))
+				return 1
+			}
+			c.Ui.Output(string(bytes))
+		} else {
+			c.Ui.Info("Packages in scope:")
+			for _, pkg := range packagesInScope {
+				c.Ui.Output(fmt.Sprintf(ui.Bold("• %v"), pkg))
+			}
+			c.Ui.Info("Tasks to run:")
+			for _, task := range tasksRun {
+				c.Ui.Output(fmt.Sprintf(ui.Bold("• %v"), task))
 			}
 		}
-		c.Ui.Error(err.Error())
-	}
-
-	ec.logReplayWaitGroup.Wait()
-
-	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
-		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
-		return 1
+	} else {
+		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
+		sort.Strings(packagesInScope)
+		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
+		if rs.Opts.stream {
+			c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
+		}
+		exitCode = c.executeTasks(g, rs, engine, backend, startAt)
 	}
 
 	return exitCode
@@ -410,7 +393,9 @@ type RunOptions struct {
 	bail            bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
-	only bool
+	only       bool
+	dryRun     bool
+	dryRunJson bool
 }
 
 func (ro *RunOptions) ScopeOpts() *scope.Opts {
@@ -540,6 +525,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
+			case strings.HasPrefix(arg, "--dry-run"):
+				runOptions.dryRun = true
+				if strings.HasPrefix(arg, "--dry-run=json") {
+					runOptions.dryRunJson = true
+				}
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
@@ -593,6 +583,77 @@ func (c *RunCommand) logWarning(log hclog.Logger, prefix string, err error) {
 func hasGraphViz() bool {
 	err := exec.Command("dot", "-v").Run()
 	return err == nil
+}
+
+func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, backend *api.LanguageBackend, startAt time.Time) int {
+	goctx := gocontext.Background()
+	var analyticsSink analytics.Sink
+	if c.Config.IsLoggedIn() {
+		analyticsSink = c.Config.ApiClient
+	} else {
+		analyticsSink = analytics.NullSink
+	}
+	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	turboCache := cache.New(c.Config, analyticsClient)
+	defer turboCache.Shutdown()
+	runState := NewRunState(rs.Opts, startAt)
+	runState.Listen(c.Ui, time.Now())
+	ec := &execContext{
+		g:          g,
+		colorCache: NewColorCache(),
+		runState:   runState,
+		rs:         rs,
+		ui:         &cli.ConcurrentUi{Ui: c.Ui},
+		turboCache: turboCache,
+		logger:     c.Config.Logger,
+		backend:    backend,
+		processes:  c.Processes,
+	}
+
+	// run the thing
+	errs := engine.Execute(ec.exec, core.ExecOpts{
+		Parallel:    rs.Opts.parallel,
+		Concurrency: rs.Opts.concurrency,
+	})
+
+	// Track if we saw any child with a non-zero exit code
+	exitCode := 0
+	exitCodeErr := &process.ChildExit{}
+	for _, err := range errs {
+		if errors.As(err, &exitCodeErr) {
+			if exitCodeErr.ExitCode > exitCode {
+				exitCode = exitCodeErr.ExitCode
+			}
+		}
+		c.Ui.Error(err.Error())
+	}
+
+	ec.logReplayWaitGroup.Wait()
+
+	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
+		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
+		return 1
+	}
+	return 0
+}
+
+func (c *RunCommand) executeDryRun(engine *core.Scheduler) ([]string, error) {
+	taskIDs := []string{}
+	errs := engine.Execute(func(taskID string) error {
+		taskIDs = append(taskIDs, taskID)
+		return nil
+	}, core.ExecOpts{
+		Concurrency: 1,
+		Parallel:    false,
+	})
+	if len(errs) > 0 {
+		for _, err := range errs {
+			c.Ui.Error(err.Error())
+		}
+		return nil, errors.New("errors occurred during dry-run graph traversal")
+	}
+	return taskIDs, nil
 }
 
 // Replay logs will try to replay logs back to the stdout
