@@ -80,7 +80,7 @@ func isProtocolExternal(protocol string) bool {
 	return protocol != "" && protocol != "npm"
 }
 
-func isWorkspaceReference(packageVersion string, dependencyVersion string) bool {
+func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd string, rootpath string) bool {
 	protocol, dependencyVersion := parseDependencyProtocol(dependencyVersion)
 
 	if protocol == "workspace" {
@@ -88,10 +88,26 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string) bool 
 		// versions of the same package name, just assume its a match and don't check the range
 		// for an exact match.
 		return true
+	} else if protocol == "file" {
+		abs, err := filepath.Abs(filepath.Join(cwd, dependencyVersion))
+		if err != nil {
+			// Default to internal if we have the package but somehow cannot get the path
+			// TODO(gsoltis): log this?
+			return true
+		}
+		isWithinRepo, err := fs.DirContainsPath(rootpath, filepath.FromSlash(abs))
+		if err != nil {
+			// Default to internal if we have the package but somehow cannot get the path
+			// TODO(gsoltis): log this?
+			return true
+		}
+		return isWithinRepo
 	} else if isProtocolExternal(protocol) {
 		// Other protocols are assumed to be external references ("github:", "link:", "file:" etc)
 		return false
-	}
+	} else if dependencyVersion == "*" {
+    return true
+  }
 
 	// If we got this far, then we need to check the workspace package version to see it satisfies
 	// the dependencies range to determin whether or not its an internal or external dependency.
@@ -203,7 +219,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
 			populateGraphWaitGroup.Go(func() error {
-				return c.populateTopologicGraphForPackageJson(pkg)
+				return c.populateTopologicGraphForPackageJson(pkg, rootpath)
 			})
 			packageDepsHashGroup.Go(func() error {
 				return c.loadPackageDepsHash(pkg)
@@ -274,16 +290,13 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	pkg := rootPackageJSON
 	depSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
-	for dep, version := range pkg.Dependencies {
-		pkg.UnresolvedExternalDeps[dep] = version
-	}
 	for dep, version := range pkg.DevDependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	for dep, version := range pkg.OptionalDependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	for dep, version := range pkg.PeerDependencies {
+	for dep, version := range pkg.Dependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	if util.IsYarn(c.Backend.Name) {
@@ -308,7 +321,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	return nil
 }
 
-func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) error {
+func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON, rootpath string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	depMap := make(map[string]string)
@@ -316,10 +329,6 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 	externalUnresolvedDepsSet := make(dag.Set)
 	externalDepSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
-
-	for dep, version := range pkg.Dependencies {
-		depMap[dep] = version
-	}
 
 	for dep, version := range pkg.DevDependencies {
 		depMap[dep] = version
@@ -329,13 +338,13 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 		depMap[dep] = version
 	}
 
-	for dep, version := range pkg.PeerDependencies {
+	for dep, version := range pkg.Dependencies {
 		depMap[dep] = version
 	}
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion) {
+		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir, rootpath) {
 			internalDepsSet.Add(depName)
 			c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, depName))
 		} else {
@@ -345,15 +354,15 @@ func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON) erro
 
 	for _, name := range externalUnresolvedDepsSet.List() {
 		name := name.(string)
-		if item, ok := pkg.Dependencies[name]; ok {
-			pkg.UnresolvedExternalDeps[name] = item
-		}
-
 		if item, ok := pkg.DevDependencies[name]; ok {
 			pkg.UnresolvedExternalDeps[name] = item
 		}
 
 		if item, ok := pkg.OptionalDependencies[name]; ok {
+			pkg.UnresolvedExternalDeps[name] = item
+		}
+
+		if item, ok := pkg.Dependencies[name]; ok {
 			pkg.UnresolvedExternalDeps[name] = item
 		}
 	}
