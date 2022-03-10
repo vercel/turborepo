@@ -1,7 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
-const TRAY_URL = "https://39dca6c2-9ca4-41b4-82c9-e48202f221f8.trayapp.io";
-
 export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse
@@ -13,7 +11,7 @@ export default async function handle(
     };
 
     try {
-      await fetch(TRAY_URL, {
+      await fetch(process.env.TRAY_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
