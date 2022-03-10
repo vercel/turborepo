@@ -21,7 +21,7 @@ type Task struct {
 
 type Visitor = func(taskID string) error
 
-type scheduler struct {
+type Scheduler struct {
 	// TopologicGraph is a graph of workspaces
 	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
@@ -33,8 +33,8 @@ type scheduler struct {
 }
 
 // NewScheduler creates a new scheduler given a topologic graph of workspace package names
-func NewScheduler(topologicalGraph *dag.AcyclicGraph) *scheduler {
-	return &scheduler{
+func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
+	return &Scheduler{
 		Tasks:           make(map[string]*Task),
 		TopologicGraph:  topologicalGraph,
 		TaskGraph:       &dag.AcyclicGraph{},
@@ -53,7 +53,7 @@ type SchedulerExecutionOptions struct {
 	TasksOnly bool
 }
 
-func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
+func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
 	if len(pkgs) == 0 {
 		// TODO(gsoltis): Is this behavior only used in tests?
@@ -64,6 +64,7 @@ func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
+		// TODO(gsoltis): Is this behavior used?
 		for key := range p.Tasks {
 			tasks = append(tasks, key)
 		}
@@ -85,7 +86,7 @@ type ExecOpts struct {
 }
 
 // Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
-func (p *scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
+func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
 		// Always return if it is the root node
@@ -101,7 +102,7 @@ func (p *scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
-func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
+func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -225,12 +226,12 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
-func (p *scheduler) AddTask(task *Task) *scheduler {
+func (p *Scheduler) AddTask(task *Task) *Scheduler {
 	p.Tasks[task.Name] = task
 	return p
 }
 
-func (p *scheduler) AddDep(fromTaskId string, toTaskId string) *scheduler {
+func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) *Scheduler {
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
 	return p
 }

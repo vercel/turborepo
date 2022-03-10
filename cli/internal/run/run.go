@@ -255,55 +255,11 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 	}
 
-	engine := core.NewScheduler(&g.TopologicalGraph)
-	for taskName, value := range g.Pipeline {
-		topoDeps := make(util.Set)
-		deps := make(util.Set)
-		if util.IsPackageTask(taskName) {
-			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
-					continue
-				}
-				if util.IsPackageTask(from) {
-					engine.AddDep(from, taskName)
-					continue
-				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
-					topoDeps.Add(from[1:])
-				} else {
-					deps.Add(from)
-				}
-			}
-			_, id := util.GetPackageTaskFromId(taskName)
-			taskName = id
-		} else {
-			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
-					continue
-				}
-				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
-					topoDeps.Add(from[1:])
-				} else {
-					deps.Add(from)
-				}
-			}
-		}
-
-		engine.AddTask(&core.Task{
-			Name:     taskName,
-			TopoDeps: topoDeps,
-			Deps:     deps,
-		})
-	}
-
-	if err := engine.Prepare(&core.SchedulerExecutionOptions{
-		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
-		TaskNames: rs.Targets,
-		TasksOnly: rs.Opts.only,
-	}); err != nil {
+	engine, err := buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
+	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
-
 	if rs.Opts.dotGraph != "" {
 		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 		if err != nil {
@@ -364,6 +320,57 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	}
 
 	return exitCode
+}
+
+func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
+	engine := core.NewScheduler(topoGraph)
+	for taskName, value := range pipeline {
+		topoDeps := make(util.Set)
+		deps := make(util.Set)
+		if util.IsPackageTask(taskName) {
+			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
+					continue
+				}
+				if util.IsPackageTask(from) {
+					engine.AddDep(from, taskName)
+					continue
+				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
+					topoDeps.Add(from[1:])
+				} else {
+					deps.Add(from)
+				}
+			}
+			_, id := util.GetPackageTaskFromId(taskName)
+			taskName = id
+		} else {
+			for _, from := range value.DependsOn {
+				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
+					continue
+				}
+				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
+					topoDeps.Add(from[1:])
+				} else {
+					deps.Add(from)
+				}
+			}
+		}
+
+		engine.AddTask(&core.Task{
+			Name:     taskName,
+			TopoDeps: topoDeps,
+			Deps:     deps,
+		})
+	}
+
+	if err := engine.Prepare(&core.SchedulerExecutionOptions{
+		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
+		TaskNames: rs.Targets,
+		TasksOnly: rs.Opts.only,
+	}); err != nil {
+		return nil, err
+	}
+	return engine, nil
 }
 
 // RunOptions holds the current run operations configuration

@@ -55,7 +55,7 @@ func TestSchedulerDefault(t *testing.T) {
 	}
 
 	err := p.Prepare(&SchedulerExecutionOptions{
-		Packages:  nil,
+		Packages:  []string{"a", "b", "c"},
 		TaskNames: []string{"test"},
 		TasksOnly: false,
 	})
@@ -115,7 +115,7 @@ func TestSchedulerTasksOnly(t *testing.T) {
 	}
 
 	err := p.Prepare(&SchedulerExecutionOptions{
-		Packages:  nil,
+		Packages:  []string{"a", "b", "c"},
 		TaskNames: []string{"test"},
 		TasksOnly: true,
 	})
