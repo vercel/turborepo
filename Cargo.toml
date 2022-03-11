@@ -1,10 +1,13 @@
+[profile.release]
+debug = 1
+
 [workspace]
 
 members = [
-  "packages/turbo-tasks",
-  "packages/turbo-tasks-macros",
-  "packages/turbo-tasks-example",
-  "packages/turbo-tasks-fs",
-  "packages/turbo-pack",
-  "packages/node-file-trace",
+  "crates/turbo-tasks",
+  "crates/turbo-tasks-macros",
+  "crates/turbo-tasks-example",
+  "crates/turbo-tasks-fs",
+  "crates/turbo-pack",
+  "crates/node-file-trace",
 ]
