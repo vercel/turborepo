@@ -341,12 +341,12 @@ function runSmokeTests<T>(
       );
       assert.ok(
         secondLintRun.includes(
-          `a:lint: cache miss, executing ${getHashFromOutput(
+          `a:lint: cache hit, replaying output ${getHashFromOutput(
             secondLintRun,
             "a#lint"
           )}`
         ),
-        "Cache miss, dependency changes are irrelevant for lint task but we don't know that yet"
+        "Cache hit, dependency changes are irrelevant for lint task"
       );
 
       const commandOnceBHasChangedOutput = getCommandOutputAsArray(

@@ -20,7 +20,6 @@ import (
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/pyr-sh/dag"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -189,9 +188,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			populateGraphWaitGroup.Go(func() error {
 				return c.populateTopologicGraphForPackageJson(pkg, rootpath)
 			})
-			packageDepsHashGroup.Go(func() error {
-				return c.loadPackageDepsHash(pkg)
-			})
 		}
 
 		if err := populateGraphWaitGroup.Wait(); err != nil {
@@ -205,51 +201,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
-}
-
-func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
-	pkg.Mu.Lock()
-	defer pkg.Mu.Unlock()
-	hashObject, pkgDepsErr := fs.GetPackageDeps(&fs.PackageDepsOptions{
-		PackagePath: pkg.Dir,
-	})
-	if pkgDepsErr != nil {
-		hashObject = make(map[string]string)
-		// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-		// the directory of a package.
-		ignore, err := safeCompileIgnoreFile(".gitignore")
-		if err != nil {
-			return err
-		}
-
-		ignorePkg, err := safeCompileIgnoreFile(filepath.Join(pkg.Dir, ".gitignore"))
-		if err != nil {
-			return err
-		}
-
-		fs.Walk(pkg.Dir, func(name string, isDir bool) error {
-			rootMatch := ignore.MatchesPath(name)
-			otherMatch := ignorePkg.MatchesPath(name)
-			if !rootMatch && !otherMatch {
-				if !isDir {
-					hash, err := fs.GitLikeHashFile(name)
-					if err != nil {
-						return fmt.Errorf("could not hash file %v. \n%w", name, err)
-					}
-					hashObject[strings.TrimPrefix(name, pkg.Dir+"/")] = hash
-				}
-			}
-			return nil
-		})
-
-		// ignorefile rules matched files
-	}
-	hashOfFiles, otherErr := fs.HashObject(hashObject)
-	if otherErr != nil {
-		return otherErr
-	}
-	pkg.FilesHash = hashOfFiles
-	return nil
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
@@ -430,14 +381,6 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 
 		}(directDepName, unresolvedVersion)
 	}
-}
-
-func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
-	if fs.FileExists(filepath) {
-		return gitignore.CompileIgnoreFile(filepath)
-	}
-	// no op
-	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
 func getWorkspaceIgnores() []string {
