@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/tabwriter"
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -297,14 +298,30 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			}
 			c.Ui.Output(string(bytes))
 		} else {
-			c.Ui.Info("Packages in scope:")
+			c.Ui.Output("")
+			c.Ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
+			p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+			fmt.Fprintln(p, "Name\tPath\t")
 			for _, pkg := range packagesInScope {
-				c.Ui.Output(fmt.Sprintf(ui.Bold("• %v"), pkg))
+				fmt.Fprintln(p, fmt.Sprintf("%s\t%s\t", pkg, g.PackageInfos[pkg].Dir))
 			}
-			c.Ui.Info("Tasks to run:")
+			p.Flush()
+
+			c.Ui.Output("")
+			c.Ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
+
 			for _, task := range tasksRun {
-				c.Ui.Output(fmt.Sprintf(ui.Bold("• %v"), task))
+				c.Ui.Info(util.Sprintf("${BOLD}%s${RESET}", task.TaskID))
+				w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs[1:], ", ")))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
+				w.Flush()
 			}
+
 		}
 	} else {
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
@@ -652,22 +669,63 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 }
 
 type hashedTask struct {
-	TaskID string `json:"taskId"`
-	Hash   string `json:"hash"`
+	TaskID       string   `json:"taskId"`
+	Hash         string   `json:"hash"`
+	Command      string   `json:"command"`
+	Outputs      []string `json:"outputs"`
+	Dir          string   `json:"directory"`
+	Dependencies []string `json:"dependencies"`
+	Dependents   []string `json:"dependents"`
+	// TaskDeps []string `json:"taskDependendents"`
 	// TODO(gsoltis): other data we might want here? inputs, args, outputs, etc.
 }
 
 func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs *runSpec, logger hclog.Logger) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
 	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
+		command, ok := pt.pkg.Scripts[pt.task]
+		if !ok {
+			logger.Debug("no task in package, skipping")
+			logger.Debug("done", "status", "skipped")
+			return nil
+		}
 		passThroughArgs := rs.ArgsForTask(pt.task)
 		hash, err := pt.hash(passThroughArgs, logger)
 		if err != nil {
 			return err
 		}
+		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
+		if err != nil {
+			return err
+		}
+		stringAncestors := []string{}
+		for _, dep := range ancestors {
+			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
+				stringAncestors = append(stringAncestors, dep.(string))
+			}
+		}
+		descendents, err := engine.TaskGraph.Descendents(pt.taskID)
+		if err != nil {
+			return err
+		}
+		stringDescendents := []string{}
+		for _, dep := range descendents {
+			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
+				stringDescendents = append(stringDescendents, dep.(string))
+			}
+		}
+		sort.Strings(stringDescendents)
+
 		taskIDs = append(taskIDs, hashedTask{
-			TaskID: pt.taskID,
-			Hash:   hash,
+			TaskID:       pt.taskID,
+			Hash:         hash,
+			Command:      command,
+			Dir:          pt.pkg.Dir,
+			Outputs:      pt.Outputs(),
+			Dependencies: stringAncestors,
+			Dependents:   stringDescendents,
 		})
 		return nil
 	}), core.ExecOpts{
