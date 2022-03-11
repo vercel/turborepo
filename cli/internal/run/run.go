@@ -313,6 +313,8 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			for _, task := range tasksRun {
 				c.Ui.Info(util.Sprintf("${BOLD}%s${RESET}", task.TaskID))
 				w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
@@ -675,14 +677,14 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 
 type hashedTask struct {
 	TaskID       string   `json:"taskId"`
+	Task         string   `json:"task"`
+	Package      string   `json:"package"`
 	Hash         string   `json:"hash"`
 	Command      string   `json:"command"`
 	Outputs      []string `json:"outputs"`
 	Dir          string   `json:"directory"`
 	Dependencies []string `json:"dependencies"`
 	Dependents   []string `json:"dependents"`
-	// TaskDeps []string `json:"taskDependendents"`
-	// TODO(gsoltis): other data we might want here? inputs, args, outputs, etc.
 }
 
 func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs *runSpec, logger hclog.Logger) ([]hashedTask, error) {
@@ -725,6 +727,8 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 
 		taskIDs = append(taskIDs, hashedTask{
 			TaskID:       pt.taskID,
+			Task:         pt.task,
+			Package:      pt.packageName,
 			Hash:         hash,
 			Command:      command,
 			Dir:          pt.pkg.Dir,
