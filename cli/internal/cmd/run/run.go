@@ -31,10 +31,10 @@ import (
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/run"
 	"github.com/vercel/turborepo/cli/internal/scm"
+	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
-	"github.com/vercel/turborepo/cli/internal/util/filter"
 )
 
 const (
@@ -97,6 +97,9 @@ occurred again).
 			if len(passThroughArgs) == 2 {
 				opts.PassThroughArgs = strings.Split(passThroughArgs[1], " ")
 			}
+			if len(opts.Scope) != 0 && opts.Since != "" && !opts.IncludeDeps {
+				opts.IncludeDeps = true
+			}
 
 			startAt := time.Now()
 
@@ -111,142 +114,20 @@ occurred again).
 				return ch.LogError("failed to resolve targets: %w", err)
 			}
 
-			gitRepoRoot, err := fs.FindupFrom(".git", opts.Cwd)
+			scmInstance, err := scm.FromInRepo(opts.Cwd)
 			if err != nil {
-				ch.LogWarning("cannot find a .git folder in current working directory or in any parent directories. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo.", err)
+				if errors.Is(err, scm.ErrFallback) {
+					ch.LogWarning("%w", err)
+				} else {
+					return ch.LogError("failed to create SCM: %w", err)
+				}
 			}
-			git, err := scm.NewFallback(filepath.Dir(gitRepoRoot))
+
+			filteredPkgs, err := scope.ResolvePackages(opts.ScopeOpts(), scmInstance, ctx, ch.Logger, ch.Config.Logger)
 			if err != nil {
-				ch.LogWarning("%w", err)
+				ch.LogError("failed resolve packages to run %v", err)
 			}
 
-			ignoreGlob, err := filter.Compile(opts.Ignore)
-			if err != nil {
-				return ch.LogError("invalid ignore globs: %w", err)
-			}
-			globalDepsGlob, err := filter.Compile(opts.GlobalDeps)
-			if err != nil {
-				return ch.LogError("invalid global deps glob: %w", err)
-			}
-			hasRepoGlobalFileChanged := false
-			var changedFiles []string
-			if opts.Since != "" {
-				changedFiles = git.ChangedFiles(opts.Since, true, opts.Cwd)
-			}
-
-			ignoreSet := make(util.Set)
-			if globalDepsGlob != nil {
-				for _, f := range changedFiles {
-					if globalDepsGlob.Match(f) {
-						hasRepoGlobalFileChanged = true
-						break
-					}
-				}
-			}
-
-			if ignoreGlob != nil {
-				for _, f := range changedFiles {
-					if ignoreGlob.Match(f) {
-						ignoreSet.Add(f)
-					}
-				}
-			}
-
-			filteredChangedFiles := make(util.Set)
-			// Ignore any changed files in the ignore set
-			for _, ch := range changedFiles {
-				if !ignoreSet.Includes(ch) {
-					filteredChangedFiles.Add(ch)
-				}
-			}
-
-			changedPackages := make(util.Set)
-			// Be specific with the changed packages only if no repo-wide changes occurred
-			if !hasRepoGlobalFileChanged {
-				for k, pkgInfo := range ctx.PackageInfos {
-					partialPath := pkgInfo.Dir
-					if filteredChangedFiles.Some(func(v interface{}) bool {
-						return strings.HasPrefix(fmt.Sprintf("%v", v), partialPath) // true
-					}) {
-						changedPackages.Add(k)
-					}
-				}
-			}
-
-			// Scoped packages
-			// Unwind scope globs
-			scopePkgs, err := getScopedPackages(ctx, opts.Scope)
-			if err != nil {
-				return ch.LogError("invalid scope: %w", err)
-			}
-
-			// Filter Packages
-			filteredPkgs := make(util.Set)
-
-			// If both scoped and since are specified, we have to merge two lists:
-			// 1. changed packages that ARE themselves the scoped packages
-			// 2. changed package consumers (package dependents) that are within the scoped subgraph
-			if scopePkgs.Len() > 0 && changedPackages.Len() > 0 {
-				filteredPkgs = scopePkgs.Intersection(changedPackages)
-				for _, changed := range changedPackages {
-					descenders, err := ctx.TopologicalGraph.Descendents(changed)
-					if err != nil {
-						return ch.LogError("could not determine dependency: %w", err)
-					}
-
-					filteredPkgs.Add(changed)
-					for _, d := range descenders {
-						filteredPkgs.Add(d)
-					}
-				}
-				ch.Logger.Printf(ui.Dim("• Packages changed since %s in scope: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", "))
-			} else if changedPackages.Len() > 0 {
-				filteredPkgs = changedPackages
-				ch.Logger.Printf(ui.Dim("• Packages changed since %s: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", "))
-			} else if scopePkgs.Len() > 0 {
-				filteredPkgs = scopePkgs
-			} else if opts.Since == "" {
-				for _, f := range ctx.PackageNames {
-					filteredPkgs.Add(f)
-				}
-			}
-
-			if opts.IncludeDependents {
-				// perf??? this is duplicative from the step above
-				for _, pkg := range filteredPkgs {
-					descenders, err := ctx.TopologicalGraph.Descendents(pkg)
-					if err != nil {
-						return ch.LogError("error calculating affected packages: %w", err)
-					}
-					ch.Config.Logger.Debug("dependents", "pkg", pkg, "value", descenders.List())
-					for _, d := range descenders {
-						// we need to exclude the fake root node
-						// since it is not a real package
-						if d != ctx.RootNode {
-							filteredPkgs.Add(d)
-						}
-					}
-				}
-				ch.Config.Logger.Debug("running with dependents")
-			}
-
-			if opts.IncludeDeps {
-				for _, pkg := range filteredPkgs {
-					ancestors, err := ctx.TopologicalGraph.Ancestors(pkg)
-					if err != nil {
-						return ch.LogError("error getting dependency %v", err)
-					}
-					ch.Config.Logger.Debug("dependencies", "pkg", pkg, "value", ancestors.List())
-					for _, d := range ancestors {
-						// we need to exclude the fake root node
-						// since it is not a real package
-						if d != ctx.RootNode {
-							filteredPkgs.Add(d)
-						}
-					}
-				}
-				ch.Config.Logger.Debug(ui.Dim("running with dependencies"))
-			}
 			ch.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 			packagesInScope := filteredPkgs.UnsafeListOfStrings()
 			sort.Strings(packagesInScope)
@@ -727,43 +608,6 @@ func runOperation(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, backend *ap
 	}
 
 	return &cmdutil.Error{ExitCode: exitCode}
-}
-
-func getScopedPackages(ctx *context.Context, scopePatterns []string) (scopePkgs util.Set, err error) {
-	if err != nil {
-		return nil, fmt.Errorf("invalid glob pattern %w", err)
-	}
-	var scopedPkgs = make(util.Set)
-	if len(scopePatterns) == 0 {
-		return scopePkgs, nil
-	}
-
-	include := make([]string, 0, len(scopePatterns))
-	exclude := make([]string, 0, len(scopePatterns))
-
-	for _, pattern := range scopePatterns {
-		if strings.HasPrefix(pattern, "!") {
-			exclude = append(exclude, pattern[1:])
-		} else {
-			include = append(include, pattern)
-		}
-	}
-
-	glob, err := filter.NewIncludeExcludeFilter(include, exclude)
-	if err != nil {
-		return nil, err
-	}
-	for _, f := range ctx.PackageNames {
-		if glob.Match(f) {
-			scopedPkgs.Add(f)
-		}
-	}
-
-	if len(include) > 0 && scopedPkgs.Len() == 0 {
-		return nil, errors.Errorf("No packages found matching the provided scope pattern.")
-	}
-
-	return scopedPkgs, nil
 }
 
 func hasGraphViz() bool {

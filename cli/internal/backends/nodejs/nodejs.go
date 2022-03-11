@@ -3,7 +3,6 @@ package nodejs
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"path/filepath"
 
 	"github.com/vercel/turborepo/cli/internal/api"
@@ -57,8 +56,6 @@ var NodejsYarnBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
-			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -114,18 +111,9 @@ var NodejsBerryBackend = api.LanguageBackend{
 			}
 
 			if isBerry {
-				isNMLinker, err := util.IsNMLinker(cwd)
-				if err != nil {
-					return false, fmt.Errorf("could not determine if yarn is using `nodeLinker: node-modules`: %w", err)
-				} else if !isNMLinker {
-					return false, fmt.Errorf("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
-				}
-
 				return true, nil
 			}
 		} else {
-			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please set the \"packageManager\" field to your package.json")
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -135,13 +123,6 @@ var NodejsBerryBackend = api.LanguageBackend{
 			}
 
 			if specfileExists && lockfileExists && isBerry {
-				isNMLinker, err := util.IsNMLinker(cwd)
-				if err != nil {
-					return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
-				} else if !isNMLinker {
-					return false, fmt.Errorf("only yarn nm-linker is supported")
-				}
-
 				return true, nil
 			}
 		}
@@ -193,7 +174,6 @@ var NodejsPnpmBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
-			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
 
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
@@ -238,7 +218,6 @@ var NodejsNpmBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
-			log.Println("[WARNING] Did not find \"packageManager\" in your package.json. Please run \"npx @turbo/codemod add-package-manager\"")
 
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))

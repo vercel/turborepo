@@ -52,6 +52,13 @@ func PruneCmd(ch *cmdutil.Helper) *cobra.Command {
 
 			if !util.IsYarn(ctx.Backend.Name) {
 				return ch.LogError("this command is not yet implemented for %s", ctx.Backend.Name)
+			} else if ctx.Backend.Name == "nodejs-berry" {
+				isNMLinker, err := util.IsNMLinker(opts.cwd)
+				if err != nil {
+					return ch.LogError("could not determine if yarn is using `nodeLinker: node-modules`: %w", err)
+				} else if !isNMLinker {
+					return ch.LogError("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
+				}
 			}
 
 			logger.Printf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(filepath.Join(opts.cwd, "out")))

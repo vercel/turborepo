@@ -12,6 +12,7 @@ import (
 	"github.com/google/chrometracing"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	tlogger "github.com/vercel/turborepo/cli/internal/logger"
+	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/ui/term"
 )
@@ -57,6 +58,18 @@ type RunResult struct {
 	Description string
 	// Test results
 	// Tests TestSuite
+}
+
+func (ro *RunOptions) ScopeOpts() *scope.Opts {
+	return &scope.Opts{
+		IncludeDependencies: ro.IncludeDeps,
+		IncludeDependents:   ro.IncludeDependents,
+		Patterns:            ro.Scope,
+		Since:               ro.Since,
+		Cwd:                 ro.Cwd,
+		IgnorePatterns:      ro.Ignore,
+		GlobalDepPatterns:   ro.GlobalDeps,
+	}
 }
 
 // A RunResultStatus represents the status of a target when we log a build result.
