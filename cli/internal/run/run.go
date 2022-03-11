@@ -70,6 +70,16 @@ type runSpec struct {
 	Opts         *RunOptions
 }
 
+func (rs *runSpec) ArgsForTask(task string) []string {
+	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
+	for _, target := range rs.Targets {
+		if target == task {
+			passThroughArgs = append(passThroughArgs, rs.Opts.passThroughArgs...)
+		}
+	}
+	return passThroughArgs
+}
+
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
 	return "Run a task"
@@ -265,7 +275,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			return 1
 		}
 	} else if rs.Opts.dryRun {
-		tasksRun, err := c.executeDryRun(engine)
+		tasksRun, err := c.executeDryRun(engine, g, rs, c.Config.Logger)
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
 			return 1
@@ -273,9 +283,13 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
 		if rs.Opts.dryRunJson {
-			dryRun := make(map[string][]string)
-			dryRun["packages"] = packagesInScope
-			dryRun["tasks"] = tasksRun
+			dryRun := &struct {
+				Packages []string     `json:"packages"`
+				Tasks    []hashedTask `json:"tasks"`
+			}{
+				Packages: packagesInScope,
+				Tasks:    tasksRun,
+			}
 			bytes, err := json.MarshalIndent(dryRun, "", "  ")
 			if err != nil {
 				c.logError(c.Config.Logger, "", errors.Wrap(err, "failed to render to JSON"))
@@ -600,7 +614,6 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
 	ec := &execContext{
-		g:          g,
 		colorCache: NewColorCache(),
 		runState:   runState,
 		rs:         rs,
@@ -612,7 +625,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 
 	// run the thing
-	errs := engine.Execute(ec.exec, core.ExecOpts{
+	errs := engine.Execute(g.getPackageTaskVisitor(ec.exec), core.ExecOpts{
 		Parallel:    rs.Opts.parallel,
 		Concurrency: rs.Opts.concurrency,
 	})
@@ -638,12 +651,26 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	return 0
 }
 
-func (c *RunCommand) executeDryRun(engine *core.Scheduler) ([]string, error) {
-	taskIDs := []string{}
-	errs := engine.Execute(func(taskID string) error {
-		taskIDs = append(taskIDs, taskID)
+type hashedTask struct {
+	TaskID string `json:"taskId"`
+	Hash   string `json:"hash"`
+	// TODO(gsoltis): other data we might want here? inputs, args, outputs, etc.
+}
+
+func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs *runSpec, logger hclog.Logger) ([]hashedTask, error) {
+	taskIDs := []hashedTask{}
+	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
+		passThroughArgs := rs.ArgsForTask(pt.task)
+		hash, err := pt.hash(passThroughArgs, logger)
+		if err != nil {
+			return err
+		}
+		taskIDs = append(taskIDs, hashedTask{
+			TaskID: pt.taskID,
+			Hash:   hash,
+		})
 		return nil
-	}, core.ExecOpts{
+	}), core.ExecOpts{
 		Concurrency: 1,
 		Parallel:    false,
 	})
@@ -700,7 +727,6 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 }
 
 type execContext struct {
-	g                  *completeGraph
 	colorCache         *ColorCache
 	runState           *RunState
 	rs                 *runSpec
@@ -722,27 +748,25 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(id string) error {
+func (e *execContext) exec(pt *packageTask) error {
 	cmdTime := time.Now()
-	name, task := util.GetPackageTaskFromId(id)
-	pack := e.g.PackageInfos[name]
-	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pack.Name, task))
-	defer targetLogger.ResetNamed(pack.Name)
+
+	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.pkg.Name, pt.task))
 	targetLogger.Debug("start")
 
 	// bail if the script doesn't exist
-	if _, ok := pack.Scripts[task]; !ok {
+	if _, ok := pt.pkg.Scripts[pt.task]; !ok {
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
 	}
 
 	// Setup tracer
-	tracer := e.runState.Run(util.GetTaskId(pack.Name, task))
+	tracer := e.runState.Run(util.GetTaskId(pt.pkg.Name, pt.task))
 
 	// Create a logger
-	pref := e.colorCache.PrefixColor(pack.Name)
-	actualPrefix := pref("%s:%s: ", pack.Name, task)
+	pref := e.colorCache.PrefixColor(pt.pkg.Name)
+	actualPrefix := pref("%s:%s: ", pt.pkg.Name, pt.task)
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: actualPrefix,
@@ -750,71 +774,17 @@ func (e *execContext) exec(id string) error {
 		ErrorPrefix:  actualPrefix,
 		WarnPrefix:   actualPrefix,
 	}
-	// Hash ---------------------------------------------
-	// first check for package-tasks
-	pipeline, ok := e.g.Pipeline[fmt.Sprintf("%v", id)]
-	if !ok {
-		// then check for regular tasks
-		altpipe, notcool := e.g.Pipeline[task]
-		// if neither, then bail
-		if !notcool && !ok {
-			return nil
-		}
-		// override if we need to...
-		pipeline = altpipe
-	}
 
-	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", task)}
-	if pipeline.Outputs == nil {
-		outputs = append(outputs, "dist/**/*", "build/**/*")
-	} else {
-		outputs = append(outputs, pipeline.Outputs...)
-	}
-	targetLogger.Debug("task output globs", "outputs", outputs)
-
-	passThroughArgs := make([]string, 0, len(e.rs.Opts.passThroughArgs))
-	for _, target := range e.rs.Targets {
-		if target == task {
-			passThroughArgs = append(passThroughArgs, e.rs.Opts.passThroughArgs...)
-		}
-	}
-
-	// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
-	var hashableEnvVars []string
-	var hashableEnvPairs []string
-	if len(pipeline.DependsOn) > 0 {
-		for _, v := range pipeline.DependsOn {
-			if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
-				trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
-				hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-				hashableEnvVars = append(hashableEnvVars, trimmed)
-			}
-		}
-		sort.Strings(hashableEnvVars) // always sort them
-	}
-	targetLogger.Debug("hashable env vars", "vars", hashableEnvVars)
-	hashable := struct {
-		Hash             string
-		Task             string
-		Outputs          []string
-		PassThruArgs     []string
-		HashableEnvPairs []string
-	}{
-		Hash:             pack.Hash,
-		Task:             task,
-		Outputs:          outputs,
-		PassThruArgs:     passThroughArgs,
-		HashableEnvPairs: hashableEnvPairs,
-	}
-	hash, err := fs.HashObject(hashable)
-	targetLogger.Debug("task hash", "value", hash)
-	if err != nil {
-		targetUi.Error(fmt.Sprintf("Hashing error: %v", err))
-		// @TODO probably should abort fatally???
-	}
-	logFileName := filepath.Join(pack.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", task))
+	logFileName := filepath.Join(pt.pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.task))
 	targetLogger.Debug("log file", "path", filepath.Join(e.rs.Opts.cwd, logFileName))
 
+	passThroughArgs := e.rs.ArgsForTask(pt.task)
+	hash, err := pt.hash(passThroughArgs, e.logger)
+	e.logger.Debug("task hash", "value", hash)
+	if err != nil {
+		e.ui.Error(fmt.Sprintf("Hashing error: %v", err))
+		// @TODO probably should abort fatally???
+	}
 	// Cache ---------------------------------------------
 	var hit bool
 	if !e.rs.Opts.forceExecution {
@@ -841,7 +811,7 @@ func (e *execContext) exec(id string) error {
 	}
 
 	// Setup command execution
-	argsactual := append([]string{"run"}, task)
+	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
 	// @TODO: @jaredpalmer fix this hack to get the package manager's name
 	var cmd *exec.Cmd
@@ -850,7 +820,7 @@ func (e *execContext) exec(id string) error {
 	} else {
 		cmd = exec.Command(strings.TrimPrefix(e.backend.Name, "nodejs-"), argsactual...)
 	}
-	cmd.Dir = pack.Dir
+	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 
@@ -858,7 +828,7 @@ func (e *execContext) exec(id string) error {
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
 	var writer io.Writer
-	if !e.rs.Opts.cache || (pipeline.Cache != nil && !*pipeline.Cache) {
+	if !e.rs.Opts.cache || (pt.pipeline.Cache != nil && !*pt.pipeline.Cache) {
 		writer = os.Stdout
 	} else {
 		// Setup log file
@@ -915,10 +885,10 @@ func (e *execContext) exec(id string) error {
 				defer f.Close()
 				scan := bufio.NewScanner(f)
 				e.ui.Error("")
-				e.ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pack.Name, task)))
+				e.ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pt.pkg.Name, pt.task)))
 				e.ui.Error("")
 				for scan.Scan() {
-					e.ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pack.Name, task, scan.Bytes())) //Writing to Stdout
+					e.ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pt.pkg.Name, pt.task, scan.Bytes())) //Writing to Stdout
 				}
 			}
 			e.processes.Close()
@@ -931,11 +901,12 @@ func (e *execContext) exec(id string) error {
 	}
 
 	// Cache command outputs
-	if e.rs.Opts.cache && (pipeline.Cache == nil || *pipeline.Cache) {
+	if e.rs.Opts.cache && (pt.pipeline.Cache == nil || *pt.pipeline.Cache) {
+		outputs := pt.Outputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
-		filesToBeCached := globby.GlobFiles(pack.Dir, outputs, ignore)
-		if err := e.turboCache.Put(pack.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
+		filesToBeCached := globby.GlobFiles(pt.pkg.Dir, outputs, ignore)
+		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -998,4 +969,83 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
 		c.Ui.Output(graphString)
 	}
 	return nil
+}
+
+type packageTask struct {
+	taskID      string
+	task        string
+	packageName string
+	pkg         *fs.PackageJSON
+	pipeline    *fs.Pipeline
+}
+
+func (pt *packageTask) Outputs() []string {
+	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
+	if pt.pipeline.Outputs == nil {
+		outputs = append(outputs, "dist/**/*", "build/**/*")
+	} else {
+		outputs = append(outputs, pt.pipeline.Outputs...)
+	}
+	return outputs
+}
+
+func (pt *packageTask) hash(args []string, logger hclog.Logger) (string, error) {
+	// Hash ---------------------------------------------
+	outputs := pt.Outputs()
+	logger.Debug("task output globs", "outputs", outputs)
+
+	// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
+	var hashableEnvVars []string
+	var hashableEnvPairs []string
+	if len(pt.pipeline.DependsOn) > 0 {
+		for _, v := range pt.pipeline.DependsOn {
+			if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
+				trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
+				hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+				hashableEnvVars = append(hashableEnvVars, trimmed)
+			}
+		}
+		sort.Strings(hashableEnvVars) // always sort them
+	}
+	logger.Debug("hashable env vars", "vars", hashableEnvVars)
+	hashable := struct {
+		Hash             string
+		Task             string
+		Outputs          []string
+		PassThruArgs     []string
+		HashableEnvPairs []string
+	}{
+		Hash:             pt.pkg.Hash,
+		Task:             pt.task,
+		Outputs:          outputs,
+		PassThruArgs:     args,
+		HashableEnvPairs: hashableEnvPairs,
+	}
+	return fs.HashObject(hashable)
+}
+
+func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) error) func(taskID string) error {
+	return func(taskID string) error {
+		name, task := util.GetPackageTaskFromId(taskID)
+		pkg := g.PackageInfos[name]
+		// first check for package-tasks
+		pipeline, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
+		if !ok {
+			// then check for regular tasks
+			altpipe, notcool := g.Pipeline[task]
+			// if neither, then bail
+			if !notcool && !ok {
+				return nil
+			}
+			// override if we need to...
+			pipeline = altpipe
+		}
+		return visitor(&packageTask{
+			taskID:      taskID,
+			task:        task,
+			packageName: name,
+			pkg:         pkg,
+			pipeline:    &pipeline,
+		})
+	}
 }
