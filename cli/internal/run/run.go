@@ -133,9 +133,9 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
-  --dry-run[=json]       List the packages in scope and the tasks that would be run, 
-                         but don't actually run them.
-                         Passing --dry-run=json will render the output in JSON format.
+  --dry/--dry-run[=json] List the packages in scope and the tasks that would be run, 
+                         but don't actually run them. Passing --dry=json or 
+                         --dry-run=json will render the output in JSON format.
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -559,6 +559,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--dry-run"):
 				runOptions.dryRun = true
 				if strings.HasPrefix(arg, "--dry-run=json") {
+					runOptions.dryRunJson = true
+				}
+			case strings.HasPrefix(arg, "--dry"):
+				runOptions.dryRun = true
+				if strings.HasPrefix(arg, "--dry=json") {
 					runOptions.dryRunJson = true
 				}
 			case strings.HasPrefix(arg, "--team"):
