@@ -319,6 +319,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs[1:], ", ")))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 				w.Flush()
@@ -682,6 +683,7 @@ type hashedTask struct {
 	Hash         string   `json:"hash"`
 	Command      string   `json:"command"`
 	Outputs      []string `json:"outputs"`
+	LogFile      string   `json:"logFile"`
 	Dir          string   `json:"directory"`
 	Dependencies []string `json:"dependencies"`
 	Dependents   []string `json:"dependents"`
@@ -732,7 +734,8 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 			Hash:         hash,
 			Command:      command,
 			Dir:          pt.pkg.Dir,
-			Outputs:      pt.Outputs(),
+			Outputs:      pt.ExternalOutputs(),
+			LogFile:      pt.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
 		})
@@ -969,7 +972,7 @@ func (e *execContext) exec(pt *packageTask) error {
 
 	// Cache command outputs
 	if e.rs.Opts.cache && (pt.pipeline.Cache == nil || *pt.pipeline.Cache) {
-		outputs := pt.Outputs()
+		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
 		filesToBeCached := globby.GlobFiles(pt.pkg.Dir, outputs, ignore)
@@ -1046,19 +1049,26 @@ type packageTask struct {
 	pipeline    *fs.Pipeline
 }
 
-func (pt *packageTask) Outputs() []string {
-	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
+func (pt *packageTask) ExternalOutputs() []string {
 	if pt.pipeline.Outputs == nil {
-		outputs = append(outputs, "dist/**/*", "build/**/*")
-	} else {
-		outputs = append(outputs, pt.pipeline.Outputs...)
+		return []string{"dist/**/*", "build/**/*"}
 	}
+	return pt.pipeline.Outputs
+}
+
+func (pt *packageTask) RepoRelativeLogFile() string {
+	return filepath.Join(pt.pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.task))
+}
+
+func (pt *packageTask) HashableOutputs() []string {
+	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
+	outputs = append(outputs, pt.ExternalOutputs()...)
 	return outputs
 }
 
 func (pt *packageTask) hash(args []string, logger hclog.Logger) (string, error) {
 	// Hash ---------------------------------------------
-	outputs := pt.Outputs()
+	outputs := pt.HashableOutputs()
 	logger.Debug("task output globs", "outputs", outputs)
 
 	// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
