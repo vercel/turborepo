@@ -157,15 +157,10 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			}
 
 			if hasTopoDeps {
+        depPkgs := p.TopologicGraph.DownEdges(pkg)
 				for _, from := range task.TopoDeps.UnsafeListOfStrings() {
-					// TODO: this should move out of the loop???
-					depPkgs, err := p.TopologicGraph.Ancestors(pkg)
-					if err != nil {
-						return fmt.Errorf("error getting ancestors: %w", err)
-					}
-
 					// add task dep from all the package deps within repo
-					for _, depPkg := range depPkgs.List() {
+					for depPkg := range depPkgs {
 						fromTaskId := util.GetTaskId(depPkg, from)
 						taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 						p.TaskGraph.Add(fromTaskId)
