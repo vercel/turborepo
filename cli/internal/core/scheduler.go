@@ -28,7 +28,6 @@ type Scheduler struct {
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the scheduler
 	Tasks           map[string]*Task
-	taskDeps        [][]string
 	PackageTaskDeps [][]string
 }
 
@@ -39,7 +38,6 @@ func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
 		TopologicGraph:  topologicalGraph,
 		TaskGraph:       &dag.AcyclicGraph{},
 		PackageTaskDeps: [][]string{},
-		taskDeps:        [][]string{},
 	}
 }
 
@@ -109,8 +107,6 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 	packageTasksDepsMap := getPackageTaskDepsMap(p.PackageTaskDeps)
 
-	taskDeps := [][]string{}
-
 	traversalQueue := []string{}
 
 	for _, pkg := range scope {
@@ -157,17 +153,11 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			}
 
 			if hasTopoDeps {
+				depPkgs := p.TopologicGraph.DownEdges(pkg)
 				for _, from := range task.TopoDeps.UnsafeListOfStrings() {
-					// TODO: this should move out of the loop???
-					depPkgs, err := p.TopologicGraph.Ancestors(pkg)
-					if err != nil {
-						return fmt.Errorf("error getting ancestors: %w", err)
-					}
-
 					// add task dep from all the package deps within repo
-					for _, depPkg := range depPkgs.List() {
+					for depPkg := range depPkgs {
 						fromTaskId := util.GetTaskId(depPkg, from)
-						taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 						p.TaskGraph.Add(fromTaskId)
 						p.TaskGraph.Add(toTaskId)
 						p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
@@ -179,7 +169,6 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			if hasDeps {
 				for _, from := range deps.UnsafeListOfStrings() {
 					fromTaskId := util.GetTaskId(pkg, from)
-					taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 					p.TaskGraph.Add(fromTaskId)
 					p.TaskGraph.Add(toTaskId)
 					p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
@@ -190,7 +179,6 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			if hasPackageTaskDeps {
 				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskId]; ok {
 					for _, fromTaskId := range pkgTaskDeps {
-						taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 						p.TaskGraph.Add(fromTaskId)
 						p.TaskGraph.Add(toTaskId)
 						p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
@@ -200,16 +188,12 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			}
 
 			if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
-				// TODO: this should change to ROOT_NODE_NAME
-				fromTaskId := util.GetTaskId(pkg, "")
-				taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 				p.TaskGraph.Add(ROOT_NODE_NAME)
 				p.TaskGraph.Add(toTaskId)
 				p.TaskGraph.Connect(dag.BasicEdge(toTaskId, ROOT_NODE_NAME))
 			}
 		}
 	}
-	p.taskDeps = taskDeps
 	return nil
 }
 
