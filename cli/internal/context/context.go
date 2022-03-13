@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "snozzberries"
+const GLOBAL_CACHE_KEY = "snozzberries are delicious"
 
 // Context of the CLI
 type Context struct {
@@ -106,8 +106,8 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 		// Other protocols are assumed to be external references ("github:", "link:", "file:" etc)
 		return false
 	} else if dependencyVersion == "*" {
-    return true
-  }
+		return true
+	}
 
 	// If we got this far, then we need to check the workspace package version to see it satisfies
 	// the dependencies range to determin whether or not its an internal or external dependency.
