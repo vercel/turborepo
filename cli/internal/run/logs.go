@@ -383,3 +383,10 @@ func (c *LogsCommand) logError(log hclog.Logger, prefix string, err error) {
 
 	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
+
+// logInfo logs an info message and outputs it to the UI.
+func (c *LogsCommand) logInfo(log hclog.Logger, message string) {
+	log.Info(message)
+
+	c.Ui.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.BlueString(" %v", message)))
+}
