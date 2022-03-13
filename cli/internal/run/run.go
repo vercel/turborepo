@@ -104,7 +104,7 @@ Options:
   --scope                Specify package(s) to act as entry points for task
                          execution. Supports globs.
   --cache-dir            Specify local filesystem cache directory.
-												 (default "./node_modules/.cache/turbo")
+                         (default "./node_modules/.cache/turbo")
   --concurrency          Limit the concurrency of task execution. Use 1 for
                          serial (i.e. one-at-a-time) execution. (default 10)
   --continue             Continue execution even if a task exits with an error
@@ -114,8 +114,8 @@ Options:
                          (default false)
   --graph                Generate a Dot graph of the task execution.
   --global-deps          Specify glob of global filesystem dependencies to
-	                       be hashed. Useful for .env and files in the root
-												 directory. Can be specified multiple times.
+                         be hashed. Useful for .env and files in the root
+                         directory. Can be specified multiple times.
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
