@@ -90,6 +90,10 @@ func (c *LogsCommand) Run(args []string) int {
 	if logsOptions.sortType == "task" || !logsOptions.includeAll {
 		if !fs.FileExists(logsOptions.lastRunPath) {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve last run file: %v", logsOptions.lastRunPath))
+			metadataPaths := globby.GlobFiles(logsOptions.cacheFolder, []string{"*-meta.json"}, []string{})
+			if len(metadataPaths) > 0 {
+				c.logInfo(c.Config.Logger, "other logs found, use --all to view them")
+			}
 			return 1
 		}
 		lastRunHashes, err = cache.ReadHashesFile(logsOptions.lastRunPath)
