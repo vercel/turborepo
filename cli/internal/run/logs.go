@@ -62,9 +62,9 @@ Options:
                          specific hashes are given, defaults to their order.
                          If --all, defaults to alnum. (default task)
   --reverse              Reverse order while sorting.
-  --progress             Set type of replay output (standard|reduced).
-                         Use reduced to hide cached task logs.
-                         (default standard)
+  --output-logs          Set type of replay output logs. Use full to show all
+                         output. Use hash-only to show only the turbo-computed
+                         task hash lines. (default full)
   --cache-dir            Specify local filesystem cache directory.
                          (default "./node_modules/.cache/turbo")
   --last-run-path        Specify path to last run file to load.
@@ -176,7 +176,7 @@ func (c *LogsCommand) Run(args []string) int {
 			}
 			defer file.Close()
 			scan := bufio.NewScanner(file)
-			if logsOptions.progressType == "reduced" {
+			if logsOptions.outputLogsMode == "hash" {
 				scan.Scan()
 				c.Ui.Output(ui.StripAnsi(string(scan.Bytes())))
 			} else {
@@ -255,17 +255,19 @@ type LogsOptions struct {
 	// in user-provided order
 	queryHashes []string
 	// Replay task logs output mode
-	progressType string
+	// full - show all,
+	// hash - only show task hash
+	outputLogsMode string
 }
 
 func getDefaultLogsOptions() *LogsOptions {
 	return &LogsOptions{
-		listOnly:     false,
-		listType:     "hash",
-		includeAll:   false,
-		sortType:     "task",
-		reverseSort:  false,
-		progressType: "standard",
+		listOnly:       false,
+		listType:       "hash",
+		includeAll:     false,
+		sortType:       "task",
+		reverseSort:    false,
+		outputLogsMode: "full",
 	}
 }
 
@@ -313,14 +315,17 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				unresolvedCacheFolder = arg[len("--cache-dir="):]
 			case strings.HasPrefix(arg, "--last-run-path="):
 				unresolvedLastRunPath = arg[len("--last-run-path="):]
-			case strings.HasPrefix(arg, "--progress"):
-				if len(arg[len("--progress="):]) > 0 {
-					progressType := arg[len("--progress="):]
-					if progressType != "standard" && progressType != "reduced" {
-						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --progress CLI flag. Falling back to standard", progressType))
-						progressType = "standard"
+			case strings.HasPrefix(arg, "--output-logs"):
+				outputLogsMode := arg[len("--output-logs="):]
+				if len(outputLogsMode) > 0 {
+					switch outputLogsMode {
+					case "full":
+						logsOptions.outputLogsMode = outputLogsMode
+					case "hash-only":
+						logsOptions.outputLogsMode = "hash"
+					default:
+						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 					}
-					logsOptions.progressType = progressType
 				}
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
