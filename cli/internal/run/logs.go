@@ -113,7 +113,7 @@ func (c *LogsCommand) Run(args []string) int {
 	var hashes []hashMetadata
 	if len(specificHashes) > 0 {
 		for _, hash := range specificHashes {
-			replayPaths := globby.GlobFiles(filepath.Join(logsOptions.cacheFolder, hash, ".turbo"), []string{"turbo-*.log"}, []string{})
+			replayPaths := globby.GlobFiles(filepath.Join(logsOptions.cacheFolder, hash), []string{"**/.turbo/turbo-*.log"}, []string{})
 			metadataPath := filepath.Join(logsOptions.cacheFolder, hash+"-meta.json")
 			metadata, err := cache.ReadCacheMetaFile(metadataPath)
 			duration := -1
