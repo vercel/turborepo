@@ -169,15 +169,15 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
-#### `--progress`
+#### `--output-logs`
 
 `type: string`
 
-Default standard. Set type of progress output. Use standard for normal output. Use reduced to hide cached task logs and only show what changed.
+Default `full`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
 
 ```shell
-turbo run build --progress=standard
-turbo run build --progress=reduced
+turbo run build --output-logs=full
+turbo run build --output-logs=new-only
 ```
 
 #### `--only`

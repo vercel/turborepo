@@ -92,7 +92,7 @@ Options:
   --scope                Specify package(s) to act as entry points for task
                          execution. Supports globs.
   --cache-dir            Specify local filesystem cache directory.
-												 (default "./node_modules/.cache/turbo")
+                         (default "./node_modules/.cache/turbo")
   --concurrency          Limit the concurrency of task execution. Use 1 for 
                          serial (i.e. one-at-a-time) execution. (default 10)
   --continue             Continue execution even if a task exits with an error
@@ -102,8 +102,8 @@ Options:
                          (default false)
   --graph                Generate a Dot graph of the task execution.   
   --global-deps          Specify glob of global filesystem dependencies to 
-	                       be hashed. Useful for .env and files in the root
-												 directory. Can be specified multiple times.
+                         be hashed. Useful for .env and files in the root
+                         directory. Can be specified multiple times.
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
@@ -121,9 +121,11 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
-  --progress             Set type of progress output (standard|reduced).
-                         Use reduced to hide cached task logs.
-                         (default standard)
+  --output-logs          Set type of process output logging. Use full to show
+                         all output. Use hash-only to show only turbo-computed
+                         task hashes. Use new-only to show only new output with
+                         only hashes for cached tasks. Use none to hide process
+                         output. (default full)
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -416,7 +418,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					} else if hit {
 						if rs.Opts.stream && fs.FileExists(filepath.Join(rs.Opts.cwd, logFileName)) {
 							logReplayWaitGroup.Add(1)
-							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false, rs.Opts.progressType == "reduced")
+							go replayLogs(targetLogger, targetBaseUI, rs.Opts, logFileName, hash, &logReplayWaitGroup, false, rs.Opts.cachedOutputLogsMode)
 						}
 						targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 						tracer(TargetCached, nil)
@@ -473,7 +475,11 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 					bufWriter := bufio.NewWriter(output)
 					bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 					defer bufWriter.Flush()
-					writer = io.MultiWriter(os.Stdout, bufWriter)
+					if rs.Opts.notCachedOutputLogsMode == "none" || rs.Opts.notCachedOutputLogsMode == "hash" {
+						writer = bufWriter
+					} else {
+						writer = io.MultiWriter(os.Stdout, bufWriter)
+					}
 				}
 
 				logger := log.New(writer, "", 0)
@@ -670,8 +676,12 @@ type RunOptions struct {
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
 	only bool
-	// Task logs output mode
-	progressType string
+	// Task logs output modes (cached and not cached tasks):
+	// full - show all,
+	// hash - only show task hash,
+	// none - show nothing
+	cachedOutputLogsMode    string
+	notCachedOutputLogsMode string
 }
 
 func (ro *RunOptions) ScopeOpts() *scope.Opts {
@@ -688,18 +698,19 @@ func (ro *RunOptions) ScopeOpts() *scope.Opts {
 
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
-		bail:                true,
-		includeDependents:   true,
-		parallel:            false,
-		concurrency:         10,
-		dotGraph:            "",
-		includeDependencies: false,
-		cache:               true,
-		profile:             "", // empty string does no tracing
-		forceExecution:      false,
-		stream:              true,
-		only:                false,
-		progressType:        "standard",
+		bail:                    true,
+		includeDependents:       true,
+		parallel:                false,
+		concurrency:             10,
+		dotGraph:                "",
+		includeDependencies:     false,
+		cache:                   true,
+		profile:                 "", // empty string does no tracing
+		forceExecution:          false,
+		stream:                  true,
+		only:                    false,
+		cachedOutputLogsMode:    "full",
+		notCachedOutputLogsMode: "full",
 	}
 }
 
@@ -802,14 +813,23 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
-			case strings.HasPrefix(arg, "--progress"):
-				if len(arg[len("--progress="):]) > 0 {
-					progressType := arg[len("--progress="):]
-					if progressType != "standard" && progressType != "reduced" {
-						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --progress CLI flag. Falling back to standard", progressType))
-						progressType = "standard"
+			case strings.HasPrefix(arg, "--output-logs"):
+				outputLogsMode := arg[len("--output-logs="):]
+				if len(outputLogsMode) > 0 {
+					switch outputLogsMode {
+					case "full",
+						"none":
+						runOptions.notCachedOutputLogsMode = outputLogsMode
+						runOptions.cachedOutputLogsMode = outputLogsMode
+					case "hash-only":
+						runOptions.notCachedOutputLogsMode = "hash"
+						runOptions.cachedOutputLogsMode = "hash"
+					case "new-only":
+						runOptions.notCachedOutputLogsMode = "full"
+						runOptions.cachedOutputLogsMode = "hash"
+					default:
+						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 					}
-					runOptions.progressType = progressType
 				}
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
@@ -867,7 +887,7 @@ func hasGraphViz() bool {
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, silentOutput bool) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode string) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
@@ -876,14 +896,16 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	scan := bufio.NewScanner(f)
-	if silentOutput {
-		//Writing to Stdout only the "cache hit, replaying output" line
-		scan.Scan()
-		prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
-	} else {
-		for scan.Scan() {
-			prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+	if outputLogsMode != "none" {
+		scan := bufio.NewScanner(f)
+		if outputLogsMode == "hash" {
+			//Writing to Stdout only the "cache hit, replaying output" line
+			scan.Scan()
+			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
+		} else {
+			for scan.Scan() {
+				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+			}
 		}
 	}
 	logger.Debug("finish replaying logs")
