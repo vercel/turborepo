@@ -172,7 +172,6 @@ function SubmitForm() {
         })
           .then((res) => res.json())
           .then((res) => {
-            Cookies.set("ckId", res.id, { expires: 365 });
             return router.push("/confirm");
           });
         e.preventDefault();

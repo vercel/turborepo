@@ -76,16 +76,12 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				rel, err := filepath.Rel(target, file)
-				if err != nil {
-					return fmt.Errorf("error constructing relative path from %v to %v: %w", target, file, err)
-				}
 				if !fs.IsDirectory(file) {
-					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, rel)); err != nil {
+					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, file)); err != nil {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, rel), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
+					if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, file), fs.DirPermissions, fs.DirPermissions, true, true); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}
