@@ -170,7 +170,7 @@ func (c *LogsCommand) Run(args []string) int {
 			continue
 		}
 		if len(hash.ReplayPaths) == 0 {
-			c.Ui.Output("No logs found to replay.")
+			c.logInfo(c.Config.Logger, fmt.Sprintf("%v: no logs found to replay", hash.Hash))
 		}
 		for _, replayPath := range hash.ReplayPaths {
 			file, err := os.Open(replayPath)
