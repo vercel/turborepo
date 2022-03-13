@@ -910,11 +910,11 @@ func (e *execContext) exec(pt *packageTask) error {
 
 			return nil
 		}
-		if e.rs.Opts.stream {
+		if e.rs.Opts.stream && e.rs.Opts.cachedOutputLogsMode != "none" {
 			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 		}
 	} else {
-		if e.rs.Opts.stream {
+		if e.rs.Opts.stream && e.rs.Opts.cachedOutputLogsMode != "none" {
 			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 		}
 	}
