@@ -536,13 +536,13 @@ turbo logs hash1 hash2 hash3 --reverse
 turbo logs --list --sort=duration --reverse
 ```
 
-#### `--progress`
+#### `--output-logs`
 
 `type: string`
 
-Defaults to `standard`. Set type of replay output. Use `standard` for normal output. Use `reduced` to hide cached task logs and only show what changed. Has no effect when [`--list`](#--list) is given.
+Defaults to `full`. Set type of replay output logs. Use `full` to show all replay logs output. Use `hash-only` to show only the turbo-computed task hash lines. Has no effect when [`--list`](#--list) is given.
 
 ```shell
-turbo logs --progress=standard
-turbo logs --progress=reduced
+turbo logs --output-logs=full
+turbo logs --output-logs=hash-only
 ```
