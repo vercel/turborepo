@@ -29,11 +29,11 @@ func Execute(version string, processes *process.Manager) int {
 		return 0
 	}
 
+	logger.Printf(err.Error())
+
 	var cmdErr *cmdutil.Error
 	if errors.As(err, &cmdErr) {
 		return cmdErr.ExitCode
-	} else {
-		logger.Printf(err.Error())
 	}
 
 	return 1

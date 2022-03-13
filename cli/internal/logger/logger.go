@@ -13,6 +13,10 @@ import (
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
 
+var successPrefix = color.New(color.Bold, color.FgGreen, color.ReverseVideo).Sprint(" SUCCESS ")
+var warningPrefix = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
+var errorPrefix = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
+
 type Logger struct {
 	out io.Writer
 }
@@ -29,21 +33,15 @@ func (l *Logger) Printf(format string, args ...interface{}) {
 
 func (l *Logger) Sucessf(format string, args ...interface{}) string {
 	msg := fmt.Sprintf(format, args...)
-	successPrefix := color.New(color.Bold, color.FgGreen, color.ReverseVideo).Sprint(" SUCCESS ")
-
 	return fmt.Sprintf("%s%s", successPrefix, color.GreenString(" %v", msg))
 }
 
 func (l *Logger) Warnf(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
-	warnPrefix := color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
-
-	return fmt.Errorf("%s%s", warnPrefix, color.YellowString(" %v", err))
+	return fmt.Errorf("%s%s", warningPrefix, color.YellowString(" %v", err))
 }
 
 func (l *Logger) Errorf(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
-	errorPrefix := color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
-
 	return fmt.Errorf("%s%s", errorPrefix, color.RedString(" %v", err))
 }

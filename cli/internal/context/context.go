@@ -188,7 +188,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		globalHash, err := calculateGlobalHash(rootpath, rootPackageJSON, c.TurboConfig.GlobalDependencies, c.Backend, config.Logger, os.Environ())
 		if err != nil {
-			return fmt.Errorf("could calculate global hash: %w", err)
+			return fmt.Errorf("couldn't calculate global hash: %w", err)
 		}
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a

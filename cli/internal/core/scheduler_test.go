@@ -9,6 +9,11 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
+func testVisitor(taskID string) error {
+	fmt.Println(taskID)
+	return nil
+}
+
 func TestSchedulerDefault(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")
@@ -26,34 +31,18 @@ func TestSchedulerDefault(t *testing.T) {
 		Name:     "build",
 		TopoDeps: topoDeps,
 		Deps:     deps,
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 	p.AddTask(&Task{
 		Name:     "test",
 		TopoDeps: topoDeps,
 		Deps:     deps,
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 	p.AddTask(&Task{
 		Name: "prepare",
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 	p.AddTask(&Task{
 		Name: "side-quest", // not in the build/test tree
 		Deps: deps,
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 
 	if _, ok := p.Tasks["build"]; !ok {
@@ -65,18 +54,18 @@ func TestSchedulerDefault(t *testing.T) {
 	}
 
 	err := p.Prepare(&SchedulerExecutionOptions{
-		Packages:    nil,
-		TaskNames:   []string{"test"},
-		Concurrency: 10,
-		Parallel:    false,
-		TasksOnly:   false,
+		Packages:  []string{"a", "b", "c"},
+		TaskNames: []string{"test"},
+		TasksOnly: false,
 	})
 
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
-	errs := p.Execute()
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
 
 	for _, err := range errs {
 		t.Fatalf("%v", err)
@@ -106,26 +95,14 @@ func TestSchedulerTasksOnly(t *testing.T) {
 		Name:     "build",
 		TopoDeps: topoDeps,
 		Deps:     deps,
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 	p.AddTask(&Task{
 		Name:     "test",
 		TopoDeps: topoDeps,
 		Deps:     deps,
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 	p.AddTask(&Task{
 		Name: "prepare",
-		Run: func(cwd string) error {
-			fmt.Println(cwd)
-			return nil
-		},
 	})
 
 	if _, ok := p.Tasks["build"]; !ok {
@@ -137,18 +114,18 @@ func TestSchedulerTasksOnly(t *testing.T) {
 	}
 
 	err := p.Prepare(&SchedulerExecutionOptions{
-		Packages:    nil,
-		TaskNames:   []string{"test"},
-		Concurrency: 10,
-		Parallel:    false,
-		TasksOnly:   true,
+		Packages:  []string{"a", "b", "c"},
+		TaskNames: []string{"test"},
+		TasksOnly: true,
 	})
 
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
-	errs := p.Execute()
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
 
 	for _, err := range errs {
 		t.Fatalf("%v", err)

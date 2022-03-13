@@ -17,6 +17,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/ui/term"
 )
 
+// RunOptions holds the current run operations configuration
 type RunOptions struct {
 	IncludeDependents bool
 	Scope             []string
@@ -39,6 +40,8 @@ type RunOptions struct {
 	Only              bool
 	Bail              bool
 	PassThroughArgs   []string
+	DryRun            bool
+	DryRunType        string
 }
 
 // A RunResult represents a single event in the build process, i.e. a target starting or finishing
@@ -221,14 +224,14 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	}
 }
 
-func (r *RunState) Listen(logger tlogger.Logger, startAt time.Time) {
+func (r *RunState) Listen(logger *tlogger.Logger, startAt time.Time) {
 	if r.runOptions.Stream {
 		return
 	}
 	r.ticker = time.NewTicker(100 * time.Millisecond)
 	r.done = make(chan string)
 	lineBuffer := 10
-	go func(r *RunState, logger tlogger.Logger) {
+	go func(r *RunState, logger *tlogger.Logger) {
 		z := r
 		i := 0
 		for {
@@ -259,10 +262,9 @@ func (r *RunState) Listen(logger tlogger.Logger, startAt time.Time) {
 			}
 		}
 	}(r, logger)
-
 }
 
-func (r *RunState) Render(logger tlogger.Logger, startAt time.Time, renderCount int, lineBuffer int) {
+func (r *RunState) Render(logger *tlogger.Logger, startAt time.Time, renderCount int, lineBuffer int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	idx := 0
@@ -306,7 +308,7 @@ func (r *RunState) Render(logger tlogger.Logger, startAt time.Time, renderCount 
 	}
 }
 
-func (r *RunState) Close(logger tlogger.Logger, filename string) error {
+func (r *RunState) Close(logger *tlogger.Logger, filename string) error {
 	outputPath := chrometracing.Path()
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
 	if filename != "" {

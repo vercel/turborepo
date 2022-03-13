@@ -16,33 +16,27 @@ type Task struct {
 	Deps util.Set
 	// TopoDeps are dependencies across packages within the same topological graph (e.g. parent `build` -> child `build`) */
 	TopoDeps util.Set
-	Cache    *bool
-	Run      func(cwd string) error
 }
 
-type scheduler struct {
+type Visitor = func(taskID string) error
+
+type Scheduler struct {
 	// TopologicGraph is a graph of workspaces
 	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the scheduler
 	Tasks           map[string]*Task
-	taskDeps        [][]string
 	PackageTaskDeps [][]string
-	// Concurrency is the number of concurrent tasks that can be executed
-	Concurrency int
-	// Parallel is whether to run tasks in parallel
-	Parallel bool
 }
 
 // NewScheduler creates a new scheduler given a topologic graph of workspace package names
-func NewScheduler(topologicalGraph *dag.AcyclicGraph) *scheduler {
-	return &scheduler{
+func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
+	return &Scheduler{
 		Tasks:           make(map[string]*Task),
 		TopologicGraph:  topologicalGraph,
 		TaskGraph:       &dag.AcyclicGraph{},
 		PackageTaskDeps: [][]string{},
-		taskDeps:        [][]string{},
 	}
 }
 
@@ -52,15 +46,11 @@ type SchedulerExecutionOptions struct {
 	Packages []string
 	// TaskNames in the execution scope, if nil, all tasks will be executed
 	TaskNames []string
-	// Concurrency is the number of concurrent tasks that can be executed
-	Concurrency int
-	// Parallel is whether to run tasks in parallel
-	Parallel bool
 	// Restrict execution to only the listed task names
 	TasksOnly bool
 }
 
-func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
+func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
 	if len(pkgs) == 0 {
 		// TODO(gsoltis): Is this behavior only used in tests?
@@ -71,14 +61,11 @@ func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
+		// TODO(gsoltis): Is this behavior used?
 		for key := range p.Tasks {
 			tasks = append(tasks, key)
 		}
 	}
-
-	p.Concurrency = options.Concurrency
-
-	p.Parallel = options.Parallel
 
 	if err := p.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
 		return err
@@ -87,40 +74,37 @@ func (p *scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	return nil
 }
 
+// ExecOpts controls a single walk of the task graph
+type ExecOpts struct {
+	// Parallel is whether to run tasks in parallel
+	Parallel bool
+	// Concurrency is the number of concurrent tasks that can be executed
+	Concurrency int
+}
+
 // Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
-func (p *scheduler) Execute() []error {
-	var sema = util.NewSemaphore(p.Concurrency)
+func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
+	var sema = util.NewSemaphore(opts.Concurrency)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
 		// Always return if it is the root node
 		if strings.Contains(dag.VertexName(v), ROOT_NODE_NAME) {
 			return nil
 		}
 		// Acquire the semaphore unless parallel
-		if !p.Parallel {
+		if !opts.Parallel {
 			sema.Acquire()
 			defer sema.Release()
 		}
-		// Find and run the task for the current vertex
-		_, taskName := util.GetPackageTaskFromId(dag.VertexName(v))
-		task, ok := p.Tasks[taskName]
-		if !ok {
-			return fmt.Errorf("task %s not found", dag.VertexName(v))
-		}
-		if task.Run != nil {
-			return task.Run(dag.VertexName(v))
-		}
-		return nil
+		return visitor(dag.VertexName(v))
 	})
 }
 
-func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
+func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
 
 	packageTasksDepsMap := getPackageTaskDepsMap(p.PackageTaskDeps)
-
-	taskDeps := [][]string{}
 
 	traversalQueue := []string{}
 
@@ -168,17 +152,11 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			}
 
 			if hasTopoDeps {
+				depPkgs := p.TopologicGraph.DownEdges(pkg)
 				for _, from := range task.TopoDeps.UnsafeListOfStrings() {
-					// TODO: this should move out of the loop???
-					depPkgs, err := p.TopologicGraph.Ancestors(pkg)
-					if err != nil {
-						return fmt.Errorf("error getting ancestors: %w", err)
-					}
-
 					// add task dep from all the package deps within repo
-					for _, depPkg := range depPkgs.List() {
+					for depPkg := range depPkgs {
 						fromTaskId := util.GetTaskId(depPkg, from)
-						taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 						p.TaskGraph.Add(fromTaskId)
 						p.TaskGraph.Add(toTaskId)
 						p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
@@ -190,7 +168,6 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			if hasDeps {
 				for _, from := range deps.UnsafeListOfStrings() {
 					fromTaskId := util.GetTaskId(pkg, from)
-					taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 					p.TaskGraph.Add(fromTaskId)
 					p.TaskGraph.Add(toTaskId)
 					p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
@@ -201,7 +178,6 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			if hasPackageTaskDeps {
 				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskId]; ok {
 					for _, fromTaskId := range pkgTaskDeps {
-						taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 						p.TaskGraph.Add(fromTaskId)
 						p.TaskGraph.Add(toTaskId)
 						p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
@@ -211,16 +187,12 @@ func (p *scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 			}
 
 			if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
-				// TODO: this should change to ROOT_NODE_NAME
-				fromTaskId := util.GetTaskId(pkg, "")
-				taskDeps = append(taskDeps, []string{fromTaskId, toTaskId})
 				p.TaskGraph.Add(ROOT_NODE_NAME)
 				p.TaskGraph.Add(toTaskId)
 				p.TaskGraph.Connect(dag.BasicEdge(toTaskId, ROOT_NODE_NAME))
 			}
 		}
 	}
-	p.taskDeps = taskDeps
 	return nil
 }
 
@@ -237,12 +209,12 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
-func (p *scheduler) AddTask(task *Task) *scheduler {
+func (p *Scheduler) AddTask(task *Task) *Scheduler {
 	p.Tasks[task.Name] = task
 	return p
 }
 
-func (p *scheduler) AddDep(fromTaskId string, toTaskId string) *scheduler {
+func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) *Scheduler {
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
 	return p
 }

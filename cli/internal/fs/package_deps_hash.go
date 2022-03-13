@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -90,11 +89,8 @@ func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]strin
 	changes := make(map[string]string)
 	if len(filesToHash) > 0 {
 		var input = []string{"hash-object"}
+		input = append(input, filesToHash...)
 
-		for _, filename := range filesToHash {
-			input = append(input, filepath.Join(PackagePath, filename))
-		}
-		// fmt.Println(input)
 		cmd := exec.Command("git", input...)
 		// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
 		cmd.Stdin = strings.NewReader(strings.Join(input, "\n"))

@@ -252,7 +252,7 @@ func (oss *oneShotServer) start(handler http.HandlerFunc) error {
 	}
 	go func() {
 		if err := oss.srv.Serve(l); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			oss.serverErr = errors.Wrap(err, "could not activate device. Please try again")
+			oss.serverErr = fmt.Errorf("could not activate device. Please try again: %w", err)
 		}
 		close(oss.serverDone)
 	}()
