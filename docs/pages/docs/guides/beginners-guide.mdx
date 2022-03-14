@@ -24,6 +24,42 @@ Well you run the following commands for the following package managers:
 
 ## Adding workspaces
 
+Another common issue is that users don't know how to add a workspace to the monorepo.
+
+To add a workspace you need a few things.
+
+1. A folder for your workspace
+2. Something that indicates that a folder is a workspace
+3. A `package.json` file in the workspace folder
+
+### A folder for your workspace
+
+First you need to decide where you want to put your workspace.
+A common pattern is to have an `apps` folder and a `packages` folder.
+The `apps` folder will contain workspaces that house launcheable apps, such as a next.js app.
+The `packages` folder will contain workspaces that house packages that are used by either an app or another package.
+
+When you have decided where to put the workspace you simply create a folder for it.
+
+### Something that indicates that a folder is a workspace
+
+After creating your folder you need to make sure your package manager knows that your folder is a workspace folder.
+
+This step is different for `pnpm` than it is for `npm` and `yarn`.
+
+For `pnpm` you need to add the folder to the `pnpm-workspace.yaml` file that exists in your root.
+This file contains a list of workspaces in the form of globs.
+
+For `yarn` and `npm` you need to add the folder to the `workspaces` field in the root `package.json` file
+This field contains a list of workspaces in the form of globs.
+
+Each folder that matches any of the globs in the lists is considered a workspace folder.
+
+### A `package.json` file in the workspace folder
+
+After creating the folder and adding it to the list of workspaces we want to create the `package.json` file for the workspace.
+This `package.json` file will house all the information for the workspace such as the version, dependencies, and scripts, just like a normal `package.json` file would.
+
 ## Naming workspaces
 
 ## Example projects
