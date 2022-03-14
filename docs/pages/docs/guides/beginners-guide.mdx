@@ -62,4 +62,18 @@ This `package.json` file will house all the information for the workspace such a
 
 ## Naming workspaces
 
+Some issues can occur when choosing names for your workspaces.
+Therefor, we want to provide some guidelines and best-practices.
+
+A maybe somewhat obvious, but essential point is that workspaces can't have the same name.
+Not only will it cause problems when doing an install, it also means you won't be able to target the workspace in any way since Turborepo and package managers won't know which workspace you are targeting.
+
+Another important thing is that you should not name your workspace the same name as an existing npm package.
+It gets worse if you also have that package as a dependency for one of your workspaces, this will not work and cause errors during install.
+If you don't have a dependency to the npm package it should technically work.
+However, it is still a bad idea, since you may want to add a dependency to that package in the future, or you will have to refactor your entire code base if you ever decide you want to publish the package to npm yourself.
+
+A common naming convention for monorepos is to use the name of the monorepo, and name of the workspace seperated by a slash, and preceded by an @ symbol.
+An example of this would be `@todolist/app`, this convention prevents most npm naming collisions, and clearly shows that the workspace exists in the monorepo.
+
 ## Example projects
