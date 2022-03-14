@@ -9,6 +9,19 @@ If you just start working with Turborepo and monorepos there are a lot of things
 
 ## Installing packages
 
+A common issue beginners are facing is the installing of packages in a specific workspace.
+When not working in a monorepo you can simply run `npm install <package>` but now that installs that in the root.
+No when you go in the folder of a workspace and run that command the entire `node_modules` folder will also end up there.
+So how do you install a package?
+
+Well you run the following commands for the following package managers:
+
+| Package manager | Command                                    | Example                        |
+| --------------- | ------------------------------------------ | ------------------------------ |
+| npm             | `npm install <package> -w=<workspace>`     | `npm install react -w=web`     |
+| yarn            | `yarn workspace <workspace> add <package>` | `yarn workspace web add react` |
+| pnpm            | `pnpm add <package> --filter <workspace>`  | `pnpm add react --filter web`  |
+
 ## Adding workspaces
 
 ## Naming workspaces
