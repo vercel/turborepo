@@ -572,21 +572,21 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
-			case strings.HasPrefix(arg, "--output-logs"):
+			case strings.HasPrefix(arg, "--output-logs="):
 				outputLogsMode := arg[len("--output-logs="):]
-					switch outputLogsMode {
-					case "full",
-						"none":
-						runOptions.cacheMissLogsMode = outputLogsMode
-						runOptions.cacheHitLogsMode = outputLogsMode
-					case "hash-only":
-						runOptions.cacheMissLogsMode = "hash"
-						runOptions.cacheHitLogsMode = "hash"
-					case "new-only":
-						runOptions.cacheMissLogsMode = "full"
-						runOptions.cacheHitLogsMode = "hash"
-					default:
-						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
+				switch outputLogsMode {
+				case "full",
+					"none":
+					runOptions.cacheMissLogsMode = outputLogsMode
+					runOptions.cacheHitLogsMode = outputLogsMode
+				case "hash-only":
+					runOptions.cacheMissLogsMode = "hash"
+					runOptions.cacheHitLogsMode = "hash"
+				case "new-only":
+					runOptions.cacheMissLogsMode = "full"
+					runOptions.cacheHitLogsMode = "hash"
+				default:
+					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 				}
 			case strings.HasPrefix(arg, "--dry-run"):
 				runOptions.dryRun = true
