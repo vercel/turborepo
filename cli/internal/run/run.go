@@ -574,7 +574,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--output-logs"):
 				outputLogsMode := arg[len("--output-logs="):]
-				if len(outputLogsMode) > 0 {
 					switch outputLogsMode {
 					case "full",
 						"none":
@@ -588,7 +587,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 						runOptions.cacheHitLogsMode = "hash"
 					default:
 						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
-					}
 				}
 			case strings.HasPrefix(arg, "--dry-run"):
 				runOptions.dryRun = true
