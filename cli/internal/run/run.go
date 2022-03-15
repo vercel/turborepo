@@ -437,10 +437,10 @@ type RunOptions struct {
 	// full - show all,
 	// hash - only show task hash,
 	// none - show nothing
-	cachedOutputLogsMode    string
-	notCachedOutputLogsMode string
-	dryRun                  bool
-	dryRunJson              bool
+	cacheHitLogsMode  string
+	cacheMissLogsMode string
+	dryRun            bool
+	dryRunJson        bool
 }
 
 func (ro *RunOptions) ScopeOpts() *scope.Opts {
@@ -457,19 +457,19 @@ func (ro *RunOptions) ScopeOpts() *scope.Opts {
 
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
-		bail:                    true,
-		includeDependents:       true,
-		parallel:                false,
-		concurrency:             10,
-		dotGraph:                "",
-		includeDependencies:     false,
-		cache:                   true,
-		profile:                 "", // empty string does no tracing
-		forceExecution:          false,
-		stream:                  true,
-		only:                    false,
-		cachedOutputLogsMode:    "full",
-		notCachedOutputLogsMode: "full",
+		bail:                true,
+		includeDependents:   true,
+		parallel:            false,
+		concurrency:         10,
+		dotGraph:            "",
+		includeDependencies: false,
+		cache:               true,
+		profile:             "", // empty string does no tracing
+		forceExecution:      false,
+		stream:              true,
+		only:                false,
+		cacheHitLogsMode:    "full",
+		cacheMissLogsMode:   "full",
 	}
 }
 
@@ -578,14 +578,14 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 					switch outputLogsMode {
 					case "full",
 						"none":
-						runOptions.notCachedOutputLogsMode = outputLogsMode
-						runOptions.cachedOutputLogsMode = outputLogsMode
+						runOptions.cacheMissLogsMode = outputLogsMode
+						runOptions.cacheHitLogsMode = outputLogsMode
 					case "hash-only":
-						runOptions.notCachedOutputLogsMode = "hash"
-						runOptions.cachedOutputLogsMode = "hash"
+						runOptions.cacheMissLogsMode = "hash"
+						runOptions.cacheHitLogsMode = "hash"
 					case "new-only":
-						runOptions.notCachedOutputLogsMode = "full"
-						runOptions.cachedOutputLogsMode = "hash"
+						runOptions.cacheMissLogsMode = "full"
+						runOptions.cacheHitLogsMode = "hash"
 					default:
 						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 					}
@@ -903,18 +903,18 @@ func (e *execContext) exec(pt *packageTask) error {
 		} else if hit {
 			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
 				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cachedOutputLogsMode)
+				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
 
 			return nil
 		}
-		if e.rs.Opts.stream && e.rs.Opts.cachedOutputLogsMode != "none" {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != "none" {
 			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 		}
 	} else {
-		if e.rs.Opts.stream && e.rs.Opts.cachedOutputLogsMode != "none" {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != "none" {
 			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 		}
 	}
@@ -960,7 +960,7 @@ func (e *execContext) exec(pt *packageTask) error {
 		bufWriter := bufio.NewWriter(output)
 		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 		defer bufWriter.Flush()
-		if e.rs.Opts.notCachedOutputLogsMode == "none" || e.rs.Opts.notCachedOutputLogsMode == "hash" {
+		if e.rs.Opts.cacheMissLogsMode == "none" || e.rs.Opts.cacheMissLogsMode == "hash" {
 			// only write to log file, not to stdout
 			writer = bufWriter
 		} else {
