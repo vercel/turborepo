@@ -105,21 +105,21 @@ Options:
                          execution. Supports globs.
   --cache-dir            Specify local filesystem cache directory.
                          (default "./node_modules/.cache/turbo")
-  --concurrency          Limit the concurrency of task execution. Use 1 for 
+  --concurrency          Limit the concurrency of task execution. Use 1 for
                          serial (i.e. one-at-a-time) execution. (default 10)
   --continue             Continue execution even if a task exits with an error
                          or non-zero exit code. The default behavior is to bail
                          immediately. (default false)
-  --force                Ignore the existing cache (to force execution). 
+  --force                Ignore the existing cache (to force execution).
                          (default false)
-  --graph                Generate a Dot graph of the task execution.   
-  --global-deps          Specify glob of global filesystem dependencies to 
+  --graph                Generate a Dot graph of the task execution.
+  --global-deps          Specify glob of global filesystem dependencies to
                          be hashed. Useful for .env and files in the root
                          directory. Can be specified multiple times.
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
-  --team                 The slug of the turborepo.com team.                         
+  --team                 The slug of the turborepo.com team.
   --token                A turborepo.com personal access token.
   --ignore               Files to ignore when calculating changed files
                          (i.e. --since). Supports globs.
@@ -138,8 +138,8 @@ Options:
                          task hashes. Use new-only to show only new output with
                          only hashes for cached tasks. Use none to hide process
                          output. (default full)
-  --dry/--dry-run[=json] List the packages in scope and the tasks that would be run, 
-                         but don't actually run them. Passing --dry=json or 
+  --dry/--dry-run[=json] List the packages in scope and the tasks that would be run,
+                         but don't actually run them. Passing --dry=json or
                          --dry-run=json will render the output in JSON format.
 `)
 	return strings.TrimSpace(helpText)
@@ -323,7 +323,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs[1:], ", ")))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
