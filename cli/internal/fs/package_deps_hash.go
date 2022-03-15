@@ -38,6 +38,7 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 		return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 	}
 	// Add all the checked in hashes.
+	// TODO(gsoltis): are these platform-dependent paths?
 	result := parseGitLsTree(gitLsOutput)
 
 	if len(p.ExcludedPaths) > 0 {
@@ -61,7 +62,14 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
 		}
 	}
-	return GetHashableDeps(filesToHash, p.PackagePath)
+	hashes, err := GetHashableDeps(filesToHash, p.PackagePath)
+	if err != nil {
+		return nil, err
+	}
+	for key, hash := range hashes {
+		result[key] = hash
+	}
+	return result, nil
 }
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
