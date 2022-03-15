@@ -3,7 +3,7 @@
 Dependencies
 
 1.  On OSX: `brew install sponge`
-2.  Run `yarn` at root
+2.  Run `pnpm install` at root
 
 Building
 
