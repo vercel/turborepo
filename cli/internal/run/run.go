@@ -71,6 +71,14 @@ type runSpec struct {
 	Opts         *RunOptions
 }
 
+type LogsMode string
+
+const (
+	FullLogs LogsMode = "full"
+	HashLogs LogsMode = "hash"
+	NoLogs   LogsMode = "none"
+)
+
 func (rs *runSpec) ArgsForTask(task string) []string {
 	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
 	for _, target := range rs.Targets {
@@ -437,8 +445,8 @@ type RunOptions struct {
 	// full - show all,
 	// hash - only show task hash,
 	// none - show nothing
-	cacheHitLogsMode  string
-	cacheMissLogsMode string
+	cacheHitLogsMode  LogsMode
+	cacheMissLogsMode LogsMode
 	dryRun            bool
 	dryRunJson        bool
 }
@@ -468,8 +476,8 @@ func getDefaultRunOptions() *RunOptions {
 		forceExecution:      false,
 		stream:              true,
 		only:                false,
-		cacheHitLogsMode:    "full",
-		cacheMissLogsMode:   "full",
+		cacheHitLogsMode:    FullLogs,
+		cacheMissLogsMode:   FullLogs,
 	}
 }
 
@@ -575,16 +583,18 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--output-logs="):
 				outputLogsMode := arg[len("--output-logs="):]
 				switch outputLogsMode {
-				case "full",
-					"none":
-					runOptions.cacheMissLogsMode = outputLogsMode
-					runOptions.cacheHitLogsMode = outputLogsMode
+				case "full":
+					runOptions.cacheMissLogsMode = FullLogs
+					runOptions.cacheHitLogsMode = FullLogs
+				case "none":
+					runOptions.cacheMissLogsMode = NoLogs
+					runOptions.cacheHitLogsMode = NoLogs
 				case "hash-only":
-					runOptions.cacheMissLogsMode = "hash"
-					runOptions.cacheHitLogsMode = "hash"
+					runOptions.cacheMissLogsMode = HashLogs
+					runOptions.cacheHitLogsMode = HashLogs
 				case "new-only":
-					runOptions.cacheMissLogsMode = "full"
-					runOptions.cacheHitLogsMode = "hash"
+					runOptions.cacheMissLogsMode = FullLogs
+					runOptions.cacheHitLogsMode = HashLogs
 				default:
 					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 				}
@@ -783,7 +793,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode string) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
@@ -792,9 +802,9 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	if outputLogsMode != "none" {
+	if outputLogsMode != NoLogs {
 		scan := bufio.NewScanner(f)
-		if outputLogsMode == "hash" {
+		if outputLogsMode == HashLogs {
 			//Writing to Stdout only the "cache hit, replaying output" line
 			scan.Scan()
 			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
@@ -908,11 +918,11 @@ func (e *execContext) exec(pt *packageTask) error {
 
 			return nil
 		}
-		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != "none" {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 		}
 	} else {
-		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != "none" {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 		}
 	}
@@ -958,7 +968,7 @@ func (e *execContext) exec(pt *packageTask) error {
 		bufWriter := bufio.NewWriter(output)
 		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 		defer bufWriter.Flush()
-		if e.rs.Opts.cacheMissLogsMode == "none" || e.rs.Opts.cacheMissLogsMode == "hash" {
+		if e.rs.Opts.cacheMissLogsMode == NoLogs || e.rs.Opts.cacheMissLogsMode == HashLogs {
 			// only write to log file, not to stdout
 			writer = bufWriter
 		} else {
