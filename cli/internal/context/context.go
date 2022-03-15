@@ -541,7 +541,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 	}
 
 	// No prefix, global deps already have full paths
-	globalFileHashMap, err := fs.GitHashForFiles(globalDeps.UnsafeListOfStrings())
+	globalFileHashMap, err := fs.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}

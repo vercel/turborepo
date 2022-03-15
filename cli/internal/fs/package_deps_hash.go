@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -59,27 +61,33 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
 		}
 	}
+	return GetHashableDeps(filesToHash, p.PackagePath)
+}
 
-	// log.Printf("[TRACE] %v:", gitStatusOutput)
-	// log.Printf("[TRACE] start GitHashForFiles")
-	current, err := GitHashForFiles(filesToHash)
+// GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
+// this map is suitable for cross-platform caching.
+func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]string, error) {
+	fileHashes, err := gitHashForFiles(absolutePaths)
 	if err != nil {
-		return nil, fmt.Errorf("could not retrieve git hash for files in %s", p.PackagePath)
+		return nil, errors.Wrapf(err, "failed to hash files %v", strings.Join(absolutePaths, ", "))
 	}
-	// log.Printf("[TRACE] end GitHashForFiles")
-	// log.Printf("[TRACE] GitHashForFiles files %v", current)
-	for filename, hash := range current {
-		// log.Printf("[TRACE] GitHashForFiles files %v: %v", filename, hash)
-		result[filename] = hash
+	result := make(map[string]string)
+	for filename, hash := range fileHashes {
+		// Normalize path as POSIX-style and relative to "relativeTo"
+		relativePath, err := filepath.Rel(relativeTo, filename)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get relative path from %v to %v", relativeTo, relativePath)
+		}
+		key := filepath.ToSlash(relativePath)
+		result[key] = hash
 	}
-	// log.Printf("[TRACE] GitHashForFiles result %v", result)
 	return result, nil
 }
 
-// GitHashForFiles a list of files returns a map of with their git hash values. It uses
+// gitHashForFiles a list of files returns a map of with their git hash values. It uses
 // git hash-object under the hood.
 // Note that filesToHash must have full paths.
-func GitHashForFiles(filesToHash []string) (map[string]string, error) {
+func gitHashForFiles(filesToHash []string) (map[string]string, error) {
 	changes := make(map[string]string)
 	if len(filesToHash) > 0 {
 		input := []string{"hash-object"}
