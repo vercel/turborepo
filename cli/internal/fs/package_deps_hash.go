@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -53,23 +52,17 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	}
 	currentlyChangedFiles := parseGitStatus(gitStatusOutput, p.PackagePath)
 	var filesToHash []string
-	excludedPathsSet := new(util.Set)
 	for filename, changeType := range currentlyChangedFiles {
 		if changeType == "D" || (len(changeType) == 2 && string(changeType)[1] == []byte("D")[0]) {
 			delete(result, filename)
 		} else {
-			if !excludedPathsSet.Includes(filename) {
-				filesToHash = append(filesToHash, filename)
-			}
+			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
 		}
 	}
 
 	// log.Printf("[TRACE] %v:", gitStatusOutput)
 	// log.Printf("[TRACE] start GitHashForFiles")
-	current, err := GitHashForFiles(
-		filesToHash,
-		p.PackagePath,
-	)
+	current, err := GitHashForFiles(filesToHash)
 	if err != nil {
 		return nil, fmt.Errorf("could not retrieve git hash for files in %s", p.PackagePath)
 	}
@@ -84,20 +77,15 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 }
 
 // GitHashForFiles a list of files returns a map of with their git hash values. It uses
-// git hash-object under the
-func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]string, error) {
+// git hash-object under the hood.
+// Note that filesToHash must have full paths.
+func GitHashForFiles(filesToHash []string) (map[string]string, error) {
 	changes := make(map[string]string)
 	if len(filesToHash) > 0 {
-		var input = []string{"hash-object"}
-
-		for _, filename := range filesToHash {
-			input = append(input, filepath.Join(PackagePath, filename))
-		}
-		// fmt.Println(input)
+		input := []string{"hash-object"}
+		input = append(input, filesToHash...)
 		cmd := exec.Command("git", input...)
 		// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
-		cmd.Stdin = strings.NewReader(strings.Join(input, "\n"))
-		cmd.Dir = PackagePath
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return nil, fmt.Errorf("git hash-object exited with status: %w", err)
