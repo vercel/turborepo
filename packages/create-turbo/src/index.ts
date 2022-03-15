@@ -2,7 +2,6 @@
 
 import * as path from "path";
 import execa from "execa";
-import fs from "fs";
 import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -29,7 +28,7 @@ const help = `
 
   If <dir> is not provided up front you will be prompted for it.
 
-  Flags:    
+  Flags:
     --use-npm           Explicitly tell the CLI to bootstrap the app using npm
     --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
     --no-install        Explicitly do not run the package manager's install command
@@ -209,10 +208,18 @@ async function run() {
       },
     }).start();
 
-    await execa(`${answers.packageManager}`, [`install`], {
-      stdio: "ignore",
-      cwd: projectDir,
-    });
+    // Using the official npm registry in the installation could be very slow,
+    // So we use the user customized registry from default instead.
+    const npmRegistry = await getNpmRegistry(answers.packageManager);
+
+    await execa(
+      `${answers.packageManager}`,
+      [`install`, `--registry=${npmRegistry}`],
+      {
+        stdio: "ignore",
+        cwd: projectDir,
+      }
+    );
     spinner.stop();
   } else {
     console.log();
@@ -276,6 +283,20 @@ async function run() {
     chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
   );
   console.log();
+}
+
+async function getNpmRegistry(pkgManager: PackageManager): Promise<string> {
+  try {
+    // npm/pnpm/yarn share the same CLI configuration commands
+    const { stdout: registry } = await execa(pkgManager, [
+      "config",
+      "get",
+      "registry",
+    ]);
+    return registry;
+  } catch (error) {
+    return "";
+  }
 }
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
