@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -33,6 +34,7 @@ type hashMetadata struct {
 	Hash        string
 	ReplayPaths []string
 	Duration    int
+	Datetime    time.Time
 }
 
 type SortMode string
@@ -41,6 +43,7 @@ const (
 	TaskSort     SortMode = "task"
 	DurationSort SortMode = "duration"
 	AlnumSort    SortMode = "alnum"
+	DatetimeSort SortMode = "datetime"
 	QuerySort    SortMode = "query"
 	NothingSort  SortMode = "n/a"
 )
@@ -67,10 +70,11 @@ Options:
                          recent run command execution.
   --sort                 Set mode to order results. Use task to order by the
                          previous run's execution order. Use duration to order
-                         by time taken (lowest to highest). Use alnum to order
+                         by time taken (lowest to highest). Use datetime to
+                         order by timestamp of the log file. Use alnum to order
                          alphanumerically. Normally defaults to task. If
                          specific hashes are given, defaults to their order.
-                         If --all, defaults to alnum. (default task)
+                         If --all, defaults to datetime. (default task)
   --reverse              Reverse order while sorting.
   --output-logs          Set type of replay output logs. Use full to show all
                          output. Use hash-only to show only the turbo-computed
@@ -120,6 +124,7 @@ func (c *LogsCommand) Run(args []string) int {
 	}
 
 	// find and collect cached hashes and durations from metadata json
+	// also get file modified datetime from filesystem
 	var hashes []hashMetadata
 	if len(specificHashes) > 0 {
 		for _, hash := range specificHashes {
@@ -132,10 +137,18 @@ func (c *LogsCommand) Run(args []string) int {
 			} else {
 				c.logWarning(c.Config.Logger, "", fmt.Errorf("cannot read metadata file: %v: %w", metadataPath, err))
 			}
+			file, err := os.Stat(metadataPath)
+			datetime := time.Time{}
+			if err == nil {
+				datetime = file.ModTime()
+			} else {
+				c.logWarning(c.Config.Logger, "", fmt.Errorf("cannot get modification time of metadata file: %v: %w", metadataPath, err))
+			}
 			hashes = append(hashes, hashMetadata{
 				Hash:        hash,
 				ReplayPaths: replayPaths,
 				Duration:    duration,
+				Datetime:    datetime,
 			})
 		}
 	} else {
@@ -146,11 +159,19 @@ func (c *LogsCommand) Run(args []string) int {
 				c.logWarning(c.Config.Logger, "", fmt.Errorf("cannot read metadata file: %v: %w", metadataPath, err))
 				continue
 			}
+			file, err := os.Stat(metadataPath)
+			datetime := time.Time{}
+			if err == nil {
+				datetime = file.ModTime()
+			} else {
+				c.logWarning(c.Config.Logger, "", fmt.Errorf("cannot get modification time of metadata file: %v: %w", metadataPath, err))
+			}
 			replayPaths := globby.GlobFiles(filepath.Join(logsOptions.cacheFolder, metadata.Hash, ".turbo"), []string{"turbo-*.log"}, []string{})
 			hashes = append(hashes, hashMetadata{
 				Hash:        metadata.Hash,
 				ReplayPaths: replayPaths,
 				Duration:    metadata.Duration,
+				Datetime:    datetime,
 			})
 		}
 	}
@@ -164,6 +185,8 @@ func (c *LogsCommand) Run(args []string) int {
 		cmp = createReferenceIndexComparator(hashes, lastRunHashes, logsOptions.reverseSort)
 	} else if logsOptions.sortType == QuerySort {
 		cmp = createReferenceIndexComparator(hashes, logsOptions.queryHashes, logsOptions.reverseSort)
+	} else if logsOptions.sortType == DatetimeSort {
+		cmp = createDatetimeComparator(hashes, logsOptions.reverseSort)
 	}
 	sort.SliceStable(hashes, cmp)
 
@@ -212,6 +235,17 @@ func createDurationComparator(hashes []hashMetadata, reverse bool) func(int, int
 	}
 	return func(i, j int) bool {
 		return hashes[i].Duration <= hashes[j].Duration
+	}
+}
+
+func createDatetimeComparator(hashes []hashMetadata, reverse bool) func(int, int) bool {
+	if reverse {
+		return func(i, j int) bool {
+			return hashes[i].Datetime.After(hashes[j].Datetime)
+		}
+	}
+	return func(i, j int) bool {
+		return hashes[i].Datetime.Before(hashes[j].Datetime) || hashes[i].Datetime.Equal(hashes[j].Datetime)
 	}
 }
 
@@ -325,10 +359,12 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 						unresolvedSortType = TaskSort
 					case "duration":
 						unresolvedSortType = DurationSort
+					case "datetime":
+						unresolvedSortType = DatetimeSort
 					case "alnum":
 						unresolvedSortType = AlnumSort
 					default:
-						return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, or alnum", inputSortType)
+						return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, datetime, or alnum", inputSortType)
 					}
 				}
 			case arg == "--reverse":
@@ -366,7 +402,7 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 		unresolvedSortType = QuerySort
 	}
 	if logsOptions.includeAll && unresolvedSortType == NothingSort {
-		unresolvedSortType = AlnumSort
+		unresolvedSortType = DatetimeSort
 	}
 	if unresolvedSortType != NothingSort {
 		logsOptions.sortType = unresolvedSortType
