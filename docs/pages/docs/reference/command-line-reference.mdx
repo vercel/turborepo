@@ -85,9 +85,20 @@ Let's say you have packages A, B, C, and D where A depends on B and C depends on
 
 #### --dry / --dry-run
 
-Instead of executing tasks, display details about the tasks that would be run.
-Task details include the affected packages, commands to be run, log file locations, and more.
+Instead of executing tasks, display details about the affected packages and tasks that would be run.
 Specify `--dry=json` to get the output in JSON format.
+
+Task details include:
+
+- `task`: The name of the task to be executed
+- `package`: The package in which to run the task
+- `hash`: The hash of the task, used for caching
+- `directory`: The directory where the task will be run
+- `command`: The actual command used to run the task
+- `outputs`: Location of outputs from the task that will cached
+- `logFile`: Location of the log file for the task run
+- `dependencies`: Tasks that must run before this task
+- `dependents`: Tasks that must be run after this task
 
 #### `--graph`
 
