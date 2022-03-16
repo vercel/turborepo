@@ -62,14 +62,20 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
 		}
 	}
+	normalized := make(map[string]string)
+	// These paths are platform-dependent, but already relative to the package root
+	for platformSpecificPath, hash := range result {
+		platformIndependentPath := filepath.ToSlash(platformSpecificPath)
+		normalized[platformIndependentPath] = hash
+	}
 	hashes, err := GetHashableDeps(filesToHash, p.PackagePath)
 	if err != nil {
 		return nil, err
 	}
-	for key, hash := range hashes {
-		result[key] = hash
+	for platformIndependentPath, hash := range hashes {
+		normalized[platformIndependentPath] = hash
 	}
-	return result, nil
+	return normalized, nil
 }
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
