@@ -1,10 +1,10 @@
 # Turborepo starter
 
-This is an official Yarn v1 starter turborepo.
+This is an official starter turborepo.
 
 ## What's inside?
 
-This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package manager. It includes the following packages/apps:
+This turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
