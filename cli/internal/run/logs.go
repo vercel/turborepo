@@ -35,6 +35,16 @@ type hashMetadata struct {
 	Duration    int
 }
 
+type SortMode string
+
+const (
+	TaskSort     SortMode = "task"
+	DurationSort SortMode = "duration"
+	AlnumSort    SortMode = "alnum"
+	QuerySort    SortMode = "query"
+	NothingSort  SortMode = "n/a"
+)
+
 // Synopsis of run command
 func (c *LogsCommand) Synopsis() string {
 	return "Review the most recently run tasks logs"
@@ -87,7 +97,7 @@ func (c *LogsCommand) Run(args []string) int {
 	c.Config.Logger.Trace("reverse", "value", logsOptions.reverseSort)
 
 	var lastRunHashes []string
-	if logsOptions.sortType == "task" || !logsOptions.includeAll {
+	if logsOptions.sortType == TaskSort || !logsOptions.includeAll {
 		if !fs.FileExists(logsOptions.lastRunPath) {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve last run file: %v", logsOptions.lastRunPath))
 			metadataPaths := globby.GlobFiles(logsOptions.cacheFolder, []string{"*-meta.json"}, []string{})
@@ -148,11 +158,11 @@ func (c *LogsCommand) Run(args []string) int {
 
 	// sort task list
 	cmp := createAlnumComparator(hashes, logsOptions.reverseSort)
-	if logsOptions.sortType == "duration" {
+	if logsOptions.sortType == DurationSort {
 		cmp = createDurationComparator(hashes, logsOptions.reverseSort)
-	} else if logsOptions.sortType == "task" {
+	} else if logsOptions.sortType == TaskSort {
 		cmp = createReferenceIndexComparator(hashes, lastRunHashes, logsOptions.reverseSort)
-	} else if logsOptions.sortType == "query" {
+	} else if logsOptions.sortType == QuerySort {
 		cmp = createReferenceIndexComparator(hashes, logsOptions.queryHashes, logsOptions.reverseSort)
 	}
 	sort.SliceStable(hashes, cmp)
@@ -161,7 +171,7 @@ func (c *LogsCommand) Run(args []string) int {
 	for _, hash := range hashes {
 		if logsOptions.listOnly {
 			if logsOptions.listType == "relevant" {
-				if logsOptions.sortType == "duration" {
+				if logsOptions.sortType == DurationSort {
 					c.Ui.Output(fmt.Sprintf("%v %v", hash.Hash, hash.Duration))
 					continue
 				}
@@ -252,7 +262,7 @@ type LogsOptions struct {
 	//  duration - duration of each task (low to high)
 	//  alnum - alphanumerically on hash string
 	//  query - match order of queryHashes
-	sortType string
+	sortType SortMode
 	// True to reverse output order
 	reverseSort bool
 	// List of requested hashes to retrieve
@@ -261,6 +271,7 @@ type LogsOptions struct {
 	// Replay task logs output mode
 	// full - show all,
 	// hash - only show task hash
+	// TODO: refactor to use run.LogsMode
 	outputLogsMode string
 }
 
@@ -286,7 +297,7 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 	unresolvedLastRunPath := ""
-	unresolvedSortType := ""
+	unresolvedSortType := NothingSort
 	queryHashesSet := make(util.Set)
 
 	for _, arg := range args {
@@ -308,9 +319,16 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				logsOptions.includeAll = true
 			case strings.HasPrefix(arg, "--sort="):
 				if len(arg[len("--sort="):]) > 0 {
-					unresolvedSortType = arg[len("--sort="):]
-					if unresolvedSortType != "task" && unresolvedSortType != "duration" && unresolvedSortType != "alnum" {
-						return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, or alnum", unresolvedSortType)
+					inputSortType := arg[len("--sort="):]
+					switch inputSortType {
+					case "task":
+						unresolvedSortType = TaskSort
+					case "duration":
+						unresolvedSortType = DurationSort
+					case "alnum":
+						unresolvedSortType = AlnumSort
+					default:
+						return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, or alnum", inputSortType)
 					}
 				}
 			case arg == "--reverse":
@@ -344,13 +362,13 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 
 	// We can only set sortType once we know what the default should
 	//  be and whether or not it has been overridden
-	if len(logsOptions.queryHashes) > 0 && unresolvedSortType == "" {
-		unresolvedSortType = "query"
+	if len(logsOptions.queryHashes) > 0 && unresolvedSortType == NothingSort {
+		unresolvedSortType = QuerySort
 	}
-	if logsOptions.includeAll && unresolvedSortType == "" {
-		unresolvedSortType = "alnum"
+	if logsOptions.includeAll && unresolvedSortType == NothingSort {
+		unresolvedSortType = AlnumSort
 	}
-	if unresolvedSortType != "" {
+	if unresolvedSortType != NothingSort {
 		logsOptions.sortType = unresolvedSortType
 	}
 
