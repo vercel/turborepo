@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
-import { Avatar } from "./components/Avatar";
+import { Footer } from "./components/Footer";
+
 const Logo = ({ height, ...props }) => (
   <svg
     height={height}
@@ -127,57 +128,20 @@ const Vercel = ({ height = 20 }) => (
   </svg>
 );
 
-const team = {
-  jaredpalmer: {
-    name: "Jared Palmer",
-    twitterUsername: "jaredpalmer",
-    picture: "/images/people/jaredpalmer_headshot.jpeg",
-  },
-  gaspargarcia_: {
-    name: "Gaspar Garcia",
-    twitterUsername: "gaspargarcia_",
-    picture: "/images/people/gaspargarcia_.jpeg",
-  },
-  becca__z: {
-    name: "Becca Z.",
-    twitterUsername: "becca__z",
-    picture: "/images/people/becca__z.jpeg",
-  },
-  gsoltis: {
-    name: "Greg Soltis",
-    twitterUsername: "gsoltis",
-    picture: "/images/people/gsoltis.jpeg",
-  },
-};
-
 const theme = {
   github: "https://github.com/vercel/turborepo",
   docsRepositoryBase:
     "https://github.com/vercel/turborepo/blob/main/docs/pages",
   titleSuffix: " | Turborepo",
   search: true,
-  unstable_stork: false,
+  unstable_flexsearch: true,
   unstable_staticImage: true,
   floatTOC: true,
   font: false,
-  enterpriseLink:
-    "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink", // @TODO
   projectChatLink: "https://turborepo.org/discord",
   feedbackLink: "Question? Give us feedback →",
-  authors: function Authors({ authors }) {
-    return (
-      <div className="grid max-w-screen-md gap-4 px-6 sm:grid-cols-2 md:grid-cols-4">
-        {authors.map((username) =>
-          !!team[username] ? (
-            <Avatar key={username} {...team[username]} />
-          ) : (
-            console.warning("no author found for", username) || null
-          )
-        )}
-      </div>
-    );
-  },
   banner: function Banner() {
+    // TODO
     return (
       <div className="px-6 py-2 text-sm text-center text-white bg-black dark:bg-white dark:text-black">
         <a
@@ -200,7 +164,8 @@ const theme = {
       </>
     );
   },
-  head: function Head({ title, meta, router }) {
+  head: function Head({ title, meta }) {
+    const router = useRouter();
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -251,7 +216,8 @@ const theme = {
   footerEditLink: ({ locale }) => {
     return "Edit this page on GitHub";
   },
-  footerText: ({ locale }) => {
+  footerText: () => {
+    return <Footer />;
     return (
       <a
         href="https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink"
