@@ -5,28 +5,28 @@ description: A guide for beginners that solves some issues that new users may fa
 
 # Beginners guide
 
-If you just start working with Turborepo and monorepos there are a lot of things you'll have to figure out. We want to make this process a little easier by providing answers to some basic questions.
+If you just started working with Turborepo and monorepos there are a lot of problems you may run into. We want to make this process a little easier by providing answers to some basic questions.
 
 ## Installing packages
 
-A common issue beginners are facing is the installing of packages in a specific workspace.
-When not working in a monorepo you can simply run `npm install <package>` but now that installs that in the root.
-No when you go in the folder of a workspace and run that command the entire `node_modules` folder will also end up there.
-So how do you install a package?
+A common issue beginners are facing is the installation of packages in a specific workspace.
+When not working in a monorepo, you can simply run `npm install <package>`, but now that installs that in the root.
+Now when you go into the folder of a workspace and run that command, the entire `node_modules` folder will also end up there.
+So, how do you install a package?
 
-Well you run the following commands for the following package managers:
+Well, you run the following commands for the following package managers:
 
-| Package manager | Command                                    | Example                        |
-| --------------- | ------------------------------------------ | ------------------------------ |
-| npm             | `npm install <package> -w=<workspace>`     | `npm install react -w=web`     |
-| yarn            | `yarn workspace <workspace> add <package>` | `yarn workspace web add react` |
-| pnpm            | `pnpm add <package> --filter <workspace>`  | `pnpm add react --filter web`  |
+| Package manager  | Command                                     | Example                         |
+| ---------------- | ------------------------------------------- | ------------------------------- |
+| npm              | `npm install <package> -w=<workspace>`      | `npm install react -w=web`      |
+| yarn             | `yarn workspace <workspace> add <package>`  | `yarn workspace web add react`  |
+| pnpm             | `pnpm add <package> --filter <workspace>`   | `pnpm add react --filter web`   |
 
 ## Adding workspaces
 
 Another common issue is that users don't know how to add a workspace to the monorepo.
 
-To add a workspace you need a few things.
+To add a workspace, you need a few things.
 
 1. A folder for your workspace
 2. Something that indicates that a folder is a workspace
@@ -34,46 +34,46 @@ To add a workspace you need a few things.
 
 ### A folder for your workspace
 
-First you need to decide where you want to put your workspace.
+First, you need to decide where you want to put your workspace.
 A common pattern is to have an `apps` folder and a `packages` folder.
-The `apps` folder will contain workspaces that house launcheable apps, such as a next.js app.
+The `apps` folder will contain workspaces that house launchable apps , such as a next.js app.
 The `packages` folder will contain workspaces that house packages that are used by either an app or another package.
 
-When you have decided where to put the workspace you simply create a folder for it.
+When you have decided where to put the workspace, you simply create a folder for it.
 
 ### Something that indicates that a folder is a workspace
 
-After creating your folder you need to make sure your package manager knows that your folder is a workspace folder.
+After creating your folder, you need to make sure your package manager knows that your folder is a workspace folder.
 
 This step is different for `pnpm` than it is for `npm` and `yarn`.
 
 For `pnpm` you need to add the folder to the `pnpm-workspace.yaml` file that exists in your root.
 This file contains a list of workspaces in the form of globs.
 
-For `yarn` and `npm` you need to add the folder to the `workspaces` field in the root `package.json` file
+For `yarn` and `npm`, you need to add the folder to the `workspaces` field in the root `package.json` file
 This field contains a list of workspaces in the form of globs.
 
 Each folder that matches any of the globs in the lists is considered a workspace folder.
 
 ### A `package.json` file in the workspace folder
 
-After creating the folder and adding it to the list of workspaces we want to create the `package.json` file for the workspace.
-This `package.json` file will house all the information for the workspace such as the version, dependencies, and scripts, just like a normal `package.json` file would.
+After creating the folder and adding it to the list of workspaces, we want to create the `package.json` file for the workspace.
+This `package.json` file will house all the information for the workspace, such as the version, dependencies, and scripts, just like a normal `package.json` file would.
 
 ## Naming workspaces
 
 Some issues can occur when choosing names for your workspaces.
-Therefore, we want to provide some guidelines and best-practices.
+Therefore, we want to provide some guidelines and best practices.
 
-A maybe somewhat obvious, but essential point is that workspaces can't have the same name.
-Not only will it cause problems when doing an install, it also means you won't be able to target the workspace in any way since Turborepo and package managers won't know which workspace you are targeting.
+A maybe somewhat obvious, but essential, point is that workspaces can't have the same name.
+Not only will it cause problems when doing an installation, but it also means you won't be able to target the workspace in any way, since Turborepo and package managers won't know which workspace you are targeting.
 
 Another important thing is that you should not name your workspace the same name as an existing npm package.
-It gets worse if you also have that package as a dependency for one of your workspaces, this will not work and cause errors during install.
-If you don't have a dependency to the npm package it should technically work.
+It gets worse if you also have that package as a dependency for one of your workspaces, this will not work and cause errors during installation.
+If you don't have a dependency on the npm package, it should technically work.
 However, it is still a bad idea, since you may want to add a dependency to that package in the future, or you will have to refactor your entire code base if you ever decide you want to publish the package to npm yourself.
 
-A common naming convention for monorepos is to use the name of the monorepo, and name of the workspace seperated by a slash, and preceded by an @ symbol.
+A common naming convention for monorepos is to use the name of the monorepo, and the name of the workspace is separated by a slash and preceded by an @ symbol.
 An example of this would be `@todolist/app`, this convention prevents most npm naming collisions, and clearly shows that the workspace exists in the monorepo.
 
 ## Example projects
@@ -83,7 +83,7 @@ They can all be found in the Turborepo GitHub.
 
 The repository has the following examples:
 
-- [basic](https://github.com/vercel/turborepo/tree/main/examples/basic): A basic monorepo that uses yarn, has documentation using Next.js and a frontend, also using Next.js. It also has a next.js ui package.
+- [basic](https://github.com/vercel/turborepo/tree/main/examples/basic): A basic monorepo that uses yarn, has documentation using Next.js and a frontend, also using Next.js. It also has a next.js UI package.
 - [design-system](https://github.com/vercel/turborepo/tree/main/examples/design-system): An official React design system starter.
-- [kitchen-sink](https://github.com/vercel/turborepo/tree/main/examples/kitchen-sink): A more elaborate example, which has four apps, an api using express, a storefront using Next.js, an admin panel using Vite, and a blog using Remix.
+- [kitchen-sink](https://github.com/vercel/turborepo/tree/main/examples/kitchen-sink): A more elaborate example, which has four apps, an API using express, a storefront using Next.js, an admin panel using Vite, and a blog using Remix.
 - [with-pnpm](https://github.com/vercel/turborepo/tree/main/examples/with-pnpm): An official starter repo that uses the pnpm package manager.
