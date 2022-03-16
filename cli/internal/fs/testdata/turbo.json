@@ -1,14 +1,21 @@
 {
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  },
   "remoteCacheOptions": {
     "teamId": "team_id",
     "signatureOptions": {
       "enabled": true,
       "key": "key"
-    }
-  },
-  "pipeline": {
-    "dev": {
-      "cache": false
     }
   }
 }

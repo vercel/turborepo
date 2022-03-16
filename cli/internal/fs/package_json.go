@@ -15,7 +15,6 @@ type TurboConfigJSON struct {
 	Base string `json:"baseBranch,omitempty"`
 	// Global root filesystem dependencies
 	GlobalDependencies []string           `json:"globalDependencies,omitempty"`
-	TurboCacheOptions  string             `json:"cacheOptions,omitempty"`
 	Outputs            []string           `json:"outputs,omitempty"`
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCacheOptions,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
