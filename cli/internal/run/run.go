@@ -178,11 +178,10 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger, runOptions.dryRunJson || runOptions.dryRun)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
-
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
 	fs.EnsureDir(runOptions.cacheFolder)
@@ -330,12 +329,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	} else {
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
-		prettyPackagesInScope := strings.Join(packagesInScope, ", ")
-		if rs.Opts.since != "" {
-			c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), rs.Opts.since, prettyPackagesInScope))
-		} else {
-			c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), prettyPackagesInScope))
-		}
+		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		if rs.Opts.stream {
 			c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		}
