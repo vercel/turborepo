@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"github.com/vercel/turborepo/cli/internal/util"
+
+	"github.com/pkg/errors"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -37,6 +38,7 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 		return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 	}
 	// Add all the checked in hashes.
+	// TODO(gsoltis): are these platform-dependent paths?
 	result := parseGitLsTree(gitLsOutput)
 
 	if len(p.ExcludedPaths) > 0 {
@@ -53,51 +55,59 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	}
 	currentlyChangedFiles := parseGitStatus(gitStatusOutput, p.PackagePath)
 	var filesToHash []string
-	excludedPathsSet := new(util.Set)
 	for filename, changeType := range currentlyChangedFiles {
 		if changeType == "D" || (len(changeType) == 2 && string(changeType)[1] == []byte("D")[0]) {
 			delete(result, filename)
 		} else {
-			if !excludedPathsSet.Includes(filename) {
-				filesToHash = append(filesToHash, filename)
-			}
+			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
 		}
 	}
-
-	// log.Printf("[TRACE] %v:", gitStatusOutput)
-	// log.Printf("[TRACE] start GitHashForFiles")
-	current, err := GitHashForFiles(
-		filesToHash,
-		p.PackagePath,
-	)
+	normalized := make(map[string]string)
+	// These paths are platform-dependent, but already relative to the package root
+	for platformSpecificPath, hash := range result {
+		platformIndependentPath := filepath.ToSlash(platformSpecificPath)
+		normalized[platformIndependentPath] = hash
+	}
+	hashes, err := GetHashableDeps(filesToHash, p.PackagePath)
 	if err != nil {
-		return nil, fmt.Errorf("could not retrieve git hash for files in %s", p.PackagePath)
+		return nil, err
 	}
-	// log.Printf("[TRACE] end GitHashForFiles")
-	// log.Printf("[TRACE] GitHashForFiles files %v", current)
-	for filename, hash := range current {
-		// log.Printf("[TRACE] GitHashForFiles files %v: %v", filename, hash)
-		result[filename] = hash
+	for platformIndependentPath, hash := range hashes {
+		normalized[platformIndependentPath] = hash
 	}
-	// log.Printf("[TRACE] GitHashForFiles result %v", result)
+	return normalized, nil
+}
+
+// GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
+// this map is suitable for cross-platform caching.
+func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]string, error) {
+	fileHashes, err := gitHashForFiles(absolutePaths)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to hash files %v", strings.Join(absolutePaths, ", "))
+	}
+	result := make(map[string]string)
+	for filename, hash := range fileHashes {
+		// Normalize path as POSIX-style and relative to "relativeTo"
+		relativePath, err := filepath.Rel(relativeTo, filename)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get relative path from %v to %v", relativeTo, relativePath)
+		}
+		key := filepath.ToSlash(relativePath)
+		result[key] = hash
+	}
 	return result, nil
 }
 
-// GitHashForFiles a list of files returns a map of with their git hash values. It uses
-// git hash-object under the
-func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]string, error) {
+// gitHashForFiles a list of files returns a map of with their git hash values. It uses
+// git hash-object under the hood.
+// Note that filesToHash must have full paths.
+func gitHashForFiles(filesToHash []string) (map[string]string, error) {
 	changes := make(map[string]string)
 	if len(filesToHash) > 0 {
-		var input = []string{"hash-object"}
-
-		for _, filename := range filesToHash {
-			input = append(input, filepath.Join(PackagePath, filename))
-		}
-		// fmt.Println(input)
+		input := []string{"hash-object"}
+		input = append(input, filesToHash...)
 		cmd := exec.Command("git", input...)
 		// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
-		cmd.Stdin = strings.NewReader(strings.Join(input, "\n"))
-		cmd.Dir = PackagePath
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return nil, fmt.Errorf("git hash-object exited with status: %w", err)

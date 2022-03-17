@@ -83,6 +83,23 @@ turbo run build --no-deps
 
 Let's say you have packages A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
 
+#### --dry / --dry-run
+
+Instead of executing tasks, display details about the affected packages and tasks that would be run.
+Specify `--dry=json` to get the output in JSON format.
+
+Task details include:
+
+- `task`: The name of the task to be executed
+- `package`: The package in which to run the task
+- `hash`: The hash of the task, used for caching
+- `directory`: The directory where the task will be run
+- `command`: The actual command used to run the task
+- `outputs`: Location of outputs from the task that will cached
+- `logFile`: Location of the log file for the task run
+- `dependencies`: Tasks that must run before this task
+- `dependents`: Tasks that must be run after this task
+
 #### `--graph`
 
 `type: string`
