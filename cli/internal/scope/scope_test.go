@@ -261,7 +261,7 @@ func TestResolvePackages(t *testing.T) {
 				PackageNames:     packageNames,
 				TopologicalGraph: graph,
 				SCC:              scc,
-			}, tui, logger, false)
+			}, tui, logger)
 			if err != nil {
 				t.Errorf("expected no error, got %v", err)
 			}
