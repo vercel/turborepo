@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Basic Turbo Build",
+      "name": "Build Basic",
       "type": "go",
       "request": "launch",
       "mode": "debug",
@@ -21,6 +21,15 @@
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/examples/basic",
       "args": ["--version"]
+    },
+    {
+      "name": "Build All (Force)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}",
+      "args": ["run", "build", "--force"]
     }
   ]
 }
