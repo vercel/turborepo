@@ -156,16 +156,16 @@ func (c *ApiClient) PutArtifact(hash string, duration int, artifactReader io.Rea
 	contentMd5 := base64.StdEncoding.EncodeToString(md5Sum[:])
 
 	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), artifactBody)
-	Trailer := make(http.Header)
-	Trailer.Add("Content-MD5", contentMd5)
 	// We need to initialize the trailer since it's not auto-initialized by the http module
-	req.Trailer = Trailer
+	req.Trailer = make(http.Header)
+	req.Trailer.Add("Content-MD5", contentMd5)
 	// ContentLenth -1 is required to set trailers on the http request.
 	req.ContentLength = -1
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Trailer", "Content-MD5")
 
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
