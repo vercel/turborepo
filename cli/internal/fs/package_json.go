@@ -41,6 +41,7 @@ func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
 type SignatureOptions struct {
 	Enabled bool   `json:"enabled,omitempty"`
 	Key     string `json:"key,omitempty"`
+	KeyEnv  string `json:"keyEnv,omitempty"`
 }
 type RemoteCacheOptions struct {
 	TeamId           string           `json:"teamId,omitempty"`
