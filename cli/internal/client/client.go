@@ -160,7 +160,7 @@ func (c *ApiClient) PutArtifact(hash string, duration int, artifactReader io.Rea
 	Trailer.Add("Content-MD5", contentMd5)
 	// We need to initialize the trailer since it's not auto-initialized by the http module
 	req.Trailer = Trailer
-	// ContentLenth -1 is requried to set trailers on the http request.
+	// ContentLenth -1 is required to set trailers on the http request.
 	req.ContentLength = -1
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
