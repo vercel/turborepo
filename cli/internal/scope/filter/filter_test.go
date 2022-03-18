@@ -36,38 +36,38 @@ func Test_filter(t *testing.T) {
 	graph.Add("project-0")
 	packageJSONs["project-0"] = &fs.PackageJSON{
 		Name: "project-0",
-		Dir:  filepath.Join(root, "packages", "project-0"),
+		Dir:  filepath.Join("packages", "project-0"),
 	}
 	graph.Add("project-1")
 	packageJSONs["project-1"] = &fs.PackageJSON{
 		Name: "project-1",
-		Dir:  filepath.Join(root, "packages", "project-1"),
+		Dir:  filepath.Join("packages", "project-1"),
 	}
 	graph.Add("project-2")
 	packageJSONs["project-2"] = &fs.PackageJSON{
 		Name: "project-2",
-		Dir:  filepath.Join(root, "project-2"),
+		Dir:  "project-2",
 	}
 	graph.Add("project-3")
 	packageJSONs["project-3"] = &fs.PackageJSON{
 		Name: "project-3",
-		Dir:  filepath.Join(root, "project-3"),
+		Dir:  "project-3",
 	}
 	graph.Add("project-4")
 	packageJSONs["project-4"] = &fs.PackageJSON{
 		Name: "project-4",
-		Dir:  filepath.Join(root, "project-4"),
+		Dir:  "project-4",
 	}
 	graph.Add("project-5")
 	packageJSONs["project-5"] = &fs.PackageJSON{
 		Name: "project-5",
-		Dir:  filepath.Join(root, "project-5"),
+		Dir:  "project-5",
 	}
 	// Note: inside project-5
 	graph.Add("project-6")
 	packageJSONs["project-6"] = &fs.PackageJSON{
 		Name: "project-6",
-		Dir:  filepath.Join(root, "project-5", "packages", "project-6"),
+		Dir:  filepath.Join("project-5", "packages", "project-6"),
 	}
 	// Add dependencies
 	graph.Connect(dag.BasicEdge("project-0", "project-1"))
@@ -180,7 +180,7 @@ func Test_filter(t *testing.T) {
 			"select by parentDir using glob",
 			[]*TargetSelector{
 				{
-					parentDir: "/packages/*",
+					parentDir: filepath.Join(root, "/packages/*"),
 				},
 			},
 			[]string{"project-0", "project-1"},
@@ -189,7 +189,7 @@ func Test_filter(t *testing.T) {
 			"select by parentDir using globstar",
 			[]*TargetSelector{
 				{
-					parentDir: "/project-5/**",
+					parentDir: filepath.Join(root, "/project-5/**"),
 				},
 			},
 			[]string{"project-5", "project-6"},
@@ -198,7 +198,7 @@ func Test_filter(t *testing.T) {
 			"select by parentDir with no glob",
 			[]*TargetSelector{
 				{
-					parentDir: "/project-5",
+					parentDir: filepath.Join(root, "/project-5"),
 				},
 			},
 			[]string{"project-5"},
@@ -217,7 +217,7 @@ func Test_filter(t *testing.T) {
 			"select by parentDir and exclude one package by pattern",
 			[]*TargetSelector{
 				{
-					parentDir: "/packages/*",
+					parentDir: filepath.Join(root, "/packages/*"),
 				},
 				{
 					exclude:     true,
@@ -365,22 +365,22 @@ func Test_SCM(t *testing.T) {
 	graph.Add("package-1")
 	packageJSONs["package-1"] = &fs.PackageJSON{
 		Name: "package-1",
-		Dir:  filepath.Join(root, "package-1"),
+		Dir:  "package-1",
 	}
 	graph.Add("package-2")
 	packageJSONs["package-2"] = &fs.PackageJSON{
 		Name: "package-2",
-		Dir:  filepath.Join(root, "package-2"),
+		Dir:  "package-2",
 	}
 	graph.Add("package-3")
 	packageJSONs["package-3"] = &fs.PackageJSON{
 		Name: "package-3",
-		Dir:  filepath.Join(root, "package-3"),
+		Dir:  "package-3",
 	}
 	graph.Add("package-20")
 	packageJSONs["package-20"] = &fs.PackageJSON{
 		Name: "package-20",
-		Dir:  filepath.Join(root, "package-20"),
+		Dir:  "package-20",
 	}
 
 	graph.Connect(dag.BasicEdge("package-3", "package-20"))
@@ -413,7 +413,7 @@ func Test_SCM(t *testing.T) {
 			[]*TargetSelector{
 				{
 					diff:      "HEAD~1",
-					parentDir: "package-2",
+					parentDir: filepath.Join(root, "package-2"),
 				},
 			},
 			[]string{"package-2"},

@@ -199,16 +199,12 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		if err != nil {
 			return nil, err
 		}
-		parentDir := ""
-		if selector.parentDir != "" {
-			parentDir = filepath.Join(r.Cwd, selector.parentDir)
-		}
-
+		parentDir := selector.parentDir
 		for pkgName := range changedPkgs {
 			if parentDir != "" {
 				if pkg, ok := r.PackageInfos[pkgName]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
-				} else if matches, err := doublestar.PathMatch(parentDir, pkg.Dir); err != nil {
+				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
 					entryPackages.Add(pkgName)
@@ -220,9 +216,9 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 	} else if selector.parentDir != "" {
 		// get packages by path
 		selectorWasUsed = true
-		parentDir := filepath.Join(r.Cwd, selector.parentDir)
+		parentDir := selector.parentDir
 		for name, pkg := range r.PackageInfos {
-			if matches, err := doublestar.PathMatch(parentDir, pkg.Dir); err != nil {
+			if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
 				return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 			} else if matches {
 				entryPackages.Add(name)
