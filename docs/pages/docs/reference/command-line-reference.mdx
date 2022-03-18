@@ -186,6 +186,17 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--output-logs`
+
+`type: string`
+
+Default `full`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+
+```shell
+turbo run build --output-logs=full
+turbo run build --output-logs=new-only
+```
+
 #### `--only`
 
 Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.

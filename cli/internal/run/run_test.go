@@ -39,6 +39,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -56,6 +58,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 "zop",
 				cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -74,6 +78,8 @@ func TestParseConfig(t *testing.T) {
 				scope:               []string{"foo", "blah"},
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -91,6 +97,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -108,6 +116,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -126,6 +136,8 @@ func TestParseConfig(t *testing.T) {
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{"--boop", "zoop"},
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -144,6 +156,8 @@ func TestParseConfig(t *testing.T) {
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{},
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -160,6 +174,8 @@ func TestParseConfig(t *testing.T) {
 				cacheFolder:         defaultCacheFolder,
 				scope:               []string{"bar"},
 				since:               "some-ref",
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 	}
