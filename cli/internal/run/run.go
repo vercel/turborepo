@@ -71,6 +71,14 @@ type runSpec struct {
 	Opts         *RunOptions
 }
 
+type LogsMode string
+
+const (
+	FullLogs LogsMode = "full"
+	HashLogs LogsMode = "hash"
+	NoLogs   LogsMode = "none"
+)
+
 func (rs *runSpec) ArgsForTask(task string) []string {
 	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
 	for _, target := range rs.Targets {
@@ -133,6 +141,11 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
+  --output-logs          Set type of process output logging. Use full to show
+                         all output. Use hash-only to show only turbo-computed
+                         task hashes. Use new-only to show only new output with
+                         only hashes for cached tasks. Use none to hide process
+                         output. (default full)
   --dry/--dry-run[=json] List the packages in scope and the tasks that would be run,
                          but don't actually run them. Passing --dry=json or
                          --dry-run=json will render the output in JSON format.
@@ -427,9 +440,15 @@ type RunOptions struct {
 	bail            bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
-	only       bool
-	dryRun     bool
-	dryRunJson bool
+	only bool
+	// Task logs output modes (cached and not cached tasks):
+	// full - show all,
+	// hash - only show task hash,
+	// none - show nothing
+	cacheHitLogsMode  LogsMode
+	cacheMissLogsMode LogsMode
+	dryRun            bool
+	dryRunJson        bool
 }
 
 func (ro *RunOptions) ScopeOpts() *scope.Opts {
@@ -457,6 +476,8 @@ func getDefaultRunOptions() *RunOptions {
 		forceExecution:      false,
 		stream:              true,
 		only:                false,
+		cacheHitLogsMode:    FullLogs,
+		cacheMissLogsMode:   FullLogs,
 	}
 }
 
@@ -559,6 +580,24 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
+			case strings.HasPrefix(arg, "--output-logs="):
+				outputLogsMode := arg[len("--output-logs="):]
+				switch outputLogsMode {
+				case "full":
+					runOptions.cacheMissLogsMode = FullLogs
+					runOptions.cacheHitLogsMode = FullLogs
+				case "none":
+					runOptions.cacheMissLogsMode = NoLogs
+					runOptions.cacheHitLogsMode = NoLogs
+				case "hash-only":
+					runOptions.cacheMissLogsMode = HashLogs
+					runOptions.cacheHitLogsMode = HashLogs
+				case "new-only":
+					runOptions.cacheMissLogsMode = FullLogs
+					runOptions.cacheHitLogsMode = HashLogs
+				default:
+					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
+				}
 			case strings.HasPrefix(arg, "--dry-run"):
 				runOptions.dryRun = true
 				if strings.HasPrefix(arg, "--dry-run=json") {
@@ -754,7 +793,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
@@ -763,9 +802,17 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+	if outputLogsMode != NoLogs {
+		scan := bufio.NewScanner(f)
+		if outputLogsMode == HashLogs {
+			//Writing to Stdout only the "cache hit, replaying output" line
+			scan.Scan()
+			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
+		} else {
+			for scan.Scan() {
+				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+			}
+		}
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -864,18 +911,18 @@ func (e *execContext) exec(pt *packageTask) error {
 		} else if hit {
 			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
 				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false)
+				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
 
 			return nil
 		}
-		if e.rs.Opts.stream {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 		}
 	} else {
-		if e.rs.Opts.stream {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 		}
 	}
@@ -921,7 +968,12 @@ func (e *execContext) exec(pt *packageTask) error {
 		bufWriter := bufio.NewWriter(output)
 		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 		defer bufWriter.Flush()
-		writer = io.MultiWriter(os.Stdout, bufWriter)
+		if e.rs.Opts.cacheMissLogsMode == NoLogs || e.rs.Opts.cacheMissLogsMode == HashLogs {
+			// only write to log file, not to stdout
+			writer = bufWriter
+		} else {
+			writer = io.MultiWriter(os.Stdout, bufWriter)
+		}
 	}
 
 	logger := log.New(writer, "", 0)
