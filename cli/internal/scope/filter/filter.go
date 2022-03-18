@@ -230,14 +230,14 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		}
 	}
 	if selector.namePattern != "" {
-		selectorWasUsed = true
 		// find packages that match name
-		if entryPackages.Len() == 0 {
+		if !selectorWasUsed {
 			matched, err := matchPackageNamesToVertices(selector.namePattern, r.Graph.Vertices())
 			if err != nil {
 				return nil, err
 			}
 			entryPackages = matched
+			selectorWasUsed = true
 		} else {
 			matched, err := matchPackageNames(selector.namePattern, entryPackages)
 			if err != nil {

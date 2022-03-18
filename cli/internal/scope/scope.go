@@ -80,6 +80,7 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 			filteredPkgs.Add(f)
 		}
 	}
+	filteredPkgs.Delete(ctx.RootNode)
 	return filteredPkgs, nil
 }
 
