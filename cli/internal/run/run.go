@@ -118,6 +118,12 @@ Options:
   --continue             Continue execution even if a task exits with an error
                          or non-zero exit code. The default behavior is to bail
                          immediately. (default false)
+  --filter="<selector>"  Use the given selector to specify package(s) to act as
+                         entry points. The syntax mirror's pnpm's syntax, and
+                         additional documentation and examples can be found in
+                         turbo's documentation TODO: LINK.
+                         --filter can be specified multiple times. Packages that
+                         match any filter will be included.
   --force                Ignore the existing cache (to force execution).
                          (default false)
   --graph                Generate a Dot graph of the task execution.
@@ -191,7 +197,7 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
@@ -406,6 +412,8 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 // RunOptions holds the current run operations configuration
 
 type RunOptions struct {
+	// patterns supplied to --filter on the commandline
+	filterPatterns []string
 	// Whether to include dependent impacted consumers in execution (defaults to true)
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
@@ -451,7 +459,7 @@ type RunOptions struct {
 	dryRunJson        bool
 }
 
-func (ro *RunOptions) ScopeOpts() *scope.Opts {
+func (ro *RunOptions) scopeOpts() *scope.Opts {
 	return &scope.Opts{
 		IncludeDependencies: ro.includeDependencies,
 		IncludeDependents:   ro.includeDependents,
@@ -460,6 +468,7 @@ func (ro *RunOptions) ScopeOpts() *scope.Opts {
 		Cwd:                 ro.cwd,
 		IgnorePatterns:      ro.ignore,
 		GlobalDepPatterns:   ro.globalDeps,
+		FilterPatterns:      ro.filterPatterns,
 	}
 }
 
@@ -507,6 +516,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			break
 		} else if strings.HasPrefix(arg, "--") {
 			switch {
+			case strings.HasPrefix(arg, "--filter="):
+				filterPattern := arg[len("--filter="):]
+				if filterPattern != "" {
+					runOptions.filterPatterns = append(runOptions.filterPatterns, filterPattern)
+				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
 					runOptions.since = arg[len("--since="):]

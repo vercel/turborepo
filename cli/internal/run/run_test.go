@@ -178,6 +178,22 @@ func TestParseConfig(t *testing.T) {
 				cacheMissLogsMode:   FullLogs,
 			},
 		},
+		{
+			"can specify filter patterns",
+			[]string{"foo", "--filter=bar", "--filter=...[main]"},
+			&RunOptions{
+				includeDependents: true,
+				filterPatterns:    []string{"bar", "...[main]"},
+				stream:            true,
+				bail:              true,
+				concurrency:       10,
+				cache:             true,
+				cwd:               defaultCwd,
+				cacheFolder:       defaultCacheFolder,
+				cacheHitLogsMode:  FullLogs,
+				cacheMissLogsMode: FullLogs,
+			},
+		},
 	}
 
 	ui := &cli.BasicUi{
