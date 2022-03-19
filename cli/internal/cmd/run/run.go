@@ -43,6 +43,9 @@ import (
 const (
 	TOPOLOGICAL_PIPELINE_DELIMITER = "^"
 	ENV_PIPELINE_DELIMITER         = "$"
+	FullLogs                       = "full"
+	HashLogs                       = "hash"
+	NoLogs                         = "none"
 )
 
 // completeGraph represents the common state inferred from the filesystem and pipeline.
@@ -110,7 +113,7 @@ func (rs *runSpec) ArgsForTask(task string) []string {
 func (e *execContext) logError(prefix, format string, args ...interface{}) {
 	err := fmt.Errorf(format, args...)
 	e.hlogger.Error(prefix, "error", err)
-	e.logger.Printf("%w", fmt.Errorf("%s%s", prefix, color.RedString(" %v", err)))
+	e.logger.Printf("%v", fmt.Errorf("%s%s", prefix, color.RedString(" %v", err)))
 }
 
 func RunCmd(ch *cmdutil.Helper) *cobra.Command {
@@ -154,6 +157,24 @@ occurred again).
 			}
 			if len(passThroughArgs) == 2 {
 				opts.PassThroughArgs = strings.Split(passThroughArgs[1], " ")
+			}
+			if opts.OutputLogs != "" {
+				switch opts.OutputLogs {
+				case "full":
+					opts.CacheMissLogsMode = FullLogs
+					opts.CacheHitLogsMode = FullLogs
+				case "none":
+					opts.CacheMissLogsMode = NoLogs
+					opts.CacheHitLogsMode = NoLogs
+				case "hash-only":
+					opts.CacheMissLogsMode = HashLogs
+					opts.CacheHitLogsMode = HashLogs
+				case "new-only":
+					opts.CacheMissLogsMode = FullLogs
+					opts.CacheHitLogsMode = HashLogs
+				default:
+					ch.LogWarning("unknown value %v for --output-logs CLI flag. Falling back to full", opts.OutputLogs)
+				}
 			}
 
 			startAt := time.Now()
@@ -229,6 +250,7 @@ occurred again).
 	cmd.Flags().BoolVar(&opts.NoCache, "no-cache", false, "avoid saving task results to the cache")
 	cmd.Flags().StringVar(&opts.DryRunType, "dry-run", "", "don't actually run tasks")
 	cmd.Flags().StringVar(&opts.Cwd, "cwd", path, "directory to execute command in")
+	cmd.Flags().StringVar(&opts.OutputLogs, "output-logs", "full", "set type of process output logging")
 	cmd.Flags().BoolVar(&opts.Stream, "stream", true, "stream???")
 	cmd.Flags().BoolVar(&opts.Only, "only", true, "only???")
 
@@ -554,7 +576,7 @@ func executeDryRun(ch *cmdutil.Helper, engine *core.Scheduler, g *completeGraph,
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, cLogger *logger.ConcurrentLogger, runOptions *run.RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
+func replayLogs(logger hclog.Logger, cLogger *logger.ConcurrentLogger, runOptions *run.RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode string) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.Cwd, logFileName))
@@ -563,9 +585,17 @@ func replayLogs(logger hclog.Logger, cLogger *logger.ConcurrentLogger, runOption
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		cLogger.Printf(ui.StripAnsi(string(scan.Bytes()))) // Writing to Stdout
+	if outputLogsMode != NoLogs {
+		scan := bufio.NewScanner(f)
+		if outputLogsMode == HashLogs {
+			//Writing to Stdout only the "cache hit, replaying output" line
+			scan.Scan()
+			cLogger.Printf(ui.StripAnsi(string(scan.Bytes())))
+		} else {
+			for scan.Scan() {
+				cLogger.Printf(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+			}
+		}
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -624,7 +654,7 @@ func (e *execContext) exec(pt *packageTask) error {
 	hash, err := pt.hash(passThroughArgs, e.hlogger)
 	e.hlogger.Debug("task hash", "value", hash)
 	if err != nil {
-		targetLogger.Printf("%w", targetLogger.Errorf("hashing error: %v", err))
+		targetLogger.Printf("%v", targetLogger.Errorf("hashing error: %v", err))
 		// @TODO probably should abort fatally???
 	}
 	// Cache ---------------------------------------------
@@ -632,22 +662,22 @@ func (e *execContext) exec(pt *packageTask) error {
 	if !e.rs.Opts.Force {
 		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.Cwd, hash, nil)
 		if err != nil {
-			targetLogger.Printf("%w", targetLogger.Errorf(fmt.Sprintf("error fetching from cache: %s", err)))
+			targetLogger.Printf("%v", targetLogger.Errorf(fmt.Sprintf("error fetching from cache: %s", err)))
 		} else if hit {
 			if e.rs.Opts.Stream && fs.FileExists(filepath.Join(e.rs.Opts.Cwd, logFileName)) {
 				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetHlogger, e.logger, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false)
+				go replayLogs(targetHlogger, e.logger, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.CacheHitLogsMode)
 			}
 			targetHlogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(run.TargetCached, nil)
 
 			return nil
 		}
-		if e.rs.Opts.Stream {
+		if e.rs.Opts.Stream && e.rs.Opts.CacheHitLogsMode != NoLogs {
 			targetLogger.Output("cache miss, executing %s", ui.Dim(hash))
 		}
 	} else {
-		if e.rs.Opts.Stream {
+		if e.rs.Opts.Stream && e.rs.Opts.CacheHitLogsMode != NoLogs {
 			targetLogger.Output("cache bypass, force executing %s", ui.Dim(hash))
 		}
 	}
@@ -693,7 +723,12 @@ func (e *execContext) exec(pt *packageTask) error {
 		bufWriter := bufio.NewWriter(output)
 		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 		defer bufWriter.Flush()
-		writer = io.MultiWriter(os.Stdout, bufWriter)
+		if e.rs.Opts.CacheMissLogsMode == NoLogs || e.rs.Opts.CacheMissLogsMode == HashLogs {
+			// only write to log file, not to stdout
+			writer = bufWriter
+		} else {
+			writer = io.MultiWriter(os.Stdout, bufWriter)
+		}
 	}
 
 	logger := log.New(writer, "", 0)
@@ -722,13 +757,13 @@ func (e *execContext) exec(pt *packageTask) error {
 			} else {
 				f, err := os.Open(filepath.Join(e.rs.Opts.Cwd, logFileName))
 				if err != nil {
-					targetLogger.Printf("%w", targetLogger.Warnf("failed reading logs: %v", err))
+					targetLogger.Printf("%v", targetLogger.Warnf("failed reading logs: %v", err))
 				}
 				defer f.Close()
 				scan := bufio.NewScanner(f)
-				targetLogger.Printf("%w", targetLogger.Errorf(""))
-				targetLogger.Printf("%w", targetLogger.Errorf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pt.pkg.Name, pt.task)))
-				targetLogger.Printf("%w", targetLogger.Errorf(""))
+				targetLogger.Printf("%v", targetLogger.Errorf(""))
+				targetLogger.Printf("%v", targetLogger.Errorf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pt.pkg.Name, pt.task)))
+				targetLogger.Printf("%v", targetLogger.Errorf(""))
 				for scan.Scan() {
 					e.logger.Printf("${RED}%s:%s: ${RESET}%s", pt.pkg.Name, pt.task, scan.Bytes()) // Writing to Stdout
 				}
@@ -736,7 +771,7 @@ func (e *execContext) exec(pt *packageTask) error {
 			e.processes.Close()
 		} else {
 			if e.rs.Opts.Stream {
-				targetLogger.Printf("%w", targetLogger.Warnf("command finished with error, but continuing..."))
+				targetLogger.Printf("%v", targetLogger.Warnf("command finished with error, but continuing..."))
 			}
 		}
 		return err
@@ -799,7 +834,7 @@ func generateDotGraph(ch *cmdutil.Helper, taskGraph *dag.AcyclicGraph, outputFil
 		cmd := exec.Command("dot", dotArgs...)
 		cmd.Stdin = strings.NewReader(graphString)
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
+			return fmt.Errorf("could not generate task graphfile %v: %w", outputFilename, err)
 		} else {
 			ch.Logger.Printf("")
 			ch.Logger.Printf("✔ Generated task graph in %s", ui.Bold(outputFilename))

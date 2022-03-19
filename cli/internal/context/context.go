@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Masterminds/semver"
 	"github.com/deckarep/golang-set"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
@@ -20,7 +21,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/Masterminds/semver"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -460,7 +460,6 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 			if len(entry.OptionalDependencies) > 0 {
 				c.resolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
 			}
-
 		}(directDepName, unresolvedVersion)
 	}
 }
@@ -537,11 +536,12 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 
 	if !util.IsYarn(backend.Name) {
 		// If we are not in Yarn, add the specfile and lockfile to global deps
-		globalDeps.Add(backend.Specfile)
-		globalDeps.Add(backend.Lockfile)
+		globalDeps.Add(filepath.Join(rootpath, backend.Specfile))
+		globalDeps.Add(filepath.Join(rootpath, backend.Lockfile))
 	}
 
-	globalFileHashMap, err := fs.GitHashForFiles(globalDeps.UnsafeListOfStrings(), rootpath)
+	// No prefix, global deps already have full paths
+	globalFileHashMap, err := fs.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}

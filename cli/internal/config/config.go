@@ -28,6 +28,11 @@ type Config struct {
 	Logger    hclog.Logger
 	ApiClient *client.ApiClient
 	Cache     *CacheConfig
+
+	NoGC       bool
+	Heap       string
+	Trace      string
+	CpuProfile string
 }
 
 type CacheConfig struct {

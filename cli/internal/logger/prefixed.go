@@ -22,10 +22,10 @@ func NewPrefixed(outputPrefix, successPrefix, warningPrefix, errorPrefix string)
 	return &PrefixedLogger{
 		out: os.Stdout,
 
-		outputPrefix: outputPrefix,
+		outputPrefix:  outputPrefix,
 		successPrefix: successPrefix,
 		warningPrefix: warningPrefix,
-		errorPrefix: errorPrefix,
+		errorPrefix:   errorPrefix,
 	}
 }
 

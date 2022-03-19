@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"errors"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
@@ -59,8 +62,13 @@ func runCmd(logger *logger.Logger, version string, processes *process.Manager) e
 	rootCmd.PersistentFlags().StringVar(&cfg.TeamSlug, "team", cfg.TeamSlug, "vercel team slug")
 	rootCmd.PersistentFlags().StringVar(&cfg.ApiUrl, "api", cfg.ApiUrl, "vercel api url")
 	rootCmd.PersistentFlags().StringVar(&cfg.LoginUrl, "url", cfg.LoginUrl, "vercel login url")
+	rootCmd.PersistentFlags().BoolVar(&cfg.NoGC, "no-gc", false, "")
+	rootCmd.PersistentFlags().StringVar(&cfg.Heap, "heap", "", "outputs the heap trace to the given file")
+	rootCmd.PersistentFlags().StringVar(&cfg.Trace, "trace", "", "outputs the cpu trace to the given file")
+	rootCmd.PersistentFlags().StringVar(&cfg.CpuProfile, "cpu-profile", "", "outputs the cpu profile to the given file")
 
 	rootCmd.PersistentFlags().Lookup("token").DefValue = ""
+	rootCmd.PersistentFlags().Lookup("no-gc").Hidden = true
 
 	ch := &cmdutil.Helper{
 		Logger:    logger,
@@ -83,6 +91,25 @@ func runCmd(logger *logger.Logger, version string, processes *process.Manager) e
 	rootCmd.AddCommand(auth.LogoutCmd(ch))
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(pruneCmd)
+
+	cpuProfile := false
+	for _, arg := range os.Args {
+		if strings.Contains(arg, "cpu-profile") {
+			cpuProfile = true
+			break
+		}
+	}
+	if cpuProfile {
+		// The CPU profiler in Go only runs at 100 Hz, which is far too slow to
+		// return useful information for esbuild, since it's so fast. Let's keep
+		// running for 30 seconds straight, which should give us 3,000 samples.
+		seconds := 30.0
+		start := time.Now()
+		for time.Since(start).Seconds() < seconds {
+			rootCmd.Execute()
+		}
+		return rootCmd.Execute()
+	}
 
 	return rootCmd.Execute()
 }

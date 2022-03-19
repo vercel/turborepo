@@ -5,12 +5,13 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime/debug"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/logger"
+	tlogger "github.com/vercel/turborepo/cli/internal/logger"
 	"github.com/vercel/turborepo/cli/internal/process"
 )
 
@@ -21,7 +22,7 @@ const (
 
 type Helper struct {
 	Config    *config.Config
-	Logger    *logger.Logger
+	Logger    *tlogger.Logger
 	Processes *process.Manager
 }
 
@@ -39,6 +40,49 @@ func (h *Helper) LogError(format string, args ...interface{}) error {
 
 func (h *Helper) PreRun() func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
+		// To view a CPU trace, use "go tool trace [file]". Note that the trace
+		// viewer doesn't work under Windows Subsystem for Linux for some reason.
+		if h.Config.Trace != "" {
+			if done := createTraceFile(args, h.Config.Trace); done == nil {
+				os.Exit(1)
+			} else {
+				defer done()
+			}
+		}
+
+		// To view a heap trace, use "go tool pprof [file]" and type "top". You can
+		// also drop it into https://speedscope.app and use the "left heavy" or
+		// "sandwich" view modes.
+		if h.Config.Heap != "" {
+			if done := createHeapFile(args, h.Config.Heap); done == nil {
+				os.Exit(1)
+			} else {
+				defer done()
+			}
+		}
+
+		// To view a CPU profile, drop the file into https://speedscope.app.
+		// Note: Running the CPU profiler doesn't work under Windows subsystem for
+		// Linux. The profiler has to be built for native Windows and run using the
+		// command prompt instead.
+		if h.Config.CpuProfile != "" {
+			if done := createCpuprofileFile(args, h.Config.CpuProfile); done == nil {
+				os.Exit(1)
+			} else {
+				defer done()
+			}
+		}
+
+		if h.Config.CpuProfile == "" {
+			// Disable the GC since we're just going to allocate a bunch of memory
+			// and then exit anyway. This speedup is not insignificant. Make sure to
+			// only do this here once we know that we're not going to be a long-lived
+			// process though.
+			if !h.Config.NoGC {
+				debug.SetGCPercent(-1)
+			}
+		}
+
 		if !h.Config.NoColor {
 			os.Setenv("FORCE_COLOR", "1")
 		}

@@ -42,6 +42,13 @@ type RunOptions struct {
 	PassThroughArgs   []string
 	DryRun            bool
 	DryRunType        string
+	OutputLogs        string
+	// Task logs output modes (cached and not cached tasks):
+	// full - show all,
+	// hash - only show task hash,
+	// none - show nothing
+	CacheHitLogsMode  string
+	CacheMissLogsMode string
 }
 
 // A RunResult represents a single event in the build process, i.e. a target starting or finishing

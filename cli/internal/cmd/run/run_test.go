@@ -1,22 +1,23 @@
 package run
 
 import (
-	// "fmt"
-	// "os"
-	// "path/filepath"
-	// "reflect"
-	// "testing"
+// 	"fmt"
+// 	"os"
+// 	"path/filepath"
+// 	"reflect"
+// 	"testing"
 
-	// "github.com/vercel/turborepo/cli/internal/fs"
-	// "github.com/stretchr/testify/assert"
+// 	"github.com/mitchellh/cli"
+// 	"github.com/vercel/turborepo/cli/internal/fs"
+// 	"github.com/stretchr/testify/assert"
 )
 
 // func TestParseConfig(t *testing.T) {
 // 	defaultCwd, err := os.Getwd()
 // 	if err != nil {
-// 		t.Errorf("failed to get Cwd: %v", err)
+// 		t.Errorf("failed to get cwd: %v", err)
 // 	}
-// 	defaultCacheDir := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.Cache/turbo"))
+// 	defaultCacheFolder := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
 // 	cases := []struct {
 // 		Name     string
 // 		Args     []string
@@ -26,147 +27,154 @@ import (
 // 			"string flags",
 // 			[]string{"foo"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             false,
-// 				DotGraph:          "",
-// 				Concurrency:       10,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "",
+// 				concurrency:         10,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"cwd",
 // 			[]string{"foo", "--cwd=zop"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             false,
-// 				DotGraph:          "",
-// 				Concurrency:       10,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Cwd:               "zop",
-// 				CacheDir:          filepath.FromSlash("zop/node_modules/.Cache/turbo"),
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "",
+// 				concurrency:         10,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				cwd:                 "zop",
+// 				cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"scope",
 // 			[]string{"foo", "--scope=foo", "--scope=blah"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             false,
-// 				DotGraph:          "",
-// 				Concurrency:       10,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Scope:             []string{"foo", "blah"},
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "",
+// 				concurrency:         10,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				scope:               []string{"foo", "blah"},
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"concurrency",
 // 			[]string{"foo", "--concurrency=12"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             false,
-// 				DotGraph:          "",
-// 				Concurrency:       12,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "",
+// 				concurrency:         12,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"graph",
 // 			[]string{"foo", "--graph=g.png"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             true,
-// 				DotGraph:          "g.png",
-// 				Concurrency:       10,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "g.png",
+// 				concurrency:         10,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"passThroughArgs",
 // 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             true,
-// 				DotGraph:          "g.png",
-// 				Concurrency:       10,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
-// 				PassThroughArgs:   []string{"--boop", "zoop"},
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "g.png",
+// 				concurrency:         10,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				passThroughArgs:     []string{"--boop", "zoop"},
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"Empty passThroughArgs",
 // 			[]string{"foo", "--graph=g.png", "--"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             true,
-// 				DotGraph:          "g.png",
-// 				Concurrency:       10,
-// 				IncludeDeps:       false,
-// 				NoCache:           false,
-// 				Force:             false,
-// 				Profile:           "",
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
-// 				PassThroughArgs:   []string{},
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				dotGraph:            "g.png",
+// 				concurrency:         10,
+// 				includeDependencies: false,
+// 				cache:               true,
+// 				forceExecution:      false,
+// 				profile:             "",
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				passThroughArgs:     []string{},
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 		{
 // 			"since and scope imply including dependencies for backwards compatibility",
 // 			[]string{"foo", "--scope=bar", "--since=some-ref"},
 // 			&RunOptions{
-// 				IncludeDependents: true,
-// 				Stream:            true,
-// 				Bail:              true,
-// 				Graph:             true,
-// 				DotGraph:          "",
-// 				Concurrency:       10,
-// 				IncludeDeps:       true,
-// 				NoCache:           false,
-// 				Cwd:               defaultCwd,
-// 				CacheDir:          defaultCacheDir,
-// 				Scope:             []string{"bar"},
-// 				Since:             "some-ref",
+// 				includeDependents:   true,
+// 				stream:              true,
+// 				bail:                true,
+// 				concurrency:         10,
+// 				includeDependencies: true,
+// 				cache:               true,
+// 				cwd:                 defaultCwd,
+// 				cacheFolder:         defaultCacheFolder,
+// 				scope:               []string{"bar"},
+// 				since:               "some-ref",
+// 				cacheHitLogsMode:    FullLogs,
+// 				cacheMissLogsMode:   FullLogs,
 // 			},
 // 		},
 // 	}
@@ -179,6 +187,7 @@ import (
 
 // 	for i, tc := range cases {
 // 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
+
 // 			actual, err := parseRunArgs(tc.Args, ui)
 // 			if err != nil {
 // 				t.Fatalf("invalid parse: %#v", err)
@@ -232,7 +241,7 @@ import (
 // 		{
 // 			name: "handles pass through arguments after -- ",
 // 			args: args{
-// 				arguments: []string{"build", "test", "--", "--foo", "build", "--Cache-dir"},
+// 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
 // 				configJson: &fs.TurboConfigJSON{
 // 					Pipeline: map[string]fs.Pipeline{
 // 						"build":      {},
@@ -247,7 +256,7 @@ import (
 // 		{
 // 			name: "handles unknown pipeline targets ",
 // 			args: args{
-// 				arguments: []string{"foo", "test", "--", "--foo", "build", "--Cache-dir"},
+// 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
 // 				configJson: &fs.TurboConfigJSON{
 // 					Pipeline: map[string]fs.Pipeline{
 // 						"build":      {},

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -76,11 +77,12 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		target, _ = os.Readlink(name)
 	}
-	hdr, err := tar.FileInfoHeader(info, target)
+	hdr, err := tar.FileInfoHeader(info, filepath.ToSlash(target))
 	if err != nil {
 		return err
 	}
-	hdr.Name = name
+	// Ensure posix path for filename written in header.
+	hdr.Name = filepath.ToSlash(name)
 	// Zero out all timestamps.
 	hdr.ModTime = mtime
 	hdr.AccessTime = mtime

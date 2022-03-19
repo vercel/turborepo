@@ -126,7 +126,7 @@ func loginSSO(ch *cmdutil.Helper, ssoTeam string) error {
 		http.Redirect(w, r, location, http.StatusFound)
 	}, defaultPort)
 	if err != nil {
-		return ch.LogError("failed to start local server: ", err)
+		return ch.LogError("failed to start local server: %v", err)
 	}
 
 	s := ui.NewSpinner(os.Stdout)
