@@ -2,6 +2,7 @@ package cache
 
 import (
 	"sync"
+	"time"
 
 	"github.com/vercel/turborepo/cli/internal/config"
 )
@@ -21,6 +22,7 @@ type asyncCache struct {
 type cacheRequest struct {
 	target   string
 	key      string
+	start    time.Time
 	duration int
 	files    []string
 }
@@ -37,17 +39,18 @@ func newAsyncCache(realCache Cache, config *config.Config) Cache {
 	return c
 }
 
-func (c *asyncCache) Put(target string, key string, duration int, files []string) error {
+func (c *asyncCache) Put(target string, key string, start time.Time, duration int, files []string) error {
 	c.requests <- cacheRequest{
 		target:   target,
 		key:      key,
 		files:    files,
 		duration: duration,
+		start:    start,
 	}
 	return nil
 }
 
-func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
+func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, time.Time, int, error) {
 	return c.realCache.Fetch(target, key, files)
 }
 
@@ -69,7 +72,7 @@ func (c *asyncCache) Shutdown() {
 // run implements the actual async logic.
 func (c *asyncCache) run() {
 	for r := range c.requests {
-		c.realCache.Put(r.target, r.key, r.duration, r.files)
+		c.realCache.Put(r.target, r.key, r.start, r.duration, r.files)
 	}
 	c.wg.Done()
 }

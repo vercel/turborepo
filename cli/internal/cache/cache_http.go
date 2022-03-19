@@ -41,7 +41,8 @@ var mtime = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 // nobody is the usual uid / gid of the 'nobody' user.
 const nobody = 65534
 
-func (cache *httpCache) Put(target, hash string, duration int, files []string) error {
+// start is ignored
+func (cache *httpCache) Put(target, hash string, start time.Time, duration int, files []string) error {
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
@@ -104,19 +105,19 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 	return err
 }
 
-func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, int, error) {
+func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, time.Time, int, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
 		// TODO: analytics event?
-		return false, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		return false, files, notime, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
-	cache.logFetch(hit, key, duration)
-	return hit, files, duration, err
+	cache.logFetch(hit, key, notime, duration)
+	return hit, files, notime, duration, err
 }
 
-func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
+func (cache *httpCache) logFetch(hit bool, hash string, start time.Time, duration int) {
 	var event string
 	if hit {
 		event = cacheEventHit
@@ -128,6 +129,7 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 		Event:    event,
 		Hash:     hash,
 		Duration: duration,
+		Start:    start,
 	}
 	cache.recorder.LogEvent(payload)
 }

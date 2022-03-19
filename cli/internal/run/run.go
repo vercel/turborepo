@@ -860,7 +860,7 @@ func (e *execContext) exec(pt *packageTask) error {
 	// Cache ---------------------------------------------
 	var hit bool
 	if !e.rs.Opts.forceExecution {
-		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
+		hit, _, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
@@ -978,7 +978,7 @@ func (e *execContext) exec(pt *packageTask) error {
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
 		filesToBeCached := globby.GlobFiles(pt.pkg.Dir, outputs, ignore)
-		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
+		if err := e.turboCache.Put(pt.pkg.Dir, hash, cmdTime, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}

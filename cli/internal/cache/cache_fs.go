@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -27,31 +28,31 @@ func newFsCache(config *config.Config, recorder analytics.Recorder) Cache {
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
-func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []string, int, error) {
+func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []string, time.Time, int, error) {
 	cachedFolder := filepath.Join(f.cacheDirectory, hash)
 
 	// If it's not in the cache bail now
 	if !fs.PathExists(cachedFolder) {
-		f.logFetch(false, hash, 0)
-		return false, nil, 0, nil
+		f.logFetch(false, hash, notime, 0)
+		return false, nil, notime, 0, nil
 	}
 
 	// Otherwise, copy it into position
 	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, fs.DirPermissions, true, true)
 	if err != nil {
 		// TODO: what event to log here?
-		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
+		return false, nil, notime, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
 	}
 
 	meta, err := ReadCacheMetaFile(filepath.Join(f.cacheDirectory, hash+"-meta.json"))
 	if err != nil {
-		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
+		return false, nil, notime, 0, fmt.Errorf("error reading cache metadata: %w", err)
 	}
-	f.logFetch(true, hash, meta.Duration)
-	return true, nil, meta.Duration, nil
+	f.logFetch(true, hash, meta.Start, meta.Duration)
+	return true, nil, meta.Start, meta.Duration, nil
 }
 
-func (f *fsCache) logFetch(hit bool, hash string, duration int) {
+func (f *fsCache) logFetch(hit bool, hash string, start time.Time, duration int) {
 	var event string
 	if hit {
 		event = cacheEventHit
@@ -63,11 +64,12 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 		Event:    event,
 		Hash:     hash,
 		Duration: duration,
+		Start:    start,
 	}
 	f.recorder.LogEvent(payload)
 }
 
-func (f *fsCache) Put(target, hash string, duration int, files []string) error {
+func (f *fsCache) Put(target, hash string, start time.Time, duration int, files []string) error {
 	g := new(errgroup.Group)
 
 	numDigesters := runtime.NumCPU()
@@ -102,6 +104,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	WriteCacheMetaFile(filepath.Join(f.cacheDirectory, hash+"-meta.json"), &CacheMetadata{
 		Duration: duration,
 		Hash:     hash,
+		Start:    start,
 	})
 
 	return nil
@@ -120,8 +123,9 @@ func (cache *fsCache) Shutdown() {}
 // CacheMetadata stores duration and hash information for a cache entry so that aggregate Time Saved calculations
 // can be made from artifacts from various caches
 type CacheMetadata struct {
-	Hash     string `json:"hash"`
-	Duration int    `json:"duration"`
+	Hash     string    `json:"hash"`
+	Duration int       `json:"duration"`
+	Start    time.Time `json:"start"`
 }
 
 // WriteCacheMetaFile writes cache metadata file at a path
