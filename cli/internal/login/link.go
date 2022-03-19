@@ -78,7 +78,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}))
 
 	if !shouldSetup {
-		c.Ui.Info("> Aborted.")
+		c.Ui.Info("> Canceled.")
 		return 1
 	}
 
@@ -125,7 +125,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}))
 
 	if chosenTeamName == "" {
-		c.Ui.Info("Aborted. Turborepo not set up.")
+		c.Ui.Info("Canceled. Turborepo not set up.")
 		return 1
 	} else if (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username) {
 		chosenTeam = client.Team{

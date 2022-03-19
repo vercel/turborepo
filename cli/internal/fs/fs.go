@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // https://github.com/thought-machine/please/blob/master/src/fs/fs.go
@@ -28,6 +29,23 @@ func EnsureDir(filename string) error {
 		}
 	}
 	return err
+}
+
+var nonRelativeSentinel string = ".." + string(filepath.Separator)
+
+// DirContainsPath returns true if the path 'target' is contained within 'dir'
+// Expects both paths to be absolute and does not verify that either path exists.
+func DirContainsPath(dir string, target string) (bool, error) {
+	// In Go, filepath.Rel can return a path that starts with "../" or equivalent.
+	// Checking filesystem-level contains can get extremely complicated
+	// (see https://github.com/golang/dep/blob/f13583b555deaa6742f141a9c1185af947720d60/internal/fs/fs.go#L33)
+	// As a compromise, rely on the stdlib to generate a relative path and then check
+	// if the first step is "../".
+	rel, err := filepath.Rel(dir, target)
+	if err != nil {
+		return false, err
+	}
+	return !strings.HasPrefix(rel, nonRelativeSentinel), nil
 }
 
 // PathExists returns true if the given path exists, as a file or a directory.
