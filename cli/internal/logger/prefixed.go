@@ -10,7 +10,7 @@ import (
 )
 
 type PrefixedLogger struct {
-	out io.Writer
+	Out io.Writer
 
 	outputPrefix  string
 	successPrefix string
@@ -20,7 +20,7 @@ type PrefixedLogger struct {
 
 func NewPrefixed(outputPrefix, successPrefix, warningPrefix, errorPrefix string) *PrefixedLogger {
 	return &PrefixedLogger{
-		out: os.Stdout,
+		Out: os.Stdout,
 
 		outputPrefix:  outputPrefix,
 		successPrefix: successPrefix,
@@ -30,7 +30,7 @@ func NewPrefixed(outputPrefix, successPrefix, warningPrefix, errorPrefix string)
 }
 
 func (l *PrefixedLogger) Printf(format string, args ...interface{}) {
-	fmt.Fprintln(l.out, util.Sprintf(format, args...))
+	fmt.Fprintln(l.Out, util.Sprintf(format, args...))
 }
 
 func (l *PrefixedLogger) Sucessf(format string, args ...interface{}) string {

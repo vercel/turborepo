@@ -7,9 +7,9 @@ import (
 // 	"reflect"
 // 	"testing"
 
-// 	"github.com/mitchellh/cli"
-// 	"github.com/vercel/turborepo/cli/internal/fs"
 // 	"github.com/stretchr/testify/assert"
+// 	"github.com/vercel/turborepo/cli/internal/fs"
+// 	"github.com/vercel/turborepo/cli/internal/run"
 )
 
 // func TestParseConfig(t *testing.T) {
@@ -21,12 +21,12 @@ import (
 // 	cases := []struct {
 // 		Name     string
 // 		Args     []string
-// 		Expected *RunOptions
+// 		Expected *run.RunOptions
 // 	}{
 // 		{
 // 			"string flags",
 // 			[]string{"foo"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -45,7 +45,7 @@ import (
 // 		{
 // 			"cwd",
 // 			[]string{"foo", "--cwd=zop"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -64,7 +64,7 @@ import (
 // 		{
 // 			"scope",
 // 			[]string{"foo", "--scope=foo", "--scope=blah"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -84,7 +84,7 @@ import (
 // 		{
 // 			"concurrency",
 // 			[]string{"foo", "--concurrency=12"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -103,7 +103,7 @@ import (
 // 		{
 // 			"graph",
 // 			[]string{"foo", "--graph=g.png"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -122,7 +122,7 @@ import (
 // 		{
 // 			"passThroughArgs",
 // 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -142,7 +142,7 @@ import (
 // 		{
 // 			"Empty passThroughArgs",
 // 			[]string{"foo", "--graph=g.png", "--"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,
@@ -162,7 +162,7 @@ import (
 // 		{
 // 			"since and scope imply including dependencies for backwards compatibility",
 // 			[]string{"foo", "--scope=bar", "--since=some-ref"},
-// 			&RunOptions{
+// 			&run.RunOptions{
 // 				includeDependents:   true,
 // 				stream:              true,
 // 				bail:                true,

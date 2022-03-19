@@ -32,6 +32,11 @@ type oneShotServer struct {
 	srv         *http.Server
 }
 
+type deps struct {
+	ch      *cmdutil.Helper
+	openUrl func(string) error
+}
+
 func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 	var opts struct {
 		ssoTeam string
@@ -42,9 +47,15 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 		Short: "Login to your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.ssoTeam != "" {
-				return loginSSO(ch, opts.ssoTeam)
+				return loginSSO(deps{
+					ch:      ch,
+					openUrl: browser.OpenBrowser,
+				}, opts.ssoTeam)
 			} else {
-				return login(ch)
+				return login(deps{
+					ch:      ch,
+					openUrl: browser.OpenBrowser,
+				})
 			}
 		},
 	}
@@ -54,7 +65,9 @@ func LoginCmd(ch *cmdutil.Helper) *cobra.Command {
 	return cmd
 }
 
-func login(ch *cmdutil.Helper) error {
+func login(deps deps) error {
+	ch := deps.ch
+
 	ch.Config.Logger.Debug(fmt.Sprintf("turbo v%v", ch.Config.Version))
 	ch.Config.Logger.Debug(fmt.Sprintf("api url: %v", ch.Config.ApiUrl))
 	ch.Config.Logger.Debug(fmt.Sprintf("login url: %v", ch.Config.LoginUrl))
@@ -75,7 +88,7 @@ func login(ch *cmdutil.Helper) error {
 	}
 
 	s := ui.NewSpinner(os.Stdout)
-	err = browser.OpenBrowser(loginURL)
+	err = deps.openUrl(loginURL)
 	if err != nil {
 		return ch.LogError("failed to open %v: %w", loginURL, err)
 	}
@@ -108,7 +121,9 @@ func login(ch *cmdutil.Helper) error {
 	return nil
 }
 
-func loginSSO(ch *cmdutil.Helper, ssoTeam string) error {
+func loginSSO(deps deps, ssoTeam string) error {
+	ch := deps.ch
+
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	query := make(url.Values)
 	query.Add("teamId", ssoTeam)
@@ -130,7 +145,7 @@ func loginSSO(ch *cmdutil.Helper, ssoTeam string) error {
 	}
 
 	s := ui.NewSpinner(os.Stdout)
-	err = browser.OpenBrowser(loginURL)
+	err = deps.openUrl(loginURL)
 	if err != nil {
 		return ch.LogError("failed to open %v: %w", loginURL, err)
 	}

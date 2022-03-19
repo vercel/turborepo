@@ -8,13 +8,13 @@ import (
 
 type ConcurrentLogger struct {
 	logger *Logger
-	out    io.Writer
+	Out    io.Writer
 	mutex  sync.Mutex
 }
 
 func NewConcurrent(logger *Logger) *ConcurrentLogger {
 	return &ConcurrentLogger{
-		out: os.Stdout,
+		Out: os.Stdout,
 	}
 }
 
