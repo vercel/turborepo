@@ -666,7 +666,7 @@ func hasGraphViz() bool {
 func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, backend *api.LanguageBackend, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
-	if c.Config.IsLoggedIn() {
+	if c.Config.IsAuthenticated() {
 		analyticsSink = c.Config.ApiClient
 	} else {
 		analyticsSink = analytics.NullSink

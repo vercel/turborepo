@@ -36,10 +36,10 @@ func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.Ve
 
 var logger = hclog.Default()
 var cf = &config.Config{
-	Logger:       logger,
-	TurboVersion: "test",
-	ApiUrl:       "api-url",
-	LoginUrl:     "login-url",
+	Logger:   logger,
+	Version:  "test",
+	ApiUrl:   "api-url",
+	LoginUrl: "login-url",
 }
 
 type testResult struct {

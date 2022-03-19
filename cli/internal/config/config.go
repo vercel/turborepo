@@ -10,12 +10,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/vercel/turborepo/cli/internal/client"
-
-	hclog "github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
+	"github.com/vercel/turborepo/cli/internal/client"
+	"github.com/vercel/turborepo/cli/internal/logger"
 )
 
 const (
@@ -23,49 +23,38 @@ const (
 	EnvLogLevel = "TURBO_LOG_LEVEL"
 )
 
-// IsCI returns true if running in a CI/CD environment
 func IsCI() bool {
 	return !isatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("CI") != ""
 }
 
-// Config is a struct that contains user inputs and our logger
 type Config struct {
-	Logger hclog.Logger
-	// Bearer token
-	Token string
-	// vercel.com / remote cache team id
-	TeamId string
-	// vercel.com / remote cache team slug
-	TeamSlug string
-	// Backend API URL
-	ApiUrl string
-	// Login URL
-	LoginUrl string
-	// Backend retryable http client
+	Level     int
+	Token     string
+	TeamId    string
+	TeamSlug  string
+	ApiUrl    string
+	LoginUrl  string
+	Version   string
+	NoColor   bool
+	Logger    hclog.Logger
 	ApiClient *client.ApiClient
-	// Turborepo CLI Version
-	TurboVersion string
-	Cache        *CacheConfig
+	Cache     *CacheConfig
+
+	NoGC       bool
+	Heap       string
+	Trace      string
+	CpuProfile string
 }
 
-// IsLoggedIn returns true if we have a token and either a team id or team slug
-func (c *Config) IsLoggedIn() bool {
-	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
-}
-
-// CacheConfig
 type CacheConfig struct {
-	// Number of async workers
 	Workers int
-	// Cache directory
-	Dir string
+	Dir     string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
 func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
-
 	// Special check for ./turbo invocation without any args
 	// Return the help message
 	if len(args) == 0 {
@@ -170,14 +159,14 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
 
 	c = &Config{
-		Logger:       logger,
-		Token:        partialConfig.Token,
-		TeamSlug:     partialConfig.TeamSlug,
-		TeamId:       partialConfig.TeamId,
-		ApiUrl:       partialConfig.ApiUrl,
-		LoginUrl:     partialConfig.LoginUrl,
-		ApiClient:    apiClient,
-		TurboVersion: turboVersion,
+		Logger:    logger,
+		Token:     partialConfig.Token,
+		TeamSlug:  partialConfig.TeamSlug,
+		TeamId:    partialConfig.TeamId,
+		ApiUrl:    partialConfig.ApiUrl,
+		LoginUrl:  partialConfig.LoginUrl,
+		ApiClient: apiClient,
+		Version:   turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
@@ -187,4 +176,39 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	c.ApiClient.SetToken(partialConfig.Token)
 
 	return c, nil
+}
+
+func New(logger *logger.Logger, version string) (*Config, error) {
+	userConfig, _ := ReadUserConfigFile()
+	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
+	partialConfig.Token = userConfig.Token
+
+	enverr := envconfig.Process("TURBO", partialConfig)
+	if enverr != nil {
+		return nil, logger.Errorf("invalid environment variable: %w", enverr)
+	}
+
+	if partialConfig.Token == "" && IsCI() {
+		partialConfig.Token = os.Getenv("VERCEL_ARTIFACTS_TOKEN")
+		partialConfig.TeamId = os.Getenv("VERCEL_ARTIFACTS_OWNER")
+	}
+
+	cfg := &Config{
+		Token:    partialConfig.Token,
+		TeamSlug: partialConfig.TeamSlug,
+		TeamId:   partialConfig.TeamId,
+		ApiUrl:   partialConfig.ApiUrl,
+		LoginUrl: partialConfig.LoginUrl,
+		Version:  version,
+		Cache: &CacheConfig{
+			Workers: runtime.NumCPU() + 2,
+			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
+		},
+	}
+
+	return cfg, nil
+}
+
+func (c *Config) IsAuthenticated() bool {
+	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
 }
