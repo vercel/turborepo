@@ -108,7 +108,6 @@ func runCmd(logger *logger.Logger, version string, processes *process.Manager) e
 		for time.Since(start).Seconds() < seconds {
 			rootCmd.Execute()
 		}
-		return rootCmd.Execute()
 	}
 
 	return rootCmd.Execute()
