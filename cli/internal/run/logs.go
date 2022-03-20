@@ -103,8 +103,8 @@ Options:
                          output. Use hash-only to show only the turbo-computed
                          task hash lines. (default full)
   --include-metadata     Also show the specified data points for each task.
-                         Can be specified multiple times. Possible options are
-                         duration, start, and end.
+                         Can be given multiple times or as a comma-separated
+                         list. Options are duration, start, and end.
   --cache-dir            Specify local filesystem cache directory.
                          (default "./node_modules/.cache/turbo")
   --last-run-path        Specify path to last run file to load.
@@ -403,16 +403,19 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 			case arg == "--list":
 				logsOptions.listOnly = true
 			case strings.HasPrefix(arg, "--include-metadata="):
-				metadataName := arg[len("--include-metadata="):]
-				switch metadataName {
-				case "duration":
-					logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
-				case "start":
-					logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
-				case "end":
-					logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
-				default:
-					return nil, fmt.Errorf("invalid value %v for --include-metadata CLI flag. This should be duration, start, or end", metadataName)
+				rawMetadataNames := arg[len("--include-metadata="):]
+				metadataNames := strings.Split(rawMetadataNames, ",")
+				for _, metadataName := range metadataNames {
+					switch metadataName {
+					case "duration":
+						logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
+					case "start":
+						logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
+					case "end":
+						logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
+					default:
+						return nil, fmt.Errorf("invalid value(s) %v for --include-metadata CLI flag. This should be duration, start, or end", rawMetadataNames)
+					}
 				}
 			case arg == "--all":
 				logsOptions.includeAll = true
