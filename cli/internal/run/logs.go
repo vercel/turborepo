@@ -50,6 +50,26 @@ const (
 	NothingSort   SortMode = "n/a"
 )
 
+type MetadataName string
+
+const (
+	DurationPoint  MetadataName = "duration"
+	StartTimePoint MetadataName = "start"
+	EndTimePoint   MetadataName = "end"
+)
+
+func (m MetadataName) String() string {
+	switch m {
+	case DurationPoint:
+		return "Elapsed Time"
+	case StartTimePoint:
+		return "Start Time"
+	case EndTimePoint:
+		return "End Time"
+	}
+	return ""
+}
+
 // notime is the time used to represent invalid or undefined time
 var notime = time.Date(0, time.January, 0, 0, 0, 0, 0, time.UTC)
 
@@ -68,9 +88,6 @@ Usage: turbo logs [--list] [<hashes>]
 Options:
   --help                 Show this message.
   --list                 List the hashes available for viewing from the cache.
-  --list-format          Specify output format for --list. Use hash to only
-                         show the hashes. Use relevant to include metadata
-                         relevant to sorting if any. (default hash)
   --all                  Show all results, not just results from the most
                          recent run command execution.
   --sort                 Set mode to order results. Use task to order by the
@@ -85,6 +102,9 @@ Options:
   --output-logs          Set type of replay output logs. Use full to show all
                          output. Use hash-only to show only the turbo-computed
                          task hash lines. (default full)
+  --include-metadata     Also show the specified data points for each task.
+                         Can be specified multiple times. Possible options are
+                         duration, start, and end.
   --cache-dir            Specify local filesystem cache directory.
                          (default "./node_modules/.cache/turbo")
   --last-run-path        Specify path to last run file to load.
@@ -129,15 +149,14 @@ func (c *LogsCommand) Run(args []string) int {
 		specificHashes = logsOptions.queryHashes
 	}
 
-	// find and collect cached hashes and durations from metadata json
-	// also get file modified datetime from filesystem
+	// find and collect cached hashes and durations (milliseconds) from metadata json
 	var hashes []hashMetadata
 	if len(specificHashes) > 0 {
 		for _, hash := range specificHashes {
 			replayPaths := globby.GlobFiles(filepath.Join(logsOptions.cacheFolder, hash), []string{"**/.turbo/turbo-*.log"}, []string{})
 			metadataPath := filepath.Join(logsOptions.cacheFolder, hash+"-meta.json")
 			metadata, err := cache.ReadCacheMetaFile(metadataPath)
-			duration := 0 // in milliseconds
+			duration := 0
 			start := notime
 			if err == nil {
 				duration = metadata.Duration
@@ -190,15 +209,25 @@ func (c *LogsCommand) Run(args []string) int {
 	sort.SliceStable(hashes, cmp)
 
 	// output replay logs from sorted task list
+	if logsOptions.listOnly && len(logsOptions.includeData) > 0 {
+		header := make([]string, 0, len(logsOptions.includeData)+1)
+		header = append(header, "hash")
+		for _, dataPoint := range logsOptions.includeData {
+			header = append(header, string(dataPoint))
+		}
+		c.Ui.Output(strings.Join(header, ","))
+	}
 	for _, hash := range hashes {
+		extraDataPoints := make([]string, 0, len(logsOptions.includeData))
+		for _, dataPoint := range logsOptions.includeData {
+			extraDataPoints = append(extraDataPoints, getDataPoint(dataPoint, hash))
+		}
 		if logsOptions.listOnly {
-			if logsOptions.listType == "relevant" {
-				if logsOptions.sortType == DurationSort {
-					c.Ui.Output(fmt.Sprintf("%v %v", hash.Hash, hash.Duration))
-					continue
-				}
+			extraDataPointsValue := ""
+			if len(extraDataPoints) > 0 {
+				extraDataPointsValue = "," + strings.Join(extraDataPoints, ",")
 			}
-			c.Ui.Output(hash.Hash)
+			c.Ui.Output(fmt.Sprintf("%v%v", hash.Hash, extraDataPointsValue))
 			continue
 		}
 		if len(hash.ReplayPaths) == 0 {
@@ -220,10 +249,26 @@ func (c *LogsCommand) Run(args []string) int {
 					c.Ui.Output(ui.StripAnsi(string(scan.Bytes())))
 				}
 			}
+			for i, dataPointName := range logsOptions.includeData {
+				// fmt.Sprintf uses the MetadataName.String() method
+				c.logInfo(c.Config.Logger, fmt.Sprintf("%v: %v", dataPointName, extraDataPoints[i]))
+			}
 		}
 	}
 
 	return 0
+}
+
+func getDataPoint(dataType MetadataName, hash hashMetadata) string {
+	switch dataType {
+	case DurationPoint:
+		return fmt.Sprintf("%v ms", hash.Duration)
+	case StartTimePoint:
+		return hash.Start.String()
+	case EndTimePoint:
+		return hash.End.String()
+	}
+	return ""
 }
 
 func createDurationComparator(hashes []hashMetadata, reverse bool) func(int, int) bool {
@@ -293,10 +338,11 @@ type LogsOptions struct {
 	cacheFolder string
 	// Only output task hashes
 	listOnly bool
-	// Adjust output format
-	//  hash - only show hash
-	//  relevant - include relevant metadata
-	listType string
+	// Additional data to output, options are
+	//  duration - show task elapsed duration
+	//  start - show task start time
+	//  end - show task end time
+	includeData []MetadataName
 	// Show all results, not only from the last run
 	includeAll bool
 	// Path to last run file
@@ -324,7 +370,6 @@ type LogsOptions struct {
 func getDefaultLogsOptions() *LogsOptions {
 	return &LogsOptions{
 		listOnly:       false,
-		listType:       "hash",
 		includeAll:     false,
 		sortType:       "task",
 		reverseSort:    false,
@@ -357,27 +402,35 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				}
 			case arg == "--list":
 				logsOptions.listOnly = true
-			case strings.HasPrefix(arg, "--list-format="):
-				if len(arg[len("--list-format="):]) > 0 {
-					logsOptions.listType = arg[len("--list-format="):]
+			case strings.HasPrefix(arg, "--include-metadata="):
+				metadataName := arg[len("--include-metadata="):]
+				switch metadataName {
+				case "duration":
+					logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
+				case "start":
+					logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
+				case "end":
+					logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
+				default:
+					return nil, fmt.Errorf("invalid value %v for --include-metadata CLI flag. This should be duration, start, or end", metadataName)
 				}
 			case arg == "--all":
 				logsOptions.includeAll = true
 			case strings.HasPrefix(arg, "--sort="):
-					inputSortType := arg[len("--sort="):]
-					switch inputSortType {
-					case "task":
-						unresolvedSortType = TaskSort
-					case "duration":
-						unresolvedSortType = DurationSort
-					case "start":
-						unresolvedSortType = StartTimeSort
-					case "end":
-						unresolvedSortType = EndTimeSort
-					case "alnum":
-						unresolvedSortType = AlnumSort
-					default:
-						return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, start, end, or alnum", inputSortType)
+				inputSortType := arg[len("--sort="):]
+				switch inputSortType {
+				case "task":
+					unresolvedSortType = TaskSort
+				case "duration":
+					unresolvedSortType = DurationSort
+				case "start":
+					unresolvedSortType = StartTimeSort
+				case "end":
+					unresolvedSortType = EndTimeSort
+				case "alnum":
+					unresolvedSortType = AlnumSort
+				default:
+					return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, start, end, or alnum", inputSortType)
 				}
 			case arg == "--reverse":
 				logsOptions.reverseSort = true
@@ -387,13 +440,13 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				unresolvedLastRunPath = arg[len("--last-run-path="):]
 			case strings.HasPrefix(arg, "--output-logs"):
 				outputLogsMode := arg[len("--output-logs="):]
-					switch outputLogsMode {
-					case "full":
-						logsOptions.outputLogsMode = outputLogsMode
-					case "hash-only":
-						logsOptions.outputLogsMode = "hash"
-					default:
-						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
+				switch outputLogsMode {
+				case "full":
+					logsOptions.outputLogsMode = outputLogsMode
+				case "hash-only":
+					logsOptions.outputLogsMode = "hash"
+				default:
+					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 				}
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
