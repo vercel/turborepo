@@ -175,15 +175,16 @@ func (c *LogsCommand) Run(args []string) int {
 
 	// sort task list
 	cmp := createAlnumComparator(hashes, logsOptions.reverseSort)
-	if logsOptions.sortType == DurationSort {
+	switch logsOptions.sortType {
+	case DurationSort:
 		cmp = createDurationComparator(hashes, logsOptions.reverseSort)
-	} else if logsOptions.sortType == TaskSort {
+	case TaskSort:
 		cmp = createReferenceIndexComparator(hashes, lastRunHashes, logsOptions.reverseSort)
-	} else if logsOptions.sortType == QuerySort {
+	case QuerySort:
 		cmp = createReferenceIndexComparator(hashes, logsOptions.queryHashes, logsOptions.reverseSort)
-	} else if logsOptions.sortType == StartTimeSort {
+	case StartTimeSort:
 		cmp = createStartTimeComparator(hashes, logsOptions.reverseSort)
-	} else if logsOptions.sortType == EndTimeSort {
+	case EndTimeSort:
 		cmp = createEndTimeComparator(hashes, logsOptions.reverseSort)
 	}
 	sort.SliceStable(hashes, cmp)
