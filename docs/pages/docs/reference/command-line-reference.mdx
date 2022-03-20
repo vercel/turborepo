@@ -488,17 +488,6 @@ Defaults to `false`. Only list the hashes available for viewing from the cache.
 turbo logs --list
 ```
 
-#### `--list-format`
-
-`type: string`
-
-Defaults to `hash`. Specify output format for [`--list`](#--list). Use `hash` to only show the hashes. Use `relevant` to include metadata relevant to sorting if any.
-
-```sh
-turbo logs --list --list-format=hash
-turbo logs --list --list-format=relevant --sort=duration
-```
-
 #### `--all`
 
 `type: boolean`
@@ -514,14 +503,14 @@ turbo logs --list --all
 
 `type: string`
 
-Defaults to `task`. Set mode to order results. Use `task` to sort by the previous run's execution order (requires the file at [`--last-run-path`](#--last-run-path) to exist). Use `duration` to sort by time taken per task hash (lowest to highest). Use `alnum` to order by hash alphanumerically. Normally defaults to task. If specific hashes are given, defaults to the order they are given in. If [`--all`](#--all), defaults to alnum.
+Defaults to `task`. Set mode to order results. Use `task` to sort by the previous run's execution order (requires the file at [`--last-run-path`](#--last-run-path) to exist). Use `duration` to sort by time taken per task hash (lowest to highest). Use `start` to order by task start times. Use `end` to order by task end times. Use `alnum` to order by hash alphanumerically. Normally defaults to task. If specific hashes are given, defaults to the order they are given in. If [`--all`](#--all), defaults to alnum.
 
 ```sh
 turbo logs --sort=task
 turbo logs --sort=duration
 turbo logs --sort=alnum
 turbo logs hash1 hash2 hash3
-turbo logs --list --sort=duration
+turbo logs --list --sort=start
 ```
 
 #### `--reverse`
@@ -545,4 +534,15 @@ Defaults to `full`. Set type of replay output logs. Use `full` to show all repla
 ```shell
 turbo logs --output-logs=full
 turbo logs --output-logs=hash-only
+```
+
+#### `--include-metadata`
+
+`type: string`
+
+Also show the specified data points for each task. Can be given multiple times or as a comma-separated list. Options are duration, start, and end.
+
+```sh
+turbo logs --list --include-metadata=duration
+turbo logs --include-metadata=start,duration
 ```
