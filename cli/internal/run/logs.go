@@ -363,7 +363,6 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 			case arg == "--all":
 				logsOptions.includeAll = true
 			case strings.HasPrefix(arg, "--sort="):
-				if len(arg[len("--sort="):]) > 0 {
 					inputSortType := arg[len("--sort="):]
 					switch inputSortType {
 					case "task":
@@ -378,7 +377,6 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 						unresolvedSortType = AlnumSort
 					default:
 						return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, start, end, or alnum", inputSortType)
-					}
 				}
 			case arg == "--reverse":
 				logsOptions.reverseSort = true
@@ -388,7 +386,6 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				unresolvedLastRunPath = arg[len("--last-run-path="):]
 			case strings.HasPrefix(arg, "--output-logs"):
 				outputLogsMode := arg[len("--output-logs="):]
-				if len(outputLogsMode) > 0 {
 					switch outputLogsMode {
 					case "full":
 						logsOptions.outputLogsMode = outputLogsMode
@@ -396,7 +393,6 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 						logsOptions.outputLogsMode = "hash"
 					default:
 						output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
-					}
 				}
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
