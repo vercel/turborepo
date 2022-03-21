@@ -2,9 +2,7 @@ package client
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,7 +132,7 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) PutArtifact(hash string, duration int, artifactReader io.Reader) error {
+func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) error {
 	if err := c.okToRequest(); err != nil {
 		return err
 	}
@@ -145,28 +143,11 @@ func (c *ApiClient) PutArtifact(hash string, duration int, artifactReader io.Rea
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	// Read the entire artifactReader into memory so we can easily compute the Content-MD5.
-	// Note: retryablehttp.NewRequest reads the artifactReader into memory so there's no
-	// additional overhead by doing the ioutil.ReadAll here instead.
-	artifactBody, err := ioutil.ReadAll(artifactReader)
-	if err != nil {
-		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
-	}
-	md5Sum := md5.Sum(artifactBody)
-	contentMd5 := base64.StdEncoding.EncodeToString(md5Sum[:])
-
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), artifactBody)
-	// We need to initialize the trailer since it's not auto-initialized by the http module
-	req.Trailer = make(http.Header)
-	req.Trailer.Add("Content-MD5", contentMd5)
-	// ContentLenth -1 is required to set trailers on the http request.
-	req.ContentLength = -1
+	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), rawBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
-	req.Header.Set("Trailer", "Content-MD5")
-
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
