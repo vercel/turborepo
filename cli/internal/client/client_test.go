@@ -83,7 +83,7 @@ func Test_PutArtifact(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1)
 	apiClient.SetToken("my-token")
 	expectedArtifactBody := "My string artifact"
 	artifactReader := strings.NewReader(expectedArtifactBody)
