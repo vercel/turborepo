@@ -259,12 +259,6 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
 	}
-	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range vertexSet.Difference(rs.FilteredPkgs) {
-		if toRemove != g.RootNode {
-			g.TopologicalGraph.Remove(toRemove)
-		}
-	}
 
 	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root
@@ -496,11 +490,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
-	// --scope and --since implies --include-dependencies for backwards compatibility
-	// When we switch to cobra we will need to track if it's been set manually. Currently
-	// it's only possible to set to true, but in the future a user could theoretically set
-	// it to false and override the default behavior.
-	includDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
@@ -574,10 +563,8 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--output-logs="):
@@ -620,9 +607,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
 		}
-	}
-	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
-		runOptions.includeDependencies = true
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
