@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,22 +16,21 @@ import (
 )
 
 func Test_sendToServer(t *testing.T) {
-	handler := http.NewServeMux()
 	ch := make(chan []byte, 1)
-	handler.HandleFunc("/v8/artifacts/events", func(w http.ResponseWriter, req *http.Request) {
-		defer req.Body.Close()
-		b, err := ioutil.ReadAll(req.Body)
-		if err != nil {
-			t.Errorf("failed to read request %v", err)
-		}
-		ch <- b
-		w.WriteHeader(200)
-		w.Write([]byte{})
-	})
-	server := &http.Server{Addr: "localhost:8888", Handler: handler}
-	go server.ListenAndServe()
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			defer req.Body.Close()
+			b, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				t.Errorf("failed to read request %v", err)
+			}
+			ch <- b
+			w.WriteHeader(200)
+			w.Write([]byte{})
+		}))
+	defer ts.Close()
 
-	apiClient := NewClient("http://localhost:8888", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1)
 	apiClient.SetToken("my-token")
 
 	myUUID, err := uuid.NewUUID()
@@ -64,15 +64,11 @@ func Test_sendToServer(t *testing.T) {
 	if !reflect.DeepEqual(events, result) {
 		t.Errorf("roundtrip got %v, want %v", result, events)
 	}
-
-	server.Close()
 }
 
 func Test_PutArtifact(t *testing.T) {
-	handler := http.NewServeMux()
 	ch := make(chan string, 2)
-	hash := "hash"
-	handler.HandleFunc("/v8/artifacts/"+hash, func(w http.ResponseWriter, req *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
 		b, err := ioutil.ReadAll(req.Body)
 		if err != nil {
@@ -83,12 +79,11 @@ func Test_PutArtifact(t *testing.T) {
 		ch <- trailerMd5
 		w.WriteHeader(200)
 		w.Write([]byte{})
-	})
-	server := &http.Server{Addr: "localhost:8889", Handler: handler}
-	go server.ListenAndServe()
+	}))
+	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient("http://localhost:8889", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1)
 	apiClient.SetToken("my-token")
 	expectedArtifactBody := "My string artifact"
 	artifactReader := strings.NewReader(expectedArtifactBody)
@@ -96,7 +91,7 @@ func Test_PutArtifact(t *testing.T) {
 	expectedMd5 := base64.StdEncoding.EncodeToString(md5Sum[:])
 
 	// Test Put Artifact
-	apiClient.PutArtifact(hash, 500, artifactReader)
+	apiClient.PutArtifact("hash", 500, artifactReader)
 	testBody := <-ch
 	if expectedArtifactBody != testBody {
 		t.Errorf("Handler read '%v', wants '%v'", testBody, expectedArtifactBody)
@@ -107,5 +102,4 @@ func Test_PutArtifact(t *testing.T) {
 		t.Errorf("Handler read trailer '%v', wants '%v'", testMd5, expectedMd5)
 	}
 
-	server.Close()
 }
