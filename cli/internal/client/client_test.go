@@ -84,11 +84,11 @@ func Test_PutArtifact(t *testing.T) {
 		w.WriteHeader(200)
 		w.Write([]byte{})
 	})
-	server := &http.Server{Addr: "localhost:8888", Handler: handler}
+	server := &http.Server{Addr: "localhost:8889", Handler: handler}
 	go server.ListenAndServe()
 
 	// Set up test expected values
-	apiClient := NewClient("http://localhost:8888", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient("http://localhost:8889", hclog.Default(), "v1", "", "my-team-slug", 1)
 	apiClient.SetToken("my-token")
 	expectedArtifactBody := "My string artifact"
 	artifactReader := strings.NewReader(expectedArtifactBody)
