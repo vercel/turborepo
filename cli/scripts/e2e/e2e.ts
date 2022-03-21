@@ -103,22 +103,17 @@ function runSmokeTests<T>(
         )
       );
       assert.fixture(
-        `• Packages changed since main: a`,
         sinceCommandOutputNoCache[0],
-        "Calculates changed packages (--since)"
-      );
-      assert.fixture(
         `• Packages in scope: a`,
-        sinceCommandOutputNoCache[1],
         "Packages in scope"
       );
       assert.fixture(
+        sinceCommandOutputNoCache[1],
         `• Running test in 1 packages`,
-        sinceCommandOutputNoCache[2],
         "Runs only in changed packages"
       );
       assert.fixture(
-        sinceCommandOutputNoCache[3],
+        sinceCommandOutputNoCache[2],
         `a:test: cache miss, executing ${getHashFromOutput(
           sinceCommandOutputNoCache,
           "a#test"
@@ -131,22 +126,17 @@ function runSmokeTests<T>(
       );
 
       assert.fixture(
-        `• Packages changed since main: a`,
         sinceCommandOutput[0],
-        "Calculates changed packages (--since)"
-      );
-      assert.fixture(
         `• Packages in scope: a`,
-        sinceCommandOutput[1],
         "Packages in scope"
       );
       assert.fixture(
+        sinceCommandOutput[1],
         `• Running test in 1 packages`,
-        sinceCommandOutput[2],
         "Runs only in changed packages"
       );
       assert.fixture(
-        sinceCommandOutput[3],
+        sinceCommandOutput[2],
         `a:test: cache miss, executing ${getHashFromOutput(
           sinceCommandOutput,
           "a#test"
@@ -159,23 +149,18 @@ function runSmokeTests<T>(
         repo.turbo("run", ["test", "--since=main", "--stream"], options)
       );
       assert.equal(
-        `• Packages changed since main: a`,
         sinceCommandSecondRunOutput[0],
-        "Calculates changed packages (--since) after a second run"
-      );
-      assert.equal(
         `• Packages in scope: a`,
-        sinceCommandSecondRunOutput[1],
         "Packages in scope after a second run"
       );
       assert.equal(
+        sinceCommandSecondRunOutput[1],
         `• Running test in 1 packages`,
-        sinceCommandSecondRunOutput[2],
         "Runs only in changed packages after a second run"
       );
 
       assert.fixture(
-        sinceCommandSecondRunOutput[3],
+        sinceCommandSecondRunOutput[2],
         `a:test: cache hit, replaying output ${getHashFromOutput(
           sinceCommandSecondRunOutput,
           "a#test"

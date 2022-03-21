@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "snozzberries are delicious"
+const GLOBAL_CACHE_KEY = "the hero we needed"
 
 // Context of the CLI
 type Context struct {
@@ -536,11 +536,12 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 
 	if !util.IsYarn(backend.Name) {
 		// If we are not in Yarn, add the specfile and lockfile to global deps
-		globalDeps.Add(backend.Specfile)
-		globalDeps.Add(backend.Lockfile)
+		globalDeps.Add(filepath.Join(rootpath, backend.Specfile))
+		globalDeps.Add(filepath.Join(rootpath, backend.Lockfile))
 	}
 
-	globalFileHashMap, err := fs.GitHashForFiles(globalDeps.UnsafeListOfStrings(), rootpath)
+	// No prefix, global deps already have full paths
+	globalFileHashMap, err := fs.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}
