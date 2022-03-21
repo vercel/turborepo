@@ -111,12 +111,10 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 				}
 			}
 		}
-		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s in scope: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if changedPackages.Len() > 0 {
 		// --since was specified, there are changes, but no scope was specified.
 		// Run the packages that have changed
 		filteredPkgs = changedPackages
-		tui.Output(fmt.Sprintf(ui.Dim("• Packages changed since %s: %s"), opts.Since, strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")))
 	} else if scopePkgs.Len() > 0 {
 		// There was either a global change, or no changes, or no --since flag
 		// There was a --scope flag, run the desired scopes
