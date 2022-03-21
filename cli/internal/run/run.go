@@ -708,7 +708,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
-	return 0
+	return exitCode
 }
 
 type hashedTask struct {
