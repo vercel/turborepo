@@ -136,6 +136,8 @@ Use the set of files changed since a specified commit to calculate packages. Enc
 `[]`. For example, `--filter=[HEAD^1]` will select all packages that have changed in the most recent
 commit.
 
+You can use [`--ignore`](#--ignore) to specify changed files to be ignored in the calculation of which packages have changed.
+
 You can additionally prepend the commit reference with `...` to match the dependencies of other components
 against the changed packages. For instance, to select `foo` if any of `foo`'s dependencies have changed in the last commit,
 you can pass `--filter=foo...[HEAD^1]`. Note that this feature is different from `pnpm`'s syntax.
