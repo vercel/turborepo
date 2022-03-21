@@ -100,6 +100,64 @@ Task details include:
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
 
+#### `--filter`
+
+`type: string[]`
+
+Specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+Filter syntax is based on `pnpm`'s filter syntax.
+
+###### Dependents specifier - Include dependents of matched packages
+
+Prepend `...` to the filter. If `a` depends on `b`, `...b` will select `a` and `b`.
+Optionally including a `^` (`...^b`) will select all of `b`'s dependents, but not `b` itself. In this case, just `a` will be
+selected.
+
+###### Package specifier - Glob match package names
+
+Supports exact matches (`--filter=my-pkg`), and globs (`--filter=*my-pkg*`) are supported.
+Scoped packages (`@foo/bar`) can be abbreviated to just the package name (`bar`) as long as the package name
+is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
+
+###### Directory specifier - Match a directory or directory tree
+
+Supports exact matches (`--filter=./apps/docs`) and globs (`--filter=./apps/*`).
+When combined with other components, must be enclosed in `{}` (`--filter=...{./libs/*}`).
+
+###### Commit specifier - Match changed packages
+
+Use the set of files changed since a specified commit to calculate packages. Enclose references in
+`[]`. For example, `--filter=[HEAD^1]` will select all packages that have changed in the most recent
+commit.
+
+You can additionally prepend the commit reference with `...` to match the dependencies of other components
+against the changed packages. For instance, to select `foo` if any of `foo`'s dependencies have changed in the last commit,
+you can pass `--filter=foo...[HEAD^1]`. Note that this feature is different from `pnpm`'s syntax.
+
+###### Dependencies specifier - Include dependencies of matched packages
+
+Append `...` to the end of the filter. If `a` depends on `b`, `a...` will select `a` and `b`.
+Optionally including a `^` (`a^...`) will select all of `a`'s dependencies, but not `a` itself. In this case, just `b` will be selected.
+
+###### Exclusion specifier - Exclude matched packages
+
+Prepend `!` to the filter. Matched packages from the entire filter will be excluded from the set of targets.
+For example, match everything except `a`: `--filter=!a`. Note that you may need to escape `!` as appropriate for your shell.
+
+###### Examples
+
+- Test everything that has changed since the previous commit: `turbo run test --filter=[HEAD^1]`
+- Build the docs app and its dependencies: `turbo run build --filter=docs...`
+- Test everything that depends on a library (`@scope/foo`), but not the library itself: `turbo run test --filter=...^@scope/foo`
+- Test each package in the `@scope` scope and in the `packages` directory, if it has changed since the previous commit:
+  `turbo run test --filter=@scope/*{packages/*}[HEAD^1]`
+
 #### `--graph`
 
 `type: string`
