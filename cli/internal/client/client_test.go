@@ -75,8 +75,8 @@ func Test_PutArtifact(t *testing.T) {
 			t.Errorf("failed to read request %v", err)
 		}
 		ch <- string(b)
-		trailerMd5 := req.Trailer.Get("Content-MD5")
-		ch <- trailerMd5
+		contentMd5 := req.Header.Get("Content-MD5")
+		ch <- contentMd5
 		w.WriteHeader(200)
 		w.Write([]byte{})
 	}))
