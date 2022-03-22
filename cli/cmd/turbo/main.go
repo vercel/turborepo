@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/cmd/info"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/info"
 	"github.com/vercel/turborepo/cli/internal/login"
 	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
