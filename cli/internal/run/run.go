@@ -495,6 +495,10 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
+	if os.Getenv("TURBO_FORCE") == "true" {
+		runOptions.forceExecution = true
+	}
+
 	// --scope and --since implies --include-dependencies for backwards compatibility
 	// When we switch to cobra we will need to track if it's been set manually. Currently
 	// it's only possible to set to true, but in the future a user could theoretically set
