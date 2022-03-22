@@ -2,7 +2,6 @@ package context
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,12 +28,11 @@ const GLOBAL_CACHE_KEY = "the hero we needed"
 
 // Context of the CLI
 type Context struct {
-	RootPackageInfo  *fs.PackageJSON // TODO(gsoltis): should this be included in PackageInfos?
+	// Does not include the root PackageJSON
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
 	RootNode         string
-	TurboConfig      *fs.TurboConfigJSON
 	GlobalHash       string
 	Lockfile         *fs.YarnLockfile
 	SCC              [][]dag.Vertex
@@ -131,38 +129,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		packageJSONPath := filepath.Join(rootpath, "package.json")
-		rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
-		if err != nil {
-			return fmt.Errorf("package.json: %w", err)
-		}
-
-		// If turbo.json exists, we use that
-		// If pkg.Turbo exists, we warn about running the migration
-		// Use pkg.Turbo if turbo.json doesn't exist
-		// If neither exists, it's a fatal error
-		turboJSONPath := filepath.Join(rootpath, "turbo.json")
-		if !fs.FileExists(turboJSONPath) {
-			if rootPackageJSON.LegacyTurboConfig == nil {
-				// TODO: suggestion on how to create one
-				return fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
-			} else {
-				log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
-				c.TurboConfig = rootPackageJSON.LegacyTurboConfig
-			}
-		} else {
-			turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
-			if err != nil {
-				return fmt.Errorf("turbo.json: %w", err)
-			}
-			c.TurboConfig = turbo
-			if rootPackageJSON.LegacyTurboConfig != nil {
-				log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
-				rootPackageJSON.LegacyTurboConfig = nil
-			}
-		}
-
-		if backend, err := backends.GetBackend(rootpath, rootPackageJSON); err != nil {
+		if backend, err := backends.GetBackend(rootpath, config.RootPackageJSON); err != nil {
 			return err
 		} else {
 			c.Backend = backend
@@ -177,10 +144,10 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			c.Lockfile = lockfile
 		}
 
-		if c.resolveWorkspaceRootDeps(rootPackageJSON) != nil {
-			return err
+		if err := c.resolveWorkspaceRootDeps(config.RootPackageJSON); err != nil {
+			// TODO(Gaspar) was this the intended return error?
+			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
-		c.RootPackageInfo = rootPackageJSON
 
 		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
 
@@ -188,7 +155,8 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
-		globalHash, err := calculateGlobalHash(rootpath, rootPackageJSON, c.TurboConfig.GlobalDependencies, c.Backend, config.Logger, os.Environ())
+		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.Backend, config.Logger, os.Environ())
+		// TODO(Gaspar): this error is unused?
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/client"
+	"github.com/vercel/turborepo/cli/internal/fs"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
@@ -44,8 +46,11 @@ type Config struct {
 	// Backend retryable http client
 	ApiClient *client.ApiClient
 	// Turborepo CLI Version
-	TurboVersion string
-	Cache        *CacheConfig
+	TurboVersion    string
+	Cache           *CacheConfig
+	TurboConfigJSON *fs.TurboConfigJSON
+	RootPackageJSON *fs.PackageJSON
+	Cwd             string
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -85,7 +90,21 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if len(inputFlags) == 1 && (inputFlags[0] == "help" || inputFlags[0] == "--help" || inputFlags[0] == "-help") {
 		return nil, nil
 	}
+
+	cwd, err := selectCwd(&args)
+	if err != nil {
+		return nil, err
+	}
 	// Precedence is flags > env > config > default
+	packageJSONPath := filepath.Join(cwd, "package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
+	if err != nil {
+		return nil, fmt.Errorf("package.json: %w", err)
+	}
+	turboConfigJson, err := ReadTurboConfig(cwd, rootPackageJSON)
+	if err != nil {
+		return nil, err
+	}
 	userConfig, _ := ReadUserConfigFile()
 	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
 	partialConfig.Token = userConfig.Token
@@ -182,9 +201,59 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
+		RootPackageJSON: rootPackageJSON,
+		TurboConfigJSON: turboConfigJson,
+		Cwd:             cwd,
 	}
 
 	c.ApiClient.SetToken(partialConfig.Token)
 
 	return c, nil
+}
+
+func ReadTurboConfig(rootPath string, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
+	// If turbo.json exists, we use that
+	// If pkg.Turbo exists, we warn about running the migration
+	// Use pkg.Turbo if turbo.json doesn't exist
+	// If neither exists, it's a fatal error
+	turboJSONPath := filepath.Join(rootPath, "turbo.json")
+
+	if !fs.FileExists(turboJSONPath) {
+		if rootPackageJSON.LegacyTurboConfig == nil {
+			// TODO: suggestion on how to create one
+			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+		} else {
+			log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+			return rootPackageJSON.LegacyTurboConfig, nil
+		}
+	} else {
+		turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
+		if err != nil {
+			return nil, fmt.Errorf("turbo.json: %w", err)
+		}
+		if rootPackageJSON.LegacyTurboConfig != nil {
+			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+			rootPackageJSON.LegacyTurboConfig = nil
+		}
+		return turbo, nil
+	}
+}
+
+// Selects the current current working directory from OS
+// and overrides with the `--cwd=` input argument
+func selectCwd(inputArgs *[]string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("invalid working directory: %w", err)
+	}
+	for _, arg := range *inputArgs {
+		if arg == "--" {
+			break
+		} else if strings.HasPrefix(arg, "--cwd=") {
+			if len(arg[len("--cwd="):]) > 0 {
+				cwd = arg[len("--cwd="):]
+			}
+		}
+	}
+	return cwd, nil
 }
