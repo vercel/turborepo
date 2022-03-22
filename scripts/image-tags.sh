@@ -12,6 +12,8 @@ function generate_tags {
 	tag=$(make tag)
 	GORELEASER_VERSION=v$GORELEASER_VERSION
 
+	tag_minor=v$("${SCRIPT_DIR}/semver.sh" get major "$tag").$("${SCRIPT_DIR}/semver.sh" get minor "$tag")
+
 	if [[ $("${SCRIPT_DIR}"/is_prerelease.sh "$tag") == true ]]; then
 		echo "$hub:$tag.$GORELEASER_VERSION"
 		echo "$hub:$tag"
@@ -20,9 +22,13 @@ function generate_tags {
 	else
 		echo "$hub:latest"
 		echo "$hub:$tag-$GORELEASER_VERSION"
+		echo "$hub:$tag_minor-$GORELEASER_VERSION"
+		echo "$hub:$tag_minor"
 		echo "$hub:$tag"
 		echo "$ghcr:latest"
 		echo "$ghcr:$tag-$GORELEASER_VERSION"
+		echo "$ghcr:$tag_minor-$GORELEASER_VERSION"
+		echo "$ghcr:$tag_minor"
 		echo "$ghcr:$tag"
 	fi
 

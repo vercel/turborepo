@@ -1,6 +1,7 @@
 include .env
 
 REGISTRY           ?= ghcr.io
+TAG_VERSION        ?= $(shell git describe --tags --abbrev=0)
 
 ifeq ($(REGISTRY),)
 	IMAGE_BASE_NAME := goreleaser/goreleaser-cross-base:$(TAG_VERSION)
@@ -17,7 +18,6 @@ OSX_CROSS_COMMIT   := e59a63461da2cbc20cb0a5bbfc954730e50a5472
 DEBIAN_FRONTEND    := noninteractive
 GORELEASER_VERSION ?= 1.1.0
 TINI_VERSION       ?= v0.19.0
-GORELEASER_TAG     ?= $(shell git describe --tags --abbrev=0)
 COSIGN_VERSION     ?= 1.3.0
 COSIGN_SHA256      ?= 65de2f3f2844815ed20ab939319e3dad4238a9aaaf4893b22ec5702e9bc33755
 
@@ -103,4 +103,4 @@ tags:
 
 .PHONY: tag
 tag:
-	@echo $(GORELEASER_TAG)
+	@echo $(TAG_VERSION)
