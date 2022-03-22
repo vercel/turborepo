@@ -8,7 +8,12 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Scoped Tasks
 
-Scoping task execution can speed up the process especially if there are distinct clusters of packages that are not related to each other within your repository. Turborepo has a `scope` option that allows the task running to proceed up to the packages found that matches the `scope` argument. It's useful to think of `scope` as an "entry point" into your monorepo's package/task graph. This is a string matcher based on the name of the packages (not the package path).
+Scoping task execution can speed up the process especially if there are distinct clusters of packages
+that are not related to each other within your repository. Turborepo has a
+[`filter`](/docs/reference/command-line-reference#--filter) option that
+offers a flexible mechanism for selecting the packages that will act as "entry points" into your monorepo's
+package/task graph. You can match packages by name, directory, include dependents/dependencies, and by changes
+in git history.
 
 <Callout type="info">
   It is important to note that dependents and dependencies refer to the
@@ -17,7 +22,17 @@ Scoping task execution can speed up the process especially if there are distinct
 
 ## Scoped tasks with all its dependents
 
-By default, it is helpful to be able to run tasks on all affected packages within a scope. Packages that changed will affect downstream consumers. In this case, pass along the `scope` to build all the dependencies as well.
+In the case of a change to a shared library, it is helpful to be able to run tasks on all affected packages.
+Packages that have changed will affect downstream consumers. In this case, pass along the `filter` to build all the dependencies
+as well.
+
+<Callout type="info">
+  Prepending a filter with `...` adds dependents of the selected packages as entry points.
+</Callout>
+
+```sh
+turbo run build --filter=...@shared/my-lib
+```
 
 <Callout type="info">
   You can use wildcard character: `*`. This is particularly helpful when
@@ -25,20 +40,48 @@ By default, it is helpful to be able to run tasks on all affected packages withi
 </Callout>
 
 ```sh
-turbo run build --scope=*build-tools*
+turbo run build --filter=...@shared/*
 ```
 
-## Scoped tasks with no dependents & their dependencies
+## Scoped tasks with dependencies
 
-Sometimes we want to run the tasks needed to satisfy the `build` script of all the packages that has the `build-tools` string in their names. Think of this as running tasks up and including the package matched in the scope. Add a `--no-deps` flag to run up to a package task.
+Sometimes we want to run the tasks needed to satisfy the `build` script of all the packages that has
+the `build-tools` string in their names. `turbo` will pick up the dependency build tasks from the pipeline
+configuration in `turbo.json`.
 
 ```sh
-turbo run build --scope=*build-tools* --no-deps --include-dependencies
+turbo run build --filter=*build-tools*
 ```
 
+We might also want to include all of the matched packages dependencies as their own entry points, perhaps in the case of running
+a full test suite.
+
+<Callout type="info">
+  Adding `...` suffix to a filter adds dependencies of the selected packages as entry points.
+</Callout>
+
+```sh
+turbo run build --filter=*build-tools*...
+```
+
+## Packages that have changed
+
+If we want to verify that everything in the most recent commit still builds, we can specify a git reference
+to diff against, using that as a basis for selecting packages.
+
+<Callout type="info">
+  Enclose commit references in `[]` to match packages that have changed since the referenced commit
+</Callout>
+
+```sh
+turbo run build --filter=[HEAD^1]
+```
+
+## Full Filter Syntax
+
+The full filter syntax can be found in the [CLI Reference Documentation](/docs/reference/command-line-reference#--filter)
+
 <Callout type="idea" icon={<HeartIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />}>
-Turborepo's Scoped Tasks API design and docs were/are inspired [Microsoft's Lage project](https://microsoft.github.io/lage/guide/scopes.html#scoped-builds-with-all-its-dependents) `--scope` flag which was inspired by [Lerna's](https://github.com/lerna/lerna/tree/main/commands/run#readme).
-
-We are working toward a new, more expressive task filtering/scoping syntax. [Read the RFC here.](https://github.com/vercel/turborepo/discussions/105)
-
+Turborepo's Filter API design and docs were/are inspired by 
+[`pnpm`](https://pnpm.io/filtering)
 </Callout>
