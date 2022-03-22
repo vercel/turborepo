@@ -15,7 +15,6 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turborepo/cli/internal/client"
-	"github.com/vercel/turborepo/cli/internal/logger"
 )
 
 const (
@@ -176,37 +175,6 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	c.ApiClient.SetToken(partialConfig.Token)
 
 	return c, nil
-}
-
-func New(logger *logger.Logger, version string) (*Config, error) {
-	userConfig, _ := ReadUserConfigFile()
-	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
-	partialConfig.Token = userConfig.Token
-
-	enverr := envconfig.Process("TURBO", partialConfig)
-	if enverr != nil {
-		return nil, logger.Errorf("invalid environment variable: %w", enverr)
-	}
-
-	if partialConfig.Token == "" && IsCI() {
-		partialConfig.Token = os.Getenv("VERCEL_ARTIFACTS_TOKEN")
-		partialConfig.TeamId = os.Getenv("VERCEL_ARTIFACTS_OWNER")
-	}
-
-	cfg := &Config{
-		Token:    partialConfig.Token,
-		TeamSlug: partialConfig.TeamSlug,
-		TeamId:   partialConfig.TeamId,
-		ApiUrl:   partialConfig.ApiUrl,
-		LoginUrl: partialConfig.LoginUrl,
-		Version:  version,
-		Cache: &CacheConfig{
-			Workers: runtime.NumCPU() + 2,
-			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
-		},
-	}
-
-	return cfg, nil
 }
 
 func (c *Config) IsAuthenticated() bool {
