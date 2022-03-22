@@ -11,6 +11,9 @@ GO_FLAGS += -trimpath
 turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
+schema-generation: cmd/schema-generation/* internal/*/*.go go.mod
+	CGO_ENABLED=0 go build -o schema-generation.exe $(GO_FLAGS) ./cmd/schema-generation
+
 # These tests are for development
 test: test-go vet-go
 

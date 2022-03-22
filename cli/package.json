@@ -9,6 +9,7 @@
     "e2e": "node -r esbuild-register scripts/e2e/e2e.ts",
     "watch": "watchlist e2e -- pnpm test",
     "publish": "make publish-all",
+    "schema": "make schema-generation",
     "format": "go fmt ./cmd/... ./internal/...",
     "lint": "go vet ./cmd/... ./internal/..."
   },

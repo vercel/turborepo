@@ -26,7 +26,15 @@
       "dependsOn": []
     },
     "schema": {
-      "outputs": ["public/schema.json"]
+      "outputs": [
+        "schema-generation",
+        "schema-generation.exe",
+        "public/schema.json"
+      ]
+    },
+    "docs#schema": {
+      "outputs": ["public/schema.json"],
+      "dependsOn": ["cli#schema"]
     },
     "create-turbo#test": {
       "dependsOn": ["create-turbo#build"],
@@ -34,7 +42,7 @@
     },
     "docs#build": {
       "outputs": [".next/**"],
-      "dependsOn": ["^build", "docs#schema"]
+      "dependsOn": ["^build", "cli#schema"]
     }
   }
 }
