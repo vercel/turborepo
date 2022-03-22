@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -562,14 +561,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				output.Warn("[WARNING] The --serial flag has been deprecated and will be removed in future versions of turbo. Please use `--concurrency=1` instead")
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
-				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
-					return nil, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
+				concurrencyRaw := arg[len("--concurrency="):]
+				if concurrency, err := util.ParseConcurrency(concurrencyRaw); err != nil {
+					return nil, err
 				} else {
-					if i >= 1 {
-						runOptions.concurrency = i
-					} else {
-						return nil, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
-					}
+					runOptions.concurrency = concurrency
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
@@ -712,7 +708,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
-	return 0
+	return exitCode
 }
 
 type hashedTask struct {
