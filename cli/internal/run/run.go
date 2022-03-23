@@ -116,6 +116,12 @@ Options:
   --continue             Continue execution even if a task exits with an error
                          or non-zero exit code. The default behavior is to bail
                          immediately. (default false)
+  --filter="<selector>"  Use the given selector to specify package(s) to act as
+                         entry points. The syntax mirror's pnpm's syntax, and
+                         additional documentation and examples can be found in
+                         turbo's documentation TODO: LINK.
+                         --filter can be specified multiple times. Packages that
+                         match any filter will be included.
   --force                Ignore the existing cache (to force execution).
                          (default false)
   --graph                Generate a Dot graph of the task execution.
@@ -189,7 +195,7 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
@@ -256,12 +262,6 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
-	}
-	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range vertexSet.Difference(rs.FilteredPkgs) {
-		if toRemove != g.RootNode {
-			g.TopologicalGraph.Remove(toRemove)
-		}
 	}
 
 	// If we are running in parallel, then we remove all the edges in the graph
@@ -404,6 +404,8 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 // RunOptions holds the current run operations configuration
 
 type RunOptions struct {
+	// patterns supplied to --filter on the commandline
+	filterPatterns []string
 	// Whether to include dependent impacted consumers in execution (defaults to true)
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
@@ -449,7 +451,7 @@ type RunOptions struct {
 	dryRunJson        bool
 }
 
-func (ro *RunOptions) ScopeOpts() *scope.Opts {
+func (ro *RunOptions) scopeOpts() *scope.Opts {
 	return &scope.Opts{
 		IncludeDependencies: ro.includeDependencies,
 		IncludeDependents:   ro.includeDependents,
@@ -458,6 +460,7 @@ func (ro *RunOptions) ScopeOpts() *scope.Opts {
 		Cwd:                 ro.cwd,
 		IgnorePatterns:      ro.ignore,
 		GlobalDepPatterns:   ro.globalDeps,
+		FilterPatterns:      ro.filterPatterns,
 	}
 }
 
@@ -489,17 +492,17 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 	runOptions.cwd = cwd
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
-	// --scope and --since implies --include-dependencies for backwards compatibility
-	// When we switch to cobra we will need to track if it's been set manually. Currently
-	// it's only possible to set to true, but in the future a user could theoretically set
-	// it to false and override the default behavior.
-	includDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
 			break
 		} else if strings.HasPrefix(arg, "--") {
 			switch {
+			case strings.HasPrefix(arg, "--filter="):
+				filterPattern := arg[len("--filter="):]
+				if filterPattern != "" {
+					runOptions.filterPatterns = append(runOptions.filterPatterns, filterPattern)
+				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
 					runOptions.since = arg[len("--since="):]
@@ -560,10 +563,8 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--output-logs="):
@@ -607,9 +608,6 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
 		}
-	}
-	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
-		runOptions.includeDependencies = true
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
