@@ -13,7 +13,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
-	"github.com/stretchr/testify/assert"
 )
 
 type mockSCM struct {
