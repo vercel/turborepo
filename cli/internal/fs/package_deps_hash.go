@@ -139,7 +139,6 @@ func UnescapeChars(in []byte) []byte {
 
 // gitLsTree executes "git ls-tree" in a folder
 func gitLsTree(path string, gitPath string) (string, error) {
-
 	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()

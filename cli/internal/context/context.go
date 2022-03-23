@@ -9,7 +9,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Masterminds/semver"
+	"github.com/deckarep/golang-set"
 	"github.com/hashicorp/go-hclog"
+	"github.com/pyr-sh/dag"
+	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/backends"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -17,11 +21,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/util"
-
-	"github.com/Masterminds/semver"
-	mapset "github.com/deckarep/golang-set"
-	"github.com/pyr-sh/dag"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -145,7 +144,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if !fs.FileExists(turboJSONPath) {
 			if rootPackageJSON.LegacyTurboConfig == nil {
 				// TODO: suggestion on how to create one
-				return fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+				return fmt.Errorf("could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
 			} else {
 				log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
 				c.TurboConfig = rootPackageJSON.LegacyTurboConfig
@@ -183,12 +182,14 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.RootPackageInfo = rootPackageJSON
 
 		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
-
 		if err != nil {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
 		globalHash, err := calculateGlobalHash(rootpath, rootPackageJSON, c.TurboConfig.GlobalDependencies, c.Backend, config.Logger, os.Environ())
+		if err != nil {
+			return fmt.Errorf("couldn't calculate global hash: %w", err)
+		}
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
@@ -459,7 +460,6 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 			if len(entry.OptionalDependencies) > 0 {
 				c.resolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
 			}
-
 		}(directDepName, unresolvedVersion)
 	}
 }

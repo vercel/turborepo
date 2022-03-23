@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/logger"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -25,7 +25,7 @@ type Opts struct {
 	GlobalDepPatterns   []string
 }
 
-func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
+func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, logger *logger.Logger, hlogger hclog.Logger) (util.Set, error) {
 	changedFiles, err := getChangedFiles(opts, scm)
 	if err != nil {
 		return nil, err
@@ -132,12 +132,12 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 		// resulting in a bunch of duplicate work as we look for descendents of something
 		// that has already had all of its descendents included.
 		for _, pkg := range filteredPkgs {
-			err = addDependents(filteredPkgs, pkg, ctx, logger)
+			err = addDependents(filteredPkgs, pkg, ctx, hlogger)
 			if err != nil {
 				return nil, err
 			}
 		}
-		logger.Debug("running with dependents")
+		hlogger.Debug("running with dependents")
 	}
 
 	if includeDependencies {
@@ -145,12 +145,12 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 		// resulting in a bunch of duplicate work as we look for dependencies of something
 		// that has already had all of its dependencies included.
 		for _, pkg := range filteredPkgs {
-			err = addDependencies(filteredPkgs, pkg, ctx, logger)
+			err = addDependencies(filteredPkgs, pkg, ctx, hlogger)
 			if err != nil {
 				return nil, err
 			}
 		}
-		logger.Debug(ui.Dim("running with dependencies"))
+		hlogger.Debug(ui.Dim("running with dependencies"))
 	}
 	return filteredPkgs, nil
 }

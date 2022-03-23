@@ -5,9 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/util"
-
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func testVisitor(taskID string) error {

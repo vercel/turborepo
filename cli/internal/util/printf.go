@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+
 	"github.com/vercel/turborepo/cli/internal/ui"
 )
 
@@ -21,11 +22,11 @@ func Sprintf(format string, args ...interface{}) string {
 }
 
 func Printf(format string, args ...interface{}) {
-	fmt.Fprint(os.Stderr, os.Expand(fmt.Sprintf(format, args...), replace))
+	Fprintf(os.Stderr, format, args...)
 }
 
 func Fprintf(writer io.Writer, format string, args ...interface{}) {
-	fmt.Fprint(writer, os.Expand(fmt.Sprintf(format, args...), replace))
+	fmt.Fprint(writer, Sprintf(format, args...))
 }
 
 func replace(s string) string {

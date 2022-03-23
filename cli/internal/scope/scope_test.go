@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/logger"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -79,8 +79,8 @@ func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativ
 }
 
 func TestResolvePackages(t *testing.T) {
-	tui := ui.Default()
-	logger := hclog.Default()
+	logger := logger.New()
+	hlogger := hclog.Default()
 	//
 	// app0 -
 	//        \
@@ -261,7 +261,7 @@ func TestResolvePackages(t *testing.T) {
 				PackageNames:     packageNames,
 				TopologicalGraph: graph,
 				SCC:              scc,
-			}, tui, logger)
+			}, logger, hlogger)
 			if err != nil {
 				t.Errorf("expected no error, got %v", err)
 			}

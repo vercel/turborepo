@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vercel/turborepo/cli/internal/util"
-
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 const ROOT_NODE_NAME = "___ROOT___"

@@ -9,7 +9,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
-	"github.com/mitchellh/cli"
 )
 
 const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
@@ -61,19 +60,4 @@ func Rainbow(text string) string {
 	}
 
 	return strings.Join(rainbowStr, "")
-}
-
-// Default returns the default colored ui
-func Default() *cli.ColoredUi {
-	return &cli.ColoredUi{
-		Ui: &cli.BasicUi{
-			Reader:      os.Stdin,
-			Writer:      os.Stdout,
-			ErrorWriter: os.Stderr,
-		},
-		OutputColor: cli.UiColorNone,
-		InfoColor:   cli.UiColorNone,
-		WarnColor:   cli.UiColorYellow,
-		ErrorColor:  cli.UiColorRed,
-	}
 }

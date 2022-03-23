@@ -8,7 +8,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -115,7 +114,6 @@ var NodejsBerryBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -125,13 +123,6 @@ var NodejsBerryBackend = api.LanguageBackend{
 			}
 
 			if specfileExists && lockfileExists && isBerry {
-				isNMLinker, err := util.IsNMLinker(cwd)
-				if err != nil {
-					return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
-				} else if !isNMLinker {
-					return false, fmt.Errorf("only yarn nm-linker is supported")
-				}
-
 				return true, nil
 			}
 		}
