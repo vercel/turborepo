@@ -3,6 +3,7 @@ package cache
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,6 +25,7 @@ type httpCache struct {
 	config         *config.Config
 	requestLimiter limiter
 	recorder       analytics.Recorder
+	signerVerifier *ArtifactSignatureAuthentication
 }
 
 type limiter chan struct{}
@@ -49,7 +51,22 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
-	return cache.config.ApiClient.PutArtifact(hash, duration, r)
+
+	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
+	// additional overhead by doing the ioutil.ReadAll here instead.
+	artifactBody, err := ioutil.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+	}
+	tag := ""
+	if cache.signerVerifier.isEnabled() {
+		tag, err = cache.signerVerifier.generateTag(hash, artifactBody)
+		if err != nil {
+			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+		}
+	}
+	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -151,6 +168,11 @@ func (cache *httpCache) retrieve(key string) (bool, []string, int, error) {
 		}
 		duration = intVar
 	}
+	// If the verifier is enabled all incoming artifact downloads must have a signature
+	// TODO(Gaspar) verify signature once download of artifact completes
+	if cache.signerVerifier.isEnabled() && resp.Header.Get("x-artifact-tag") == "" {
+		return false, nil, 0, errors.New("arfifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
+	}
 	if resp.StatusCode == http.StatusNotFound {
 		return false, files, duration, nil // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {
@@ -236,5 +258,9 @@ func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache
 		config:         config,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
+		signerVerifier: &ArtifactSignatureAuthentication{
+			teamId:  config.TeamId,
+			options: &config.TurboConfigJSON.RemoteCacheOptions.SignatureOptions,
+		},
 	}
 }
