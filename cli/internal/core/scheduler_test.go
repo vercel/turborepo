@@ -79,6 +79,77 @@ func TestSchedulerDefault(t *testing.T) {
 	}
 }
 
+func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
+	// app1 -> libA
+	//              \
+	//                > libB -> libD
+	//              /
+	//       app2 <
+	//              \ libC
+	//
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("app2")
+	graph.Add("libA")
+	graph.Add("libB")
+	graph.Add("libC")
+	graph.Add("libD")
+	graph.Connect(dag.BasicEdge("libA", "libB"))
+	graph.Connect(dag.BasicEdge("libB", "libD"))
+	graph.Connect(dag.BasicEdge("app0", "libA"))
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+	graph.Connect(dag.BasicEdge("app2", "libB"))
+	graph.Connect(dag.BasicEdge("app2", "libC"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "test",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	// We're only requesting one package ("scope"),
+	// but the combination of that package and task causes
+	// dependencies to also get run. This is the equivalent of
+	// turbo run test --filter=app2
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app2"},
+		TaskNames: []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to prepare scheduler: %v", err)
+	}
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
+	for _, err := range errs {
+		t.Fatalf("error executing tasks: %v", err)
+	}
+	expected := `
+___ROOT___
+app2#test
+  libB#build
+  libC#build
+libB#build
+  libD#build
+libC#build
+  ___ROOT___
+libD#build
+  ___ROOT___
+`
+	expected = strings.TrimSpace(expected)
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	if actual != expected {
+		t.Errorf("task graph got:\n%v\nwant:\n%v", actual, expected)
+	}
+}
+
 func TestSchedulerTasksOnly(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")
