@@ -162,19 +162,15 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Config.Cwd, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	cwd := c.Config.Cwd
 
-	// We can only set this cache folder after we know actual cwd
-	cacheFolder := filepath.Join(cwd, runOptions.unresolvedCacheFolder)
+	c.Config.Cache.Dir = runOptions.cacheFolder
 
-	c.Config.Cache.Dir = cacheFolder
-
-	ctx, err := context.New(context.WithGraph(cwd, c.Config))
+	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -185,7 +181,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	scmInstance, err := scm.FromInRepo(cwd)
+	scmInstance, err := scm.FromInRepo(runOptions.cwd)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
 			c.logWarning(c.Config.Logger, "", err)
@@ -194,13 +190,13 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(cwd), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
-	c.Config.Logger.Debug("local cache folder", "path", cacheFolder)
-	fs.EnsureDir(cacheFolder)
+	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
+	fs.EnsureDir(runOptions.cacheFolder)
 
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
@@ -286,7 +282,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	}
 	exitCode := 0
 	if rs.Opts.dotGraph != "" {
-		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(c.Config.Cwd, rs.Opts.dotGraph))
+		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
 			return 1
@@ -429,6 +425,8 @@ type RunOptions struct {
 	parallel bool
 	// Git diff used to calculate changed packages
 	since string
+	// Current working directory
+	cwd string
 	// Whether to emit a perf profile
 	profile string
 	// Force task execution
@@ -436,7 +434,7 @@ type RunOptions struct {
 	// Cache results
 	cache bool
 	// Cache folder
-	unresolvedCacheFolder string
+	cacheFolder string
 	// Immediately exit on task failure
 	bail            bool
 	passThroughArgs []string
@@ -452,13 +450,13 @@ type RunOptions struct {
 	dryRunJson        bool
 }
 
-func (ro *RunOptions) ScopeOpts(cwd string) *scope.Opts {
+func (ro *RunOptions) ScopeOpts() *scope.Opts {
 	return &scope.Opts{
 		IncludeDependencies: ro.includeDependencies,
 		IncludeDependents:   ro.includeDependents,
 		Patterns:            ro.scope,
 		Since:               ro.since,
-		Cwd:                 cwd,
+		Cwd:                 ro.cwd,
 		IgnorePatterns:      ro.ignore,
 		GlobalDepPatterns:   ro.globalDeps,
 	}
@@ -466,29 +464,31 @@ func (ro *RunOptions) ScopeOpts(cwd string) *scope.Opts {
 
 func getDefaultRunOptions() *RunOptions {
 	return &RunOptions{
-		bail:                  true,
-		includeDependents:     true,
-		parallel:              false,
-		concurrency:           10,
-		dotGraph:              "",
-		includeDependencies:   false,
-		cache:                 true,
-		profile:               "", // empty string does no tracing
-		forceExecution:        false,
-		stream:                true,
-		only:                  false,
-		cacheHitLogsMode:      FullLogs,
-		cacheMissLogsMode:     FullLogs,
-		unresolvedCacheFolder: filepath.FromSlash("./node_modules/.cache/turbo"),
+		bail:                true,
+		includeDependents:   true,
+		parallel:            false,
+		concurrency:         10,
+		dotGraph:            "",
+		includeDependencies: false,
+		cache:               true,
+		profile:             "", // empty string does no tracing
+		forceExecution:      false,
+		stream:              true,
+		only:                false,
+		cacheHitLogsMode:    FullLogs,
+		cacheMissLogsMode:   FullLogs,
 	}
 }
 
-func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
+
+	runOptions.cwd = cwd
+	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	// --scope and --since implies --include-dependencies for backwards compatibility
 	// When we switch to cobra we will need to track if it's been set manually. Currently
@@ -532,9 +532,9 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				runOptions.cache = false
 			case strings.HasPrefix(arg, "--cacheFolder"):
 				output.Warn("[WARNING] The --cacheFolder flag has been deprecated and will be removed in future versions of turbo. Please use `--cache-dir` instead")
-				runOptions.unresolvedCacheFolder = arg[len("--cacheFolder="):]
+				unresolvedCacheFolder = arg[len("--cacheFolder="):]
 			case strings.HasPrefix(arg, "--cache-dir"):
-				runOptions.unresolvedCacheFolder = arg[len("--cache-dir="):]
+				unresolvedCacheFolder = arg[len("--cache-dir="):]
 			case strings.HasPrefix(arg, "--continue"):
 				runOptions.bail = false
 			case strings.HasPrefix(arg, "--force"):
@@ -617,6 +617,10 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 	if !ui.IsTTY || ui.IsCI {
 		runOptions.stream = true
 	}
+
+	// We can only set this cache folder after we know actual cwd
+	runOptions.cacheFolder = filepath.Join(runOptions.cwd, unresolvedCacheFolder)
+
 	return runOptions, nil
 }
 
@@ -670,7 +674,6 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		logger:     c.Config.Logger,
 		backend:    backend,
 		processes:  c.Processes,
-		Config:     c.Config,
 	}
 
 	// run the thing
@@ -778,10 +781,10 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, cwd string, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
-	f, err := os.Open(filepath.Join(cwd, logFileName))
+	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 	if err != nil && !silent {
 		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
@@ -838,7 +841,6 @@ type execContext struct {
 	logger             hclog.Logger
 	backend            *api.LanguageBackend
 	processes          *process.Manager
-	Config             *config.Config
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -879,7 +881,7 @@ func (e *execContext) exec(pt *packageTask) error {
 	}
 
 	logFileName := filepath.Join(pt.pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.task))
-	targetLogger.Debug("log file", "path", filepath.Join(e.Config.Cwd, logFileName))
+	targetLogger.Debug("log file", "path", filepath.Join(e.rs.Opts.cwd, logFileName))
 
 	passThroughArgs := e.rs.ArgsForTask(pt.task)
 	hash, err := pt.hash(passThroughArgs, e.logger)
@@ -891,13 +893,13 @@ func (e *execContext) exec(pt *packageTask) error {
 	// Cache ---------------------------------------------
 	var hit bool
 	if !e.rs.Opts.forceExecution {
-		hit, _, _, err = e.turboCache.Fetch(e.Config.Cwd, hash, nil)
+		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
-			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.Config.Cwd, logFileName)) {
+			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
 				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.Config.Cwd, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
+				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
@@ -986,7 +988,7 @@ func (e *execContext) exec(pt *packageTask) error {
 			if e.rs.Opts.stream {
 				targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
 			} else {
-				f, err := os.Open(filepath.Join(e.Config.Cwd, logFileName))
+				f, err := os.Open(filepath.Join(e.rs.Opts.cwd, logFileName))
 				if err != nil {
 					targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
 				}
