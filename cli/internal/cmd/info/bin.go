@@ -50,7 +50,7 @@ func (c *BinCommand) Run(args []string) int {
 		return 0
 	}
 
-	logger.Printf(err.Error())
+	logger.Error(err)
 
 	var cmdErr *cmdutil.Error
 	if errors.As(err, &cmdErr) {

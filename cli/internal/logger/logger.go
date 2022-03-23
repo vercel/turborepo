@@ -19,17 +19,23 @@ var warningPrefix = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sp
 var errorPrefix = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 
 type Logger struct {
-	Out io.Writer
+	Writer      io.Writer
+	ErrorWriter io.Writer
 }
 
 func New() *Logger {
 	return &Logger{
-		Out: os.Stdout,
+		Writer:      os.Stdout,
+		ErrorWriter: os.Stderr,
 	}
 }
 
 func (l *Logger) Printf(format string, args ...interface{}) {
-	fmt.Fprintln(os.Stdout, util.Sprintf(format, args...))
+	fmt.Fprintln(l.Writer, util.Sprintf(format, args...))
+}
+
+func (l *Logger) Error(err error) {
+	fmt.Fprintln(l.ErrorWriter, err.Error())
 }
 
 func (l *Logger) Sucessf(format string, args ...interface{}) string {
