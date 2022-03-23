@@ -1,10 +1,10 @@
 package globby
 
 import (
-	"github.com/vercel/turborepo/cli/internal/fs"
-
 	"path/filepath"
 	"strings"
+
+	"github.com/vercel/turborepo/cli/internal/fs"
 
 	"github.com/bmatcuk/doublestar/v4"
 )

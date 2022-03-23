@@ -19,7 +19,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
-	mapset "github.com/deckarep/golang-set"
+	"github.com/deckarep/golang-set"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"

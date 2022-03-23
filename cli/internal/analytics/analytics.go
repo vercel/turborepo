@@ -5,10 +5,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/util"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/mapstructure"
-	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type Events = []map[string]interface{}

@@ -12,7 +12,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/client"
 
-	hclog "github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
@@ -65,7 +65,6 @@ type CacheConfig struct {
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
 func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
-
 	// Special check for ./turbo invocation without any args
 	// Return the help message
 	if len(args) == 0 {

@@ -34,12 +34,11 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 
-	"github.com/pyr-sh/dag"
-
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
+	"github.com/pyr-sh/dag"
 )
 
 const TOPOLOGICAL_PIPELINE_DELIMITER = "^"

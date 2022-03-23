@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
