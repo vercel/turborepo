@@ -192,7 +192,7 @@ import (
 // 			if err != nil {
 // 				t.Fatalf("invalid parse: %#v", err)
 // 			}
-// 			assert.EqualValues(t, actual, tc.Expected)
+// 			assert.EqualValues(t, tc.Expected, actual))
 // 		})
 // 	}
 // }

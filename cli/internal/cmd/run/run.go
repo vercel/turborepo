@@ -123,6 +123,10 @@ func RunCmd(ch *cmdutil.Helper) *cobra.Command {
 		IncludeDependents: true,
 	}
 
+	var runOpts struct {
+		concurrency string
+	}
+
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run tasks across projects in your monorepo",
@@ -175,6 +179,11 @@ occurred again).
 				default:
 					ch.LogWarning("unknown value %v for --output-logs CLI flag. Falling back to full", opts.OutputLogs)
 				}
+			}
+			if concurrency, err := util.ParseConcurrency(runOpts.concurrency); err != nil {
+				return err
+			} else {
+				opts.Concurrency = concurrency
 			}
 
 			startAt := time.Now()
@@ -235,7 +244,7 @@ occurred again).
 
 	cmd.Flags().StringArrayVar(&opts.Scope, "scope", []string{}, "package(s) to act as entry points for task execution, supports globs")
 	cmd.Flags().StringVar(&opts.CacheDir, "cache-dir", filepath.FromSlash("./node_modules/.cache/turbo"), "Specify local filesystem cache directory")
-	cmd.Flags().IntVar(&opts.Concurrency, "concurrency", 10, "concurrency of task execution")
+	cmd.Flags().StringVar(&runOpts.concurrency, "concurrency", "10", "concurrency of task execution")
 	cmd.Flags().BoolVar(&opts.ShouldContinue, "continue", false, "continue execution even if a task exits with an error or non-zero exit code")
 	cmd.Flags().BoolVarP(&opts.Force, "force", "f", false, "ignore the existing cache")
 	cmd.Flags().StringVar(&opts.Profile, "profile", "", "file to write turbo's performance profile output into")
@@ -505,6 +514,12 @@ func executeTasks(ch *cmdutil.Helper, g *completeGraph, rs *runSpec, engine *cor
 		return &cmdutil.Error{
 			ExitCode: exitCode,
 			Err:      ch.Logger.Errorf("error with profiler: %s", err.Error()),
+		}
+	}
+
+	if exitCode != 0 {
+		return &cmdutil.Error{
+			ExitCode: exitCode,
 		}
 	}
 

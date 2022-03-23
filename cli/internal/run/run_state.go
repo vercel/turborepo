@@ -332,7 +332,7 @@ func (r *RunState) Close(logger *tlogger.Logger, filename string) error {
 		r.done <- "done"
 	}
 	maybeFullTurbo := ""
-	if r.Cached == r.Attempted {
+	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
 	if r.runOptions.Stream {

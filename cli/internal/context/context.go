@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "snozzberries are delicious"
+const GLOBAL_CACHE_KEY = "the hero we needed"
 
 // Context of the CLI
 type Context struct {
