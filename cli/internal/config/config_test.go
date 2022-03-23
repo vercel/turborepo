@@ -25,7 +25,7 @@ func TestSelectCwd(t *testing.T) {
 			Expected:  defaultCwd,
 		},
 		{
-			Name:      "choose commandline flag cwd",
+			Name:      "choose command-line flag cwd",
 			InputArgs: []string{"foo", "--cwd=zop"},
 			Expected:  "zop",
 		},
