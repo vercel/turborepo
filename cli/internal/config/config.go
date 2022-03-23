@@ -10,11 +10,12 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/vercel/turborepo/cli/internal/client"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
-	"github.com/vercel/turborepo/cli/internal/client"
 )
 
 const (
@@ -22,27 +23,29 @@ const (
 	EnvLogLevel = "TURBO_LOG_LEVEL"
 )
 
+// IsCI returns true if running in a CI/CD environment
 func IsCI() bool {
 	return !isatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("CI") != ""
 }
 
+// Config is a struct that contains user inputs and our logger
 type Config struct {
-	Level     int
-	Token     string
-	TeamId    string
-	TeamSlug  string
-	ApiUrl    string
-	LoginUrl  string
-	Version   string
-	NoColor   bool
 	Logger    hclog.Logger
+	// Bearer token
+	Token string
+	// vercel.com / remote cache team id
+	TeamId string
+	// vercel.com / remote cache team slug
+	TeamSlug string
+	// Backend API URL
+	ApiUrl string
+	// Login URL
+	LoginUrl string
+	// Backend retryable http client
 	ApiClient *client.ApiClient
+	// Turborepo CLI Version
+	Version   string
 	Cache     *CacheConfig
-
-	NoGC       bool
-	Heap       string
-	Trace      string
-	CpuProfile string
 }
 
 type CacheConfig struct {
@@ -177,6 +180,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	return c, nil
 }
 
+// IsAuthenticated returns true if we have a token and either a team id or team slug
 func (c *Config) IsAuthenticated() bool {
 	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
 }

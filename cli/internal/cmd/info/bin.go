@@ -5,11 +5,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mitchellh/cli"
-	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/logger"
+
+	"github.com/mitchellh/cli"
+	"github.com/spf13/cobra"
 )
 
 type BinCommand struct {
@@ -39,9 +40,10 @@ func (c *BinCommand) Run(args []string) int {
 		Logger: logger,
 	})
 
-	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 	cmd.CompletionOptions.DisableDefaultCmd = true
+
+	cmd.SetArgs(args)
 
 	err := cmd.Execute()
 	if err == nil {

@@ -5,9 +5,10 @@ import (
 	"io"
 	"os"
 
+	"github.com/vercel/turborepo/cli/internal/util"
+
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
-	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())

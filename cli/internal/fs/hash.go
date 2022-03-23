@@ -4,10 +4,11 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/vercel/turborepo/cli/internal/xxhash"
 	"io"
 	"os"
 	"strconv"
+
+	"github.com/vercel/turborepo/cli/internal/xxhash"
 )
 
 func HashObject(i interface{}) (string, error) {

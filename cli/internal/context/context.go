@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/backends"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
