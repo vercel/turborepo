@@ -79,14 +79,14 @@ func (asa *ArtifactSignatureAuthentication) validate(hash string, artifactBody [
 }
 
 func (asa *ArtifactSignatureAuthentication) streamValidator(hash string, incomingReader io.ReadCloser) (io.ReadCloser, *StreamValidator, error) {
-	gen, err := asa.getTagGenerator(hash)
+	tag, err := asa.getTagGenerator(hash)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tee := io.TeeReader(incomingReader, gen)
+	tee := io.TeeReader(incomingReader, tag)
 	artifactReader := readCloser{tee, incomingReader}
-	return artifactReader, &StreamValidator{gen}, nil
+	return artifactReader, &StreamValidator{tag}, nil
 }
 
 type StreamValidator struct {
