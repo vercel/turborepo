@@ -11,7 +11,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
-func Test_SignatureAuthenitcation(t *testing.T) {
+func Test_SignatureAuthentication(t *testing.T) {
 	teamId := "team_someid"
 	secret := "my-secret"
 	hash := "the-artifact-hash"
