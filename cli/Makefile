@@ -7,7 +7,9 @@ GO_FLAGS += "-ldflags=-s -w"
 # Avoid embedding the build path in the executable for more reproducible builds
 GO_FLAGS += -trimpath
 
-turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
+SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
+
+turbo: $(SRC_FILES) go.mod
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
 # These tests are for development
