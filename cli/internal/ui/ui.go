@@ -59,6 +59,7 @@ func Rainbow(text string) string {
 		str := fmt.Sprintf("\033[1m\033[38;2;%d;%d;%dm%c\033[0m\033[0;1m", r, g, b, value)
 		rainbowStr = append(rainbowStr, str)
 	}
+	rainbowStr = append(rainbowStr, "\x1b[0m")
 
 	return strings.Join(rainbowStr, "")
 }
