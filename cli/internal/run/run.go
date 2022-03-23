@@ -162,7 +162,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Config.Cwd, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -175,7 +175,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	targets, err := getTargetsFromArguments(args, ctx.TurboConfig)
+	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -201,7 +201,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         ctx.TurboConfig.Pipeline,
+		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
 		SCC:              ctx.SCC,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
@@ -474,19 +474,14 @@ func getDefaultRunOptions() *RunOptions {
 	}
 }
 
-func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("invalid working directory: %w", err)
-	}
 	runOptions.cwd = cwd
-
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	for argIndex, arg := range args {
@@ -510,10 +505,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--global-deps="):
 				if len(arg[len("--global-deps="):]) > 0 {
 					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
-				}
-			case strings.HasPrefix(arg, "--cwd="):
-				if len(arg[len("--cwd="):]) > 0 {
-					runOptions.cwd = arg[len("--cwd="):]
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
@@ -599,6 +590,7 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--cpuprofile"):
 			case strings.HasPrefix(arg, "--heap"):
 			case strings.HasPrefix(arg, "--no-gc"):
+			case strings.HasPrefix(arg, "--cwd="):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
