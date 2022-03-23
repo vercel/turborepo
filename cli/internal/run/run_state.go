@@ -296,7 +296,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		Ui.Output("") // Clear the line
 		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total", r.Cached+r.Success, r.Attempted))
 		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total", r.Cached, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
+		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 		Ui.Output("")
 	} else {
 
