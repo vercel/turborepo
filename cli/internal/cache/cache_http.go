@@ -151,8 +151,8 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
-func (cache *httpCache) retrieve(key string) (bool, []string, int, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(key, nil)
+func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
+	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
 	if err != nil {
 		return false, nil, 0, err
 	}
@@ -168,18 +168,26 @@ func (cache *httpCache) retrieve(key string) (bool, []string, int, error) {
 		}
 		duration = intVar
 	}
-	// If the verifier is enabled all incoming artifact downloads must have a signature
-	// TODO(Gaspar) verify signature once download of artifact completes
-	if cache.signerVerifier.isEnabled() && resp.Header.Get("x-artifact-tag") == "" {
-		return false, nil, 0, errors.New("arfifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
-	}
 	if resp.StatusCode == http.StatusNotFound {
 		return false, files, duration, nil // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {
 		b, _ := ioutil.ReadAll(resp.Body)
 		return false, files, duration, fmt.Errorf("%s", string(b))
 	}
-	gzr, err := gzip.NewReader(resp.Body)
+	artifactReader := resp.Body
+	var streamValidator *StreamValidator = nil
+	expectedTag := resp.Header.Get("x-artifact-tag")
+	if cache.signerVerifier.isEnabled() {
+		// If the verifier is enabled all incoming artifact downloads must have a signature
+		if expectedTag == "" {
+			return false, nil, 0, errors.New("arfifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
+		}
+		artifactReader, streamValidator, err = cache.signerVerifier.streamValidator(hash, artifactReader)
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+		}
+	}
+	gzr, err := gzip.NewReader(artifactReader)
 	if err != nil {
 		return false, files, duration, err
 	}
@@ -194,7 +202,10 @@ func (cache *httpCache) retrieve(key string) (bool, []string, int, error) {
 						return false, files, duration, err
 					}
 				}
-
+				if streamValidator != nil && !streamValidator.Validate(expectedTag) {
+					err = fmt.Errorf("artifact verification failed: artifact tag %s does not match expected tag %s", streamValidator.CurrentValue(), expectedTag)
+					return false, files, duration, err
+				}
 				return true, files, duration, nil
 			}
 			return false, files, duration, err

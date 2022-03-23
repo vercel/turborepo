@@ -37,7 +37,7 @@ func Test_SignatureAuthentication(t *testing.T) {
 		t.Fatalf("Error generating tag: %#v", err)
 	}
 	assert.EqualValues(t, expectedTag, tag)
-	signatureIsValid, err := signerVerifier.validateTag(hash, artifactBody, expectedTag)
+	signatureIsValid, err := signerVerifier.validate(hash, artifactBody, expectedTag)
 	if err != nil {
 		t.Fatalf("Error generating tag: %#v", err)
 	}
