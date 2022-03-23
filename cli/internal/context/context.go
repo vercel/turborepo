@@ -28,7 +28,7 @@ const GLOBAL_CACHE_KEY = "the hero we needed"
 
 // Context of the CLI
 type Context struct {
-	// Does not include the root PackageJSON
+	// TODO(gsoltis): should the RootPackageJSON be included in PackageInfos?
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph

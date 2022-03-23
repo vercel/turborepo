@@ -46,11 +46,14 @@ type Config struct {
 	// Backend retryable http client
 	ApiClient *client.ApiClient
 	// Turborepo CLI Version
-	TurboVersion    string
-	Cache           *CacheConfig
+	TurboVersion string
+	Cache        *CacheConfig
+	// turbo.json or legacy turbo config from package.json
 	TurboConfigJSON *fs.TurboConfigJSON
+	// package.json at the root of the repo
 	RootPackageJSON *fs.PackageJSON
-	Cwd             string
+	// Current Working Directory
+	Cwd string
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -91,7 +94,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		return nil, nil
 	}
 
-	cwd, err := selectCwd(&args)
+	cwd, err := selectCwd(args)
 	if err != nil {
 		return nil, err
 	}
@@ -239,14 +242,14 @@ func ReadTurboConfig(rootPath string, rootPackageJSON *fs.PackageJSON) (*fs.Turb
 	}
 }
 
-// Selects the current current working directory from OS
+// Selects the current working directory from OS
 // and overrides with the `--cwd=` input argument
-func selectCwd(inputArgs *[]string) (string, error) {
+func selectCwd(inputArgs []string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("invalid working directory: %w", err)
 	}
-	for _, arg := range *inputArgs {
+	for _, arg := range inputArgs {
 		if arg == "--" {
 			break
 		} else if strings.HasPrefix(arg, "--cwd=") {
