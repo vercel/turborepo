@@ -36,5 +36,11 @@
       "outputs": [".next/**"],
       "dependsOn": ["^build", "docs#schema"]
     }
+  },
+  "remoteCacheOptions": {
+    "signatureOptions": {
+      "enabled": true,
+      "key": "my-secret-key-turbos"
+    }
   }
 }
