@@ -7,11 +7,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
-
-	"github.com/hashicorp/go-hclog"
 )
 
 type dummyClient struct {

@@ -5,9 +5,8 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/vercel/turborepo/cli/internal/fs"
-
 	"github.com/adrg/xdg"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user

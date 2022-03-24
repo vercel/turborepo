@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mitchellh/cli"
 	"github.com/vercel/turborepo/cli/internal/fs"
 
-	"github.com/mitchellh/cli"
 	"github.com/stretchr/testify/assert"
 )
 

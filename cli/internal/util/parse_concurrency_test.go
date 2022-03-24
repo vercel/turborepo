@@ -2,9 +2,8 @@ package util
 
 import (
 	"fmt"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestParseConcurrency(t *testing.T) {

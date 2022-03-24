@@ -5,9 +5,8 @@ package scm
 import (
 	"path/filepath"
 
-	"github.com/vercel/turborepo/cli/internal/fs"
-
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo")

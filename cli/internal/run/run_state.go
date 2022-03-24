@@ -11,8 +11,9 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
-	cursor "github.com/vercel/turborepo/cli/internal/ui/term"
 	"github.com/vercel/turborepo/cli/internal/util"
+
+	cursor "github.com/vercel/turborepo/cli/internal/ui/term"
 
 	"github.com/google/chrometracing"
 	"github.com/mitchellh/cli"

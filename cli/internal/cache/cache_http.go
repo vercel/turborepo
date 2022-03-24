@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
+	log "log"
 	"net/http"
 	"os"
 	"path"

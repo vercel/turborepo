@@ -3,7 +3,6 @@ package login
 import (
 	"fmt"
 	"strings"
-
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
