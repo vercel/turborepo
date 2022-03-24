@@ -2,6 +2,7 @@ package cache
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -175,17 +176,26 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		return false, files, duration, fmt.Errorf("%s", string(b))
 	}
 	artifactReader := resp.Body
-	var streamValidator *StreamValidator = nil
 	expectedTag := resp.Header.Get("x-artifact-tag")
 	if cache.signerVerifier.isEnabled() {
 		// If the verifier is enabled all incoming artifact downloads must have a signature
 		if expectedTag == "" {
 			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
 		}
-		artifactReader, streamValidator, err = cache.signerVerifier.streamValidator(hash, artifactReader)
+		b, _ := ioutil.ReadAll(artifactReader)
 		if err != nil {
 			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
 		}
+		isValid, err := cache.signerVerifier.validate(hash, b, expectedTag)
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+		}
+		if !isValid {
+			err = fmt.Errorf("artifact verification failed: artifact tag does not match expected tag %s", expectedTag)
+			return false, nil, 0, err
+		}
+		// The artifact has been verified and the body can be read and untarred
+		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
 	}
 	gzr, err := gzip.NewReader(artifactReader)
 	if err != nil {
@@ -202,10 +212,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 						return false, files, duration, err
 					}
 				}
-				if streamValidator != nil && !streamValidator.Validate(expectedTag) {
-					err = fmt.Errorf("artifact verification failed: artifact tag %s does not match expected tag %s", streamValidator.CurrentValue(), expectedTag)
-					return false, files, duration, err
-				}
+
 				return true, files, duration, nil
 			}
 			return false, files, duration, err
