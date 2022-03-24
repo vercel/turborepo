@@ -11,7 +11,6 @@ import {
   RefreshIcon,
 } from "@heroicons/react/outline";
 import copy from "copy-to-clipboard";
-import { useTheme } from "next-themes";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
