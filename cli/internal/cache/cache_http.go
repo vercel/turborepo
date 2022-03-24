@@ -180,7 +180,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 	if cache.signerVerifier.isEnabled() {
 		// If the verifier is enabled all incoming artifact downloads must have a signature
 		if expectedTag == "" {
-			return false, nil, 0, errors.New("arfifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
+			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
 		}
 		artifactReader, streamValidator, err = cache.signerVerifier.streamValidator(hash, artifactReader)
 		if err != nil {
