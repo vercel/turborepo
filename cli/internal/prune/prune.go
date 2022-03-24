@@ -58,18 +58,13 @@ type PruneOptions struct {
 	docker bool
 }
 
-func parsePruneArgs(args []string) (*PruneOptions, error) {
-	var options = &PruneOptions{}
+func parsePruneArgs(args []string, cwd string) (*PruneOptions, error) {
+	var options = &PruneOptions{cwd: cwd}
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one target must be specified.")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, errors.Errorf("invalid working directory")
-	}
-	options.cwd = cwd
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--") {
 			switch {
@@ -78,9 +73,6 @@ func parsePruneArgs(args []string) (*PruneOptions, error) {
 			case strings.HasPrefix(arg, "--docker"):
 				options.docker = true
 			case strings.HasPrefix(arg, "--cwd="):
-				if len(arg[len("--cwd="):]) > 1 {
-					options.cwd = arg[len("--cwd="):]
-				}
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
@@ -92,7 +84,7 @@ func parsePruneArgs(args []string) (*PruneOptions, error) {
 
 // Prune creates a smaller monorepo with only the required workspaces
 func (c *PruneCommand) Run(args []string) int {
-	pruneOptions, err := parsePruneArgs(args)
+	pruneOptions, err := parsePruneArgs(args, c.Config.Cwd)
 	logger := log.New(os.Stdout, "", 0)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
@@ -139,7 +131,7 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	workspaces := []string{}
-	lockfile := ctx.RootPackageInfo.SubLockfile
+	lockfile := c.Config.RootPackageJSON.SubLockfile
 	targets := []interface{}{pruneOptions.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(pruneOptions.scope)
 	if err != nil {
