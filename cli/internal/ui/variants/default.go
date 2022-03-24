@@ -1,4 +1,4 @@
-package logger
+package variants
 
 import (
 	"fmt"
@@ -8,47 +8,47 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
-	"github.com/mattn/go-isatty"
 )
-
-var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
-var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
 
 var successPrefix = color.New(color.Bold, color.FgGreen, color.ReverseVideo).Sprint(" SUCCESS ")
 var warningPrefix = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
 var errorPrefix = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 
-type Logger struct {
+type Default struct {
 	Writer      io.Writer
 	ErrorWriter io.Writer
 }
 
-func New() *Logger {
-	return &Logger{
+func NewDefault() *Default {
+	return &Default{
 		Writer:      os.Stdout,
 		ErrorWriter: os.Stderr,
 	}
 }
 
-func (l *Logger) Printf(format string, args ...interface{}) {
-	fmt.Fprintln(l.Writer, util.Sprintf(format, args...))
+func (u *Default) output(msg string) {
+	fmt.Fprintln(u.Writer, msg)
 }
 
-func (l *Logger) Error(err error) {
-	fmt.Fprintln(l.ErrorWriter, err.Error())
+func (u *Default) Error(err error) {
+	fmt.Fprintln(u.ErrorWriter, err.Error())
 }
 
-func (l *Logger) Sucessf(format string, args ...interface{}) string {
+func (u *Default) Printf(format string, args ...interface{}) {
+	u.output(util.Sprintf(format, args...))
+}
+
+func (u *Default) Successf(format string, args ...interface{}) string {
 	msg := fmt.Sprintf(format, args...)
 	return fmt.Sprintf("%s%s", successPrefix, color.GreenString(" %v", msg))
 }
 
-func (l *Logger) Warnf(format string, args ...interface{}) error {
+func (u *Default) Warnf(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	return fmt.Errorf("%s%s", warningPrefix, color.YellowString(" %v", err))
 }
 
-func (l *Logger) Errorf(format string, args ...interface{}) error {
+func (u *Default) Errorf(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	return fmt.Errorf("%s%s", errorPrefix, color.RedString(" %v", err))
 }

@@ -7,7 +7,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/logger"
+	"github.com/vercel/turborepo/cli/internal/ui/variants"
 
 	"github.com/mitchellh/cli"
 	"github.com/spf13/cobra"
@@ -34,10 +34,10 @@ Usage: turbo bin
 }
 
 func (c *BinCommand) Run(args []string) int {
-	logger := logger.New()
+	ui := variants.NewDefault()
 	cmd := BinCmd(&cmdutil.Helper{
 		Config: c.Config,
-		Logger: logger,
+		Ui: ui,
 	})
 
 	cmd.SilenceErrors = true
@@ -50,7 +50,7 @@ func (c *BinCommand) Run(args []string) int {
 		return 0
 	}
 
-	logger.Error(err)
+	ui.Error(err)
 
 	var cmdErr *cmdutil.Error
 	if errors.As(err, &cmdErr) {
@@ -70,7 +70,7 @@ func BinCmd(ch *cmdutil.Helper) *cobra.Command {
 				return ch.LogError("could not get path to turbo binary: %w", err)
 			}
 
-			ch.Logger.Printf(path)
+			ch.Ui.Printf(path)
 			return nil
 		},
 	}
