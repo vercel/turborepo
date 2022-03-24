@@ -100,6 +100,17 @@ func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
+func (p *Scheduler) getPackageAndTask(taskID string) (string, *Task, error) {
+	pkg, taskName := util.GetPackageTaskFromId(taskID)
+	if task, ok := p.Tasks[taskID]; ok {
+		return pkg, task, nil
+	}
+	if task, ok := p.Tasks[taskName]; ok {
+		return pkg, task, nil
+	}
+	return "", nil, fmt.Errorf("cannot find task for %v", taskID)
+}
+
 func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
@@ -120,10 +131,9 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 	for len(traversalQueue) > 0 {
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
-		pkg, taskName := util.GetPackageTaskFromId(taskId)
-		task, ok := p.Tasks[taskName]
-		if !ok {
-			return fmt.Errorf("task %v not found", taskId)
+		pkg, task, err := p.getPackageAndTask(taskId)
+		if err != nil {
+			return err
 		}
 		if !visited.Includes(taskId) {
 			visited.Add(taskId)
@@ -144,7 +154,7 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 				})
 			}
 
-			toTaskId := util.GetTaskId(pkg, taskName)
+			toTaskId := taskId
 			hasTopoDeps := task.TopoDeps.Len() > 0 && p.TopologicGraph.DownEdges(pkg).Len() > 0
 			hasDeps := deps.Len() > 0
 			hasPackageTaskDeps := false

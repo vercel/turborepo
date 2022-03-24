@@ -369,8 +369,6 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 					deps.Add(from)
 				}
 			}
-			_, id := util.GetPackageTaskFromId(taskName)
-			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
 				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
