@@ -11,37 +11,175 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
-func Test_SignatureAuthentication(t *testing.T) {
+func Test_SecretKey(t *testing.T) {
 	teamId := "team_someid"
 	secret := "my-secret"
-	hash := "the-artifact-hash"
-	artifactBody := []byte("the artifact body as bytes")
-	signerVerifier := &ArtifactSignatureAuthentication{
-		teamId: teamId,
-		options: &fs.SignatureOptions{
-			Enabled: true,
-			Key:     secret,
+	secretKeyEnvName := "TURBO_TEST_SIGNING_KEY"
+	secretKeyEnvValue := "my-secret-key-env"
+	t.Setenv(secretKeyEnvName, secretKeyEnvValue)
+
+	cases := []struct {
+		name                   string
+		asa                    *ArtifactSignatureAuthentication
+		expectedSecretKey      string
+		expectedSecretKeyError bool
+	}{
+		{
+			name: "Accepts secret key",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     secret,
+				},
+			},
+			expectedSecretKey:      secret,
+			expectedSecretKeyError: false,
+		},
+		{
+			name: "Accepts secret keyEnv",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					KeyEnv:  secretKeyEnvName,
+				},
+			},
+			expectedSecretKey:      secretKeyEnvValue,
+			expectedSecretKeyError: false,
+		},
+		{
+			name: "Prefers secret keyEnv",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     secret,
+					KeyEnv:  secretKeyEnvName,
+				},
+			},
+			expectedSecretKey:      secretKeyEnvValue,
+			expectedSecretKeyError: false,
+		},
+		{
+			name: "Secret key not defined errors",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+				},
+			},
+			expectedSecretKey:      "",
+			expectedSecretKeyError: true,
+		},
+		{
+			name: "Secret key is empty errors",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     "",
+				},
+			},
+			expectedSecretKey:      "",
+			expectedSecretKeyError: true,
 		},
 	}
-	expectedTag := testUtilGetHMACTag(hash, teamId, artifactBody, secret)
 
-	// Test methods
-	assert.EqualValues(t, true, signerVerifier.isEnabled())
-	testKey, err := signerVerifier.secretKey()
-	if err != nil {
-		t.Fatalf("Error retrieving key %#v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			secretKey, err := tc.asa.secretKey()
+			if tc.expectedSecretKeyError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedSecretKey, string(secretKey))
+			}
+		})
 	}
-	assert.EqualValues(t, []byte(secret), testKey)
-	tag, err := signerVerifier.generateTag(hash, artifactBody)
-	if err != nil {
-		t.Fatalf("Error generating tag: %#v", err)
+}
+
+func Test_GenerateTagAndValidate(t *testing.T) {
+	teamId := "team_someid"
+	hash := "the-artifact-hash"
+	artifactBody := []byte("the artifact body as bytes")
+	secret := "my-secret"
+
+	cases := []struct {
+		name                    string
+		asa                     *ArtifactSignatureAuthentication
+		expectedTagMatches      string
+		expectedTagDoesNotMatch string
+	}{
+		{
+			name: "Uses hash to generate tag",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     secret,
+				},
+			},
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
+			expectedTagDoesNotMatch: testUtilGetHMACTag("wrong-hash", teamId, artifactBody, secret),
+		},
+		{
+			name: "Uses teamId to generate tag",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     secret,
+				},
+			},
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
+			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, "wrong-teamId", artifactBody, secret),
+		},
+		{
+			name: "Uses artifactBody to generate tag",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     secret,
+				},
+			},
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
+			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, teamId, []byte("wrong-artifact-body"), secret),
+		},
+		{
+			name: "Uses secret to generate tag",
+			asa: &ArtifactSignatureAuthentication{
+				teamId: teamId,
+				options: &fs.SignatureOptions{
+					Enabled: true,
+					Key:     secret,
+				},
+			},
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
+			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, teamId, artifactBody, "wrong-secret"),
+		},
 	}
-	assert.EqualValues(t, expectedTag, tag)
-	signatureIsValid, err := signerVerifier.validate(hash, artifactBody, expectedTag)
-	if err != nil {
-		t.Fatalf("Error generating tag: %#v", err)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tag, err := tc.asa.generateTag(hash, artifactBody)
+			assert.NoError(t, err)
+
+			// validates the tag
+			assert.Equal(t, tc.expectedTagMatches, tag)
+			isValid, err := tc.asa.validate(hash, artifactBody, tc.expectedTagMatches)
+			assert.NoError(t, err)
+			assert.True(t, isValid)
+
+			// does not validate the tag
+			assert.NotEqual(t, tc.expectedTagDoesNotMatch, tag)
+			isValid, err = tc.asa.validate(hash, artifactBody, tc.expectedTagDoesNotMatch)
+			assert.NoError(t, err)
+			assert.False(t, isValid)
+
+		})
 	}
-	assert.True(t, signatureIsValid)
 }
 
 // Test utils
