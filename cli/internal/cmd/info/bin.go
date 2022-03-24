@@ -37,7 +37,7 @@ func (c *BinCommand) Run(args []string) int {
 	ui := variants.NewDefault()
 	cmd := BinCmd(&cmdutil.Helper{
 		Config: c.Config,
-		Ui: ui,
+		Ui:     ui,
 	})
 
 	cmd.SilenceErrors = true

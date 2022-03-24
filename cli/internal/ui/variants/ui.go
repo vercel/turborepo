@@ -2,7 +2,7 @@ package variants
 
 type Ui interface {
 	output(msg string)
-	
+
 	// Output to ErrorWriter
 	Error(err error)
 	// Format and output to Writer

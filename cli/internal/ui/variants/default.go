@@ -19,6 +19,8 @@ type Default struct {
 	ErrorWriter io.Writer
 }
 
+var _ Ui = (*Default)(nil)
+
 func NewDefault() *Default {
 	return &Default{
 		Writer:      os.Stdout,
