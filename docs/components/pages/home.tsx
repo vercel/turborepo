@@ -93,7 +93,7 @@ function Page() {
         />
       </Head>
       <div>
-        <div className="px-4 pt-16 pb-8 sm:px-6 sm:pt-24 lg:px-8">
+        <div className="px-4 pt-16 pb-8 sm:pt-24 lg:px-8">
           <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
             Monorepos that
             <br className="hidden lg:block" />
@@ -126,7 +126,7 @@ function Page() {
         </div>
 
         <div className="py-16">
-          <div className="max-w-5xl px-4 mx-auto sm:px-6 lg:px-8">
+          <div className="max-w-5xl mx-auto ">
             <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
               Trusted by teams from around the world
             </p>
@@ -175,7 +175,7 @@ function Page() {
         </div>
 
         <div className="relative from-gray-50 to-gray-100">
-          <div className="max-w-4xl px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24 lg:px-8">
+          <div className="px-4 py-16 mx-auto  sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24">
             <h2 className="text-4xl font-extrabold tracking-tight lg:text-5xl xl:text-6xl lg:text-center dark:text-white">
               Build like the best
             </h2>
@@ -209,7 +209,7 @@ function Page() {
           </div>
         </div>
         <div className="">
-          <div className="px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
+          <div className="px-4 py-16 mx-auto sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
             <h2 className="max-w-4xl mx-auto pb-6 text-5xl font-extrabold  tracking-tight lg:text-6xl xl:text-7xl leading-[1.25!important] md:text-center dark:text-white">
               Scaling your monorepo shouldn&apos;t be so difficult
             </h2>
@@ -286,12 +286,12 @@ function Page() {
           </div>
         </div>
         <div className="sm:py-20 lg:py-24">
-          <div className="max-w-4xl px-4 pb-12 mx-auto sm:px-6 lg:px-8 ">
+          <div className="max-w-4xl px-4 pb-12 mx-auto lg:px-8 ">
             <h2 className="text-4xl font-extrabold leading-tight tracking-tight lg:text-5xl xl:text-6xl md:text-center dark:text-white">
               Loved by badass engineers
             </h2>
           </div>
-          <div className="grid gap-4 px-4 mx-auto sm:px-6 lg:grid-cols-3 max-w-7xl">
+          <div className="grid gap-4 px-4 mx-auto lg:grid-cols-3 max-w-7xl">
             <div className="space-y-4">
               <Tweet
                 url="https://twitter.com/jongold/status/1409714159227326466"
