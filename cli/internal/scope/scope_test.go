@@ -8,61 +8,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
-	"github.com/stretchr/testify/assert"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
-
-func TestScopedPackages(t *testing.T) {
-	cases := []struct {
-		Name         string
-		PackageNames []string
-		Pattern      []string
-		Expected     util.Set
-	}{
-		{
-			"starts with @",
-			[]string{"@sample/app", "sample-app", "jared"},
-			[]string{"@sample/*"},
-			util.Set{"@sample/app": "@sample/app"},
-		},
-		{
-			"return an array of matches",
-			[]string{"foo", "bar", "baz"},
-			[]string{"f*"},
-			util.Set{"foo": "foo"},
-		},
-		{
-			"return an array of matches",
-			[]string{"foo", "bar", "baz"},
-			[]string{"f*", "bar"},
-			util.Set{"bar": "bar", "foo": "foo"},
-		},
-		{
-			"return matches in the order the list were defined",
-			[]string{"foo", "bar", "baz"},
-			[]string{"*a*", "!f*"},
-			util.Set{"bar": "bar", "baz": "baz"},
-		},
-	}
-
-	for i, tc := range cases {
-		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			actual, err := getScopedPackages(tc.PackageNames, tc.Pattern)
-			if err != nil {
-				t.Fatalf("invalid scope parse: %#v", err)
-			}
-			assert.EqualValues(t, tc.Expected, actual)
-		})
-	}
-
-	t.Run(fmt.Sprintf("%d-%s", len(cases), "throws an error if no package matches the provided scope pattern"), func(t *testing.T) {
-		_, err := getScopedPackages([]string{"foo", "bar"}, []string{"baz"})
-		assert.Error(t, err)
-	})
-}
 
 type mockSCM struct {
 	changed []string
@@ -178,11 +128,13 @@ func TestResolvePackages(t *testing.T) {
 			includeDependencies: true, // scope implies include-dependencies
 		},
 		{
-			// a dependent lib changed, user explicitly asked to not build dependencies
+			// a dependent lib changed, user explicitly asked to not build dependencies.
+			// Since the package matching the scope had a changed dependency, we run it.
+			// We don't include its dependencies because the user asked for no dependencies.
 			// note: this is not yet supported by the CLI, as you cannot specify --include-dependencies=false
 			name:                "dependency of scope changed, user asked to not include depedencies",
 			changed:             []string{"libs/libA/src/index.ts"},
-			expected:            []string{"libA", "app1"},
+			expected:            []string{"app1"},
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: false,
@@ -192,7 +144,7 @@ func TestResolvePackages(t *testing.T) {
 			// note: this is not yet supported by the CLI, as you cannot specify --include-dependencies=false
 			name:                "nested dependency of scope changed, user asked to not include dependencies",
 			changed:             []string{"libs/libB/src/index.ts"},
-			expected:            []string{"libA", "libB", "app1"},
+			expected:            []string{"app1"},
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: false,
