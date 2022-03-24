@@ -277,6 +277,8 @@ func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{
+			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
+			// enforcing team restrictions for repositories.
 			teamId:  config.TeamId,
 			options: &config.TurboConfigJSON.RemoteCacheOptions.SignatureOptions,
 		},
