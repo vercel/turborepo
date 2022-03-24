@@ -11,7 +11,6 @@ import {
   RefreshIcon,
 } from "@heroicons/react/outline";
 import copy from "copy-to-clipboard";
-import { useTheme } from "next-themes";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
@@ -175,7 +174,7 @@ function Page() {
         </div>
 
         <div className="relative from-gray-50 to-gray-100">
-          <div className="px-4 py-16 mx-auto  sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24">
+          <div className="max-w-full px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24 lg:px-8">
             <h2 className="text-4xl font-extrabold tracking-tight lg:text-5xl xl:text-6xl lg:text-center dark:text-white">
               Build like the best
             </h2>

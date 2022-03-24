@@ -1,17 +1,5 @@
 @tailwind utilities;
 
-.docs-search > span {
-  width: 100%;
-}
-
-[data-reach-skip-link] {
-  @apply sr-only;
-}
-
-[data-reach-skip-link]:focus {
-  @apply fixed top-0 z-50 px-6 py-2 mt-2 ml-6 text-lg bg-white outline-none not-sr-only focus:ring;
-}
-
 code {
   @apply text-sm;
 }
