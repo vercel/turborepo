@@ -1,5 +1,6 @@
 import "../styles.css";
 import "nextra-theme-docs/style.css";
+
 import { SSRProvider } from "@react-aria/ssr";
 
 // Shim requestIdleCallback in Safari
