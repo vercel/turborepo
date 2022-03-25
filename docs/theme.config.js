@@ -121,6 +121,7 @@ const Logo = ({ height, ...props }) => (
 
 const theme = {
   github: "https://github.com/vercel/turborepo",
+  projectLink: "https://github.com/vercel/turborepo",
   docsRepositoryBase:
     "https://github.com/vercel/turborepo/blob/main/docs/pages",
   titleSuffix: " | Turborepo",
