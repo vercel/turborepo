@@ -691,7 +691,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 
 	ec.logReplayWaitGroup.Wait()
-
+	fmt.Println(rs.Opts.profile)
 	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1

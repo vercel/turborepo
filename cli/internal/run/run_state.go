@@ -88,6 +88,9 @@ type RunState struct {
 }
 
 func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
+	if runOptions.profile != "" {
+		chrometracing.EnableTracing()
+	}
 	return &RunState{
 		Success:   0,
 		Failure:   0,
