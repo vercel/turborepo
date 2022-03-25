@@ -171,7 +171,7 @@ importers:
 
   generateRepoFiles(turboConfig = {}) {
     this.commitFiles({
-      [`.gitignore`]: `node_modules\n.turbo\n!*-lock.json`,
+      [`.gitignore`]: `node_modules\n.turbo\n!*-lock.json\ndist/\n`,
       "package.json": {
         name: this.name,
         version: "0.1.0",
