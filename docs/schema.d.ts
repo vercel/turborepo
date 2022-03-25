@@ -50,7 +50,7 @@ export interface Schema {
    * Configuration options that control how turbo interfaces with the remote Cache.
    * @default {}
    */
-  remoteCache?: RemoteCacheOptions;
+  remoteCache?: RemoteCache;
 }
 
 export interface Pipeline {
