@@ -1,20 +1,23 @@
 {
+  "*": {
+    "type": "page"
+  },
   "index": {
     "title": "Home",
-    "type": "nav",
-    "hidden": true
+    "hidden": true,
+    "theme": {
+      "layout": "raw"
+    }
   },
-  "docs": {
-    "title": "Docs",
-    "type": "nav"
-  },
-  "blog": {
-    "title": "Blog",
-    "type": "nav"
+  "docs": "Docs",
+  "blog": "Blog",
+  "enterprise": {
+    "title": "Enterprise",
+    "href": "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink",
+    "newWindow": true
   },
   "confirm": {
     "title": "Confirm",
-    "type": "nav",
     "hidden": true
   },
   "terms": {
@@ -22,7 +25,7 @@
     "hidden": true
   },
   "privacy": {
-    "title": "Terms of Use",
+    "title": "Privacy Policy",
     "hidden": true
   }
 }
