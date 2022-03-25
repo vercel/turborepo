@@ -19,7 +19,7 @@ type TurboConfigJSON struct {
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline map[string]Pipeline
 	// Configuration options when interfacing with the remote cache
-	RemoteCacheOptions RemoteCacheOptions `json:"remoteCacheOptions,omitempty"`
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
 func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
@@ -45,7 +45,7 @@ type SignatureOptions struct {
 }
 type RemoteCacheOptions struct {
 	TeamId           string           `json:"teamId,omitempty"`
-	SignatureOptions SignatureOptions `json:"signatureOptions,omitempty"`
+	SignatureOptions SignatureOptions `json:"signature,omitempty"`
 }
 
 type PPipeline struct {

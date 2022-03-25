@@ -176,10 +176,10 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		return false, files, duration, fmt.Errorf("%s", string(b))
 	}
 	artifactReader := resp.Body
-	expectedTag := resp.Header.Get("x-artifact-tag")
 	if cache.signerVerifier.isEnabled() {
-		// If the verifier is enabled all incoming artifact downloads must have a signature
+		expectedTag := resp.Header.Get("x-artifact-tag")
 		if expectedTag == "" {
+			// If the verifier is enabled all incoming artifact downloads must have a signature
 			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
 		}
 		b, _ := ioutil.ReadAll(artifactReader)
