@@ -853,13 +853,6 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.pkg.Name, pt.task))
 	targetLogger.Debug("start")
 
-	// bail if the script doesn't exist
-	if _, ok := pt.pkg.Scripts[pt.task]; !ok {
-		targetLogger.Debug("no task in package, skipping")
-		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
-	}
-
 	// Setup tracer
 	tracer := e.runState.Run(util.GetTaskId(pt.pkg.Name, pt.task))
 
@@ -883,6 +876,16 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	if err != nil {
 		e.ui.Error(fmt.Sprintf("Hashing error: %v", err))
 		// @TODO probably should abort fatally???
+	}
+	// TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
+	// the following block should never get hit. In the meantime, keep it after hashing
+	// so that downstream tasks can count on the hash existing
+	//
+	// bail if the script doesn't exist
+	if _, ok := pt.pkg.Scripts[pt.task]; !ok {
+		targetLogger.Debug("no task in package, skipping")
+		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
+		return nil
 	}
 	// Cache ---------------------------------------------
 	var hit bool
