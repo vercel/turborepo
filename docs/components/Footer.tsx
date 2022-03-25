@@ -70,20 +70,17 @@ const navigation = {
 
 export function Footer() {
   return (
-    <footer
-      className="bg-gray-100 border-t dark:bg-dark dark:border-gray-800"
-      aria-labelledby="footer-heading"
-    >
+    <footer className="" aria-labelledby="footer-heading">
       <h2 id="footer-heading" className="sr-only">
         Footer
       </h2>
-      <div className="px-4 py-12 mx-auto max-w-7xl sm:px-6 lg:py-16 lg:px-8">
+      <div className="py-8 mx-auto max-w-7xl">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
           <div className="grid grid-cols-2 gap-8 xl:col-span-2">
             <div className="md:grid md:grid-cols-2 md:gap-8">
               <div>
                 <FooterHeader>Solutions</FooterHeader>
-                <ul role="list" className="mt-4 space-y-1.5">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.general.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -93,7 +90,7 @@ export function Footer() {
               </div>
               <div className="mt-12 md:mt-0">
                 <FooterHeader>Support</FooterHeader>
-                <ul role="list" className="mt-4 space-y-1.5">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.support.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -105,7 +102,7 @@ export function Footer() {
             <div className="md:grid md:grid-cols-2 md:gap-8">
               <div>
                 <FooterHeader>Company</FooterHeader>
-                <ul role="list" className="mt-4 space-y-1.5">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.company.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -115,7 +112,7 @@ export function Footer() {
               </div>
               <div className="mt-12 md:mt-0">
                 <FooterHeader>Legal</FooterHeader>
-                <ul role="list" className="mt-4 space-y-1.5">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.legal.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -125,7 +122,7 @@ export function Footer() {
               </div>
             </div>
           </div>
-          <div className="mt-8 xl:mt-0">
+          <div className="">
             <FooterHeader>Subscribe to our newsletter</FooterHeader>
             <p className="mt-4 text-sm text-gray-600 dark:text-gray-500">
               Join the Turborepo newsletter and stay updated on new releases and
@@ -194,7 +191,7 @@ function SubmitForm() {
       <div className="mt-3 rounded-md sm:mt-0 sm:ml-3 sm:flex-shrink-0">
         <button
           type="submit"
-          className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-gray-500 border border-transparent rounded-md sm:text-sm betterhover:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-white"
+          className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-black dark:bg-white dark:text-black border border-transparent rounded-md sm:text-sm betterhover:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-white dark:betterhover:hover:bg-gray-300"
         >
           Subscribe
         </button>

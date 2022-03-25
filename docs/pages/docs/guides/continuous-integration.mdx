@@ -1,0 +1,107 @@
+---
+title: Continuous Integration
+description: Recipes for using Turborepo with GitHub Actions, CircleCI, and other continuous integration providers.
+---
+
+# Continuous Integration
+
+Turborepo not only speeds up builds, but also your CI pipeline. Below are a few ways to use Turborepo with various Continuous Integration providers.
+
+## GitHub Actions
+
+The following example shows how to use Turborepo with GitHub Actions and pnpm.
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, synchronize]
+
+build:
+    name: Build and Test
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    # To use Remote Caching, uncomment the next lines and follow the steps below.
+    # env:
+    #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+    #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.32.2
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Test
+        run: pnpm turbo run test
+```
+
+#### Remote Caching
+
+To use Remote Caching with GitHub Actions, add the following environment variables to your GitHub Actions workflow
+and make them available to your `turbo` commands.
+
+- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
+- `TURBO_TEAM` - The team to which the monorepo belongs
+
+To use Vercel Remote Caching, you can get the value of these variables in a few steps:
+
+1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
+
+![Vercel Access Tokens](/images/docs/vercel-tokens.png)
+
+![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+
+Copy the value to a safe place. You'll need it in a moment.
+
+2. Go to your GitHub repository settings and click on the **Secrets** and then **Actions** tab.
+   Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+
+![GitHub Secrets](/images/docs/github-actions-secrets.png)
+![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
+
+3. Make a second secret called `TURBO_TEAM` and enter the value of your Vercel team's URL. Do not include `https://vercel.com` part, but only the slug.
+
+![Vercel Team Slug](/images/docs/vercel-slug.png)
+
+4. At the top of your GitHub Actions workflow, provide the following environment variables to jobs that use `turbo`:
+
+```yaml highlight="6-8"
+build:
+    name: Build and Test
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    # To use Turborepo Remote Caching, set the following environment variables for the job.
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+    # ...
+```

@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -118,6 +117,12 @@ Options:
   --continue             Continue execution even if a task exits with an error
                          or non-zero exit code. The default behavior is to bail
                          immediately. (default false)
+  --filter="<selector>"  Use the given selector to specify package(s) to act as
+                         entry points. The syntax mirror's pnpm's syntax, and
+                         additional documentation and examples can be found in
+                         turbo's documentation TODO: LINK.
+                         --filter can be specified multiple times. Packages that
+                         match any filter will be included.
   --force                Ignore the existing cache (to force execution).
                          (default false)
   --graph                Generate a Dot graph of the task execution.
@@ -163,7 +168,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Config.Cwd, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -176,7 +181,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	targets, err := getTargetsFromArguments(args, ctx.TurboConfig)
+	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -191,7 +196,7 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
@@ -202,7 +207,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         ctx.TurboConfig.Pipeline,
+		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
 		SCC:              ctx.SCC,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
@@ -258,12 +263,6 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
-	}
-	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range vertexSet.Difference(rs.FilteredPkgs) {
-		if toRemove != g.RootNode {
-			g.TopologicalGraph.Remove(toRemove)
-		}
 	}
 
 	// If we are running in parallel, then we remove all the edges in the graph
@@ -371,8 +370,6 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 					deps.Add(from)
 				}
 			}
-			_, id := util.GetPackageTaskFromId(taskName)
-			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
 				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
@@ -406,6 +403,8 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 // RunOptions holds the current run operations configuration
 
 type RunOptions struct {
+	// patterns supplied to --filter on the commandline
+	filterPatterns []string
 	// Whether to include dependent impacted consumers in execution (defaults to true)
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
@@ -451,7 +450,7 @@ type RunOptions struct {
 	dryRunJson        bool
 }
 
-func (ro *RunOptions) ScopeOpts() *scope.Opts {
+func (ro *RunOptions) scopeOpts() *scope.Opts {
 	return &scope.Opts{
 		IncludeDependencies: ro.includeDependencies,
 		IncludeDependents:   ro.includeDependents,
@@ -460,6 +459,7 @@ func (ro *RunOptions) ScopeOpts() *scope.Opts {
 		Cwd:                 ro.cwd,
 		IgnorePatterns:      ro.ignore,
 		GlobalDepPatterns:   ro.globalDeps,
+		FilterPatterns:      ro.filterPatterns,
 	}
 }
 
@@ -481,32 +481,27 @@ func getDefaultRunOptions() *RunOptions {
 	}
 }
 
-func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("invalid working directory: %w", err)
-	}
 	runOptions.cwd = cwd
-
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
-	// --scope and --since implies --include-dependencies for backwards compatibility
-	// When we switch to cobra we will need to track if it's been set manually. Currently
-	// it's only possible to set to true, but in the future a user could theoretically set
-	// it to false and override the default behavior.
-	includDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
 			break
 		} else if strings.HasPrefix(arg, "--") {
 			switch {
+			case strings.HasPrefix(arg, "--filter="):
+				filterPattern := arg[len("--filter="):]
+				if filterPattern != "" {
+					runOptions.filterPatterns = append(runOptions.filterPatterns, filterPattern)
+				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
 					runOptions.since = arg[len("--since="):]
@@ -522,10 +517,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--global-deps="):
 				if len(arg[len("--global-deps="):]) > 0 {
 					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
-				}
-			case strings.HasPrefix(arg, "--cwd="):
-				if len(arg[len("--cwd="):]) > 0 {
-					runOptions.cwd = arg[len("--cwd="):]
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
@@ -562,22 +553,17 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				output.Warn("[WARNING] The --serial flag has been deprecated and will be removed in future versions of turbo. Please use `--concurrency=1` instead")
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
-				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
-					return nil, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
+				concurrencyRaw := arg[len("--concurrency="):]
+				if concurrency, err := util.ParseConcurrency(concurrencyRaw); err != nil {
+					return nil, err
 				} else {
-					if i >= 1 {
-						runOptions.concurrency = i
-					} else {
-						return nil, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
-					}
+					runOptions.concurrency = concurrency
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--output-logs="):
@@ -616,13 +602,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--cpuprofile"):
 			case strings.HasPrefix(arg, "--heap"):
 			case strings.HasPrefix(arg, "--no-gc"):
+			case strings.HasPrefix(arg, "--cwd="):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
 		}
-	}
-	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
-		runOptions.includeDependencies = true
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
@@ -712,7 +696,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
-	return 0
+	return exitCode
 }
 
 type hashedTask struct {
