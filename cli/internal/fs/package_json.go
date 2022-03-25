@@ -18,6 +18,8 @@ type TurboConfigJSON struct {
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline map[string]Pipeline
+	// Configuration options when interfacing with the remote cache
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
 func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
@@ -34,6 +36,16 @@ func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
 		return nil, err
 	}
 	return turboConfig, nil
+}
+
+type SignatureOptions struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	Key     string `json:"key,omitempty"`
+	KeyEnv  string `json:"keyEnv,omitempty"`
+}
+type RemoteCacheOptions struct {
+	TeamId           string           `json:"teamId,omitempty"`
+	SignatureOptions SignatureOptions `json:"signature,omitempty"`
 }
 
 type PPipeline struct {
