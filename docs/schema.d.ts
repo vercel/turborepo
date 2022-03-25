@@ -50,7 +50,7 @@ export interface Schema {
    * Configuration options that control how turbo interfaces with the remote Cache.
    * @default {}
    */
-  remoteCacheOptions?: RemoteCacheOptions;
+  remoteCache?: RemoteCacheOptions;
 }
 
 export interface Pipeline {
@@ -96,7 +96,7 @@ export interface Pipeline {
   cache?: boolean;
 }
 
-export interface RemoteCacheOptions {
+export interface RemoteCache {
   /**
    * The teamId used in requests to the Remote Cache.
    */
@@ -107,10 +107,10 @@ export interface RemoteCacheOptions {
    *
    * @default {}
    */
-  signatureOptions?: SignatureOptions;
+  signature?: Signature;
 }
 
-export interface SignatureOptions {
+export interface Signature {
   /**
    * Indicates if signature verification is enabled for requests to the remote cache. When
    * `enabled` is `true`, Turborepo will sign every uploaded artifact using the `key`.
