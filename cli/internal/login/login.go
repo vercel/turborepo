@@ -100,7 +100,7 @@ type loginDeps struct {
 }
 
 func run(c *config.Config, deps loginDeps) error {
-	c.Logger.Debug(fmt.Sprintf("turbo v%v", c.Version))
+	c.Logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
 	c.Logger.Debug(fmt.Sprintf("api url: %v", c.ApiUrl))
 	c.Logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)

@@ -14,7 +14,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
 
-	"github.com/hashicorp/go-hclog"
+	hclog "github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
@@ -46,8 +46,8 @@ type Config struct {
 	// Backend retryable http client
 	ApiClient *client.ApiClient
 	// Turborepo CLI Version
-	Version string
-	Cache   *CacheConfig
+	TurboVersion string
+	Cache        *CacheConfig
 	// turbo.json or legacy turbo config from package.json
 	TurboConfigJSON *fs.TurboConfigJSON
 	// package.json at the root of the repo
@@ -56,8 +56,8 @@ type Config struct {
 	Cwd string
 }
 
-// IsAuthenticated returns true if we have a token and either a team id or team slug
-func (c *Config) IsAuthenticated() bool {
+// IsLoggedIn returns true if we have a token and either a team id or team slug
+func (c *Config) IsLoggedIn() bool {
 	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
 }
 
@@ -73,6 +73,7 @@ type CacheConfig struct {
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
 func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
+
 	// Special check for ./turbo invocation without any args
 	// Return the help message
 	if len(args) == 0 {
@@ -191,14 +192,14 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
 
 	c = &Config{
-		Logger:    logger,
-		Token:     partialConfig.Token,
-		TeamSlug:  partialConfig.TeamSlug,
-		TeamId:    partialConfig.TeamId,
-		ApiUrl:    partialConfig.ApiUrl,
-		LoginUrl:  partialConfig.LoginUrl,
-		ApiClient: apiClient,
-		Version:   turboVersion,
+		Logger:       logger,
+		Token:        partialConfig.Token,
+		TeamSlug:     partialConfig.TeamSlug,
+		TeamId:       partialConfig.TeamId,
+		ApiUrl:       partialConfig.ApiUrl,
+		LoginUrl:     partialConfig.LoginUrl,
+		ApiClient:    apiClient,
+		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),

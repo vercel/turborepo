@@ -7,11 +7,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
-
-	"github.com/hashicorp/go-hclog"
 )
 
 type dummyClient struct {
@@ -37,10 +36,10 @@ func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.Ve
 
 var logger = hclog.Default()
 var cf = &config.Config{
-	Logger:   logger,
-	Version:  "test",
-	ApiUrl:   "api-url",
-	LoginUrl: "login-url",
+	Logger:       logger,
+	TurboVersion: "test",
+	ApiUrl:       "api-url",
+	LoginUrl:     "login-url",
 }
 
 type testResult struct {
