@@ -43,12 +43,12 @@ turbo run build --cache-dir="./my-cache"
 
 #### `--concurrency`
 
-`type: number`
+`type: number | string`
 
-Defaults to `10`. Set/limit the max concurrency of task execution. This must be an integer greater than or equal to `1`. Use `1` to force serial (i.e. one task at a time) execution. This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
+Defaults to `10`. Set/limit the max concurrency of task execution. This must be an integer greater than or equal to `1` or a percentage value like `50%`. Use `1` to force serial (i.e. one task at a time) execution. Use `100%` to use all available logical processors. This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
 
 ```sh
-turbo run build --concurrency=10
+turbo run build --concurrency=50%
 turbo run test --concurrency=1
 ```
 
