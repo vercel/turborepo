@@ -101,7 +101,7 @@ type PackageJSON struct {
 	Workspaces             Workspaces        `json:"workspaces,omitempty"`
 	Private                bool              `json:"private,omitempty"`
 	PackageJSONPath        string
-	Dir                    string
+	Dir                    string // relative path from repo root to the package
 	InternalDeps           []string
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string

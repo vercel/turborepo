@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -65,41 +66,17 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON) (string, error) {
+func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, rootPath string) (string, error) {
 	hashObject, pkgDepsErr := fs.GetPackageDeps(&fs.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
 	})
 	if pkgDepsErr != nil {
-		hashObject = make(map[string]string)
-		// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-		// the directory of a package.
-		ignore, err := safeCompileIgnoreFile(".gitignore")
+		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, rootPath)
 		if err != nil {
 			return "", err
 		}
-
-		ignorePkg, err := safeCompileIgnoreFile(filepath.Join(pkg.Dir, ".gitignore"))
-		if err != nil {
-			return "", err
-		}
-
-		fs.Walk(pkg.Dir, func(name string, isDir bool) error {
-			rootMatch := ignore.MatchesPath(name)
-			otherMatch := ignorePkg.MatchesPath(name)
-			if !rootMatch && !otherMatch {
-				if !isDir {
-					hash, err := fs.GitLikeHashFile(name)
-					if err != nil {
-						return fmt.Errorf("could not hash file %v. \n%w", name, err)
-					}
-					hashObject[strings.TrimPrefix(name, pkg.Dir+"/")] = hash
-				}
-			}
-			return nil
-		})
-
-		// ignorefile rules matched files
+		hashObject = manualHashObject
 	}
 	hashOfFiles, otherErr := fs.HashObject(hashObject)
 	if otherErr != nil {
@@ -108,13 +85,59 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON) (string, error) {
 	return hashOfFiles, nil
 }
 
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath string) (map[string]string, error) {
+	hashObject := make(map[string]string)
+	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
+	// the directory of a package.
+	ignore, err := safeCompileIgnoreFile(filepath.Join(rootPath, ".gitignore"))
+	if err != nil {
+		return nil, err
+	}
+
+	ignorePkg, err := safeCompileIgnoreFile(filepath.Join(rootPath, pkg.Dir, ".gitignore"))
+	if err != nil {
+		return nil, err
+	}
+
+	includePattern := ""
+	if len(inputs) > 0 {
+		includePattern = "{" + strings.Join(inputs, ",") + "}"
+	}
+
+	pathPrefix := filepath.Join(rootPath, pkg.Dir)
+	fs.Walk(pathPrefix, func(name string, isDir bool) error {
+		rootMatch := ignore.MatchesPath(name)
+		otherMatch := ignorePkg.MatchesPath(name)
+		if !rootMatch && !otherMatch {
+			if !isDir {
+				if includePattern != "" {
+					val, err := doublestar.PathMatch(includePattern, name)
+					if err != nil {
+						return err
+					}
+					if !val {
+						return nil
+					}
+				}
+				hash, err := fs.GitLikeHashFile(name)
+				if err != nil {
+					return fmt.Errorf("could not hash file %v. \n%w", name, err)
+				}
+				hashObject[strings.TrimPrefix(name, pathPrefix+"/")] = hash
+			}
+		}
+		return nil
+	})
+	return hashObject, nil
+}
+
 // packageFileHashes is a map from a package and optional input globs to the hash of
 // the matched files in the package.
 type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int) error {
+func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, rootPath string) error {
 	hashTasks := make(util.Set)
 	for _, v := range allTasks {
 		taskID, ok := v.(string)
@@ -148,7 +171,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int) e
 				if !ok {
 					return fmt.Errorf("cannot find package %v", ht.pkg)
 				}
-				hash, err := ht.hash(pkg)
+				hash, err := ht.hash(pkg, rootPath)
 				if err != nil {
 					return err
 				}
