@@ -58,8 +58,8 @@ type PruneOptions struct {
 	docker bool
 }
 
-func parsePruneArgs(args []string, cwd string) (*PruneOptions, error) {
-	var options = &PruneOptions{cwd: cwd}
+func parsePruneArgs(args []string, cwd fs.AbsolutePath) (*PruneOptions, error) {
+	var options = &PruneOptions{cwd: cwd.ToStringDuringMigration()}
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one target must be specified.")

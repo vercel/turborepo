@@ -22,6 +22,22 @@ func UnsafeToAbsolutePath(s string) AbsolutePath {
 	return AbsolutePath(s)
 }
 
+func GetCwd() (AbsolutePath, error) {
+	cwdRaw, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("invalid working directory: %w", err)
+	}
+	cwd, err := CheckedToAbsolutePath(cwdRaw)
+	if err != nil {
+		return "", fmt.Errorf("cwd is not an absolute path %v: %v", cwdRaw, err)
+	}
+	return cwd, nil
+}
+
+func (ap AbsolutePath) ToStringDuringMigration() string {
+	return ap.asString()
+}
+
 func (ap AbsolutePath) Join(args ...string) AbsolutePath {
 	return AbsolutePath(filepath.Join(ap.asString(), filepath.Join(args...)))
 }
@@ -43,14 +59,6 @@ func (ap AbsolutePath) Open() (*os.File, error) {
 func (ap AbsolutePath) ReadFile() ([]byte, error) {
 	return ioutil.ReadFile(ap.asString())
 }
-
-// func (ap AbsolutePath) RepoRel(other AbsolutePath) (RepoRelativePath, error) {
-// 	rel, err := filepath.Rel(ap.asString(), other.asString())
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	return RepoRelativePath(rel), nil
-// }
-
-// type RepoRelativePath string
-// type PackageRelativePath string
+func (ap AbsolutePath) FileExists() bool {
+	return FileExists(ap.asString())
+}
