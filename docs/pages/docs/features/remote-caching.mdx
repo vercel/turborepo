@@ -55,6 +55,33 @@ If you are building and hosting your apps on Vercel, then Remote Caching will be
 
 Please refer to the [Vercel documentation](https://vercel.com/docs/concepts/git/monorepos#turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link) for instructions.
 
+### Artifact Integrity and Authenticity Verification
+
+You can enable Turborepo to sign artifacts with a secret key before uploading them to the Remote Cache. Turborepo uses `HMAC-SHA256` signatures on artifacts using a secret key you provide.
+Turborepo will verify the remote cache artifacts' integrity and authenticity when they're downloaded.
+Any artifacts that fail to verify will be ignored and treated as a cache miss by Turborepo.
+
+To enable this feature, set the `remoteCache` options on your turbo config to include the `signature` option:
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "remoteCache": {
+    "signature": {
+      // Indicates if signature verifcation is enabled.
+      "enabled": true,
+      // The environment variable that contains the value of the secret key
+      // used for signing and verifying signatures. You can use any
+      // environment variable name.
+      "keyEnv": "TURBO_REMOTE_CACHE_SIGNATURE_KEY",
+      // The secret key to use for signing and verifying signatures.
+      // If `keyEnv` is not provided, this value is required.
+      "key": *****
+    }
+  }
+}
+```
+
 ## Custom Remote Caches
 
 You can self-host your own Remote Cache or use other remote caching service providers as long as they comply with Turborepo's Remote Caching Server API.
