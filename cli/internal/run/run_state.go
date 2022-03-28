@@ -88,6 +88,9 @@ type RunState struct {
 }
 
 func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
+	if runOptions.profile != "" {
+		chrometracing.EnableTracing()
+	}
 	return &RunState{
 		Success:   0,
 		Failure:   0,
@@ -279,7 +282,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(chrometracing.Path(), name, fs.DirPermissions); err != nil {
+		if err := fs.CopyFile(outputPath, name, fs.DirPermissions); err != nil {
 			return err
 		}
 	}
@@ -289,14 +292,14 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		r.done <- "done"
 	}
 	maybeFullTurbo := ""
-	if r.Cached == r.Attempted {
+	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
 	if r.runOptions.stream {
 		Ui.Output("") // Clear the line
-		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total", r.Cached+r.Success, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total", r.Cached, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
+		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
+		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
+		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 		Ui.Output("")
 	} else {
 

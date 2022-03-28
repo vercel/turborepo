@@ -2,7 +2,9 @@ package cache
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -23,6 +26,7 @@ type httpCache struct {
 	config         *config.Config
 	requestLimiter limiter
 	recorder       analytics.Recorder
+	signerVerifier *ArtifactSignatureAuthentication
 }
 
 type limiter chan struct{}
@@ -48,7 +52,22 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
-	return cache.config.ApiClient.PutArtifact(hash, duration, r)
+
+	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
+	// additional overhead by doing the ioutil.ReadAll here instead.
+	artifactBody, err := ioutil.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+	}
+	tag := ""
+	if cache.signerVerifier.isEnabled() {
+		tag, err = cache.signerVerifier.generateTag(hash, artifactBody)
+		if err != nil {
+			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+		}
+	}
+	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -76,11 +95,12 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		target, _ = os.Readlink(name)
 	}
-	hdr, err := tar.FileInfoHeader(info, target)
+	hdr, err := tar.FileInfoHeader(info, filepath.ToSlash(target))
 	if err != nil {
 		return err
 	}
-	hdr.Name = name
+	// Ensure posix path for filename written in header.
+	hdr.Name = filepath.ToSlash(name)
 	// Zero out all timestamps.
 	hdr.ModTime = mtime
 	hdr.AccessTime = mtime
@@ -132,8 +152,8 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
-func (cache *httpCache) retrieve(key string) (bool, []string, int, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(key, nil)
+func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
+	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
 	if err != nil {
 		return false, nil, 0, err
 	}
@@ -155,7 +175,29 @@ func (cache *httpCache) retrieve(key string) (bool, []string, int, error) {
 		b, _ := ioutil.ReadAll(resp.Body)
 		return false, files, duration, fmt.Errorf("%s", string(b))
 	}
-	gzr, err := gzip.NewReader(resp.Body)
+	artifactReader := resp.Body
+	if cache.signerVerifier.isEnabled() {
+		expectedTag := resp.Header.Get("x-artifact-tag")
+		if expectedTag == "" {
+			// If the verifier is enabled all incoming artifact downloads must have a signature
+			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
+		}
+		b, _ := ioutil.ReadAll(artifactReader)
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+		}
+		isValid, err := cache.signerVerifier.validate(hash, b, expectedTag)
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+		}
+		if !isValid {
+			err = fmt.Errorf("artifact verification failed: artifact tag does not match expected tag %s", expectedTag)
+			return false, nil, 0, err
+		}
+		// The artifact has been verified and the body can be read and untarred
+		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
+	}
+	gzr, err := gzip.NewReader(artifactReader)
 	if err != nil {
 		return false, files, duration, err
 	}
@@ -234,5 +276,11 @@ func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache
 		config:         config,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
+		signerVerifier: &ArtifactSignatureAuthentication{
+			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
+			// enforcing team restrictions for repositories.
+			teamId:  config.TeamId,
+			options: &config.TurboConfigJSON.RemoteCacheOptions.SignatureOptions,
+		},
 	}
 }

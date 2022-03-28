@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/mitchellh/cli"
+	"github.com/pyr-sh/dag"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -39,23 +41,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
-			},
-		},
-		{
-			"cwd",
-			[]string{"foo", "--cwd=zop"},
-			&RunOptions{
-				includeDependents:   true,
-				stream:              true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         10,
-				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
-				profile:             "",
-				cwd:                 "zop",
-				cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -74,6 +61,8 @@ func TestParseConfig(t *testing.T) {
 				scope:               []string{"foo", "blah"},
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -91,6 +80,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -108,6 +99,8 @@ func TestParseConfig(t *testing.T) {
 				profile:             "",
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -126,6 +119,8 @@ func TestParseConfig(t *testing.T) {
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{"--boop", "zoop"},
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -144,22 +139,24 @@ func TestParseConfig(t *testing.T) {
 				cwd:                 defaultCwd,
 				cacheFolder:         defaultCacheFolder,
 				passThroughArgs:     []string{},
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
-			"since and scope imply including dependencies for backwards compatibility",
-			[]string{"foo", "--scope=bar", "--since=some-ref"},
+			"can specify filter patterns",
+			[]string{"foo", "--filter=bar", "--filter=...[main]"},
 			&RunOptions{
-				includeDependents:   true,
-				stream:              true,
-				bail:                true,
-				concurrency:         10,
-				includeDependencies: true,
-				cache:               true,
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
-				scope:               []string{"bar"},
-				since:               "some-ref",
+				includeDependents: true,
+				filterPatterns:    []string{"bar", "...[main]"},
+				stream:            true,
+				bail:              true,
+				concurrency:       10,
+				cache:             true,
+				cwd:               defaultCwd,
+				cacheFolder:       defaultCacheFolder,
+				cacheHitLogsMode:  FullLogs,
+				cacheMissLogsMode: FullLogs,
 			},
 		},
 	}
@@ -173,13 +170,50 @@ func TestParseConfig(t *testing.T) {
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ui)
+			actual, err := parseRunArgs(tc.Args, defaultCwd, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
-			assert.EqualValues(t, actual, tc.Expected)
+			assert.EqualValues(t, tc.Expected, actual)
 		})
 	}
+}
+
+func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
+	expected := &RunOptions{
+		includeDependents:   true,
+		stream:              true,
+		bail:                true,
+		dotGraph:            "",
+		concurrency:         10,
+		includeDependencies: false,
+		cache:               true,
+		forceExecution:      false,
+		profile:             "",
+		cwd:                 "zop",
+		cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
+		cacheHitLogsMode:    FullLogs,
+		cacheMissLogsMode:   FullLogs,
+	}
+
+	ui := &cli.BasicUi{
+		Reader:      os.Stdin,
+		Writer:      os.Stdout,
+		ErrorWriter: os.Stderr,
+	}
+
+	t.Run("accepts cwd argument", func(t *testing.T) {
+		// Note that the Run parsing actually ignores `--cwd=` arg since
+		// the `--cwd=` is parsed when setting up the global Config. This value is
+		// passed directly as an argument to the parser.
+		// We still need to ensure run accepts cwd flag and doesn't error.
+		actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, "zop", ui)
+		if err != nil {
+			t.Fatalf("invalid parse: %#v", err)
+		}
+		assert.EqualValues(t, expected, actual)
+	})
+
 }
 
 func TestGetTargetsFromArguments(t *testing.T) {
@@ -267,5 +301,49 @@ func TestGetTargetsFromArguments(t *testing.T) {
 				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func Test_dontSquashTasks(t *testing.T) {
+	topoGraph := &dag.AcyclicGraph{}
+	topoGraph.Add("a")
+	topoGraph.Add("b")
+	// no dependencies between packages
+
+	pipeline := map[string]fs.Pipeline{
+		"build": {
+			Outputs:   []string{},
+			DependsOn: []string{"generate"},
+		},
+		"generate": {
+			Outputs:   []string{},
+			DependsOn: []string{},
+		},
+		"b#build": {
+			Outputs:   []string{},
+			DependsOn: []string{},
+		},
+	}
+	filteredPkgs := make(util.Set)
+	filteredPkgs.Add("a")
+	filteredPkgs.Add("b")
+	rs := &runSpec{
+		FilteredPkgs: filteredPkgs,
+		Targets:      []string{"build"},
+		Opts:         &RunOptions{},
+	}
+	engine, err := buildTaskGraph(topoGraph, pipeline, rs)
+	if err != nil {
+		t.Fatalf("failed to build task graph: %v", err)
+	}
+	toRun := engine.TaskGraph.Vertices()
+	// 4 is the 3 tasks + root
+	if len(toRun) != 4 {
+		t.Errorf("expected 4 tasks, got %v", len(toRun))
+	}
+	for task := range pipeline {
+		if _, ok := engine.Tasks[task]; !ok {
+			t.Errorf("expected to find task %v in the task graph, but it is missing", task)
+		}
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -71,6 +70,14 @@ type runSpec struct {
 	Opts         *RunOptions
 }
 
+type LogsMode string
+
+const (
+	FullLogs LogsMode = "full"
+	HashLogs LogsMode = "hash"
+	NoLogs   LogsMode = "none"
+)
+
 func (rs *runSpec) ArgsForTask(task string) []string {
 	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
 	for _, target := range rs.Targets {
@@ -110,6 +117,12 @@ Options:
   --continue             Continue execution even if a task exits with an error
                          or non-zero exit code. The default behavior is to bail
                          immediately. (default false)
+  --filter="<selector>"  Use the given selector to specify package(s) to act as
+                         entry points. The syntax mirror's pnpm's syntax, and
+                         additional documentation and examples can be found in
+                         turbo's documentation TODO: LINK.
+                         --filter can be specified multiple times. Packages that
+                         match any filter will be included.
   --force                Ignore the existing cache (to force execution).
                          (default false)
   --graph                Generate a Dot graph of the task execution.
@@ -133,6 +146,11 @@ Options:
                          (default false)
   --no-cache             Avoid saving task results to the cache. Useful for
                          development/watch tasks. (default false)
+  --output-logs          Set type of process output logging. Use full to show
+                         all output. Use hash-only to show only turbo-computed
+                         task hashes. Use new-only to show only new output with
+                         only hashes for cached tasks. Use none to hide process
+                         output. (default full)
   --dry/--dry-run[=json] List the packages in scope and the tasks that would be run,
                          but don't actually run them. Passing --dry=json or
                          --dry-run=json will render the output in JSON format.
@@ -150,7 +168,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Config.Cwd, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -163,7 +181,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	targets, err := getTargetsFromArguments(args, ctx.TurboConfig)
+	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -178,7 +196,7 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.ScopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
 	}
@@ -189,7 +207,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         ctx.TurboConfig.Pipeline,
+		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
 		SCC:              ctx.SCC,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
@@ -245,12 +263,6 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
-	}
-	// We remove nodes that aren't in the final filter set
-	for _, toRemove := range vertexSet.Difference(rs.FilteredPkgs) {
-		if toRemove != g.RootNode {
-			g.TopologicalGraph.Remove(toRemove)
-		}
 	}
 
 	// If we are running in parallel, then we remove all the edges in the graph
@@ -358,8 +370,6 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 					deps.Add(from)
 				}
 			}
-			_, id := util.GetPackageTaskFromId(taskName)
-			taskName = id
 		} else {
 			for _, from := range value.DependsOn {
 				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
@@ -393,6 +403,8 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline
 // RunOptions holds the current run operations configuration
 
 type RunOptions struct {
+	// patterns supplied to --filter on the commandline
+	filterPatterns []string
 	// Whether to include dependent impacted consumers in execution (defaults to true)
 	includeDependents bool
 	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
@@ -427,12 +439,18 @@ type RunOptions struct {
 	bail            bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
-	only       bool
-	dryRun     bool
-	dryRunJson bool
+	only bool
+	// Task logs output modes (cached and not cached tasks):
+	// full - show all,
+	// hash - only show task hash,
+	// none - show nothing
+	cacheHitLogsMode  LogsMode
+	cacheMissLogsMode LogsMode
+	dryRun            bool
+	dryRunJson        bool
 }
 
-func (ro *RunOptions) ScopeOpts() *scope.Opts {
+func (ro *RunOptions) scopeOpts() *scope.Opts {
 	return &scope.Opts{
 		IncludeDependencies: ro.includeDependencies,
 		IncludeDependents:   ro.includeDependents,
@@ -441,6 +459,7 @@ func (ro *RunOptions) ScopeOpts() *scope.Opts {
 		Cwd:                 ro.cwd,
 		IgnorePatterns:      ro.ignore,
 		GlobalDepPatterns:   ro.globalDeps,
+		FilterPatterns:      ro.filterPatterns,
 	}
 }
 
@@ -457,35 +476,32 @@ func getDefaultRunOptions() *RunOptions {
 		forceExecution:      false,
 		stream:              true,
 		only:                false,
+		cacheHitLogsMode:    FullLogs,
+		cacheMissLogsMode:   FullLogs,
 	}
 }
 
-func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("invalid working directory: %w", err)
-	}
 	runOptions.cwd = cwd
-
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
-	// --scope and --since implies --include-dependencies for backwards compatibility
-	// When we switch to cobra we will need to track if it's been set manually. Currently
-	// it's only possible to set to true, but in the future a user could theoretically set
-	// it to false and override the default behavior.
-	includDepsSet := false
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
 			break
 		} else if strings.HasPrefix(arg, "--") {
 			switch {
+			case strings.HasPrefix(arg, "--filter="):
+				filterPattern := arg[len("--filter="):]
+				if filterPattern != "" {
+					runOptions.filterPatterns = append(runOptions.filterPatterns, filterPattern)
+				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
 					runOptions.since = arg[len("--since="):]
@@ -501,10 +517,6 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--global-deps="):
 				if len(arg[len("--global-deps="):]) > 0 {
 					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
-				}
-			case strings.HasPrefix(arg, "--cwd="):
-				if len(arg[len("--cwd="):]) > 0 {
-					runOptions.cwd = arg[len("--cwd="):]
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
@@ -541,24 +553,37 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 				output.Warn("[WARNING] The --serial flag has been deprecated and will be removed in future versions of turbo. Please use `--concurrency=1` instead")
 				runOptions.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
-				if i, err := strconv.Atoi(arg[len("--concurrency="):]); err != nil {
-					return nil, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a positive integer greater than or equal to 1: %w", err)
+				concurrencyRaw := arg[len("--concurrency="):]
+				if concurrency, err := util.ParseConcurrency(concurrencyRaw); err != nil {
+					return nil, err
 				} else {
-					if i >= 1 {
-						runOptions.concurrency = i
-					} else {
-						return nil, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
-					}
+					runOptions.concurrency = concurrency
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
 				runOptions.includeDependencies = true
-				includDepsSet = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
+			case strings.HasPrefix(arg, "--output-logs="):
+				outputLogsMode := arg[len("--output-logs="):]
+				switch outputLogsMode {
+				case "full":
+					runOptions.cacheMissLogsMode = FullLogs
+					runOptions.cacheHitLogsMode = FullLogs
+				case "none":
+					runOptions.cacheMissLogsMode = NoLogs
+					runOptions.cacheHitLogsMode = NoLogs
+				case "hash-only":
+					runOptions.cacheMissLogsMode = HashLogs
+					runOptions.cacheHitLogsMode = HashLogs
+				case "new-only":
+					runOptions.cacheMissLogsMode = FullLogs
+					runOptions.cacheHitLogsMode = HashLogs
+				default:
+					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
+				}
 			case strings.HasPrefix(arg, "--dry-run"):
 				runOptions.dryRun = true
 				if strings.HasPrefix(arg, "--dry-run=json") {
@@ -577,13 +602,11 @@ func parseRunArgs(args []string, output cli.Ui) (*RunOptions, error) {
 			case strings.HasPrefix(arg, "--cpuprofile"):
 			case strings.HasPrefix(arg, "--heap"):
 			case strings.HasPrefix(arg, "--no-gc"):
+			case strings.HasPrefix(arg, "--cwd="):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
 			}
 		}
-	}
-	if len(runOptions.scope) != 0 && runOptions.since != "" && !includDepsSet {
-		runOptions.includeDependencies = true
 	}
 
 	// Force streaming output in CI/CD non-interactive mode
@@ -673,7 +696,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
-	return 0
+	return exitCode
 }
 
 type hashedTask struct {
@@ -754,7 +777,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
@@ -763,9 +786,17 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+	if outputLogsMode != NoLogs {
+		scan := bufio.NewScanner(f)
+		if outputLogsMode == HashLogs {
+			//Writing to Stdout only the "cache hit, replaying output" line
+			scan.Scan()
+			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
+		} else {
+			for scan.Scan() {
+				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+			}
+		}
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -864,18 +895,18 @@ func (e *execContext) exec(pt *packageTask) error {
 		} else if hit {
 			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
 				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false)
+				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
 
 			return nil
 		}
-		if e.rs.Opts.stream {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 		}
 	} else {
-		if e.rs.Opts.stream {
+		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 		}
 	}
@@ -921,7 +952,12 @@ func (e *execContext) exec(pt *packageTask) error {
 		bufWriter := bufio.NewWriter(output)
 		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
 		defer bufWriter.Flush()
-		writer = io.MultiWriter(os.Stdout, bufWriter)
+		if e.rs.Opts.cacheMissLogsMode == NoLogs || e.rs.Opts.cacheMissLogsMode == HashLogs {
+			// only write to log file, not to stdout
+			writer = bufWriter
+		} else {
+			writer = io.MultiWriter(os.Stdout, bufWriter)
+		}
 	}
 
 	logger := log.New(writer, "", 0)

@@ -132,7 +132,7 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) error {
+func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
 	if err := c.okToRequest(); err != nil {
 		return err
 	}
@@ -143,11 +143,16 @@ func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) 
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), rawBody)
+
+	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), artifactBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
+	if tag != "" {
+		req.Header.Set("x-artifact-tag", tag)
+	}
+
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}

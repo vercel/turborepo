@@ -7,6 +7,7 @@ import path from "path";
 const basicPipeline = {
   pipeline: {
     test: {
+      dependsOn: ["^build"],
       outputs: [],
     },
     lint: {
@@ -52,6 +53,48 @@ for (let s of suites) {
   s.run();
 }
 
+type Task = {
+  taskId: string;
+  task: string;
+  package: string;
+  hash: string;
+  command: string;
+  outputs: string[];
+  logFile: string;
+  directory: string;
+  dependencies: string[];
+  dependents: string[];
+};
+
+type DryRun = {
+  packages: string[];
+  tasks: Task[];
+};
+
+const matchTask =
+  <T, V>(predicate: (dryRun: DryRun, val: T) => V) =>
+  (dryRun: DryRun) =>
+  (val: T): V => {
+    return predicate(dryRun, val);
+  };
+const includesTaskIdPredicate = (dryRun: DryRun, task: string): boolean => {
+  for (const entry of dryRun.tasks) {
+    if (entry.taskId === task) {
+      return true;
+    }
+  }
+  return false;
+};
+const includesTaskId = matchTask(includesTaskIdPredicate);
+const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
+  for (const entry of dryRun.tasks) {
+    if (entry.taskId === taskId) {
+      return entry.hash;
+    }
+  }
+  throw new Error(`missing task with id ${taskId}`);
+};
+
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
@@ -61,6 +104,46 @@ function runSmokeTests<T>(
   suite.after(() => {
     repo.cleanup();
   });
+
+  suite(
+    `${npmClient} builds${options.cwd ? " from " + options.cwd : ""}`,
+    async () => {
+      const results = repo.turbo("run", ["build", "--dry=json"], options);
+      const dryRun: DryRun = JSON.parse(results.stdout);
+      // expect to run all packages
+      const expectTaskId = includesTaskId(dryRun);
+      for (const pkg of ["a", "b", "c"]) {
+        assert.ok(
+          dryRun.packages.includes(pkg),
+          `Expected to include package ${pkg}`
+        );
+        assert.ok(
+          expectTaskId(pkg + "#build"),
+          `Expected to include task ${pkg}#build`
+        );
+      }
+
+      // actually run the build
+      repo.turbo("run", ["build"], options);
+
+      // assert that hashes are stable across multiple runs
+      const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
+      const secondDryRun: DryRun = JSON.parse(secondRun.stdout);
+
+      repo.turbo("run", ["build"], options);
+
+      const thirdRun = repo.turbo("run", ["build", "--dry=json"], options);
+      const thirdDryRun: DryRun = JSON.parse(thirdRun.stdout);
+      const getThirdRunHash = matchTask(taskHashPredicate)(thirdDryRun);
+      for (const entry of secondDryRun.tasks) {
+        assert.equal(
+          getThirdRunHash(entry.taskId),
+          entry.hash,
+          `Hashes for ${entry.taskId} did not match`
+        );
+      }
+    }
+  );
 
   suite(
     `${npmClient} runs tests and logs${
@@ -86,6 +169,29 @@ function runSmokeTests<T>(
   );
 
   suite(
+    `${npmClient} runs lint and logs${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      const results = repo.turbo("run", ["lint", "--stream"], options);
+      assert.equal(0, results.exitCode, "exit code should be 0");
+      const commandOutput = getCommandOutputAsArray(results);
+      const hash = getHashFromOutput(commandOutput, "c#lint");
+      assert.ok(!!hash, "No hash for c#lint");
+      const cachedLogFilePath = getCachedLogFilePathForTask(
+        getCachedDirForHash(repo, hash),
+        path.join("packages", "c"),
+        "lint"
+      );
+      let text = "";
+      assert.not.throws(() => {
+        text = repo.readFileSync(cachedLogFilePath);
+      }, `Could not read cached log file from cache ${cachedLogFilePath}`);
+      assert.ok(text.includes("linting c"), "Contains correct output");
+    }
+  );
+
+  suite(
     `${npmClient} handles filesystem changes${
       options.cwd ? " from " + options.cwd : ""
     }`,
@@ -102,92 +208,146 @@ function runSmokeTests<T>(
           options
         )
       );
+
       assert.fixture(
-        `• Packages changed since main: a`,
         sinceCommandOutputNoCache[0],
-        "Calculates changed packages (--since)"
-      );
-      assert.fixture(
         `• Packages in scope: a`,
-        sinceCommandOutputNoCache[1],
         "Packages in scope"
       );
       assert.fixture(
+        sinceCommandOutputNoCache[1],
         `• Running test in 1 packages`,
-        sinceCommandOutputNoCache[2],
         "Runs only in changed packages"
       );
-      assert.fixture(
-        sinceCommandOutputNoCache[3],
-        `a:test: cache miss, executing ${getHashFromOutput(
-          sinceCommandOutputNoCache,
-          "a#test"
-        )}`,
+
+      assert.ok(
+        sinceCommandOutputNoCache.includes(
+          `a:test: cache miss, executing ${getHashFromOutput(
+            sinceCommandOutputNoCache,
+            "a#test"
+          )}`
+        ),
         "Cache miss in changed package"
       );
 
       const sinceCommandOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["test", "--since=main", "--stream"], options)
+        repo.turbo(
+          "run",
+          ["test", "--since=main", "--stream", "--output-logs=hash-only"],
+          options
+        )
       );
 
       assert.fixture(
-        `• Packages changed since main: a`,
         sinceCommandOutput[0],
-        "Calculates changed packages (--since)"
-      );
-      assert.fixture(
         `• Packages in scope: a`,
-        sinceCommandOutput[1],
         "Packages in scope"
       );
       assert.fixture(
+        sinceCommandOutput[1],
         `• Running test in 1 packages`,
-        sinceCommandOutput[2],
         "Runs only in changed packages"
       );
-      assert.fixture(
-        sinceCommandOutput[3],
-        `a:test: cache miss, executing ${getHashFromOutput(
-          sinceCommandOutput,
-          "a#test"
-        )}`,
+
+      assert.ok(
+        sinceCommandOutput.includes(
+          `a:test: cache miss, executing ${getHashFromOutput(
+            sinceCommandOutput,
+            "a#test"
+          )}`
+        ),
         "Cache miss in changed package"
       );
 
       // Check cache hit after another run
       const sinceCommandSecondRunOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["test", "--since=main", "--stream"], options)
+        repo.turbo(
+          "run",
+          ["test", "--since=main", "--stream", "--output-logs=hash-only"],
+          options
+        )
       );
       assert.equal(
-        `• Packages changed since main: a`,
         sinceCommandSecondRunOutput[0],
-        "Calculates changed packages (--since) after a second run"
-      );
-      assert.equal(
         `• Packages in scope: a`,
-        sinceCommandSecondRunOutput[1],
         "Packages in scope after a second run"
       );
       assert.equal(
+        sinceCommandSecondRunOutput[1],
         `• Running test in 1 packages`,
-        sinceCommandSecondRunOutput[2],
         "Runs only in changed packages after a second run"
       );
 
-      assert.fixture(
-        sinceCommandSecondRunOutput[3],
-        `a:test: cache hit, replaying output ${getHashFromOutput(
-          sinceCommandSecondRunOutput,
-          "a#test"
-        )}`,
+      assert.ok(
+        sinceCommandSecondRunOutput.includes(
+          `b:build: cache hit, replaying output ${getHashFromOutput(
+            sinceCommandSecondRunOutput,
+            "b#build"
+          )}`
+        ),
+        "Cache hit building dependency after a second run"
+      );
 
+      assert.ok(
+        sinceCommandSecondRunOutput.includes(
+          `a:test: cache hit, replaying output ${getHashFromOutput(
+            sinceCommandSecondRunOutput,
+            "a#test"
+          )}`
+        ),
         "Cache hit in changed package after a second run"
+      );
+
+      // run a task without dependencies
+      const lintOutput = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+      assert.equal(
+        lintOutput[0],
+        `• Packages in scope: a`,
+        "Packages in scope for lint"
+      );
+      assert.ok(
+        lintOutput.includes(
+          `a:lint: cache miss, executing ${getHashFromOutput(
+            lintOutput,
+            "a#lint"
+          )}`
+        ),
+        "Cache miss, a has changed"
       );
 
       // Check that hashes are different and trigger a cascade
       repo.commitFiles({
         [path.join("packages", "b", "test.js")]: `console.log('testingz b');`,
       });
+
+      const secondLintRun = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+
+      assert.equal(
+        secondLintRun[0],
+        `• Packages in scope: a`,
+        "Packages in scope for lint"
+      );
+      assert.ok(
+        secondLintRun.includes(
+          `a:lint: cache miss, executing ${getHashFromOutput(
+            secondLintRun,
+            "a#lint"
+          )}`
+        ),
+        "Cache miss, dependency changes are irrelevant for lint task but we don't know that yet"
+      );
 
       const commandOnceBHasChangedOutput = getCommandOutputAsArray(
         repo.turbo("run", ["test", "--stream"], options)
