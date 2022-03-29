@@ -215,6 +215,15 @@ func loginSSO(c *config.Config, ssoTeam string, deps loginDeps) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to save teamId")
 		}
+		deps.ui.Info(util.Sprintf("${CYAN}Remote Caching enabled for %s${RESET}", ssoTeam))
+		deps.ui.Info("")
+		deps.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
+		deps.ui.Info("  all your team’s Vercel projects. It also can share outputs")
+		deps.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
+		deps.ui.Info("  This results in faster build times and deployments for your team.")
+		deps.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+		deps.ui.Info("")
+		deps.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {
 
 		deps.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))

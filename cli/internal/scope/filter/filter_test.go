@@ -440,6 +440,19 @@ func Test_SCM(t *testing.T) {
 		},
 		// Note: missing test here that takes advantage of automatically exempting
 		// test-only changes from pulling in dependents
+		//
+		// turbo-specific tests below here
+		{
+			"changed package was requested scope, and we're matching dependencies",
+			[]*TargetSelector{
+				{
+					diff:              "HEAD~1",
+					namePattern:       "package-1",
+					matchDependencies: true,
+				},
+			},
+			[]string{"package-1"},
+		},
 	}
 
 	for _, tc := range testCases {
