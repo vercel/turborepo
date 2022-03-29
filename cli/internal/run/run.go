@@ -496,6 +496,10 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 	runOptions.cwd = cwd
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
+	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
+		runOptions.remoteOnly = true
+	}
+
 	for argIndex, arg := range args {
 		if arg == "--" {
 			runOptions.passThroughArgs = args[argIndex+1:]
