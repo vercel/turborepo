@@ -120,7 +120,7 @@ Options:
   --filter="<selector>"  Use the given selector to specify package(s) to act as
                          entry points. The syntax mirror's pnpm's syntax, and
                          additional documentation and examples can be found in
-                         turbo's documentation TODO: LINK.
+                         turbo's documentation https://turborepo.org/docs/reference/command-line-reference#--filter
                          --filter can be specified multiple times. Packages that
                          match any filter will be included.
   --force                Ignore the existing cache (to force execution).
