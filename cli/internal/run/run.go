@@ -154,8 +154,6 @@ Options:
   --dry/--dry-run[=json] List the packages in scope and the tasks that would be run,
                          but don't actually run them. Passing --dry=json or
                          --dry-run=json will render the output in JSON format.
-  --remote-only		     Ignore the local filesystem cache for all tasks. Only
-                         allow reading and caching artifacts using the remote cache.
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -450,8 +448,6 @@ type RunOptions struct {
 	cacheMissLogsMode LogsMode
 	dryRun            bool
 	dryRunJson        bool
-	// Only use the Remote Cache and ignore the local cache
-	remoteOnly bool
 }
 
 func (ro *RunOptions) scopeOpts() *scope.Opts {
@@ -482,7 +478,6 @@ func getDefaultRunOptions() *RunOptions {
 		only:                false,
 		cacheHitLogsMode:    FullLogs,
 		cacheMissLogsMode:   FullLogs,
-		remoteOnly:          false,
 	}
 }
 
@@ -599,8 +594,6 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 				if strings.HasPrefix(arg, "--dry=json") {
 					runOptions.dryRunJson = true
 				}
-			case strings.HasPrefix(arg, "--remote-only"):
-				runOptions.remoteOnly = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
@@ -664,7 +657,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
+	turboCache := cache.New(c.Config, analyticsClient)
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())

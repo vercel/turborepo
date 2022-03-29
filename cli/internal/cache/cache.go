@@ -33,8 +33,8 @@ type CacheEvent struct {
 }
 
 // New creates a new cache
-func New(config *config.Config, remoteOnly bool, recorder analytics.Recorder) Cache {
-	c := newSyncCache(config, remoteOnly, recorder)
+func New(config *config.Config, recorder analytics.Recorder) Cache {
+	c := newSyncCache(config, false, recorder)
 	if config.Cache.Workers > 0 {
 		return newAsyncCache(c, config)
 	}
