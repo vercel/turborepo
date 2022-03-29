@@ -98,44 +98,12 @@ export interface Pipeline {
 
 export interface RemoteCache {
   /**
-   * The teamId used in requests to the Remote Cache.
-   */
-  teamId?: string;
-  /**
-   * Configuration options that control the integrity and authentication checks for
-   * artifacts uploaded to and downloaded from the remote cache.
-   *
-   * @default {}
-   */
-  signature?: Signature;
-}
-
-export interface Signature {
-  /**
    * Indicates if signature verification is enabled for requests to the remote cache. When
-   * `enabled` is `true`, Turborepo will sign every uploaded artifact using the `key`.
-   * Turborepo will reject any downloaded artifacts that have an invalid signature or are
-   * missing a signature.
+   * `true`, Turborepo will sign every uploaded artifact using the value of the environment
+   * variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts
+   * that have an invalid signature or are missing a signature.
    *
    * @default false
    */
-  enabled?: boolean;
-  /**
-   * The secret key to use for signing and verifying signatures on artifacts uploaded to
-   * the remote cache.
-   *
-   * If both `key` and `keyEnv` are present, then `key` will be used.
-   *
-   * @default ""
-   */
-  key?: string;
-  /**
-   * The environment variable that contains the value of the secret key used for signing
-   * and verifying signatures on artifacts uploaded to the remote cache.
-   *
-   * If both `key` and `keyEnv` are present, then `key` will be used.
-   *
-   * @default ""
-   */
-  keyEnv?: string;
+  signature?: boolean;
 }
