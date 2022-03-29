@@ -132,8 +132,10 @@ Options:
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
-  --team                 The slug of the turborepo.com team.
-  --token                A turborepo.com personal access token.
+  --team                 The slug or team ID of the remote cache team.
+  --token                A bearer token for remote caching. You can also set 
+                         the value of the current token by setting an 
+                         environment variable named TURBO_TOKEN.
   --ignore               Files to ignore when calculating changed files
                          (i.e. --since). Supports globs.
   --profile              File to write turbo's performance profile output into.
