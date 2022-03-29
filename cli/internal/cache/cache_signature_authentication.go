@@ -26,7 +26,7 @@ func (asa *ArtifactSignatureAuthentication) isEnabled() bool {
 func (asa *ArtifactSignatureAuthentication) secretKey() ([]byte, error) {
 	secret := os.Getenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY")
 	if len(secret) == 0 {
-		return nil, errors.New("signature secret key not found. You must specify a secret key or keyEnv name in your turbo.json config")
+		return nil, errors.New("signature secret key not found. You must specify a secret key in the TURBO_REMOTE_CACHE_SIGNATURE_KEY environment variable")
 	}
 	return []byte(secret), nil
 }
