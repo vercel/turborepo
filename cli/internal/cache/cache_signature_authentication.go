@@ -10,29 +10,21 @@ import (
 	"hash"
 	"io"
 	"os"
-
-	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 type ArtifactSignatureAuthentication struct {
 	teamId  string
-	options *fs.SignatureOptions
+	enabled bool
 }
 
 func (asa *ArtifactSignatureAuthentication) isEnabled() bool {
-	return asa.options.Enabled
+	return asa.enabled
 }
 
 // If the secret key is not found or the secret key length is 0, an error is returned
 // Preference is given to the enviornment specifed secret key.
 func (asa *ArtifactSignatureAuthentication) secretKey() ([]byte, error) {
-	secret := ""
-	switch {
-	case len(asa.options.KeyEnv) > 0:
-		secret = os.Getenv(asa.options.KeyEnv)
-	case len(asa.options.Key) > 0:
-		secret = asa.options.Key
-	}
+	secret := os.Getenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY")
 	if len(secret) == 0 {
 		return nil, errors.New("signature secret key not found. You must specify a secret key or keyEnv name in your turbo.json config")
 	}
