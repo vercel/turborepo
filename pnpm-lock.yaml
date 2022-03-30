@@ -78,8 +78,8 @@ importers:
       eslint-config-prettier: 8.4.0
       js-cookie: 3.0.1
       next: 12.1.0
-      nextra: 2.0.0-alpha.46
-      nextra-theme-docs: ^2.0.0-alpha.46
+      nextra: 2.0.0-alpha.48
+      nextra-theme-docs: ^2.0.0-alpha.48
       postcss: 8.3.5
       react: 17.0.2
       react-dom: 17.0.2
@@ -101,8 +101,8 @@ importers:
       copy-to-clipboard: 3.3.1
       js-cookie: 3.0.1
       next: 12.1.0_dfc0b93d99fba272c9564d3139a2581a
-      nextra: 2.0.0-alpha.46_react@17.0.2
-      nextra-theme-docs: 2.0.0-alpha.46_caa633a00319350dbda42996613fe26c
+      nextra: 2.0.0-alpha.48_react@17.0.2
+      nextra-theme-docs: 2.0.0-alpha.48_caa633a00319350dbda42996613fe26c
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
       react-hot-toast: 2.1.1_83aecc314a46186883faa129c0399856
@@ -980,8 +980,8 @@ packages:
       '@jridgewell/sourcemap-codec': 1.4.11
     dev: true
 
-  /@mdx-js/mdx/2.0.0:
-    resolution: {integrity: sha512-Q/Zv+gdm80qcxpmL/Dtd/b9+UyZjjJUCQeZyywLAQqre648hRYgeGNPu7Bl2hB7M8/WBLXpabQEKW3dmGdDTDQ==}
+  /@mdx-js/mdx/2.1.0:
+    resolution: {integrity: sha512-AuZGNLSGrytOd7a81E2SsWAOYg/eV5I51BlUPc11PPmPwhpovu7mwfyQ8PH1jxhdH0Is6aRtXHERuDxon0TluQ==}
     dependencies:
       '@types/estree-jsx': 0.0.1
       '@types/mdx': 2.0.1
@@ -1004,8 +1004,8 @@ packages:
       - supports-color
     dev: false
 
-  /@mdx-js/react/2.0.0_react@17.0.2:
-    resolution: {integrity: sha512-icpMd43xqORnHSVRwALZv3ELN3IS7VS3BL+FyH2FFergQPSQ21FX0lN+OMIs0X+3dGY1L0DLhBCkMfPO+yDG7Q==}
+  /@mdx-js/react/2.1.0_react@17.0.2:
+    resolution: {integrity: sha512-RlPnY2WcVe91pOilf3Rmu1pArKj7gSK03uoaMFKjPWTyh9t6t1VYGSX40twlpChNSPmbcQ29D0xvSBOVMWA6yw==}
     peerDependencies:
       react: '>=16'
     dependencies:
@@ -2561,6 +2561,10 @@ packages:
   /component-emitter/1.3.0:
     resolution: {integrity: sha512-Rd3se6QB+sO1TwqZjscQrurpEPIfO0/yYnSin6Q/rD3mOutHvUrCAhJub3r90uNb+SESBuE0QYoB90YdfatsRg==}
     dev: true
+
+  /compute-scroll-into-view/1.0.17:
+    resolution: {integrity: sha512-j4dx+Fb0URmzbwwMUrhqWM2BEWHdFGx+qZ9qqASHRPqvTYdqvWnHg0H1hIbcyLnvgnoNAVMlwkepyqM3DaIFUg==}
+    dev: false
 
   /concat-map/0.0.1:
     resolution: {integrity: sha1-2Klr13/Wjfd5OnMDajug1UBdR3s=}
@@ -6292,15 +6296,15 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.0.0-alpha.46_caa633a00319350dbda42996613fe26c:
-    resolution: {integrity: sha512-I7JK/YggII841z2X//qLrrqZ+ji2I23xOg++2+lkKjb0T+ib9QIVYYdaSwGqEOcU0epNK/qev0VwA8sVCLqVYg==}
+  /nextra-theme-docs/2.0.0-alpha.48_caa633a00319350dbda42996613fe26c:
+    resolution: {integrity: sha512-eA1AmD8KVD7lgy+fq1aGjEv3NlNNAgx9UYE8Fsi9TimaIAuRMaqulNoG5m1HLcqUPtxjBkl/zM7gPgxfQg2d2A==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
       '@headlessui/react': 1.5.0_react-dom@17.0.2+react@17.0.2
-      '@mdx-js/react': 2.0.0_react@17.0.2
+      '@mdx-js/react': 2.1.0_react@17.0.2
       '@reach/skip-nav': 0.16.0_react-dom@17.0.2+react@17.0.2
       classnames: 2.3.1
       flexsearch: 0.7.21
@@ -6313,15 +6317,16 @@ packages:
       parse-git-url: 1.0.1
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
+      scroll-into-view-if-needed: 2.2.29
       title: 3.4.3
     dev: false
 
-  /nextra/2.0.0-alpha.46_react@17.0.2:
-    resolution: {integrity: sha512-hmTejOqNhNWJWw/lsC4nytgxTYfuCmVo8fm4slN9FVYJY49SdwlqqBOZvy/6yUmpaN1DsNAyyZwtWZatbdx07Q==}
+  /nextra/2.0.0-alpha.48_react@17.0.2:
+    resolution: {integrity: sha512-ZiAnQluH1k4Rojf0grBM4sjzZX87jGqKwnjhMd6wtflwpofXfYKDSXKMQrJei9Da8n/iZnz7STbQ2WPL1Fw+SQ==}
     peerDependencies:
       react: '>=16.13.1'
     dependencies:
-      '@mdx-js/mdx': 2.0.0
+      '@mdx-js/mdx': 2.1.0
       github-slugger: 1.4.0
       graceful-fs: 4.2.9
       gray-matter: 4.0.3
@@ -7285,6 +7290,12 @@ packages:
       ajv: 6.12.6
       ajv-keywords: 3.5.2_ajv@6.12.6
     dev: true
+
+  /scroll-into-view-if-needed/2.2.29:
+    resolution: {integrity: sha512-hxpAR6AN+Gh53AdAimHM6C8oTN1ppwVZITihix+WqalywBeFcQ6LdQP5ABNl26nX8GTEL7VT+b8lKpdqq65wXg==}
+    dependencies:
+      compute-scroll-into-view: 1.0.17
+    dev: false
 
   /section-matter/1.0.0:
     resolution: {integrity: sha512-vfD3pmTzGpufjScBh50YHKzEu2lxBWhVEHsNGoEXmCmn2hKGfeNLYMzCJpe8cD7gqX7TJluOVpBkAequ6dgMmA==}
