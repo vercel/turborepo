@@ -88,6 +88,7 @@ func TestResolvePackages(t *testing.T) {
 		name                string
 		changed             []string
 		expected            []string
+		wantErr             bool
 		scope               []string
 		since               string
 		ignore              string
@@ -105,6 +106,7 @@ func TestResolvePackages(t *testing.T) {
 			name:     "An ignored package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
 			expected: []string{},
+			wantErr:  true,
 			since:    "dummy",
 			ignore:   "libs/libB/**/*.ts",
 		},
@@ -113,6 +115,7 @@ func TestResolvePackages(t *testing.T) {
 			name:                "unrelated library changed",
 			changed:             []string{"libs/libC/src/index.ts"},
 			expected:            []string{},
+			wantErr:             true,
 			since:               "dummy",
 			scope:               []string{"app1"},
 			includeDependencies: true, // scope implies include-dependencies
@@ -214,15 +217,21 @@ func TestResolvePackages(t *testing.T) {
 				TopologicalGraph: graph,
 				SCC:              scc,
 			}, tui, logger)
-			if err != nil {
-				t.Errorf("expected no error, got %v", err)
-			}
-			expected := make(util.Set)
-			for _, pkg := range tc.expected {
-				expected.Add(pkg)
-			}
-			if !reflect.DeepEqual(pkgs, expected) {
-				t.Errorf("ResolvePackages got %v, want %v", pkgs, expected)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("ResolvePackages got %#v, wantErr %#v", err, tc.wantErr)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+				expected := make(util.Set)
+				for _, pkg := range tc.expected {
+					expected.Add(pkg)
+				}
+				if !reflect.DeepEqual(pkgs, expected) {
+					t.Errorf("ResolvePackages got %v, want %v", pkgs, expected)
+				}
 			}
 		})
 	}

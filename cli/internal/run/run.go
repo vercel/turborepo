@@ -200,7 +200,8 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run: %v", err))
+		return 1
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)

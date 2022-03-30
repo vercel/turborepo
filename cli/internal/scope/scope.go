@@ -74,6 +74,10 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 		return nil, err
 	}
 
+	if len(filterPatterns) > 0 && len(filteredPkgs) == 0 {
+		return nil, fmt.Errorf("no packages match the provided flag(s)")
+	}
+
 	if len(filterPatterns) == 0 {
 		// no filters specified, run every package
 		for _, f := range ctx.PackageNames {
