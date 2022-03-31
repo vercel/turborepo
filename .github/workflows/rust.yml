@@ -23,10 +23,34 @@ jobs:
         with:
           command: check
 
+      - name: Run cargo check tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --tests
+
+      - name: Run cargo check examples
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --examples
+
       - name: Run cargo build
         uses: actions-rs/cargo@v1
         with:
           command: build
+
+      - name: Run cargo build tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --tests
+
+      - name: Run cargo build examples
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --examples
 
       - name: Setup node
         uses: actions/setup-node@v2
