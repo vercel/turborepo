@@ -1,8 +1,11 @@
-use std::{fmt::Display, future::Future, mem::take};
+use std::{
+    collections::HashSet, fmt::Display, future::Future, hash::Hash, mem::take, pin::Pin, sync::Arc,
+};
 
 use crate::ecmascript::utils::lit_to_string;
 
 pub(crate) use self::imports::ImportMap;
+use indexmap::IndexSet;
 use swc_atoms::{js_word, JsWord};
 use swc_common::{collections::AHashSet, Mark};
 use swc_ecmascript::{ast::*, utils::ident::IdentLike};
@@ -15,7 +18,7 @@ pub mod linker;
 pub mod well_known;
 
 /// TODO: Use `Arc`
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum JsValue {
     /// Denotes a single string literal, which does not have any unknown value.
     ///
@@ -56,7 +59,7 @@ pub enum JsValue {
     WellKnownFunction(WellKnownFunctionKind),
 
     /// Not analyzable.
-    Unknown(Option<Box<JsValue>>, &'static str),
+    Unknown(Option<Arc<JsValue>>, &'static str),
 
     /// `(return_value)`
     Function(Box<JsValue>),
@@ -152,17 +155,21 @@ impl Display for JsValue {
             JsValue::WellKnownObject(obj) => write!(f, "WellKnownObject({:?})", obj),
             JsValue::WellKnownFunction(func) => write!(f, "WellKnownFunction({:?})", func),
             JsValue::Function(return_value) => write!(f, "Function(return = {:?})", return_value),
-            JsValue::Argument(index) => write!(f, "Argument({})", index),
+            JsValue::Argument(index) => write!(f, "arguments[{}]", index),
         }
     }
 }
 
 impl JsValue {
-    pub fn explain_args(args: &Vec<JsValue>, depth: usize) -> (String, String) {
+    pub fn explain_args(
+        args: &Vec<JsValue>,
+        depth: usize,
+        unknown_depth: usize,
+    ) -> (String, String) {
         let mut hints = Vec::new();
         let explainer = args
             .iter()
-            .map(|arg| arg.explain_internal(&mut hints, depth))
+            .map(|arg| arg.explain_internal(&mut hints, depth, unknown_depth))
             .collect::<Vec<_>>()
             .join(", ");
         (
@@ -174,9 +181,9 @@ impl JsValue {
         )
     }
 
-    pub fn explain(&self, depth: usize) -> (String, String) {
+    pub fn explain(&self, depth: usize, unknown_depth: usize) -> (String, String) {
         let mut hints = Vec::new();
-        let explainer = self.explain_internal(&mut hints, depth);
+        let explainer = self.explain_internal(&mut hints, depth, unknown_depth);
         (
             explainer,
             hints
@@ -186,14 +193,43 @@ impl JsValue {
         )
     }
 
-    fn explain_internal(&self, hints: &mut Vec<String>, depth: usize) -> String {
+    fn explain_internal_inner(
+        &self,
+        hints: &mut Vec<String>,
+        depth: usize,
+        unknown_depth: usize,
+    ) -> String {
+        if depth == 0 {
+            return "...".to_string();
+        }
+        let i = hints.len();
+        let explainer = self.explain_internal(hints, depth - 1, unknown_depth);
+        if explainer.len() < 100 {
+            return explainer;
+        }
+        hints.truncate(i);
+        hints.push(String::new());
+        hints[i] = format!(
+            "- *{}* {}",
+            i,
+            self.explain_internal(hints, depth - 1, unknown_depth)
+        );
+        format!("*{}*", i)
+    }
+
+    fn explain_internal(
+        &self,
+        hints: &mut Vec<String>,
+        depth: usize,
+        unknown_depth: usize,
+    ) -> String {
         match self {
             JsValue::Constant(lit) => format!("{}", lit_to_string(lit)),
             JsValue::Array(elems) => format!(
                 "[{}]",
                 elems
                     .iter()
-                    .map(|v| v.explain_internal(hints, depth))
+                    .map(|v| v.explain_internal_inner(hints, depth, unknown_depth))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -201,23 +237,27 @@ impl JsValue {
             JsValue::Alternatives(list) => format!(
                 "({})",
                 list.iter()
-                    .map(|v| v.explain_internal(hints, depth))
+                    .map(|v| v.explain_internal_inner(hints, depth, unknown_depth))
                     .collect::<Vec<_>>()
                     .join(" | ")
             ),
+            JsValue::FreeVar(FreeVarKind::Other(name)) => format!("FreeVar({})", name),
             JsValue::FreeVar(name) => format!("FreeVar({:?})", name),
             JsValue::Variable(name) => {
                 format!("{}", name.0)
             }
             JsValue::Argument(index) => {
-                format!("Argument({})", index)
+                format!("arguments[{}]", index)
             }
             JsValue::Concat(list) => format!(
                 "`{}`",
                 list.iter()
                     .map(|v| match v {
                         JsValue::Constant(Lit::Str(str)) => str.value.to_string(),
-                        _ => format!("${{{}}}", v.explain_internal(hints, depth)),
+                        _ => format!(
+                            "${{{}}}",
+                            v.explain_internal_inner(hints, depth, unknown_depth)
+                        ),
                     })
                     .collect::<Vec<_>>()
                     .join("")
@@ -225,30 +265,32 @@ impl JsValue {
             JsValue::Add(list) => format!(
                 "({})",
                 list.iter()
-                    .map(|v| v.explain_internal(hints, depth))
+                    .map(|v| v.explain_internal_inner(hints, depth, unknown_depth))
                     .collect::<Vec<_>>()
                     .join(" + ")
             ),
-            JsValue::Call(callee, list) => format!(
-                "{}({})",
-                callee.explain_internal(hints, depth),
-                list.iter()
-                    .map(|v| v.explain_internal(hints, depth))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            JsValue::Call(callee, list) => {
+                format!(
+                    "{}({})",
+                    callee.explain_internal_inner(hints, depth, unknown_depth),
+                    list.iter()
+                        .map(|v| v.explain_internal_inner(hints, depth, unknown_depth))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             JsValue::Member(obj, prop) => {
                 format!(
                     "{}[{}]",
-                    obj.explain_internal(hints, depth),
-                    prop.explain_internal(hints, depth)
+                    obj.explain_internal_inner(hints, depth, unknown_depth),
+                    prop.explain_internal_inner(hints, depth, unknown_depth)
                 )
             }
             JsValue::Module(name) => {
                 format!("module<{}>", name)
             }
             JsValue::Unknown(inner, explainer) => {
-                if depth == 0 || explainer.is_empty() {
+                if unknown_depth == 0 || explainer.is_empty() {
                     format!("???")
                 } else if let Some(inner) = inner {
                     let i = hints.len();
@@ -256,15 +298,15 @@ impl JsValue {
                     hints[i] = format!(
                         "- *{}* {}\n  ⚠️  {}",
                         i,
-                        inner.explain_internal(hints, depth - 1),
+                        inner.explain_internal(hints, depth, unknown_depth - 1),
                         explainer,
                     );
-                    format!("*{}*", i)
+                    format!("???*{}*", i)
                 } else {
                     let i = hints.len();
                     hints.push(String::new());
                     hints[i] = format!("- *{}* {}", i, explainer);
-                    format!("*{}*", i)
+                    format!("???*{}*", i)
                 }
             }
             JsValue::WellKnownObject(obj) => {
@@ -322,13 +364,20 @@ impl JsValue {
                 if depth > 0 {
                     let i = hints.len();
                     hints.push(format!("- *{i}* {name}: {explainer}"));
-                    format!("{name}s*{i}*")
+                    format!("{name}*{i}*")
                 } else {
                     name
                 }
             }
             JsValue::Function(return_value) => {
-                format!("A function which returns ({:?})", return_value)
+                if depth > 0 {
+                    format!(
+                        "(...) => ({})",
+                        return_value.explain_internal(hints, depth - 1, unknown_depth)
+                    )
+                } else {
+                    format!("(...) => (...)")
+                }
             }
         }
     }
@@ -354,13 +403,87 @@ impl JsValue {
         R: 'a + Future<Output = Result<(Self, bool), E>>,
         F: 'a + FnMut(JsValue) -> R,
     {
-        let (v, modified) = self.for_each_children_async(visitor).await?;
+        let (v, modified) = self.visit_each_children_async(visitor).await?;
         let (v, m) = visitor(v).await?;
         if m {
             Ok((v, true))
         } else {
             Ok((v, modified))
         }
+    }
+
+    pub fn visit_async_box<'a, F, R, E>(
+        self,
+        visitor: &'a mut F,
+    ) -> Pin<Box<dyn Future<Output = Result<(Self, bool), E>> + 'a>>
+    where
+        R: 'a + Future<Output = Result<(Self, bool), E>>,
+        F: 'a + FnMut(JsValue) -> R,
+        E: 'a,
+    {
+        Box::pin(self.visit_async(visitor))
+    }
+
+    pub async fn visit_each_children_async<'a, F, R, E>(
+        mut self,
+        visitor: &mut F,
+    ) -> Result<(Self, bool), E>
+    where
+        R: 'a + Future<Output = Result<(Self, bool), E>>,
+        F: 'a + FnMut(JsValue) -> R,
+    {
+        Ok(match &mut self {
+            JsValue::Alternatives(list)
+            | JsValue::Concat(list)
+            | JsValue::Add(list)
+            | JsValue::Array(list) => {
+                let mut modified = false;
+                for item in list.iter_mut() {
+                    let (v, m) = take(item).visit_async_box(visitor).await?;
+                    *item = v;
+                    if m {
+                        modified = true
+                    }
+                }
+                (self, modified)
+            }
+            JsValue::Call(box callee, list) => {
+                let (new_callee, mut modified) = take(callee).visit_async_box(visitor).await?;
+                *callee = new_callee;
+                for item in list.iter_mut() {
+                    let (v, m) = take(item).visit_async_box(visitor).await?;
+                    *item = v;
+                    if m {
+                        modified = true
+                    }
+                }
+                (self, modified)
+            }
+
+            JsValue::Function(box return_value) => {
+                let (new_return_value, modified) =
+                    take(return_value).visit_async_box(visitor).await?;
+                *return_value = new_return_value;
+
+                (self, modified)
+            }
+            JsValue::Member(box obj, box prop) => {
+                let (v, m1) = take(obj).visit_async_box(visitor).await?;
+                *obj = v;
+                let (v, m2) = take(prop).visit_async_box(visitor).await?;
+                *prop = v;
+                (self, m1 || m2)
+            }
+            JsValue::Constant(_)
+            | JsValue::FreeVar(_)
+            | JsValue::Variable(_)
+            | JsValue::Module(_)
+            | JsValue::Url(_)
+            | JsValue::WellKnownObject(_)
+            | JsValue::WellKnownFunction(_)
+            | JsValue::Unknown(..)
+            | JsValue::Argument(..) => (self, false),
+        })
     }
 
     pub async fn for_each_children_async<'a, F, R, E>(
@@ -425,7 +548,7 @@ impl JsValue {
     }
 
     pub fn visit_mut(&mut self, visitor: &mut impl FnMut(&mut JsValue) -> bool) -> bool {
-        let modified = self.for_each_children_mut(visitor);
+        let modified = self.for_each_children_mut(&mut |value| value.visit_mut(visitor));
         if visitor(self) {
             true
         } else {
@@ -433,17 +556,20 @@ impl JsValue {
         }
     }
 
-    pub fn visit_mut_recursive(&mut self, visitor: &mut impl FnMut(&mut JsValue) -> bool) -> bool {
-        let modified = self.for_each_children_mut(&mut |value| {
-            let m1 = value.visit_mut(visitor);
-            let m2 = visitor(value);
-
-            m1 || m2
-        });
-        if visitor(self) {
-            true
+    pub fn visit_mut_conditional(
+        &mut self,
+        condition: impl Fn(&JsValue) -> bool,
+        visitor: &mut impl FnMut(&mut JsValue) -> bool,
+    ) -> bool {
+        if condition(&self) {
+            let modified = self.for_each_children_mut(&mut |value| value.visit_mut(visitor));
+            if visitor(self) {
+                true
+            } else {
+                modified
+            }
         } else {
-            modified
+            false
         }
     }
 
@@ -494,8 +620,8 @@ impl JsValue {
         }
     }
 
-    pub fn visit(&mut self, visitor: &mut impl FnMut(&JsValue)) {
-        self.for_each_children(visitor);
+    pub fn visit(&self, visitor: &mut impl FnMut(&JsValue)) {
+        self.for_each_children(&mut |value| value.visit(visitor));
         visitor(self);
     }
 
@@ -578,26 +704,26 @@ impl JsValue {
     }
 
     pub fn normalize_shallow(&mut self) {
-        // TODO really doing shallow
-        self.normalize();
-    }
-
-    pub fn normalize(&mut self) {
-        self.for_each_children_mut(&mut |child| {
-            child.normalize();
-            true
-        });
-        // Handle nested
         match self {
             JsValue::Alternatives(v) => {
-                let mut new = vec![];
+                let mut set = IndexSet::new();
                 for v in take(v) {
                     match v {
-                        JsValue::Alternatives(v) => new.extend(v),
-                        v => new.push(v),
+                        JsValue::Alternatives(v) => {
+                            for v in v {
+                                set.insert(SimilarJsValue(v));
+                            }
+                        }
+                        v => {
+                            set.insert(SimilarJsValue(v));
+                        }
                     }
                 }
-                *v = new;
+                if set.len() == 1 {
+                    *self = set.into_iter().next().unwrap().0;
+                } else {
+                    *v = set.into_iter().map(|v| v.0).collect();
+                }
             }
             JsValue::Concat(v) => {
                 // Remove empty strings
@@ -650,14 +776,103 @@ impl JsValue {
                         added.push(item);
                     }
                 }
-                *v = added;
+                if added.len() == 1 {
+                    *self = added.into_iter().next().unwrap();
+                } else {
+                    *v = added;
+                }
             }
             _ => {}
         }
     }
+
+    pub fn normalize(&mut self) {
+        self.for_each_children_mut(&mut |child| {
+            child.normalize();
+            true
+        });
+        self.normalize_shallow();
+    }
+
+    fn similar(&self, other: &JsValue) -> bool {
+        fn all_similar(a: &[JsValue], b: &[JsValue]) -> bool {
+            if a.len() != b.len() {
+                return false;
+            }
+            a.iter().zip(b.iter()).all(|(a, b)| a.similar(b))
+        }
+        match (self, other) {
+            (JsValue::Constant(l), JsValue::Constant(r)) => l == r,
+            (JsValue::Array(l), JsValue::Array(r)) => all_similar(l, r),
+            (JsValue::Url(l), JsValue::Url(r)) => l == r,
+            (JsValue::Alternatives(l), JsValue::Alternatives(r)) => all_similar(l, r),
+            (JsValue::FreeVar(l), JsValue::FreeVar(r)) => l == r,
+            (JsValue::Variable(l), JsValue::Variable(r)) => l == r,
+            (JsValue::Concat(l), JsValue::Concat(r)) => all_similar(l, r),
+            (JsValue::Add(l), JsValue::Add(r)) => all_similar(l, r),
+            (JsValue::Call(lf, la), JsValue::Call(rf, ra)) => lf.similar(rf) && all_similar(la, ra),
+            (JsValue::Member(lo, lp), JsValue::Member(ro, rp)) => lo.similar(ro) && lp.similar(rp),
+            (JsValue::Module(l), JsValue::Module(r)) => l == r,
+            (JsValue::WellKnownObject(l), JsValue::WellKnownObject(r)) => l == r,
+            (JsValue::WellKnownFunction(l), JsValue::WellKnownFunction(r)) => l == r,
+            (JsValue::Unknown(_, l), JsValue::Unknown(_, r)) => l == r,
+            (JsValue::Function(l), JsValue::Function(r)) => l.similar(r),
+            (JsValue::Argument(l), JsValue::Argument(r)) => l == r,
+            _ => false,
+        }
+    }
+
+    fn similar_hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        fn all_similar_hash<H: std::hash::Hasher>(slice: &[JsValue], state: &mut H) {
+            for item in slice {
+                item.similar_hash(state);
+            }
+        }
+
+        match self {
+            JsValue::Constant(v) => Hash::hash(v, state),
+            JsValue::Array(v) => all_similar_hash(v, state),
+            JsValue::Url(v) => Hash::hash(v, state),
+            JsValue::Alternatives(v) => all_similar_hash(v, state),
+            JsValue::FreeVar(v) => Hash::hash(v, state),
+            JsValue::Variable(v) => Hash::hash(v, state),
+            JsValue::Concat(v) => all_similar_hash(v, state),
+            JsValue::Add(v) => all_similar_hash(v, state),
+            JsValue::Call(a, b) => {
+                a.similar_hash(state);
+                all_similar_hash(b, state);
+            }
+            JsValue::Member(o, p) => {
+                o.similar_hash(state);
+                p.similar_hash(state);
+            }
+            JsValue::Module(v) => Hash::hash(v, state),
+            JsValue::WellKnownObject(v) => Hash::hash(v, state),
+            JsValue::WellKnownFunction(v) => Hash::hash(v, state),
+            JsValue::Unknown(_, v) => Hash::hash(v, state),
+            JsValue::Function(v) => v.similar_hash(state),
+            JsValue::Argument(v) => Hash::hash(v, state),
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+struct SimilarJsValue(JsValue);
+
+impl PartialEq for SimilarJsValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.similar(&other.0)
+    }
+}
+
+impl Eq for SimilarJsValue {}
+
+impl Hash for SimilarJsValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.similar_hash(state)
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum FreeVarKind {
     /// `__dirname`
     Dirname,
@@ -675,7 +890,7 @@ pub enum FreeVarKind {
     Other(JsWord),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownObjectKind {
     PathModule,
     FsModule,
@@ -683,7 +898,7 @@ pub enum WellKnownObjectKind {
     ChildProcess,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownFunctionKind {
     PathJoin,
     Import,
@@ -712,7 +927,10 @@ fn is_unresolved(i: &Ident, bindings: &AHashSet<Id>, top_level_mark: Mark) -> bo
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, sync::Mutex};
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
 
     use anyhow::Result;
     use async_std::task::block_on;
@@ -733,7 +951,9 @@ mod tests {
     #[testing::fixture("tests/analyzer/graph/**/input.js")]
     fn fixture(input: PathBuf) {
         let graph_snapshot_path = input.with_file_name("graph.snapshot");
+        let graph_explained_snapshot_path = input.with_file_name("graph-explained.snapshot");
         let resolved_snapshot_path = input.with_file_name("resolved.snapshot");
+        let resolved_explained_snapshot_path = input.with_file_name("resolved-explained.snapshot");
 
         testing::run_test(false, |cm, handler| {
             let fm = cm.load_file(&input).unwrap();
@@ -754,22 +974,45 @@ mod tests {
 
             let var_graph = create_graph(&m, &eval_context);
 
+            let mut named_values = var_graph
+                .values
+                .clone()
+                .into_iter()
+                .map(|((id, ctx), value)| {
+                    let unique = var_graph.values.keys().filter(|(i, _)| &id == i).count() == 1;
+                    if unique {
+                        (id.to_string(), value)
+                    } else {
+                        (format!("{id}{ctx:?}"), value)
+                    }
+                })
+                .collect::<Vec<_>>();
+            named_values.sort_by(|a, b| a.0.cmp(&b.0));
+
+            fn explain_all(values: &Vec<(String, JsValue)>) -> String {
+                values
+                    .iter()
+                    .map(|(id, value)| {
+                        let (explainer, hints) = value.explain(usize::MAX, usize::MAX);
+                        format!("{id} = {explainer}{hints}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            }
+
             {
                 // Dump snapshot of graph
 
-                let mut dump = var_graph.values.clone().into_iter().collect::<Vec<_>>();
-                dump.sort_by(|a, b| a.0 .1.cmp(&b.0 .1));
-                dump.sort_by(|a, b| a.0 .0.cmp(&b.0 .0));
-
-                NormalizedOutput::from(format!("{:#?}", dump))
+                NormalizedOutput::from(format!("{:#?}", named_values))
                     .compare_to_file(&graph_snapshot_path)
+                    .unwrap();
+                NormalizedOutput::from(explain_all(&named_values))
+                    .compare_to_file(&graph_explained_snapshot_path)
                     .unwrap();
             }
 
             {
                 // Dump snapshot of resolved
-
-                let mut resolved = vec![];
 
                 async fn visitor(v: JsValue) -> Result<(JsValue, bool)> {
                     Ok((
@@ -783,7 +1026,10 @@ mod tests {
                                 JsValue::Constant(lit) => {
                                     JsValue::Constant((lit_to_string(&lit) + " (resolved)").into())
                                 }
-                                _ => JsValue::Unknown(Some(box v), "resolve.resolve non constant"),
+                                _ => JsValue::Unknown(
+                                    Some(Arc::new(v)),
+                                    "resolve.resolve non constant",
+                                ),
                             },
                             JsValue::FreeVar(FreeVarKind::Require) => {
                                 JsValue::WellKnownFunction(WellKnownFunctionKind::Require)
@@ -791,9 +1037,10 @@ mod tests {
                             JsValue::FreeVar(FreeVarKind::Dirname) => {
                                 JsValue::Constant("__dirname".into())
                             }
-                            JsValue::FreeVar(kind) => {
-                                JsValue::Unknown(Some(box JsValue::FreeVar(kind)), "unknown global")
-                            }
+                            JsValue::FreeVar(kind) => JsValue::Unknown(
+                                Some(Arc::new(JsValue::FreeVar(kind))),
+                                "unknown global",
+                            ),
                             JsValue::Module(ref name) => match &**name {
                                 "path" => JsValue::WellKnownObject(WellKnownObjectKind::PathModule),
                                 _ => return Ok((v, false)),
@@ -808,28 +1055,29 @@ mod tests {
                     ))
                 }
 
-                for ((id, ctx), val) in var_graph.values.iter() {
-                    let val = val.clone();
-                    let mut res = block_on(link(
-                        &var_graph,
-                        val,
-                        &(|val| Box::pin(visitor(val))),
-                        &Mutex::new(LinkCache::new()),
-                    ))
-                    .unwrap();
-                    res.normalize();
+                let cache = Mutex::new(LinkCache::new());
+                let resolved = named_values
+                    .iter()
+                    .map(|(id, val)| {
+                        let val = val.clone();
+                        let mut res = block_on(link(
+                            &var_graph,
+                            val,
+                            &(|val| Box::pin(visitor(val))),
+                            &cache,
+                        ))
+                        .unwrap();
+                        res.normalize();
 
-                    let unique = var_graph.values.keys().filter(|(i, _)| id == i).count() == 1;
-                    if unique {
-                        resolved.push((id.to_string(), res));
-                    } else {
-                        resolved.push((format!("{id}{ctx:?}"), res));
-                    }
-                }
-                resolved.sort_by(|a, b| a.0.cmp(&b.0));
+                        (id.clone(), res)
+                    })
+                    .collect::<Vec<_>>();
 
                 NormalizedOutput::from(format!("{:#?}", resolved))
                     .compare_to_file(&resolved_snapshot_path)
+                    .unwrap();
+                NormalizedOutput::from(explain_all(&resolved))
+                    .compare_to_file(&resolved_explained_snapshot_path)
                     .unwrap();
             }
 

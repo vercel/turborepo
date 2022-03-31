@@ -20,7 +20,12 @@ use crate::{
     source_asset::SourceAssetRef,
 };
 use anyhow::Result;
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Mutex};
+use std::{
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use swc_common::{
     errors::{DiagnosticId, Handler, HANDLER},
     Span, GLOBALS,
@@ -112,6 +117,9 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                 args: &F,
                 references: &mut Vec<AssetReferenceRef>,
             ) -> Result<()> {
+                fn explain_args(args: &Vec<JsValue>) -> (String, String) {
+                    JsValue::explain_args(&args, 10, 2)
+                }
                 match func {
                     JsValue::Alternatives(alts) => {
                         for alt in alts {
@@ -124,7 +132,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                         if args.len() == 1 {
                             let pat = js_value_to_pattern(&args[0]);
                             if !pat.has_constant_parts() {
-                                let (args, hints) = JsValue::explain_args(&args, 2);
+                                let (args, hints) = explain_args(&args);
                                 handler.span_warn_with_code(
                                     *span,
                                     &format!("import({args}) is very dynamic{hints}",),
@@ -143,7 +151,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                             );
                             return Ok(());
                         }
-                        let (args, hints) = JsValue::explain_args(&args, 2);
+                        let (args, hints) = explain_args(&args);
                         handler.span_warn_with_code(
                             *span,
                             &format!("import({args}) is not statically analyse-able{hints}",),
@@ -157,7 +165,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                         if args.len() == 1 {
                             let pat = js_value_to_pattern(&args[0]);
                             if !pat.has_constant_parts() {
-                                let (args, hints) = JsValue::explain_args(&args, 2);
+                                let (args, hints) = explain_args(&args);
                                 handler.span_warn_with_code(
                                     *span,
                                     &format!("require({args}) is very dynamic{hints}",),
@@ -175,7 +183,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                             );
                             return Ok(());
                         }
-                        let (args, hints) = JsValue::explain_args(&args, 2);
+                        let (args, hints) = explain_args(&args);
                         handler.span_warn_with_code(
                             *span,
                             &format!("require({args}) is not statically analyse-able{hints}",),
@@ -189,7 +197,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                         if args.len() == 1 {
                             let pat = js_value_to_pattern(&args[0]);
                             if !pat.has_constant_parts() {
-                                let (args, hints) = JsValue::explain_args(&args, 2);
+                                let (args, hints) = explain_args(&args);
                                 handler.span_warn_with_code(
                                     *span,
                                     &format!("require.resolve({args}) is very dynamic{hints}",),
@@ -208,7 +216,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                             );
                             return Ok(());
                         }
-                        let (args, hints) = JsValue::explain_args(&args, 2);
+                        let (args, hints) = explain_args(&args);
                         handler.span_warn_with_code(
                             *span,
                             &format!(
@@ -224,7 +232,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                         if args.len() >= 1 {
                             let pat = js_value_to_pattern(&args[0]);
                             if !pat.has_constant_parts() {
-                                let (args, hints) = JsValue::explain_args(&args, 2);
+                                let (args, hints) = explain_args(&args);
                                 handler.span_warn_with_code(
                                     *span,
                                     &format!("fs.{name}({args}) is very dynamic{hints}",),
@@ -239,7 +247,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                             );
                             return Ok(());
                         }
-                        let (args, hints) = JsValue::explain_args(&args, 2);
+                        let (args, hints) = explain_args(&args);
                         handler.span_warn_with_code(
                             *span,
                             &format!("fs.{name}({args}) is not statically analyse-able{hints}",),
@@ -253,7 +261,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                         if args.len() >= 1 {
                             let pat = js_value_to_pattern(&args[0]);
                             if !pat.has_constant_parts() {
-                                let (args, hints) = JsValue::explain_args(&args, 2);
+                                let (args, hints) = explain_args(&args);
                                 handler.span_warn_with_code(
                                     *span,
                                     &format!("child_process.spawn({args}) is very dynamic{hints}",),
@@ -268,7 +276,7 @@ pub async fn module_references(source: AssetRef) -> Result<AssetReferencesSetRef
                             );
                             return Ok(());
                         }
-                        let (args, hints) = JsValue::explain_args(&args, 2);
+                        let (args, hints) = explain_args(&args);
                         handler.span_warn_with_code(
                             *span,
                             &format!(
@@ -346,21 +354,21 @@ async fn value_visitor(source: &AssetRef, v: JsValue) -> Result<(JsValue, bool)>
                     match &*resolved {
                         ResolveResult::Single(asset, _) => as_abs_path(asset.path()).await?,
                         _ => JsValue::Unknown(
-                            Some(box JsValue::Call(
+                            Some(Arc::new(JsValue::Call(
                                 box JsValue::WellKnownFunction(
                                     WellKnownFunctionKind::RequireResolve,
                                 ),
                                 args,
-                            )),
+                            ))),
                             "unresolveable request",
                         ),
                     }
                 } else {
                     JsValue::Unknown(
-                        Some(box JsValue::Call(
+                        Some(Arc::new(JsValue::Call(
                             box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                             args,
-                        )),
+                        ))),
                         "only a single argument is supported",
                     )
                 }
