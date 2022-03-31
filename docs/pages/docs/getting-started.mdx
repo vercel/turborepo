@@ -190,3 +190,10 @@ rm -rf ./node_modules/.cache/turbo
 ```
 
 Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
+
+<Callout>
+  **Note: When connecting to an sso-enabled Vercel team, you must provide your Team slug as an argument to `npx turbo login`.**
+</Callout>
+```
+npx turbo login --sso-team=<team-slug>
+```

@@ -8,13 +8,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
-func Test_SecretKey(t *testing.T) {
+func Test_SecretKeySuccess(t *testing.T) {
 	teamId := "team_someid"
-	secret := "my-secret"
-	secretKeyEnvName := "TURBO_TEST_SIGNING_KEY"
+	secretKeyEnvName := "TURBO_REMOTE_CACHE_SIGNATURE_KEY"
 	secretKeyEnvValue := "my-secret-key-env"
 	t.Setenv(secretKeyEnvName, secretKeyEnvValue)
 
@@ -27,47 +25,43 @@ func Test_SecretKey(t *testing.T) {
 		{
 			name: "Accepts secret key",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     secret,
-				},
-			},
-			expectedSecretKey:      secret,
-			expectedSecretKeyError: false,
-		},
-		{
-			name: "Accepts secret keyEnv",
-			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					KeyEnv:  secretKeyEnvName,
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
 			expectedSecretKey:      secretKeyEnvValue,
 			expectedSecretKeyError: false,
 		},
-		{
-			name: "Prefers secret keyEnv",
-			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     secret,
-					KeyEnv:  secretKeyEnvName,
-				},
-			},
-			expectedSecretKey:      secretKeyEnvValue,
-			expectedSecretKeyError: false,
-		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			secretKey, err := tc.asa.secretKey()
+			if tc.expectedSecretKeyError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedSecretKey, string(secretKey))
+			}
+		})
+	}
+}
+
+func Test_SecretKeyErrors(t *testing.T) {
+	teamId := "team_someid"
+
+	// Env secret key TURBO_REMOTE_CACHE_SIGNATURE_KEY is not set
+
+	cases := []struct {
+		name                   string
+		asa                    *ArtifactSignatureAuthentication
+		expectedSecretKey      string
+		expectedSecretKeyError bool
+	}{
 		{
 			name: "Secret key not defined errors",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
 			expectedSecretKey:      "",
 			expectedSecretKeyError: true,
@@ -75,11 +69,8 @@ func Test_SecretKey(t *testing.T) {
 		{
 			name: "Secret key is empty errors",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     "",
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
 			expectedSecretKey:      "",
 			expectedSecretKeyError: true,
@@ -103,7 +94,9 @@ func Test_GenerateTagAndValidate(t *testing.T) {
 	teamId := "team_someid"
 	hash := "the-artifact-hash"
 	artifactBody := []byte("the artifact body as bytes")
-	secret := "my-secret"
+	secretKeyEnvName := "TURBO_REMOTE_CACHE_SIGNATURE_KEY"
+	secretKeyEnvValue := "my-secret-key-env"
+	t.Setenv(secretKeyEnvName, secretKeyEnvValue)
 
 	cases := []struct {
 		name                    string
@@ -114,49 +107,37 @@ func Test_GenerateTagAndValidate(t *testing.T) {
 		{
 			name: "Uses hash to generate tag",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     secret,
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
-			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
-			expectedTagDoesNotMatch: testUtilGetHMACTag("wrong-hash", teamId, artifactBody, secret),
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secretKeyEnvValue),
+			expectedTagDoesNotMatch: testUtilGetHMACTag("wrong-hash", teamId, artifactBody, secretKeyEnvValue),
 		},
 		{
 			name: "Uses teamId to generate tag",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     secret,
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
-			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
-			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, "wrong-teamId", artifactBody, secret),
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secretKeyEnvValue),
+			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, "wrong-teamId", artifactBody, secretKeyEnvValue),
 		},
 		{
 			name: "Uses artifactBody to generate tag",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     secret,
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
-			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
-			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, teamId, []byte("wrong-artifact-body"), secret),
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secretKeyEnvValue),
+			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, teamId, []byte("wrong-artifact-body"), secretKeyEnvValue),
 		},
 		{
 			name: "Uses secret to generate tag",
 			asa: &ArtifactSignatureAuthentication{
-				teamId: teamId,
-				options: &fs.SignatureOptions{
-					Enabled: true,
-					Key:     secret,
-				},
+				teamId:  teamId,
+				enabled: true,
 			},
-			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secret),
+			expectedTagMatches:      testUtilGetHMACTag(hash, teamId, artifactBody, secretKeyEnvValue),
 			expectedTagDoesNotMatch: testUtilGetHMACTag(hash, teamId, artifactBody, "wrong-secret"),
 		},
 	}

@@ -33,6 +33,9 @@ func IsBerry(cwd string, version string, pkgManager bool) (bool, error) {
 
 		return c.Check(v), nil
 	} else {
+		if !commandExists("yarn") {
+			return false, nil
+		}
 		cmd := exec.Command("yarn", "--version")
 		cmd.Dir = cwd
 		out, err := cmd.Output()
@@ -51,6 +54,11 @@ func IsBerry(cwd string, version string, pkgManager bool) (bool, error) {
 
 		return c.Check(v), nil
 	}
+}
+
+func commandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
 }
 
 func IsNMLinker(cwd string) (bool, error) {
