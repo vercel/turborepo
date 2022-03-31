@@ -16,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: Swatinem/rust-cache@v1
+
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
@@ -29,6 +31,9 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v2
         with:
+          cache: 'yarn'
+          cache-dependency-path: |
+            crates/turbopack/tests/node-file-trace/yarn.lock
           node-version: 16
 
       - run: yarn install --frozen-lockfile
