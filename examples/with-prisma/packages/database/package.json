@@ -11,16 +11,16 @@
   "scripts": {
     "build": "tsup",
     "clean": "rimraf .turbo node_modules dist",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "esno src/seed.ts",
     "dev": "tsup --watch",
     "format": "prisma format",
     "generate": "prisma generate",
     "lint": "eslint ./src --fix",
-    "migrate:deploy": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev",
     "prebuild": "npm run generate",
     "predev": "npm run generate",
-    "push": "prisma db push",
-    "seed": "esno src/seed.ts",
     "studio": "prisma studio"
   },
   "dependencies": {
