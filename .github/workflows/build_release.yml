@@ -16,7 +16,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
         with:
-          key: release
+          key: release --target=unknown-linux-musl
 
       - name: Run cargo build
         uses: actions-rs/cargo@v1
