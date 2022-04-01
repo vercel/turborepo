@@ -8,7 +8,9 @@ GO_FLAGS += "-ldflags=-s -w"
 # Avoid embedding the build path in the executable for more reproducible builds
 GO_FLAGS += -trimpath
 
-turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
+SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
+
+turbo: $(SRC_FILES) go.mod
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
 # These tests are for development
@@ -88,6 +90,14 @@ platform-unixlike:
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
 	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
+# To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
+# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
+platform-unixlike-cgo:
+	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
+	mkdir -p "$(NPMDIR)/bin"
+	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
 
@@ -95,7 +105,7 @@ platform-darwin:
 	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-unixlike
 
 platform-darwin-arm64:
-	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike
+	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike-cgo
 
 platform-freebsd:
 	make GOOS=freebsd GOARCH=amd64 NPMDIR=npm/turbo-freebsd-64 platform-unixlike

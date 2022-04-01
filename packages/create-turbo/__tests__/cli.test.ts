@@ -131,7 +131,7 @@ describe("create-turbo cli", () => {
 
           If <dir> is not provided up front you will be prompted for it.
 
-          Flags:    
+          Flags:
             --use-npm           Explicitly tell the CLI to bootstrap the app using npm
             --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
             --no-install        Explicitly do not run the package manager's install command
@@ -155,7 +155,7 @@ describe("create-turbo cli", () => {
 
           If <dir> is not provided up front you will be prompted for it.
 
-          Flags:    
+          Flags:
             --use-npm           Explicitly tell the CLI to bootstrap the app using npm
             --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
             --no-install        Explicitly do not run the package manager's install command
