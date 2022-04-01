@@ -3,12 +3,13 @@ package util
 import (
 	"fmt"
 	"io/ioutil"
-	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
-	"github.com/Masterminds/semver"
+	"github.com/vercel/turborepo/cli/internal/fs"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,43 +23,19 @@ func IsYarn(backendName string) bool {
 
 func IsBerry(cwd string, version string, pkgManager bool) (bool, error) {
 	if pkgManager {
-		v, err := semver.NewVersion(version)
+		version, err := strconv.Atoi(strings.SplitN(version, ".", 2)[0])
 		if err != nil {
-			return false, fmt.Errorf("could not parse yarn version: %w", err)
-		}
-		c, err := semver.NewConstraint(">=2.0.0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
+			return false, err
 		}
 
-		return c.Check(v), nil
-	} else {
-		if !commandExists("yarn") {
-			return false, nil
-		}
-		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = cwd
-		out, err := cmd.Output()
-		if err != nil {
-			return false, fmt.Errorf("could not detect yarn version: %w", err)
+		if version >= 2 {
+			return true, nil
 		}
 
-		v, err := semver.NewVersion(strings.TrimSpace(string(out)))
-		if err != nil {
-			return false, fmt.Errorf("could not parse yarn version: %w", err)
-		}
-		c, err := semver.NewConstraint(">=2.0.0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
-		}
-
-		return c.Check(v), nil
+		return false, nil
 	}
-}
 
-func commandExists(cmd string) bool {
-	_, err := exec.LookPath(cmd)
-	return err == nil
+	return fs.PathExists(filepath.Join(cwd, ".yarnrc.yml")), nil
 }
 
 func IsNMLinker(cwd string) (bool, error) {

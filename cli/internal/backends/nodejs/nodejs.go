@@ -39,7 +39,6 @@ var NodejsYarnBackend = api.LanguageBackend{
 	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
 			packageManager, version, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
-
 			if err != nil {
 				return false, err
 			}
@@ -62,7 +61,7 @@ var NodejsYarnBackend = api.LanguageBackend{
 
 			isBerry, err := util.IsBerry(cwd, "", false)
 			if err != nil {
-				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+				return false, fmt.Errorf("could not determine yarn version (v1 or berry): %w", err)
 			}
 
 			if specfileExists && lockfileExists && !isBerry {
@@ -98,10 +97,10 @@ var NodejsBerryBackend = api.LanguageBackend{
 	Detect: func(cwd string, pkg *fs.PackageJSON, backend *api.LanguageBackend) (bool, error) {
 		if pkg.PackageManager != "" {
 			packageManager, version, err := util.GetPackageManagerAndVersion(pkg.PackageManager)
-
 			if err != nil {
 				return false, err
 			}
+
 			if packageManager != "yarn" {
 				return false, nil
 			}
@@ -115,13 +114,12 @@ var NodejsBerryBackend = api.LanguageBackend{
 				return true, nil
 			}
 		} else {
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
 			isBerry, err := util.IsBerry(cwd, "", false)
 			if err != nil {
-				return false, fmt.Errorf("could not check if yarn is berry: %w", err)
+				return false, fmt.Errorf("could not determine yarn version (v1 or berry): %w", err)
 			}
 
 			if specfileExists && lockfileExists && isBerry {
@@ -179,11 +177,11 @@ var NodejsPnpmBackend = api.LanguageBackend{
 			if err != nil {
 				return false, err
 			}
+
 			if packageManager == "pnpm" {
 				return true, nil
 			}
 		} else {
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
@@ -223,11 +221,11 @@ var NodejsNpmBackend = api.LanguageBackend{
 			if err != nil {
 				return false, err
 			}
+
 			if packageManager == "npm" {
 				return true, nil
 			}
 		} else {
-
 			specfileExists := fs.FileExists(filepath.Join(cwd, backend.Specfile))
 			lockfileExists := fs.FileExists(filepath.Join(cwd, backend.Lockfile))
 
