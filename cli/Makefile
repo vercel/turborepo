@@ -90,6 +90,12 @@ platform-unixlike:
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
 	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
+platform-unixlike-cgo:
+	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
+	mkdir -p "$(NPMDIR)/bin"
+	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
 
@@ -97,7 +103,7 @@ platform-darwin:
 	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-unixlike
 
 platform-darwin-arm64:
-	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike
+	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike-cgo
 
 platform-freebsd:
 	make GOOS=freebsd GOARCH=amd64 NPMDIR=npm/turbo-freebsd-64 platform-unixlike
