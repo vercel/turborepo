@@ -91,7 +91,7 @@ platform-unixlike:
 	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
 # To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
-# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1
+# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
 platform-unixlike-cgo:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
