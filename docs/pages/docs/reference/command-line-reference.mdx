@@ -132,6 +132,8 @@ Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting 
 turbo run build --force
 ```
 
+The same behavior also be set via the `TURBO_FORCE=true` environment variable.
+
 #### `--global-deps`
 
 Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory that impact multiple packages/apps.
