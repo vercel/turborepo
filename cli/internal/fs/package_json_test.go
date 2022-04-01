@@ -25,7 +25,7 @@ func Test_ParseTurboConfigJson(t *testing.T) {
 	dev := Pipeline{nil, &BoolFalse, nil, PPipeline{nil, &BoolFalse, nil}}
 	pipelineExpected := map[string]Pipeline{"build": build, "lint": lint, "dev": dev}
 
-	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", SignatureOptions{true, "key", ""}}
+	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
 	assert.EqualValues(t, pipelineExpected, turboConfig.Pipeline)
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboConfig.RemoteCacheOptions)
 }
