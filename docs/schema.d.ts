@@ -25,7 +25,7 @@ export interface Schema {
    * in the traditional dependency graph
    *
    * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)).
-   * 
+   *
    * @default []
    */
   globalDependencies?: string[];
@@ -34,7 +34,7 @@ export interface Schema {
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to properly schedule, execute, and cache the outputs of tasks in
    * your project.
-   * 
+   *
    * @default {}
    */
   pipeline: {
@@ -46,6 +46,11 @@ export interface Schema {
      */
     [script: string]: Pipeline;
   };
+  /**
+   * Configuration options that control how turbo interfaces with the remote Cache.
+   * @default {}
+   */
+  remoteCache?: RemoteCache;
 }
 
 export interface Pipeline {
@@ -63,7 +68,7 @@ export interface Pipeline {
    *
    * Prefixing an item in dependsOn with a $ tells turbo that this pipeline task depends
    * the value of that environment variable.
-   * 
+   *
    * @default []
    */
   dependsOn?: string[];
@@ -89,4 +94,16 @@ export interface Pipeline {
    * @default true
    */
   cache?: boolean;
+}
+
+export interface RemoteCache {
+  /**
+   * Indicates if signature verification is enabled for requests to the remote cache. When
+   * `true`, Turborepo will sign every uploaded artifact using the value of the environment
+   * variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts
+   * that have an invalid signature or are missing a signature.
+   *
+   * @default false
+   */
+  signature?: boolean;
 }

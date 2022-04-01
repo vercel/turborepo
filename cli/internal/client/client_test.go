@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
@@ -12,22 +14,21 @@ import (
 )
 
 func Test_sendToServer(t *testing.T) {
-	handler := http.NewServeMux()
 	ch := make(chan []byte, 1)
-	handler.HandleFunc("/v8/artifacts/events", func(w http.ResponseWriter, req *http.Request) {
-		defer req.Body.Close()
-		b, err := ioutil.ReadAll(req.Body)
-		if err != nil {
-			t.Errorf("failed to read request %v", err)
-		}
-		ch <- b
-		w.WriteHeader(200)
-		w.Write([]byte{})
-	})
-	server := &http.Server{Addr: "localhost:8888", Handler: handler}
-	go server.ListenAndServe()
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			defer req.Body.Close()
+			b, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				t.Errorf("failed to read request %v", err)
+			}
+			ch <- b
+			w.WriteHeader(200)
+			w.Write([]byte{})
+		}))
+	defer ts.Close()
 
-	apiClient := NewClient("http://localhost:8888", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1)
 	apiClient.SetToken("my-token")
 
 	myUUID, err := uuid.NewUUID()
@@ -61,6 +62,32 @@ func Test_sendToServer(t *testing.T) {
 	if !reflect.DeepEqual(events, result) {
 		t.Errorf("roundtrip got %v, want %v", result, events)
 	}
+}
 
-	server.Close()
+func Test_PutArtifact(t *testing.T) {
+	ch := make(chan []byte, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer req.Body.Close()
+		b, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			t.Errorf("failed to read request %v", err)
+		}
+		ch <- b
+		w.WriteHeader(200)
+		w.Write([]byte{})
+	}))
+	defer ts.Close()
+
+	// Set up test expected values
+	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient.SetToken("my-token")
+	expectedArtifactBody := []byte("My string artifact")
+
+	// Test Put Artifact
+	apiClient.PutArtifact("hash", expectedArtifactBody, 500, "")
+	testBody := <-ch
+	if !bytes.Equal(expectedArtifactBody, testBody) {
+		t.Errorf("Handler read '%v', wants '%v'", testBody, expectedArtifactBody)
+	}
+
 }
