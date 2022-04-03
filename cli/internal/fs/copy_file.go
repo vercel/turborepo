@@ -85,7 +85,7 @@ func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.Fi
 		},
 		Unsorted:            true,
 		AllowNonDirectory:   true,
-		FollowSymbolicLinks: false,
+		FollowSymbolicLinks: true,
 	})
 }
 
