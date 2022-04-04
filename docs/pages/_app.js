@@ -1,5 +1,5 @@
-import "../styles.css";
 import "nextra-theme-docs/style.css";
+import "../styles.css";
 
 import { SSRProvider } from "@react-aria/ssr";
 
