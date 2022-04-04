@@ -181,7 +181,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err := parseJSONWaitGroup.Wait(); err != nil {
 			return err
 		}
-		packageDepsHashGroup := new(errgroup.Group)
 		populateGraphWaitGroup := new(errgroup.Group)
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
@@ -191,9 +190,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		}
 
 		if err := populateGraphWaitGroup.Wait(); err != nil {
-			return err
-		}
-		if err := packageDepsHashGroup.Wait(); err != nil {
 			return err
 		}
 
