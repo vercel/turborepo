@@ -128,7 +128,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	enverr := envconfig.Process("TURBO", partialConfig)
 	if enverr != nil {
-		return nil, fmt.Errorf("invalid environment variable: %w", err)
+		return nil, fmt.Errorf("invalid environment variable: %w", enverr)
 	}
 
 	if partialConfig.Token == "" && IsCI() {
