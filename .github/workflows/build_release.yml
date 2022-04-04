@@ -14,6 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install target
+        uses: actions-rs/toolchain@v1
+        with:
+          target: x86_64-unknown-linux-musl
+
       - uses: Swatinem/rust-cache@v1
         with:
           key: release
@@ -22,7 +27,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target=unknown-linux-musl
+          args: --release --target=x86_64-unknown-linux-musl
 
       - uses: actions/upload-artifact@v3
         with:
