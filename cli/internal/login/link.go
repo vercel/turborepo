@@ -46,6 +46,12 @@ Options:
 
 // Run links a local directory to a Vercel organization and enables remote caching
 func (c *LinkCommand) Run(args []string) int {
+	remoteClient, ok := c.Config.ApiClient.(*client.RemoteClient)
+	if !ok {
+		c.Config.Logger.Error("cannot link when using non-Vercel client")
+		c.Ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" cannot link when using non-Vercel client")))
+		return 1
+	}
 	var dontModifyGitIgnore bool
 	shouldSetup := true
 	dir, homeDirErr := homedir.Dir()
@@ -88,12 +94,12 @@ func (c *LinkCommand) Run(args []string) int {
 		return 1
 	}
 
-	teamsResponse, err := c.Config.ApiClient.GetTeams()
+	teamsResponse, err := remoteClient.GetTeams()
 	if err != nil {
 		c.logError(fmt.Errorf("could not get team information.\n%w", err))
 		return 1
 	}
-	userResponse, err := c.Config.ApiClient.GetUser()
+	userResponse, err := remoteClient.GetUser()
 	if err != nil {
 		c.logError(fmt.Errorf("could not get user information.\n%w", err))
 		return 1

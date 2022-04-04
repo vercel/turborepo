@@ -615,6 +615,14 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
 			case strings.HasPrefix(arg, "--url"):
+			case strings.HasPrefix(arg, "--cache-store"):
+			case strings.HasPrefix(arg, "--secret-access-key"):
+			case strings.HasPrefix(arg, "--access-key-id"):
+			case strings.HasPrefix(arg, "--bucket-name"):
+			case strings.HasPrefix(arg, "--bucket-prefix"):
+			case strings.HasPrefix(arg, "--bucket-region"):
+			case strings.HasPrefix(arg, "--bucket-partition"):
+			case strings.HasPrefix(arg, "--bucket-path-style"):
 			case strings.HasPrefix(arg, "--trace"):
 			case strings.HasPrefix(arg, "--cpuprofile"):
 			case strings.HasPrefix(arg, "--heap"):
@@ -667,7 +675,7 @@ func hasGraphViz() bool {
 func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, backend *api.LanguageBackend, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
-	if c.Config.IsLoggedIn() {
+	if c.Config.ApiClient.IsLoggedIn() {
 		analyticsSink = c.Config.ApiClient
 	} else {
 		analyticsSink = analytics.NullSink

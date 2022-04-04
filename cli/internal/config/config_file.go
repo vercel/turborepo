@@ -21,6 +21,11 @@ type TurborepoConfig struct {
 	LoginUrl string `json:"loginUrl,omitempty" envconfig:"login"`
 	// Owner slug
 	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
+	// Configs for bucket-compatible alternative storage solutions
+	BucketName      string `json:"bucketName,omitempty" envconfig:"bucketName"`
+	BucketPrefix    string `json:"bucketPrefix,omitempty" envconfig:"bucketPrefix"`
+	BucketRegion    string `json:"bucketRegion,omitempty" envconfig:"bucketRegion"`
+	BucketPartition string `json:"bucketPartition,omitempty" envconfig:"bucketPartition"`
 }
 
 // writeConfigFile writes config file at a path
@@ -57,11 +62,15 @@ func WriteUserConfigFile(config *TurborepoConfig) error {
 // ReadConfigFile reads a config file at a path
 func ReadConfigFile(path string) (*TurborepoConfig, error) {
 	var config = &TurborepoConfig{
-		Token:    "",
-		TeamId:   "",
-		ApiUrl:   "https://vercel.com/api",
-		LoginUrl: "https://vercel.com",
-		TeamSlug: "",
+		Token:           "",
+		TeamId:          "",
+		ApiUrl:          "https://vercel.com/api",
+		LoginUrl:        "https://vercel.com",
+		TeamSlug:        "",
+		BucketName:      "",
+		BucketPrefix:    "",
+		BucketRegion:    "",
+		BucketPartition: "aws",
 	}
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -82,11 +91,15 @@ func ReadUserConfigFile() (*TurborepoConfig, error) {
 	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return &TurborepoConfig{
-			Token:    "",
-			TeamId:   "",
-			ApiUrl:   "https://vercel.com/api",
-			LoginUrl: "https://vercel.com",
-			TeamSlug: "",
+			Token:           "",
+			TeamId:          "",
+			ApiUrl:          "https://vercel.com/api",
+			LoginUrl:        "https://vercel.com",
+			TeamSlug:        "",
+			BucketName:      "",
+			BucketPrefix:    "",
+			BucketRegion:    "",
+			BucketPartition: "aws",
 		}, err
 	}
 	return ReadConfigFile(path)

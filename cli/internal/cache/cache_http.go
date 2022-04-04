@@ -13,7 +13,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -160,15 +159,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 	defer resp.Body.Close()
 	files := []string{}
 	missingLinks := []*tar.Header{}
-	duration := 0
-	// If present, extract the duration from the response.
-	if resp.Header.Get("x-artifact-duration") != "" {
-		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
-		if err != nil {
-			return false, nil, 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
-		}
-		duration = intVar
-	}
+	duration := resp.ArtifactDuration
 	if resp.StatusCode == http.StatusNotFound {
 		return false, files, duration, nil // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {
@@ -177,7 +168,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 	}
 	artifactReader := resp.Body
 	if cache.signerVerifier.isEnabled() {
-		expectedTag := resp.Header.Get("x-artifact-tag")
+		expectedTag := resp.Tag
 		if expectedTag == "" {
 			// If the verifier is enabled all incoming artifact downloads must have a signature
 			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")

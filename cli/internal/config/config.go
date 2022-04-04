@@ -33,6 +33,8 @@ func IsCI() bool {
 // Config is a struct that contains user inputs and our logger
 type Config struct {
 	Logger hclog.Logger
+	// Turborepo CLI Version
+	TurboVersion string
 	// Bearer token
 	Token string
 	// vercel.com / remote cache team id
@@ -43,11 +45,11 @@ type Config struct {
 	ApiUrl string
 	// Login URL
 	LoginUrl string
-	// Backend retryable http client
-	ApiClient *client.ApiClient
-	// Turborepo CLI Version
-	TurboVersion string
-	Cache        *CacheConfig
+	// Backend retryable client
+	ApiClient client.Client
+	// Type of backend client
+	CacheType CacheType
+	Cache     *CacheConfig
 	// turbo.json or legacy turbo config from package.json
 	TurboConfigJSON *fs.TurboConfigJSON
 	// package.json at the root of the repo
@@ -56,9 +58,21 @@ type Config struct {
 	Cwd string
 }
 
-// IsLoggedIn returns true if we have a token and either a team id or team slug
-func (c *Config) IsLoggedIn() bool {
-	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
+type CacheType string
+
+const (
+	VercelCacheType CacheType = "vercel"
+	BucketCacheType CacheType = "bucket"
+	LocalCacheType  CacheType = "local"
+)
+
+func (c *Config) UseRemoteCaching() bool {
+	switch c.CacheType {
+	case VercelCacheType, BucketCacheType:
+		return c.ApiClient.IsLoggedIn()
+	default:
+		return false
+	}
 }
 
 // CacheConfig
@@ -121,6 +135,12 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		partialConfig.Token = os.Getenv("VERCEL_ARTIFACTS_TOKEN")
 		partialConfig.TeamId = os.Getenv("VERCEL_ARTIFACTS_OWNER")
 	}
+	accessKeyId := os.Getenv("ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("SECRET_ACCESS_KEY")
+
+	cacheType := LocalCacheType
+	clientType := client.VercelClientType
+	bucketPathStyle := false
 
 	app := args[0]
 
@@ -168,9 +188,39 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			partialConfig.Token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
+		case strings.HasPrefix(arg, "--secret-access-key="):
+			secretAccessKey = arg[len("--secret-access-key="):]
+		case strings.HasPrefix(arg, "--access-key-id="):
+			accessKeyId = arg[len("--access-key-id="):]
+		case strings.HasPrefix(arg, "--bucket-name="):
+			partialConfig.BucketName = arg[len("--bucket-name="):]
+		case strings.HasPrefix(arg, "--bucket-prefix="):
+			partialConfig.BucketPrefix = arg[len("--bucket-prefix="):]
+		case strings.HasPrefix(arg, "--bucket-region="):
+			partialConfig.BucketRegion = arg[len("--bucket-region="):]
+		case strings.HasPrefix(arg, "--bucket-partition="):
+			partialConfig.BucketPartition = arg[len("--bucket-partition="):]
+		case arg == "--bucket-path-style":
+			bucketPathStyle = true
+		case strings.HasPrefix(arg, "--cache-store="):
+			cacheStoreType := arg[len("--cache-store="):]
+			switch cacheStoreType {
+			case "vercel":
+				cacheType = VercelCacheType
+			case "bucket":
+				cacheType = BucketCacheType
+			case "local":
+				cacheType = LocalCacheType
+			default:
+				return nil, fmt.Errorf("invalid value %v for --cache-store CLI flag. This should be `vercel`, `bucket`, or `local`", cacheStoreType)
+			}
 		default:
 			continue
 		}
+	}
+
+	if cacheType == BucketCacheType {
+		clientType = client.BucketClientType
 	}
 
 	// Default output is nowhere unless we enable logging.
@@ -189,29 +239,44 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	})
 
 	maxRemoteFailCount := 3
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
+	apiClient, err := client.New(&client.ClientConfig{
+		ClientType:         clientType,
+		ApiUrl:             partialConfig.ApiUrl,
+		TeamId:             partialConfig.TeamId,
+		TeamSlug:           partialConfig.TeamSlug,
+		Token:              partialConfig.Token,
+		BucketRegion:       partialConfig.BucketRegion,
+		BucketName:         partialConfig.BucketName,
+		BucketPrefix:       partialConfig.BucketPrefix,
+		BucketPartition:    partialConfig.BucketPartition,
+		BucketPathStyle:    bucketPathStyle,
+		AccessKeyId:        accessKeyId,
+		SecretAccessKey:    secretAccessKey,
+		MaxRemoteFailCount: uint64(maxRemoteFailCount),
+		TurboVersion:       turboVersion,
+		Logger:             logger,
+	})
 
 	c = &Config{
-		Logger:       logger,
-		Token:        partialConfig.Token,
-		TeamSlug:     partialConfig.TeamSlug,
-		TeamId:       partialConfig.TeamId,
-		ApiUrl:       partialConfig.ApiUrl,
-		LoginUrl:     partialConfig.LoginUrl,
-		ApiClient:    apiClient,
-		TurboVersion: turboVersion,
+		Logger:          logger,
+		TurboVersion:    turboVersion,
+		RootPackageJSON: rootPackageJSON,
+		TurboConfigJSON: turboConfigJson,
+		Cwd:             cwd,
+		Token:           partialConfig.Token,
+		TeamSlug:        partialConfig.TeamSlug,
+		TeamId:          partialConfig.TeamId,
+		ApiUrl:          partialConfig.ApiUrl,
+		LoginUrl:        partialConfig.LoginUrl,
+		ApiClient:       apiClient,
+		CacheType:       cacheType,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
-		RootPackageJSON: rootPackageJSON,
-		TurboConfigJSON: turboConfigJson,
-		Cwd:             cwd,
 	}
 
-	c.ApiClient.SetToken(partialConfig.Token)
-
-	return c, nil
+	return c, err
 }
 
 func ReadTurboConfig(rootPath string, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {

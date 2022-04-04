@@ -6,6 +6,11 @@ require (
 	github.com/AlecAivazis/survey/v2 v2.2.12
 	github.com/Masterminds/semver v1.5.0
 	github.com/adrg/xdg v0.3.3
+	github.com/aws/aws-sdk-go-v2 v1.16.2
+	github.com/aws/aws-sdk-go-v2/config v1.15.3
+	github.com/aws/aws-sdk-go-v2/credentials v1.11.2
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.3
+	github.com/aws/smithy-go v1.11.2
 	github.com/bmatcuk/doublestar/v4 v4.0.2
 	github.com/briandowns/spinner v1.16.0
 	github.com/deckarep/golang-set v1.7.1

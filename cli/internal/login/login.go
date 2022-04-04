@@ -54,6 +54,12 @@ const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
 // Run logs into the api with PKCE and writes the token to turbo user config directory
 func (c *LoginCommand) Run(args []string) int {
+	remoteClient, ok := c.Config.ApiClient.(*client.RemoteClient)
+	if !ok {
+		c.Config.Logger.Error("cannot link when using non-Vercel client")
+		c.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" cannot link when using non-Vercel client")))
+		return 1
+	}
 	var ssoTeam string
 	loginCommand := &cobra.Command{
 		Use:   "turbo login",
@@ -62,7 +68,7 @@ func (c *LoginCommand) Run(args []string) int {
 			deps := loginDeps{
 				ui:              c.UI,
 				openURL:         browser.OpenBrowser,
-				client:          c.Config.ApiClient,
+				client:          remoteClient,
 				writeUserConfig: config.WriteUserConfigFile,
 				writeRepoConfig: config.WriteRepoConfigFile,
 			}

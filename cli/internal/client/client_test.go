@@ -28,7 +28,17 @@ func Test_sendToServer(t *testing.T) {
 		}))
 	defer ts.Close()
 
-	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient, err := New(&ClientConfig{
+		ApiUrl:             ts.URL,
+		Logger:             hclog.Default(),
+		TurboVersion:       "v1",
+		TeamId:             "",
+		TeamSlug:           "my-team-slug",
+		MaxRemoteFailCount: 1,
+	})
+	if err != nil {
+		t.Errorf("failed to create client %v", err)
+	}
 	apiClient.SetToken("my-token")
 
 	myUUID, err := uuid.NewUUID()
@@ -79,7 +89,17 @@ func Test_PutArtifact(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient, err := New(&ClientConfig{
+		ApiUrl:             ts.URL + "/hash",
+		Logger:             hclog.Default(),
+		TurboVersion:       "v1",
+		TeamId:             "",
+		TeamSlug:           "my-team-slug",
+		MaxRemoteFailCount: 1,
+	})
+	if err != nil {
+		t.Errorf("failed to create client %v", err)
+	}
 	apiClient.SetToken("my-token")
 	expectedArtifactBody := []byte("My string artifact")
 
