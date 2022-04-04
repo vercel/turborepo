@@ -32,4 +32,4 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: node-file-trace
-          path: target/release/node-file-trace
+          path: target/x86_64-unknown-linux-musl/release/node-file-trace
