@@ -51,7 +51,7 @@ turbo run build --filter=...b
 turbo run build --filter=...^b
 ```
 
-### Dependencies specifier - Include dependencies of matched packages
+### Include dependencies of matched packages
 
 Append `...` to the end of the filter. If `a` depends on `b`, `a...` will select `a` and `b`.
 Optionally including a `^` (`a^...`) will select all of `a`'s dependencies, but not `a` itself. In this case, just `b` will be selected.
