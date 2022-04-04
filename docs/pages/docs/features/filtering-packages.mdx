@@ -89,7 +89,7 @@ turbo run build --filter=...[origin/my-feature]
 turbo run build --filter=@foo/bar...[HEAD^1]
 ```
 
-### Exclusion specifier - Exclude matched packages
+### Excluding packages
 
 Prepend `!` to the filter. Matched packages from the entire filter will be excluded from the set of targets.
 For example, match everything except `a`: `--filter=!a`. Note that you may need to escape `!` as appropriate for your shell (e.g. `\!`).
