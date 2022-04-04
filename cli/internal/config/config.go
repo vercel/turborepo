@@ -56,6 +56,8 @@ type Config struct {
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
 	Cwd string
+	// Whether or not to push analytics to remote backend
+	EnableAnalytics bool
 }
 
 type CacheType string
@@ -140,6 +142,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	cacheType := LocalCacheType
 	clientType := client.VercelClientType
+	enableAnalytics := true
 	bucketPathStyle := false
 
 	app := args[0]
@@ -214,6 +217,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			default:
 				return nil, fmt.Errorf("invalid value %v for --cache-store CLI flag. This should be `vercel`, `bucket`, or `local`", cacheStoreType)
 			}
+		case arg == "--no-analytics":
+			enableAnalytics = false
 		default:
 			continue
 		}
@@ -274,6 +279,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
+		EnableAnalytics: enableAnalytics,
 	}
 
 	return c, err
