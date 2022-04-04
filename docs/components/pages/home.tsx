@@ -93,7 +93,7 @@ function Page() {
       </Head>
       <div>
         <div className="px-4 pt-16 pb-8 sm:pt-24 lg:px-8">
-          <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
+          <h1 className="max-w-5xl text-center mx-auto text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
             Monorepos that
             <br className="hidden lg:block" />
             <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-blue-500 ">
