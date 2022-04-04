@@ -40,7 +40,7 @@ turbo run build --filter=@foo/bar
 turbo run build --filter=admin-*
 ```
 
-### Dependents specifier - Include dependents of matched packages
+### Include dependents of matched packages
 
 Prepend `...` to the filter. If `a` depends on `b`, `...b` will select `a` and `b`.
 Optionally including a `^` (`...^b`) will select all of `b`'s dependents, but not `b` itself. In this case, just `a` will be
