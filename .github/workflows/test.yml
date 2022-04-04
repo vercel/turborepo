@@ -35,6 +35,12 @@ jobs:
           command: check
           args: --examples
 
+      - name: Run cargo check benches
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --benches
+
       - name: Run cargo build
         uses: actions-rs/cargo@v1
         with:
@@ -51,6 +57,12 @@ jobs:
         with:
           command: build
           args: --examples
+
+      - name: Run cargo build benches
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --benches
 
       - name: Setup node
         uses: actions/setup-node@v2
