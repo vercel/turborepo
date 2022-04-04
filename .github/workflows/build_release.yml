@@ -16,13 +16,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
         with:
-          key: release --target=unknown-linux-musl
+          key: release
 
       - name: Run cargo build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
+          args: --release --target=unknown-linux-musl
 
       - uses: actions/upload-artifact@v3
         with:
