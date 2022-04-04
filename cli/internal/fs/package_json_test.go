@@ -20,9 +20,24 @@ func Test_ParseTurboConfigJson(t *testing.T) {
 	}
 	BoolFalse := false
 
-	build := Pipeline{[]string{"dist/**", ".next/**"}, nil, []string{"^build"}, PPipeline{&[]string{"dist/**", ".next/**"}, nil, []string{"^build"}}}
-	lint := Pipeline{[]string{}, nil, nil, PPipeline{&[]string{}, nil, nil}}
-	dev := Pipeline{nil, &BoolFalse, nil, PPipeline{nil, &BoolFalse, nil}}
+	build := Pipeline{
+		Outputs:   []string{"dist/**", ".next/**"},
+		DependsOn: []string{"^build"},
+		PPipeline: PPipeline{
+			Outputs:   &[]string{"dist/**", ".next/**"},
+			DependsOn: []string{"^build"},
+		},
+	}
+	lint := Pipeline{
+		Outputs:   []string{},
+		PPipeline: PPipeline{Outputs: &[]string{}},
+	}
+	dev := Pipeline{
+		Cache: &BoolFalse,
+		PPipeline: PPipeline{
+			Cache: &BoolFalse,
+		},
+	}
 	pipelineExpected := map[string]Pipeline{"build": build, "lint": lint, "dev": dev}
 
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
