@@ -1,0 +1,113 @@
+---
+title: Filtering Packages
+description: Only build the packages you care about
+---
+
+import Callout from "../../../components/callout";
+import HeartIcon from "@heroicons/react/solid/HeartIcon";
+
+# Filtering Packages
+
+Filtering packages allows you to target your tasks to only the packages you care about.
+Turborepo supports a `pnpm`-like `--filter` flag that allows you to select the packages
+that will act as "entry points" into your monorepo's package/task graph.
+You can match packages by name, directory, include dependents/dependencies, and by changes
+in git history.
+
+`turbo` will run each task against each matched packages, ensuring that any dependencies
+are run first, according to the pipeline specification in [`turbo.json`](/docs/reference/configuration#pipeline).
+
+## Filter Syntax
+
+Filters specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+Filter syntax is based on `pnpm`'s filter syntax.
+
+### Package specifier - Glob match package names
+
+Supports exact matches (`--filter=my-pkg`), and globs (`--filter=*my-pkg*`) are supported.
+Scoped packages (`@foo/bar`) can be abbreviated to just the package name (`bar`) as long as the package name
+is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
+
+```sh
+turbo run build --filter=my-pkg
+turbo run build --filter=@foo/bar
+turbo run build --filter=admin-*
+```
+
+### Dependents specifier - Include dependents of matched packages
+
+Prepend `...` to the filter. If `a` depends on `b`, `...b` will select `a` and `b`.
+Optionally including a `^` (`...^b`) will select all of `b`'s dependents, but not `b` itself. In this case, just `a` will be
+selected.
+
+```sh
+turbo run build --filter=...b
+turbo run build --filter=...^b
+```
+
+### Dependencies specifier - Include dependencies of matched packages
+
+Append `...` to the end of the filter. If `a` depends on `b`, `a...` will select `a` and `b`.
+Optionally including a `^` (`a^...`) will select all of `a`'s dependencies, but not `a` itself. In this case, just `b` will be selected.
+
+```sh
+turbo run build --filter=a...
+turbo run build --filter=a^...
+```
+
+### Directory specifier - Match a directory or directory tree
+
+Supports exact matches (`--filter=./apps/docs`) and globs (`--filter=./apps/*`).
+When combined with other components, must be enclosed in `{}` (`--filter=...{./libs/*}`).
+
+```sh
+turbo run build --filter=./apps/*
+turbo run build --filter=...{./libs/*}
+```
+
+### Commit specifier - Match changed packages
+
+Use the set of files changed since a specified commit to calculate packages. Enclose references in
+`[]`. For example, `--filter=[HEAD^1]` will select all packages that have changed in the most recent
+commit.
+
+You can use [`--ignore`](/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which packages have changed.
+
+You can additionally prepend the commit reference with `...` to match the dependencies of other components
+against the changed packages. For instance, to select `foo` if any of `foo`'s dependencies have changed in the last commit,
+you can pass `--filter=foo...[HEAD^1]`. Note that this feature is different from `pnpm`'s syntax.
+
+```sh
+turbo run build --filter=[HEAD^1]
+turbo run build --filter=...[origin/my-feature]
+turbo run build --filter=@foo/bar...[HEAD^1]
+```
+
+### Exclusion specifier - Exclude matched packages
+
+Prepend `!` to the filter. Matched packages from the entire filter will be excluded from the set of targets.
+For example, match everything except `a`: `--filter=!a`. Note that you may need to escape `!` as appropriate for your shell (e.g. `\!`).
+
+```sh
+turbo run build --filter=!foo
+turbo run build --filter=./apps/* --filter=!./apps/admin
+```
+
+### Examples
+
+- Test everything that has changed since the previous commit: `turbo run test --filter=[HEAD^1]`
+- Build the docs app, letting `turbo` infer the need to build dependencies from the pipeline: `turbo run build --filter=docs`
+- Test everything that depends on a library (`@scope/foo`), but not the library itself: `turbo run test --filter=...^@scope/foo`
+- Test each package in the `@scope` scope and in the `packages` directory, if it has changed since the previous commit:
+  `turbo run test --filter=@scope/*{packages/*}[HEAD^1]`
+
+<Callout type="idea" icon={<HeartIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />}>
+Turborepo's Filter API design and docs were/are inspired by 
+[`pnpm`](https://pnpm.io/filtering)
+</Callout>
