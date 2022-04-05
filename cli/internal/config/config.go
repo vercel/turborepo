@@ -258,5 +258,9 @@ func selectCwd(inputArgs []string) (string, error) {
 			}
 		}
 	}
-	return cwd, nil
+	pathname, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		return "", fmt.Errorf("invalid working directory: %w", err)
+	}
+	return pathname, nil
 }
