@@ -78,6 +78,10 @@ turbo run build --cwd=./somewhere/else
 
 #### `--deps`
 
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependents-of-matched-packages) instead.
+</Callout>
+
 Defaults to `true`. Include dependent packages/apps consumers in the execution.
 
 ```sh
@@ -200,6 +204,10 @@ Just a quick overview.
 
 #### `--include-dependencies`
 
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependencies-of-matched-packages) instead.
+</Callout>
+
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
 This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
@@ -265,6 +273,10 @@ turbo run dev --parallel --no-cache
 
 #### `--scope`
 
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-package) instead.
+</Callout>
+
 `type: string[]`
 
 Specify/filter package(s)/apps to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
@@ -285,6 +297,10 @@ turbo run build --serial
 ```
 
 #### `--since`
+
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-changed-packages) instead.
+</Callout>
 
 Filter execution based on which packages have changed since a merge-base.
 
