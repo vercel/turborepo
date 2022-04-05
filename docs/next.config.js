@@ -32,11 +32,6 @@ module.exports = withNextra({
         permanent: true,
         destination: "/docs/guides/monorepo-tools",
       },
-      {
-        source: "/docs/features/scopes",
-        permanent: true,
-        destination: "/docs/features/filtering",
-      },
     ];
   },
 });
