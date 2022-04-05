@@ -35,7 +35,7 @@ module.exports = withNextra({
       {
         source: "/docs/features/scopes",
         permanent: true,
-        destination: "/docs/features/filtering-packages",
+        destination: "/docs/features/filtering",
       },
     ];
   },
