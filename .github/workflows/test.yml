@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -79,6 +79,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+
+      - name: Run cargo test (benchmarks)
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --benches
 
       - name: Install cargo clippy
         run: rustup component add clippy

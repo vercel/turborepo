@@ -1,0 +1,49 @@
+name: Benchmark PR
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Run cargo bench (main)
+        uses: actions-rs/cargo@v1
+        continue-on-error: true
+        with:
+          command: bench
+          args: -- --save-baseline=main
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: benchmark
+
+      - uses: actions/checkout@v3
+
+      - name: Run cargo bench (PR)
+        uses: actions-rs/cargo@v1
+        continue-on-error: true
+        with:
+          command: bench
+          args: -- --save-baseline=pr
+
+      - name: Show results
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+          args: -- --load-baseline=pr --baseline=main
+
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark report
+          path: target/criterion/

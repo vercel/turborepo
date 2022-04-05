@@ -1,0 +1,38 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: benchmark
+
+      - name: Run cargo bench
+        uses: actions-rs/cargo@v1
+        continue-on-error: true
+        with:
+          command: bench
+          args: -- --save-baseline=main
+
+      - name: Show results
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+          args: -- --load-baseline=pr
+
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark report
+          path: target/criterion/
