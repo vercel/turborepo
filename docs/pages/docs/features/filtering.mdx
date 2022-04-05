@@ -35,30 +35,37 @@ Scoped packages (`@foo/bar`) can be abbreviated to just the package name (`bar`)
 is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
 
 ```sh
+# Build 'my-pkg', letting turbo infer task dependencies from the pipeline defined in turbo.json
 turbo run build --filter=my-pkg
+# Build '@foo/bar', letting turbo infer task dependencies from the pipeline defined in turbo.json
 turbo run build --filter=@foo/bar
+# Build all packages that start with 'admin-', letting turbo infer task dependencies from the pipeline defined in turbo.json
 turbo run build --filter=admin-*
 ```
 
 ### Include dependents of matched packages
 
-Prepend `...` to the filter. If `a` depends on `b`, `...b` will select `a` and `b`.
-Optionally including a `^` (`...^b`) will select all of `b`'s dependents, but not `b` itself. In this case, just `a` will be
+Prepend `...` to the filter. If `my-app` depends on `my-lib`, `...my-lib` will select `my-app` and `my-lib`.
+Optionally including a `^` (`...^my-lib`) will select all of `my-lib`'s dependents, but not `my-lib` itself. In this case, just `my-app` will be
 selected.
 
 ```sh
-turbo run build --filter=...b
-turbo run build --filter=...^b
+# Test 'my-lib' and everything that depends on 'my-lib'
+turbo run test --filter=...my-lib
+# Test everything that depends on 'my-lib', but not 'my-lib' itself
+turbo run test --filter=...^my-lib
 ```
 
 ### Include dependencies of matched packages
 
-Append `...` to the end of the filter. If `a` depends on `b`, `a...` will select `a` and `b`.
-Optionally including a `^` (`a^...`) will select all of `a`'s dependencies, but not `a` itself. In this case, just `b` will be selected.
+Append `...` to the end of the filter. If `my-app` depends on `my-lib`, `my-app...` will select `my-app` and `my-lib`.
+Optionally including a `^` (`my-app^...`) will select all of `my-app`'s dependencies, but not `my-app` itself. In this case, just `my-lib` will be selected.
 
 ```sh
-turbo run build --filter=a...
-turbo run build --filter=a^...
+# Build 'my-app' and its dependencies
+turbo run build --filter=my-app...
+# Build 'my-app's dependencies, but not 'my-app' itself
+turbo run build --filter=my-app^...
 ```
 
 ### Filter by directory or directory tree
@@ -67,7 +74,9 @@ Supports exact matches (`--filter=./apps/docs`) and globs (`--filter=./apps/*`).
 When combined with other components, must be enclosed in `{}` (`--filter=...{./libs/*}`).
 
 ```sh
+# Build all of the packages in the 'apps' directory
 turbo run build --filter=./apps/*
+# Build all of the packages in the 'libs' directory, and all the packages that depends on them
 turbo run build --filter=...{./libs/*}
 ```
 
@@ -84,30 +93,29 @@ against the changed packages. For instance, to select `foo` if any of `foo`'s de
 you can pass `--filter=foo...[HEAD^1]`. Note that this feature is different from `pnpm`'s syntax.
 
 ```sh
-turbo run build --filter=[HEAD^1]
+# Test everything that changed in the last commit
+turbo run test --filter=[HEAD^1]
+# Build everything that depends on changes in branch 'my-feature'
 turbo run build --filter=...[origin/my-feature]
+# Build '@foo/bar' if it or any of its dependencies changed in the last commit
 turbo run build --filter=@foo/bar...[HEAD^1]
+# Test each package in the '@scope' scope that is in the 'packages' directory, if it has changed in the last commit
+turbo run test --filter=@scope/*{./packages/*}[HEAD^1]
 ```
 
 ### Excluding packages
 
 Prepend `!` to the filter. Matched packages from the entire filter will be excluded from the set of targets.
-For example, match everything except `a`: `--filter=!a`. Note that you may need to escape `!` as appropriate for your shell (e.g. `\!`).
+For example, match everything except `@foo/bar`: `--filter=!@foo/bar`. Note that you may need to escape `!` as appropriate for your shell (e.g. `\!`).
 
 ```sh
-turbo run build --filter=!foo
-turbo run build --filter=./apps/* --filter=!./apps/admin
+# Build everything except '@foo/bar'
+turbo run build --filter=!@foo/bar
+# Build all of the packages in the 'apps' directory, except the 'admin' package
+turbo run build --filter=./apps/* --filter=!admin
 ```
 
-### Examples
-
-- Test everything that has changed since the previous commit: `turbo run test --filter=[HEAD^1]`
-- Build the docs app, letting `turbo` infer the need to build dependencies from the pipeline: `turbo run build --filter=docs`
-- Test everything that depends on a library (`@scope/foo`), but not the library itself: `turbo run test --filter=...^@scope/foo`
-- Test each package in the `@scope` scope and in the `packages` directory, if it has changed since the previous commit:
-  `turbo run test --filter=@scope/*{packages/*}[HEAD^1]`
-
-<Callout type="idea" icon={<HeartIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />}>
+<Callout type="idea" icon={<HeartIcon className="mt-1 h-5 w-5 text-gray-400" aria-hidden="true" />}>
 Turborepo's Filter API design and docs were/are inspired by 
 [pnpm](https://pnpm.io/filtering)
 </Callout>
