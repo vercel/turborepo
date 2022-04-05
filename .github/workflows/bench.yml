@@ -29,9 +29,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: bench
-          args: -- --load-baseline=pr
+          args: -- --load-baseline=pr --baseline=pr
 
       - name: Upload report
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: benchmark report
