@@ -53,13 +53,6 @@ type SchedulerExecutionOptions struct {
 
 func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
-	if len(pkgs) == 0 {
-		// TODO(gsoltis): Is this behavior only used in tests?
-		for _, v := range p.TopologicGraph.Vertices() {
-			pkgs = append(pkgs, dag.VertexName(v))
-		}
-	}
-
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
 		// TODO(gsoltis): Is this behavior used?
