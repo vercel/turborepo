@@ -96,7 +96,7 @@ func (c *RunCommand) Synopsis() string {
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
 	helpText := strings.TrimSpace(`
-Usage: turbo run <task> [options] ...
+Usage: turbo run <task> [options] [-- <args passed to tasks>]
 
     Run tasks across projects in your monorepo.
 
@@ -105,6 +105,8 @@ Usage: turbo run <task> [options] ...
     tasks already in the cache will skip re-execution and immediately move
     artifacts from the cache into the correct output folders (as if the task
     occurred again).
+
+    Arguments passed after '--' will be passed through to the named tasks.
 
 Options:
   --help                 Show this message.

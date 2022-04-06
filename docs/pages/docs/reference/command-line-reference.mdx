@@ -25,9 +25,15 @@ Boolean options can be enabled as follows:
 --<option>=false
 ```
 
-## `turbo run <task1> <task2>`
+## `turbo run <task>`
 
 Run NPM scripts across all packages in specified scope. Tasks must be specified in your `pipeline` configuration.
+
+`turbo run <task1> <task2> [options] [-- <args passed to task1 and task2>]`
+
+`turbo` can run multiple tasks, and any arguments following `--` will be passed through
+to the tasks to be executed. Note that these additional arguments will _not_ be passed to
+any additional tasks that are run due to dependencies from the [pipeline](/docs/reference/configuration#pipeline) configuration.
 
 ### Options
 
