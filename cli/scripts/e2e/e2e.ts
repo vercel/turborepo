@@ -11,6 +11,7 @@ const basicPipeline = {
       outputs: [],
     },
     lint: {
+      inputs: ["build.js", "lint.js"],
       outputs: [],
     },
     build: {
@@ -313,12 +314,12 @@ function runSmokeTests<T>(
       );
       assert.ok(
         lintOutput.includes(
-          `a:lint: cache miss, executing ${getHashFromOutput(
+          `a:lint: cache hit, replaying output ${getHashFromOutput(
             lintOutput,
             "a#lint"
           )}`
         ),
-        "Cache miss, a has changed"
+        "Cache hit, a has changed but not a file lint depends on"
       );
 
       // Check that hashes are different and trigger a cascade
@@ -347,6 +348,33 @@ function runSmokeTests<T>(
           )}`
         ),
         "Cache hit, dependency changes are irrelevant for lint task"
+      );
+
+      repo.commitFiles({
+        [path.join("packages", "a", "lint.js")]: "console.log('lintingz a')",
+      });
+
+      const thirdLintRun = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+
+      assert.equal(
+        thirdLintRun[0],
+        `• Packages in scope: a`,
+        "Packages in scope for lint"
+      );
+      assert.ok(
+        thirdLintRun.includes(
+          `a:lint: cache miss, executing ${getHashFromOutput(
+            thirdLintRun,
+            "a#lint"
+          )}`
+        ),
+        "Cache miss, we changed a file that lint uses as an input"
       );
 
       const commandOnceBHasChangedOutput = getCommandOutputAsArray(
