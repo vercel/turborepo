@@ -790,10 +790,10 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		if outputLogsMode == HashLogs {
 			//Writing to Stdout only the "cache hit, replaying output" line
 			scan.Scan()
-			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
+			prefixUi.Output(string(scan.Bytes()))
 		} else {
 			for scan.Scan() {
-				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+				prefixUi.Output(string(scan.Bytes())) //Writing to Stdout
 			}
 		}
 	}
