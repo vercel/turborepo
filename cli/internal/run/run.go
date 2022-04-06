@@ -796,7 +796,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, logPrefix string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
@@ -805,15 +805,9 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	if outputLogsMode != NoLogs {
-		if outputLogsMode == HashLogs {
-			prefixUi.Output(fmt.Sprintf("%scache hit, suppressing output %s", logPrefix, ui.Dim(hash)))
-		} else {
-			scan := bufio.NewScanner(f)
-			for scan.Scan() {
-				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
-			}
-		}
+	scan := bufio.NewScanner(f)
+	for scan.Scan() {
+		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -910,9 +904,16 @@ func (e *execContext) exec(pt *packageTask) error {
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
-			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
-				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, actualPrefix, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
+			switch e.rs.Opts.cacheHitLogsMode {
+			case HashLogs:
+				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
+			case FullLogs:
+				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
+					e.logReplayWaitGroup.Add(1)
+					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false)
+				}
+			default:
+				// NoLogs, do not output anything
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
