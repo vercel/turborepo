@@ -39,13 +39,13 @@ have support for rendering color in their log output.
 turbo run build --color
 ```
 
-Alternatively, you can also enable color using the `FORCED_COLOR` environment variable (borrowed
+Alternatively, you can also enable color using the `FORCE_COLOR` environment variable (borrowed
 from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)). Going
 this route may also unlock some additional colored output from the actual tasks themselves if
 they use `supports-color` to determine whether or not to output with colored output.
 
 ```sh
-declare -x FORCED_COLOR=1
+declare -x FORCE_COLOR=1
 turbo run build
 ```
 
@@ -57,11 +57,11 @@ Suppresses the use of color in the output when running turbo in an interactive /
 turbo run build --no-color
 ```
 
-Alternatively, you can also suppress color using the `FORCED_COLOR` environment variable (borrowed
+Alternatively, you can also suppress color using the `FORCE_COLOR` environment variable (borrowed
 from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)).
 
 ```sh
-declare -x FORCED_COLOR=0
+declare -x FORCE_COLOR=0
 turbo run build
 ```
 
