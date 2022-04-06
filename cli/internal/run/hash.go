@@ -105,6 +105,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath string) 
 	}
 
 	pathPrefix := filepath.Join(rootPath, pkg.Dir)
+  toTrim := filepath.FromSlash(pathPrefix + "/")
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		rootMatch := ignore.MatchesPath(name)
 		otherMatch := ignorePkg.MatchesPath(name)
@@ -123,7 +124,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath string) 
 				if err != nil {
 					return fmt.Errorf("could not hash file %v. \n%w", name, err)
 				}
-				hashObject[strings.TrimPrefix(name, pathPrefix+"/")] = hash
+				hashObject[strings.TrimPrefix(name, toTrim)] = hash
 			}
 		}
 		return nil

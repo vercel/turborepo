@@ -28,16 +28,16 @@ func Test_manuallyHashPackage(t *testing.T) {
 		hash     string
 	}
 	files := map[string]fileHash{
-		"top-level-file":              {"top-level-file-contents", ""},
-		"other-dir/other-dir-file":    {"other-dir-file-contents", ""},
-		"ignoreme":                    {"anything", ""},
-		"libA/some-file":              {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
-		"libA/some-dir/other-file":    {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
-		"libA/some-dir/another-one":   {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
-		"libA/ignoreme":               {"anything", ""},
-		"libA/ignorethisdir/anything": {"anything", ""},
-		"libA/pkgignoreme":            {"anything", ""},
-		"libA/pkgignorethisdir/file":  {"anything", ""},
+		filepath.FromSlash("top-level-file"):              {"top-level-file-contents", ""},
+		filepath.FromSlash("other-dir/other-dir-file"):    {"other-dir-file-contents", ""},
+		filepath.FromSlash("ignoreme"):                    {"anything", ""},
+		filepath.FromSlash("libA/some-file"):              {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		filepath.FromSlash("libA/some-dir/other-file"):    {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		filepath.FromSlash("libA/some-dir/another-one"):   {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		filepath.FromSlash("libA/ignoreme"):               {"anything", ""},
+		filepath.FromSlash("libA/ignorethisdir/anything"): {"anything", ""},
+		filepath.FromSlash("libA/pkgignoreme"):            {"anything", ""},
+		filepath.FromSlash("libA/pkgignorethisdir/file"):  {"anything", ""},
 	}
 
 	rootIgnoreFile, err := os.Create(filepath.Join(root, ".gitignore"))
@@ -80,7 +80,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		f.Close()
 	}
 	// now that we've created the repo, expect our .gitignore file too
-	files["libA/.gitignore"] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
+	files[filepath.FromSlash("libA/.gitignore")] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
 
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
@@ -89,7 +89,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
-	prefix := pkgName + "/"
+	prefix := filepath.FromSlash(pkgName + "/")
 	prefixLen := len(prefix)
 	count := 0
 	for path, spec := range files {
@@ -111,7 +111,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := manuallyHashPackage(pkg, []string{"**/*file"}, root)
+	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, root)
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
