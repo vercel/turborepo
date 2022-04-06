@@ -56,7 +56,6 @@ type RunCommand struct {
 type completeGraph struct {
 	TopologicalGraph dag.AcyclicGraph
 	Pipeline         fs.PipelineConfig
-	SCC              [][]dag.Vertex
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	GlobalHash       string
 	RootNode         string
@@ -214,7 +213,6 @@ func (c *RunCommand) Run(args []string) int {
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
 		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
-		SCC:              ctx.SCC,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,

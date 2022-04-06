@@ -34,7 +34,6 @@ type Context struct {
 	RootNode         string
 	GlobalHash       string
 	Lockfile         *fs.YarnLockfile
-	SCC              [][]dag.Vertex
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -193,8 +192,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return err
 		}
 
-		// Only now can we get the SCC (i.e. topological order)
-		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
 }
