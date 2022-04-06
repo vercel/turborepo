@@ -807,7 +807,7 @@ func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, lo
 	defer f.Close()
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
-		prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
+		prefixUi.Output(string(scan.Bytes())) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }
