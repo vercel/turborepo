@@ -24,10 +24,10 @@ func GetColorModeFromEnv() ColorMode {
 	// respectively, so that behavior is reproduced here as well. 
 	// https://www.npmjs.com/package/supports-color
 
-	switch forcedColor := os.Getenv("FORCED_COLOR"); {
-	case forcedColor == "false" || forcedColor == "0":
+	switch forceColor := os.Getenv("FORCE_COLOR"); {
+	case forceColor == "false" || forceColor == "0":
 		return ColorModeSuppressed
-	case forcedColor == "true" || forcedColor == "1" || forcedColor == "2" || forcedColor == "3":
+	case forceColor == "true" || forceColor == "1" || forceColor == "2" || forceColor == "3":
 		return ColorModeForced
 	default:
 		return ColorModeUndefined
