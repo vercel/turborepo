@@ -35,6 +35,8 @@ jobs:
           args: -- --save-baseline=main
 
       - uses: actions/checkout@v3
+        with:
+          clean: false
 
       - name: Run cargo build benches (PR)
         uses: actions-rs/cargo@v1
