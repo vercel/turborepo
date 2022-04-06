@@ -20,16 +20,8 @@ jobs:
 
       - name: Run cargo bench
         uses: actions-rs/cargo@v1
-        continue-on-error: true
         with:
           command: bench
-          args: -- --save-baseline=main
-
-      - name: Show results
-        uses: actions-rs/cargo@v1
-        with:
-          command: bench
-          args: -- --load-baseline=pr --baseline=pr
 
       - name: Upload report
         if: always()
