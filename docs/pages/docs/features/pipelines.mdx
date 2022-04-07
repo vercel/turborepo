@@ -27,6 +27,8 @@ To define your project's task dependency graph, use the [`pipeline`](../referenc
 
 Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
 
+IPackages that doesn't have this task in its `package.json` list of `scripts` will be ignored. For example, if a package may not have a "build" step, this is not a problem for Turborepo.
+
 An example Pipeline configuration in `turbo.json`:
 
 ```json
