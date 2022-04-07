@@ -378,10 +378,10 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 
 func getWorkspaceIgnores() []string {
 	return []string{
-		"**/node_modules/**/*",
-		"**/bower_components/**/*",
-		"**/test/**/*",
-		"**/tests/**/*",
+		"**/node_modules/",
+		"**/bower_components/",
+		"**/test/",
+		"**/tests/",
 	}
 }
 
