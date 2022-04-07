@@ -74,7 +74,7 @@ We hope that this will improve visibility into what `turbo` is doing, speeding u
 
 When using `turbo run`, every `package.json` task is added to an internal graph to map dependencies based on the inferred relationships defined in your Turborepo `pipeline`. This task graph allows Turborepo to efficiently schedule incremental concurrent task running and cache task outputs for later use.
 
-We have made major improvements to the internal task scheduler and resulting graph structure, resulting in better performance and a better developer experience. For example, in many cases, you will no longer need to use `--include-dependencies`. Instead, after specifying your task entry points, the new and improved graph will automatically handle this graph resolution for you.
+We have made major improvements to the internal task scheduler and resulting graph structure, resulting in better performance and a better developer experience. For example, in many cases, you will no longer need to use `--include-dependencies`. Instead, after specifying your task entry points, the new and improved graph will automatically handle this graph resolution on your behalf.
 
 ## Cache Outputs Integrity and Signature Verification
 
