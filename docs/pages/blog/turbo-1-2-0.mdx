@@ -101,6 +101,8 @@ To enable this feature, set the `remoteCache` options in your `turbo.json` confi
 - `--remote-only` and `TURBO_REMOTE_ONLY=true` will tell `turbo` to only use Remote Caching
 - We now show `>>> FULL TURBO` when there's at least one task attempted
 - Yarn v2+ with Plug'n'Play (PnP linker) is supported for the `turbo run` command, but `turbo prune` is still not fully supported
+- Fixed regression with chrome tracing if `--profile` is specified
+- You can now set concurrency by percentage of CPUs with `--concurrency=50%`
 
 ## We're hiring!
 
@@ -111,3 +113,9 @@ The Turborepo team at [Vercel](https://vercel.com) is hiring! We're up to five c
 Along with seamless incremental adoption/migration and speeding up CI/CD, we've been focusing on improving Turborepo's day-to-day ergonomics, security, and observability. The new `--filter` flag, signed artifacts, and dry runs are important steps toward those goals.
 
 Next up, we'll be focusing an enhanced local development experience, codebase automations, and overall CLI performance.
+
+## Thank you, contributors
+
+Turborepo is the result of the combined work of over 95 individual developers and our core team.
+
+This release was brought to you by the contributions of: @gsoltis09, @jaredpalmer, @gaspar09, @shuding, @rajatkulkarni95, @VanTanev, @Kikobeats, @tknickman, @thebanjomatic, @chelkyl, @elado, @finn-orsini, @becca, @weyert, @ekosz
