@@ -31,14 +31,14 @@ Update today by running `npm install turbo@latest`. After running `turbo run` fo
 
 ## New Task Filtering API
 
-We are excited to release one of our most requested features: the ability to expressively filter tasks through a `--filter` flag. The `--filter` flag is the much more powerful successor to the current combination of `--scope`, `--include-dependencies`, `--since`, and `--no-deps` flags. 
+We are excited to release one of our most requested features: the ability to expressively filter tasks through a `--filter` flag. The `--filter` flag is the much more powerful successor to the current combination of `--scope`, `--include-dependencies`, `--since`, and `--no-deps` flags.
 
-With `--filter` you can tell `turbo` to restrict executing commands to a subset of matched packages in your monorepo based on name or folder, even if it has changed since a git commit ref.
+With `--filter` you can tell `turbo` to restrict executing commands to a subset of matched packages in your monorepo based on name, folder, or even if it has changed since a git commit ref.
 
 Take a look at some examples of what you can accomplish with the new `--filter` command:
 
 - `--filter=<package_name>` - match by exact package name or glob pattern
-- `--filter=...<package_name>`- match by package name/glob and include all dependent packages of match(es)
+- `--filter=...<package_name>`- match by package name/glob and include all dependent packages of matches
 - `--filter=...^<package_name>`- match by package name/glob and include all dependent packages of matches, but exclude the matches themselves
 - `--filter=<package_name>...` - match by package name/glob and include all the matched packages' dependencies
 - `--filter=<package_name>^...` - match by package name/glob and include all matched package dependencies, but exclude the matches themselves
@@ -55,8 +55,6 @@ turbo run test --filter={./apps/web}[HEAD^1]^...
 
 would tell `turbo` to ensure dependencies are built and to run the `test` script in all of the local dependencies of the app located in `./apps/web`, not including that app itself, if the app has changed since HEAD^1.
 
-We believe `--filter` is more expressive and intuitive than `--scope`. In the future, we will be slowly deprecating the `--scope` flag.
-
 For more details and examples, refer to the new [filtering documentation](/docs/features/filter).
 
 ## Debug and Automate with `--dry-run`
@@ -70,7 +68,7 @@ Dry runs are incredibly useful for two situations:
 
 ![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
 
-We hope that this will improve visibility into what `turbo` is doing, speeding up debugging as well as make it easier to leverage `turbo` in dynamic CI/CD systems.
+We hope that this will improve visibility into what `turbo` is doing, speeding up debugging, and make it easier to leverage `turbo` in dynamic CI/CD systems.
 
 ## Improved Internal Scheduler and Graph
 
