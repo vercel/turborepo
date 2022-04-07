@@ -31,7 +31,9 @@ Update today by running `npm install turbo@latest`. After running `turbo run` fo
 
 ## New Task Filtering API
 
-We are excited to release one of our most requested features: the ability to expressively filter tasks through a `--filter` flag. The `--filter` flag is the much more intuitive successor to the current combination of `--scope`, `--include-dependencies`, `--since`, and `--no-deps` flags. With `--filter` you can tell `turbo` to restrict executing commands to a subset of matched packages in your monorepo based on name, folder, and by whether it has changed since a git commit ref like so:
+We are excited to release one of our most requested features: the ability to expressively filter tasks through a `--filter` flag. The `--filter` flag is the much more powerful successor to the current combination of `--scope`, `--include-dependencies`, `--since`, and `--no-deps` flags. With `--filter` you can tell `turbo` to restrict executing commands to a subset of matched packages in your monorepo based on name, folder, and even if it has changed since a git commit ref. 
+
+Take a look at some examples of what you can accomplish with the new `--filter` command:
 
 - `--filter=<package_name>` - match by exact package name or glob pattern
 - `--filter=...<package_name>`- match by package name/glob and include all dependent packages of match(es)
