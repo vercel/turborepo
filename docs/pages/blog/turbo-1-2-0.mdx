@@ -22,8 +22,8 @@ Since releasing Turborepo v1.1 in late January, we've seen incredible adoption a
 
 We're further improving ergonomics, observability, and security with Turborepo v1.2 featuring:
 
-- [**New Task Filtering API**](#new-task-filtering-api): `--filter` flag adds more expressive and intuitive task filtering capabilities to `turbo run`.
-- [**Human-readable and JSON dry runs**](#debug-and-automate-with---dry-run): `--dry-run` flag can print out information about a `turbo run` without executing any tasks, in both human and JSON-parse friendly formats.
+- [**New Task Filtering API**](#new-task-filtering-api): `--filter` flag adds more expressive and intuitive task filtering capabilities to `turbo run`
+- [**Human-readable and JSON dry runs**](#debug-and-automate-with---dry-run): `--dry-run` flag can print out information about a `turbo run` without executing any tasks, in both human and JSON-parse friendly formats
 - [**Improved Internal Scheduler and Graph**](#improved-internal-scheduler-and-graph): We refactored `turbo` 's internal scheduler and graph to be more ergonomic and predictable
 - [**Enhanced Remote Cache Security**](#cache-outputs-integrity-and-signature-verification): Cryptographically sign remote cache artifacts with your own key phrase
 
@@ -92,8 +92,8 @@ To enable this feature, set the `remoteCache` options on your `turbo.json` confi
 
 ## Other bug fixes and improvements
 
-- `--sso-team` flag now enables teams with SAML tokens to log in through `turbo login` with correct team permissions.
-- `--log-output` flag allows you to control what logs are printed to the terminal, and when, allowing you to focus only on what's new.
+- `--sso-team` flag now enables teams with SAML tokens to log in through `turbo login` with correct team permissions
+- `--log-output` flag allows you to control what logs are printed to the terminal, and when, allowing you to focus only on what's new
 - `FORCE_COLOR` environment variable is now supported
 - `TURBO_FORCE=true` environment variable will now force execution
 - `--remote-only` and `TURBO_REMOTE_ONLY=true` will tell `turbo` to only use Remote Caching
