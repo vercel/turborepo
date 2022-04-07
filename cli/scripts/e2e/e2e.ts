@@ -314,7 +314,7 @@ function runSmokeTests<T>(
       );
       assert.ok(
         lintOutput.includes(
-          `a:lint: cache hit, replaying output ${getHashFromOutput(
+          `a:lint: cache hit, suppressing output ${getHashFromOutput(
             lintOutput,
             "a#lint"
           )}`
@@ -342,7 +342,7 @@ function runSmokeTests<T>(
       );
       assert.ok(
         secondLintRun.includes(
-          `a:lint: cache hit, replaying output ${getHashFromOutput(
+          `a:lint: cache hit, suppressing output ${getHashFromOutput(
             secondLintRun,
             "a#lint"
           )}`
