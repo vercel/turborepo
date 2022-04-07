@@ -133,7 +133,7 @@ turbo run build --no-deps
 
 Let's say you have packages A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
 
-#### --dry / --dry-run
+#### `--dry / --dry-run`
 
 Instead of executing tasks, display details about the affected packages and tasks that would be run.
 Specify `--dry=json` to get the output in JSON format.
@@ -254,7 +254,7 @@ This is useful when using `--scope` in CI as it guarantees that every dependency
 
 #### `--no-cache`
 
-Default false. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
+Default `false`. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
 
 ```shell
 turbo run build --no-cache
@@ -274,7 +274,7 @@ turbo run build --output-logs=new-only
 
 #### `--only`
 
-Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
+Default `false`. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
 
 Given this pipeline in `turbo.json`:
 
@@ -310,6 +310,16 @@ Default `false`. Run commands in parallel across packages and apps and ignore th
 turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
 ```
+
+#### `--remote-only`
+
+Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.
+
+```shell
+turbo run build --remote-only
+```
+
+The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment variable.
 
 #### `--scope`
 
