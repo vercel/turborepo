@@ -74,16 +74,10 @@ func Walk(rootPath string, callback func(name string, isDir bool) error) error {
 func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.FileMode) error) error {
 	return godirwalk.Walk(rootPath, &godirwalk.Options{
 		Callback: func(name string, info *godirwalk.Dirent) error {
-			pathErr := &os.PathError{}
-			if isDirLike, err := info.IsDirOrSymlinkToDir(); err == nil {
-				return callback(name, isDirLike, info.ModeType())
-			} else if errors.As(err, &pathErr) {
-				// TODO(gsoltis): Is this the right place for this check?
-				// Skip running callback on "dead" symlink (symlink to directory that doesn't exist)
+			if info.IsSymlink() {
 				return godirwalk.SkipThis
-			} else {
-				return err
 			}
+			return callback(name, info.IsDir(), info.ModeType())
 		},
 		ErrorCallback: func(pathname string, err error) godirwalk.ErrorAction {
 			pathErr := &os.PathError{}
