@@ -796,18 +796,18 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
+func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 	if err != nil {
-		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
+		output.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
-		prefixUi.Output(string(scan.Bytes())) //Writing to Stdout
+		output.Output(string(scan.Bytes())) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }
