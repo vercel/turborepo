@@ -9,6 +9,7 @@ ogImage: /images/blog/turbo-1-2-0/twitter-card.png
 # Turborepo 1.2
 
 import { Authors } from '../../components/Authors'
+import Bleed from 'nextra-theme-docs/bleed'
 
 <Authors authors={['jaredpalmer', 'becca__z', 'gaspargarcia_', 'gsoltis']} />
 
@@ -66,7 +67,9 @@ Dry runs are incredibly useful for two situations:
 - Debugging and testing run options
 - Using `turbo` filtering and task graphs for building automations
 
-![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
+<Bleed>
+  ![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
+</Bleed>
 
 We hope that this will improve visibility into what `turbo` is doing, speeding up debugging, and make it easier to leverage `turbo` in dynamic CI/CD systems.
 
