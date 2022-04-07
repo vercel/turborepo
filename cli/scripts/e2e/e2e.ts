@@ -281,7 +281,7 @@ function runSmokeTests<T>(
 
       assert.ok(
         sinceCommandSecondRunOutput.includes(
-          `b:build: cache hit, replaying output ${getHashFromOutput(
+          `b:build: cache hit, suppressing output ${getHashFromOutput(
             sinceCommandSecondRunOutput,
             "b#build"
           )}`
@@ -291,7 +291,7 @@ function runSmokeTests<T>(
 
       assert.ok(
         sinceCommandSecondRunOutput.includes(
-          `a:test: cache hit, replaying output ${getHashFromOutput(
+          `a:test: cache hit, suppressing output ${getHashFromOutput(
             sinceCommandSecondRunOutput,
             "a#test"
           )}`
