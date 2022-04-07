@@ -118,6 +118,10 @@ turbo run build --cwd=./somewhere/else
 
 #### `--deps`
 
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependents-of-matched-packages) instead.
+</Callout>
+
 Defaults to `true`. Include dependent packages/apps consumers in the execution.
 
 ```sh
@@ -145,6 +149,25 @@ Task details include:
 - `logFile`: Location of the log file for the task run
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
+
+#### `--filter`
+
+`type: string[]`
+
+Specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/features/filtering-packages)
+
+```sh
+turbo run build --filter=my-pkg
+turbo run test --filter=...^@scope/my-lib
+turbo run build --filter=./apps/* --filter=!./apps/admin
+```
 
 #### `--graph`
 
@@ -221,6 +244,10 @@ Just a quick overview.
 
 #### `--include-dependencies`
 
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependencies-of-matched-packages) instead.
+</Callout>
+
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
 This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
@@ -286,6 +313,10 @@ turbo run dev --parallel --no-cache
 
 #### `--scope`
 
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-package) instead.
+</Callout>
+
 `type: string[]`
 
 Specify/filter package(s)/apps to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
@@ -306,6 +337,10 @@ turbo run build --serial
 ```
 
 #### `--since`
+
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-changed-packages) instead.
+</Callout>
 
 Filter execution based on which packages have changed since a merge-base.
 
