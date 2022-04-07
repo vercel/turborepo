@@ -796,11 +796,11 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool) {
+func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
-	if err != nil && !silent {
+	if err != nil {
 		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
@@ -910,7 +910,7 @@ func (e *execContext) exec(pt *packageTask) error {
 			case FullLogs:
 				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
 					e.logReplayWaitGroup.Add(1)
-					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false)
+					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup)
 				}
 			default:
 				// NoLogs, do not output anything
