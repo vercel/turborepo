@@ -74,10 +74,19 @@ func Walk(rootPath string, callback func(name string, isDir bool) error) error {
 func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.FileMode) error) error {
 	return godirwalk.Walk(rootPath, &godirwalk.Options{
 		Callback: func(name string, info *godirwalk.Dirent) error {
-			if info.IsSymlink() {
-				return godirwalk.SkipThis
-			}
-			return callback(name, info.IsDir(), info.ModeType())
+			// currently we support symlinked files, but not symlinked directories:
+      // For copying, we Mkdir and bail if we encounter a symlink to a directoy
+      // For finding packages, we enumerate the symlink, but don't follow inside
+      isDir, err := info.IsDirOrSymlinkToDir()
+      if err != nil {
+        pathErr := &os.PathError{}
+        if errors.As(err, &pathErr) {
+          // If we have a broken link, skip this entry
+          return godirwalk.SkipThis
+        }
+        return err
+      }
+			return callback(name, isDir, info.ModeType())
 		},
 		ErrorCallback: func(pathname string, err error) godirwalk.ErrorAction {
 			pathErr := &os.PathError{}
