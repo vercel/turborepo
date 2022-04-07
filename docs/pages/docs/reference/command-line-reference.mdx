@@ -25,9 +25,55 @@ Boolean options can be enabled as follows:
 --<option>=false
 ```
 
-## `turbo run <task1> <task2>`
+## Global Arguments
+
+The following flags apply to all commands.
+
+#### `--color`
+
+Forces the use of color even when the output stream is not considered to be a TTY terminal.
+This can be used to enable turbo's color output for CI runners such as Github Actions which
+have support for rendering color in their log output.
+
+```sh
+turbo run build --color
+```
+
+Alternatively, you can also enable color using the `FORCE_COLOR` environment variable (borrowed
+from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)). Going
+this route may also unlock some additional colored output from the actual tasks themselves if
+they use `supports-color` to determine whether or not to output with colored output.
+
+```sh
+declare -x FORCE_COLOR=1
+turbo run build
+```
+
+#### `--no-color`
+
+Suppresses the use of color in the output when running turbo in an interactive / TTY session.
+
+```sh
+turbo run build --no-color
+```
+
+Alternatively, you can also suppress color using the `FORCE_COLOR` environment variable (borrowed
+from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)).
+
+```sh
+declare -x FORCE_COLOR=0
+turbo run build
+```
+
+## `turbo run <task>`
 
 Run NPM scripts across all packages in specified scope. Tasks must be specified in your `pipeline` configuration.
+
+`turbo run <task1> <task2> [options] [-- <args passed to task1 and task2>]`
+
+`turbo` can run multiple tasks, and any arguments following `--` will be passed through
+to the tasks to be executed. Note that these additional arguments will _not_ be passed to
+any additional tasks that are run due to dependencies from the [pipeline](/docs/reference/configuration#pipeline) configuration.
 
 ### Options
 
@@ -72,6 +118,10 @@ turbo run build --cwd=./somewhere/else
 
 #### `--deps`
 
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependents-of-matched-packages) instead.
+</Callout>
+
 Defaults to `true`. Include dependent packages/apps consumers in the execution.
 
 ```sh
@@ -99,6 +149,25 @@ Task details include:
 - `logFile`: Location of the log file for the task run
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
+
+#### `--filter`
+
+`type: string[]`
+
+Specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/features/filtering-packages)
+
+```sh
+turbo run build --filter=my-pkg
+turbo run test --filter=...^@scope/my-lib
+turbo run build --filter=./apps/* --filter=!./apps/admin
+```
 
 #### `--graph`
 
@@ -131,6 +200,8 @@ Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting 
 ```sh
 turbo run build --force
 ```
+
+The same behavior also be set via the `TURBO_FORCE=true` environment variable.
 
 #### `--global-deps`
 
@@ -172,6 +243,10 @@ Just a quick overview.
 - `!` at the beginning of a pattern will negate the match
 
 #### `--include-dependencies`
+
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependencies-of-matched-packages) instead.
+</Callout>
 
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
@@ -248,6 +323,10 @@ The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment v
 
 #### `--scope`
 
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-package) instead.
+</Callout>
+
 `type: string[]`
 
 Specify/filter package(s)/apps to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
@@ -268,6 +347,10 @@ turbo run build --serial
 ```
 
 #### `--since`
+
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-changed-packages) instead.
+</Callout>
 
 Filter execution based on which packages have changed since a merge-base.
 

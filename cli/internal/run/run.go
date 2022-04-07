@@ -96,7 +96,7 @@ func (c *RunCommand) Synopsis() string {
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
 	helpText := strings.TrimSpace(`
-Usage: turbo run <task> [options] ...
+Usage: turbo run <task> [options] [-- <args passed to tasks>]
 
     Run tasks across projects in your monorepo.
 
@@ -105,6 +105,8 @@ Usage: turbo run <task> [options] ...
     tasks already in the cache will skip re-execution and immediately move
     artifacts from the cache into the correct output folders (as if the task
     occurred again).
+
+    Arguments passed after '--' will be passed through to the named tasks.
 
 Options:
   --help                 Show this message.
@@ -120,7 +122,7 @@ Options:
   --filter="<selector>"  Use the given selector to specify package(s) to act as
                          entry points. The syntax mirror's pnpm's syntax, and
                          additional documentation and examples can be found in
-                         turbo's documentation TODO: LINK.
+                         turbo's documentation https://turborepo.org/docs/reference/command-line-reference#--filter
                          --filter can be specified multiple times. Packages that
                          match any filter will be included.
   --force                Ignore the existing cache (to force execution).
@@ -132,8 +134,10 @@ Options:
   --since                Limit/Set scope to changed packages since a
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
-  --team                 The slug of the turborepo.com team.
-  --token                A turborepo.com personal access token.
+  --team                 The slug or team ID of the remote cache team.
+  --token                A bearer token for remote caching. You can also set 
+                         the value of the current token by setting an 
+                         environment variable named TURBO_TOKEN.
   --ignore               Files to ignore when calculating changed files
                          (i.e. --since). Supports globs.
   --profile              File to write turbo's performance profile output into.
@@ -154,6 +158,8 @@ Options:
   --dry/--dry-run[=json] List the packages in scope and the tasks that would be run,
                          but don't actually run them. Passing --dry=json or
                          --dry-run=json will render the output in JSON format.
+  --remote-only		     Ignore the local filesystem cache for all tasks. Only
+                         allow reading and caching artifacts using the remote cache.
 `)
 	return strings.TrimSpace(helpText)
 }
@@ -448,6 +454,8 @@ type RunOptions struct {
 	cacheMissLogsMode LogsMode
 	dryRun            bool
 	dryRunJson        bool
+	// Only use the Remote Cache and ignore the local cache
+	remoteOnly bool
 }
 
 func (ro *RunOptions) scopeOpts() *scope.Opts {
@@ -478,6 +486,7 @@ func getDefaultRunOptions() *RunOptions {
 		only:                false,
 		cacheHitLogsMode:    FullLogs,
 		cacheMissLogsMode:   FullLogs,
+		remoteOnly:          false,
 	}
 }
 
@@ -490,6 +499,14 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 
 	runOptions.cwd = cwd
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
+
+	if os.Getenv("TURBO_FORCE") == "true" {
+		runOptions.forceExecution = true
+	}
+
+	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
+		runOptions.remoteOnly = true
+	}
 
 	for argIndex, arg := range args {
 		if arg == "--" {
@@ -594,6 +611,8 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 				if strings.HasPrefix(arg, "--dry=json") {
 					runOptions.dryRunJson = true
 				}
+			case strings.HasPrefix(arg, "--remote-only"):
+				runOptions.remoteOnly = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--api"):
@@ -657,7 +676,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, analyticsClient)
+	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
@@ -777,26 +796,18 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
+func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
-	if err != nil && !silent {
-		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
+	if err != nil {
+		output.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	if outputLogsMode != NoLogs {
-		scan := bufio.NewScanner(f)
-		if outputLogsMode == HashLogs {
-			//Writing to Stdout only the "cache hit, replaying output" line
-			scan.Scan()
-			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
-		} else {
-			for scan.Scan() {
-				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
-			}
-		}
+	scan := bufio.NewScanner(f)
+	for scan.Scan() {
+		output.Output(string(scan.Bytes())) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -893,9 +904,16 @@ func (e *execContext) exec(pt *packageTask) error {
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
-			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
-				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
+			switch e.rs.Opts.cacheHitLogsMode {
+			case HashLogs:
+				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
+			case FullLogs:
+				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
+					e.logReplayWaitGroup.Add(1)
+					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup)
+				}
+			default:
+				// NoLogs, do not output anything
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
