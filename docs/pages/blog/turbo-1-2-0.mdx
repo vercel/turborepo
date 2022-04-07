@@ -31,23 +31,23 @@ Update today by running `npm install turbo@latest`. After running `turbo run` fo
 
 ## New Task Filtering API
 
-We are excited to release one of our most requested features: the ability to expressively filter tasks through a `--filter` flag. The `--filter` flag is the much more powerful successor to the current combination of `--scope`, `--include-dependencies`, `--since`, and `--no-deps` flags. With `--filter` you can tell `turbo` to restrict executing commands to a subset of matched packages in your monorepo based on name, folder, and even if it has changed since a git commit ref. 
+We are excited to release one of our most requested features: the ability to expressively filter tasks through a `--filter` flag. The `--filter` flag is the much more powerful successor to the current combination of `--scope`, `--include-dependencies`, `--since`, and `--no-deps` flags. With `--filter` you can tell `turbo` to restrict executing commands to a subset of matched packages in your monorepo based on name, folder, and even if it has changed since a git commit ref.
 
 Take a look at some examples of what you can accomplish with the new `--filter` command:
 
 - `--filter=<package_name>` - match by exact package name or glob pattern
 - `--filter=...<package_name>`- match by package name/glob and include all dependent packages of match(es)
-- `--filter=...^<package_name>`- match by package name/glob and include all dependent packages of match(es), but exclude itself/themselves
-- `--filter=<package_name>...` - match by name and include all matched package's dependencies
-- `--filter=<package_name>^...` - match by name/glob and include all matched package dependencies, but not itself/themselves
+- `--filter=...^<package_name>`- match by package name/glob and include all dependent packages of matches, but exclude the matches themselves
+- `--filter=<package_name>...` - match by package name/glob and include all the matched packages' dependencies
+- `--filter=<package_name>^...` - match by package name/glob and include all matched package dependencies, but exclude the matches themselves
 - `--filter={./path/to/package}` - match by path or filesystem glob pattern
-- `--filter=[origin/main]` - match by changed packages since a git commit
+- `--filter=[origin/main]` - match by changed packages since a git commit ref
 
 You can use multiple filters together to get even more granular filtering as well as combine each part of the above patterns `{}`, `[]` , `^` , and `...` to express more complex behavior.
 
-For example, assuming you have an app located in `./apps/web` directory, some local packages that it uses as dependencies, and a Turborepo pipeline where `test` depends on `^build` topologically, running:
+For example, assuming you have an app located in `./apps/web` directory, some local packages that it uses as dependencies, and a Turborepo pipeline where `test` depends on `^build` [topologically](https://turborepo.org/docs/glossary#topological-order), running:
 
-```jsx
+```sh
 turbo run test --filter={./apps/web}[HEAD^1]^...
 ```
 
@@ -55,7 +55,7 @@ would tell `turbo` to ensure that dependencies are built and to run the `test` s
 
 We believe `--filter` is more expressive and intuitive than `--scope`. In the future, we will be slowly deprecating the `--scope` flag.
 
-For more details and examples, refer to the new [filtering documentation.](/docs/features/filter)
+For more details and examples, refer to the new [filtering documentation](/docs/features/filter).
 
 ## Debug and Automate with `--dry-run`
 
