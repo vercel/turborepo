@@ -66,7 +66,7 @@ func (into *stripAnsiWriter) Write(p []byte) (int, error) {
 		// not failing under typical operation as well.
 		return n, err
 	}
-	
+
 	// Write must return a non-nil error if it returns n < len(p). Consequently, if the
 	// wrappedWrite.Write call succeeded we will return len(p) as the number of bytes
 	// written.
@@ -80,7 +80,7 @@ func Default() *cli.ColoredUi {
 
 func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
 	colorMode = applyColorMode(colorMode);
-	
+
 	var outWriter, errWriter io.Writer
 
 	if colorMode == ColorModeSuppressed {

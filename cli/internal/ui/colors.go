@@ -21,7 +21,7 @@ func GetColorModeFromEnv() ColorMode {
 	// We don't currently use the level for anything specific, and just treat things as on and off.
 	//
 	// Note: while "false" and "true" aren't documented, the library coerces these values to 0 and 1
-	// respectively, so that behavior is reproduced here as well. 
+	// respectively, so that behavior is reproduced here as well.
 	// https://www.npmjs.com/package/supports-color
 
 	switch forceColor := os.Getenv("FORCE_COLOR"); {
