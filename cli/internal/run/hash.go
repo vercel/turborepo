@@ -105,7 +105,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath string) 
 	}
 
 	pathPrefix := filepath.Join(rootPath, pkg.Dir)
-  toTrim := filepath.FromSlash(pathPrefix + "/")
+	toTrim := filepath.FromSlash(pathPrefix + "/")
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		rootMatch := ignore.MatchesPath(name)
 		otherMatch := ignorePkg.MatchesPath(name)
@@ -245,11 +245,8 @@ func (th *Tracker) CalculateTaskHash(pt *packageTask, dependencySet dag.Set, arg
 	}
 	outputs := pt.HashableOutputs()
 	hashableEnvPairs := []string{}
-	for _, v := range pt.pipeline.DependsOn {
-		if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
-			trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
-			hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-		}
+	for _, envVar := range pt.pipeline.EnvVarDependencies {
+		hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", envVar, os.Getenv(envVar)))
 	}
 	sort.Strings(hashableEnvPairs)
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)

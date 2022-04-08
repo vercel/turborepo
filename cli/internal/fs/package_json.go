@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -44,7 +45,7 @@ type RemoteCacheOptions struct {
 	Signature bool   `json:"signature,omitempty"`
 }
 
-type PPipeline struct {
+type pipelineJSON struct {
 	Outputs   *[]string `json:"outputs"`
 	Cache     *bool     `json:"cache,omitempty"`
 	DependsOn []string  `json:"dependsOn,omitempty"`
@@ -63,27 +64,53 @@ func (pc PipelineConfig) GetPipeline(taskID string) (Pipeline, bool) {
 }
 
 type Pipeline struct {
-	Outputs   []string `json:"-"`
-	Cache     *bool    `json:"cache,omitempty"`
-	DependsOn []string `json:"dependsOn,omitempty"`
-	Inputs    []string `json:"inputs,omitempty"`
-	PPipeline
+	Outputs                 []string
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
 }
 
+const (
+	envPipelineDelimiter         = "$"
+	topologicalPipelineDelimiter = "^"
+)
+
+var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+
 func (c *Pipeline) UnmarshalJSON(data []byte) error {
-	if err := json.Unmarshal(data, &c.PPipeline); err != nil {
+	rawPipeline := &pipelineJSON{}
+	if err := json.Unmarshal(data, &rawPipeline); err != nil {
 		return err
 	}
 	// We actually need a nil value to be able to unmarshal the json
 	// because we interpret the omission of outputs to be different
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
-	if c.PPipeline.Outputs != nil {
-		c.Outputs = *c.PPipeline.Outputs
+	if rawPipeline.Outputs != nil {
+		c.Outputs = *rawPipeline.Outputs
+	} else {
+		c.Outputs = defaultOutputs
 	}
-	c.Cache = c.PPipeline.Cache
-	c.DependsOn = c.PPipeline.DependsOn
-	c.Inputs = c.PPipeline.Inputs
+	if rawPipeline.Cache == nil {
+		c.ShouldCache = true
+	} else {
+		c.ShouldCache = *rawPipeline.Cache
+	}
+	c.EnvVarDependencies = []string{}
+	c.TopologicalDependencies = []string{}
+	c.TaskDependencies = []string{}
+	for _, dependency := range rawPipeline.DependsOn {
+		if strings.HasPrefix(dependency, envPipelineDelimiter) {
+			c.EnvVarDependencies = append(c.EnvVarDependencies, strings.TrimPrefix(dependency, envPipelineDelimiter))
+		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+		} else {
+			c.TaskDependencies = append(c.TaskDependencies, dependency)
+		}
+	}
+	c.Inputs = rawPipeline.Inputs
 	return nil
 }
 

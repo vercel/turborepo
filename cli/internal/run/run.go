@@ -41,9 +41,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const TOPOLOGICAL_PIPELINE_DELIMITER = "^"
-const ENV_PIPELINE_DELIMITER = "$"
-
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
 	Config    *config.Config
@@ -331,37 +328,22 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	return exitCode
 }
 
-func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
+func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.PipelineConfig, rs *runSpec) (*core.Scheduler, error) {
 	engine := core.NewScheduler(topoGraph)
-	for taskName, value := range pipeline {
+	for taskName, taskDefinition := range pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
-		if util.IsPackageTask(taskName) {
-			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
-					continue
-				}
-				if util.IsPackageTask(from) {
-					engine.AddDep(from, taskName)
-				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
-					topoDeps.Add(from[1:])
-				} else {
-					deps.Add(from)
-				}
-			}
-		} else {
-			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
-					continue
-				}
-				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
-					topoDeps.Add(from[1:])
-				} else {
-					deps.Add(from)
-				}
+		isPackageTask := util.IsPackageTask(taskName)
+		for _, dependency := range taskDefinition.TaskDependencies {
+			if isPackageTask && util.IsPackageTask(dependency) {
+				engine.AddDep(dependency, taskName)
+			} else {
+				deps.Add(dependency)
 			}
 		}
-
+		for _, dependency := range taskDefinition.TopologicalDependencies {
+			topoDeps.Add(dependency)
+		}
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
@@ -410,7 +392,7 @@ type RunOptions struct {
 	profile string
 	// Force task execution
 	forceExecution bool
-	// Cache results
+	// Cache results, false only if --no-cache is set, there is no flag to force caching
 	cache bool
 	// Cache folder
 	cacheFolder string
@@ -754,7 +736,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 			Hash:         hash,
 			Command:      command,
 			Dir:          pt.pkg.Dir,
-			Outputs:      pt.ExternalOutputs(),
+			Outputs:      pt.pipeline.Outputs,
 			LogFile:      pt.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
@@ -929,7 +911,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
 	var writer io.Writer
-	if !e.rs.Opts.cache || (pt.pipeline.Cache != nil && !*pt.pipeline.Cache) {
+	if !e.rs.Opts.cache || !pt.pipeline.ShouldCache {
 		writer = os.Stdout
 	} else {
 		// Setup log file
@@ -1007,7 +989,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 
 	// Cache command outputs
-	if e.rs.Opts.cache && (pt.pipeline.Cache == nil || *pt.pipeline.Cache) {
+	if e.rs.Opts.cache && pt.pipeline.ShouldCache {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
@@ -1085,20 +1067,13 @@ type packageTask struct {
 	pipeline    *fs.Pipeline
 }
 
-func (pt *packageTask) ExternalOutputs() []string {
-	if pt.pipeline.Outputs == nil {
-		return []string{"dist/**/*", "build/**/*"}
-	}
-	return pt.pipeline.Outputs
-}
-
 func (pt *packageTask) RepoRelativeLogFile() string {
 	return filepath.Join(pt.pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.task))
 }
 
 func (pt *packageTask) HashableOutputs() []string {
 	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
-	outputs = append(outputs, pt.ExternalOutputs()...)
+	outputs = append(outputs, pt.pipeline.Outputs...)
 	return outputs
 }
 
