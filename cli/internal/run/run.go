@@ -135,8 +135,8 @@ Options:
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
   --team                 The slug or team ID of the remote cache team.
-  --token                A bearer token for remote caching. You can also set 
-                         the value of the current token by setting an 
+  --token                A bearer token for remote caching. You can also set
+                         the value of the current token by setting an
                          environment variable named TURBO_TOKEN.
   --ignore               Files to ignore when calculating changed files
                          (i.e. --since). Supports globs.
@@ -796,26 +796,18 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
+func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
-	if err != nil && !silent {
-		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
+	if err != nil {
+		output.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	if outputLogsMode != NoLogs {
-		scan := bufio.NewScanner(f)
-		if outputLogsMode == HashLogs {
-			//Writing to Stdout only the "cache hit, replaying output" line
-			scan.Scan()
-			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
-		} else {
-			for scan.Scan() {
-				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
-			}
-		}
+	scan := bufio.NewScanner(f)
+	for scan.Scan() {
+		output.Output(string(scan.Bytes())) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -912,9 +904,16 @@ func (e *execContext) exec(pt *packageTask) error {
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
-			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
-				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
+			switch e.rs.Opts.cacheHitLogsMode {
+			case HashLogs:
+				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
+			case FullLogs:
+				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
+					e.logReplayWaitGroup.Add(1)
+					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup)
+				}
+			default:
+				// NoLogs, do not output anything
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)

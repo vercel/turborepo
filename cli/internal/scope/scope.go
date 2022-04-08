@@ -44,7 +44,9 @@ func (o *Opts) asFilterPatterns() []string {
 	}
 	if len(o.Patterns) > 0 {
 		// --scope implies our tweaked syntax to see if any dependency matches
-		since = "..." + since
+		if since != "" {
+			since = "..." + since
+		}
 		for _, pattern := range o.Patterns {
 			if strings.HasPrefix(pattern, "!") {
 				patterns = append(patterns, pattern)

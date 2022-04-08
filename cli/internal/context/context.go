@@ -442,10 +442,10 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 
 func getWorkspaceIgnores() []string {
 	return []string{
-		"**/node_modules/**/*",
-		"**/bower_components/**/*",
-		"**/test/**/*",
-		"**/tests/**/*",
+		"**/node_modules/",
+		"**/bower_components/",
+		"**/test/",
+		"**/tests/",
 	}
 }
 
