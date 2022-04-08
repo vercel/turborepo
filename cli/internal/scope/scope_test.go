@@ -96,6 +96,13 @@ func TestResolvePackages(t *testing.T) {
 		includeDependents   bool
 	}{
 		{
+			name:                "Just scope and dependencies",
+			changed:             []string{},
+			includeDependencies: true,
+			scope:               []string{"app2"},
+			expected:            []string{"app2", "libB", "libC", "libD"},
+		},
+		{
 			name:     "One package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
 			expected: []string{"libB"},

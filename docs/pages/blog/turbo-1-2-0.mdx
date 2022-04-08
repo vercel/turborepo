@@ -1,6 +1,6 @@
 ---
 title: Turborepo 1.2
-date: 2022/04/06
+date: 2022/04/08
 description: Turborepo 1.2 introduces improved task filtering, artifact signing and integrity, human-readable and JSON dry runs, and more!
 tag: web development
 ogImage: /images/blog/turbo-1-2-0/twitter-card.png
@@ -11,19 +11,21 @@ ogImage: /images/blog/turbo-1-2-0/twitter-card.png
 import { Authors } from '../../components/Authors'
 import Bleed from 'nextra-theme-docs/bleed'
 
+<div className="text-sm mt-2 text-gray-500 dark:text-gray-400">Friday, April 8th, 2022</div>
+
 <Authors authors={['jaredpalmer', 'becca__z', 'gaspargarcia_', 'gsoltis']} />
 
 Since releasing Turborepo v1.1 in late January, we've seen incredible adoption and community growth:
 
-- **6.5k+** GitHub Stars
+- **6.5k+** [GitHub Stars](https://github.com/vercel/turborepo)
 - **140k+** weekly NPM downloads (doubling since our [last blog post for v1.1](/blog/turbo-1-1-0))
-- **90+** OSS contributors
+- **95+** OSS contributors
 - **900+** members of the [Turborepo Community Discord](https://turborepo.org/discord)
 - **1.6 years** of Time Saved through Remote Caching on Vercel, saving more than 2.5 months every week
 
 We've further improved ergonomics, observability, and security with Turborepo v1.2 featuring:
 
-- [**New Task Filtering API**](#new-task-filtering-api): `--filter` adds more expressive and intuitive task filtering capabilities to `turbo run`
+- [**New Task Filtering API**](#new-task-filtering-api): `--filter` adds more powerful task filtering capabilities to `turbo run`
 - [**Human-readable and JSON dry runs**](#debug-and-automate-with---dry-run): `--dry-run` flag can print out information about a `turbo run` without executing any tasks, in both human and JSON-parse friendly formats
 - [**Improved Internal Scheduler and Graph**](#improved-internal-scheduler-and-graph): We refactored `turbo` 's internal scheduler and graph to be more ergonomic and predictable
 - [**Enhanced Remote Cache Security**](#cache-outputs-integrity-and-signature-verification): Cryptographically sign remote cache artifacts with your own secret key

@@ -25,7 +25,7 @@ const team = {
 
 export function Authors({ authors }) {
   return (
-    <div className="grid gap-4 py-8 sm:grid-cols-2 md:grid-cols-4 border-b border-gray-400 border-opacity-20">
+    <div className="grid grid-cols-2 gap-4 py-8 border-b border-gray-400 md:grid-cols-4 border-opacity-20">
       {authors.map((username) =>
         !!team[username] ? (
           <Avatar key={username} {...team[username]} />
