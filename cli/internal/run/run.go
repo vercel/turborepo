@@ -52,7 +52,7 @@ type RunCommand struct {
 // It is not intended to include information specific to a particular run.
 type completeGraph struct {
 	TopologicalGraph dag.AcyclicGraph
-	Pipeline         fs.PipelineConfig
+	Pipeline         fs.Pipeline
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	GlobalHash       string
 	RootNode         string
@@ -328,7 +328,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 	return exitCode
 }
 
-func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.PipelineConfig, rs *runSpec) (*core.Scheduler, error) {
+func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
 	engine := core.NewScheduler(topoGraph)
 	for taskName, taskDefinition := range pipeline {
 		topoDeps := make(util.Set)
@@ -736,7 +736,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 			Hash:         hash,
 			Command:      command,
 			Dir:          pt.pkg.Dir,
-			Outputs:      pt.pipeline.Outputs,
+			Outputs:      pt.taskDefinition.Outputs,
 			LogFile:      pt.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
@@ -911,7 +911,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
 	var writer io.Writer
-	if !e.rs.Opts.cache || !pt.pipeline.ShouldCache {
+	if !e.rs.Opts.cache || !pt.taskDefinition.ShouldCache {
 		writer = os.Stdout
 	} else {
 		// Setup log file
@@ -989,7 +989,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 
 	// Cache command outputs
-	if e.rs.Opts.cache && pt.pipeline.ShouldCache {
+	if e.rs.Opts.cache && pt.taskDefinition.ShouldCache {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
@@ -1060,11 +1060,11 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
 }
 
 type packageTask struct {
-	taskID      string
-	task        string
-	packageName string
-	pkg         *fs.PackageJSON
-	pipeline    *fs.Pipeline
+	taskID         string
+	task           string
+	packageName    string
+	pkg            *fs.PackageJSON
+	taskDefinition *fs.TaskDefinition
 }
 
 func (pt *packageTask) RepoRelativeLogFile() string {
@@ -1073,14 +1073,14 @@ func (pt *packageTask) RepoRelativeLogFile() string {
 
 func (pt *packageTask) HashableOutputs() []string {
 	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
-	outputs = append(outputs, pt.pipeline.Outputs...)
+	outputs = append(outputs, pt.taskDefinition.Outputs...)
 	return outputs
 }
 
 func (pt *packageTask) ToPackageFileHashKey() packageFileHashKey {
 	return (&packageFileSpec{
 		pkg:    pt.packageName,
-		inputs: pt.pipeline.Inputs,
+		inputs: pt.taskDefinition.Inputs,
 	}).ToKey()
 }
 
@@ -1101,11 +1101,11 @@ func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) erro
 			pipeline = altpipe
 		}
 		return visitor(&packageTask{
-			taskID:      taskID,
-			task:        task,
-			packageName: name,
-			pkg:         pkg,
-			pipeline:    &pipeline,
+			taskID:         taskID,
+			task:           task,
+			packageName:    name,
+			pkg:            pkg,
+			taskDefinition: &pipeline,
 		})
 	}
 }

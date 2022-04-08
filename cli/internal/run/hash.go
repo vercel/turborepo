@@ -26,7 +26,7 @@ import (
 type Tracker struct {
 	rootNode            string
 	globalHash          string
-	pipeline            fs.PipelineConfig
+	pipeline            fs.Pipeline
 	packageInfos        map[interface{}]*fs.PackageJSON
 	mu                  sync.RWMutex
 	packageInputsHashes packageFileHashes
@@ -34,7 +34,7 @@ type Tracker struct {
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.PipelineConfig, packageInfos map[interface{}]*fs.PackageJSON) *Tracker {
+func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, packageInfos map[interface{}]*fs.PackageJSON) *Tracker {
 	return &Tracker{
 		rootNode:          rootNode,
 		globalHash:        globalHash,
@@ -152,13 +152,13 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 		if pkgName == th.rootNode {
 			continue
 		}
-		pipelineEntry, ok := th.pipeline.GetPipeline(taskID)
+		taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
 		if !ok {
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
 		hashTasks.Add(&packageFileSpec{
 			pkg:    pkgName,
-			inputs: pipelineEntry.Inputs,
+			inputs: taskDefinition.Inputs,
 		})
 	}
 
@@ -245,7 +245,7 @@ func (th *Tracker) CalculateTaskHash(pt *packageTask, dependencySet dag.Set, arg
 	}
 	outputs := pt.HashableOutputs()
 	hashableEnvPairs := []string{}
-	for _, envVar := range pt.pipeline.EnvVarDependencies {
+	for _, envVar := range pt.taskDefinition.EnvVarDependencies {
 		hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", envVar, os.Getenv(envVar)))
 	}
 	sort.Strings(hashableEnvPairs)

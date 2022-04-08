@@ -232,7 +232,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"build"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -247,7 +247,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"build", "test", "--foo", "--bar"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -262,7 +262,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -277,7 +277,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -310,7 +310,7 @@ func Test_dontSquashTasks(t *testing.T) {
 	topoGraph.Add("b")
 	// no dependencies between packages
 
-	pipeline := map[string]fs.Pipeline{
+	pipeline := map[string]fs.TaskDefinition{
 		"build": {
 			Outputs:   []string{},
 			TaskDependencies: []string{"generate"},

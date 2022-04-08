@@ -19,7 +19,7 @@ type TurboConfigJSON struct {
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
-	Pipeline PipelineConfig
+	Pipeline Pipeline
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
@@ -52,9 +52,9 @@ type pipelineJSON struct {
 	Inputs    []string  `json:"inputs,omitempty"`
 }
 
-type PipelineConfig map[string]Pipeline
+type Pipeline map[string]TaskDefinition
 
-func (pc PipelineConfig) GetPipeline(taskID string) (Pipeline, bool) {
+func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	if entry, ok := pc[taskID]; ok {
 		return entry, true
 	}
@@ -63,7 +63,7 @@ func (pc PipelineConfig) GetPipeline(taskID string) (Pipeline, bool) {
 	return entry, ok
 }
 
-type Pipeline struct {
+type TaskDefinition struct {
 	Outputs                 []string
 	ShouldCache             bool
 	EnvVarDependencies      []string
@@ -79,7 +79,7 @@ const (
 
 var defaultOutputs = []string{"dist/**/*", "build/**/*"}
 
-func (c *Pipeline) UnmarshalJSON(data []byte) error {
+func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	rawPipeline := &pipelineJSON{}
 	if err := json.Unmarshal(data, &rawPipeline); err != nil {
 		return err

@@ -20,7 +20,7 @@ func Test_ParseTurboConfigJson(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", err)
 	}
 
-	pipelineExpected := map[string]Pipeline{
+	pipelineExpected := map[string]TaskDefinition{
 		"build": {
 			Outputs:                 []string{"dist/**", ".next/**"},
 			TopologicalDependencies: []string{"build"},
