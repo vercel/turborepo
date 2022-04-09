@@ -711,17 +711,17 @@ type hashedTask struct {
 func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
 	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
-		command, ok := pt.pkg.Scripts[pt.task]
-		if !ok {
-			c.Config.Logger.Debug("no task in package, skipping")
-			c.Config.Logger.Debug("done", "status", "skipped")
-			return nil
-		}
 		passThroughArgs := rs.ArgsForTask(pt.task)
 		deps := engine.TaskGraph.DownEdges(pt.taskID)
 		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 		if err != nil {
 			return err
+		}
+		command, ok := pt.pkg.Scripts[pt.task]
+		if !ok {
+			c.Config.Logger.Debug("no task in package, skipping")
+			c.Config.Logger.Debug("done", "status", "skipped")
+			return nil
 		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
