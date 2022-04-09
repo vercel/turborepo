@@ -135,7 +135,7 @@ Here's how it works:
   "turbo": {
     "pipeline": {
       "build": {
-         // This `^` tells turbo that this pipeline target relies on a topological target being completed.
+        // This `^` tells turbo that this pipeline target relies on a topological target being completed.
         // In english, this reads as: "this package's `build` command depends on its dependencies' or
         // devDependencies' `build` command being completed"
         "dependsOn": ["^build"]
@@ -145,8 +145,8 @@ Here's how it works:
         // In English, this reads as: "this package's `test` command depends on its `lint` and `build` command first being completed"
         "dependsOn": ["lint", "build"]
       },
-       "lint": {},
-       "dev": {},
+      "lint": {},
+      "dev": {},
 
     }
   }
@@ -180,11 +180,11 @@ Building on the example from above, you can now set cache output conventions acr
         "outputs": ["coverage/**"],
         "dependsOn": ["lint", "build"]
       },
-       "dev": {
+      "dev": {
         // Never cache the `dev` command
         "cache": false
-       },
-       "lint": {},
+      },
+      "lint": {},
     }
   }
 }
