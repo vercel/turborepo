@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -183,6 +184,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
+	pipeline := c.Config.TurboConfigJSON.Pipeline
 	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
@@ -198,9 +200,20 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
+	}
+	if isAllPackages {
+		// if there is a root task for any of our targets, we need to add it
+		for _, target := range targets {
+			key := util.RootTaskId(target)
+			if _, ok := pipeline[key]; ok {
+				filteredPkgs.Add(util.RootPkgName)
+				// we only need to know we're running a root task once to add it for consideration
+				break
+			}
+		}
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
@@ -209,7 +222,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
+		Pipeline:         pipeline,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
@@ -705,6 +718,10 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 			c.Config.Logger.Debug("done", "status", "skipped")
 			return nil
 		}
+		isRootTask := pt.packageName == util.RootPkgName
+		if isRootTask && commandLooksLikeTurbo(command) {
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", pt.task, command)
+		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
 			return err
@@ -753,6 +770,11 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 		return nil, errors.New("errors occurred during dry-run graph traversal")
 	}
 	return taskIDs, nil
+}
+
+var isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
+func commandLooksLikeTurbo(command string) bool {
+	return isTurbo.MatchString(command)
 }
 
 // Replay logs will try to replay logs back to the stdout
@@ -820,15 +842,15 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.pkg.Name, pt.task))
+	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.packageName, pt.task))
 	targetLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.Run(util.GetTaskId(pt.pkg.Name, pt.task))
+	tracer := e.runState.Run(util.GetTaskId(pt.packageName, pt.task))
 
 	// Create a logger
-	pref := e.colorCache.PrefixColor(pt.pkg.Name)
-	actualPrefix := pref("%s:%s: ", pt.pkg.Name, pt.task)
+	pref := e.colorCache.PrefixColor(pt.packageName)
+	actualPrefix := pref("%s:%s: ", pt.packageName, pt.task)
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: actualPrefix,

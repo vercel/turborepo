@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-const TASK_DELIMITER = "#"
+const (
+	TASK_DELIMITER = "#"
+	RootPkgName    = "_root"
+)
 
 // GetTaskId returns a package-task identifier (e.g @feed/thing#build).
 func GetTaskId(pkgName interface{}, target string) string {
@@ -13,6 +16,10 @@ func GetTaskId(pkgName interface{}, target string) string {
 		return target
 	}
 	return fmt.Sprintf("%v%v%v", pkgName, TASK_DELIMITER, target)
+}
+
+func RootTaskId(target string) string {
+	return GetTaskId(RootPkgName, target)
 }
 
 // GetPackageTaskFromId returns a tuple of the package name and target task

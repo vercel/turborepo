@@ -94,6 +94,9 @@ func (g *git) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo 
 	// git will report changed files relative to the worktree: re-relativize to relativeTo
 	normalized := make([]string, 0)
 	for _, f := range files {
+		if f == "" {
+			continue
+		}
 		normalized = append(normalized, g.fixGitRelativePath(strings.TrimSpace(f), relativeTo))
 	}
 	return normalized

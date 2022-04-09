@@ -150,6 +150,64 @@ libD#build
 	}
 }
 
+func TestIncludeRootTasks(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add(util.RootPkgName)
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "test",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     util.RootTaskId("test"),
+		TopoDeps: make(util.Set),
+		Deps:     make(util.Set),
+	})
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{util.RootPkgName, "app1", "libA"},
+		TaskNames: []string{"build", "test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to prepare scheduler: %v", err)
+	}
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
+	for _, err := range errs {
+		t.Fatalf("error executing tasks: %v", err)
+	}
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	expected := fmt.Sprintf(`
+___ROOT___
+%v#test
+  ___ROOT___
+app1#build
+  libA#build
+app1#test
+  libA#build
+libA#build
+  ___ROOT___
+libA#test
+  ___ROOT___
+`, util.RootPkgName)
+	expected = strings.TrimSpace(expected)
+	if actual != expected {
+		t.Errorf("task graph got:\n%v\nwant:\n%v", actual, expected)
+	}
+}
+
 func TestSchedulerTasksOnly(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")

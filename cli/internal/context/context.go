@@ -191,6 +191,12 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err := populateGraphWaitGroup.Wait(); err != nil {
 			return err
 		}
+		// Resolve dependencies for the root package.
+		err = c.populateTopologicGraphForPackageJson(config.RootPackageJSON, rootpath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve dependencies for root package: %v", err)
+		}
+		c.PackageInfos[util.RootPkgName] = config.RootPackageJSON
 
 		return nil
 	}

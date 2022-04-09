@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 )
 
 const ROOT_NODE_NAME = "___ROOT___"
+
+var errNoTask = errors.New("the given task has not been registered")
 
 type Task struct {
 	Name string
@@ -27,17 +30,19 @@ type Scheduler struct {
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the scheduler
-	Tasks           map[string]*Task
-	PackageTaskDeps [][]string
+	Tasks            map[string]*Task
+	PackageTaskDeps  [][]string
+	rootEnabledTasks util.Set
 }
 
 // NewScheduler creates a new scheduler given a topologic graph of workspace package names
 func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
 	return &Scheduler{
-		Tasks:           make(map[string]*Task),
-		TopologicGraph:  topologicalGraph,
-		TaskGraph:       &dag.AcyclicGraph{},
-		PackageTaskDeps: [][]string{},
+		Tasks:            make(map[string]*Task),
+		TopologicGraph:   topologicalGraph,
+		TaskGraph:        &dag.AcyclicGraph{},
+		PackageTaskDeps:  [][]string{},
+		rootEnabledTasks: make(util.Set),
 	}
 }
 
@@ -101,7 +106,7 @@ func (p *Scheduler) getPackageAndTask(taskID string) (string, *Task, error) {
 	if task, ok := p.Tasks[taskName]; ok {
 		return pkg, task, nil
 	}
-	return "", nil, fmt.Errorf("cannot find task for %v", taskID)
+	return "", nil, errNoTask
 }
 
 func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
@@ -114,8 +119,11 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 	traversalQueue := []string{}
 
 	for _, pkg := range scope {
+		isRootPkg := pkg == util.RootPkgName
 		for _, target := range taskNames {
-			traversalQueue = append(traversalQueue, util.GetTaskId(pkg, target))
+			if !isRootPkg || p.rootEnabledTasks.Includes(target) {
+				traversalQueue = append(traversalQueue, util.GetTaskId(pkg, target))
+			}
 		}
 	}
 
@@ -125,7 +133,11 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
 		pkg, task, err := p.getPackageAndTask(taskId)
-		if err != nil {
+		if errors.Is(err, errNoTask) {
+			// If there is no general definition for this task, it must be a
+			// package task, and so only that package needs to be traversed.
+			continue
+		} else if err != nil {
 			return err
 		}
 		if !visited.Includes(taskId) {
@@ -214,6 +226,14 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 }
 
 func (p *Scheduler) AddTask(task *Task) *Scheduler {
+	// If a root task is added, mark the task name as eligible for
+	// root execution. Otherwise, it will be skipped.
+	if util.IsPackageTask(task.Name) {
+		pkg, taskName := util.GetPackageTaskFromId(task.Name)
+		if pkg == util.RootPkgName {
+			p.rootEnabledTasks.Add(taskName)
+		}
+	}
 	p.Tasks[task.Name] = task
 	return p
 }

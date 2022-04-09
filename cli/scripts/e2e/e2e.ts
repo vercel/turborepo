@@ -18,6 +18,16 @@ const basicPipeline = {
       dependsOn: ["^build"],
       outputs: ["dist/**"],
     },
+    "_root#build": {
+      dependsOn: [],
+      outputs: ["dist/**"],
+      inputs: ["rootbuild.js"],
+    },
+    "_root#special": {
+      dependsOn: ["^build"],
+      outputs: ["dist/**"],
+      inputs: [],
+    },
   },
   globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
 };
@@ -113,7 +123,7 @@ function runSmokeTests<T>(
       const dryRun: DryRun = JSON.parse(results.stdout);
       // expect to run all packages
       const expectTaskId = includesTaskId(dryRun);
-      for (const pkg of ["a", "b", "c"]) {
+      for (const pkg of ["a", "b", "c", "_root"]) {
         assert.ok(
           dryRun.packages.includes(pkg),
           `Expected to include package ${pkg}`
@@ -125,7 +135,13 @@ function runSmokeTests<T>(
       }
 
       // actually run the build
-      repo.turbo("run", ["build"], options);
+      const buildOutput = getCommandOutputAsArray(
+        repo.turbo("run", ["build"], options)
+      );
+      assert.ok(
+        buildOutput.includes("_root:build: building"),
+        "Missing root build"
+      );
 
       // assert that hashes are stable across multiple runs
       const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
@@ -423,6 +439,32 @@ function runSmokeTests<T>(
         `• Running test in 2 packages`,
         scopeCommandOutput[1],
         "Runs only in changed packages"
+      );
+    }
+  );
+
+  suite(
+    `${npmClient} runs root tasks${options.cwd ? " from " + options.cwd : ""}`,
+    async () => {
+      const result = getCommandOutputAsArray(
+        repo.turbo("run", ["special"], options)
+      );
+      assert.ok(result.includes("_root:special: root task"));
+      const secondPass = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["special", "--filter=_root", "--output-logs=hash-only"],
+          options
+        )
+      );
+      assert.ok(
+        secondPass.includes(
+          `_root:special: cache hit, suppressing output ${getHashFromOutput(
+            secondPass,
+            "_root#special"
+          )}`
+        ),
+        "Rerun of _root:special should be cached"
       );
     }
   );
