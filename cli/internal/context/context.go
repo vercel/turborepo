@@ -20,11 +20,10 @@ import (
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/pyr-sh/dag"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "the hero we needed"
+const GLOBAL_CACHE_KEY = "Ba weep granna weep ninny bong"
 
 // Context of the CLI
 type Context struct {
@@ -35,7 +34,6 @@ type Context struct {
 	RootNode         string
 	GlobalHash       string
 	Lockfile         *fs.YarnLockfile
-	SCC              [][]dag.Vertex
 	Backend          *api.LanguageBackend
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -182,74 +180,20 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err := parseJSONWaitGroup.Wait(); err != nil {
 			return err
 		}
-		packageDepsHashGroup := new(errgroup.Group)
 		populateGraphWaitGroup := new(errgroup.Group)
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
 			populateGraphWaitGroup.Go(func() error {
 				return c.populateTopologicGraphForPackageJson(pkg, rootpath)
 			})
-			packageDepsHashGroup.Go(func() error {
-				return c.loadPackageDepsHash(pkg)
-			})
 		}
 
 		if err := populateGraphWaitGroup.Wait(); err != nil {
 			return err
 		}
-		if err := packageDepsHashGroup.Wait(); err != nil {
-			return err
-		}
 
-		// Only now can we get the SCC (i.e. topological order)
-		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
-}
-
-func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
-	pkg.Mu.Lock()
-	defer pkg.Mu.Unlock()
-	hashObject, pkgDepsErr := fs.GetPackageDeps(&fs.PackageDepsOptions{
-		PackagePath: pkg.Dir,
-	})
-	if pkgDepsErr != nil {
-		hashObject = make(map[string]string)
-		// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-		// the directory of a package.
-		ignore, err := safeCompileIgnoreFile(".gitignore")
-		if err != nil {
-			return err
-		}
-
-		ignorePkg, err := safeCompileIgnoreFile(filepath.Join(pkg.Dir, ".gitignore"))
-		if err != nil {
-			return err
-		}
-
-		fs.Walk(pkg.Dir, func(name string, isDir bool) error {
-			rootMatch := ignore.MatchesPath(name)
-			otherMatch := ignorePkg.MatchesPath(name)
-			if !rootMatch && !otherMatch {
-				if !isDir {
-					hash, err := fs.GitLikeHashFile(name)
-					if err != nil {
-						return fmt.Errorf("could not hash file %v. \n%w", name, err)
-					}
-					hashObject[strings.TrimPrefix(name, pkg.Dir+"/")] = hash
-				}
-			}
-			return nil
-		})
-
-		// ignorefile rules matched files
-	}
-	hashOfFiles, otherErr := fs.HashObject(hashObject)
-	if otherErr != nil {
-		return otherErr
-	}
-	pkg.FilesHash = hashOfFiles
-	return nil
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
@@ -430,14 +374,6 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 
 		}(directDepName, unresolvedVersion)
 	}
-}
-
-func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
-	if fs.FileExists(filepath) {
-		return gitignore.CompileIgnoreFile(filepath)
-	}
-	// no op
-	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
 func getWorkspaceIgnores() []string {
