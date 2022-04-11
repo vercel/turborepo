@@ -114,6 +114,18 @@ func Test_isWorkspaceReference(t *testing.T) {
 			want:              false, // this is not within the repo root
 		},
 		{
+			name:              "handles link:... inside repo",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "link:../libB",
+			want:              true, // this is a sibling package
+		},
+		{
+			name:              "handles link:... outside repo",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "link:../../../otherproject",
+			want:              false, // this is not within the repo root
+		},
+		{
 			name:              "handles development versions",
 			packageVersion:    "0.0.0-development",
 			dependencyVersion: "*",

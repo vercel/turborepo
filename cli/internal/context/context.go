@@ -84,7 +84,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 		// versions of the same package name, just assume its a match and don't check the range
 		// for an exact match.
 		return true
-	} else if protocol == "file" {
+	} else if protocol == "file" || protocol == "link" {
 		abs, err := filepath.Abs(filepath.Join(cwd, dependencyVersion))
 		if err != nil {
 			// Default to internal if we have the package but somehow cannot get the path
@@ -99,7 +99,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 		}
 		return isWithinRepo
 	} else if isProtocolExternal(protocol) {
-		// Other protocols are assumed to be external references ("github:", "link:", "file:" etc)
+		// Other protocols are assumed to be external references ("github:", etc)
 		return false
 	} else if dependencyVersion == "*" {
 		return true
