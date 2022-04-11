@@ -63,7 +63,7 @@ export class Window extends React.PureComponent {
               height: 100%;
               background: #050b13;
               position: relative;
-              border-radius: 8px;              
+              border-radius: 8px;
             }
             .window.white {
               border: 0;
@@ -104,9 +104,9 @@ export class Window extends React.PureComponent {
               display: inline-block;
               white-space: nowrap;
               min-width: 28px;
-              border-radius: 8px;             
+              border-radius: 8px;
             }
-           
+
             .terminal-special:after {
               content: '';
               display: block;

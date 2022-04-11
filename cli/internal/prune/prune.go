@@ -45,8 +45,8 @@ Options:
   --help                 Show this screen.
   --scope                Specify package to act as entry point
                          for pruned monorepo (required).
-  --docker               Output pruned workspace into 'full' 
-                         and 'json' directories optimized for 
+  --docker               Output pruned workspace into 'full'
+                         and 'json' directories optimized for
                          Docker layer caching. (default false)
 `
 	return strings.TrimSpace(helpText)
