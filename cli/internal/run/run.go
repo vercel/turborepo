@@ -781,15 +781,11 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 			break
 		}
 		if !strings.HasPrefix(arg, "-") {
-			targets.Add(arg)
-			found := false
-			for task := range configJson.Pipeline {
-				if task == arg {
-					found = true
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			task := arg
+			if configJson.Pipeline.HasTask(task) {
+				targets.Add(task)
+			} else {
+				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", task)
 			}
 		}
 	}
