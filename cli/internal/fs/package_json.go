@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"sync"
 
+	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/yosuke-furukawa/json5/encoding/json5"
 )
 
@@ -16,7 +17,7 @@ type TurboConfigJSON struct {
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
-	Pipeline map[string]Pipeline
+	Pipeline PipelineConfig
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
@@ -46,12 +47,25 @@ type PPipeline struct {
 	Outputs   *[]string `json:"outputs"`
 	Cache     *bool     `json:"cache,omitempty"`
 	DependsOn []string  `json:"dependsOn,omitempty"`
+	Inputs    []string  `json:"inputs,omitempty"`
+}
+
+type PipelineConfig map[string]Pipeline
+
+func (pc PipelineConfig) GetPipeline(taskID string) (Pipeline, bool) {
+	if entry, ok := pc[taskID]; ok {
+		return entry, true
+	}
+	_, task := util.GetPackageTaskFromId(taskID)
+	entry, ok := pc[task]
+	return entry, ok
 }
 
 type Pipeline struct {
 	Outputs   []string `json:"-"`
 	Cache     *bool    `json:"cache,omitempty"`
 	DependsOn []string `json:"dependsOn,omitempty"`
+	Inputs    []string `json:"inputs,omitempty"`
 	PPipeline
 }
 
@@ -68,6 +82,7 @@ func (c *Pipeline) UnmarshalJSON(data []byte) error {
 	}
 	c.Cache = c.PPipeline.Cache
 	c.DependsOn = c.PPipeline.DependsOn
+	c.Inputs = c.PPipeline.Inputs
 	return nil
 }
 
@@ -85,15 +100,13 @@ type PackageJSON struct {
 	Workspaces             Workspaces        `json:"workspaces,omitempty"`
 	Private                bool              `json:"private,omitempty"`
 	PackageJSONPath        string
-	Hash                   string
-	Dir                    string
+	Dir                    string // relative path from repo root to the package
 	InternalDeps           []string
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
 	SubLockfile            YarnLockfile
 	LegacyTurboConfig      *TurboConfigJSON `json:"turbo"`
 	Mu                     sync.Mutex
-	FilesHash              string
 	ExternalDepsHash       string
 }
 
