@@ -1,7 +1,6 @@
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { useState } from "react";
-import Cookies from "js-cookie";
 const Vercel = ({ height = 20 }) => (
   <svg height={height} viewBox="0 0 283 64" fill="none">
     <path
@@ -55,6 +54,10 @@ const navigation = {
     },
   ],
   company: [
+    {
+      name: "Try Turborepo + Vercel",
+      href: "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-try-link",
+    },
     {
       name: "Open Source Software",
       href: "https://vercel.com/oss?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-ossLink",
