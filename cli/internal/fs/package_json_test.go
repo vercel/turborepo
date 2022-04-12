@@ -2,7 +2,6 @@ package fs
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,7 +13,11 @@ func Test_ParseTurboConfigJson(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	turboJSONPath := filepath.Join(defaultCwd, "testdata", "turbo.json")
+	cwd, err := CheckedToAbsolutePath(defaultCwd)
+	if err != nil {
+		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
+	}
+	turboJSONPath := cwd.Join("testdata", "turbo.json")
 	turboConfig, err := ReadTurboConfigJSON(turboJSONPath)
 	if err != nil {
 		t.Fatalf("invalid parse: %#v", err)

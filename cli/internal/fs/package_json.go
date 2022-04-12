@@ -3,7 +3,6 @@ package fs
 import (
 	"encoding/json"
 	"io/ioutil"
-	"os"
 	"strings"
 	"sync"
 
@@ -24,8 +23,8 @@ type TurboConfigJSON struct {
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
-	file, err := os.Open(path)
+func ReadTurboConfigJSON(path AbsolutePath) (*TurboConfigJSON, error) {
+	file, err := path.Open()
 	if err != nil {
 		return nil, err
 	}
