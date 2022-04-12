@@ -1,3 +1,6 @@
+// Adapted from https://github.com/thought-machine/please/tree/master/src/scm
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package scm
 
 import "fmt"

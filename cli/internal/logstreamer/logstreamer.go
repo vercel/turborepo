@@ -1,3 +1,6 @@
+// Copyright (c) 2013 Kevin van Zonneveld <kevin@vanzonneveld.net>. All rights reserved.
+// Source: https://github.com/kvz/logstreamer
+// SPDX-License-Identifier: MIT
 package logstreamer
 
 import (
