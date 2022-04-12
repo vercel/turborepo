@@ -205,7 +205,6 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 				if pkgName == util.RootPkgName {
 					// The root package changed, only add it if
 					// the parentDir is equivalent to the root
-					//if parentDir == r.Cwd {
 					if matches, err := doublestar.PathMatch(parentDir, r.Cwd); err != nil {
 						return nil, fmt.Errorf("failed to resolve directory relativeeship %v contains %v: %v", parentDir, r.Cwd, err)
 					} else if matches {
