@@ -807,7 +807,7 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 			if configJson.Pipeline.HasTask(task) {
 				targets.Add(task)
 			} else {
-				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", task)
+				return nil, fmt.Errorf("task `%v` not found in turbo `pipeline` in \"turbo.json\". Are you sure you added it?", task)
 			}
 		}
 	}
