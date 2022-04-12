@@ -3,7 +3,7 @@ import "nextra-theme-docs/style.css";
 import "../custom.css";
 
 import { SSRProvider } from "@react-aria/ssr";
-
+import { UserPreferencesProvider } from "../components/UserPreferencesContext";
 // Shim requestIdleCallback in Safari
 if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
   window.requestIdleCallback = (fn) => setTimeout(fn, 1);
@@ -16,7 +16,9 @@ export default function Nextra({ Component, pageProps }) {
   return getLayout(
     <>
       <SSRProvider>
-        <Component {...pageProps} />
+        <UserPreferencesProvider>
+          <Component {...pageProps} />
+        </UserPreferencesProvider>
       </SSRProvider>
     </>
   );
