@@ -542,7 +542,9 @@ function getLockfileForPackageManager(ws: PackageManager) {
 function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
-  return (results.stdout + results.stderr).split("\n");
+  return (results.stdout + results.stderr)
+    .split("\n")
+    .map((line) => line.replace("\r", ""));
 }
 
 function getHashFromOutput(lines: string[], taskId: string): string {
