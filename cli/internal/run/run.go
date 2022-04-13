@@ -183,6 +183,9 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
+	// We use Cycles instead of Validate because
+	// our DAG has multiple roots (entrypoints).
+	// Validate mandates that there is only a single root node.
 	cycles := ctx.TopologicalGraph.Cycles()
 	if len(cycles) > 0 {
 		cycleLines := make([]string, len(cycles))
