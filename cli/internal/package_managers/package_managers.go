@@ -49,7 +49,7 @@ func GetPackageManager(projectDirectory string, pkg *fs.PackageJSON) (*api.Packa
 
 	// Attempt to detect it.
 	for _, packageManager := range packageManagers {
-		detected, err := packageManager.Detect(projectDirectory, pkg, &packageManager)
+		detected, err := packageManager.Detect(projectDirectory, &packageManager)
 		if err != nil {
 			return nil, err
 		}

@@ -1,7 +1,5 @@
 package api
 
-import "github.com/vercel/turborepo/cli/internal/fs"
-
 // PackageManager is an abstraction across package managers
 type PackageManager struct {
 	Name       string
@@ -17,5 +15,5 @@ type PackageManager struct {
 	Matches func(manager string, version string) (bool, error)
 
 	// Detect if the project is using a specific package manager
-	Detect func(string, *fs.PackageJSON, *PackageManager) (bool, error)
+	Detect func(projectDirectory string, packageManager *PackageManager) (bool, error)
 }

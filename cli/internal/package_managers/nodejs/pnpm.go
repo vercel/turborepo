@@ -45,7 +45,7 @@ var NodejsPnpm = api.PackageManager{
 		return manager == "pnpm", nil
 	},
 
-	Detect: func(projectDirectory string, pkg *fs.PackageJSON, packageManager *api.PackageManager) (bool, error) {
+	Detect: func(projectDirectory string, packageManager *api.PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 
