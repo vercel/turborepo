@@ -118,6 +118,10 @@ turbo run build --cwd=./somewhere/else
 
 #### `--deps`
 
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependents-of-matched-packages) instead.
+</Callout>
+
 Defaults to `true`. Include dependent packages/apps consumers in the execution.
 
 ```sh
@@ -129,7 +133,7 @@ turbo run build --no-deps
 
 Let's say you have packages A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
 
-#### --dry / --dry-run
+#### `--dry / --dry-run`
 
 Instead of executing tasks, display details about the affected packages and tasks that would be run.
 Specify `--dry=json` to get the output in JSON format.
@@ -145,6 +149,25 @@ Task details include:
 - `logFile`: Location of the log file for the task run
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
+
+#### `--filter`
+
+`type: string[]`
+
+Specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/features/filtering)
+
+```sh
+turbo run build --filter=my-pkg
+turbo run test --filter=...^@scope/my-lib
+turbo run build --filter=./apps/* --filter=!./apps/admin
+```
 
 #### `--graph`
 
@@ -221,13 +244,17 @@ Just a quick overview.
 
 #### `--include-dependencies`
 
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependencies-of-matched-packages) instead.
+</Callout>
+
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
 This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
 
 #### `--no-cache`
 
-Default false. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
+Default `false`. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
 
 ```shell
 turbo run build --no-cache
@@ -247,7 +274,7 @@ turbo run build --output-logs=new-only
 
 #### `--only`
 
-Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
+Default `false`. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
 
 Given this pipeline in `turbo.json`:
 
@@ -284,7 +311,21 @@ turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--remote-only`
+
+Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.
+
+```shell
+turbo run build --remote-only
+```
+
+The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment variable.
+
 #### `--scope`
+
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-package) instead.
+</Callout>
 
 `type: string[]`
 
@@ -306,6 +347,10 @@ turbo run build --serial
 ```
 
 #### `--since`
+
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-changed-packages) instead.
+</Callout>
 
 Filter execution based on which packages have changed since a merge-base.
 

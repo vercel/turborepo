@@ -40,7 +40,7 @@ fmt-go:
 install: | ./package.json
 	pnpm i --filter=cli...
 
-e2e: install 
+e2e: install
 	pnpm e2e
 
 cmd/turbo/version.go: version.txt
@@ -148,10 +148,10 @@ platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 	node ./scripts/bump-version.js
 
-platform-create-turbo: 
+platform-create-turbo:
 	cd ../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
-platform-turbo-codemod: 
+platform-turbo-codemod:
 	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
@@ -263,7 +263,7 @@ bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo turbo
-	cd demo/turbo && ../../turbo run test 
+	cd demo/turbo && ../../turbo run test
 
 bench/turbo-new: demo/turbo
 	cd demo/turbo && ../../turbo-new run build test
