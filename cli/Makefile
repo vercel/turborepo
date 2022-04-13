@@ -40,7 +40,7 @@ fmt-go:
 install: | ./package.json
 	pnpm i --filter=cli...
 
-e2e: install 
+e2e: install
 	pnpm e2e
 
 cmd/turbo/version.go: version.txt
@@ -90,6 +90,14 @@ platform-unixlike:
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
 	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
+# To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
+# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
+platform-unixlike-cgo:
+	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
+	mkdir -p "$(NPMDIR)/bin"
+	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
 
@@ -97,7 +105,7 @@ platform-darwin:
 	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-unixlike
 
 platform-darwin-arm64:
-	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike
+	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike-cgo
 
 platform-freebsd:
 	make GOOS=freebsd GOARCH=amd64 NPMDIR=npm/turbo-freebsd-64 platform-unixlike
@@ -140,10 +148,10 @@ platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 	node ./scripts/bump-version.js
 
-platform-create-turbo: 
+platform-create-turbo:
 	cd ../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
-platform-turbo-codemod: 
+platform-turbo-codemod:
 	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
@@ -255,7 +263,7 @@ bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo turbo
-	cd demo/turbo && ../../turbo run test 
+	cd demo/turbo && ../../turbo run test
 
 bench/turbo-new: demo/turbo
 	cd demo/turbo && ../../turbo-new run build test

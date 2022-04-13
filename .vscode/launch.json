@@ -5,6 +5,18 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "E2E",
+      "runtimeArgs": ["-r", "esbuild-register"],
+      "cwd": "${workspaceFolder}/cli",
+      "program": "${workspaceFolder}/cli/scripts/e2e/e2e.ts",
+      "request": "launch",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node",
+      "preLaunchTask": "prepare e2e"
+    },
+    {
       "name": "Build Basic",
       "type": "go",
       "request": "launch",
@@ -48,6 +60,15 @@
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}",
       "args": ["run", "build", "--force"]
+    },
+    {
+      "name": "Kitchen Sink Dry Run",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/examples/kitchen-sink",
+      "args": ["run", "build", "--dry"]
     }
   ]
 }
