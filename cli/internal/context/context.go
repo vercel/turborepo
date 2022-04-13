@@ -13,8 +13,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
-	"github.com/vercel/turborepo/cli/internal/package_managers"
-	"github.com/vercel/turborepo/cli/internal/package_managers/api"
+	"github.com/vercel/turborepo/cli/internal/package_manager"
+	"github.com/vercel/turborepo/cli/internal/package_manager/api"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
@@ -127,7 +127,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if packageManager, err := package_managers.GetPackageManager(rootpath, config.RootPackageJSON); err != nil {
+		if packageManager, err := package_manager.GetPackageManager(rootpath, config.RootPackageJSON); err != nil {
 			return err
 		} else {
 			c.PackageManager = packageManager

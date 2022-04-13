@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_managers/api"
+	"github.com/vercel/turborepo/cli/internal/package_manager/api"
 	"gopkg.in/yaml.v2"
 )
 

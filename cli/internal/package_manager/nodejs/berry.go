@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_managers/api"
+	"github.com/vercel/turborepo/cli/internal/package_manager/api"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-var NodejsYarn = api.PackageManager{
-	Name:       "nodejs-yarn",
+var NodejsBerry = api.PackageManager{
+	Name:       "nodejs-berry",
 	Slug:       "yarn",
 	Command:    "yarn",
 	Specfile:   "package.json",
@@ -39,7 +39,7 @@ var NodejsYarn = api.PackageManager{
 		if err != nil {
 			return false, fmt.Errorf("could not parse yarn version: %w", err)
 		}
-		c, err := semver.NewConstraint("<2.0.0")
+		c, err := semver.NewConstraint(">=2.0.0")
 		if err != nil {
 			return false, fmt.Errorf("could not create constraint: %w", err)
 		}
@@ -63,6 +63,27 @@ var NodejsYarn = api.PackageManager{
 			return false, fmt.Errorf("could not detect yarn version: %w", err)
 		}
 
-		return packageManager.Matches(packageManager.Slug, strings.TrimSpace(string(out)))
+		matches, err := packageManager.Matches(packageManager.Slug, string(out))
+
+		// Short-circuit, definitely not Berry because version number says we're Yarn.
+		if !matches {
+			return false, nil
+		}
+
+		// We're Berry!
+
+		// Check for supported configuration.
+		isNMLinker, err := util.IsNMLinker(projectDirectory)
+
+		if err != nil {
+			// Failed to read the linker state, so unknown configuration is failure.
+			return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
+		} else if !isNMLinker {
+			// Not using nm-linker, so unsupported configuration.
+			return false, fmt.Errorf("only yarn nm-linker is supported")
+		}
+
+		// Berry, supported configuration.
+		return true, nil
 	},
 }

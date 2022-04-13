@@ -1,7 +1,7 @@
 // Adapted from https://github.com/replit/upm
 // Copyright (c) 2019 Neoreason d/b/a Repl.it. All rights reserved.
 // SPDX-License-Identifier: MIT
-package package_managers
+package package_manager
 
 import (
 	"errors"
@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_managers/api"
-	"github.com/vercel/turborepo/cli/internal/package_managers/nodejs"
+	"github.com/vercel/turborepo/cli/internal/package_manager/api"
+	"github.com/vercel/turborepo/cli/internal/package_manager/nodejs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
