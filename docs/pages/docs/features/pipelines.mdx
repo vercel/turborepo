@@ -37,14 +37,15 @@ An example Pipeline configuration in `turbo.json`:
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build"],
+      "outputs": [""],
+      "inputs": ["**/*.tsx", "**/*.ts"]
+    },
+    "lint": {
       "outputs": [""]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint"],
-      "outputs": [""]
-    },
-    "lint": {
       "outputs": [""]
     }
   }
@@ -83,10 +84,16 @@ What you are declaring here in the `pipeline` object of the `turbo` configuratio
     },
     "test": {
       // A package's `test` task depends on that package's
-      // topological dependencies' and devDependencies'
-      // `build` tasks  being completed first
-      // (that's what the `^` symbol signifies).
-      "dependsOn": ["^build"],
+      // own `build` task being completed first.
+      "dependsOn": ["build"],
+      "outputs": [""],
+      // A package's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
+      "inputs": ["**/*.tsx", "**/*.ts"]
+    },
+    "lint": {
+      // A package's `lint` task has no dependencies and
+      // can be run whenever.
       "outputs": [""]
     },
     "deploy": {
@@ -95,10 +102,7 @@ What you are declaring here in the `pipeline` object of the `turbo` configuratio
       // being completed.
       "dependsOn": ["build", "test", "lint"],
       "outputs": [""]
-    },
-    // A package's `lint` task has no dependencies and
-    // can be run whenever.
-    "lint": {}
+    }
   }
 }
 ```
@@ -133,14 +137,42 @@ An empty dependency list (`dependsOn` is either undefined or `[]`) means that a 
   "pipeline": {
     // ... omitted for brevity
 
-    // A package's `lint` command has no dependencies and can be run at
-    // whenever.
     "lint": {
+      // A package's `lint` command has no dependencies and can be run at
+      // whenever.
+      "inputs": ["**/*.js", "**/*.ts"],
       "outputs": [""]
     }
   }
 }
 ```
+
+### Restricting Inputs to a Task
+
+A package is considered to have been updated when any of the files in that package have changed.
+However, for some tasks, we only want to rerun that task when relevant files have changed.
+Specifying `inputs` lets us define which files are relevant for a particular task:
+
+```json
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ... omitted for brevity
+
+   "test": {
+      // A package's `test` task depends on that package's
+      // own `build` task being completed first.
+      "dependsOn": ["build"],
+      "outputs": [""],
+      // A package's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
+      "inputs": ["**/*.tsx", "**/*.ts"]
+    }
+  }
+}
+```
+
+In this scenario, the `test` will only be rerun if a `.tsx` or `.ts` file has changed in the package.
 
 ### Tasks that are in the `pipeline` but not in SOME `package.json`
 
