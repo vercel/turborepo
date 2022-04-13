@@ -9,10 +9,10 @@ If you just started working with Turborepo and monorepos there are a lot of prob
 
 ## External documentation
 
-First of all it is important to understand that workspaces themselves are not implemented by turborepo.
-Instead they are implemented by package managers.
-Since turborepo requires the use of workspaces, we will still try to explain the basics of workspaces in this guide.
-The three package managers all have their own implementation of workspaces, links to their respective documentations are listed below.
+First of all, it is important to note that workspaces themselves are not implemented by Turborepo.
+Instead, they are implemented by package managers.
+Since Turborepo requires the use of workspaces, we will still try to explain the basics of workspaces in this guide.
+The three package managers all have their implementation of workspaces, links to their respective documentation are listed below.
 
 - [Npm workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces)
 - [Yarn workspaces](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
@@ -47,7 +47,7 @@ To add a workspace, you need a few things.
 
 First, you need to decide where you want to put your workspace.
 A common pattern is to have an `apps` folder and a `packages` folder.
-The `apps` folder will contain workspaces that house launchable apps , such as a next.js app.
+The `apps` folder will contain workspaces that house launchable apps, such as a next.js app.
 The `packages` folder will contain workspaces that house packages that are used by either an app or another package.
 
 When you have decided where to put the workspace, you simply create a folder for it.
@@ -76,8 +76,8 @@ This `package.json` file will house all the information for the workspace, such 
 Some issues can occur when choosing names for your workspaces.
 Therefore, we want to provide some guidelines and best practices.
 
-A maybe somewhat obvious, but essential, point is that workspaces can't have the same name.
-Not only will it cause problems when doing an installation, but it also means you won't be able to target the workspace in any way, since Turborepo and package managers won't know which workspace you are targeting.
+A maybe somewhat obvious, but essential point is that workspaces can't have the same name.
+Not only will it cause problems when doing an installation, but it also means you won't be able to target the workspace in any way since Turborepo and package managers won't know which workspace you are targeting.
 
 Another important thing is that you should not name your workspace the same name as an existing npm package.
 It gets worse if you also have that package as a dependency for one of your workspaces, this will not work and cause errors during installation.
@@ -90,7 +90,7 @@ An example of this would be `@todolist/app`, this convention prevents most npm n
 ## Example projects
 
 A couple of example projects that use Turborepo have been created.
-They can all be found in the Turborepo GitHub.
+They can all be found on the Turborepo GitHub.
 
 The repository has the following examples:
 
