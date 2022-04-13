@@ -30,6 +30,7 @@ var NodejsBerry = api.PackageManager{
 		return pkg.Workspaces, nil
 	},
 
+	// Versions newer than 2.0 are berry, and before that we simply call them yarn.
 	Matches: func(manager string, version string) (bool, error) {
 		if manager != "yarn" {
 			return false, nil
@@ -47,6 +48,8 @@ var NodejsBerry = api.PackageManager{
 		return c.Check(v), nil
 	},
 
+	// Detect for berry needs to identify which version of yarn is running on the system.
+	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
 	Detect: func(projectDirectory string, packageManager *api.PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
@@ -63,6 +66,7 @@ var NodejsBerry = api.PackageManager{
 			return false, fmt.Errorf("could not detect yarn version: %w", err)
 		}
 
+		// See if we're a match when we compare these two things.
 		matches, err := packageManager.Matches(packageManager.Slug, string(out))
 
 		// Short-circuit, definitely not Berry because version number says we're Yarn.
@@ -76,7 +80,7 @@ var NodejsBerry = api.PackageManager{
 		isNMLinker, err := util.IsNMLinker(projectDirectory)
 
 		if err != nil {
-			// Failed to read the linker state, so unknown configuration is failure.
+			// Failed to read the linker state, so we treat an unknown configuration as a failure.
 			return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
 		} else if !isNMLinker {
 			// Not using nm-linker, so unsupported configuration.

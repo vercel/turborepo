@@ -131,17 +131,63 @@ func TestGetPackageManager(t *testing.T) {
 			want:             "nodejs-berry",
 			wantErr:          false,
 		},
-		// TODO: Test discovery of the package manager from filesystem and command execution
+		// TODO: Test discovery of the package manager from filesystem and command execution after adopting afero
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetPackageManager(tt.projectDirectory, tt.pkg)
+			gotPackageManager, err := GetPackageManager(tt.projectDirectory, tt.pkg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetPackageManager() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Name != tt.want {
-				t.Errorf("GetPackageManager() = %v, want %v", got.Name, tt.want)
+			if gotPackageManager.Name != tt.want {
+				t.Errorf("GetPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
+			}
+		})
+	}
+}
+
+func Test_readPackageManager(t *testing.T) {
+	tests := []struct {
+		name    string
+		pkg     *fs.PackageJSON
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "finds npm from a package manager string",
+			pkg:     &fs.PackageJSON{PackageManager: "npm@1.2.3"},
+			want:    "nodejs-npm",
+			wantErr: false,
+		},
+		{
+			name:    "finds pnpm from a package manager string",
+			pkg:     &fs.PackageJSON{PackageManager: "pnpm@1.2.3"},
+			want:    "nodejs-pnpm",
+			wantErr: false,
+		},
+		{
+			name:    "finds yarn from a package manager string",
+			pkg:     &fs.PackageJSON{PackageManager: "yarn@1.2.3"},
+			want:    "nodejs-yarn",
+			wantErr: false,
+		},
+		{
+			name:    "finds berry from a package manager string",
+			pkg:     &fs.PackageJSON{PackageManager: "yarn@2.3.4"},
+			want:    "nodejs-berry",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPackageManager, err := readPackageManager(tt.pkg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("readPackageManager() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotPackageManager.Name != tt.want {
+				t.Errorf("GetPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
 			}
 		})
 	}

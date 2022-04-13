@@ -30,6 +30,7 @@ var NodejsYarn = api.PackageManager{
 		return pkg.Workspaces, nil
 	},
 
+	// Versions older than 2.0 are yarn, after that they become berry
 	Matches: func(manager string, version string) (bool, error) {
 		if manager != "yarn" {
 			return false, nil
@@ -47,6 +48,7 @@ var NodejsYarn = api.PackageManager{
 		return c.Check(v), nil
 	},
 
+	// Detect for yarn needs to identify which version of yarn is running on the system.
 	Detect: func(projectDirectory string, packageManager *api.PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
