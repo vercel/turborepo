@@ -1,0 +1,40 @@
+{
+  "$schema": "./docs/public/schema.json",
+  "baseBranch": "origin/main",
+  "globalDependencies": [
+    "$CONVERTKIT_API_KEY",
+    "$CONVERTKIT_API_SECRET",
+    "$CONVERTKIT_FORM_ID"
+  ],
+  "pipeline": {
+    "test": {
+      "outputs": ["coverage/**/*"],
+      "dependsOn": ["^build"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    },
+    "build": {
+      "outputs": ["dist/**/*", ".next/**/*"],
+      "dependsOn": ["^build"]
+    },
+    "cli#build": {
+      "outputs": ["turbo", "turbo.exe"],
+      "dependsOn": []
+    },
+    "schema": {
+      "outputs": ["public/schema.json"]
+    },
+    "create-turbo#test": {
+      "dependsOn": ["create-turbo#build"],
+      "outputs": []
+    },
+    "docs#build": {
+      "outputs": [".next/**"],
+      "dependsOn": ["^build", "docs#schema"]
+    }
+  }
+}

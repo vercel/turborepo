@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"turbo/internal/client"
+
+	"github.com/vercel/turborepo/cli/internal/client"
+	"github.com/vercel/turborepo/cli/internal/fs"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/kelseyhightower/envconfig"
@@ -32,9 +35,9 @@ type Config struct {
 	Logger hclog.Logger
 	// Bearer token
 	Token string
-	// Turborepo.com team id
+	// vercel.com / remote cache team id
 	TeamId string
-	// Turborepo.com team id
+	// vercel.com / remote cache team slug
 	TeamSlug string
 	// Backend API URL
 	ApiUrl string
@@ -45,6 +48,17 @@ type Config struct {
 	// Turborepo CLI Version
 	TurboVersion string
 	Cache        *CacheConfig
+	// turbo.json or legacy turbo config from package.json
+	TurboConfigJSON *fs.TurboConfigJSON
+	// package.json at the root of the repo
+	RootPackageJSON *fs.PackageJSON
+	// Current Working Directory
+	Cwd fs.AbsolutePath
+}
+
+// IsLoggedIn returns true if we have a token and either a team id or team slug
+func (c *Config) IsLoggedIn() bool {
+	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
 }
 
 // CacheConfig
@@ -53,8 +67,6 @@ type CacheConfig struct {
 	Workers int
 	// Cache directory
 	Dir string
-	// HTTP URI of the cache
-	Url string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
@@ -81,15 +93,23 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if len(inputFlags) == 1 && (inputFlags[0] == "help" || inputFlags[0] == "--help" || inputFlags[0] == "-help") {
 		return nil, nil
 	}
-	// Precendence is flags > env > config > default
-	userConfig, err := ReadUserConfigFile()
+
+	cwd, err := selectCwd(args)
 	if err != nil {
-		// not logged in
+		return nil, err
 	}
-	partialConfig, err := ReadConfigFile(filepath.Join(".turbo", "config.json"))
+	// Precedence is flags > env > config > default
+	packageJSONPath := cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
 	if err != nil {
-		// not linked
+		return nil, fmt.Errorf("package.json: %w", err)
 	}
+	turboConfigJson, err := ReadTurboConfig(cwd, rootPackageJSON)
+	if err != nil {
+		return nil, err
+	}
+	userConfig, _ := ReadUserConfigFile()
+	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
 	partialConfig.Token = userConfig.Token
 
 	enverr := envconfig.Process("TURBO", partialConfig)
@@ -115,10 +135,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
-	var outArgs []string
 	for _, arg := range args {
 		if len(arg) != 0 && arg[0] != '-' {
-			outArgs = append(outArgs, arg)
 			continue
 		}
 		switch {
@@ -151,7 +169,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
 		default:
-			outArgs = append(outArgs, arg)
+			continue
 		}
 	}
 
@@ -170,7 +188,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Output: output,
 	})
 
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion)
+	maxRemoteFailCount := 3
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
 
 	c = &Config{
 		Logger:       logger,
@@ -185,6 +204,9 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			Workers: runtime.NumCPU() + 2,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
+		RootPackageJSON: rootPackageJSON,
+		TurboConfigJSON: turboConfigJson,
+		Cwd:             cwd,
 	}
 
 	c.ApiClient.SetToken(partialConfig.Token)
@@ -192,12 +214,55 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	return c, nil
 }
 
-// IsLoggedIn returns true if the user is logged into a Remote Cache
-func (c *Config) IsLoggedIn() bool {
-	return c.Token != ""
+func ReadTurboConfig(rootPath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
+	// If turbo.json exists, we use that
+	// If pkg.Turbo exists, we warn about running the migration
+	// Use pkg.Turbo if turbo.json doesn't exist
+	// If neither exists, it's a fatal error
+	turboJSONPath := rootPath.Join("turbo.json")
+
+	if !turboJSONPath.FileExists() {
+		if rootPackageJSON.LegacyTurboConfig == nil {
+			// TODO: suggestion on how to create one
+			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+		} else {
+			log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+			return rootPackageJSON.LegacyTurboConfig, nil
+		}
+	} else {
+		turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
+		if err != nil {
+			return nil, fmt.Errorf("turbo.json: %w", err)
+		}
+		if rootPackageJSON.LegacyTurboConfig != nil {
+			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+			rootPackageJSON.LegacyTurboConfig = nil
+		}
+		return turbo, nil
+	}
 }
 
-// IsTurborepoLinked returns true if the project is linked (or has enough info to make API requests)
-func (c *Config) IsTurborepoLinked() bool {
-	return (c.TeamId != "" || c.TeamSlug != "")
+// Selects the current working directory from OS
+// and overrides with the `--cwd=` input argument
+func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
+	cwd, err := fs.GetCwd()
+	if err != nil {
+		return "", err
+	}
+	for _, arg := range inputArgs {
+		if arg == "--" {
+			break
+		} else if strings.HasPrefix(arg, "--cwd=") {
+			if len(arg[len("--cwd="):]) > 0 {
+				cwdArgRaw := arg[len("--cwd="):]
+				cwdArg, err := fs.CheckedToAbsolutePath(cwdArgRaw)
+				if err != nil {
+					// the argument is a relative path. Join it with our actual cwd
+					return cwd.Join(cwdArgRaw), nil
+				}
+				return cwdArg, nil
+			}
+		}
+	}
+	return cwd, nil
 }

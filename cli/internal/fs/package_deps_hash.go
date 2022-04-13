@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"turbo/internal/util"
+
+	"github.com/pkg/errors"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -21,23 +22,39 @@ var (
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
 type PackageDepsOptions struct {
 	// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
-	// containing package.json.  If omitted, the default value is the current working directory.
+	// containing package.json. If omitted, the default value is the current working directory.
 	PackagePath string
 	// ExcludedPaths is an optional array of file path exclusions. If a file should be omitted from the list
 	// of dependencies, use this to exclude it.
 	ExcludedPaths []string
 	// GitPath is an optional alternative path to the git installation
 	GitPath string
+
+	InputPatterns []string
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
-	gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
-	if err != nil {
-		return nil, fmt.Errorf("Could not get git hashes for files in package %s: %w", p.PackagePath, err)
-	}
 	// Add all the checked in hashes.
-	result := parseGitLsTree(gitLsOutput)
+	// TODO(gsoltis): are these platform-dependent paths?
+	var result map[string]string
+	if len(p.InputPatterns) == 0 {
+		gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
+		if err != nil {
+			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
+		}
+		result = parseGitLsTree(gitLsOutput)
+	} else {
+		gitLsOutput, err := gitLsFiles(p.PackagePath, p.GitPath, p.InputPatterns)
+		if err != nil {
+			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
+		}
+		parsedLines, err := parseGitLsFiles(gitLsOutput)
+		if err != nil {
+			return nil, err
+		}
+		result = parsedLines
+	}
 
 	if len(p.ExcludedPaths) > 0 {
 		for _, p := range p.ExcludedPaths {
@@ -53,51 +70,59 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 	}
 	currentlyChangedFiles := parseGitStatus(gitStatusOutput, p.PackagePath)
 	var filesToHash []string
-	excludedPathsSet := new(util.Set)
 	for filename, changeType := range currentlyChangedFiles {
 		if changeType == "D" || (len(changeType) == 2 && string(changeType)[1] == []byte("D")[0]) {
 			delete(result, filename)
 		} else {
-			if !excludedPathsSet.Include(filename) {
-				filesToHash = append(filesToHash, filename)
-			}
+			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
 		}
 	}
-
-	// log.Printf("[TRACE] %v:", gitStatusOutput)
-	// log.Printf("[TRACE] start GitHashForFiles")
-	current, err := GitHashForFiles(
-		filesToHash,
-		p.PackagePath,
-	)
+	normalized := make(map[string]string)
+	// These paths are platform-dependent, but already relative to the package root
+	for platformSpecificPath, hash := range result {
+		platformIndependentPath := filepath.ToSlash(platformSpecificPath)
+		normalized[platformIndependentPath] = hash
+	}
+	hashes, err := GetHashableDeps(filesToHash, p.PackagePath)
 	if err != nil {
-		return nil, fmt.Errorf("could not retrieve git hash for files in %s", p.PackagePath)
+		return nil, err
 	}
-	// log.Printf("[TRACE] end GitHashForFiles")
-	// log.Printf("[TRACE] GitHashForFiles files %v", current)
-	for filename, hash := range current {
-		// log.Printf("[TRACE] GitHashForFiles files %v: %v", filename, hash)
-		result[filename] = hash
+	for platformIndependentPath, hash := range hashes {
+		normalized[platformIndependentPath] = hash
 	}
-	// log.Printf("[TRACE] GitHashForFiles result %v", result)
+	return normalized, nil
+}
+
+// GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
+// this map is suitable for cross-platform caching.
+func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]string, error) {
+	fileHashes, err := gitHashForFiles(absolutePaths)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to hash files %v", strings.Join(absolutePaths, ", "))
+	}
+	result := make(map[string]string)
+	for filename, hash := range fileHashes {
+		// Normalize path as POSIX-style and relative to "relativeTo"
+		relativePath, err := filepath.Rel(relativeTo, filename)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get relative path from %v to %v", relativeTo, relativePath)
+		}
+		key := filepath.ToSlash(relativePath)
+		result[key] = hash
+	}
 	return result, nil
 }
 
-// GitHashForFiles a list of files returns a map of with their git hash values. It uses
-// git hash-object under the
-func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]string, error) {
+// gitHashForFiles a list of files returns a map of with their git hash values. It uses
+// git hash-object under the hood.
+// Note that filesToHash must have full paths.
+func gitHashForFiles(filesToHash []string) (map[string]string, error) {
 	changes := make(map[string]string)
 	if len(filesToHash) > 0 {
-		var input = []string{"hash-object"}
-
-		for _, filename := range filesToHash {
-			input = append(input, filepath.Join(PackagePath, filename))
-		}
-		// fmt.Println(input)
+		input := []string{"hash-object"}
+		input = append(input, filesToHash...)
 		cmd := exec.Command("git", input...)
 		// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
-		cmd.Stdin = strings.NewReader(strings.Join(input, "\n"))
-		cmd.Dir = PackagePath
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return nil, fmt.Errorf("git hash-object exited with status: %w", err)
@@ -105,7 +130,7 @@ func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]strin
 		offByOne := strings.Split(string(out), "\n") // there is an extra ""
 		hashes := offByOne[:len(offByOne)-1]
 		if len(hashes) != len(filesToHash) {
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes.", len(filesToHash), len(hashes))
+			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes", len(filesToHash), len(hashes))
 		}
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
@@ -134,7 +159,20 @@ func gitLsTree(path string, gitPath string) (string, error) {
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to read `git ls-tree`: %w", err)
+		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func gitLsFiles(path string, gitPath string, patterns []string) (string, error) {
+	cmd := exec.Command("git", "ls-files", "-s", "--")
+	for _, pattern := range patterns {
+		cmd.Args = append(cmd.Args, pattern)
+	}
+	cmd.Dir = path
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -151,7 +189,7 @@ func parseGitLsTree(output string) map[string]string {
 		for _, line := range outputLines {
 			if len(line) > 0 {
 				matches := gitRex.MatchString(line)
-				if matches == true {
+				if matches {
 					// this looks like this
 					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
 					match := gitRex.FindAllStringSubmatch(line, -1)
@@ -166,6 +204,35 @@ func parseGitLsTree(output string) map[string]string {
 		}
 	}
 	return changes
+}
+
+func parseGitLsFiles(output string) (map[string]string, error) {
+	changes := make(map[string]string)
+	if len(output) > 0 {
+		// A line is expected to look like:
+		// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
+		// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
+		gitRex := regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+		outputLines := strings.Split(output, "\n")
+
+		for _, line := range outputLines {
+			if len(line) > 0 {
+				match := gitRex.FindStringSubmatch(line)
+				// we found matches, and the slice has three parts:
+				// 0 - the whole string
+				// 1 - the hash
+				// 2 - the filename
+				if match != nil && len(match) == 3 {
+					hash := match[1]
+					filename := parseGitFilename(match[2])
+					changes[filename] = hash
+				} else {
+					return nil, fmt.Errorf("failed to parse git ls-files output line %v", line)
+				}
+			}
+		}
+	}
+	return changes, nil
 }
 
 // Couldn't figure out how to deal with special characters. Skipping for now.
@@ -218,7 +285,7 @@ func gitStatus(path string, gitPath string) (string, error) {
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Failed to read git status: %w", err)
+		return "", fmt.Errorf("failed to read git status: %w", err)
 	}
 	// log.Printf("[TRACE] gitStatus result: %v", strings.TrimSpace(string(out)))
 	return strings.TrimSpace(string(out)), nil
@@ -247,7 +314,7 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 	for _, line := range outputLines {
 		if len(line) > 0 {
 			matches := gitRex.MatchString(line)
-			if matches == true {
+			if matches {
 				// changeType is in the format of "XY" where "X" is the status of the file in the index and "Y" is the status of
 				// the file in the working tree. Some example statuses:
 				//   - 'D' == deletion

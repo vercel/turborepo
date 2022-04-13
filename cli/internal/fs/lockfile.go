@@ -1,87 +1,80 @@
 package fs
 
 import (
-	"crypto/md5"
-	"encoding/hex"
+	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
-type LockfileEntry struct {
-	// resolved version for the particular entry based on the provided semver revision
-	Version   string `yaml:"version"`
-	Resolved  string `yaml:"resolved"`
-	Integrity string `yaml:"integrity"`
-	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
-	Dependencies map[string]string `yaml:"dependencies,omitempty"`
-	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
-	OptionalDependencies map[string]string `yaml:"optionalDependencies,omitempty"`
-}
-
-type YarnLockfile map[string]*LockfileEntry
-
-func md5sum(filePath string) (string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 // ReadLockfile will read `yarn.lock` into memory (either from the cache or fresh)
-func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
+func ReadLockfile(rootpath string, backendName string, cacheDir string) (*YarnLockfile, error) {
 	var lockfile YarnLockfile
 	var prettyLockFile = YarnLockfile{}
-	hash, err := HashFile("yarn.lock")
-
+	hash, err := HashFile(filepath.Join(rootpath, "yarn.lock"))
+	if err != nil {
+		return &YarnLockfile{}, fmt.Errorf("failed to hash lockfile: %w", err)
+	}
 	contentsOfLock, err := ioutil.ReadFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
 	if err != nil {
-		contentsB, err := ioutil.ReadFile("yarn.lock")
+		contentsB, err := ioutil.ReadFile(filepath.Join(rootpath, "yarn.lock"))
 		if err != nil {
-			return nil, fmt.Errorf("yarn.lock: %w", err)
+			return nil, fmt.Errorf("reading yarn.lock: %w", err)
 		}
-		lines := strings.Split(string(contentsB), "\n")
-		r := regexp.MustCompile(`^[\w"]`)
-		double := regexp.MustCompile(`\:\"\:`)
-		l := regexp.MustCompile("\"|:\n$")
-		o := regexp.MustCompile(`\"\s\"`)
-		// deals with colons
-		// integrity sha-... -> integrity: sha-...
-		// "@apollo/client" latest -> "@apollo/client": latest
-		// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
-		// apollo-client "0.0.0" -> apollo-client: "0.0.0"
-		a := regexp.MustCompile(`(\w|\")\s(\"|\w)`)
 
-		for i, line := range lines {
-			if r.MatchString(line) {
-				first := fmt.Sprintf("\"%v\":", l.ReplaceAllString(line, ""))
-				lines[i] = double.ReplaceAllString(first, "\":")
+		var next []byte
+		if backendName == "nodejs-yarn" {
+			var lines []string
+			var l *regexp.Regexp
+			var output string
+
+			hasLF := !bytes.HasSuffix(contentsB, []byte("\r\n"))
+			if hasLF {
+				lines = strings.Split(string(contentsB), "\n")
+				l = regexp.MustCompile("\"|:\n$")
+			} else {
+				lines = strings.Split(strings.TrimRight(string(contentsB), "\r\n"), "\r\n")
+				l = regexp.MustCompile("\"|:\r\n$")
 			}
+
+			r := regexp.MustCompile(`^[\w"]`)
+			double := regexp.MustCompile(`\:\"\:`)
+			o := regexp.MustCompile(`\"\s\"`)
+			// deals with colons
+			// integrity sha-... -> integrity: sha-...
+			// "@apollo/client" latest -> "@apollo/client": latest
+			// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
+			// apollo-client "0.0.0" -> apollo-client: "0.0.0"
+			a := regexp.MustCompile(`(\w|\")\s(\"|\w)`)
+
+			for i, line := range lines {
+				if r.MatchString(line) {
+					first := fmt.Sprintf("\"%v\":", l.ReplaceAllString(line, ""))
+					lines[i] = double.ReplaceAllString(first, "\":")
+				}
+			}
+
+			if hasLF {
+				output = o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
+			} else {
+				output = o.ReplaceAllString(strings.Join(lines, "\r\n"), "\": \"")
+			}
+
+			next = []byte(a.ReplaceAllStringFunc(output, func(m string) string {
+				parts := a.FindStringSubmatch(m)
+				return fmt.Sprintf("%s: %s", parts[1], parts[2])
+			}))
+		} else {
+			next = contentsB
 		}
-		output := o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
 
-		next := a.ReplaceAllStringFunc(output, func(m string) string {
-			parts := a.FindStringSubmatch(m)
-			return fmt.Sprintf("%s: %s", parts[1], parts[2])
-		})
-
-		err = yaml.Unmarshal([]byte(next), &lockfile)
+		err = yaml.Unmarshal(next, &lockfile)
 		if err != nil {
-			fmt.Println("unmarshal")
-			return &YarnLockfile{}, err
+			return &YarnLockfile{}, fmt.Errorf("could not unmarshal lockfile: %w", err)
 		}
 		// This final step is important, it splits any deps with multiple-resolutions
 		// (e.g. "@babel/generator@^7.13.0, @babel/generator@^7.13.9":) into separate

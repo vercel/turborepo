@@ -57,8 +57,8 @@ packageGraph.forEachNode((node) => {
 const root = path.join(__dirname, "../demo", type);
 
 function generate(root, skipInstall) {
+  fs.mkdirSync(root, { recursive: true });
   if (type !== "nx") {
-    fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(
       path.join(root, ".gitignore"),
       `node_modules
@@ -71,7 +71,7 @@ turbo-linux
     );
     if (fs.existsSync(root)) {
       try {
-        fs.rmdirSync(root + "/packages", { recursive: true });
+        fs.rmSync(root + "/packages", { recursive: true });
       } catch (error) {}
     }
 
@@ -82,22 +82,7 @@ turbo-linux
               [type]: "*",
             },
           }
-        : {
-            turbo: {
-              pipeline: {
-                build: {
-                  outputs: ["dist/**/*"],
-                  dependsOn: ["^build"],
-                },
-                test: {
-                  dependsOn: ["build"],
-                },
-                dev: {
-                  cache: false,
-                },
-              },
-            },
-          };
+        : {};
 
     fs.writeFileSync(
       path.join(root, "package.json"),
@@ -107,8 +92,8 @@ turbo-linux
           version: "0.0.0",
           private: true,
           workspaces: ["packages/*"],
-
           ...deps,
+          packageManager: "yarn@1.22.17",
         },
         null,
         2
@@ -156,6 +141,18 @@ turbo-linux
           cacheStorageConfig: {
             provider: "local",
             cacheUrl: "https://1a77600385dd.ngrok.io",
+          },
+          pipeline: {
+            build: {
+              outputs: ["dist/**/*"],
+              dependsOn: ["^build"],
+            },
+            test: {
+              dependsOn: ["build"],
+            },
+            dev: {
+              cache: false,
+            },
           },
         },
         null,
@@ -268,7 +265,7 @@ module.exports = {
       );
       // instead of dealing with actual code, just list as implicitDependencies
       const safeName = node.data.name.replace(/^@[^/]+\//, "");
-      const workspace = fs.readJSONSync(path.join(root, "nx.json"));
+      const workspace = fs.readJSONSync(path.join(root, "workspace.json"));
       workspace.projects[safeName] = {
         ...workspace.projects[safeName],
         implicitDependencies: node.data.implicitDependencies || [],

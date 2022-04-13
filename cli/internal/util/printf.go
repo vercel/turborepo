@@ -1,10 +1,13 @@
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package util
 
 import (
 	"fmt"
 	"io"
 	"os"
-	"turbo/internal/ui"
+
+	"github.com/vercel/turborepo/cli/internal/ui"
 )
 
 // initPrintf sets up the replacements used by printf.
@@ -57,12 +60,4 @@ var replacements = map[string]string{
 	"RESET":        "\x1b[0m",
 	"ERASE_AFTER":  "\x1b[K",
 	"CLEAR_END":    "\x1b[0J",
-}
-
-// replacements overrides for light colour scheme.
-var lightOverrides = map[string]string{
-	"BOLD_GREY":  "\x1b[37;1m",
-	"BOLD_WHITE": "\x1b[30;1m",
-	"GREY":       "\x1b[37m",
-	"WHITE":      "\x1b[30m",
 }

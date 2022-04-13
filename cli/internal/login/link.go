@@ -5,11 +5,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"turbo/internal/client"
-	"turbo/internal/config"
-	"turbo/internal/fs"
-	"turbo/internal/ui"
-	"turbo/internal/util"
+
+	"github.com/vercel/turborepo/cli/internal/client"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
@@ -52,7 +53,7 @@ func (c *LinkCommand) Run(args []string) int {
 		c.logError(fmt.Errorf("could not find home directory.\n%w", homeDirErr))
 		return 1
 	}
-	c.Ui.Info(fmt.Sprintf(">>> Remote Caching (beta)"))
+	c.Ui.Info(">>> Remote Caching (beta)")
 	c.Ui.Info("")
 	c.Ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
 	c.Ui.Info("  all your team’s Vercel projects. It also can share outputs")
@@ -78,7 +79,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}))
 
 	if !shouldSetup {
-		c.Ui.Info("> Aborted.")
+		c.Ui.Info("> Canceled.")
 		return 1
 	}
 
@@ -125,7 +126,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}))
 
 	if chosenTeamName == "" {
-		c.Ui.Info("Aborted. Turborepo not set up.")
+		c.Ui.Info("Canceled. Turborepo not set up.")
 		return 1
 	} else if (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username) {
 		chosenTeam = client.Team{
@@ -142,7 +143,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}
 	}
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	fsErr := config.WriteConfigFile(filepath.Join(".turbo", "config.json"), &config.TurborepoConfig{
+	fsErr := config.WriteRepoConfigFile(&config.TurborepoConfig{
 		TeamId: chosenTeam.ID,
 		ApiUrl: c.Config.ApiUrl,
 	})
@@ -161,7 +162,7 @@ func (c *LinkCommand) Run(args []string) int {
 	}
 
 	c.Ui.Info("")
-	c.Ui.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeam.Name))
+	c.Ui.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeamName))
 	c.Ui.Info("")
 	c.Ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	c.Ui.Info("")

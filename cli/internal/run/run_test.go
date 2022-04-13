@@ -2,15 +2,25 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
-	"turbo/internal/context"
-	"turbo/internal/util"
+
+	"github.com/mitchellh/cli"
+	"github.com/pyr-sh/dag"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestParseConfig(t *testing.T) {
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	defaultCacheFolder := defaultCwd.Join(filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
 		Name     string
 		Args     []string
@@ -29,24 +39,10 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
-			},
-		},
-		{
-			"cwd",
-			[]string{"foo", "--cwd=zop"},
-			&RunOptions{
-				includeDependents:   true,
-				stream:              true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         10,
-				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
-				profile:             "",
-				cwd:                 "zop",
-				cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -63,7 +59,10 @@ func TestParseConfig(t *testing.T) {
 				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -79,7 +78,10 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -95,7 +97,10 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -111,8 +116,11 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				passThroughArgs:     []string{"--boop", "zoop"},
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
 		{
@@ -128,72 +136,212 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cacheFolder:         filepath.FromSlash("node_modules/.cache/turbo"),
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				passThroughArgs:     []string{},
+				cacheHitLogsMode:    FullLogs,
+				cacheMissLogsMode:   FullLogs,
 			},
 		},
+		{
+			"can specify filter patterns",
+			[]string{"foo", "--filter=bar", "--filter=...[main]"},
+			&RunOptions{
+				includeDependents: true,
+				filterPatterns:    []string{"bar", "...[main]"},
+				stream:            true,
+				bail:              true,
+				concurrency:       10,
+				cache:             true,
+				cwd:               defaultCwd.ToStringDuringMigration(),
+				cacheFolder:       defaultCacheFolder.ToStringDuringMigration(),
+				cacheHitLogsMode:  FullLogs,
+				cacheMissLogsMode: FullLogs,
+			},
+		},
+	}
+
+	ui := &cli.BasicUi{
+		Reader:      os.Stdin,
+		Writer:      os.Stdout,
+		ErrorWriter: os.Stderr,
 	}
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, ".")
+			actual, err := parseRunArgs(tc.Args, defaultCwd, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
-			assert.EqualValues(t, actual, tc.Expected)
+			assert.EqualValues(t, tc.Expected, actual)
 		})
 	}
 }
 
-func TestScopedPackages(t *testing.T) {
-	cases := []struct {
-		Name     string
-		Ctx      *context.Context
-		Patttern []string
-		Expected util.Set
+func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
+	expected := &RunOptions{
+		includeDependents:   true,
+		stream:              true,
+		bail:                true,
+		dotGraph:            "",
+		concurrency:         10,
+		includeDependencies: false,
+		cache:               true,
+		forceExecution:      false,
+		profile:             "",
+		cwd:                 "zop",
+		cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
+		cacheHitLogsMode:    FullLogs,
+		cacheMissLogsMode:   FullLogs,
+	}
+
+	ui := &cli.BasicUi{
+		Reader:      os.Stdin,
+		Writer:      os.Stdout,
+		ErrorWriter: os.Stderr,
+	}
+
+	t.Run("accepts cwd argument", func(t *testing.T) {
+		// Note that the Run parsing actually ignores `--cwd=` arg since
+		// the `--cwd=` is parsed when setting up the global Config. This value is
+		// passed directly as an argument to the parser.
+		// We still need to ensure run accepts cwd flag and doesn't error.
+		actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, "zop", ui)
+		if err != nil {
+			t.Fatalf("invalid parse: %#v", err)
+		}
+		assert.EqualValues(t, expected, actual)
+	})
+
+}
+
+func TestGetTargetsFromArguments(t *testing.T) {
+	type args struct {
+		arguments  []string
+		configJson *fs.TurboConfigJSON
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
 	}{
 		{
-			"starts with @",
-			&context.Context{
-				PackageNames: []string{"@sample/app", "sample-app", "jared"},
+			name: "handles one defined target",
+			args: args{
+				arguments: []string{"build"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.TaskDefinition{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
 			},
-			[]string{"@sample/*"},
-			util.Set{"@sample/app": "@sample/app"},
+			want:    []string{"build"},
+			wantErr: false,
 		},
 		{
-			"return an array of matches",
-			&context.Context{
-				PackageNames: []string{"foo", "bar", "baz"},
+			name: "handles multiple targets and ignores flags",
+			args: args{
+				arguments: []string{"build", "test", "--foo", "--bar"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.TaskDefinition{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
 			},
-			[]string{"f*"},
-			util.Set{"foo": "foo"},
+			want:    []string{"build", "test"},
+			wantErr: false,
 		},
 		{
-			"return an array of matches",
-			&context.Context{
-				PackageNames: []string{"foo", "bar", "baz"},
+			name: "handles pass through arguments after -- ",
+			args: args{
+				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.TaskDefinition{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
 			},
-			[]string{"f*", "bar"},
-			util.Set{"bar": "bar", "foo": "foo"},
+			want:    []string{"build", "test"},
+			wantErr: false,
 		},
 		{
-			"return matches in the order the list were defined",
-			&context.Context{
-				PackageNames: []string{"foo", "bar", "baz"},
+			name: "handles unknown pipeline targets ",
+			args: args{
+				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: map[string]fs.TaskDefinition{
+						"build":      {},
+						"test":       {},
+						"thing#test": {},
+					},
+				},
 			},
-			[]string{"*a*", "!f*"},
-			util.Set{"bar": "bar", "baz": "baz"},
+			want:    nil,
+			wantErr: true,
 		},
 	}
 
-	for i, tc := range cases {
-		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			actual, err := getScopedPackages(tc.Ctx, tc.Patttern)
-			if err != nil {
-				t.Fatalf("invalid scope parse: %#v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJson)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
-			assert.EqualValues(t, tc.Expected, actual)
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
+			}
 		})
+	}
+}
+
+func Test_dontSquashTasks(t *testing.T) {
+	topoGraph := &dag.AcyclicGraph{}
+	topoGraph.Add("a")
+	topoGraph.Add("b")
+	// no dependencies between packages
+
+	pipeline := map[string]fs.TaskDefinition{
+		"build": {
+			Outputs:   []string{},
+			TaskDependencies: []string{"generate"},
+		},
+		"generate": {
+			Outputs:   []string{},
+		},
+		"b#build": {
+			Outputs:   []string{},
+		},
+	}
+	filteredPkgs := make(util.Set)
+	filteredPkgs.Add("a")
+	filteredPkgs.Add("b")
+	rs := &runSpec{
+		FilteredPkgs: filteredPkgs,
+		Targets:      []string{"build"},
+		Opts:         &RunOptions{},
+	}
+	engine, err := buildTaskGraph(topoGraph, pipeline, rs)
+	if err != nil {
+		t.Fatalf("failed to build task graph: %v", err)
+	}
+	toRun := engine.TaskGraph.Vertices()
+	// 4 is the 3 tasks + root
+	if len(toRun) != 4 {
+		t.Errorf("expected 4 tasks, got %v", len(toRun))
+	}
+	for task := range pipeline {
+		if _, ok := engine.Tasks[task]; !ok {
+			t.Errorf("expected to find task %v in the task graph, but it is missing", task)
+		}
 	}
 }

@@ -1,0 +1,57 @@
+name: Large Repo Benchmark
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  build:
+    name: Run Benchmarks
+    timeout-minutes: 40
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.6
+        id: go
+
+      - uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.32.2
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: pnpm
+
+      - name: Build
+        run: cd cli && make turbo
+
+      - name: Install dependencies
+        run: pnpm install --filter=benchmark
+
+      - name: Run benchmarks
+        run: cd benchmark && pnpm benchmark
+
+      - name: Store Benchmark Result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: "${{ runner.os }} Benchmark"
+          # What benchmark tool the output is formatted as
+          tool: "customSmallerIsBetter"
+          output-file-path: ./benchmark/benchmarks.json
+          benchmark-data-dir-path: benchmarks/large-repo/${{ runner.os }}
+          auto-push: true
+          # GitHub API token to make a commit
+          github-token: ${{ secrets.GITHUB_TOKEN }}

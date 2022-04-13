@@ -2,14 +2,6 @@
   "name": "turbo",
   "version": "0.0.0",
   "private": true,
-  "workspaces": {
-    "packages": [
-      "packages/*",
-      "docs",
-      "cli",
-      "create-turbo"
-    ]
-  },
   "scripts": {
     "format": "prettier --write",
     "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
@@ -19,57 +11,20 @@
     "turbo": "./turbow.sh"
   },
   "devDependencies": {
+    "lint-staged": "^12.3.2",
     "prettier": "^2.5.0",
     "simple-git-hooks": "^2.7.0"
   },
   "lint-staged": {
-    "**/*.{ts,tsx,md,mdx,js,jsx,.go}": [
-      "npm run format",
+    "*.{ts,tsx,md,mdx,js,jsx}": [
+      "prettier --write"
+    ],
+    "*.go": [
       "cd cli && npm run format"
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "npx lint-staged"
+    "pre-commit": "pnpm exec lint-staged"
   },
-  "turbo": {
-    "baseBranch": "origin/main",
-    "pipeline": {
-      "test": {
-        "outputs": [
-          "coverage/**/*"
-        ],
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "lint": {
-        "outputs": []
-      },
-      "dev": {
-        "cache": false
-      },
-      "build": {
-        "outputs": [
-          "dist/**/*",
-          ".next/**/*"
-        ],
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "cli#build": {
-        "outputs": [
-          "turbo",
-          "turbo.exe"
-        ],
-        "dependsOn": []
-      },
-      "create-turbo#test": {
-        "dependsOn": [
-          "create-turbo#build"
-        ],
-        "outputs": []
-      }
-    }
-  }
+  "packageManager": "pnpm@6.32.2"
 }

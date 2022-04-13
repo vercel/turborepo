@@ -1,8 +1,8 @@
 <p align="center">
-   <img width="340" alt="Turborepo logo" src="https://user-images.githubusercontent.com/4060187/106504110-82f58d00-6494-11eb-87b7-a16d4f68bc5a.png">
+  <img width="340" alt="Turborepo logo" src="https://user-images.githubusercontent.com/4060187/106504110-82f58d00-6494-11eb-87b7-a16d4f68bc5a.png">
 </p>
 
-<p align="center">  
+<p align="center">
   <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo">
     <img alt="" src="https://badgen.net/npm/v/turbo">
   </a>
@@ -10,6 +10,8 @@
     <img src="https://badgen.net/badge/icon/Made%20By%20Vercel?icon=vercel&label&color=black&labelColor=black">
   </a>
 </p>
+
+![turbo-screenshot](https://user-images.githubusercontent.com/4060187/148454607-f65de1fb-2d46-4594-ad95-2234815338f3.png)
 
 ## Getting Started / Documentation
 

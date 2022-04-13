@@ -2,12 +2,12 @@ package browser
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
 	"runtime"
 )
 
-func OpenBrowser(url string) {
+// OpenBrowser attempts to interactively open a browser window at the given URL
+func OpenBrowser(url string) error {
 	var err error
 
 	switch runtime.GOOS {
@@ -21,7 +21,7 @@ func OpenBrowser(url string) {
 		err = fmt.Errorf("unsupported platform")
 	}
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-
+	return nil
 }

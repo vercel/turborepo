@@ -5,13 +5,15 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
+	"github.com/mitchellh/cli"
 )
 
-const ESC = 27
+const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
 
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
@@ -20,12 +22,7 @@ var bold = color.New(color.Bold)
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
 
-// clear the line and move the cursor up
-var clear = fmt.Sprintf("%c[%dA%c[2K", ESC, 1, ESC)
-
-func ClearLines(writer io.Writer, count int) {
-	_, _ = fmt.Fprint(writer, strings.Repeat(clear, count))
-}
+var ansiRegex = regexp.MustCompile(ansiEscapeStr)
 
 // Dim prints out dimmed text
 func Dim(str string) string {
@@ -36,10 +33,10 @@ func Bold(str string) string {
 	return bold.Sprint(str)
 }
 
-func Warn(str string) string {
-	return fmt.Sprintf("%s %s", WARNING_PREFIX, color.YellowString(str))
-}
-
+// Adapted from go-rainbow
+// Copyright (c) 2017 Raphael Amorim
+// Source: https://github.com/raphamorim/go-rainbow
+// SPDX-License-Identifier: MIT
 func rgb(i int) (int, int, int) {
 	var f = 0.275
 
@@ -50,10 +47,12 @@ func rgb(i int) (int, int, int) {
 }
 
 // Rainbow function returns a formated colorized string ready to print it to the shell/terminal
+//
+// Adapted from go-rainbow
+// Copyright (c) 2017 Raphael Amorim
+// Source: https://github.com/raphamorim/go-rainbow
+// SPDX-License-Identifier: MIT
 func Rainbow(text string) string {
-	if !IsTTY {
-		return text
-	}
 	var rainbowStr []string
 	for index, value := range text {
 		r, g, b := rgb(index)
@@ -62,4 +61,54 @@ func Rainbow(text string) string {
 	}
 
 	return strings.Join(rainbowStr, "")
+}
+
+type stripAnsiWriter struct {
+	wrappedWriter io.Writer
+}
+
+func (into *stripAnsiWriter) Write(p []byte) (int, error) {
+	n, err := into.wrappedWriter.Write(ansiRegex.ReplaceAll(p, []byte{}))
+	if err != nil {
+		// The number of bytes returned here isn't directly related to the input bytes
+		// if ansi color codes were being stripped out, but we are counting on Stdout.Write
+		// not failing under typical operation as well.
+		return n, err
+	}
+
+	// Write must return a non-nil error if it returns n < len(p). Consequently, if the
+	// wrappedWrite.Write call succeeded we will return len(p) as the number of bytes
+	// written.
+	return len(p), nil
+}
+
+// Default returns the default colored ui
+func Default() *cli.ColoredUi {
+	return BuildColoredUi(ColorModeUndefined)
+}
+
+func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
+	colorMode = applyColorMode(colorMode)
+
+	var outWriter, errWriter io.Writer
+
+	if colorMode == ColorModeSuppressed {
+		outWriter = &stripAnsiWriter{wrappedWriter: os.Stdout}
+		errWriter = &stripAnsiWriter{wrappedWriter: os.Stderr}
+	} else {
+		outWriter = os.Stdout
+		errWriter = os.Stderr
+	}
+
+	return &cli.ColoredUi{
+		Ui: &cli.BasicUi{
+			Reader:      os.Stdin,
+			Writer:      outWriter,
+			ErrorWriter: errWriter,
+		},
+		OutputColor: cli.UiColorNone,
+		InfoColor:   cli.UiColorNone,
+		WarnColor:   cli.UiColorYellow,
+		ErrorColor:  cli.UiColorRed,
+	}
 }

@@ -1,15 +1,14 @@
 const withNextra = require("nextra")({
-  theme: "./nextra-theme-docs",
+  theme: "nextra-theme-docs",
   themeConfig: "./theme.config.js",
-  unstable_stork: false,
+  unstable_flexsearch: true,
   unstable_staticImage: true,
 });
 
 module.exports = withNextra({
-  reactStrictMode: true,
+  // reactStrictMode: true,
   experiments: {
-    swcLoader: true,
-    swcMinify: true,
+    esmExternals: true,
   },
   async redirects() {
     return [
@@ -21,12 +20,17 @@ module.exports = withNextra({
       {
         source: "/discord{/}?",
         permanent: true,
-        destination: "https://discord.gg/CwfEWSaMF5",
+        destination: "https://discord.gg/sSzyjxvbf5",
       },
       {
         source: "/docs/changelog",
         permanent: true,
         destination: "https://github.com/vercel/turborepo/releases",
+      },
+      {
+        source: "/docs/guides/complimentary-tools",
+        permanent: true,
+        destination: "/docs/guides/monorepo-tools",
       },
     ];
   },

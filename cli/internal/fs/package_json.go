@@ -2,58 +2,114 @@ package fs
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
-	"reflect"
+	"strings"
 	"sync"
 
-	"github.com/pascaldekloe/name"
+	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/yosuke-furukawa/json5/encoding/json5"
 )
 
-// TurboCacheOptions are configuration for Turborepo cache
-
+// TurboConfigJSON is the root turborepo configuration
 type TurboConfigJSON struct {
-	Base               string   `json:"baseBranch,omitempty"`
+	// Base Git branch
+	Base string `json:"baseBranch,omitempty"`
+	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
-	TurboCacheOptions  string   `json:"cacheOptions,omitempty"`
-	Outputs            []string `json:"outputs,omitempty"`
-	RemoteCacheUrl     string   `json:"remoteCacheUrl,omitempty"`
-	Pipeline           map[string]Pipeline
+	// Pipeline is a map of Turbo pipeline entries which define the task graph
+	// and cache behavior on a per task or per package-task basis.
+	Pipeline Pipeline
+	// Configuration options when interfacing with the remote cache
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-// Camelcase string with optional args.
-func Camelcase(s string, v ...interface{}) string {
-	return name.CamelCase(fmt.Sprintf(s, v...), true)
+func ReadTurboConfigJSON(path AbsolutePath) (*TurboConfigJSON, error) {
+	file, err := path.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	var turboConfig *TurboConfigJSON
+	decoder := json5.NewDecoder(file)
+	err = decoder.Decode(&turboConfig)
+	if err != nil {
+		println("error unmarshalling", err.Error())
+		return nil, err
+	}
+	return turboConfig, nil
 }
 
-var requiredFields = []string{"Name", "Version"}
+type RemoteCacheOptions struct {
+	TeamId    string `json:"teamId,omitempty"`
+	Signature bool   `json:"signature,omitempty"`
+}
 
-type PPipeline struct {
+type pipelineJSON struct {
 	Outputs   *[]string `json:"outputs"`
 	Cache     *bool     `json:"cache,omitempty"`
 	DependsOn []string  `json:"dependsOn,omitempty"`
+	Inputs    []string  `json:"inputs,omitempty"`
 }
 
-type Pipeline struct {
-	Outputs   []string `json:"-"`
-	Cache     *bool    `json:"cache,omitempty"`
-	DependsOn []string `json:"dependsOn,omitempty"`
-	PPipeline
+type Pipeline map[string]TaskDefinition
+
+func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
+	if entry, ok := pc[taskID]; ok {
+		return entry, true
+	}
+	_, task := util.GetPackageTaskFromId(taskID)
+	entry, ok := pc[task]
+	return entry, ok
 }
 
-func (c *Pipeline) UnmarshalJSON(data []byte) error {
-	if err := json.Unmarshal(data, &c.PPipeline); err != nil {
+type TaskDefinition struct {
+	Outputs                 []string
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
+}
+
+const (
+	envPipelineDelimiter         = "$"
+	topologicalPipelineDelimiter = "^"
+)
+
+var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+
+func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
+	rawPipeline := &pipelineJSON{}
+	if err := json.Unmarshal(data, &rawPipeline); err != nil {
 		return err
 	}
 	// We actually need a nil value to be able to unmarshal the json
 	// because we interpret the omission of outputs to be different
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
-	if c.PPipeline.Outputs != nil {
-		c.Outputs = *c.PPipeline.Outputs
+	if rawPipeline.Outputs != nil {
+		c.Outputs = *rawPipeline.Outputs
+	} else {
+		c.Outputs = defaultOutputs
 	}
-	c.Cache = c.PPipeline.Cache
-	c.DependsOn = c.PPipeline.DependsOn
+	if rawPipeline.Cache == nil {
+		c.ShouldCache = true
+	} else {
+		c.ShouldCache = *rawPipeline.Cache
+	}
+	c.EnvVarDependencies = []string{}
+	c.TopologicalDependencies = []string{}
+	c.TaskDependencies = []string{}
+	for _, dependency := range rawPipeline.DependsOn {
+		if strings.HasPrefix(dependency, envPipelineDelimiter) {
+			c.EnvVarDependencies = append(c.EnvVarDependencies, strings.TrimPrefix(dependency, envPipelineDelimiter))
+		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+		} else {
+			c.TaskDependencies = append(c.TaskDependencies, dependency)
+		}
+	}
+	c.Inputs = rawPipeline.Inputs
 	return nil
 }
 
@@ -66,19 +122,18 @@ type PackageJSON struct {
 	DevDependencies        map[string]string `json:"devDependencies,omitempty"`
 	OptionalDependencies   map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies       map[string]string `json:"peerDependencies,omitempty"`
+	PackageManager         string            `json:"packageManager,omitempty"`
 	Os                     []string          `json:"os,omitempty"`
 	Workspaces             Workspaces        `json:"workspaces,omitempty"`
 	Private                bool              `json:"private,omitempty"`
 	PackageJSONPath        string
-	Hash                   string
-	Dir                    string
+	Dir                    string // relative path from repo root to the package
 	InternalDeps           []string
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
 	SubLockfile            YarnLockfile
-	Turbo                  TurboConfigJSON `json:"turbo"`
+	LegacyTurboConfig      *TurboConfigJSON `json:"turbo"`
 	Mu                     sync.Mutex
-	FilesHash              string
 	ExternalDepsHash       string
 }
 
@@ -90,7 +145,7 @@ type WorkspacesAlt struct {
 
 func (r *Workspaces) UnmarshalJSON(data []byte) error {
 	var tmp = &WorkspacesAlt{}
-	if err := json.Unmarshal(data, &tmp); err == nil {
+	if err := json.Unmarshal(data, tmp); err == nil {
 		*r = Workspaces(tmp.Packages)
 		return nil
 	}
@@ -107,25 +162,6 @@ func Parse(payload []byte) (*PackageJSON, error) {
 	var packagejson *PackageJSON
 	err := json.Unmarshal(payload, &packagejson)
 	return packagejson, err
-}
-
-// Validate checks if provided package.json is valid.
-func (p *PackageJSON) Validate() error {
-	for _, fieldname := range requiredFields {
-		value := getField(p, fieldname)
-		if len(value) == 0 {
-			return fmt.Errorf("'%s' field is required in package.json", fieldname)
-		}
-	}
-
-	return nil
-}
-
-// getField returns struct field value by name.
-func getField(i interface{}, fieldname string) string {
-	value := reflect.ValueOf(i)
-	field := reflect.Indirect(value).FieldByName(fieldname)
-	return field.String()
 }
 
 // ReadPackageJSON returns a struct of package.json

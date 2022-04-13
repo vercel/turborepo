@@ -1,5 +1,5 @@
 import execa from "execa";
-import { test } from "uvu";
+import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import { Monorepo } from "../monorepo";
 import path from "path";
@@ -7,9 +7,11 @@ import path from "path";
 const basicPipeline = {
   pipeline: {
     test: {
+      dependsOn: ["^build"],
       outputs: [],
     },
     lint: {
+      inputs: ["build.js", "lint.js"],
       outputs: [],
     },
     build: {
@@ -17,12 +19,15 @@ const basicPipeline = {
       outputs: ["dist/**"],
     },
   },
+  globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
 };
 
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
 
-for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
+let suites = [];
+for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
+  const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
   repo.install();
@@ -30,7 +35,7 @@ for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
   repo.addPackage("b");
   repo.addPackage("c");
   repo.linkPackages();
-  runSmokeTests(repo, npmClient);
+  runSmokeTests(Suite, repo, npmClient);
   const sub = new Monorepo("in-subdirectory");
   sub.init(npmClient, basicPipeline, "js");
   sub.install();
@@ -38,145 +43,488 @@ for (let npmClient of ["yarn", "pnpm", "npm"] as const) {
   sub.addPackage("b");
   sub.addPackage("c");
   sub.linkPackages();
-  runSmokeTests(sub, npmClient, {
+  runSmokeTests(Suite, sub, npmClient, {
     cwd: path.join(sub.root, sub.subdir),
   });
+  suites.push(Suite);
   // test that turbo can run from a subdirectory
 }
 
-test.run();
+for (let s of suites) {
+  s.run();
+}
 
-function runSmokeTests(
+type Task = {
+  taskId: string;
+  task: string;
+  package: string;
+  hash: string;
+  command: string;
+  outputs: string[];
+  logFile: string;
+  directory: string;
+  dependencies: string[];
+  dependents: string[];
+};
+
+type DryRun = {
+  packages: string[];
+  tasks: Task[];
+};
+
+const matchTask =
+  <T, V>(predicate: (dryRun: DryRun, val: T) => V) =>
+  (dryRun: DryRun) =>
+  (val: T): V => {
+    return predicate(dryRun, val);
+  };
+const includesTaskIdPredicate = (dryRun: DryRun, task: string): boolean => {
+  for (const entry of dryRun.tasks) {
+    if (entry.taskId === task) {
+      return true;
+    }
+  }
+  return false;
+};
+const includesTaskId = matchTask(includesTaskIdPredicate);
+const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
+  for (const entry of dryRun.tasks) {
+    if (entry.taskId === taskId) {
+      return entry.hash;
+    }
+  }
+  throw new Error(`missing task with id ${taskId}`);
+};
+
+function runSmokeTests<T>(
+  suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
-  test(`${npmClient} runs tests and logs ${
-    options.cwd ? " from " + options.cwd : ""
-  } `, async () => {
-    const results = repo.turbo("run", ["test", "--stream", "-vvv"], options);
-    const out = results.stdout + results.stderr;
-    assert.equal(0, results.exitCode);
-    const lines = out.split("\n");
-    const chash = lines.find((l) => l.startsWith("c:test"));
-    assert.ok(!!chash, "No hash for c:test");
-    const splitMessage = chash.split(" ");
-    const hash = splitMessage[splitMessage.length - 1];
-    const logFilePath = path.join(
-      repo.subdir ? repo.subdir + "/" : "",
-      "node_modules",
-      ".cache",
-      "turbo",
-      hash,
-      ".turbo",
-      "turbo-test.log"
-    );
-    let text = "";
-    assert.not.throws(() => {
-      text = repo.readFileSync(logFilePath);
-    }, `Could not read log file from cache ${logFilePath}`);
-
-    assert.ok(text.includes("testing c"), "Contains correct output");
-
-    repo.newBranch("my-feature-branch");
-    repo.commitFiles({
-      [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
-    });
-
-    const sinceResults = repo.turbo(
-      "run",
-      ["test", "--since=main", "--stream", "-vvv"],
-      options
-    );
-    const testCLine = (sinceResults.stdout + sinceResults.stderr).split("\n");
-
-    assert.equal(
-      `• Packages changed since main: a`,
-      testCLine[0],
-      "Calculates changed packages (--since)"
-    );
-    assert.equal(`• Packages in scope: a`, testCLine[1], "Packages in scope");
-    assert.equal(
-      `• Running test in 1 packages`,
-      testCLine[2],
-      "Runs only in changed packages"
-    );
-    assert.ok(
-      testCLine[3].startsWith(`a:test: cache miss, executing`),
-      "Cache miss in changed package"
-    );
-
-    // Check cache hit after another run
-    const since2Results = repo.turbo(
-      "run",
-      ["test", "--since=main", "--stream", "-vvv"],
-      options
-    );
-    const testCLine2 = (since2Results.stdout + since2Results.stderr).split(
-      "\n"
-    );
-    assert.equal(
-      `• Packages changed since main: a`,
-      testCLine2[0],
-      "Calculates changed packages (--since) after a second run"
-    );
-    assert.equal(
-      `• Packages in scope: a`,
-      testCLine2[1],
-      "Packages in scope after a second run"
-    );
-    assert.equal(
-      `• Running test in 1 packages`,
-      testCLine2[2],
-      "Runs only in changed packages after a second run"
-    );
-
-    assert.ok(
-      testCLine2[3].startsWith(`a:test: cache hit, replaying output`),
-      "Cache hit in changed package after a second run"
-    );
-
-    // Check that hashes are different and trigger a cascade
-    repo.commitFiles({
-      [path.join("packages", "b", "test.js")]: `console.log('testingz b');`,
-    });
-
-    const hashChangeResults = repo.turbo("run", ["test", "--stream"], options);
-    const hashChangeResultsOut =
-      hashChangeResults.stdout + hashChangeResults.stderr;
-    console.log("------------------------------------------------------");
-    console.log(hashChangeResultsOut);
-    console.log("------------------------------------------------------");
-    const testCLine3 = hashChangeResultsOut.split("\n");
-
-    assert.equal(
-      `• Packages in scope: a, b, c`,
-      testCLine3[0],
-      "Packages in scope after a third run"
-    );
-    assert.equal(
-      `• Running test in 3 packages`,
-      testCLine3[1],
-      "Runs correct number of packages"
-    );
-    assert.ok(
-      testCLine3.findIndex((l) =>
-        l.startsWith("a:test: cache miss, executing")
-      ) >= 0,
-      `A was impacted.`
-    );
-    assert.ok(
-      testCLine3.findIndex((l) =>
-        l.startsWith("b:test: cache miss, executing")
-      ) >= 0,
-      `B was impacted.`
-    );
-    assert.ok(
-      testCLine3.findIndex((l) =>
-        l.startsWith("c:test: cache hit, replaying output")
-      ) >= 0,
-      `C was unchanged`
-    );
+  suite.after(() => {
     repo.cleanup();
   });
+
+  suite(
+    `${npmClient} builds${options.cwd ? " from " + options.cwd : ""}`,
+    async () => {
+      const results = repo.turbo("run", ["build", "--dry=json"], options);
+      const dryRun: DryRun = JSON.parse(results.stdout);
+      // expect to run all packages
+      const expectTaskId = includesTaskId(dryRun);
+      for (const pkg of ["a", "b", "c"]) {
+        assert.ok(
+          dryRun.packages.includes(pkg),
+          `Expected to include package ${pkg}`
+        );
+        assert.ok(
+          expectTaskId(pkg + "#build"),
+          `Expected to include task ${pkg}#build`
+        );
+      }
+
+      // actually run the build
+      repo.turbo("run", ["build"], options);
+
+      // assert that hashes are stable across multiple runs
+      const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
+      const secondDryRun: DryRun = JSON.parse(secondRun.stdout);
+
+      repo.turbo("run", ["build"], options);
+
+      const thirdRun = repo.turbo("run", ["build", "--dry=json"], options);
+      const thirdDryRun: DryRun = JSON.parse(thirdRun.stdout);
+      const getThirdRunHash = matchTask(taskHashPredicate)(thirdDryRun);
+      for (const entry of secondDryRun.tasks) {
+        assert.equal(
+          getThirdRunHash(entry.taskId),
+          entry.hash,
+          `Hashes for ${entry.taskId} did not match`
+        );
+      }
+    }
+  );
+
+  suite(
+    `${npmClient} runs tests and logs${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      const results = repo.turbo("run", ["test", "--stream"], options);
+      assert.equal(0, results.exitCode, "exit code should be 0");
+      const commandOutput = getCommandOutputAsArray(results);
+      const hash = getHashFromOutput(commandOutput, "c#test");
+      assert.ok(!!hash, "No hash for c#test");
+      const cachedLogFilePath = getCachedLogFilePathForTask(
+        getCachedDirForHash(repo, hash),
+        path.join("packages", "c"),
+        "test"
+      );
+      let text = "";
+      assert.not.throws(() => {
+        text = repo.readFileSync(cachedLogFilePath);
+      }, `Could not read cached log file from cache ${cachedLogFilePath}`);
+      assert.ok(text.includes("testing c"), "Contains correct output");
+    }
+  );
+
+  suite(
+    `${npmClient} runs lint and logs${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      const results = repo.turbo("run", ["lint", "--stream"], options);
+      assert.equal(0, results.exitCode, "exit code should be 0");
+      const commandOutput = getCommandOutputAsArray(results);
+      const hash = getHashFromOutput(commandOutput, "c#lint");
+      assert.ok(!!hash, "No hash for c#lint");
+      const cachedLogFilePath = getCachedLogFilePathForTask(
+        getCachedDirForHash(repo, hash),
+        path.join("packages", "c"),
+        "lint"
+      );
+      let text = "";
+      assert.not.throws(() => {
+        text = repo.readFileSync(cachedLogFilePath);
+      }, `Could not read cached log file from cache ${cachedLogFilePath}`);
+      assert.ok(text.includes("linting c"), "Contains correct output");
+    }
+  );
+
+  suite(
+    `${npmClient} handles filesystem changes${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      repo.newBranch("my-feature-branch");
+      repo.commitFiles({
+        [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
+      });
+
+      const sinceCommandOutputNoCache = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["test", "--since=main", "--stream", "--no-cache"],
+          options
+        )
+      );
+
+      assert.fixture(
+        sinceCommandOutputNoCache[0],
+        `• Packages in scope: a`,
+        "Packages in scope"
+      );
+      assert.fixture(
+        sinceCommandOutputNoCache[1],
+        `• Running test in 1 packages`,
+        "Runs only in changed packages"
+      );
+
+      assert.ok(
+        sinceCommandOutputNoCache.includes(
+          `a:test: cache miss, executing ${getHashFromOutput(
+            sinceCommandOutputNoCache,
+            "a#test"
+          )}`
+        ),
+        "Cache miss in changed package"
+      );
+
+      const sinceCommandOutput = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["test", "--since=main", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+
+      assert.fixture(
+        sinceCommandOutput[0],
+        `• Packages in scope: a`,
+        "Packages in scope"
+      );
+      assert.fixture(
+        sinceCommandOutput[1],
+        `• Running test in 1 packages`,
+        "Runs only in changed packages"
+      );
+
+      assert.ok(
+        sinceCommandOutput.includes(
+          `a:test: cache miss, executing ${getHashFromOutput(
+            sinceCommandOutput,
+            "a#test"
+          )}`
+        ),
+        "Cache miss in changed package"
+      );
+
+      // Check cache hit after another run
+      const sinceCommandSecondRunOutput = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["test", "--since=main", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+      assert.equal(
+        sinceCommandSecondRunOutput[0],
+        `• Packages in scope: a`,
+        "Packages in scope after a second run"
+      );
+      assert.equal(
+        sinceCommandSecondRunOutput[1],
+        `• Running test in 1 packages`,
+        "Runs only in changed packages after a second run"
+      );
+
+      assert.ok(
+        sinceCommandSecondRunOutput.includes(
+          `b:build: cache hit, suppressing output ${getHashFromOutput(
+            sinceCommandSecondRunOutput,
+            "b#build"
+          )}`
+        ),
+        "Cache hit building dependency after a second run"
+      );
+
+      assert.ok(
+        sinceCommandSecondRunOutput.includes(
+          `a:test: cache hit, suppressing output ${getHashFromOutput(
+            sinceCommandSecondRunOutput,
+            "a#test"
+          )}`
+        ),
+        "Cache hit in changed package after a second run"
+      );
+
+      // run a task without dependencies
+      const lintOutput = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+      assert.equal(
+        lintOutput[0],
+        `• Packages in scope: a`,
+        "Packages in scope for lint"
+      );
+      assert.ok(
+        lintOutput.includes(
+          `a:lint: cache hit, suppressing output ${getHashFromOutput(
+            lintOutput,
+            "a#lint"
+          )}`
+        ),
+        "Cache hit, a has changed but not a file lint depends on"
+      );
+
+      // Check that hashes are different and trigger a cascade
+      repo.commitFiles({
+        [path.join("packages", "b", "test.js")]: `console.log('testingz b');`,
+      });
+
+      const secondLintRun = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+
+      assert.equal(
+        secondLintRun[0],
+        `• Packages in scope: a`,
+        "Packages in scope for lint"
+      );
+      assert.ok(
+        secondLintRun.includes(
+          `a:lint: cache hit, suppressing output ${getHashFromOutput(
+            secondLintRun,
+            "a#lint"
+          )}`
+        ),
+        "Cache hit, dependency changes are irrelevant for lint task"
+      );
+
+      repo.commitFiles({
+        [path.join("packages", "a", "lint.js")]: "console.log('lintingz a')",
+      });
+
+      const thirdLintRun = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          options
+        )
+      );
+
+      assert.equal(
+        thirdLintRun[0],
+        `• Packages in scope: a`,
+        "Packages in scope for lint"
+      );
+      assert.ok(
+        thirdLintRun.includes(
+          `a:lint: cache miss, executing ${getHashFromOutput(
+            thirdLintRun,
+            "a#lint"
+          )}`
+        ),
+        "Cache miss, we changed a file that lint uses as an input"
+      );
+
+      const commandOnceBHasChangedOutput = getCommandOutputAsArray(
+        repo.turbo("run", ["test", "--stream"], options)
+      );
+
+      assert.fixture(
+        `• Packages in scope: a, b, c`,
+        commandOnceBHasChangedOutput[0],
+        "After running, changing source of b, and running `turbo run test` again, should print `Packages in scope: a, b, c`"
+      );
+      assert.fixture(
+        `• Running test in 3 packages`,
+        commandOnceBHasChangedOutput[1],
+        "After running, changing source of b, and running `turbo run test` again, should print `Running in 3 packages`"
+      );
+      assert.ok(
+        commandOnceBHasChangedOutput.findIndex((l) =>
+          l.startsWith("a:test: cache miss, executing")
+        ) >= 0,
+        "After running, changing source of b, and running `turbo run test` again, should print `a:test: cache miss, executing` since a depends on b and b has changed"
+      );
+      assert.ok(
+        commandOnceBHasChangedOutput.findIndex((l) =>
+          l.startsWith("b:test: cache miss, executing")
+        ) >= 0,
+        "After running, changing source of b, and running `turbo run test` again, should print `b:test: cache miss, executing` since b has changed"
+      );
+      assert.ok(
+        commandOnceBHasChangedOutput.findIndex((l) =>
+          l.startsWith("c:test: cache hit, replaying output")
+        ) >= 0,
+        "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying output` since c should not be impacted by changes to b"
+      );
+
+      const scopeCommandOutput = getCommandOutputAsArray(
+        repo.turbo("run", ["test", '--scope="!b"', "--stream"], options)
+      );
+
+      assert.fixture(
+        `• Packages in scope: a, c`,
+        scopeCommandOutput[0],
+        "Packages in scope"
+      );
+      assert.fixture(
+        `• Running test in 2 packages`,
+        scopeCommandOutput[1],
+        "Runs only in changed packages"
+      );
+    }
+  );
+
+  if (npmClient === "yarn") {
+    // Test `turbo prune --scope=a`
+    // @todo refactor with other package managers
+    suite(
+      `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
+      async () => {
+        const pruneCommandOutput = getCommandOutputAsArray(
+          repo.turbo("prune", ["--scope=a"], options)
+        );
+        assert.fixture(pruneCommandOutput[1], " - Added a");
+        assert.fixture(pruneCommandOutput[2], " - Added b");
+
+        let files = [];
+        assert.not.throws(() => {
+          files = repo.globbySync("out/**/*", {
+            cwd: options.cwd ?? repo.root,
+          });
+        }, `Could not read generated \`out\` directory after \`turbo prune\``);
+        const expected = [
+          "out/package.json",
+          "out/turbo.json",
+          "out/yarn.lock",
+          "out/packages/a/build.js",
+          "out/packages/a/lint.js",
+          "out/packages/a/package.json",
+          "out/packages/a/test.js",
+          "out/packages/b/build.js",
+          "out/packages/b/lint.js",
+          "out/packages/b/package.json",
+          "out/packages/b/test.js",
+        ];
+        for (const file of expected) {
+          assert.ok(
+            files.includes(file),
+            `Expected file ${file} to be generated`
+          );
+        }
+        const install = repo.run("install", ["--frozen-lockfile"], {
+          cwd: options.cwd
+            ? path.join(options.cwd, "out")
+            : path.join(repo.root, "out"),
+        });
+        assert.is(
+          install.exitCode,
+          0,
+          "Expected yarn install --frozen-lockfile to succeed"
+        );
+      }
+    );
+  }
+}
+
+type PackageManager = "yarn" | "pnpm" | "npm" | "berry";
+
+// getLockfileForPackageManager returns the name of the lockfile for the given package manager
+function getLockfileForPackageManager(ws: PackageManager) {
+  switch (ws) {
+    case "yarn":
+      return "yarn.lock";
+    case "pnpm":
+      return "pnpm-lock.yaml";
+    case "npm":
+      return "package-lock.json";
+    case "berry":
+      return "yarn.lock";
+    default:
+      throw new Error(`Unknown package manager: ${ws}`);
+  }
+}
+
+function getCommandOutputAsArray(
+  results: execa.ExecaSyncReturnValue<string>
+): string[] {
+  return (results.stdout + results.stderr).split("\n");
+}
+
+function getHashFromOutput(lines: string[], taskId: string): string {
+  const normalizedTaskId = taskId.replace("#", ":");
+  const line = lines.find((l) => l.startsWith(normalizedTaskId));
+  const splitMessage = line.split(" ");
+  const hash = splitMessage[splitMessage.length - 1];
+  return hash;
+}
+
+function getCachedDirForHash(repo: Monorepo, hash: string): string {
+  return path.join(
+    repo.subdir ? repo.subdir : ".",
+    "node_modules",
+    ".cache",
+    "turbo",
+    hash
+  );
+}
+
+function getCachedLogFilePathForTask(
+  cacheDir: string,
+  pathToPackage: string,
+  taskName: string
+): string {
+  return path.join(cacheDir, pathToPackage, ".turbo", `turbo-${taskName}.log`);
 }

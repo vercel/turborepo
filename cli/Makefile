@@ -8,15 +8,15 @@ GO_FLAGS += "-ldflags=-s -w"
 # Avoid embedding the build path in the executable for more reproducible builds
 GO_FLAGS += -trimpath
 
-turbo: cmd/turbo/version.go cmd/turbo/*.go internal/*/*.go go.mod
+SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
+
+turbo: $(SRC_FILES) go.mod
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
 # These tests are for development
 test: test-go vet-go
 
-
-
-ewatch: | scripts/node_modules
+ewatch: scripts/...
 	nodemon --exec "make turbo && make e2e" -e .ts,.go
 
 check-go-version:
@@ -37,14 +37,11 @@ vet-go:
 fmt-go:
 	go fmt ./cmd/... ./internal/...
 
-scripts/node_modules:
-	cd scripts && yarn
-	
-scripts: | scripts/node_modules
-	cd scripts && yarn install
+install: | ./package.json
+	pnpm i --filter=cli...
 
-e2e: | scripts/node_modules
-	cd scripts && yarn uvu -r esbuild-register e2e
+e2e: install
+	pnpm e2e
 
 cmd/turbo/version.go: version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
@@ -93,6 +90,14 @@ platform-unixlike:
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
 	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
+# To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
+# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
+platform-unixlike-cgo:
+	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
+	mkdir -p "$(NPMDIR)/bin"
+	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
 
@@ -100,7 +105,7 @@ platform-darwin:
 	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-unixlike
 
 platform-darwin-arm64:
-	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike
+	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike-cgo
 
 platform-freebsd:
 	make GOOS=freebsd GOARCH=amd64 NPMDIR=npm/turbo-freebsd-64 platform-unixlike
@@ -143,8 +148,11 @@ platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 	node ./scripts/bump-version.js
 
-platform-create-turbo: 
-	cd ../create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+platform-create-turbo:
+	cd ../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+
+platform-turbo-codemod:
+	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
 	rm -rf demo/turbo
@@ -180,6 +188,7 @@ publish-all: cmd/turbo/version.go
 	@echo Confirm release:
 	make publish-neutral
 	make publish-create-turbo
+	make publish-turbo-codemod
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
@@ -227,18 +236,21 @@ publish-neutral: platform-neutral
 	make test && cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
 
 publish-create-turbo: platform-create-turbo
-	cd ../create-turbo && npm publish --tag $(TURBO_TAG)
+	cd ../packages/create-turbo && npm publish --tag $(TURBO_TAG)
 
-demo/lage: | scripts/node_modules
+publish-turbo-codemod: platform-turbo-codemod
+	cd ../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
+
+demo/lage: | node_modules
 	node scripts/generate.mjs lage
 
-demo/lerna: | scripts/node_modules
+demo/lerna: | node_modules
 	node scripts/generate.mjs lerna
 
-demo/nx: | scripts/node_modules
+demo/nx: | node_modules
 	node scripts/generate.mjs nx
 
-demo/turbo: | scripts/node_modules
+demo/turbo: | node_modules
 	node scripts/generate.mjs turbo
 
 bench/lerna: demo/lerna
@@ -250,11 +262,11 @@ bench/lage: demo/lage
 bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
-bench/turbo: demo/turbo
-	cd demo/turbo && ../../turbo run test 
+bench/turbo: demo/turbo turbo
+	cd demo/turbo && ../../turbo run test
 
 bench/turbo-new: demo/turbo
-	cd demo/turbo && ../../turbo-new run build test 
+	cd demo/turbo && ../../turbo-new run build test
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 

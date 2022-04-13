@@ -1,5 +1,6 @@
 ---
 title: Getting Started
+description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
 import Callout from "../../components/callout";
@@ -39,7 +40,7 @@ Add `turbo` as a development dependency in the root of your project.
 ### Yarn
 
 ```bash
-yarn add turbo -W --dev
+yarn add turbo -DW
 ```
 
 ### NPM
@@ -51,48 +52,48 @@ npm install turbo -D
 ### PNPM
 
 ```bash
-pnpm add turbo -D
+pnpm add turbo -DW
 ```
 
 The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
 
-### Add `turbo` to `package.json`
+### Create `turbo.json`
 
-In your root `package.json`, add a key `turbo`. If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, ours is set to `origin/main`).
+In your root directory, create an empty file named `turbo.json`.
+This will hold the configuration for Turborepo in your project.
+If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, ours is set to `origin/main`).
 
 ```json
 {
-  "turbo": {
-    "baseBranch": "origin/main"
-  }
+  "$schema": "https://turborepo.org/schema.json",
+  "baseBranch": "origin/main"
 }
 ```
 
 ### Create a `pipeline`
 
-In your `package.json`, add the commands you want to "turbocharge" to your pipeline.
+In `turbo.json`, add the commands you want to "turbocharge" to your pipeline.
 
 Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
 ```json
 {
-  "turbo": {
-    "baseBranch": "origin/main",
-    "pipeline": {
-      "build": {
-        "dependsOn": ["^build"],
-        "outputs": [".next/**"]
-      },
-      "test": {
-        "dependsOn": ["^build"],
-        "outputs": []
-      },
-      "lint": {
-        "outputs": []
-      },
-      "dev": {
-        "cache": false
-      }
+  "$schema": "https://turborepo.org/schema.json",
+  "baseBranch": "origin/main",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
     }
   }
 }
@@ -165,7 +166,7 @@ Turborepo can use a technique known as Remote Caching to share cache artifacts a
 
 ### Link Your Turborepo to Your Remote Cache
 
-As part of Turborepo's initial public launch, [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link) is offering **free remote caching** on all accounts with zero-configuration needed.
+Remote caching is available with zero configuration on [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link).
 
 #### Using Remote Caching for Local development
 
@@ -189,3 +190,10 @@ rm -rf ./node_modules/.cache/turbo
 ```
 
 Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
+
+<Callout>
+  **Note: When connecting to an sso-enabled Vercel team, you must provide your Team slug as an argument to `npx turbo login`.**
+</Callout>
+```
+npx turbo login --sso-team=<team-slug>
+```

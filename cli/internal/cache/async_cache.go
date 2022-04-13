@@ -1,8 +1,12 @@
+// Adapted from https://github.com/thought-machine/please
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package cache
 
 import (
 	"sync"
-	"turbo/internal/config"
+
+	"github.com/vercel/turborepo/cli/internal/config"
 )
 
 // An asyncCache is a wrapper around a Cache interface that handles incoming
@@ -46,7 +50,7 @@ func (c *asyncCache) Put(target string, key string, duration int, files []string
 	return nil
 }
 
-func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, error) {
+func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
 	return c.realCache.Fetch(target, key, files)
 }
 

@@ -11,7 +11,6 @@ import {
   RefreshIcon,
 } from "@heroicons/react/outline";
 import copy from "copy-to-clipboard";
-import { useTheme } from "next-themes";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
@@ -25,7 +24,7 @@ import shadcn from "../../images/shadcn.jpeg";
 import christian from "../../images/christian.jpeg";
 import yangshunz from "../../images/yangshunz.jpeg";
 import nmoore from "../../images/nmoore.jpeg";
-import sseraphini from "../../images/sseraphini.jpeg";
+import joshlarson from "../../images/joshlarson.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import { Footer } from "../Footer";
@@ -92,8 +91,8 @@ function Page() {
           TypeScript codebases"
         />
       </Head>
-      <div className="px-4 pt-16 pb-8 sm:px-6 sm:pt-24 lg:px-8 dark:text-white dark:bg-black ">
-        <h1 className="text-center text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
+      <div className="w-auto px-4 pt-16 pb-8 mx-auto sm:pt-24 lg:px-8">
+        <h1 className="max-w-5xl text-center mx-auto text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
           Monorepos that
           <br className="hidden lg:block" />
           <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-blue-500 ">
@@ -108,7 +107,7 @@ function Page() {
           <div className="rounded-md ">
             <Link href="/docs/getting-started">
               <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:dark:hover:bg-gray-300 betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
-                Start building →
+                Start Building →
               </a>
             </Link>
           </div>
@@ -124,13 +123,13 @@ function Page() {
         </div>
       </div>
 
-      <div className="py-16 dark:bg-black ">
-        <div className="max-w-4xl px-4 mx-auto sm:px-6 lg:px-8">
+      <div className="py-16">
+        <div className="max-w-5xl mx-auto ">
           <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
 
-          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6 "
@@ -139,32 +138,42 @@ function Page() {
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img className="h-8" src="/images/logos/aws.svg" alt="AWS" />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
-                className="h-6 "
-                src="/images/logos/lattice.svg"
-                alt="Lattice"
+                className="h-7"
+                src="/images/logos/paypal.svg"
+                alt="PayPal"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6"
-                src="/images/logos/teespring.svg"
-                alt="TeeSpring"
+                src="/images/logos/shopify.svg"
+                alt="Shopify"
               />
             </div>
             <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
               <img
                 className="h-6"
-                src="/images/logos/makeswift.svg"
-                alt="Makeswift"
+                src="/images/logos/twilio.svg"
+                alt="Twilio"
+              />
+            </div>
+            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
+              <img
+                className="w-auto h-7"
+                src="/images/logos/washingtonpost.svg"
+                alt="The Washington Post"
               />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="relative dark:bg-black from-gray-50 to-gray-100">
-        <div className="max-w-4xl px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24 lg:px-8">
+      <div className="relative from-gray-50 to-gray-100">
+        <div className="px-4 py-16 mx-auto sm:pt-20 sm:pb-24 lg:max-w-7xl lg:pt-24">
           <h2 className="text-4xl font-extrabold tracking-tight lg:text-5xl xl:text-6xl lg:text-center dark:text-white">
             Build like the best
           </h2>
@@ -197,8 +206,8 @@ function Page() {
           </div>
         </div>
       </div>
-      <div className="dark:bg-black">
-        <div className="px-4 py-16 mx-auto sm:px-6 sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
+      <div className="">
+        <div className="px-4 py-16 mx-auto sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
           <h2 className="max-w-4xl mx-auto pb-6 text-5xl font-extrabold  tracking-tight lg:text-6xl xl:text-7xl leading-[1.25!important] md:text-center dark:text-white">
             Scaling your monorepo shouldn&apos;t be so difficult
           </h2>
@@ -274,13 +283,13 @@ function Page() {
           </div>
         </div>
       </div>
-      <div className="bg-gray-50 dark:bg-gradient-to-b dark:bg-black sm:py-20 lg:py-24">
-        <div className="max-w-4xl px-4 pb-12 mx-auto sm:px-6 lg:px-8 ">
+      <div className="sm:py-20 lg:py-24">
+        <div className="max-w-4xl px-4 pb-12 mx-auto lg:px-8 ">
           <h2 className="text-4xl font-extrabold leading-tight tracking-tight lg:text-5xl xl:text-6xl md:text-center dark:text-white">
             Loved by badass engineers
           </h2>
         </div>
-        <div className="grid gap-4 px-4 mx-auto sm:px-6 lg:grid-cols-3 max-w-7xl">
+        <div className="grid gap-4 px-4 mx-auto lg:grid-cols-3 max-w-7xl">
           <div className="space-y-4">
             <Tweet
               url="https://twitter.com/jongold/status/1409714159227326466"
@@ -450,17 +459,24 @@ function Page() {
               }
             />
             <Tweet
-              url="https://twitter.com/sseraphini/status/1470501625580208139"
-              username="sseraphini"
-              name="Sibelius Seraphini"
-              date="Dec 13"
-              avatar={sseraphini}
-              text={<>Turborepo is sweet</>}
+              url="https://twitter.com/jplhomer/status/1494080248845062154"
+              username="jplhomer"
+              name="Josh Larson"
+              date="Feb 16"
+              avatar={joshlarson}
+              text={
+                <>
+                  Living that <Mention>@turborepo</Mention> life{" "}
+                  <span role="img" aria-label="Smiling face with sunglasses">
+                    😎
+                  </span>
+                </>
+              }
             />
           </div>
         </div>
         <Container>
-          <div className="max-w-sm py-16 mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
+          <div className="px-4 py-16 mx-auto mt-10 sm:max-w-none sm:flex sm:justify-center">
             <div className="space-y-4 sm:space-y-0 sm:mx-auto ">
               <Link href="/docs/getting-started">
                 <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:dark:hover:bg-gray-300 betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
@@ -471,22 +487,28 @@ function Page() {
           </div>
         </Container>
       </div>
-      <Footer />
       <Toaster position="bottom-right" />
     </>
   );
 }
 
-function Mention({ children }) {
+function TweetLink({ href, children }) {
   return (
     <a
-      href={`https://twitter.com/${children.replace("@", "")}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-block text-[#35ACDF]"
     >
       {children}
     </a>
+  );
+}
+function Mention({ children }) {
+  return (
+    <TweetLink href={`https://twitter.com/${children.replace("@", "")}`}>
+      {children}
+    </TweetLink>
   );
 }
 

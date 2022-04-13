@@ -1,10 +1,13 @@
 // Package xxhash implements the 64-bit variant of xxHash (XXH64) as described
 // at http://cyan4973.github.io/xxHash/.
+
+// Adapted from https://cs.github.com/evanw/esbuild/blob/0c9ced59c8b3ea3bd8dd5feebafed1f47ed279dd/internal/xxhash
+// Copyright (c) 2016 Caleb Spare. All rights reserved.
+// SPDX-License-Identifier: MIT
 package xxhash
 
 import (
 	"encoding/binary"
-	"errors"
 	"math/bits"
 )
 
@@ -22,13 +25,7 @@ const (
 // convenience in the Go code in a few places where we need to intentionally
 // avoid constant arithmetic (e.g., v1 := prime1 + prime2 fails because the
 // result overflows a uint64).
-var (
-	prime1v = prime1
-	prime2v = prime2
-	prime3v = prime3
-	prime4v = prime4
-	prime5v = prime5
-)
+var prime1v = prime1
 
 // Digest implements hash.Hash64.
 type Digest struct {
@@ -164,50 +161,6 @@ const (
 	marshaledSize = len(magic) + 8*5 + 32
 )
 
-// MarshalBinary implements the encoding.BinaryMarshaler interface.
-func (d *Digest) MarshalBinary() ([]byte, error) {
-	b := make([]byte, 0, marshaledSize)
-	b = append(b, magic...)
-	b = appendUint64(b, d.v1)
-	b = appendUint64(b, d.v2)
-	b = appendUint64(b, d.v3)
-	b = appendUint64(b, d.v4)
-	b = appendUint64(b, d.total)
-	b = append(b, d.mem[:d.n]...)
-	b = b[:len(b)+len(d.mem)-d.n]
-	return b, nil
-}
-
-// UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
-func (d *Digest) UnmarshalBinary(b []byte) error {
-	if len(b) < len(magic) || string(b[:len(magic)]) != magic {
-		return errors.New("xxhash: invalid hash state identifier")
-	}
-	if len(b) != marshaledSize {
-		return errors.New("xxhash: invalid hash state size")
-	}
-	b = b[len(magic):]
-	b, d.v1 = consumeUint64(b)
-	b, d.v2 = consumeUint64(b)
-	b, d.v3 = consumeUint64(b)
-	b, d.v4 = consumeUint64(b)
-	b, d.total = consumeUint64(b)
-	copy(d.mem[:], b)
-	d.n = int(d.total % uint64(len(d.mem)))
-	return nil
-}
-
-func appendUint64(b []byte, x uint64) []byte {
-	var a [8]byte
-	binary.LittleEndian.PutUint64(a[:], x)
-	return append(b, a[:]...)
-}
-
-func consumeUint64(b []byte) ([]byte, uint64) {
-	x := u64(b)
-	return b[8:], x
-}
-
 func u64(b []byte) uint64 { return binary.LittleEndian.Uint64(b) }
 func u32(b []byte) uint32 { return binary.LittleEndian.Uint32(b) }
 
@@ -233,3 +186,17 @@ func rol18(x uint64) uint64 { return bits.RotateLeft64(x, 18) }
 func rol23(x uint64) uint64 { return bits.RotateLeft64(x, 23) }
 func rol27(x uint64) uint64 { return bits.RotateLeft64(x, 27) }
 func rol31(x uint64) uint64 { return bits.RotateLeft64(x, 31) }
+
+func writeBlocks(d *Digest, b []byte) int {
+	v1, v2, v3, v4 := d.v1, d.v2, d.v3, d.v4
+	n := len(b)
+	for len(b) >= 32 {
+		v1 = round(v1, u64(b[0:8:len(b)]))
+		v2 = round(v2, u64(b[8:16:len(b)]))
+		v3 = round(v3, u64(b[16:24:len(b)]))
+		v4 = round(v4, u64(b[24:32:len(b)]))
+		b = b[32:len(b):len(b)]
+	}
+	d.v1, d.v2, d.v3, d.v4 = v1, v2, v3, v4
+	return n - len(b)
+}

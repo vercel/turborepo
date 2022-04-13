@@ -1,6 +1,10 @@
+// Adapted from https://github.com/thought-machine/please
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package fs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -31,14 +35,6 @@ func CopyOrLinkFile(from, to string, fromMode, toMode os.FileMode, link, fallbac
 // 'mode' is the mode of the destination file.
 func RecursiveCopy(from string, to string, mode os.FileMode) error {
 	return RecursiveCopyOrLinkFile(from, to, mode, false, false)
-}
-
-// RecursiveLink hardlinks either a single file or a directory.
-// Note that you can't hardlink directories so the behaviour is much the same as a recursive copy.
-// If it can't link then it falls back to a copy.
-// 'mode' is the mode of the destination file.
-func RecursiveLink(from string, to string, mode os.FileMode) error {
-	return RecursiveCopyOrLinkFile(from, to, mode, true, true)
 }
 
 // RecursiveCopyOrLinkFile recursively copies or links a file or directory.
@@ -79,17 +75,32 @@ func Walk(rootPath string, callback func(name string, isDir bool) error) error {
 // WalkMode is like Walk but the callback receives an additional type specifying the file mode type.
 // N.B. This only includes the bits of the mode that determine the mode type, not the permissions.
 func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.FileMode) error) error {
-	// Compatibility with filepath.Walk which allows passing a file as the root argument.
-	if info, err := os.Lstat(rootPath); err != nil {
-		return err
-	} else if !info.IsDir() {
-		return callback(rootPath, false, info.Mode())
-	}
 	return godirwalk.Walk(rootPath, &godirwalk.Options{
 		Callback: func(name string, info *godirwalk.Dirent) error {
-			return callback(name, info.IsDir(), info.ModeType())
+			// currently we support symlinked files, but not symlinked directories:
+			// For copying, we Mkdir and bail if we encounter a symlink to a directoy
+			// For finding packages, we enumerate the symlink, but don't follow inside
+			isDir, err := info.IsDirOrSymlinkToDir()
+			if err != nil {
+				pathErr := &os.PathError{}
+				if errors.As(err, &pathErr) {
+					// If we have a broken link, skip this entry
+					return godirwalk.SkipThis
+				}
+				return err
+			}
+			return callback(name, isDir, info.ModeType())
 		},
-		Unsorted: true,
+		ErrorCallback: func(pathname string, err error) godirwalk.ErrorAction {
+			pathErr := &os.PathError{}
+			if errors.As(err, &pathErr) {
+				return godirwalk.SkipNode
+			}
+			return godirwalk.Halt
+		},
+		Unsorted:            true,
+		AllowNonDirectory:   true,
+		FollowSymbolicLinks: false,
 	})
 }
 

@@ -6,15 +6,19 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-	"turbo/internal/config"
-	"turbo/internal/info"
-	"turbo/internal/login"
-	prune "turbo/internal/prune"
-	"turbo/internal/run"
-	uiPkg "turbo/internal/ui"
-	"turbo/internal/util"
+
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/info"
+	"github.com/vercel/turborepo/cli/internal/login"
+	"github.com/vercel/turborepo/cli/internal/process"
+	prune "github.com/vercel/turborepo/cli/internal/prune"
+	"github.com/vercel/turborepo/cli/internal/run"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	uiPkg "github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
+	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 )
 
@@ -24,6 +28,7 @@ func main() {
 	traceFile := ""
 	cpuprofileFile := ""
 	argsEnd := 0
+	colorMode := uiPkg.GetColorModeFromEnv()
 	for _, arg := range args {
 		switch {
 		case strings.HasPrefix(arg, "--heap="):
@@ -32,6 +37,10 @@ func main() {
 			traceFile = arg[len("--trace="):]
 		case strings.HasPrefix(arg, "--cpuprofile="):
 			cpuprofileFile = arg[len("--cpuprofile="):]
+		case arg == "--color":
+			colorMode = ui.ColorModeForced
+		case arg == "--no-color":
+			colorMode = ui.ColorModeSuppressed
 		default:
 			// Strip any arguments that were handled above
 			args[argsEnd] = arg
@@ -39,34 +48,35 @@ func main() {
 		}
 	}
 	args = args[:argsEnd]
+
+	ui := ui.BuildColoredUi(colorMode);
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
-	ui := &cli.ColoredUi{
-		Ui: &cli.BasicUi{
-			Reader:      os.Stdin,
-			Writer:      os.Stdout,
-			ErrorWriter: os.Stderr,
-		},
-		OutputColor: cli.UiColorNone,
-		InfoColor:   cli.UiColorNone,
-		WarnColor:   cli.UiColorYellow,
-		ErrorColor:  cli.UiColorRed,
-	}
 
 	c.Args = args
 	c.HelpWriter = os.Stdout
 	c.ErrorWriter = os.Stderr
 	// Parse and validate cmd line flags and env vars
+	// Note that cf can be nil
 	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion)
 	if err != nil {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
 	}
+
+	var logger hclog.Logger
+	if cf != nil {
+		logger = cf.Logger
+	} else {
+		logger = hclog.Default()
+	}
+	processes := process.NewManager(logger.Named("processes"))
+	signalCh := watchSignals(func() { processes.Close() })
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
-			return &run.RunCommand{Config: cf, Ui: ui},
+			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes},
 				nil
 		},
 		"prune": func() (cli.Command, error) {
@@ -78,23 +88,22 @@ func main() {
 		"unlink": func() (cli.Command, error) {
 			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
 		},
-		"graph": func() (cli.Command, error) {
-			return &info.GraphCommand{Config: cf, Ui: ui}, nil
-		},
 		"login": func() (cli.Command, error) {
-			return &login.LoginCommand{Config: cf, Ui: ui}, nil
+			return &login.LoginCommand{Config: cf, UI: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
 		},
-		"me": func() (cli.Command, error) {
-			return &login.MeCommand{Config: cf, Ui: ui}, nil
+		"bin": func() (cli.Command, error) {
+			return &info.BinCommand{Config: cf, Ui: ui}, nil
 		},
 	}
 
 	// Capture the defer statements below so the "done" message comes last
 	exitCode := 1
+	doneCh := make(chan struct{})
 	func() {
+		defer func() { close(doneCh) }()
 		// To view a CPU trace, use "go tool trace [file]". Note that the trace
 		// viewer doesn't work under Windows Subsystem for Linux for some reason.
 		if traceFile != "" {
@@ -164,5 +173,12 @@ func main() {
 			}
 		}
 	}()
+	// Wait for either our command to finish, in which case we need to clean up,
+	// or to receive a signal, in which case the signal handler above does the cleanup
+	select {
+	case <-doneCh:
+		processes.Close()
+	case <-signalCh:
+	}
 	os.Exit(exitCode)
 }

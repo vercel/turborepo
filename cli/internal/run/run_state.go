@@ -8,18 +8,16 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"turbo/internal/fs"
-	"turbo/internal/ui"
-	"turbo/internal/util"
 
-	cursor "turbo/internal/ui/term"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
+
+	cursor "github.com/vercel/turborepo/cli/internal/ui/term"
 
 	"github.com/google/chrometracing"
 	"github.com/mitchellh/cli"
 )
-
-// clear the line and move the cursor up
-var clear = fmt.Sprintf("%c[%dA%c[2K", 27, 1, 27)
 
 // A RunResult represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
@@ -56,18 +54,6 @@ const (
 	TargetTestFailed
 )
 
-// Category returns the broad area that this event represents in the tasks we perform for a target.
-func (s RunResultStatus) Category() string {
-	switch s {
-	case TargetBuilding, TargetBuildStopped, TargetBuilt, TargetBuildFailed:
-		return "Build"
-	case TargetTesting, TargetTestStopped, TargetTested, TargetTestFailed:
-		return "Test"
-	default:
-		return "Other"
-	}
-}
-
 type BuildTargetState struct {
 	StartAt time.Time
 
@@ -97,19 +83,24 @@ type RunState struct {
 	runOptions *RunOptions
 	cursor     *cursor.Cursor
 	ticker     *time.Ticker
+
+	startedAt time.Time
 }
 
-func NewRunState(runOptions *RunOptions) *RunState {
+func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
+	if runOptions.profile != "" {
+		chrometracing.EnableTracing()
+	}
 	return &RunState{
-		Success:    0,
-		Failure:    0,
-		Cached:     0,
-		Attempted:  0,
-		state:      make(map[string]*BuildTargetState),
-		done:       make(chan string),
+		Success:   0,
+		Failure:   0,
+		Cached:    0,
+		Attempted: 0,
+		state:     make(map[string]*BuildTargetState),
+
 		cursor:     cursor.New(),
 		runOptions: runOptions,
-		ticker:     time.NewTicker(100 * time.Millisecond),
+		startedAt:  startedAt,
 	}
 }
 
@@ -187,7 +178,7 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	case result.Status == TargetBuildFailed:
 		r.Failure++
 		r.Attempted++
-		if r.runOptions.bail {
+		if r.runOptions.bail && !r.runOptions.stream {
 			r.done <- result.Label
 		}
 	case result.Status == TargetCached:
@@ -200,6 +191,11 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 }
 
 func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
+	if r.runOptions.stream {
+		return
+	}
+	r.ticker = time.NewTicker(100 * time.Millisecond)
+	r.done = make(chan string)
 	lineBuffer := 10
 	go func(r *RunState, Ui cli.Ui) {
 		z := r
@@ -279,38 +275,41 @@ func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuf
 	}
 }
 
-func (r *RunState) Close(Ui cli.Ui, startAt time.Time, filename string) error {
+func (r *RunState) Close(Ui cli.Ui, filename string) error {
 	outputPath := chrometracing.Path()
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
 	if filename != "" {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(chrometracing.Path(), name, fs.DirPermissions); err != nil {
+		if err := fs.CopyFile(outputPath, name, fs.DirPermissions); err != nil {
 			return err
 		}
 	}
-	r.ticker.Stop()
-	r.done <- "done"
+
+	if !r.runOptions.stream {
+		r.ticker.Stop()
+		r.done <- "done"
+	}
 	maybeFullTurbo := ""
-	if r.Cached == r.Attempted {
+	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
 	if r.runOptions.stream {
 		Ui.Output("") // Clear the line
-		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total", r.Cached+r.Success, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total", r.Cached, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v", time.Since(startAt).Truncate(time.Millisecond), maybeFullTurbo))
+		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
+		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
+		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 		Ui.Output("")
 	} else {
 
 		incrementality := fmt.Sprintf("%.f%% incremental", math.Round(float64(r.Cached)/float64(r.Attempted)*100))
 		if r.Failure > 0 {
-			r.Render(Ui, startAt, 3, len(r.Ordered))
-			Ui.Output(util.Sprintf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(startAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
+			r.Render(Ui, r.startedAt, 3, len(r.Ordered))
+			Ui.Output(util.Sprintf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
 		} else {
 			Ui.Output(util.Sprintf("${BOLD}>>> TURBO${RESET}"))
-			Ui.Output(util.Sprintf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(startAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
+			Ui.Output(util.Sprintf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
 		}
 
 	}

@@ -1,3 +1,6 @@
+// Copyright (c) 2013 Kevin van Zonneveld <kevin@vanzonneveld.net>. All rights reserved.
+// Source: https://github.com/kvz/logstreamer
+// SPDX-License-Identifier: MIT
 package logstreamer
 
 import (
@@ -103,7 +106,7 @@ func TestLogstreamerFlush(t *testing.T) {
 	logStreamerOut.Flush()
 	byteWriter.Flush()
 
-	s := strings.TrimSpace(string(buffer.Bytes()))
+	s := strings.TrimSpace(buffer.String())
 
 	if s != text {
 		t.Fatalf("Expected '%s', got '%s'.", text, s)

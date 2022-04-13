@@ -1,3 +1,8 @@
+---
+title: CLI Reference
+description: Turborepo is a high-performance build system for JavaScript and TypeScript codebases.
+---
+
 import Callout from '../../../components/callout'
 
 # Command-Line Reference
@@ -20,9 +25,55 @@ Boolean options can be enabled as follows:
 --<option>=false
 ```
 
-## `turbo run <task1> <task2>`
+## Global Arguments
+
+The following flags apply to all commands.
+
+#### `--color`
+
+Forces the use of color even when the output stream is not considered to be a TTY terminal.
+This can be used to enable turbo's color output for CI runners such as Github Actions which
+have support for rendering color in their log output.
+
+```sh
+turbo run build --color
+```
+
+Alternatively, you can also enable color using the `FORCE_COLOR` environment variable (borrowed
+from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)). Going
+this route may also unlock some additional colored output from the actual tasks themselves if
+they use `supports-color` to determine whether or not to output with colored output.
+
+```sh
+declare -x FORCE_COLOR=1
+turbo run build
+```
+
+#### `--no-color`
+
+Suppresses the use of color in the output when running turbo in an interactive / TTY session.
+
+```sh
+turbo run build --no-color
+```
+
+Alternatively, you can also suppress color using the `FORCE_COLOR` environment variable (borrowed
+from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)).
+
+```sh
+declare -x FORCE_COLOR=0
+turbo run build
+```
+
+## `turbo run <task>`
 
 Run NPM scripts across all packages in specified scope. Tasks must be specified in your `pipeline` configuration.
+
+`turbo run <task1> <task2> [options] [-- <args passed to task1 and task2>]`
+
+`turbo` can run multiple tasks, and any arguments following `--` will be passed through
+to the tasks to be executed. Note that these additional arguments will _not_ be passed to
+any additional tasks that are run due to dependencies from the [pipeline](/docs/reference/configuration#pipeline) configuration.
 
 ### Options
 
@@ -38,12 +89,12 @@ turbo run build --cache-dir="./my-cache"
 
 #### `--concurrency`
 
-`type: number`
+`type: number | string`
 
-Defaults to `10`. Set/limit the max concurrency of task execution. This must be an integer greater than or equal to `1`. Use `1` to force serial (i.e. one task at a time) execution. This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
+Defaults to `10`. Set/limit the max concurrency of task execution. This must be an integer greater than or equal to `1` or a percentage value like `50%`. Use `1` to force serial (i.e. one task at a time) execution. Use `100%` to use all available logical processors. This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
 
 ```sh
-turbo run build --concurrency=10
+turbo run build --concurrency=50%
 turbo run test --concurrency=1
 ```
 
@@ -67,6 +118,10 @@ turbo run build --cwd=./somewhere/else
 
 #### `--deps`
 
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependents-of-matched-packages) instead.
+</Callout>
+
 Defaults to `true`. Include dependent packages/apps consumers in the execution.
 
 ```sh
@@ -77,6 +132,42 @@ turbo run build --no-deps
 **Example**
 
 Let's say you have packages A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
+
+#### `--dry / --dry-run`
+
+Instead of executing tasks, display details about the affected packages and tasks that would be run.
+Specify `--dry=json` to get the output in JSON format.
+
+Task details include:
+
+- `task`: The name of the task to be executed
+- `package`: The package in which to run the task
+- `hash`: The hash of the task, used for caching
+- `directory`: The directory where the task will be run
+- `command`: The actual command used to run the task
+- `outputs`: Location of outputs from the task that will cached
+- `logFile`: Location of the log file for the task run
+- `dependencies`: Tasks that must run before this task
+- `dependents`: Tasks that must be run after this task
+
+#### `--filter`
+
+`type: string[]`
+
+Specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/features/filtering)
+
+```sh
+turbo run build --filter=my-pkg
+turbo run test --filter=...^@scope/my-lib
+turbo run build --filter=./apps/* --filter=!./apps/admin
+```
 
 #### `--graph`
 
@@ -96,13 +187,10 @@ turbo run build test lint --graph=my-graph.png
 turbo run build test lint --graph=my-graph.html
 ```
 
-<Callout>
+<Callout type="info">
   **Known Bug**: All possible pipeline task nodes will be added to the
   graph at the moment, even if that pipeline task does not actually exist in a
-  given package. This has no impact on execution, it means that:
-
-  - the terminal output may overstate the number of packages in which a task is running.
-  - your dot viz graph may contain additional nodes that represents tasks that do not exist.
+  given package. This has no impact on execution, it means that 1) the terminal output may overstate the number of packages in which a task is running and 2) your dot viz graph may contain additional nodes that represents tasks that do not exist.
 </Callout>
 
 #### `--force`
@@ -112,6 +200,8 @@ Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting 
 ```sh
 turbo run build --force
 ```
+
+The same behavior also be set via the `TURBO_FORCE=true` environment variable.
 
 #### `--global-deps`
 
@@ -154,39 +244,53 @@ Just a quick overview.
 
 #### `--include-dependencies`
 
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependencies-of-matched-packages) instead.
+</Callout>
+
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
 This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
 
 #### `--no-cache`
 
-Default false. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
+Default `false`. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
 
 ```shell
 turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--output-logs`
+
+`type: string`
+
+Default `full`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+
+```shell
+turbo run build --output-logs=full
+turbo run build --output-logs=new-only
+```
+
 #### `--only`
 
-Default false. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
+Default `false`. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
 
-Given this pipeline:
+Given this pipeline in `turbo.json`:
 
 ```json
 {
-  "turbo": {
-    "pipeline": {
-      "build": {
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "test": {
-        "dependsOn": [
-          "^build"
-        ]
-      }
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ]
     }
   }
 }
@@ -207,11 +311,25 @@ turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--remote-only`
+
+Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.
+
+```shell
+turbo run build --remote-only
+```
+
+The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment variable.
+
 #### `--scope`
+
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-package) instead.
+</Callout>
 
 `type: string[]`
 
-Specify/filter package(s)/apps to act as entry points for execution. Globs against package.json `name` field (and not the file system.)
+Specify/filter package(s)/apps to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
 
 ```sh
 turbo run lint --scope="@example/**"
@@ -230,13 +348,17 @@ turbo run build --serial
 
 #### `--since`
 
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-changed-packages) instead.
+</Callout>
+
 Filter execution based on which packages have changed since a merge-base.
 
 ```
 turbo run build --since=origin/main
 ```
 
-<Callout emoji="🚨">
+<Callout type="info">
   **Important**: This uses the `git diff ${target_branch}...` mechanism to
   identify which packages have changed. There is an assumption that all the
   input files for a package exist inside their respective package/app folders.
@@ -269,9 +391,9 @@ You can also set the value of the current team by setting an environment variabl
 
 `type: string`
 
-To view CPU trace, outputs the trace to the given file,  use `go tool trace [file]`.
+To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
 
-<Callout emoji="🚨">
+<Callout>
   **Important**: The trace viewer doesn't work under Windows Subsystem for Linux.
 </Callout>
 
@@ -295,19 +417,19 @@ turbo run build --heap="<heap-file-name>"
 
 To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://speedscope.app).
 
-<Callout emoji="🚨">
+<Callout>
   **Important**: The CPU profiler doesn't work under
-  Windows subsystem for Linux. The profiler has to be built
+  Windows Subsystem for Linux. The profiler has to be built
   for native Windows and run using the command prompt instead.
 </Callout>
-
 
 ```sh
 turbo run build --cpuprofile="<cpu-profile-file-name>"
 ```
+
 #### `-v`, `-vv`, `-vvv`
 
-To sepecify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
+To specify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
 
 ```sh
 turbo run build -v
@@ -325,7 +447,7 @@ This command will generate folder called `out` with the following inside of it:
 - A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
 - A copy of the root `package.json`
 
-```tree
+```
 .                                 # Folder full source code for all package needed to build the target
 ├── package.json                  # The root `package.json`
 ├── packages
@@ -368,7 +490,7 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 - A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
 - A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
 
-```tree
+```
 .
 ├── full                                # Folder full source code for all package needed to build the target
 │   ├── package.json
@@ -423,7 +545,21 @@ Defaults to `https://vercel.com`.
 
 `type: string`
 
-Defaults to `https://api.vercel.com`.
+Defaults to `https://vercel.com/api`.
+
+#### `--sso-team`
+
+`type: string`
+
+Connect to an sso-enabled Vercel team by providing your Team slug.
+
+```
+turbo login --sso-team=<team-slug>
+```
+
+## `turbo logout`
+
+Logs you out of your Vercel account.
 
 ## `turbo link`
 
@@ -438,6 +574,10 @@ You should run this command from the root of your monorepo.
 
 Defaults to `https://api.vercel.com`
 
-### `turbo unlink`
+## `turbo unlink`
 
-Unlink the current directory from the Remote Cache
+Unlink the current directory from the Remote Cache.
+
+## `turbo bin`
+
+Get the path to the Turbo binary.

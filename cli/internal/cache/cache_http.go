@@ -1,8 +1,13 @@
+// Adapted from https://github.com/thought-machine/please
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package cache
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,15 +15,21 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
 	"time"
-	"turbo/internal/config"
-	"turbo/internal/fs"
+
+	"github.com/vercel/turborepo/cli/internal/analytics"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 type httpCache struct {
 	writable       bool
 	config         *config.Config
 	requestLimiter limiter
+	recorder       analytics.Recorder
+	signerVerifier *ArtifactSignatureAuthentication
 }
 
 type limiter chan struct{}
@@ -41,9 +52,25 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
+
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
-	return cache.config.ApiClient.PutArtifact(hash, cache.config.TeamId, cache.config.TeamSlug, duration, r)
+
+	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
+	// additional overhead by doing the ioutil.ReadAll here instead.
+	artifactBody, err := ioutil.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+	}
+	tag := ""
+	if cache.signerVerifier.isEnabled() {
+		tag, err = cache.signerVerifier.generateTag(hash, artifactBody)
+		if err != nil {
+			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+		}
+	}
+	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -71,11 +98,12 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		target, _ = os.Readlink(name)
 	}
-	hdr, err := tar.FileInfoHeader(info, target)
+	hdr, err := tar.FileInfoHeader(info, filepath.ToSlash(target))
 	if err != nil {
 		return err
 	}
-	hdr.Name = name
+	// Ensure posix path for filename written in header.
+	hdr.Name = filepath.ToSlash(name)
 	// Zero out all timestamps.
 	hdr.ModTime = mtime
 	hdr.AccessTime = mtime
@@ -99,32 +127,82 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 	return err
 }
 
-func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, error) {
+func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, int, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
-	m, files, err := cache.retrieve(key)
+	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
-		return false, files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		// TODO: analytics event?
+		return false, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
-	return m, files, err
+	cache.logFetch(hit, key, duration)
+	return hit, files, duration, err
 }
 
-func (cache *httpCache) retrieve(key string) (bool, []string, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(key, cache.config.TeamId, cache.config.TeamSlug, nil)
+func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
+	var event string
+	if hit {
+		event = cacheEventHit
+	} else {
+		event = cacheEventMiss
+	}
+	payload := &CacheEvent{
+		Source:   "REMOTE",
+		Event:    event,
+		Hash:     hash,
+		Duration: duration,
+	}
+	cache.recorder.LogEvent(payload)
+}
+
+func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
+	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
 	if err != nil {
-		return false, nil, err
+		return false, nil, 0, err
 	}
 	defer resp.Body.Close()
 	files := []string{}
+	missingLinks := []*tar.Header{}
+	duration := 0
+	// If present, extract the duration from the response.
+	if resp.Header.Get("x-artifact-duration") != "" {
+		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
+		}
+		duration = intVar
+	}
 	if resp.StatusCode == http.StatusNotFound {
-		return false, files, nil // doesn't exist - not an error
+		return false, files, duration, nil // doesn't exist - not an error
 	} else if resp.StatusCode != http.StatusOK {
 		b, _ := ioutil.ReadAll(resp.Body)
-		return false, files, fmt.Errorf("%s", string(b))
+		return false, files, duration, fmt.Errorf("%s", string(b))
 	}
-	gzr, err := gzip.NewReader(resp.Body)
+	artifactReader := resp.Body
+	if cache.signerVerifier.isEnabled() {
+		expectedTag := resp.Header.Get("x-artifact-tag")
+		if expectedTag == "" {
+			// If the verifier is enabled all incoming artifact downloads must have a signature
+			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
+		}
+		b, _ := ioutil.ReadAll(artifactReader)
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+		}
+		isValid, err := cache.signerVerifier.validate(hash, b, expectedTag)
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+		}
+		if !isValid {
+			err = fmt.Errorf("artifact verification failed: artifact tag does not match expected tag %s", expectedTag)
+			return false, nil, 0, err
+		}
+		// The artifact has been verified and the body can be read and untarred
+		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
+	}
+	gzr, err := gzip.NewReader(artifactReader)
 	if err != nil {
-		return false, files, err
+		return false, files, duration, err
 	}
 	defer gzr.Close()
 	tr := tar.NewReader(gzr)
@@ -132,32 +210,52 @@ func (cache *httpCache) retrieve(key string) (bool, []string, error) {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
-				return true, files, nil
+				for _, link := range missingLinks {
+					if err := os.Symlink(link.Linkname, link.Name); err != nil {
+						return false, files, duration, err
+					}
+				}
+
+				return true, files, duration, nil
 			}
-			return false, files, err
+			return false, files, duration, err
 		}
 		files = append(files, hdr.Name)
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(hdr.Name, fs.DirPermissions); err != nil {
-				return false, files, err
+				return false, files, duration, err
 			}
 		case tar.TypeReg:
 			if dir := path.Dir(hdr.Name); dir != "." {
 				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
-					return false, files, err
+					return false, files, duration, err
 				}
 			}
 			if f, err := os.OpenFile(hdr.Name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
-				return false, files, err
+				return false, files, duration, err
 			} else if _, err := io.Copy(f, tr); err != nil {
-				return false, files, err
+				return false, files, duration, err
 			} else if err := f.Close(); err != nil {
-				return false, files, err
+				return false, files, duration, err
 			}
 		case tar.TypeSymlink:
+			if dir := path.Dir(hdr.Name); dir != "." {
+				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
+					return false, files, duration, err
+				}
+			}
+			if _, err := os.Lstat(hdr.Name); err == nil {
+				if err := os.Remove(hdr.Name); err != nil {
+					return false, files, duration, err
+				}
+			} else if os.IsNotExist(err) {
+				missingLinks = append(missingLinks, hdr)
+				continue
+			}
+
 			if err := os.Symlink(hdr.Linkname, hdr.Name); err != nil {
-				return false, files, err
+				return false, files, duration, err
 			}
 		default:
 			log.Printf("Unhandled file type %d for %s", hdr.Typeflag, hdr.Name)
@@ -175,10 +273,17 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(config *config.Config) *httpCache {
+func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
 		config:         config,
 		requestLimiter: make(limiter, 20),
+		recorder:       recorder,
+		signerVerifier: &ArtifactSignatureAuthentication{
+			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
+			// enforcing team restrictions for repositories.
+			teamId:  config.TeamId,
+			enabled: config.TurboConfigJSON.RemoteCacheOptions.Signature,
+		},
 	}
 }
