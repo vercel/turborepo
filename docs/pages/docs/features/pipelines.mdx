@@ -73,7 +73,7 @@ Turborepo will then efficiently schedule execution minimizing idle CPUs.
 
 What you are declaring here in the `pipeline` object of the `turbo` configuration is a dependency graph of tasks. In the above example, in plain english, the configuration translates to the following conventions:
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -115,7 +115,7 @@ The `^` symbol explicitly declares that the task has a [package-topological](../
 
 A common pattern in many TypeScript monorepos is to declare that a package's `build` task (e.g. `tsc`) should only run once the `build` tasks of all of its dependencies in the monorepo have run their own `build` tasks. This type of relationship can be expressed as follows:
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -133,7 +133,7 @@ A common pattern in many TypeScript monorepos is to declare that a package's `bu
 
 An empty dependency list (`dependsOn` is either undefined or `[]`) means that a task can start executing whenever it can! After all, it has NO dependencies.
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -155,7 +155,7 @@ A package is considered to have been updated when any of the files in that packa
 However, for some tasks, we only want to rerun that task when relevant files have changed.
 Specifying `inputs` lets us define which files are relevant for a particular task:
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -191,7 +191,7 @@ Additionally, you may need to express implicit dependencies or sequences between
 
 For these cases, you can express these relationships in your `pipeline` configuration like this:
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {

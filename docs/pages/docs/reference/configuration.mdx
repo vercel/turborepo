@@ -22,7 +22,7 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
 
 **Example**
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -43,7 +43,7 @@ An object representing the task dependency graph of your project. `turbo` interp
 
 Each key in the `pipeline` object is the name of a task that can be executed by `turbo run`. If `turbo` finds a workspace package with a `package.json` `scripts` object with a matching key, it will apply the pipeline task configuration to that NPM script during execution. This allows you to use `pipeline` to set conventions across your entire Turborepo.
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -76,7 +76,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 **Example: Basics**
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -103,7 +103,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 **Example: Environment Variables and Tasks**
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -141,7 +141,7 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
 
 **Example**
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -179,7 +179,7 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs-1). Se
 
 **Example**
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -209,7 +209,7 @@ Specifying `[]` will cause the task to be rerun when any file changes.
 
 **Example**
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
