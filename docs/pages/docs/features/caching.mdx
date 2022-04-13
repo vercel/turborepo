@@ -76,6 +76,25 @@ You can also always disable caching on a specific task by setting `cache` to `fa
 
 ## Alter Caching Based on Environment Variables and Files
 
+For some tasks, you may not want a cache miss if an irrelevant file has changed. For instance, updating `README.md`
+might not need to trigger a cache miss for the `test` task. You can use `inputs` to restrict the set
+of files `turbo` considers for a particular task. In this case, only consider `.ts` and `.tsx` files relevant for
+determining a cache hit on the `test` task:
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ...other tasks
+    "test": {
+      "outputs": [], // leave empty to only cache logs
+      "dependsOn": ["build"],
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
+
 When you use `turbo` with tools which inline environment variables at build time (e.g. Next.js or Create React App), it is important you tell `turbo` about it. Otherwise, you could ship a cached artifact with the wrong environment variables!
 
 Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavior based on the values of both environment variables and the contents of files:
@@ -92,28 +111,28 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
     "build": {
       "dependsOn": [
         "^build",
-          // env vars will impact hashes of all "build" tasks
-          "$SOME_ENV_VAR",
+        // env vars will impact hashes of all "build" tasks
+        "$SOME_ENV_VAR",
       ],
       "outputs": ["dist/**"]
     },
     "web#build": { // override settings for the "build" task for the "web" app
       "dependsOn": [
         "^build",
-          // env vars that will impact the hash of "build" task for only "web" app
-          "$STRIPE_SECRET_KEY",
-          "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-          "$NEXT_PUBLIC_ANALYTICS_ID",
+        // env vars that will impact the hash of "build" task for only "web" app
+        "$STRIPE_SECRET_KEY",
+        "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "$NEXT_PUBLIC_ANALYTICS_ID",
       ],
       "outputs": [".next/**"],
     },
     "docs#build": { // override settings for the "build" task for the "docs" app
       "dependsOn": [
         "^build",
-          // env vars that will impact the hash of "build" task for only "docs" app
-          "$STRIPE_SECRET_KEY",
-          "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-          "$NEXT_PUBLIC_ANALYTICS_ID",
+        // env vars that will impact the hash of "build" task for only "docs" app
+        "$STRIPE_SECRET_KEY",
+        "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "$NEXT_PUBLIC_ANALYTICS_ID",
       ],
       "outputs": [".next/**"],
     }
@@ -156,7 +175,7 @@ First `turbo` constructs a hash of the current global state of the monorepo:
 
 Then it adds on more factors relative to a given package's task:
 
-- Hash the contents of all not-gitignored files in the package folder
+- Hash the contents of all not-gitignored files in the package folder or the files matching the `inputs` globs, if present
 - The hashes of all internal dependencies
 - The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a package's `package.json` from the root lockfile
