@@ -913,13 +913,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
-	// @TODO: @jaredpalmer fix this hack to get the package manager's name
+
 	var cmd *exec.Cmd
-	if e.packageManager.Name == "nodejs-berry" {
-		cmd = exec.Command("yarn", argsactual...)
-	} else {
-		cmd = exec.Command(strings.TrimPrefix(e.packageManager.Name, "nodejs-"), argsactual...)
-	}
+	cmd = exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
