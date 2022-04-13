@@ -1,19 +1,15 @@
 name: golangci-lint
 on:
-  push:
-    tags:
-      - v*
-    branches:
-      - master
-      - main
+  # push:
+  #   tags:
+  #     - v*
+  #   branches:
+  #     - main
   pull_request:
 permissions:
   contents: read
   # Optional: allow read access to pull request. Use with `only-new-issues` option.
   pull-requests: read
-defaults:
-  run:
-    working-directory: ./cli
 jobs:
   golangci:
     name: lint
@@ -28,13 +24,14 @@ jobs:
           version: latest
 
           # Optional: working directory, useful for monorepos
-          # working-directory: cli
+          working-directory: cli
 
           # Optional: golangci-lint command line arguments.
           # args: --issues-exit-code=0
+          args: --new-from-rev=${{github.event.pull_request.head.ref}}
 
           # Optional: show only new issues if it's a pull request. The default value is `false`.
-          only-new-issues: true
+          # only-new-issues: true
 
           # Optional: if set to true then the all caching functionality will be complete disabled,
           #           takes precedence over all other caching options.
