@@ -218,7 +218,11 @@ func (p *Scheduler) AddTask(task *Task) *Scheduler {
 	return p
 }
 
-func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) *Scheduler {
+func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
+	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
+	if fromPkg != ROOT_NODE_NAME && !p.TopologicGraph.HasVertex(fromPkg) {
+		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
+	}
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
-	return p
+	return nil
 }
