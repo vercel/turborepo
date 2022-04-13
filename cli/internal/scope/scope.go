@@ -92,9 +92,9 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*f
 		// that the changes we're interested in are scoped, but we need to handle
 		// global dependencies changing as well. A future optimization might be to
 		// scope changed files more deeply if we know there are no global dependencies.
-		changedFiles, err := getChangedFiles(o, scm)
-		if err != nil {
-			return nil, err
+		changedFiles := []string{}
+		if since != "" {
+			changedFiles = scm.ChangedFiles(since, true, o.Cwd)
 		}
 		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, changedFiles); err != nil {
 			return nil, err
@@ -112,14 +112,6 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*f
 		changedPkgs := getChangedPackages(filteredChangedFiles, packageInfos)
 		return changedPkgs, nil
 	}
-}
-
-// getChangedFiles returns platform-dependent paths relative to the root of the monorepo
-func getChangedFiles(opts *Opts, scm scm.SCM) ([]string, error) {
-	if opts.Since == "" {
-		return []string{}, nil
-	}
-	return scm.ChangedFiles(opts.Since, true, opts.Cwd), nil
 }
 
 func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
