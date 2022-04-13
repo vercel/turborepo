@@ -41,7 +41,7 @@ An example Pipeline configuration in `turbo.json`:
     "test": {
       "dependsOn": ["build"],
       "outputs": [""],
-      "inputs": ["**/*.tsx", "**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "lint": {
       "outputs": [""]
@@ -91,7 +91,7 @@ What you are declaring here in the `pipeline` object of the `turbo` configuratio
       "outputs": [""],
       // A package's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
-      "inputs": ["**/*.tsx", "**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "lint": {
       // A package's `lint` task has no dependencies and
@@ -142,7 +142,6 @@ An empty dependency list (`dependsOn` is either undefined or `[]`) means that a 
     "lint": {
       // A package's `lint` command has no dependencies and can be run at
       // whenever.
-      "inputs": ["**/*.js", "**/*.ts"],
       "outputs": [""]
     }
   }
@@ -168,7 +167,7 @@ Specifying `inputs` lets us define which files are relevant for a particular tas
       "outputs": [""],
       // A package's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
-      "inputs": ["**/*.tsx", "**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
   }
 }

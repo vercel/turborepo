@@ -53,7 +53,7 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": ["build"],
-      "inputs": ["**/*.tsx", "**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "dev": {
       "cache": false
@@ -222,7 +222,7 @@ Specifying `[]` will cause the task to be rerun when any file changes.
       "outputs": [""],
       // A package's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
-      "inputs": ["**/*.tsx", "**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
   }
 }

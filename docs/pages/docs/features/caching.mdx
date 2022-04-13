@@ -89,7 +89,7 @@ determining a cache hit on the `test` task:
     "test": {
       "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
   }
 }
