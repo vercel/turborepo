@@ -1,0 +1,902 @@
+internal/client/client.go:162:18: Error return value of `resp.Body.Close` is not checked (errcheck)
+		resp.Body.Close()
+		               ^
+internal/client/client.go:263:23: Error return value of `resp.Body.Close` is not checked (errcheck)
+	defer resp.Body.Close()
+	                     ^
+internal/client/client.go:307:23: Error return value of `resp.Body.Close` is not checked (errcheck)
+	defer resp.Body.Close()
+	                     ^
+internal/client/client.go:309:10: Error return value of `io.Copy` is not checked (errcheck)
+		io.Copy(ioutil.Discard, resp.Body)
+		       ^
+internal/client/client.go:351:23: Error return value of `resp.Body.Close` is not checked (errcheck)
+	defer resp.Body.Close()
+	                     ^
+internal/client/client.go:353:10: Error return value of `io.Copy` is not checked (errcheck)
+		io.Copy(ioutil.Discard, resp.Body)
+		       ^
+internal/client/client_test.go:20:24: Error return value of `req.Body.Close` is not checked (errcheck)
+			defer req.Body.Close()
+			                    ^
+internal/client/client_test.go:27:11: Error return value of `w.Write` is not checked (errcheck)
+			w.Write([]byte{})
+			       ^
+internal/client/client_test.go:53:33: Error return value of `apiClient.RecordAnalyticsEvents` is not checked (errcheck)
+	apiClient.RecordAnalyticsEvents(events)
+	                               ^
+internal/client/client_test.go:70:23: Error return value of `req.Body.Close` is not checked (errcheck)
+		defer req.Body.Close()
+		                    ^
+internal/client/client_test.go:77:10: Error return value of `w.Write` is not checked (errcheck)
+		w.Write([]byte{})
+		       ^
+internal/client/client_test.go:87:23: Error return value of `apiClient.PutArtifact` is not checked (errcheck)
+	apiClient.PutArtifact("hash", expectedArtifactBody, 500, "")
+	                     ^
+internal/client/client.go:22:6: exported type `ApiClient` should have comment or be unexported (golint)
+type ApiClient struct {
+     ^
+internal/client/client.go:24:2: struct field `baseUrl` should be `baseURL` (golint)
+	baseUrl      string
+	^
+internal/client/client.go:32:2: struct field `HttpClient` should be `HTTPClient` (golint)
+	HttpClient *retryablehttp.Client
+	^
+internal/client/client.go:40:1: exported method `ApiClient.SetToken` should have comment or be unexported (golint)
+func (api *ApiClient) SetToken(token string) {
+^
+internal/client/client.go:44:1: comment on exported function `NewClient` should be of the form `NewClient ...` (golint)
+// New creates a new ApiClient
+^
+internal/client/client.go:45:16: func parameter `baseUrl` should be `baseURL` (golint)
+func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
+               ^
+internal/client/client.go:67:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
+^
+internal/client/client.go:99:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
+^
+internal/client/client.go:120:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) okToRequest() error {
+^
+internal/client/client.go:127:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) makeUrl(endpoint string) string {
+^
+internal/client/client.go:131:1: exported method `ApiClient.UserAgent` should have comment or be unexported (golint)
+func (c *ApiClient) UserAgent() string {
+^
+internal/client/client.go:135:1: exported method `ApiClient.PutArtifact` should have comment or be unexported (golint)
+func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
+^
+internal/client/client.go:161:9: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+	} else {
+	       ^
+internal/client/client.go:167:1: exported method `ApiClient.FetchArtifact` should have comment or be unexported (golint)
+func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
+^
+internal/client/client.go:188:1: exported method `ApiClient.RecordAnalyticsEvents` should have comment or be unexported (golint)
+func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error {
+^
+internal/client/client.go:217:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) addTeamParam(params *url.Values) {
+^
+internal/client/client.go:249:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
+^
+internal/client/client.go:281:6: exported type `User` should have comment or be unexported (golint)
+type User struct {
+     ^
+internal/client/client.go:288:6: exported type `UserResponse` should have comment or be unexported (golint)
+type UserResponse struct {
+     ^
+internal/client/client.go:293:1: receiver name c should be consistent with previous receiver name api for ApiClient (golint)
+func (c *ApiClient) GetUser() (*UserResponse, error) {
+^
+internal/client/client.go:338:1: exported method `ApiClient.VerifySSOToken` should have comment or be unexported (golint)
+func (c *ApiClient) VerifySSOToken(token string, tokenName string) (*VerifiedSSOUser, error) {
+^
+internal/logstreamer/logstreamer_test.go:23:28: Error return value of `logStreamerOut.Close` is not checked (errcheck)
+	defer logStreamerOut.Close()
+	                          ^
+internal/logstreamer/logstreamer_test.go:27:28: Error return value of `logStreamerErr.Close` is not checked (errcheck)
+	defer logStreamerErr.Close()
+	                          ^
+internal/logstreamer/logstreamer_test.go:61:28: Error return value of `logStreamerOut.Close` is not checked (errcheck)
+	defer logStreamerOut.Close()
+	                          ^
+internal/logstreamer/logstreamer_test.go:65:28: Error return value of `logStreamerErr.Close` is not checked (errcheck)
+	defer logStreamerErr.Close()
+	                          ^
+internal/logstreamer/logstreamer_test.go:103:28: Error return value of `logStreamerOut.Close` is not checked (errcheck)
+	defer logStreamerOut.Close()
+	                          ^
+internal/logstreamer/logstreamer_test.go:105:22: Error return value of `logStreamerOut.Write` is not checked (errcheck)
+	logStreamerOut.Write([]byte(text))
+	                    ^
+internal/logstreamer/logstreamer_test.go:106:22: Error return value of `logStreamerOut.Flush` is not checked (errcheck)
+	logStreamerOut.Flush()
+	                    ^
+internal/logstreamer/logstreamer_test.go:107:18: Error return value of `byteWriter.Flush` is not checked (errcheck)
+	byteWriter.Flush()
+	                ^
+internal/logstreamer/logstreamer.go:1:1: package comment should be of the form "Package logstreamer ..." (golint)
+// Copyright (c) 2013 Kevin van Zonneveld <kevin@vanzonneveld.net>. All rights reserved.
+^
+internal/logstreamer/logstreamer.go:14:6: exported type `Logstreamer` should have comment or be unexported (golint)
+type Logstreamer struct {
+     ^
+internal/logstreamer/logstreamer.go:32:1: exported function `NewLogstreamer` should have comment or be unexported (golint)
+func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer {
+^
+internal/logstreamer/logstreamer.go:62:1: exported method `Logstreamer.Close` should have comment or be unexported (golint)
+func (l *Logstreamer) Close() error {
+^
+internal/logstreamer/logstreamer.go:70:1: exported method `Logstreamer.Flush` should have comment or be unexported (golint)
+func (l *Logstreamer) Flush() error {
+^
+internal/logstreamer/logstreamer.go:80:1: exported method `Logstreamer.OutputLines` should have comment or be unexported (golint)
+func (l *Logstreamer) OutputLines() error {
+^
+internal/logstreamer/logstreamer.go:109:1: exported method `Logstreamer.FlushRecord` should have comment or be unexported (golint)
+func (l *Logstreamer) FlushRecord() string {
+^
+internal/scope/filter/filter.go:15:6: exported type `SelectedPackages` should have comment or be unexported (golint)
+type SelectedPackages struct {
+     ^
+internal/scope/filter/filter.go:20:6: exported type `PackagesChangedSince` should have comment or be unexported (golint)
+type PackagesChangedSince = func(since string) (util.Set, error)
+     ^
+internal/scope/filter/filter.go:22:6: exported type `Resolver` should have comment or be unexported (golint)
+type Resolver struct {
+     ^
+internal/scope/filter/filter.go:49:1: exported method `Resolver.GetFilteredPackages` should have comment or be unexported (golint)
+func (r *Resolver) GetFilteredPackages(selectors []*TargetSelector) (*SelectedPackages, error) {
+^
+internal/scope/filter/matcher.go:10:6: exported type `Matcher` should have comment or be unexported (golint)
+type Matcher = func(pkgName string) bool
+     ^
+internal/scope/filter/parse_target_selector.go:10:6: exported type `TargetSelector` should have comment or be unexported (golint)
+type TargetSelector struct {
+     ^
+internal/scope/filter/parse_target_selector.go:23:1: exported method `TargetSelector.IsValid` should have comment or be unexported (golint)
+func (ts *TargetSelector) IsValid() bool {
+^
+cmd/turbo/main_utils.go:27:13: Error return value of `trace.Start` is not checked (errcheck)
+	trace.Start(f)
+	           ^
+cmd/turbo/main_utils.go:30:10: Error return value of `f.Close` is not checked (errcheck)
+		f.Close()
+		       ^
+cmd/turbo/main_utils.go:46:10: Error return value of `f.Close` is not checked (errcheck)
+		f.Close()
+		       ^
+cmd/turbo/main_utils.go:57:23: Error return value of `pprof.StartCPUProfile` is not checked (errcheck)
+	pprof.StartCPUProfile(f)
+	                     ^
+cmd/turbo/main_utils.go:60:10: Error return value of `f.Close` is not checked (errcheck)
+		f.Close()
+		       ^
+cmd/turbo/main.go:52: File is not `goimports`-ed (goimports)
+	ui := ui.BuildColoredUi(colorMode);
+cmd/turbo/main.go:112:11: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+			} else {
+			       ^
+cmd/turbo/main.go:123:11: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+			} else {
+			       ^
+cmd/turbo/main.go:135:11: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+			} else {
+			       ^
+internal/ui/spinner.go:36:9: Error return value of `s.Color` is not checked (errcheck)
+	s.Color("faint")
+	       ^
+internal/ui/colors.go:50: File is not `goimports`-ed (goimports)
+		return ColorModeSuppressed;
+internal/ui/colors.go:9:6: exported type `ColorMode` should have comment or be unexported (golint)
+type ColorMode int
+     ^
+internal/ui/colors.go:12:2: exported const ColorModeUndefined should have comment (or a comment on this block) or be unexported (golint)
+	ColorModeUndefined ColorMode = iota + 1
+	^
+internal/ui/colors.go:17:1: exported function `GetColorModeFromEnv` should have comment or be unexported (golint)
+func GetColorModeFromEnv() ColorMode {
+^
+internal/ui/colors.go:51:9: `if` block ends with a `return` statement, so drop this `else` and outdent its block (golint)
+	} else {
+	       ^
+internal/ui/spinner.go:1:1: package comment should be of the form "Package ui ..." (golint)
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+^
+internal/ui/ui.go:18:5: exported var `IsTTY` should have comment or be unexported (golint)
+var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+    ^
+internal/ui/ui.go:19:5: exported var `IsCI` should have comment or be unexported (golint)
+var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
+    ^
+internal/ui/ui.go:22:5: don't use ALL_CAPS in Go names; use CamelCase (golint)
+var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
+    ^
+internal/ui/ui.go:23:5: don't use ALL_CAPS in Go names; use CamelCase (golint)
+var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
+    ^
+internal/ui/ui.go:32:1: exported function `Bold` should have comment or be unexported (golint)
+func Bold(str string) string {
+^
+internal/ui/ui.go:90:1: exported function `BuildColoredUi` should have comment or be unexported (golint)
+func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
+^
+internal/cache/async_cache.go:75:18: Error return value of `c.realCache.Put` is not checked (errcheck)
+		c.realCache.Put(r.target, r.key, r.duration, r.files)
+		               ^
+internal/cache/cache.go:108:20: Error return value of `mplex.storeUntil` is not checked (errcheck)
+			mplex.storeUntil(target, key, duration, actualFiles, i)
+			                ^
+internal/cache/cache_fs.go:103:20: Error return value is not checked (errcheck)
+	WriteCacheMetaFile(filepath.Join(f.cacheDirectory, hash+"-meta.json"), &CacheMetadata{
+	                  ^
+internal/cache/cache_http.go:78:15: Error return value of `w.Close` is not checked (errcheck)
+	defer w.Close()
+	             ^
+internal/cache/cache_http.go:80:17: Error return value of `gzw.Close` is not checked (errcheck)
+	defer gzw.Close()
+	               ^
+internal/cache/cache_http.go:82:16: Error return value of `tw.Close` is not checked (errcheck)
+	defer tw.Close()
+	              ^
+internal/cache/cache_http.go:125:15: Error return value of `f.Close` is not checked (errcheck)
+	defer f.Close()
+	             ^
+internal/cache/cache_http.go:163:23: Error return value of `resp.Body.Close` is not checked (errcheck)
+	defer resp.Body.Close()
+	                     ^
+internal/cache/cache_http.go:207:17: Error return value of `gzr.Close` is not checked (errcheck)
+	defer gzr.Close()
+	               ^
+internal/cache/async_cache.go:1:1: package comment should be of the form "Package cache ..." (golint)
+// Adapted from https://github.com/thought-machine/please
+^
+internal/cache/cache.go:3:1: package comment should be of the form "Package cache ..." (golint)
+// Adapted from https://github.com/thought-machine/please
+^
+internal/cache/cache.go:32:6: exported type `CacheEvent` should have comment or be unexported (golint)
+type CacheEvent struct {
+     ^
+internal/cache/cache_fs.go:1:1: package comment should be of the form "Package cache ..." (golint)
+// Adapted from https://github.com/thought-machine/please
+^
+internal/cache/cache_fs.go:119:1: receiver name cache should be consistent with previous receiver name f for fsCache (golint)
+func (cache *fsCache) Shutdown() {}
+^
+internal/cache/cache_fs.go:123:6: type name will be used as cache.CacheMetadata by other packages, and that stutters; consider calling this Metadata (golint)
+type CacheMetadata struct {
+     ^
+internal/cache/cache_http.go:1:1: package comment should be of the form "Package cache ..." (golint)
+// Adapted from https://github.com/thought-machine/please
+^
+internal/cache/cache_signature_authentication.go:1:1: package comment should be of the form "Package cache ..." (golint)
+// Adapted from https://github.com/thought-machine/please
+^
+internal/cache/cache_signature_authentication.go:18:6: exported type `ArtifactSignatureAuthentication` should have comment or be unexported (golint)
+type ArtifactSignatureAuthentication struct {
+     ^
+internal/cache/cache_signature_authentication.go:19:2: struct field `teamId` should be `teamID` (golint)
+	teamId  string
+	^
+internal/cache/cache_signature_authentication.go:47:2: var `teamId` should be `teamID` (golint)
+	teamId := asa.teamId
+	^
+internal/cache/cache_signature_authentication.go:54:3: struct field `TeamId` should be `TeamID` (golint)
+		TeamId string `json:"teamId"`
+		^
+internal/cache/cache_signature_authentication.go:89:6: exported type `StreamValidator` should have comment or be unexported (golint)
+type StreamValidator struct {
+     ^
+internal/cache/cache_signature_authentication.go:93:1: exported method `StreamValidator.Validate` should have comment or be unexported (golint)
+func (sv *StreamValidator) Validate(expectedTag string) bool {
+^
+internal/cache/cache_signature_authentication.go:98:1: exported method `StreamValidator.CurrentValue` should have comment or be unexported (golint)
+func (sv *StreamValidator) CurrentValue() string {
+^
+internal/cache/cache_signature_authentication_test.go:17:2: var `teamId` should be `teamID` (golint)
+	teamId := "team_someid"
+	^
+internal/cache/cache_signature_authentication_test.go:53:2: var `teamId` should be `teamID` (golint)
+	teamId := "team_someid"
+	^
+internal/cache/cache_signature_authentication_test.go:97:2: var `teamId` should be `teamID` (golint)
+	teamId := "team_someid"
+	^
+internal/cache/cache_signature_authentication_test.go:172:38: func parameter `teamId` should be `teamID` (golint)
+func testUtilGetHMACTag(hash string, teamId string, artifactBody []byte, secret string) string {
+                                     ^
+internal/cache/cache_signature_authentication_test.go:175:3: struct field `TeamId` should be `TeamID` (golint)
+		TeamId string `json:"teamId"`
+		^
+internal/cache/cache_signature_authentication_test.go:188:2: var `teamId` should be `teamID` (golint)
+	teamId := "team_someid"
+	^
+internal/cache/cache_signature_authentication.go:78:45: func `(*ArtifactSignatureAuthentication).streamValidator` is unused (unused)
+func (asa *ArtifactSignatureAuthentication) streamValidator(hash string, incomingReader io.ReadCloser) (io.ReadCloser, *StreamValidator, error) {
+                                            ^
+internal/cache/cache_signature_authentication.go:102:6: type `readCloser` is unused (unused)
+type readCloser struct {
+     ^
+internal/core/scheduler.go:12:7: don't use ALL_CAPS in Go names; use CamelCase (golint)
+const ROOT_NODE_NAME = "___ROOT___"
+      ^
+internal/core/scheduler.go:14:6: exported type `Task` should have comment or be unexported (golint)
+type Task struct {
+     ^
+internal/core/scheduler.go:22:6: exported type `Visitor` should have comment or be unexported (golint)
+type Visitor = func(taskID string) error
+     ^
+internal/core/scheduler.go:24:6: exported type `Scheduler` should have comment or be unexported (golint)
+type Scheduler struct {
+     ^
+internal/core/scheduler.go:54:1: exported method `Scheduler.Prepare` should have comment or be unexported (golint)
+func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
+^
+internal/core/scheduler.go:125:3: var `taskId` should be `taskID` (golint)
+		taskId := traversalQueue[0]
+		^
+internal/core/scheduler.go:150:4: var `toTaskId` should be `toTaskID` (golint)
+			toTaskId := taskId
+			^
+internal/core/scheduler.go:163:7: var `fromTaskId` should be `fromTaskID` (golint)
+						fromTaskId := util.GetTaskId(depPkg, from)
+						^
+internal/core/scheduler.go:174:6: var `fromTaskId` should be `fromTaskID` (golint)
+					fromTaskId := util.GetTaskId(pkg, from)
+					^
+internal/core/scheduler.go:184:13: range var `fromTaskId` should be `fromTaskID` (golint)
+					for _, fromTaskId := range pkgTaskDeps {
+					       ^
+internal/core/scheduler.go:216:1: exported method `Scheduler.AddTask` should have comment or be unexported (golint)
+func (p *Scheduler) AddTask(task *Task) *Scheduler {
+^
+internal/core/scheduler.go:221:1: exported method `Scheduler.AddDep` should have comment or be unexported (golint)
+func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
+^
+internal/context/context.go:26:7: don't use ALL_CAPS in Go names; use CamelCase (golint)
+const GLOBAL_CACHE_KEY = "Ba weep granna weep ninny bong"
+      ^
+internal/context/context.go:125:1: exported function `WithGraph` should have comment or be unexported (golint)
+func WithGraph(rootpath string, config *config.Config) Option {
+^
+internal/context/context.go:132:10: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+		} else {
+		       ^
+internal/context/context.go:236:19: method populateTopologicGraphForPackageJson should be populateTopologicGraphForPackageJSON (golint)
+func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON, rootpath string) error {
+                  ^
+internal/context/context.go:156:15: ineffectual assignment to err (ineffassign)
+		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.Backend, config.Logger, os.Environ())
+		            ^
+internal/fs/fs.go:70:22: Error return value of `fromFile.Close` is not checked (errcheck)
+	defer fromFile.Close()
+	                    ^
+internal/fs/fs.go:133:16: Error return value of `in.Close` is not checked (errcheck)
+	defer in.Close()
+	              ^
+internal/fs/hash.go:26:18: Error return value of `file.Close` is not checked (errcheck)
+	defer file.Close()
+	                ^
+internal/fs/hash.go:43:18: Error return value of `file.Close` is not checked (errcheck)
+	defer file.Close()
+	                ^
+internal/fs/hash.go:9: File is not `goimports`-ed (goimports)
+	"strconv"
+internal/fs/copy_file.go:1:1: package comment should be of the form "Package fs ..." (golint)
+// Adapted from https://github.com/thought-machine/please
+^
+internal/fs/find_up.go:51:1: comment on exported function `FindupFrom` should be of the form `FindupFrom ...` (golint)
+// Recursively find a file by walking up parents in the file tree
+^
+internal/fs/hash.go:13:1: exported function `HashObject` should have comment or be unexported (golint)
+func HashObject(i interface{}) (string, error) {
+^
+internal/fs/hash.go:21:1: exported function `HashFile` should have comment or be unexported (golint)
+func HashFile(filePath string) (string, error) {
+^
+internal/fs/package_json.go:26:1: exported function `ReadTurboConfigJSON` should have comment or be unexported (golint)
+func ReadTurboConfigJSON(path AbsolutePath) (*TurboConfigJSON, error) {
+^
+internal/fs/package_json.go:42:6: exported type `RemoteCacheOptions` should have comment or be unexported (golint)
+type RemoteCacheOptions struct {
+     ^
+internal/fs/package_json.go:43:2: struct field `TeamId` should be `TeamID` (golint)
+	TeamId    string `json:"teamId,omitempty"`
+	^
+internal/fs/package_json.go:54:6: exported type `Pipeline` should have comment or be unexported (golint)
+type Pipeline map[string]TaskDefinition
+     ^
+internal/fs/package_json.go:56:1: exported method `Pipeline.GetTaskDefinition` should have comment or be unexported (golint)
+func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
+^
+internal/fs/package_json.go:65:6: exported type `TaskDefinition` should have comment or be unexported (golint)
+type TaskDefinition struct {
+     ^
+internal/fs/package_json.go:81:1: exported method `TaskDefinition.UnmarshalJSON` should have comment or be unexported (golint)
+func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
+^
+internal/fs/package_json.go:140:6: exported type `Workspaces` should have comment or be unexported (golint)
+type Workspaces []string
+     ^
+internal/fs/package_json.go:142:6: exported type `WorkspacesAlt` should have comment or be unexported (golint)
+type WorkspacesAlt struct {
+     ^
+internal/fs/package_json.go:146:1: exported method `Workspaces.UnmarshalJSON` should have comment or be unexported (golint)
+func (r *Workspaces) UnmarshalJSON(data []byte) error {
+^
+internal/fs/path.go:14:1: exported function `CheckedToAbsolutePath` should have comment or be unexported (golint)
+func CheckedToAbsolutePath(s string) (AbsolutePath, error) {
+^
+internal/fs/path.go:21:1: exported function `UnsafeToAbsolutePath` should have comment or be unexported (golint)
+func UnsafeToAbsolutePath(s string) AbsolutePath {
+^
+internal/fs/path.go:25:1: exported function `GetCwd` should have comment or be unexported (golint)
+func GetCwd() (AbsolutePath, error) {
+^
+internal/fs/path.go:37:1: exported method `AbsolutePath.ToStringDuringMigration` should have comment or be unexported (golint)
+func (ap AbsolutePath) ToStringDuringMigration() string {
+^
+internal/fs/path.go:41:1: exported method `AbsolutePath.Join` should have comment or be unexported (golint)
+func (ap AbsolutePath) Join(args ...string) AbsolutePath {
+^
+internal/fs/path.go:47:1: exported method `AbsolutePath.Dir` should have comment or be unexported (golint)
+func (ap AbsolutePath) Dir() AbsolutePath {
+^
+internal/fs/path.go:50:1: exported method `AbsolutePath.MkdirAll` should have comment or be unexported (golint)
+func (ap AbsolutePath) MkdirAll() error {
+^
+internal/fs/path.go:53:1: exported method `AbsolutePath.Remove` should have comment or be unexported (golint)
+func (ap AbsolutePath) Remove() error {
+^
+internal/fs/path.go:56:1: exported method `AbsolutePath.Open` should have comment or be unexported (golint)
+func (ap AbsolutePath) Open() (*os.File, error) {
+^
+internal/fs/path.go:59:1: exported method `AbsolutePath.ReadFile` should have comment or be unexported (golint)
+func (ap AbsolutePath) ReadFile() ([]byte, error) {
+^
+internal/fs/path.go:62:1: exported method `AbsolutePath.FileExists` should have comment or be unexported (golint)
+func (ap AbsolutePath) FileExists() bool {
+^
+internal/fs/yarn_lockfile.go:3:6: exported type `LockfileEntry` should have comment or be unexported (golint)
+type LockfileEntry struct {
+     ^
+internal/fs/yarn_lockfile.go:14:6: exported type `YarnLockfile` should have comment or be unexported (golint)
+type YarnLockfile map[string]*LockfileEntry
+     ^
+internal/fs/fs.go:34:25: var-declaration: should omit type string from declaration of var nonRelativeSentinel; it will be inferred from the right-hand side (revive)
+var nonRelativeSentinel string = ".." + string(filepath.Separator)
+                        ^
+internal/fs/package_deps_hash.go:225:8: S1009: should omit nil check; len() for nil slices is defined as zero (gosimple)
+				if match != nil && len(match) == 3 {
+				   ^
+internal/fs/package_deps_hash.go:169:2: S1011: should replace loop with `cmd.Args = append(cmd.Args, patterns...)` (gosimple)
+	for _, pattern := range patterns {
+	^
+internal/scope/scope.go:18:6: exported type `Opts` should have comment or be unexported (golint)
+type Opts struct {
+     ^
+internal/scope/scope.go:66:1: exported function `ResolvePackages` should have comment or be unexported (golint)
+func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
+^
+internal/ui/term/cursor.go:68:21: should replace `i += 1` with `i++` (golint)
+	for i := 0; i < n; i += 1 {
+	                   ^
+internal/xxhash/xxhash.go:161:2: `marshaledSize` is unused (deadcode)
+	marshaledSize = len(magic) + 8*5 + 32
+	^
+internal/xxhash/xxhash.go:4:1: package comment should be of the form "Package xxhash ..." (golint)
+// Adapted from https://cs.github.com/evanw/esbuild/blob/0c9ced59c8b3ea3bd8dd5feebafed1f47ed279dd/internal/xxhash
+^
+internal/login/link.go:70:15: Error return value of `survey.AskOne` is not checked (errcheck)
+	survey.AskOne(
+	             ^
+internal/login/link.go:116:15: Error return value of `survey.AskOne` is not checked (errcheck)
+	survey.AskOne(
+	             ^
+internal/login/link.go:145:14: Error return value of `fs.EnsureDir` is not checked (errcheck)
+	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
+	            ^
+internal/login/link.go:156:15: Error return value of `fs.EnsureDir` is not checked (errcheck)
+		fs.EnsureDir(".gitignore")
+		            ^
+internal/login/login.go:135:22: Error return value is not checked (errcheck)
+	deps.writeUserConfig(&config.TurborepoConfig{Token: query.Get("token")})
+	                    ^
+internal/login/logout.go:5: File is not `goimports`-ed (goimports)
+	"strings"
+internal/login/link.go:24:2: struct field `Ui` should be `UI` (golint)
+	Ui     *cli.ColoredUi
+	^
+internal/login/login.go:26:6: type name will be used as login.LoginCommand by other packages, and that stutters; consider calling this Command (golint)
+type LoginCommand struct {
+     ^
+internal/login/logout.go:18:2: struct field `Ui` should be `UI` (golint)
+	Ui     *cli.ColoredUi
+	^
+internal/login/unlink.go:19:2: struct field `Ui` should be `UI` (golint)
+	Ui     *cli.ColoredUi
+	^
+internal/login/login_test.go:49:2: `clientTokenWritten` is unused (structcheck)
+	clientTokenWritten string
+	^
+internal/process/child.go:283:23: Error return value of `c.cmd.Process.Kill` is not checked (errcheck)
+				c.cmd.Process.Kill()
+				                  ^
+internal/process/child.go:353:22: Error return value of `c.cmd.Process.Kill` is not checked (errcheck)
+			c.cmd.Process.Kill()
+			                  ^
+internal/process/child.go:373:21: Error return value of `c.cmd.Process.Wait` is not checked (errcheck)
+		c.cmd.Process.Wait()
+		                  ^
+internal/util/parse_concurrency_test.go:5: File is not `goimports`-ed (goimports)
+	"github.com/stretchr/testify/assert"
+internal/util/backends.go:15:6: exported type `YarnRC` should have comment or be unexported (golint)
+type YarnRC struct {
+     ^
+internal/util/backends.go:19:1: exported function `IsYarn` should have comment or be unexported (golint)
+func IsYarn(backendName string) bool {
+^
+internal/util/backends.go:23:1: exported function `IsBerry` should have comment or be unexported (golint)
+func IsBerry(cwd string, version string, pkgManager bool) (bool, error) {
+^
+internal/util/backends.go:35:9: `if` block ends with a `return` statement, so drop this `else` and outdent its block (golint)
+	} else {
+	       ^
+internal/util/backends.go:64:1: exported function `IsNMLinker` should have comment or be unexported (golint)
+func IsNMLinker(cwd string) (bool, error) {
+^
+internal/util/backends.go:79:1: exported function `GetPackageManagerAndVersion` should have comment or be unexported (golint)
+func GetPackageManagerAndVersion(packageManager string) (string, string, error) {
+^
+internal/util/modulo.go:3:1: comment on exported function `PositiveMod` should be of the form `PositiveMod ...` (golint)
+// PostitiveMod returns a modulo operator like JavaScripts
+^
+internal/util/parse_concurrency.go:16:1: exported function `ParseConcurrency` should have comment or be unexported (golint)
+func ParseConcurrency(concurrencyRaw string) (int, error) {
+^
+internal/util/parse_concurrency.go:20:10: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+		} else {
+		       ^
+internal/util/parse_concurrency.go:23:11: `if` block ends with a `return` statement, so drop this `else` and outdent its block (golint)
+			} else {
+			       ^
+internal/util/parse_concurrency.go:32:10: `if` block ends with a `return` statement, so drop this `else` and outdent its block (golint)
+		} else {
+		       ^
+internal/util/printf.go:1:1: package comment should be of the form "Package util ..." (golint)
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+^
+internal/util/printf.go:13:1: comment on exported function `InitPrintf` should be of the form `InitPrintf ...` (golint)
+// initPrintf sets up the replacements used by printf.
+^
+internal/util/printf.go:20:1: comment on exported function `Sprintf` should be of the form `Sprintf ...` (golint)
+// printf is used throughout this package to print something to stderr with some
+^
+internal/util/printf.go:26:1: exported function `Printf` should have comment or be unexported (golint)
+func Printf(format string, args ...interface{}) {
+^
+internal/util/printf.go:30:1: exported function `Fprintf` should have comment or be unexported (golint)
+func Fprintf(writer io.Writer, format string, args ...interface{}) {
+^
+internal/util/task_id.go:8:7: don't use ALL_CAPS in Go names; use CamelCase (golint)
+const TASK_DELIMITER = "#"
+      ^
+internal/util/task_id.go:11:6: func GetTaskId should be GetTaskID (golint)
+func GetTaskId(pkgName interface{}, target string) string {
+     ^
+internal/util/task_id.go:19:6: func GetPackageTaskFromId should be GetPackageTaskFromID (golint)
+func GetPackageTaskFromId(taskId string) (packageName string, task string) {
+     ^
+internal/util/filter/filter.go:1:1: package comment should be of the form "Package filter ..." (golint)
+// Copyright (c) 2015-2020 InfluxData Inc. MIT License (MIT)
+^
+internal/util/filter/filter.go:11:6: exported type `Filter` should have comment or be unexported (golint)
+type Filter interface {
+     ^
+internal/util/filter/filter.go:83:6: exported type `IncludeExcludeFilter` should have comment or be unexported (golint)
+type IncludeExcludeFilter struct {
+     ^
+internal/util/filter/filter.go:90:1: exported function `NewIncludeExcludeFilter` should have comment or be unexported (golint)
+func NewIncludeExcludeFilter(
+^
+internal/util/filter/filter.go:97:1: exported function `NewIncludeExcludeFilterDefaults` should have comment or be unexported (golint)
+func NewIncludeExcludeFilterDefaults(
+^
+internal/util/filter/filter.go:116:1: exported method `IncludeExcludeFilter.Match` should have comment or be unexported (golint)
+func (f *IncludeExcludeFilter) Match(s string) bool {
+^
+internal/backends/nodejs/nodejs.go:1:1: package comment should be of the form "Package nodejs ..." (golint)
+// Adapted from https://github.com/replit/upm
+^
+internal/backends/nodejs/nodejs.go:21:5: exported var `NodejsYarnBackend` should have comment or be unexported (golint)
+var NodejsYarnBackend = api.LanguageBackend{
+    ^
+internal/backends/nodejs/nodejs.go:80:5: exported var `NodejsBerryBackend` should have comment or be unexported (golint)
+var NodejsBerryBackend = api.LanguageBackend{
+    ^
+internal/backends/nodejs/nodejs.go:152:5: exported var `NodejsPnpmBackend` should have comment or be unexported (golint)
+var NodejsPnpmBackend = api.LanguageBackend{
+    ^
+internal/backends/nodejs/nodejs.go:202:5: exported var `NodejsNpmBackend` should have comment or be unexported (golint)
+var NodejsNpmBackend = api.LanguageBackend{
+    ^
+internal/backends/backends.go:1:1: package comment should be of the form "Package backends ..." (golint)
+// Adapted from https://github.com/replit/upm
+^
+internal/backends/backends.go:22:1: exported function `GetBackend` should have comment or be unexported (golint)
+func GetBackend(cwd string, pkg *fs.PackageJSON) (*api.LanguageBackend, error) {
+^
+internal/globby/globby.go:12:1: exported function `GlobFiles` should have comment or be unexported (golint)
+func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) []string {
+^
+internal/analytics/analytics.go:14:6: exported type `Events` should have comment or be unexported (golint)
+type Events = []map[string]interface{}
+     ^
+internal/analytics/analytics.go:16:6: exported type `EventPayload` should have comment or be unexported (golint)
+type EventPayload = interface{}
+     ^
+internal/analytics/analytics.go:18:6: exported type `Recorder` should have comment or be unexported (golint)
+type Recorder interface {
+     ^
+internal/analytics/analytics.go:22:6: exported type `Client` should have comment or be unexported (golint)
+type Client interface {
+     ^
+internal/analytics/analytics.go:28:6: exported type `Sink` should have comment or be unexported (golint)
+type Sink interface {
+     ^
+internal/analytics/analytics.go:81:1: exported function `NewClient` should have comment or be unexported (golint)
+func NewClient(parent context.Context, sink Sink, logger hclog.Logger) Client {
+^
+internal/info/bin.go:6: File is not `goimports`-ed (goimports)
+	"strings"
+internal/info/bin.go:15:6: exported type `BinCommand` should have comment or be unexported (golint)
+type BinCommand struct {
+     ^
+internal/info/bin.go:17:2: struct field `Ui` should be `UI` (golint)
+	Ui     *cli.ColoredUi
+	^
+internal/info/bin.go:35:1: exported method `BinCommand.Run` should have comment or be unexported (golint)
+func (c *BinCommand) Run(args []string) int {
+^
+internal/prune/prune.go:234:20: Error return value of `yamlEncoder.Encode` is not checked (errcheck)
+	yamlEncoder.Encode(lockfile)
+	                  ^
+internal/prune/prune.go:254:41: Error return value of `tmpGeneratedLockfileWriter.WriteString` is not checked (errcheck)
+		tmpGeneratedLockfileWriter.WriteString("# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n\n")
+		                                      ^
+internal/prune/prune.go:256:41: Error return value of `tmpGeneratedLockfileWriter.WriteString` is not checked (errcheck)
+		tmpGeneratedLockfileWriter.WriteString("# This file is generated by running \"yarn install\" inside your project.\n# Manual changes might be lost - proceed with caution!\n\n__metadata:\nversion: 5\ncacheKey: 8\n\n")
+		                                      ^
+internal/prune/prune.go:272:42: Error return value of `tmpGeneratedLockfileWriter.WriteString` is not checked (errcheck)
+			tmpGeneratedLockfileWriter.WriteString(fmt.Sprintf("\n%v\n", strings.ReplaceAll(line, "'", "\"")))
+			                                      ^
+internal/prune/prune.go:274:42: Error return value of `tmpGeneratedLockfileWriter.WriteString` is not checked (errcheck)
+			tmpGeneratedLockfileWriter.WriteString(fmt.Sprintf("%v\n", strings.ReplaceAll(line, "'", "\"")))
+			                                      ^
+internal/prune/prune.go:278:34: Error return value of `tmpGeneratedLockfileWriter.Flush` is not checked (errcheck)
+	tmpGeneratedLockfileWriter.Flush()
+	                                ^
+internal/prune/prune.go:281:28: Error return value of `tmpGeneratedLockfile.Close` is not checked (errcheck)
+	tmpGeneratedLockfile.Close()
+	                          ^
+internal/prune/prune.go:282:25: Error return value of `generatedLockfile.Close` is not checked (errcheck)
+	generatedLockfile.Close()
+	                       ^
+internal/prune/prune.go:27:6: type name will be used as prune.PruneCommand by other packages, and that stutters; consider calling this Command (golint)
+type PruneCommand struct {
+     ^
+internal/prune/prune.go:29:2: struct field `Ui` should be `UI` (golint)
+	Ui     *cli.ColoredUi
+	^
+internal/prune/prune.go:55:6: exported type `PruneOptions` should have comment or be unexported (golint)
+type PruneOptions struct {
+     ^
+internal/prune/prune.go:85:1: comment on exported method `PruneCommand.Run` should be of the form `Run ...` (golint)
+// Prune creates a smaller monorepo with only the required workspaces
+^
+internal/prune/prune.go:77:17: errorf: should replace errors.New(fmt.Sprintf(...)) with fmt.Errorf(...) (revive)
+				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
+				            ^
+internal/prune/prune.go:65:29: error-strings: error strings should not be capitalized or end with punctuation or a newline (revive)
+		return nil, errors.Errorf("At least one target must be specified.")
+		                          ^
+internal/run/hash.go:109:9: Error return value of `fs.Walk` is not checked (errcheck)
+	fs.Walk(pathPrefix, func(name string, isDir bool) error {
+	       ^
+internal/run/hash_test.go:51:22: Error return value of `rootIgnoreFile.Close` is not checked (errcheck)
+	rootIgnoreFile.Close()
+	                    ^
+internal/run/hash_test.go:65:21: Error return value of `pkgIgnoreFile.Close` is not checked (errcheck)
+	pkgIgnoreFile.Close()
+	                   ^
+internal/run/hash_test.go:80:10: Error return value of `f.Close` is not checked (errcheck)
+		f.Close()
+		       ^
+internal/run/run.go:207:14: Error return value of `fs.EnsureDir` is not checked (errcheck)
+	fs.EnsureDir(runOptions.cacheFolder)
+	            ^
+internal/run/run.go:297:11: Error return value of `p.Flush` is not checked (errcheck)
+			p.Flush()
+			       ^
+internal/run/run.go:314:12: Error return value of `w.Flush` is not checked (errcheck)
+				w.Flush()
+				       ^
+internal/run/run.go:773:15: Error return value of `f.Close` is not checked (errcheck)
+	defer f.Close()
+	             ^
+internal/run/run.go:939:21: Error return value of `output.Close` is not checked (errcheck)
+		defer output.Close()
+		                  ^
+internal/run/run.go:941:24: Error return value of `bufWriter.WriteString` is not checked (errcheck)
+		bufWriter.WriteString(fmt.Sprintf("%scache hit, replaying output %s\n", actualPrefix, ui.Dim(hash)))
+		                     ^
+internal/run/run.go:942:24: Error return value of `bufWriter.Flush` is not checked (errcheck)
+		defer bufWriter.Flush()
+		                     ^
+internal/run/run.go:979:18: Error return value of `f.Close` is not checked (errcheck)
+				defer f.Close()
+				             ^
+internal/run/run.go:1025:16: Error return value of `f.Close` is not checked (errcheck)
+		defer f.Close()
+		             ^
+internal/run/run.go:1026:16: Error return value of `f.WriteString` is not checked (errcheck)
+		f.WriteString(`<!DOCTYPE html>
+		             ^
+internal/run/run.go:1036:16: Error return value of `f.WriteString` is not checked (errcheck)
+		f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
+		             ^
+internal/run/run.go:1037:16: Error return value of `f.WriteString` is not checked (errcheck)
+		f.WriteString(`
+		             ^
+internal/run/run.go:1044:23: Error return value of `browser.OpenBrowser` is not checked (errcheck)
+			browser.OpenBrowser(outputFilename)
+			                   ^
+internal/run/run_test.go:315: File is not `goimports`-ed (goimports)
+			Outputs:   []string{},
+internal/run/color_cache.go:17:6: exported type `ColorCache` should have comment or be unexported (golint)
+type ColorCache struct {
+     ^
+internal/run/color_cache.go:24:1: exported function `NewColorCache` should have comment or be unexported (golint)
+func NewColorCache() *ColorCache {
+^
+internal/run/run.go:45:6: type name will be used as run.RunCommand by other packages, and that stutters; consider calling this Command (golint)
+type RunCommand struct {
+     ^
+internal/run/run.go:47:2: struct field `Ui` should be `UI` (golint)
+	Ui        *cli.ColoredUi
+	^
+internal/run/run.go:69:6: exported type `LogsMode` should have comment or be unexported (golint)
+type LogsMode string
+     ^
+internal/run/run.go:72:2: exported const FullLogs should have comment (or a comment on this block) or be unexported (golint)
+	FullLogs LogsMode = "full"
+	^
+internal/run/run.go:369:6: exported type `RunOptions` should have comment or be unexported (golint)
+type RunOptions struct {
+     ^
+internal/run/run.go:414:2: struct field `dryRunJson` should be `dryRunJSON` (golint)
+	dryRunJson        bool
+	^
+internal/run/run.go:534:12: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+				} else {
+				       ^
+internal/run/run.go:783:50: func parameter `configJson` should be `configJSON` (golint)
+func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+                                                 ^
+internal/run/run.go:842:2: var `targetUi` should be `targetUI` (golint)
+	targetUi := &cli.PrefixedUi{
+	^
+internal/run/run.go:1055:10: if block ends with a return statement, so drop this else and outdent its block (move short variable declaration to its own line if necessary) (golint)
+		} else {
+		       ^
+internal/run/run_state.go:24:6: type name will be used as run.RunResult by other packages, and that stutters; consider calling this Result (golint)
+type RunResult struct {
+     ^
+internal/run/run_state.go:42:6: type name will be used as run.RunResultStatus by other packages, and that stutters; consider calling this ResultStatus (golint)
+type RunResultStatus int
+     ^
+internal/run/run_state.go:57:6: exported type `BuildTargetState` should have comment or be unexported (golint)
+type BuildTargetState struct {
+     ^
+internal/run/run_state.go:71:6: exported type `RunState` should have comment or be unexported (golint)
+type RunState struct {
+     ^
+internal/run/run_state.go:90:1: exported function `NewRunState` should have comment or be unexported (golint)
+func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
+^
+internal/run/run_state.go:107:1: exported method `RunState.Run` should have comment or be unexported (golint)
+func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
+^
+internal/run/run_state.go:193:1: exported method `RunState.Listen` should have comment or be unexported (golint)
+func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
+^
+internal/run/run_state.go:234:1: exported method `RunState.Render` should have comment or be unexported (golint)
+func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuffer int) {
+^
+internal/run/run_state.go:278:1: exported method `RunState.Close` should have comment or be unexported (golint)
+func (r *RunState) Close(Ui cli.Ui, filename string) error {
+^
+internal/run/run_test.go:222:3: struct field `configJson` should be `configJSON` (golint)
+		configJson *fs.TurboConfigJSON
+		^
+internal/run/run.go:584:17: errorf: should replace errors.New(fmt.Sprintf(...)) with fmt.Errorf(...) (revive)
+				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
+				            ^
+internal/run/run.go:455:29: error-strings: error strings should not be capitalized or end with punctuation or a newline (revive)
+		return nil, errors.Errorf("At least one task must be specified.")
+		                          ^
+internal/run/run.go:295:5: S1038: should use fmt.Fprintf instead of fmt.Fprintln(fmt.Sprintf(...)) (but don't forget the newline) (gosimple)
+				fmt.Fprintln(p, fmt.Sprintf("%s\t%s\t", pkg, g.PackageInfos[pkg].Dir))
+				^
+internal/scm/git.go:123:15: Error return value of `f.Close` is not checked (errcheck)
+	defer f.Close()
+	             ^
+internal/scm/git.go:166:18: Error return value of `file.Close` is not checked (errcheck)
+	defer file.Close()
+	                ^
+internal/scm/git.go:4:1: package comment should be of the form "Package scm ..." (golint)
+// Adapted from https://github.com/thought-machine/please/tree/master/src/scm
+^
+internal/scm/scm.go:4:1: package comment should be of the form "Package scm ..." (golint)
+// Adapted from https://github.com/thought-machine/please/tree/master/src/scm
+^
+internal/scm/scm.go:17:5: exported var `ErrFallback` should have comment or be unexported (golint)
+var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo")
+    ^
+internal/scm/scm.go:44:1: exported function `FromInRepo` should have comment or be unexported (golint)
+func FromInRepo(cwd string) (SCM, error) {
+^
+internal/scm/stub.go:1:1: package comment should be of the form "Package scm ..." (golint)
+// Adapted from https://github.com/thought-machine/please/tree/master/src/scm
+^
+internal/config/config_file.go:42:14: Error return value of `fs.EnsureDir` is not checked (errcheck)
+	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
+	            ^
+internal/config/config.go:39:2: struct field `TeamId` should be `TeamID` (golint)
+	TeamId string
+	^
+internal/config/config.go:43:2: struct field `ApiUrl` should be `APIURL` (golint)
+	ApiUrl string
+	^
+internal/config/config.go:45:2: struct field `LoginUrl` should be `LoginURL` (golint)
+	LoginUrl string
+	^
+internal/config/config.go:47:2: struct field `ApiClient` should be `APIClient` (golint)
+	ApiClient *client.ApiClient
+	^
+internal/config/config.go:64:1: comment on exported type CacheConfig should be of the form "CacheConfig ..." (with optional leading article) (golint)
+// CacheConfig
+^
+internal/config/config.go:107:2: var `turboConfigJson` should be `turboConfigJSON` (golint)
+	turboConfigJson, err := ReadTurboConfig(cwd, rootPackageJSON)
+	^
+internal/config/config.go:156:4: var `apiUrl` should be `apiURL` (golint)
+			apiUrl := arg[len("--api="):]
+			^
+internal/config/config.go:162:4: var `loginUrl` should be `loginURL` (golint)
+			loginUrl := arg[len("--url="):]
+			^
+internal/config/config.go:217:1: exported function `ReadTurboConfig` should have comment or be unexported (golint)
+func ReadTurboConfig(rootPath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
+^
+internal/config/config.go:228:10: `if` block ends with a `return` statement, so drop this `else` and outdent its block (golint)
+		} else {
+		       ^
+internal/config/config_file.go:17:2: struct field `TeamId` should be `TeamID` (golint)
+	TeamId string `json:"teamId,omitempty"`
+	^
+internal/config/config_file.go:19:2: struct field `ApiUrl` should be `APIURL` (golint)
+	ApiUrl string `json:"apiUrl,omitempty" envconfig:"api"`
+	^
+internal/config/config_file.go:21:2: struct field `LoginUrl` should be `LoginURL` (golint)
+	LoginUrl string `json:"loginUrl,omitempty" envconfig:"login"`
+	^
+internal/config/config.go:177:13: var-declaration: should omit type io.Writer from declaration of var output; it will be inferred from the right-hand side (revive)
+	var output io.Writer = ioutil.Discard
+	           ^

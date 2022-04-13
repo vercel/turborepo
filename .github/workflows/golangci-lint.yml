@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
   # Optional: allow read access to pull request. Use with `only-new-issues` option.
-  # pull-requests: read
+  pull-requests: read
 jobs:
   golangci:
     name: lint
@@ -31,7 +31,7 @@ jobs:
           # args: --issues-exit-code=0
 
           # Optional: show only new issues if it's a pull request. The default value is `false`.
-          # only-new-issues: true
+          only-new-issues: true
 
           # Optional: if set to true then the all caching functionality will be complete disabled,
           #           takes precedence over all other caching options.

@@ -1,0 +1,6 @@
+internal/config/config.go:177:13: var-declaration: should omit type io.Writer from declaration of var output; it will be inferred from the right-hand side (revive)
+internal/fs/fs.go:34:25: var-declaration: should omit type string from declaration of var nonRelativeSentinel; it will be inferred from the right-hand side (revive)
+internal/prune/prune.go:65:29: error-strings: error strings should not be capitalized or end with punctuation or a newline (revive)
+internal/prune/prune.go:77:17: errorf: should replace errors.New(fmt.Sprintf(...)) with fmt.Errorf(...) (revive)
+internal/run/run.go:455:29: error-strings: error strings should not be capitalized or end with punctuation or a newline (revive)
+internal/run/run.go:584:17: errorf: should replace errors.New(fmt.Sprintf(...)) with fmt.Errorf(...) (revive)
