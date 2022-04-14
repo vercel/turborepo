@@ -127,12 +127,31 @@ func (c *ApiClient) okToRequest() error {
 	return ErrTooManyFailures
 }
 
-func (c *ApiClient) makeUrl(endpoint string) string {
+type makeUrlOpts struct {
+	redirectUrl string
+}
+
+func (c *ApiClient) makeUrl(endpoint string, opts *makeUrlOpts) string {
+	if opts == nil {
+		return fmt.Sprintf("%v%v", opts.redirectUrl, endpoint)
+	}
 	return fmt.Sprintf("%v%v", c.baseUrl, endpoint)
 }
 
 func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+}
+
+func (c *ApiClient) doPreflight(url string, requestMethod string, requestHeaders string) (*http.Response, error) {
+	req, err := retryablehttp.NewRequest(http.MethodOptions, url, nil)
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Access-Control-Request-Method", http.MethodPut)
+	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
+	}
+
+	return c.HttpClient.Do(req)
 }
 
 func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
@@ -147,7 +166,23 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 		encoded = "?" + encoded
 	}
 
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), artifactBody)
+	putUrlOpts := makeUrlOpts{
+		redirectUrl: c.baseUrl,
+	}
+	requestUrl := c.makeUrl("/v8/artifacts/"+hash+encoded, &putUrlOpts)
+	if c.usePreflight {
+		if resp, err := c.doPreflight(requestUrl, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag"); err != nil {
+			return fmt.Errorf("pre-flight request failed before store files in HTTP cache: %w", err)
+		} else {
+			if redirectUrl, err := resp.Location(); err != nil {
+				putUrlOpts.redirectUrl = redirectUrl.String()
+			}
+			resp.Body.Close()
+		}
+	}
+
+	requestUrl = c.makeUrl("/v8/artifacts/"+hash+encoded, &putUrlOpts)
+	req, err := retryablehttp.NewRequest(http.MethodPut, requestUrl, artifactBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -155,10 +190,10 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	if tag != "" {
 		req.Header.Set("x-artifact-tag", tag)
 	}
-
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
+
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -178,7 +213,7 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded), nil)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded, nil), nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
@@ -202,7 +237,24 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events"+encoded), body)
+
+	putUrlOpts := makeUrlOpts{
+		redirectUrl: c.baseUrl,
+	}
+	requestUrl := c.makeUrl("/v8/artifacts/events"+encoded, &putUrlOpts)
+	if c.usePreflight {
+		if resp, err := c.doPreflight(requestUrl, http.MethodPost, "Content-Type, Authorization, User-Agent"); err != nil {
+			return fmt.Errorf("pre-flight request failed before store files in HTTP cache: %w", err)
+		} else {
+			if redirectUrl, err := resp.Location(); err != nil {
+				putUrlOpts.redirectUrl = redirectUrl.String()
+			}
+			resp.Body.Close()
+		}
+	}
+
+	requestUrl = c.makeUrl("/v8/artifacts/events"+encoded, &putUrlOpts)
+	req, err := retryablehttp.NewRequest(http.MethodPost, requestUrl, body)
 	if err != nil {
 		return err
 	}
@@ -251,7 +303,7 @@ type TeamsResponse struct {
 // GetTeams returns a list of Vercel teams
 func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 	teamsResponse := &TeamsResponse{}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/teams?limit=100"), nil)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/teams?limit=100", nil), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +347,7 @@ type UserResponse struct {
 // GetUser returns the current user
 func (c *ApiClient) GetUser() (*UserResponse, error) {
 	userResponse := &UserResponse{}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/user"), nil)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/user", nil), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +394,7 @@ func (c *ApiClient) VerifySSOToken(token string, tokenName string) (*VerifiedSSO
 	query := make(url.Values)
 	query.Add("token", token)
 	query.Add("tokenName", tokenName)
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/registration/verify")+"?"+query.Encode(), nil)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/registration/verify", nil)+"?"+query.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
