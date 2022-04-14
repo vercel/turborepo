@@ -202,7 +202,20 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded), nil)
+
+	requestUrl := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	if c.usePreflight {
+		if resp, err := c.doPreflight(requestUrl, http.MethodGet, "Authorization, User-Agent"); err != nil {
+			return nil, fmt.Errorf("pre-flight request failed before fetch files in HTTP cache: %w", err)
+		} else {
+			if locationUrl, err := resp.Location(); err != nil {
+				requestUrl = locationUrl.String()
+			}
+			resp.Body.Close()
+		}
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodGet, requestUrl, nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
