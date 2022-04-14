@@ -28,7 +28,7 @@ func Test_sendToServer(t *testing.T) {
 		}))
 	defer ts.Close()
 
-	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1, false)
 	apiClient.SetToken("my-token")
 
 	myUUID, err := uuid.NewUUID()
@@ -79,7 +79,7 @@ func Test_PutArtifact(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1)
+	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1, false)
 	apiClient.SetToken("my-token")
 	expectedArtifactBody := []byte("My string artifact")
 

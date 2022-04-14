@@ -573,6 +573,7 @@ func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOption
 				runOptions.remoteOnly = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
+			case strings.HasPrefix(arg, "--preflight"):
 			case strings.HasPrefix(arg, "--api"):
 			case strings.HasPrefix(arg, "--url"):
 			case strings.HasPrefix(arg, "--trace"):

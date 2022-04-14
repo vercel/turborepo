@@ -32,6 +32,8 @@ type ApiClient struct {
 	HttpClient *retryablehttp.Client
 	teamID     string
 	teamSlug   string
+	// Whether or not to send preflight requests before uploads
+	usePreflight bool
 }
 
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
@@ -42,7 +44,7 @@ func (api *ApiClient) SetToken(token string) {
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
+func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64, usePreflight bool) *ApiClient {
 	client := &ApiClient{
 		baseUrl:            baseUrl,
 		turboVersion:       turboVersion,
@@ -57,8 +59,9 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID 
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
-		teamID:   teamID,
-		teamSlug: teamSlug,
+		teamID:       teamID,
+		teamSlug:     teamSlug,
+		usePreflight: usePreflight,
 	}
 	client.HttpClient.CheckRetry = client.checkRetry
 	return client

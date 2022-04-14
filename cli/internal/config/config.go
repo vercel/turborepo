@@ -133,6 +133,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		}
 	}
 
+	usePreflight := false
+
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
 	for _, arg := range args {
@@ -168,6 +170,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			partialConfig.Token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
+		case arg == "--preflight":
+			usePreflight = true
 		default:
 			continue
 		}
@@ -189,7 +193,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	})
 
 	maxRemoteFailCount := 3
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount), usePreflight)
 
 	c = &Config{
 		Logger:       logger,
