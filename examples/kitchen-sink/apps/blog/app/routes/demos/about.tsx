@@ -1,5 +1,5 @@
-import type { LinksFunction, MetaFunction } from "@remix-run/node";
-import { Outlet } from "@remix-run/react";
+import { Outlet } from "remix";
+import type { MetaFunction, LinksFunction } from "remix";
 
 import stylesUrl from "~/styles/demos/about.css";
 

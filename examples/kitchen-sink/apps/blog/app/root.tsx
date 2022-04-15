@@ -1,5 +1,3 @@
-import type { LinksFunction } from "@remix-run/node";
-
 import {
   Link,
   Links,
@@ -9,7 +7,8 @@ import {
   Scripts,
   ScrollRestoration,
   useCatch,
-} from "@remix-run/react";
+} from "remix";
+import type { LinksFunction } from "remix";
 
 import globalStylesUrl from "~/styles/global.css";
 import darkStylesUrl from "~/styles/dark.css";

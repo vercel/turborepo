@@ -1,6 +1,5 @@
-import type { LoaderFunction, MetaFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import type { MetaFunction, LoaderFunction } from "remix";
+import { useLoaderData, json, Link } from "remix";
 import { CounterButton } from "ui";
 
 type IndexData = {

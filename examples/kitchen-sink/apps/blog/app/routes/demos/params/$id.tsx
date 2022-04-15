@@ -1,6 +1,5 @@
-import type { LoaderFunction, MetaFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { Link, useCatch, useLoaderData } from "@remix-run/react";
+import { useCatch, Link, json, useLoaderData } from "remix";
+import type { LoaderFunction, MetaFunction } from "remix";
 
 // The `$` in route filenames becomes a pattern that's parsed from the URL and
 // passed to your loaders so you can look up data.
