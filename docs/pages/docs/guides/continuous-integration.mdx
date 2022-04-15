@@ -78,29 +78,32 @@ Copy the value to a safe place. You'll need it in a moment.
 ![GitHub Secrets](/images/docs/github-actions-secrets.png)
 ![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your Vercel team's URL. Do not include `https://vercel.com` part, but only the slug.
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include `https://vercel.com` part, but only the slug.
 
-![Vercel Team Slug](/images/docs/vercel-slug.png)
+![Vercel Account Slug](/images/docs/vercel-slug.png)
 
 4. At the top of your GitHub Actions workflow, provide the following environment variables to jobs that use `turbo`:
 
 ```yaml highlight="6-8"
-build:
-    name: Build and Test
-    timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
-    # To use Turborepo Remote Caching, set the following environment variables for the job.
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+# ...
+ 
+jobs:
+  build:
+      name: Build and Test
+      timeout-minutes: 15
+      runs-on: ${{ matrix.os }}
+      # To use Turborepo Remote Caching, set the following environment variables for the job.
+      env:
+        TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      strategy:
+        matrix:
+          os: [ubuntu-latest, macos-latest]
 
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-    # ...
+      steps:
+        - name: Check out code
+          uses: actions/checkout@v2
+          with:
+            fetch-depth: 2
+      # ...
 ```
