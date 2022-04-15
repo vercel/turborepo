@@ -164,7 +164,7 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 		if resp, err := c.doPreflight(requestUrl, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag"); err != nil {
 			return fmt.Errorf("pre-flight request failed before store files in HTTP cache: %w", err)
 		} else {
-			if locationUrl, err := resp.Location(); err != nil {
+			if locationUrl, err := resp.Location(); err == nil {
 				requestUrl = locationUrl.String()
 			}
 			resp.Body.Close()
@@ -208,7 +208,7 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 		if resp, err := c.doPreflight(requestUrl, http.MethodGet, "Authorization, User-Agent"); err != nil {
 			return nil, fmt.Errorf("pre-flight request failed before fetch files in HTTP cache: %w", err)
 		} else {
-			if locationUrl, err := resp.Location(); err != nil {
+			if locationUrl, err := resp.Location(); err == nil {
 				requestUrl = locationUrl.String()
 			}
 			resp.Body.Close()
@@ -245,7 +245,7 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 		if resp, err := c.doPreflight(requestUrl, http.MethodPost, "Content-Type, Authorization, User-Agent"); err != nil {
 			return fmt.Errorf("pre-flight request failed before store files in HTTP cache: %w", err)
 		} else {
-			if locationUrl, err := resp.Location(); err != nil {
+			if locationUrl, err := resp.Location(); err == nil {
 				requestUrl = locationUrl.String()
 			}
 			resp.Body.Close()
