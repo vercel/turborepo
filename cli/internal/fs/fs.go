@@ -23,6 +23,8 @@ func (dfs *defaultFS) Open(name string) (iofs.File, error) {
 
 var dFS = &defaultFS{}
 
+// DefaultFilesystem provides a wrapper around `os.Open` for usage with
+// apis from the io/fs package.
 func DefaultFilesystem() iofs.FS {
 	return dFS
 }
