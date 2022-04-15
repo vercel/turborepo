@@ -135,6 +135,7 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
+// doPreflight returns response with closed body, latest request url, and any errors to the caller
 func (c *ApiClient) doPreflight(requestURL string, requestMethod string, requestHeaders string) (*http.Response, string, error) {
 	req, err := retryablehttp.NewRequest(http.MethodOptions, requestURL, nil)
 	req.Header.Set("User-Agent", c.UserAgent())
@@ -151,6 +152,7 @@ func (c *ApiClient) doPreflight(requestURL string, requestMethod string, request
 	if resp == nil {
 		return resp, requestURL, err
 	}
+	defer resp.Body.Close()
 	// The client will continue following 307, 308 redirects until it hits
 	//  max redirects, gets an error, or gets a normal response.
 	// Get the url from the Location header or get the url used in the last
