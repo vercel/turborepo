@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -181,6 +180,22 @@ func (c *RunCommand) Run(args []string) int {
 	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
+		return 1
+	}
+	// We use Cycles instead of Validate because
+	// our DAG has multiple roots (entrypoints).
+	// Validate mandates that there is only a single root node.
+	cycles := ctx.TopologicalGraph.Cycles()
+	if len(cycles) > 0 {
+		cycleLines := make([]string, len(cycles))
+		for i, cycle := range cycles {
+			vertices := make([]string, len(cycle))
+			for j, vertex := range cycle {
+				vertices[j] = vertex.(string)
+			}
+			cycleLines[i] = "\t" + strings.Join(vertices, ",")
+		}
+		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
 		return 1
 	}
 	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
@@ -675,8 +690,6 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		c.Ui.Error(err.Error())
 	}
 
-	ec.logReplayWaitGroup.Wait()
-
 	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
@@ -763,8 +776,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string) {
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 	if err != nil {
@@ -806,16 +818,15 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 }
 
 type execContext struct {
-	colorCache         *ColorCache
-	runState           *RunState
-	rs                 *runSpec
-	logReplayWaitGroup sync.WaitGroup
-	ui                 cli.Ui
-	turboCache         cache.Cache
-	logger             hclog.Logger
-	backend            *api.LanguageBackend
-	processes          *process.Manager
-	taskHashes         *Tracker
+	colorCache *ColorCache
+	runState   *RunState
+	rs         *runSpec
+	ui         cli.Ui
+	turboCache cache.Cache
+	logger     hclog.Logger
+	backend    *api.LanguageBackend
+	processes  *process.Manager
+	taskHashes *Tracker
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -880,8 +891,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
 			case FullLogs:
 				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
-					e.logReplayWaitGroup.Add(1)
-					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup)
+					replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash)
 				}
 			default:
 				// NoLogs, do not output anything
