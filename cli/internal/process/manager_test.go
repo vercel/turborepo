@@ -33,38 +33,6 @@ func TestExec_simple(t *testing.T) {
 	}
 }
 
-func TestExec_multiple(t *testing.T) {
-	mgr := newManager()
-
-	wg := sync.WaitGroup{}
-	tasks := 4
-	errors := make([]error, tasks)
-	start := time.Now()
-	for i := 0; i < tasks; i++ {
-		wg.Add(1)
-		go func(index int) {
-			cmd := exec.Command("sleep", "0.15")
-			err := mgr.Exec(cmd)
-			if err != nil {
-				errors[index] = err
-			}
-			wg.Done()
-		}(i)
-	}
-	wg.Wait()
-	end := time.Now()
-	duration := end.Sub(start)
-	// running all in sequence would total 600ms
-	if duration > 450*time.Millisecond {
-		t.Errorf("expected parallel execution, total time was %q", duration)
-	}
-	for _, err := range errors {
-		if err != nil {
-			t.Errorf("expected no errors, found %q", err)
-		}
-	}
-}
-
 func TestClose(t *testing.T) {
 	mgr := newManager()
 
