@@ -39,6 +39,7 @@ type ApiClient struct {
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
 var ErrTooManyFailures = errors.New("skipping HTTP Request, too many failures have occurred")
 
+// SetToken updates the ApiClient's Token
 func (c *ApiClient) SetToken(token string) {
 	c.Token = token
 }
