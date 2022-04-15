@@ -155,21 +155,20 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		}
 
 		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.Backend, config.Logger, os.Environ())
-		// TODO(Gaspar): this error is unused?
-		c.GlobalHash = globalHash
-		// We will parse all package.json's simultaneously. We use a
-		// wait group because we cannot fully populate the graph (the next step)
-		// until all parsing is complete
-		parseJSONWaitGroup := new(errgroup.Group)
-		justJsons := make([]string, 0, len(spaces))
-		for _, space := range spaces {
-			justJsons = append(justJsons, filepath.Join(space, "package.json"))
+		if err != nil {
+			return fmt.Errorf("failed to calculate global hash: %v", err)
 		}
-		f, err := findPackageJSONs(rootpath, fs.DefaultFilesystem(), justJsons, getWorkspaceIgnores())
+
+		c.GlobalHash = globalHash
+		f, err := findPackageJSONs(rootpath, fs.DefaultFilesystem(), spaces, getWorkspaceIgnores())
 		if err != nil {
 			return fmt.Errorf("failed to find package definitions: %v", err)
 		}
 
+		// We will parse all package.json's simultaneously. We use a
+		// wait group because we cannot fully populate the graph (the next step)
+		// until all parsing is complete
+		parseJSONWaitGroup := new(errgroup.Group)
 		for _, val := range f {
 			relativePkgPath, err := filepath.Rel(rootpath, val)
 			if err != nil {
@@ -205,7 +204,7 @@ func findPackageJSONs(basePath string, fsys iofs.FS, workspaceGlobs []string, ig
 	var result []string
 
 	for _, p := range workspaceGlobs {
-		include = append(include, filepath.Join(basePath, p))
+		include = append(include, filepath.Join(basePath, p, "package.json"))
 	}
 
 	for _, p := range ignores {

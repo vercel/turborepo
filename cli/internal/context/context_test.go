@@ -3,7 +3,9 @@ package context
 import (
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
+	"testing/fstest"
 )
 
 func Test_getHashableTurboEnvVarsFromOs(t *testing.T) {
@@ -141,4 +143,33 @@ func Test_isWorkspaceReference(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFindPackageJSONs(t *testing.T) {
+	filesystem := fstest.MapFS{
+		"foo/root/packages/a/a.js":               {},
+		"foo/root/packages/a/package.json":       {},
+		"foo/root/packages/b/b.js":               {},
+		"foo/root/packages/b/package.json":       {},
+		"foo/root/apps/web/web.js":               {},
+		"foo/root/apps/web/package.json":         {},
+		"foo/root/other/package.json":            {},
+		"foo/bar/package.json":                   {},
+		"foo/root/node_modules/lib/package.json": {},
+	}
+	pkgFiles, err := findPackageJSONs("foo/root", filesystem, []string{"apps/*", "packages/*"}, getWorkspaceIgnores())
+	if err != nil {
+		t.Fatalf("failed to find package.json files: %v", err)
+	}
+	expected := []string{
+		"foo/root/packages/a/package.json",
+		"foo/root/packages/b/package.json",
+		"foo/root/apps/web/package.json",
+	}
+	sort.Strings(expected)
+	sort.Strings(pkgFiles)
+	if !reflect.DeepEqual(expected, pkgFiles) {
+		t.Errorf("packageJSONs got %v, want %v", pkgFiles, expected)
+	}
+
 }
