@@ -29,9 +29,10 @@ type ApiClient struct {
 	// Must be used via atomic package
 	currentFailCount uint64
 	// An http client
-	HttpClient *retryablehttp.Client
-	teamID     string
-	teamSlug   string
+	preflightHttpClient *http.Client
+	HttpClient          *retryablehttp.Client
+	teamID              string
+	teamSlug            string
 	// Whether or not to send preflight requests before uploads
 	usePreflight bool
 }
@@ -49,6 +50,12 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID 
 		baseUrl:            baseUrl,
 		turboVersion:       turboVersion,
 		maxRemoteFailCount: maxRemoteFailCount,
+		preflightHttpClient: &http.Client{
+			Timeout: time.Duration(20 * time.Second),
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
 				Timeout: time.Duration(20 * time.Second),
@@ -136,7 +143,7 @@ func (c *ApiClient) UserAgent() string {
 }
 
 func (c *ApiClient) doPreflight(url string, requestMethod string, requestHeaders string) (*http.Response, error) {
-	req, err := retryablehttp.NewRequest(http.MethodOptions, url, nil)
+	req, err := http.NewRequest(http.MethodOptions, url, nil)
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Access-Control-Request-Method", requestMethod)
 	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
@@ -144,7 +151,7 @@ func (c *ApiClient) doPreflight(url string, requestMethod string, requestHeaders
 		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
 
-	return c.HttpClient.Do(req)
+	return c.preflightHttpClient.Do(req)
 }
 
 func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
