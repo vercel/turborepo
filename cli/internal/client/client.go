@@ -29,10 +29,9 @@ type ApiClient struct {
 	// Must be used via atomic package
 	currentFailCount uint64
 	// An http client
-	preflightHttpClient *http.Client
-	HttpClient          *retryablehttp.Client
-	teamID              string
-	teamSlug            string
+	HttpClient *retryablehttp.Client
+	teamID     string
+	teamSlug   string
 	// Whether or not to send preflight requests before uploads
 	usePreflight bool
 }
@@ -50,12 +49,6 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID 
 		baseUrl:            baseUrl,
 		turboVersion:       turboVersion,
 		maxRemoteFailCount: maxRemoteFailCount,
-		preflightHttpClient: &http.Client{
-			Timeout: time.Duration(20 * time.Second),
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
 				Timeout: time.Duration(20 * time.Second),
@@ -142,16 +135,36 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) doPreflight(url string, requestMethod string, requestHeaders string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodOptions, url, nil)
+func (c *ApiClient) doPreflight(requestUrl string, requestMethod string, requestHeaders string) (*http.Response, string, error) {
+	req, err := retryablehttp.NewRequest(http.MethodOptions, requestUrl, nil)
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Access-Control-Request-Method", requestMethod)
 	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
 	if err != nil {
-		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
+		return nil, requestUrl, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
 
-	return c.preflightHttpClient.Do(req)
+	// If resp is not nil, ignore any errors
+	//  because most likely unimportant for preflight to handle.
+	// Let follow-up request handle potential errors.
+	resp, err := c.HttpClient.Do(req)
+	if resp == nil {
+		return resp, requestUrl, err
+	}
+	// The client will continue following 307, 308 redirects until it hits
+	//  max redirects, gets an error, or gets a normal response.
+	// Get the url from the Location header or get the url used in the last
+	//  request (could have changed after following redirects).
+	// Note that net/http client does not continue redirecting the preflight
+	//  request with the OPTIONS method for 301, 302, and 303 redirects.
+	//  See golang/go Issue 18570.
+	if locationUrl, err := resp.Location(); err == nil {
+		requestUrl = locationUrl.String()
+	} else {
+		requestUrl = resp.Request.URL.String()
+	}
+	resp.Body.Close()
+	return resp, requestUrl, nil
 }
 
 func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
@@ -168,14 +181,11 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 
 	requestUrl := c.makeUrl("/v8/artifacts/" + hash + encoded)
 	if c.usePreflight {
-		if resp, err := c.doPreflight(requestUrl, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag"); err != nil {
-			return fmt.Errorf("pre-flight request failed before store files in HTTP cache: %w", err)
-		} else {
-			if locationUrl, err := resp.Location(); err == nil {
-				requestUrl = locationUrl.String()
-			}
-			resp.Body.Close()
+		_, latestRequestUrl, err := c.doPreflight(requestUrl, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
+		if err != nil {
+			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
 		}
+		requestUrl = latestRequestUrl
 	}
 
 	req, err := retryablehttp.NewRequest(http.MethodPut, requestUrl, artifactBody)
@@ -212,14 +222,11 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 
 	requestUrl := c.makeUrl("/v8/artifacts/" + hash + encoded)
 	if c.usePreflight {
-		if resp, err := c.doPreflight(requestUrl, http.MethodGet, "Authorization, User-Agent"); err != nil {
-			return nil, fmt.Errorf("pre-flight request failed before fetch files in HTTP cache: %w", err)
-		} else {
-			if locationUrl, err := resp.Location(); err == nil {
-				requestUrl = locationUrl.String()
-			}
-			resp.Body.Close()
+		_, latestRequestUrl, err := c.doPreflight(requestUrl, http.MethodGet, "Authorization, User-Agent")
+		if err != nil {
+			return nil, fmt.Errorf("pre-flight request failed before trying to fetch files in HTTP cache: %w", err)
 		}
+		requestUrl = latestRequestUrl
 	}
 
 	req, err := retryablehttp.NewRequest(http.MethodGet, requestUrl, nil)
@@ -249,14 +256,11 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 
 	requestUrl := c.makeUrl("/v8/artifacts/events" + encoded)
 	if c.usePreflight {
-		if resp, err := c.doPreflight(requestUrl, http.MethodPost, "Content-Type, Authorization, User-Agent"); err != nil {
-			return fmt.Errorf("pre-flight request failed before store files in HTTP cache: %w", err)
-		} else {
-			if locationUrl, err := resp.Location(); err == nil {
-				requestUrl = locationUrl.String()
-			}
-			resp.Body.Close()
+		_, latestRequestUrl, err := c.doPreflight(requestUrl, http.MethodPost, "Content-Type, Authorization, User-Agent")
+		if err != nil {
+			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
 		}
+		requestUrl = latestRequestUrl
 	}
 
 	req, err := retryablehttp.NewRequest(http.MethodPost, requestUrl, body)
