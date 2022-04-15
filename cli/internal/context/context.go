@@ -2,12 +2,14 @@ package context
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/backends"
@@ -148,7 +150,6 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		}
 
 		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
-
 		if err != nil {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
@@ -164,8 +165,10 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		for _, space := range spaces {
 			justJsons = append(justJsons, filepath.Join(space, "package.json"))
 		}
-
-		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
+		f, err := findPackageJSONs(rootpath, fs.DefaultFilesystem(), justJsons, getWorkspaceIgnores())
+		if err != nil {
+			return fmt.Errorf("failed to find package definitions: %v", err)
+		}
 
 		for _, val := range f {
 			relativePkgPath, err := filepath.Rel(rootpath, val)
@@ -194,6 +197,43 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		return nil
 	}
+}
+
+func findPackageJSONs(basePath string, fsys iofs.FS, workspaceGlobs []string, ignores []string) ([]string, error) {
+	var include []string
+	var exclude []string
+	var result []string
+
+	for _, p := range workspaceGlobs {
+		include = append(include, filepath.Join(basePath, p))
+	}
+
+	for _, p := range ignores {
+		exclude = append(exclude, filepath.Join(basePath, p))
+	}
+
+	includePattern := "{" + strings.Join(include, ",") + "}"
+	excludePattern := "{" + strings.Join(exclude, ",") + "}"
+	if patternValid := doublestar.ValidatePattern(includePattern); !patternValid {
+		return nil, fmt.Errorf("invalid pattern %v", includePattern)
+	}
+	if patternValid := doublestar.ValidatePattern(excludePattern); !patternValid {
+		return nil, fmt.Errorf("invalid pattern %v", includePattern)
+	}
+	err := doublestar.GlobWalk(fsys, includePattern, func(path string, d iofs.DirEntry) error {
+		match, err := doublestar.PathMatch(excludePattern, path)
+		if err != nil {
+			return err
+		} else if match {
+			return nil
+		}
+		result = append(result, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {

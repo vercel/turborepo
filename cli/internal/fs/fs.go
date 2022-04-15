@@ -2,6 +2,7 @@ package fs
 
 import (
 	"io"
+	iofs "io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -13,6 +14,18 @@ import (
 
 // DirPermissions are the default permission bits we apply to directories.
 const DirPermissions = os.ModeDir | 0775
+
+type defaultFS struct{}
+
+func (dfs *defaultFS) Open(name string) (iofs.File, error) {
+	return os.Open(name)
+}
+
+var dFS = &defaultFS{}
+
+func DefaultFilesystem() iofs.FS {
+	return dFS
+}
 
 // EnsureDir ensures that the directory of the given file has been created.
 func EnsureDir(filename string) error {
