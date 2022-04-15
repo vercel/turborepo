@@ -133,7 +133,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		}
 	}
 
-	usePreflight := false
+	usePreflight := os.Getenv("TURBO_PREFLIGHT") == "true"
 
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
