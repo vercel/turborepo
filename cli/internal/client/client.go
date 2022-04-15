@@ -138,7 +138,7 @@ func (c *ApiClient) UserAgent() string {
 func (c *ApiClient) doPreflight(url string, requestMethod string, requestHeaders string) (*http.Response, error) {
 	req, err := retryablehttp.NewRequest(http.MethodOptions, url, nil)
 	req.Header.Set("User-Agent", c.UserAgent())
-	req.Header.Set("Access-Control-Request-Method", http.MethodPut)
+	req.Header.Set("Access-Control-Request-Method", requestMethod)
 	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
 	if err != nil {
 		return nil, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
