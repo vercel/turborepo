@@ -387,6 +387,14 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 
 You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precedence over the environment variable if both are present.
 
+#### `--preflight`
+
+Only applicable when remote artifact caching is configured. Enables sending a preflight request before every cache artifact and analytics request. The follow-up upload and download will follow redirects.
+
+```sh
+turbo run build --preflight
+```
+
 #### `--trace`
 
 `type: string`
