@@ -37,23 +37,25 @@ Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](http
 
 Add `turbo` as a development dependency in the root of your project.
 
-### Yarn
+import { Tabs, Tab } from '../../components/Tabs'
 
-```bash
-yarn add turbo -DW
-```
-
-### NPM
-
-```bash
-npm install turbo -D
-```
-
-### PNPM
-
-```bash
-pnpm add turbo -DW
-```
+<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo -D
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn add turbo -DW
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm add turbo -DW
+    ```
+  </Tab>
+</Tabs>
 
 The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
 
