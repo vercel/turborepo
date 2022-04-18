@@ -22,6 +22,10 @@ func CopyOrLinkFile(from, to string, fromMode, toMode os.FileMode, link, fallbac
 			if err != nil {
 				return err
 			}
+			// Make sure the link we're about to create doesn't already exist
+			if err := os.Remove(to); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
 			return os.Symlink(dest, to)
 		}
 		if err := os.Link(from, to); err == nil || !fallback {
