@@ -76,7 +76,7 @@ In `turbo.json`, add the commands you want to "turbocharge" to your pipeline.
 
 Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
-```json
+```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "baseBranch": "origin/main",
