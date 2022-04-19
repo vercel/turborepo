@@ -384,6 +384,47 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 	return teamsResponse, nil
 }
 
+// GetTeam gets a particular Vercel Team. It returns nil if it's not found
+func (c *ApiClient) GetTeam(teamID string) (*Team, error) {
+	queryParams := make(url.Values)
+	queryParams.Add("teamId", teamID)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/team?"+queryParams.Encode()), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	// We don't care if we fail to close the response body
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil // Doesn't exist, let calling code handle that case
+	} else if resp.StatusCode != http.StatusOK {
+		b, err := ioutil.ReadAll(resp.Body)
+		var responseText string
+		if err != nil {
+			responseText = fmt.Sprintf("failed to read response: %v", err)
+		} else {
+			responseText = string(b)
+		}
+		return nil, fmt.Errorf("failed to get team (%v): %s", resp.StatusCode, responseText)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read team response: %v", err)
+	}
+	team := &Team{}
+	err = json.Unmarshal(body, team)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON response: %v", string(body))
+	}
+	return team, nil
+}
+
 type User struct {
 	ID        string `json:"id,omitempty"`
 	Username  string `json:"username,omitempty"`
@@ -436,8 +477,10 @@ type statusResponse struct {
 
 // GetCachingStatus returns the server's perspective on whether or not remove caching
 // requests will be allowed.
-func (c *ApiClient) GetCachingStatus(teamID string) (util.CachingStatus, error) {
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/status"), nil)
+func (c *ApiClient) GetCachingStatus() (util.CachingStatus, error) {
+	values := make(url.Values)
+	c.addTeamParam(&values)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/status?"+values.Encode()), nil)
 	if err != nil {
 		return util.CachingStatusDisabled, err
 	}

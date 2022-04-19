@@ -8,14 +8,18 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type dummyClient struct {
 	setToken            string
 	createdSSOTokenName string
+	team                *client.Team
+	cachingStatus       util.CachingStatus
 }
 
 func (d *dummyClient) SetToken(t string) {
@@ -25,6 +29,16 @@ func (d *dummyClient) SetToken(t string) {
 func (d *dummyClient) GetUser() (*client.UserResponse, error) {
 	return &client.UserResponse{}, nil
 }
+
+func (d *dummyClient) GetTeam(teamID string) (*client.Team, error) {
+	return d.team, nil
+}
+
+func (d *dummyClient) GetCachingStatus() (util.CachingStatus, error) {
+	return d.cachingStatus, nil
+}
+
+func (d *dummyClient) SetTeamID(teamID string) {}
 
 func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.VerifiedSSOUser, error) {
 	d.createdSSOTokenName = tokenName
@@ -43,23 +57,25 @@ var cf = &config.Config{
 }
 
 type testResult struct {
-	clientErr          error
-	userConfigWritten  *config.TurborepoConfig
-	repoConfigWritten  *config.TurborepoConfig
-	clientTokenWritten string
-	openedURL          string
-	stepCh             chan struct{}
-	client             dummyClient
+	clientErr           error
+	userConfigWritten   *config.TurborepoConfig
+	repoConfigWritten   *config.TurborepoConfig
+	clientTokenWritten  string
+	openedURL           string
+	stepCh              chan struct{}
+	client              dummyClient
+	shouldEnableCaching bool
 }
 
-func (tr *testResult) Deps() loginDeps {
+func (tr *testResult) getTestLogin() login {
 	urlOpener := func(url string) error {
 		tr.openedURL = url
 		tr.stepCh <- struct{}{}
 		return nil
 	}
-	return loginDeps{
+	return login{
 		ui:      ui.Default(),
+		logger:  hclog.Default(),
 		openURL: urlOpener,
 		client:  &tr.client,
 		writeUserConfig: func(cf *config.TurborepoConfig) error {
@@ -70,6 +86,9 @@ func (tr *testResult) Deps() loginDeps {
 			tr.repoConfigWritten = cf
 			return nil
 		},
+		promptEnableCaching: func() (bool, error) {
+			return tr.shouldEnableCaching, nil
+		},
 	}
 }
 
@@ -78,6 +97,11 @@ func newTest(redirectedURL string) *testResult {
 	tr := &testResult{
 		stepCh: stepCh,
 	}
+	tr.client.team = &client.Team{
+		ID:         "sso-team-id",
+		Membership: client.Membership{Role: "OWNER"},
+	}
+	tr.client.cachingStatus = util.CachingStatusEnabled
 	// When it's time, do the redirect
 	go func() {
 		<-tr.stepCh
@@ -92,18 +116,17 @@ func newTest(redirectedURL string) *testResult {
 		} else if resp != nil && resp.StatusCode != http.StatusFound {
 			tr.clientErr = fmt.Errorf("invalid status %v", resp.StatusCode)
 		}
-		tr.stepCh <- struct{}{}
 	}()
 	return tr
 }
 
 func Test_run(t *testing.T) {
 	test := newTest("http://127.0.0.1:9789/?token=my-token")
-	err := run(cf, test.Deps())
+	login := test.getTestLogin()
+	err := login.run(cf)
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
-	<-test.stepCh
 	if test.clientErr != nil {
 		t.Errorf("test client had error %v", test.clientErr)
 	}
@@ -126,11 +149,11 @@ func Test_sso(t *testing.T) {
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
 	test := newTest("http://127.0.0.1:9789/?" + redirectParams.Encode())
-	err := loginSSO(cf, "my-team", test.Deps())
+	login := test.getTestLogin()
+	err := login.loginSSO(cf, "my-team")
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
-	<-test.stepCh
 	if test.clientErr != nil {
 		t.Errorf("test client had error %v", test.clientErr)
 	}
@@ -155,5 +178,35 @@ func Test_sso(t *testing.T) {
 	}
 	if test.repoConfigWritten.Token != "" {
 		t.Errorf("repo config file token, got %v want empty string", test.repoConfigWritten.Token)
+	}
+}
+
+func Test_ssoCachingDisabledShouldEnable(t *testing.T) {
+	redirectParams := make(url.Values)
+	redirectParams.Add("token", "verification-token")
+	redirectParams.Add("email", "test@example.com")
+	test := newTest("http://127.0.0.1:9789/?" + redirectParams.Encode())
+	test.shouldEnableCaching = true
+	test.client.cachingStatus = util.CachingStatusDisabled
+	login := test.getTestLogin()
+	err := login.loginSSO(cf, "my-team")
+	// Handle URL Open
+	<-test.stepCh
+	if !errors.Is(err, errTryAfterEnable) {
+		t.Errorf("loginSSO got %v, want %v", err, errTryAfterEnable)
+	}
+}
+
+func Test_ssoCachingDisabledDontEnable(t *testing.T) {
+	redirectParams := make(url.Values)
+	redirectParams.Add("token", "verification-token")
+	redirectParams.Add("email", "test@example.com")
+	test := newTest("http://127.0.0.1:9789/?" + redirectParams.Encode())
+	test.shouldEnableCaching = false
+	test.client.cachingStatus = util.CachingStatusDisabled
+	login := test.getTestLogin()
+	err := login.loginSSO(cf, "my-team")
+	if !errors.Is(err, errNeedCachingEnabled) {
+		t.Errorf("loginSSO got %v, want %v", err, errNeedCachingEnabled)
 	}
 }

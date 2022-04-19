@@ -45,7 +45,7 @@ type linkAPIClient interface {
 	GetTeams() (*client.TeamsResponse, error)
 	GetUser() (*client.UserResponse, error)
 	SetTeamID(teamID string)
-	GetCachingStatus(teamID string) (util.CachingStatus, error)
+	GetCachingStatus() (util.CachingStatus, error)
 }
 
 func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
@@ -110,12 +110,7 @@ func (c *LinkCommand) Run(args []string) int {
 	return 0
 }
 
-var (
-	errUserCanceled       = errors.New("canceled")
-	errOverage            = errors.New("usage limit")
-	errNeedCachingEnabled = errors.New("caching not enabled")
-	errTryAfterEnable     = errors.New("link after enabling caching")
-)
+var errUserCanceled = errors.New("canceled")
 
 func (l *link) run() error {
 	dir, err := homedir.Dir()
@@ -176,20 +171,17 @@ func (l *link) run() error {
 	}
 	isUser := (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username)
 	var chosenTeam client.Team
-	var accountID string
-	if isUser {
-		accountID = userResponse.User.ID
-	} else {
+	if !isUser {
 		for _, team := range teamsResponse.Teams {
 			if team.Name == chosenTeamName {
 				chosenTeam = team
 				break
 			}
 		}
-		accountID = chosenTeam.ID
+		l.apiClient.SetTeamID(chosenTeam.ID)
 	}
 
-	cachingStatus, err := l.apiClient.GetCachingStatus(accountID)
+	cachingStatus, err := l.apiClient.GetCachingStatus()
 	if err != nil {
 		return err
 	}
@@ -213,8 +205,8 @@ func (l *link) run() error {
 				} else {
 					l.ui.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
 				}
+				return errTryAfterEnable
 			}
-			return errTryAfterEnable
 		}
 		return errNeedCachingEnabled
 	case util.CachingStatusOverLimit:
@@ -252,25 +244,6 @@ func (l *link) run() error {
 func (l *link) logError(err error) {
 	l.logger.Error("error", err)
 	l.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
-}
-
-func promptEnableCaching() (bool, error) {
-	shouldEnable := false
-	err := survey.AskOne(
-		&survey.Confirm{
-			Default: true,
-			Message: util.Sprintf("Remote Caching was previously disabled for this team. Would you like to enable it now?"),
-		},
-		&shouldEnable,
-		survey.WithValidator(survey.Required),
-		survey.WithIcons(func(icons *survey.IconSet) {
-			icons.Question.Format = "gray+hb"
-		}),
-	)
-	if err != nil {
-		return false, err
-	}
-	return shouldEnable, nil
 }
 
 func promptSetup(location string) (bool, error) {
