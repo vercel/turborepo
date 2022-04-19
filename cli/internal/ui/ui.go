@@ -33,6 +33,10 @@ func Bold(str string) string {
 	return bold.Sprint(str)
 }
 
+// Adapted from go-rainbow
+// Copyright (c) 2017 Raphael Amorim
+// Source: https://github.com/raphamorim/go-rainbow
+// SPDX-License-Identifier: MIT
 func rgb(i int) (int, int, int) {
 	var f = 0.275
 
@@ -43,6 +47,11 @@ func rgb(i int) (int, int, int) {
 }
 
 // Rainbow function returns a formated colorized string ready to print it to the shell/terminal
+//
+// Adapted from go-rainbow
+// Copyright (c) 2017 Raphael Amorim
+// Source: https://github.com/raphamorim/go-rainbow
+// SPDX-License-Identifier: MIT
 func Rainbow(text string) string {
 	var rainbowStr []string
 	for index, value := range text {
@@ -60,7 +69,7 @@ type stripAnsiWriter struct {
 
 func (into *stripAnsiWriter) Write(p []byte) (int, error) {
 	n, err := into.wrappedWriter.Write(ansiRegex.ReplaceAll(p, []byte{}))
-	if (err != nil) {
+	if err != nil {
 		// The number of bytes returned here isn't directly related to the input bytes
 		// if ansi color codes were being stripped out, but we are counting on Stdout.Write
 		// not failing under typical operation as well.
@@ -79,7 +88,7 @@ func Default() *cli.ColoredUi {
 }
 
 func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
-	colorMode = applyColorMode(colorMode);
+	colorMode = applyColorMode(colorMode)
 
 	var outWriter, errWriter io.Writer
 

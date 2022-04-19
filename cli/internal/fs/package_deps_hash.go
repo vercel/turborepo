@@ -29,17 +29,32 @@ type PackageDepsOptions struct {
 	ExcludedPaths []string
 	// GitPath is an optional alternative path to the git installation
 	GitPath string
+
+	InputPatterns []string
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
-	gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
-	if err != nil {
-		return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
-	}
 	// Add all the checked in hashes.
 	// TODO(gsoltis): are these platform-dependent paths?
-	result := parseGitLsTree(gitLsOutput)
+	var result map[string]string
+	if len(p.InputPatterns) == 0 {
+		gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
+		if err != nil {
+			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
+		}
+		result = parseGitLsTree(gitLsOutput)
+	} else {
+		gitLsOutput, err := gitLsFiles(p.PackagePath, p.GitPath, p.InputPatterns)
+		if err != nil {
+			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
+		}
+		parsedLines, err := parseGitLsFiles(gitLsOutput)
+		if err != nil {
+			return nil, err
+		}
+		result = parsedLines
+	}
 
 	if len(p.ExcludedPaths) > 0 {
 		for _, p := range p.ExcludedPaths {
@@ -149,6 +164,19 @@ func gitLsTree(path string, gitPath string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func gitLsFiles(path string, gitPath string, patterns []string) (string, error) {
+	cmd := exec.Command("git", "ls-files", "-s", "--")
+	for _, pattern := range patterns {
+		cmd.Args = append(cmd.Args, pattern)
+	}
+	cmd.Dir = path
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 func parseGitLsTree(output string) map[string]string {
 	changes := make(map[string]string)
 	if len(output) > 0 {
@@ -176,6 +204,35 @@ func parseGitLsTree(output string) map[string]string {
 		}
 	}
 	return changes
+}
+
+func parseGitLsFiles(output string) (map[string]string, error) {
+	changes := make(map[string]string)
+	if len(output) > 0 {
+		// A line is expected to look like:
+		// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
+		// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
+		gitRex := regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+		outputLines := strings.Split(output, "\n")
+
+		for _, line := range outputLines {
+			if len(line) > 0 {
+				match := gitRex.FindStringSubmatch(line)
+				// we found matches, and the slice has three parts:
+				// 0 - the whole string
+				// 1 - the hash
+				// 2 - the filename
+				if match != nil && len(match) == 3 {
+					hash := match[1]
+					filename := parseGitFilename(match[2])
+					changes[filename] = hash
+				} else {
+					return nil, fmt.Errorf("failed to parse git ls-files output line %v", line)
+				}
+			}
+		}
+	}
+	return changes, nil
 }
 
 // Couldn't figure out how to deal with special characters. Skipping for now.
