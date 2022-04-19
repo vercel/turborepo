@@ -81,8 +81,8 @@ func (c *LinkCommand) Run(args []string) int {
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
-		if errors.Is(err, errUserCancelled) {
-			c.Ui.Info("Cancelled. Turborepo not set up.")
+		if errors.Is(err, errUserCanceled) {
+			c.Ui.Info("Canceled. Turborepo not set up.")
 		} else {
 			c.logError(err)
 		}
@@ -91,7 +91,7 @@ func (c *LinkCommand) Run(args []string) int {
 	return 0
 }
 
-var errUserCancelled = errors.New("cancelled")
+var errUserCanceled = errors.New("Canceled")
 
 func (l *link) run() error {
 	dir, err := homedir.Dir()
@@ -114,7 +114,7 @@ func (l *link) run() error {
 	shouldSetup, err := l.promptSetup(repoLocation)
 
 	if !shouldSetup {
-		return errUserCancelled
+		return errUserCanceled
 	}
 
 	if !l.apiClient.IsLoggedIn() {
@@ -146,7 +146,7 @@ func (l *link) run() error {
 		return err
 	}
 	if chosenTeamName == "" {
-		return errUserCancelled
+		return errUserCanceled
 	}
 	var chosenTeam client.Team
 	if (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username) {
