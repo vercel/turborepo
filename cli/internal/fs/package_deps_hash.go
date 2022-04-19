@@ -91,7 +91,11 @@ func GitHashForFiles(filesToHash []string, PackagePath string) (map[string]strin
 		var input = []string{"hash-object"}
 
 		for _, filename := range filesToHash {
-			input = append(input, filepath.Join(PackagePath, filename))
+			if filepath.IsAbs(filename) {
+				input = append(input, filename)
+			} else {
+				input = append(input, filepath.Join(PackagePath, filename))
+			}
 		}
 		// fmt.Println(input)
 		cmd := exec.Command("git", input...)
