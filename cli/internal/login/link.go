@@ -112,7 +112,9 @@ func (l *link) run() error {
 	}
 	repoLocation := strings.Replace(currentDir, dir, "~", 1)
 	shouldSetup, err := l.promptSetup(repoLocation)
-
+	if err != nil {
+		return err
+	}
 	if !shouldSetup {
 		return errUserCanceled
 	}

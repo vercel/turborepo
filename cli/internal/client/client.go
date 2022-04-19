@@ -68,10 +68,12 @@ func NewClient(baseURL string, logger hclog.Logger, turboVersion string, teamID 
 	return client
 }
 
+// IsLoggedIn returns true if this ApiClient has a credential (token)
 func (c *ApiClient) IsLoggedIn() bool {
 	return c.Token != ""
 }
 
+// SetTeamID sets the team parameter used on all requests by this client
 func (c *ApiClient) SetTeamID(teamID string) {
 	c.teamID = teamID
 }
