@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -24,47 +26,77 @@ type LinkCommand struct {
 	Ui     *cli.ColoredUi
 }
 
+type link struct {
+	config          *config.Config
+	ui              cli.Ui
+	modifyGitIgnore bool
+}
+
+func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
+	var dontModifyGitIgnore bool
+	cmd := &cobra.Command{
+		Use:   "turbo link",
+		Short: "Link your local directory to a Vercel organization and enable remote caching.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			link := &link{
+				config:          config,
+				ui:              ui,
+				modifyGitIgnore: !dontModifyGitIgnore,
+			}
+			return link.run()
+		},
+	}
+	cmd.Flags().BoolVar(&dontModifyGitIgnore, "no-gitignore", false, "Do not create or modify .gitignore (default false)")
+	return cmd
+}
+
 // Synopsis of link command
 func (c *LinkCommand) Synopsis() string {
-	return "Link your local directory to a Vercel organization and enable remote caching."
+	cmd := getCmd(c.Config, c.Ui)
+	return cmd.Short
 }
 
 // Help returns information about the `link` command
 func (c *LinkCommand) Help() string {
-	helpText := `
-Usage: turbo link
-
-  Link your local directory to a Vercel organization and enable remote caching.
-
-Options:
-  --help                 Show this screen.
-  --no-gitignore         Do not create or modify .gitignore
-                         (default false)
-`
-	return strings.TrimSpace(helpText)
+	cmd := getCmd(c.Config, c.Ui)
+	return util.HelpForCobraCmd(cmd)
 }
 
 // Run links a local directory to a Vercel organization and enables remote caching
 func (c *LinkCommand) Run(args []string) int {
-	var dontModifyGitIgnore bool
-	shouldSetup := true
-	dir, homeDirErr := homedir.Dir()
-	if homeDirErr != nil {
-		c.logError(fmt.Errorf("could not find home directory.\n%w", homeDirErr))
+	cmd := getCmd(c.Config, c.Ui)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
+	if err != nil {
+		if errors.Is(err, errUserCancelled) {
+			c.Ui.Info("Cancelled. Turborepo not set up.")
+		} else {
+			c.logError(err)
+		}
 		return 1
 	}
-	c.Ui.Info(">>> Remote Caching (beta)")
-	c.Ui.Info("")
-	c.Ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
-	c.Ui.Info("  all your team’s Vercel projects. It also can share outputs")
-	c.Ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
-	c.Ui.Info("  This results in faster build times and deployments for your team.")
-	c.Ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
-	c.Ui.Info("")
-	currentDir, fpErr := filepath.Abs(".")
-	if fpErr != nil {
-		c.logError(fmt.Errorf("could figure out file path.\n%w", fpErr))
-		return 1
+	return 0
+}
+
+var errUserCancelled = errors.New("cancelled")
+
+func (l *link) run() error {
+	shouldSetup := true
+	dir, err := homedir.Dir()
+	if err != nil {
+		return fmt.Errorf("could not find home directory.\n%w", err)
+	}
+	l.ui.Info(">>> Remote Caching (beta)")
+	l.ui.Info("")
+	l.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
+	l.ui.Info("  all your team’s Vercel projects. It also can share outputs")
+	l.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
+	l.ui.Info("  This results in faster build times and deployments for your team.")
+	l.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+	l.ui.Info("")
+	currentDir, err := filepath.Abs(".")
+	if err != nil {
+		return fmt.Errorf("could figure out file path.\n%w", err)
 	}
 
 	survey.AskOne(
@@ -79,24 +111,20 @@ func (c *LinkCommand) Run(args []string) int {
 		}))
 
 	if !shouldSetup {
-		c.Ui.Info("> Canceled.")
-		return 1
+		return errUserCancelled
 	}
 
-	if c.Config.Token == "" {
-		c.logError(fmt.Errorf(util.Sprintf("User not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}.")))
-		return 1
+	if l.config.Token == "" {
+		return fmt.Errorf(util.Sprintf("User not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}."))
 	}
 
-	teamsResponse, err := c.Config.ApiClient.GetTeams()
+	teamsResponse, err := l.config.ApiClient.GetTeams()
 	if err != nil {
-		c.logError(fmt.Errorf("could not get team information.\n%w", err))
-		return 1
+		return fmt.Errorf("could not get team information.\n%w", err)
 	}
-	userResponse, err := c.Config.ApiClient.GetUser()
+	userResponse, err := l.config.ApiClient.GetUser()
 	if err != nil {
-		c.logError(fmt.Errorf("could not get user information.\n%w", err))
-		return 1
+		return fmt.Errorf("could not get user information.\n%w", err)
 	}
 
 	var chosenTeam client.Team
@@ -126,8 +154,7 @@ func (c *LinkCommand) Run(args []string) int {
 		}))
 
 	if chosenTeamName == "" {
-		c.Ui.Info("Canceled. Turborepo not set up.")
-		return 1
+		return errUserCancelled
 	} else if (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username) {
 		chosenTeam = client.Team{
 			ID:   userResponse.User.ID,
@@ -143,30 +170,28 @@ func (c *LinkCommand) Run(args []string) int {
 		}
 	}
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	fsErr := config.WriteRepoConfigFile(&config.TurborepoConfig{
+	err = config.WriteRepoConfigFile(&config.TurborepoConfig{
 		TeamId: chosenTeam.ID,
-		ApiUrl: c.Config.ApiUrl,
+		ApiUrl: l.config.ApiUrl,
 	})
-	if fsErr != nil {
-		c.logError(fmt.Errorf("could not link current directory to team/user.\n%w", fsErr))
-		return 1
+	if err != nil {
+		return fmt.Errorf("could not link current directory to team/user.\n%w", err)
 	}
 
-	if !dontModifyGitIgnore {
+	if l.modifyGitIgnore {
 		fs.EnsureDir(".gitignore")
 		_, gitIgnoreErr := exec.Command("sh", "-c", "grep -qxF '.turbo' .gitignore || echo '.turbo' >> .gitignore").CombinedOutput()
 		if err != nil {
-			c.logError(fmt.Errorf("could find or update .gitignore.\n%w", gitIgnoreErr))
-			return 1
+			return fmt.Errorf("could find or update .gitignore.\n%w", gitIgnoreErr)
 		}
 	}
 
-	c.Ui.Info("")
-	c.Ui.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeamName))
-	c.Ui.Info("")
-	c.Ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
-	c.Ui.Info("")
-	return 0
+	l.ui.Info("")
+	l.ui.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeamName))
+	l.ui.Info("")
+	l.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
+	l.ui.Info("")
+	return nil
 }
 
 // logError logs an error and outputs it to the UI.
