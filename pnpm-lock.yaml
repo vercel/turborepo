@@ -78,8 +78,8 @@ importers:
       eslint-config-prettier: 8.4.0
       js-cookie: 3.0.1
       next: 12.1.0
-      nextra: 2.0.0-alpha.49
-      nextra-theme-docs: 2.0.0-alpha.50
+      nextra: 2.0.0-alpha.48
+      nextra-theme-docs: 2.0.0-alpha.48
       postcss: 8.3.5
       react: 17.0.2
       react-dom: 17.0.2
@@ -101,8 +101,8 @@ importers:
       copy-to-clipboard: 3.3.1
       js-cookie: 3.0.1
       next: 12.1.0_dfc0b93d99fba272c9564d3139a2581a
-      nextra: 2.0.0-alpha.49_react@17.0.2
-      nextra-theme-docs: 2.0.0-alpha.50_caa633a00319350dbda42996613fe26c
+      nextra: 2.0.0-alpha.48_react@17.0.2
+      nextra-theme-docs: 2.0.0-alpha.48_caa633a00319350dbda42996613fe26c
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
       react-hot-toast: 2.1.1_83aecc314a46186883faa129c0399856
@@ -1012,122 +1012,6 @@ packages:
       '@types/mdx': 2.0.1
       '@types/react': 17.0.39
       react: 17.0.2
-    dev: false
-
-  /@napi-rs/simple-git-android-arm-eabi/0.1.7:
-    resolution: {integrity: sha512-1ZNMZJ+3NhwI3HGB08nRsAzMP81du6RnZ1X9YhZ6uusuSH7p4EWs3d44TshJ+vHdjPi6eitfMN9jK5iw6dHKow==}
-    engines: {node: '>= 10'}
-    cpu: [arm]
-    os: [android]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-android-arm64/0.1.7:
-    resolution: {integrity: sha512-Xy3b8IfuIhwYx8xns7fUnJslbytjq4knTG9i0PhyF+o59se81RkLgcj86LmuD4GhzDrYQTwFgnPx3aKUUObn3Q==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [android]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-darwin-arm64/0.1.7:
-    resolution: {integrity: sha512-uHO0JOwHjc39rX6nEt/tctx7IcsS33HWlHYtjt8h8YlfdvwAidPMVZDwg/dBPMTl+mdAyuFUM8ce6S91OguGNQ==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [darwin]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-darwin-x64/0.1.7:
-    resolution: {integrity: sha512-33nWHRBMf+twLabVdxyj9c/xsAY4lgWip7Sa5ogpMWdzPDDZjPliz//7hScmcRcetfFoPpfqbbLW2YCEmhQYGA==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [darwin]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-linux-arm-gnueabihf/0.1.7:
-    resolution: {integrity: sha512-oqC/TngHfXaeynapp5YP+1PMoQXFP7IrCRlKbwkVxTXOW5O9A8KaeFn00WRLHvm/wkAbW7757mU6Nz5csy4qPw==}
-    engines: {node: '>= 10'}
-    cpu: [arm]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-linux-arm64-gnu/0.1.7:
-    resolution: {integrity: sha512-T/QQIaQviWPfHUhPnQQQYuzlAHVlr68xK99Hd5b6xPp8LsLcDBsTg7P3pAilAkgzXKz1O6/pYVtwJD1BTayu9A==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-linux-arm64-musl/0.1.7:
-    resolution: {integrity: sha512-afbdrfmEGptPp+yBykR0uVWrKxvZwC5C80GYMROa63/BdzvODWsDt+FJcTWuj/kXHms7hGRLWCyOAnuLAjdBow==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-linux-x64-gnu/0.1.7:
-    resolution: {integrity: sha512-pb2jPxPX0TCaJMuDbyWj87s5ylZExt2E8Nz0i9DT706LmcRrEsGjPVD/XITBDukPv2fPWwW7E4gw0fAQBYt4Ag==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-linux-x64-musl/0.1.7:
-    resolution: {integrity: sha512-1tUBN6FdC5EmRkxaKA51IpbGdnJYSmPjKKaaLyMXpUcyc2PJxGymzYy5Oj2XfxUcu2BdO2SdIpt9N4APOERkSg==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-win32-arm64-msvc/0.1.7:
-    resolution: {integrity: sha512-pGoGppekJ1T+J78g+oWpwOux9mQLy2vRZMAp7DM+8Wv0RkA41JROISlQHpkmxvNTB4VQ7OyP2ASeizBS4rNrhg==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [win32]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git-win32-x64-msvc/0.1.7:
-    resolution: {integrity: sha512-/qHNi8TlEhjFTXl5CvlU5RhkibWAnFisLG6yKY8pNHaxEJMjE+HS58USDGtQ0gwgM3pmvJtaqRtMwQyoboTOXg==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [win32]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@napi-rs/simple-git/0.1.7:
-    resolution: {integrity: sha512-53fsesi8pmCh5ctuFMpSgfmYy4WtXJV5R5BW48B7P49ypvoTaySx0uKUN+cv6pRRWILWFIrPH2cJiPoiONM3vg==}
-    engines: {node: '>= 10'}
-    optionalDependencies:
-      '@napi-rs/simple-git-android-arm-eabi': 0.1.7
-      '@napi-rs/simple-git-android-arm64': 0.1.7
-      '@napi-rs/simple-git-darwin-arm64': 0.1.7
-      '@napi-rs/simple-git-darwin-x64': 0.1.7
-      '@napi-rs/simple-git-linux-arm-gnueabihf': 0.1.7
-      '@napi-rs/simple-git-linux-arm64-gnu': 0.1.7
-      '@napi-rs/simple-git-linux-arm64-musl': 0.1.7
-      '@napi-rs/simple-git-linux-x64-gnu': 0.1.7
-      '@napi-rs/simple-git-linux-x64-musl': 0.1.7
-      '@napi-rs/simple-git-win32-arm64-msvc': 0.1.7
-      '@napi-rs/simple-git-win32-x64-msvc': 0.1.7
     dev: false
 
   /@next/env/12.1.0:
@@ -6412,8 +6296,8 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.0.0-alpha.50_caa633a00319350dbda42996613fe26c:
-    resolution: {integrity: sha512-TkMvB8pCVN1LJV6NpXm/5MG2+IHFrMh7bf8E0J6QGRfYaLAhHEAbO7OZpXuE6q/MGGzaNjsXYfFVsC+0r/+/mQ==}
+  /nextra-theme-docs/2.0.0-alpha.48_caa633a00319350dbda42996613fe26c:
+    resolution: {integrity: sha512-eA1AmD8KVD7lgy+fq1aGjEv3NlNNAgx9UYE8Fsi9TimaIAuRMaqulNoG5m1HLcqUPtxjBkl/zM7gPgxfQg2d2A==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
@@ -6437,17 +6321,15 @@ packages:
       title: 3.4.3
     dev: false
 
-  /nextra/2.0.0-alpha.49_react@17.0.2:
-    resolution: {integrity: sha512-dR52NUOH7amYQeRsQ0lENPjDrnx41NTmKMImAQQ9Nlx/PVBzEmdRo/bnX3GLIYeDWPt7pgzOoDhHRyMt04VdVw==}
+  /nextra/2.0.0-alpha.48_react@17.0.2:
+    resolution: {integrity: sha512-ZiAnQluH1k4Rojf0grBM4sjzZX87jGqKwnjhMd6wtflwpofXfYKDSXKMQrJei9Da8n/iZnz7STbQ2WPL1Fw+SQ==}
     peerDependencies:
       react: '>=16.13.1'
     dependencies:
       '@mdx-js/mdx': 2.1.0
-      '@napi-rs/simple-git': 0.1.7
       github-slugger: 1.4.0
       graceful-fs: 4.2.9
       gray-matter: 4.0.3
-      p-limit: 4.0.0
       react: 17.0.2
       rehype-pretty-code: 0.1.0_shiki@0.10.1
       remark-gfm: 3.0.1
@@ -6711,13 +6593,6 @@ packages:
     dependencies:
       yocto-queue: 0.1.0
     dev: true
-
-  /p-limit/4.0.0:
-    resolution: {integrity: sha512-5b0R4txpzjPWVw/cXXUResoD4hb6U/x9BH08L7nw+GN1sezDzPdxeRvpc9c433fZhBan/wusjbCsqwqm4EIBIQ==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-    dependencies:
-      yocto-queue: 1.0.0
-    dev: false
 
   /p-locate/2.0.0:
     resolution: {integrity: sha1-IKAQOyIqcMj9OcwuWAaA893l7EM=}
@@ -8801,11 +8676,6 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
     dev: true
-
-  /yocto-queue/1.0.0:
-    resolution: {integrity: sha512-9bnSc/HEW2uRy67wc+T8UwauLuPJVn28jb+GtJY16iiKWyvmYJRXVT4UamsAEGQfPohgr2q4Tq0sQbQlxTfi1g==}
-    engines: {node: '>=12.20'}
-    dev: false
 
   /zwitch/2.0.2:
     resolution: {integrity: sha512-JZxotl7SxAJH0j7dN4pxsTV6ZLXoLdGME+PsjkL/DaBrVryK9kTGq06GfKrwcSOqypP+fdXGoCHE36b99fWVoA==}
