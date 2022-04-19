@@ -10,16 +10,32 @@ import (
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_manager/api"
-	"github.com/vercel/turborepo/cli/internal/package_manager/nodejs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-var packageManagers = []api.PackageManager{
-	nodejs.NodejsYarn,
-	nodejs.NodejsBerry,
-	nodejs.NodejsNpm,
-	nodejs.NodejsPnpm,
+// PackageManager is an abstraction across package managers
+type PackageManager struct {
+	Name       string
+	Slug       string
+	Command    string
+	Specfile   string
+	Lockfile   string
+	PackageDir string
+
+	// Return the list of workspace glob
+	GetWorkspaceGlobs func(rootpath string) ([]string, error)
+
+	Matches func(manager string, version string) (bool, error)
+
+	// Detect if the project is using a specific package manager
+	Detect func(projectDirectory string, packageManager *PackageManager) (bool, error)
+}
+
+var packageManagers = []PackageManager{
+	nodejsYarn,
+	nodejsBerry,
+	nodejsNpm,
+	nodejsPnpm,
 }
 
 // ParsePackageManagerString takes a package manager version string parses it into consituent components
@@ -35,7 +51,7 @@ func ParsePackageManagerString(packageManager string) (manager string, version s
 }
 
 // GetPackageManager attempts all methods for identifying the package manager in use.
-func GetPackageManager(projectDirectory string, pkg *fs.PackageJSON) (packageManager *api.PackageManager, err error) {
+func GetPackageManager(projectDirectory string, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
 	result, _ := readPackageManager(pkg)
 	if result != nil {
 		return result, nil
@@ -45,7 +61,7 @@ func GetPackageManager(projectDirectory string, pkg *fs.PackageJSON) (packageMan
 }
 
 // readPackageManager attempts to read the package manager from the package.json.
-func readPackageManager(pkg *fs.PackageJSON) (packageManager *api.PackageManager, err error) {
+func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
 	if pkg.PackageManager != "" {
 		manager, version, err := ParsePackageManagerString(pkg.PackageManager)
 		if err != nil {
@@ -64,7 +80,7 @@ func readPackageManager(pkg *fs.PackageJSON) (packageManager *api.PackageManager
 }
 
 // detectPackageManager attempts to detect the package manager by inspecting the project directory state.
-func detectPackageManager(projectDirectory string) (packageManager *api.PackageManager, err error) {
+func detectPackageManager(projectDirectory string) (packageManager *PackageManager, err error) {
 	for _, packageManager := range packageManagers {
 		isResponsible, err := packageManager.Detect(projectDirectory, &packageManager)
 		if err != nil {

@@ -14,7 +14,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/package_manager"
-	"github.com/vercel/turborepo/cli/internal/package_manager/api"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
@@ -34,7 +33,7 @@ type Context struct {
 	RootNode         string
 	GlobalHash       string
 	Lockfile         *fs.YarnLockfile
-	PackageManager   *api.PackageManager
+	PackageManager   *package_manager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -401,7 +400,7 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	return justNames, pairs
 }
 
-func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *api.PackageManager, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *package_manager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 

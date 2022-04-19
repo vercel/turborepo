@@ -1,4 +1,4 @@
-package nodejs
+package package_manager
 
 import (
 	"fmt"
@@ -8,10 +8,9 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_manager/api"
 )
 
-var NodejsYarn = api.PackageManager{
+var nodejsYarn = PackageManager{
 	Name:       "nodejs-yarn",
 	Slug:       "yarn",
 	Command:    "yarn",
@@ -49,7 +48,7 @@ var NodejsYarn = api.PackageManager{
 	},
 
 	// Detect for yarn needs to identify which version of yarn is running on the system.
-	Detect: func(projectDirectory string, packageManager *api.PackageManager) (bool, error) {
+	Detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 

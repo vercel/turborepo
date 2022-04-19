@@ -1,4 +1,4 @@
-package nodejs
+package package_manager
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_manager/api"
 	"gopkg.in/yaml.v2"
 )
 
@@ -16,7 +15,7 @@ type PnpmWorkspaces struct {
 	Packages []string `yaml:"packages,omitempty"`
 }
 
-var NodejsPnpm = api.PackageManager{
+var nodejsPnpm = PackageManager{
 	Name:       "nodejs-pnpm",
 	Slug:       "pnpm",
 	Command:    "pnpm",
@@ -45,7 +44,7 @@ var NodejsPnpm = api.PackageManager{
 		return manager == "pnpm", nil
 	},
 
-	Detect: func(projectDirectory string, packageManager *api.PackageManager) (bool, error) {
+	Detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 

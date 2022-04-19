@@ -1,4 +1,4 @@
-package nodejs
+package package_manager
 
 import (
 	"fmt"
@@ -7,11 +7,10 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/package_manager/api"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-var NodejsBerry = api.PackageManager{
+var nodejsBerry = PackageManager{
 	Name:       "nodejs-berry",
 	Slug:       "yarn",
 	Command:    "yarn",
@@ -50,7 +49,7 @@ var NodejsBerry = api.PackageManager{
 
 	// Detect for berry needs to identify which version of yarn is running on the system.
 	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
-	Detect: func(projectDirectory string, packageManager *api.PackageManager) (bool, error) {
+	Detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 
