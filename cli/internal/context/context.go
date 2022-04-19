@@ -421,7 +421,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 		}
 
 		if len(globs) > 0 {
-			f := globby.GlobFiles(rootpath, globs, []string{})
+			f := globby.GlobFiles(rootpath, globs, getWorkspaceIgnores())
 			for _, val := range f {
 				globalDeps.Add(val)
 			}
