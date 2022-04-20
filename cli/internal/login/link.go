@@ -14,6 +14,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util/browser"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
@@ -28,13 +29,15 @@ type LinkCommand struct {
 }
 
 type link struct {
-	ui              cli.Ui
-	logger          hclog.Logger
-	modifyGitIgnore bool
-	apiURL          string
-	apiClient       linkAPIClient
-	promptSetup     func(location string) (bool, error)
-	promptTeam      func(teams []string) (string, error)
+	ui                  cli.Ui
+	logger              hclog.Logger
+	modifyGitIgnore     bool
+	apiURL              string
+	apiClient           linkAPIClient
+	promptSetup         func(location string) (bool, error)
+	promptTeam          func(teams []string) (string, error)
+	promptEnableCaching func() (bool, error)
+	openBrowser         func(url string) error
 }
 
 type linkAPIClient interface {
@@ -42,6 +45,7 @@ type linkAPIClient interface {
 	GetTeams() (*client.TeamsResponse, error)
 	GetUser() (*client.UserResponse, error)
 	SetTeamID(teamID string)
+	GetCachingStatus(teamID string) (util.CachingStatus, error)
 }
 
 func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
@@ -51,18 +55,26 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 		Short: "Link your local directory to a Vercel organization and enable remote caching.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			link := &link{
-				ui:              ui,
-				logger:          config.Logger,
-				modifyGitIgnore: !dontModifyGitIgnore,
-				apiURL:          config.ApiUrl,
-				apiClient:       config.ApiClient,
-				promptSetup:     promptSetup,
-				promptTeam:      promptTeam,
+				ui:                  ui,
+				logger:              config.Logger,
+				modifyGitIgnore:     !dontModifyGitIgnore,
+				apiURL:              config.ApiUrl,
+				apiClient:           config.ApiClient,
+				promptSetup:         promptSetup,
+				promptTeam:          promptTeam,
+				promptEnableCaching: promptEnableCaching,
+				openBrowser:         browser.OpenBrowser,
 			}
 			err := link.run()
 			if err != nil {
 				if errors.Is(err, errUserCanceled) {
 					ui.Info("Canceled. Turborepo not set up.")
+				} else if errors.Is(err, errTryAfterEnable) {
+					ui.Info("Please run 'turbo link' again after remote caching has been enabled")
+				} else if errors.Is(err, errNeedCachingEnabled) {
+					ui.Info("Please contact your account owner to enable remote caching on Vercel.")
+				} else if errors.Is(err, errOverage) {
+					ui.Warn("TODO: hobby error message")
 				} else {
 					link.logError(err)
 				}
@@ -98,7 +110,12 @@ func (c *LinkCommand) Run(args []string) int {
 	return 0
 }
 
-var errUserCanceled = errors.New("Canceled")
+var (
+	errUserCanceled       = errors.New("canceled")
+	errOverage            = errors.New("usage limit")
+	errNeedCachingEnabled = errors.New("caching not enabled")
+	errTryAfterEnable     = errors.New("link after enabling caching")
+)
 
 func (l *link) run() error {
 	dir, err := homedir.Dir()
@@ -157,13 +174,11 @@ func (l *link) run() error {
 	if chosenTeamName == "" {
 		return errUserCanceled
 	}
+	isUser := (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username)
 	var chosenTeam client.Team
-	if (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username) {
-		chosenTeam = client.Team{
-			ID:   userResponse.User.ID,
-			Name: userResponse.User.Name,
-			Slug: userResponse.User.Username,
-		}
+	var accountID string
+	if isUser {
+		accountID = userResponse.User.ID
 	} else {
 		for _, team := range teamsResponse.Teams {
 			if team.Name == chosenTeamName {
@@ -171,7 +186,43 @@ func (l *link) run() error {
 				break
 			}
 		}
+		accountID = chosenTeam.ID
 	}
+
+	cachingStatus, err := l.apiClient.GetCachingStatus(accountID)
+	if err != nil {
+		return err
+	}
+	switch cachingStatus {
+	case util.CachingStatusDisabled:
+		if isUser || chosenTeam.IsOwner() {
+			shouldEnable, err := l.promptEnableCaching()
+			if err != nil {
+				return err
+			}
+			if shouldEnable {
+				var url string
+				if isUser {
+					url = "https://vercel.com/account/billing"
+				} else {
+					url = fmt.Sprintf("https://vercel.com/teams/%v/settings/billing", chosenTeam.Slug)
+				}
+				err = l.openBrowser(url)
+				if err != nil {
+					l.ui.Warn(fmt.Sprintf("Failed to open browser. Please visit %v to enable Remote Caching", url))
+				} else {
+					l.ui.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
+				}
+			}
+			return errTryAfterEnable
+		}
+		return errNeedCachingEnabled
+	case util.CachingStatusOverLimit:
+		return errOverage
+	case util.CachingStatusEnabled:
+	default:
+	}
+
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
 	err = config.WriteRepoConfigFile(&config.TurborepoConfig{
 		TeamId: chosenTeam.ID,
@@ -201,6 +252,25 @@ func (l *link) run() error {
 func (l *link) logError(err error) {
 	l.logger.Error("error", err)
 	l.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+}
+
+func promptEnableCaching() (bool, error) {
+	shouldEnable := false
+	err := survey.AskOne(
+		&survey.Confirm{
+			Default: true,
+			Message: util.Sprintf("Remote Caching was previously disabled for this team. Would you like to enable it now?"),
+		},
+		&shouldEnable,
+		survey.WithValidator(survey.Required),
+		survey.WithIcons(func(icons *survey.IconSet) {
+			icons.Question.Format = "gray+hb"
+		}),
+	)
+	if err != nil {
+		return false, err
+	}
+	return shouldEnable, nil
 }
 
 func promptSetup(location string) (bool, error) {
