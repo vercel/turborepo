@@ -34,7 +34,7 @@ func GetColorModeFromEnv() ColorMode {
 	}
 }
 
-func applyColorMode(colorMode ColorMode) ColorMode {
+func ApplyColorMode(colorMode ColorMode) ColorMode {
 	switch colorMode {
 	case ColorModeForced:
 		color.NoColor = false
@@ -47,8 +47,8 @@ func applyColorMode(colorMode ColorMode) ColorMode {
 	}
 
 	if color.NoColor {
-		return ColorModeSuppressed;
+		return ColorModeSuppressed
 	} else {
-		return ColorModeForced;
+		return ColorModeForced
 	}
 }

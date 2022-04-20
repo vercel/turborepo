@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/run"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	uiPkg "github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/ui/variants"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
@@ -49,7 +50,8 @@ func main() {
 	}
 	args = args[:argsEnd]
 
-	ui := ui.BuildColoredUi(colorMode);
+	ui := ui.BuildColoredUi(colorMode)
+	newUi := variants.NewDefault()
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
@@ -95,7 +97,7 @@ func main() {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
 		},
 		"bin": func() (cli.Command, error) {
-			return &info.BinCommand{Config: cf, Ui: ui}, nil
+			return &info.BinCommand{Config: cf, Ui: newUi}, nil
 		},
 	}
 

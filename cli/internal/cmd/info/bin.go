@@ -2,6 +2,7 @@ package info
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -9,13 +10,12 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui/variants"
 
-	"github.com/mitchellh/cli"
 	"github.com/spf13/cobra"
 )
 
 type BinCommand struct {
 	Config *config.Config
-	Ui     *cli.ColoredUi
+	Ui     variants.Ui
 }
 
 // Synopsis of run command
@@ -35,10 +35,7 @@ Usage: turbo bin
 
 func (c *BinCommand) Run(args []string) int {
 	ui := variants.NewDefault()
-	cmd := BinCmd(&cmdutil.Helper{
-		Config: c.Config,
-		Ui:     ui,
-	})
+	cmd := BinCmd(c)
 
 	cmd.SilenceErrors = true
 	cmd.CompletionOptions.DisableDefaultCmd = true
@@ -60,7 +57,13 @@ func (c *BinCommand) Run(args []string) int {
 	return 1
 }
 
-func BinCmd(ch *cmdutil.Helper) *cobra.Command {
+func (c *BinCommand) LogError(format string, args ...interface{}) error {
+	err := fmt.Errorf(format, args...)
+	c.Config.Logger.Error("error", err)
+	return c.Ui.Errorf(err.Error())
+}
+
+func BinCmd(ch *BinCommand) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bin",
 		Short: "Get the path to the Turbo binary",

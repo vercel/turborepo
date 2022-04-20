@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
@@ -22,9 +23,25 @@ type Default struct {
 var _ Ui = (*Default)(nil)
 
 func NewDefault() *Default {
+	return BuildDefault(ui.ColorModeUndefined)
+}
+
+func BuildDefault(colorMode ui.ColorMode) *Default {
+	colorMode = ui.ApplyColorMode(colorMode)
+
+	var outWriter, errWriter io.Writer
+
+	if colorMode == ui.ColorModeSuppressed {
+		outWriter = &stripAnsiWriter{wrappedWriter: os.Stdout}
+		errWriter = &stripAnsiWriter{wrappedWriter: os.Stderr}
+	} else {
+		outWriter = os.Stdout
+		errWriter = os.Stderr
+	}
+
 	return &Default{
-		Writer:      os.Stdout,
-		ErrorWriter: os.Stderr,
+		Writer:      outWriter,
+		ErrorWriter: errWriter,
 	}
 }
 
