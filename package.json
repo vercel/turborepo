@@ -20,7 +20,7 @@
       "prettier --write"
     ],
     "*.go": [
-      "echo $PWD"
+      "cd cli && npm run format"
     ]
   },
   "simple-git-hooks": {
