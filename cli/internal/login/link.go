@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
@@ -28,6 +29,7 @@ type LinkCommand struct {
 
 type link struct {
 	ui              cli.Ui
+	logger          hclog.Logger
 	modifyGitIgnore bool
 	apiURL          string
 	apiClient       linkAPIClient
@@ -50,13 +52,23 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			link := &link{
 				ui:              ui,
+				logger:          config.Logger,
 				modifyGitIgnore: !dontModifyGitIgnore,
 				apiURL:          config.ApiUrl,
 				apiClient:       config.ApiClient,
 				promptSetup:     promptSetup,
 				promptTeam:      promptTeam,
 			}
-			return link.run()
+			err := link.run()
+			if err != nil {
+				if errors.Is(err, errUserCanceled) {
+					ui.Info("Canceled. Turborepo not set up.")
+				} else {
+					link.logError(err)
+				}
+				return err
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dontModifyGitIgnore, "no-gitignore", false, "Do not create or modify .gitignore (default false)")
@@ -81,11 +93,6 @@ func (c *LinkCommand) Run(args []string) int {
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
-		if errors.Is(err, errUserCanceled) {
-			c.Ui.Info("Canceled. Turborepo not set up.")
-		} else {
-			c.logError(err)
-		}
 		return 1
 	}
 	return 0
@@ -191,9 +198,9 @@ func (l *link) run() error {
 }
 
 // logError logs an error and outputs it to the UI.
-func (c *LinkCommand) logError(err error) {
-	c.Config.Logger.Error("error", err)
-	c.Ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+func (l *link) logError(err error) {
+	l.logger.Error("error", err)
+	l.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 
 func promptSetup(location string) (bool, error) {
