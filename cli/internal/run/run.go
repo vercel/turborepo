@@ -1006,7 +1006,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
-		filesToBeCached := globby.GlobFiles(pt.pkg.Dir, outputs, ignore)
+		filesToBeCached := globby.GlobFiles(filepath.Join(e.rs.Opts.cwd, pt.pkg.Dir), outputs, ignore)
 		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
