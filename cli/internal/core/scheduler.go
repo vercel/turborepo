@@ -53,13 +53,6 @@ type SchedulerExecutionOptions struct {
 
 func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
-	if len(pkgs) == 0 {
-		// TODO(gsoltis): Is this behavior only used in tests?
-		for _, v := range p.TopologicGraph.Vertices() {
-			pkgs = append(pkgs, dag.VertexName(v))
-		}
-	}
-
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
 		// TODO(gsoltis): Is this behavior used?
@@ -225,7 +218,11 @@ func (p *Scheduler) AddTask(task *Task) *Scheduler {
 	return p
 }
 
-func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) *Scheduler {
+func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
+	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
+	if fromPkg != ROOT_NODE_NAME && !p.TopologicGraph.HasVertex(fromPkg) {
+		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
+	}
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
-	return p
+	return nil
 }

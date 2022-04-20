@@ -293,10 +293,10 @@ func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Se
 		}
 		for changedPkg := range changedPkgs {
 			if !selector.excludeSelf && pkg == changedPkg {
-        roots.Add(pkg)
-        break
-      }
-      if deps.Include(changedPkg) {
+				roots.Add(pkg)
+				break
+			}
+			if deps.Include(changedPkg) {
 				roots.Add(pkg)
 				matched.Add(changedPkg)
 				break

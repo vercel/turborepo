@@ -53,7 +53,7 @@ type Config struct {
 	// package.json at the root of the repo
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
-	Cwd string
+	Cwd fs.AbsolutePath
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -99,8 +99,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		return nil, err
 	}
 	// Precedence is flags > env > config > default
-	packageJSONPath := filepath.Join(cwd, "package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
+	packageJSONPath := cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
 	if err != nil {
 		return nil, fmt.Errorf("package.json: %w", err)
 	}
@@ -132,6 +132,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			return nil, fmt.Errorf("%s value %q is not a valid log level", EnvLogLevel, v)
 		}
 	}
+
+	usePreflight := os.Getenv("TURBO_PREFLIGHT") == "true"
 
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
@@ -168,6 +170,8 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			partialConfig.Token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
+		case arg == "--preflight":
+			usePreflight = true
 		default:
 			continue
 		}
@@ -189,7 +193,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	})
 
 	maxRemoteFailCount := 3
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount))
+	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount), usePreflight)
 
 	c = &Config{
 		Logger:       logger,
@@ -214,14 +218,14 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	return c, nil
 }
 
-func ReadTurboConfig(rootPath string, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
+func ReadTurboConfig(rootPath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
 	// If turbo.json exists, we use that
 	// If pkg.Turbo exists, we warn about running the migration
 	// Use pkg.Turbo if turbo.json doesn't exist
 	// If neither exists, it's a fatal error
-	turboJSONPath := filepath.Join(rootPath, "turbo.json")
+	turboJSONPath := rootPath.Join("turbo.json")
 
-	if !fs.FileExists(turboJSONPath) {
+	if !turboJSONPath.FileExists() {
 		if rootPackageJSON.LegacyTurboConfig == nil {
 			// TODO: suggestion on how to create one
 			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
@@ -244,17 +248,23 @@ func ReadTurboConfig(rootPath string, rootPackageJSON *fs.PackageJSON) (*fs.Turb
 
 // Selects the current working directory from OS
 // and overrides with the `--cwd=` input argument
-func selectCwd(inputArgs []string) (string, error) {
-	cwd, err := os.Getwd()
+func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
+	cwd, err := fs.GetCwd()
 	if err != nil {
-		return "", fmt.Errorf("invalid working directory: %w", err)
+		return "", err
 	}
 	for _, arg := range inputArgs {
 		if arg == "--" {
 			break
 		} else if strings.HasPrefix(arg, "--cwd=") {
 			if len(arg[len("--cwd="):]) > 0 {
-				cwd = arg[len("--cwd="):]
+				cwdArgRaw := arg[len("--cwd="):]
+				cwdArg, err := fs.CheckedToAbsolutePath(cwdArgRaw)
+				if err != nil {
+					// the argument is a relative path. Join it with our actual cwd
+					return cwd.Join(cwdArgRaw), nil
+				}
+				return cwdArg, nil
 			}
 		}
 	}
