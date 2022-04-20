@@ -16,11 +16,11 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
-	defaultCwd, err := os.Getwd()
+	defaultCwd, err := fs.GetCwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	defaultCacheFolder := filepath.Join(defaultCwd, filepath.FromSlash("node_modules/.cache/turbo"))
+	defaultCacheFolder := defaultCwd.Join(filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
 		Name     string
 		Args     []string
@@ -39,8 +39,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				cacheHitLogsMode:    FullLogs,
 				cacheMissLogsMode:   FullLogs,
 			},
@@ -59,8 +59,8 @@ func TestParseConfig(t *testing.T) {
 				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				cacheHitLogsMode:    FullLogs,
 				cacheMissLogsMode:   FullLogs,
 			},
@@ -78,8 +78,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				cacheHitLogsMode:    FullLogs,
 				cacheMissLogsMode:   FullLogs,
 			},
@@ -97,8 +97,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				cacheHitLogsMode:    FullLogs,
 				cacheMissLogsMode:   FullLogs,
 			},
@@ -116,8 +116,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				passThroughArgs:     []string{"--boop", "zoop"},
 				cacheHitLogsMode:    FullLogs,
 				cacheMissLogsMode:   FullLogs,
@@ -136,8 +136,8 @@ func TestParseConfig(t *testing.T) {
 				cache:               true,
 				forceExecution:      false,
 				profile:             "",
-				cwd:                 defaultCwd,
-				cacheFolder:         defaultCacheFolder,
+				cwd:                 defaultCwd.ToStringDuringMigration(),
+				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				passThroughArgs:     []string{},
 				cacheHitLogsMode:    FullLogs,
 				cacheMissLogsMode:   FullLogs,
@@ -153,8 +153,8 @@ func TestParseConfig(t *testing.T) {
 				bail:              true,
 				concurrency:       10,
 				cache:             true,
-				cwd:               defaultCwd,
-				cacheFolder:       defaultCacheFolder,
+				cwd:               defaultCwd.ToStringDuringMigration(),
+				cacheFolder:       defaultCacheFolder.ToStringDuringMigration(),
 				cacheHitLogsMode:  FullLogs,
 				cacheMissLogsMode: FullLogs,
 			},
@@ -232,7 +232,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"build"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -247,7 +247,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"build", "test", "--foo", "--bar"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -262,7 +262,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -277,7 +277,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			args: args{
 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
 				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.Pipeline{
+					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
 						"thing#test": {},
@@ -310,18 +310,16 @@ func Test_dontSquashTasks(t *testing.T) {
 	topoGraph.Add("b")
 	// no dependencies between packages
 
-	pipeline := map[string]fs.Pipeline{
+	pipeline := map[string]fs.TaskDefinition{
 		"build": {
 			Outputs:   []string{},
-			DependsOn: []string{"generate"},
+			TaskDependencies: []string{"generate"},
 		},
 		"generate": {
 			Outputs:   []string{},
-			DependsOn: []string{},
 		},
 		"b#build": {
 			Outputs:   []string{},
-			DependsOn: []string{},
 		},
 	}
 	filteredPkgs := make(util.Set)

@@ -55,7 +55,6 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
-	scc := dag.StronglyConnected(&graph.Graph)
 	packagesInfos := map[interface{}]*fs.PackageJSON{
 		"app0": {
 			Dir: "app/app0",
@@ -219,7 +218,6 @@ func TestResolvePackages(t *testing.T) {
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,
 				TopologicalGraph: graph,
-				SCC:              scc,
 			}, tui, logger)
 			if err != nil {
 				t.Errorf("expected no error, got %v", err)
