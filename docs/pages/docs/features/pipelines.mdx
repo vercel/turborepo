@@ -206,7 +206,7 @@ For these cases, you can express these relationships in your `pipeline` configur
       "outputs": [""]
     },
     "frontend#deploy": {
-      "dependsOn": ["ui#test", "backend#deploy"],
+      "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"],
       "outputs": [""]
     }
   }
