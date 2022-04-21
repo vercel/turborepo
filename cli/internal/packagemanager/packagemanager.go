@@ -1,7 +1,8 @@
 // Adapted from https://github.com/replit/upm
 // Copyright (c) 2019 Neoreason d/b/a Repl.it. All rights reserved.
 // SPDX-License-Identifier: MIT
-package package_manager
+
+package packagemanager
 
 import (
 	"errors"

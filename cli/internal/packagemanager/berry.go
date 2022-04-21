@@ -1,4 +1,4 @@
-package package_manager
+package packagemanager
 
 import (
 	"fmt"
@@ -66,7 +66,7 @@ var nodejsBerry = PackageManager{
 		}
 
 		// See if we're a match when we compare these two things.
-		matches, err := packageManager.Matches(packageManager.Slug, string(out))
+		matches, _ := packageManager.Matches(packageManager.Slug, string(out))
 
 		// Short-circuit, definitely not Berry because version number says we're Yarn.
 		if !matches {
