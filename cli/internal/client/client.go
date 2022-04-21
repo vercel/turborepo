@@ -338,14 +338,6 @@ func (t *Team) IsOwner() bool {
 	return t.Membership.Role == "OWNER"
 }
 
-func TeamFromUser(user *User) Team {
-	return Team{
-		ID:         user.ID,
-		Name:       user.Name,
-		Membership: Membership{Role: "OWNER"},
-	}
-}
-
 // Pagination is a Vercel pagination object
 type Pagination struct {
 	Count int `json:"count,omitempty"`
@@ -456,7 +448,9 @@ func (c *ApiClient) GetCachingStatus(teamID string) (util.CachingStatus, error) 
 	if err != nil {
 		return util.CachingStatusDisabled, err
 	}
-	defer resp.Body.Close()
+	// Explicitly ignore the error from closing the response body. We don't need
+	// to fail the method if we fail to close the response.
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		b, err := ioutil.ReadAll(resp.Body)
 		var responseText string
