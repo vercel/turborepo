@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/pyr-sh/dag"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
@@ -72,6 +74,8 @@ const (
 	HashLogs LogsMode = "hash"
 	NoLogs   LogsMode = "none"
 )
+
+var isGlobTargetPattern = regexp.MustCompile(`^.*((?:[^\\]*\*)|(?::\*\*:)).*$`)
 
 func (rs *runSpec) ArgsForTask(task string) []string {
 	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
@@ -791,24 +795,52 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 	logger.Debug("finish replaying logs")
 }
 
+func swapColonAndSlash(r rune) rune {
+	switch {
+	case r == ':':
+		return '/'
+	case r == '/':
+		return ':'
+	}
+	return r
+}
+
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
 func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
 	targets := make(util.Set)
+	tasksAsPaths := make(map[string]string, len(configJson.Pipeline))
+	for task := range configJson.Pipeline {
+		tasksAsPaths[task] = strings.Map(swapColonAndSlash, task)
+	}
 	for _, arg := range arguments {
 		if arg == "--" {
 			break
 		}
 		if !strings.HasPrefix(arg, "-") {
-			targets.Add(arg)
-			found := false
-			for task := range configJson.Pipeline {
-				if task == arg {
-					found = true
+			if isGlobTargetPattern.MatchString(arg) {
+				matchPattern := strings.Map(swapColonAndSlash, arg)
+				for task := range tasksAsPaths {
+					taskAsPath := tasksAsPaths[task]
+					hasMatch, err := doublestar.Match(matchPattern, taskAsPath)
+					if err != nil {
+						return nil, fmt.Errorf("task glob `%v` is invalid: %w", arg, err)
+					}
+					if hasMatch {
+						targets.Add(task)
+					}
 				}
-			}
-			if !found {
-				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			} else {
+				targets.Add(arg)
+				found := false
+				for task := range configJson.Pipeline {
+					if task == arg {
+						found = true
+					}
+				}
+				if !found {
+					return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+				}
 			}
 		}
 	}
