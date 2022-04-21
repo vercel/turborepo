@@ -38,4 +38,7 @@ type LanguageBackend struct {
 
 	// Detect if the project is using a specific package manager
 	Detect func(string, *fs.PackageJSON, *LanguageBackend) (bool, error)
+
+	// Get the lockfile keys for a dependency and version
+	GetLockfileKeys func(string, string) []string
 }
