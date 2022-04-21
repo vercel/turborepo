@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -25,6 +24,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
@@ -234,11 +234,11 @@ func (c *RunCommand) Run(args []string) int {
 		FilteredPkgs: filteredPkgs,
 		Opts:         runOptions,
 	}
-	backend := ctx.Backend
-	return c.runOperation(g, rs, backend, startAt)
+	packageManager := ctx.PackageManager
+	return c.runOperation(g, rs, packageManager, startAt)
 }
 
-func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
+func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) int {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -337,7 +337,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		if rs.Opts.stream {
 			c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		}
-		exitCode = c.executeTasks(g, rs, engine, backend, hashTracker, startAt)
+		exitCode = c.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
 	}
 
 	return exitCode
@@ -640,7 +640,7 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, backend *api.LanguageBackend, hashes *Tracker, startAt time.Time) int {
+func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *Tracker, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -655,15 +655,15 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
 	ec := &execContext{
-		colorCache: NewColorCache(),
-		runState:   runState,
-		rs:         rs,
-		ui:         &cli.ConcurrentUi{Ui: c.Ui},
-		turboCache: turboCache,
-		logger:     c.Config.Logger,
-		backend:    backend,
-		processes:  c.Processes,
-		taskHashes: hashes,
+		colorCache:     NewColorCache(),
+		runState:       runState,
+		rs:             rs,
+		ui:             &cli.ConcurrentUi{Ui: c.Ui},
+		turboCache:     turboCache,
+		logger:         c.Config.Logger,
+		packageManager: packageManager,
+		processes:      c.Processes,
+		taskHashes:     hashes,
 	}
 
 	// run the thing
@@ -818,15 +818,15 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 }
 
 type execContext struct {
-	colorCache *ColorCache
-	runState   *RunState
-	rs         *runSpec
-	ui         cli.Ui
-	turboCache cache.Cache
-	logger     hclog.Logger
-	backend    *api.LanguageBackend
-	processes  *process.Manager
-	taskHashes *Tracker
+	colorCache     *ColorCache
+	runState       *RunState
+	rs             *runSpec
+	ui             cli.Ui
+	turboCache     cache.Cache
+	logger         hclog.Logger
+	packageManager *packagemanager.PackageManager
+	processes      *process.Manager
+	taskHashes     *Tracker
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -913,13 +913,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
-	// @TODO: @jaredpalmer fix this hack to get the package manager's name
+
 	var cmd *exec.Cmd
-	if e.backend.Name == "nodejs-berry" {
-		cmd = exec.Command("yarn", argsactual...)
-	} else {
-		cmd = exec.Command(strings.TrimPrefix(e.backend.Name, "nodejs-"), argsactual...)
-	}
+	cmd = exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
