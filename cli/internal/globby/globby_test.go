@@ -1,6 +1,7 @@
 package globby
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -509,10 +510,15 @@ func TestGlobFiles(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GlobFiles(tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
 
+			var gotToSlash = make([]string, len(got))
+			for index, path := range got {
+				gotToSlash[index] = filepath.ToSlash(path)
+			}
+
 			// If the length of both are zero, we're already good to go.
 			if len(got) != 0 || len(tt.want) != 0 {
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("GlobFiles() = %v, want %v", got, tt.want)
+				if !reflect.DeepEqual(gotToSlash, tt.want) {
+					t.Errorf("GlobFiles() = %v, want %v", gotToSlash, tt.want)
 				}
 			}
 		})
