@@ -1007,7 +1007,14 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
 		filesToBeCached := globby.GlobFiles(filepath.Join(e.rs.Opts.cwd, pt.pkg.Dir), outputs, ignore)
-		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
+		var relativePaths = make([]string, len(filesToBeCached))
+
+		for index, value := range filesToBeCached {
+			relativePath, _ := filepath.Rel(e.rs.Opts.cwd, value)
+			relativePaths[index] = relativePath
+		}
+
+		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
