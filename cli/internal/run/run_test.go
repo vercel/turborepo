@@ -307,7 +307,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 func TestGetTargetsFromGlobArguments(t *testing.T) {
 	type args struct {
 		arguments  []string
-		configJson *fs.TurboConfigJSON
+		configJSON *fs.TurboConfigJSON
 	}
 	pipelineConfig := map[string]fs.TaskDefinition{
 		"alpha:aaa:check":       {},
@@ -349,7 +349,7 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 					"beta:a\\*:update", // beta:a*:update
 					"foxtrot:*",        // foxtrot:build foxtrot:update
 				},
-				configJson: &fs.TurboConfigJSON{
+				configJSON: &fs.TurboConfigJSON{
 					Pipeline: pipelineConfig,
 				},
 			},
@@ -364,7 +364,7 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 					"alpha:**:update", // alpha:aaa:update alpha:ccc:iii:update
 					"beta:**build",    // no results
 				},
-				configJson: &fs.TurboConfigJSON{
+				configJSON: &fs.TurboConfigJSON{
 					Pipeline: pipelineConfig,
 				},
 			},
@@ -380,7 +380,7 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 					"alpha:ccc:**:build", // alpha:ccc:iii:build alpha:ccc:jjj:build
 					"alpha:bbb:*",        // alpha:bbb:build alpha:bbb:check
 				},
-				configJson: &fs.TurboConfigJSON{
+				configJSON: &fs.TurboConfigJSON{
 					Pipeline: pipelineConfig,
 				},
 			},
@@ -396,7 +396,7 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 					"foxtrot:[a-z][a-z][a-z]:[^0-9]*", // foxtrot:aaa:clean foxtrot:aaa:update
 					"beta:a?:update",                  // beta:a*:update
 				},
-				configJson: &fs.TurboConfigJSON{
+				configJSON: &fs.TurboConfigJSON{
 					Pipeline: pipelineConfig,
 				},
 			},
@@ -407,7 +407,7 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJson)
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJSON)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
 				return

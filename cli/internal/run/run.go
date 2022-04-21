@@ -797,7 +797,7 @@ func hasGlobMeta(s string) bool {
 	return strings.ContainsAny(s, "*?[{")
 }
 
-// swapColonAndSlash replaces : with / and vice versa, leaving other characters alone
+// swapColonAndSlash replaces : with / and vice versa, leaving other characters alone.
 func swapColonAndSlash(r rune) rune {
 	switch {
 	case r == ':':
