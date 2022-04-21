@@ -103,7 +103,7 @@ Add `turbo` as a development dependency in the root of your project.
   </Tab>
   <Tab>
     ```bash
-    pnpm add turbo -DW
+    pnpm add turbo -Dw
     ```
   </Tab>
 </Tabs>
@@ -140,7 +140,10 @@ Packages that do not have have this script defined in their `package.json`'s lis
       // topological dependencies' and devDependencies'
       // `build` tasks  being completed first
       // (that's what the `^` symbol signifies).
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      // note: output globs are relative to each package's `package.json`
+      // (and not the monorepo root)
+      "outputs": [".next/**"]
     },
     "test": {
       // A package's `test` script depends on that package's
