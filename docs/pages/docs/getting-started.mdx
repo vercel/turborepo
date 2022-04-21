@@ -25,7 +25,7 @@ To see more examples and starters, have a look at the [examples directory on Git
 
 Turborepo was designed to be incrementally adopted. Adding it to an existing monorepo takes only a few minutes.
 
-Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](https://npmjs.com), and [PNPM](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
+`turbo` works with [Yarn](https://classic.yarnpkg.com/lang/en/), [npm](https://npmjs.com), and [pnpm](https://pnpm.io/) on the following operating systems:
 
 - macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
 - Linux 32-bit, 64-bit, ARM, ARM 64-bit, MIPS 64-bit Little Endian, PowerPC 64-bit Little Endian, IBM Z 64-bit Big Endian
@@ -33,6 +33,58 @@ Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](http
 - FreeBSD 64-bit, ARM 64-bit
 - NetBSD AMD64
 - Android ARM 64-bit
+
+### Ensure workspaces are configured
+
+**`turbo` is built on top of Workspaces**—A set of features implemented by [npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description), [Yarn](https://classic.yarnpkg.com/lang/en/docs/workspaces/), and [pnpm](https://pnpm.io/workspaces) that allows you to manage multiple packages from your local files system from within a singular top-level, root package. Workspaces are required to use `turbo`
+
+When it comes to folder structure, we suggest is applications to be placed the `/apps` folder and packages to go in `/packages` folders, but that's not a requirement.
+
+<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+  <Tab>
+<div/>
+Ensure that you have specified all `workspaces` in your root `package.json` like so:
+
+```json filename="package.json"
+{
+ "workspaces": [
+   "packages/*",
+   "apps/*"
+  ]
+}
+```
+
+  </Tab>
+  <Tab>
+<div/>    
+Ensure that you have specified all `workspaces` in your root `package.json` like so:
+
+```json filename="package.json"
+{
+ "workspaces": [
+   "packages/*",
+   "apps/*"
+  ]
+}
+```
+
+  </Tab>
+  <Tab>
+<div/>
+Ensure that you have specified all `packages` in `pnpm-workspaces.yaml`.
+```yaml filename="pnpm-workspace.yaml"
+packages:
+  - "packages/*"
+  - "apps/*"
+```
+  </Tab>
+</Tabs>
+
+Now re-run your NPM client's install command just to be sure.
+
+<Callout>
+  Note: Nested workspaces are not supported. You can flatten your workspaces as a workaround.
+</Callout>
 
 ### Install `turbo`
 
@@ -64,7 +116,7 @@ In your root directory, create an empty file named `turbo.json`.
 This will hold the configuration for Turborepo in your project.
 If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, ours is set to `origin/main`).
 
-```json
+```json filename="./turbo.json"
 {
   "$schema": "https://turborepo.org/schema.json",
   "baseBranch": "origin/main"
@@ -73,43 +125,64 @@ If your git repo's base branch is NOT `origin/master` then you need to specify a
 
 ### Create a `pipeline`
 
-In `turbo.json`, add the commands you want to "turbocharge" to your pipeline.
+To define your project's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of your project. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the `package.json` scripts defined in all of your workspaces in your monorepo.
 
-Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
+Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./features/caching).
 
-```jsonc
+Packages that do not have have this script defined in their `package.json`'s list of `scripts` will be ignored and skipped over during `turbo run`.
+
+```jsonc filename="./turbo.json"
 {
   "$schema": "https://turborepo.org/schema.json",
-  "baseBranch": "origin/main",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"],
-      // note: output globs are relative to each package's `package.json`
-      // (and not the monorepo root)
-      "outputs": [".next/**"]
+      // A package's `build` script depends on that package's
+      // topological dependencies' and devDependencies'
+      // `build` tasks  being completed first
+      // (that's what the `^` symbol signifies).
+      "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      // A package's `test` script depends on that package's
+      // own `build` script being completed first.
+      "dependsOn": ["build"],
+      "outputs": [],
+      // A package's `test` script should only be rerun when
+      // either a `.tsx` or `.ts` file has changed in `src` or `test` folders.
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "lint": {
+      // A package's `lint` script has no dependencies and
+      // can be run whenever. It also has no filesystem outputs.
       "outputs": []
     },
-    "dev": {
-      "cache": false
+    "deploy": {
+      // A package's `deploy` script depends on the `build`,
+      // `test`, and `lint` scripts of the same package
+      // being completed. It also has no filesystem outputs.
+      "dependsOn": ["build", "test", "lint"],
+      "outputs": []
     }
   }
 }
 ```
 
-In the above example, the `build` and `test` tasks are dependent on their packages `dependencies` and `devDependencies` being built first, this is denoted with the `^` prefix.
+The rough execution order for a given package based on the `dependsOn` keys above will be:
 
-For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders relative to each packages's `package.json` by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
-like in the example above, where the `.next/**` folder is selected to be the default cache outputs folder for the `build` task for each package. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
+1. `build` once its dependencies have run their `build` commands
+2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs)
+3. `lint` can run whenever and has no filesystem outputs (just logs)
+4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished, no outputs
 
-Finally, the `dev` task has its caching disabled using the `cache` key with a value of `false`.
+The full pipeline can then be run:
 
-See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
+```bash
+npx turbo run build test lint deploy
+```
+
+Turborepo will then efficiently schedule execution minimizing idle CPUs.
+
+See the [`pipeline`](./features/pipelines) documentation for more details on how to configure your `pipeline`.
 
 ### Edit `.gitignore`
 
@@ -127,30 +200,42 @@ Make sure that your task artifacts (the files you want to be cached) are also ig
 + .next/**
 ```
 
-### Ensure workspaces are configured
+Now re-run your NPM client's install command just to be sure. You should be good to go now.
 
-If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg.com/en/docs/workspaces/), be sure to also specify all `workspaces` in your `package.json`. The convention we follow is for applications to go into the `/apps` folder and packages to go in `/packages` folders.
+## Create `package.json` scripts
 
-```diff
+Add or update `scripts` in your root `package.json` to call `turbo` scripts.
+
+```jsonc filename="./package.json"
 {
-+ "workspaces": [
-+    "packages/*",
-+    "apps/*"
-+  ]
+  "scripts": {
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "dev": "turbo dev"
+  }
 }
 ```
 
-Now re-run your NPM client's install command just to be sure. You should be good to go now.
-
 ## Run stuff!
 
-To build with your freshly installed `turbo`, type the following:
-
-### Yarn
-
-```sh
-yarn turbo run build
-```
+<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm run build
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn  build
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm build
+    ```
+  </Tab>
+</Tabs>
 
 Now run it again. Depending on your monorepo setup, some stuff might already be caching properly. If not, no worries! In the next sections, we'll discuss how `turbo` works, how `scope` works, and then how to get caching working after that.
 
