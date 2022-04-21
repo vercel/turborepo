@@ -75,6 +75,18 @@ Run NPM scripts across all packages in specified scope. Tasks must be specified 
 to the tasks to be executed. Note that these additional arguments will _not_ be passed to
 any additional tasks that are run due to dependencies from the [pipeline](/docs/reference/configuration#pipeline) configuration.
 
+Uses glob patterns via [`doublestar`](https://github.com/bmatcuk/doublestar) under the hood. Specifying multiple glob patterns adds to the result.
+
+##### doublestar globbing patterns
+
+Just a quick overview.
+
+- `*` matches any number of characters, but not `:`
+- `?` matches a single character, but not `:`
+- `:**:` matches any number of characters, including `:`
+- `[class]` matches any single character (but not `:`) in the class of characters (abc or a-z)
+- `{alt1,...}` allows for a comma-separated list of "or" expressions
+
 ### Options
 
 #### `--cache-dir`
@@ -232,7 +244,7 @@ Positive patterns (e.g. `foo` or `*`) add to the results, while negative pattern
 
 Therefore a lone negation (e.g. `['!foo']`) will never match anything – use `['*', '!foo']` instead.
 
-##### Globbing patterns
+##### multimatch globbing patterns
 
 Just a quick overview.
 
