@@ -152,8 +152,11 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
-		globalHash, _ := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
-		// TODO(Gaspar): this error is unused?
+		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
+		if err != nil {
+			return fmt.Errorf("failed to calculate global hash: %v", err)
+		}
+
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
