@@ -401,6 +401,13 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	return justNames, pairs
 }
 
+func hasGlobPatterns(dep string) bool {
+	return strings.Contains(dep, "*") ||
+		strings.Contains(dep, "?") ||
+		strings.Contains(dep, "[") ||
+		strings.Contains(dep, "{")
+}
+
 func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *api.LanguageBackend, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
@@ -415,6 +422,8 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 				trimmed := strings.TrimPrefix(v, "$")
 				globalHashableEnvNames = append(globalHashableEnvNames, trimmed)
 				globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
+			} else if !hasGlobPatterns(v) {
+				globalDeps.Add(filepath.Join(rootpath, v))
 			} else {
 				globs = append(globs, v)
 			}
