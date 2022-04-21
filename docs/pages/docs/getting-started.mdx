@@ -5,6 +5,7 @@ description: Create your first monorepo or add Turborepo to an existing project.
 
 import Callout from "../../components/callout";
 import Beta from "../../components/beta";
+import { Tabs, Tab } from '../../components/Tabs'
 
 # Getting Started with Turborepo
 
@@ -37,23 +38,23 @@ Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](http
 
 Add `turbo` as a development dependency in the root of your project.
 
-### Yarn
-
-```bash
-yarn add turbo -DW
-```
-
-### NPM
-
-```bash
-npm install turbo -D
-```
-
-### PNPM
-
-```bash
-pnpm add turbo -Dw
-```
+<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo -D
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn add turbo -DW
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm add turbo -Dw
+    ```
+  </Tab>
+</Tabs>
 
 The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
 
@@ -84,7 +85,7 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
     "build": {
       "dependsOn": ["^build"],
       // note: output globs are relative to each package's `package.json`
-      // (and not the monorepo root) 
+      // (and not the monorepo root)
       "outputs": [".next/**"]
     },
     "test": {
