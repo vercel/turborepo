@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // PnpmWorkspaces is a representation of workspace package globs found
