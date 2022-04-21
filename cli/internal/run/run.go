@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -74,8 +73,6 @@ const (
 	HashLogs LogsMode = "hash"
 	NoLogs   LogsMode = "none"
 )
-
-var isGlobTargetPattern = regexp.MustCompile(`^.*((?:[^\\]*\*)|(?::\*\*:)).*$`)
 
 func (rs *runSpec) ArgsForTask(task string) []string {
 	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
@@ -795,6 +792,12 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 	logger.Debug("finish replaying logs")
 }
 
+// hasGlobMeta reports whether string contains any doublestar-supported glob characters.
+func hasGlobMeta(s string) bool {
+	return strings.ContainsAny(s, "*?[{")
+}
+
+// swapColonAndSlash replaces : with / and vice versa, leaving other characters alone
 func swapColonAndSlash(r rune) rune {
 	switch {
 	case r == ':':
@@ -818,7 +821,7 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 			break
 		}
 		if !strings.HasPrefix(arg, "-") {
-			if isGlobTargetPattern.MatchString(arg) {
+			if hasGlobMeta(arg) {
 				matchPattern := strings.Map(swapColonAndSlash, arg)
 				for task := range tasksAsPaths {
 					taskAsPath := tasksAsPaths[task]

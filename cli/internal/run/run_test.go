@@ -328,6 +328,9 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 		"foxtrot:update":        {},
 		"foxtrot:build":         {},
 		"foxtrot:aaa:update":    {},
+		"foxtrot:aaa:clean":     {},
+		"foxtrot:aaa:456":       {},
+		"foxtrot:123:clean":     {},
 	}
 	tests := []struct {
 		name    string
@@ -382,6 +385,22 @@ func TestGetTargetsFromGlobArguments(t *testing.T) {
 				},
 			},
 			want:    []string{"alpha:bbb:build", "alpha:bbb:check", "alpha:ccc:iii:build", "alpha:ccc:jjj:build", "delta:check", "echo:check", "foxtrot:aaa:update", "foxtrot:update"},
+			wantErr: false,
+		},
+		{
+			name: "handles wildcards, braces, and character class glob targets",
+			args: args{
+				arguments: []string{
+					"alpha:{a*,b*}:check",             // alpha:aaa:check alpha:bbb:check
+					"alpha:ccc:{iii,jjj}:build",       // alpha:ccc:iii:build alpha:ccc:jjj:build
+					"foxtrot:[a-z][a-z][a-z]:[^0-9]*", // foxtrot:aaa:clean foxtrot:aaa:update
+					"beta:a?:update",                  // beta:a*:update
+				},
+				configJson: &fs.TurboConfigJSON{
+					Pipeline: pipelineConfig,
+				},
+			},
+			want:    []string{"alpha:aaa:check", "alpha:bbb:check", "alpha:ccc:iii:build", "alpha:ccc:jjj:build", "beta:a*:update", "foxtrot:aaa:clean", "foxtrot:aaa:update"},
 			wantErr: false,
 		},
 	}
