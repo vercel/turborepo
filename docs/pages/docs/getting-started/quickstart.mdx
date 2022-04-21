@@ -1,5 +1,5 @@
 ---
-title: Getting Started
+title: Quickstart
 description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
@@ -84,7 +84,7 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
     "build": {
       "dependsOn": ["^build"],
       // note: output globs are relative to each package's `package.json`
-      // (and not the monorepo root) 
+      // (and not the monorepo root)
       "outputs": [".next/**"]
     },
     "test": {
