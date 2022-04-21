@@ -15,19 +15,31 @@ import (
 
 // PackageManager is an abstraction across package managers
 type PackageManager struct {
-	Name       string
-	Slug       string
-	Command    string
-	Specfile   string
-	Lockfile   string
+	// The descriptive name of the Package Manager.
+	Name string
+
+	// The unique identifier of the Package Manager.
+	Slug string
+
+	// The command used to invoke the Package Manager.
+	Command string
+
+	// The location of the package spec file used by the Package Manager.
+	Specfile string
+
+	// The location of the package lock file used by the Package Manager.
+	Lockfile string
+
+	// The directory in which package assets are stored by the Package Manager.
 	PackageDir string
 
 	// Return the list of workspace glob
 	GetWorkspaceGlobs func(rootpath string) ([]string, error)
 
+	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
 
-	// Detect if the project is using a specific package manager
+	// Detect if the project is using the Package Manager by inspecting the system.
 	Detect func(projectDirectory string, packageManager *PackageManager) (bool, error)
 }
 
