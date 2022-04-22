@@ -9,21 +9,13 @@ import (
 	"github.com/spf13/afero"
 )
 
-var afs *afero.Afero
-
-func init() {
-	setFileSystem(afero.NewOsFs())
-}
-
-func getFileSystem() afero.Fs {
-	return afs
-}
-
-func setFileSystem(fs afero.Fs) {
-	afs = &afero.Afero{Fs: fs}
-}
+var osFS = afero.NewOsFs()
 
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) []string {
+	return globFilesFs(osFS, basePath, includePatterns, excludePatterns)
+}
+
+func globFilesFs(fs afero.Fs, basePath string, includePatterns []string, excludePatterns []string) []string {
 	var include []string
 	var exclude []string
 	var result []string
@@ -39,7 +31,7 @@ func GlobFiles(basePath string, includePatterns []string, excludePatterns []stri
 	includePattern := "{" + strings.Join(include, ",") + "}"
 	excludePattern := "{" + strings.Join(exclude, ",") + "}"
 
-	_ = afs.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+	_ = afero.Walk(fs, basePath, func(path string, info os.FileInfo, err error) error {
 		var isDir = info.IsDir()
 		if val, _ := doublestar.PathMatch(excludePattern, path); val {
 			if isDir {
