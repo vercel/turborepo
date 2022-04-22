@@ -63,7 +63,7 @@ For more information about this automation, refer to the official [changesets do
 
 If you want to publish package to the public npm registry and make them publicly available, this is already setup.
 
-To publish packages to a private NPM organization scope, **remove** the following from each of the `package.json`'s
+To publish packages to a private npm organization scope, **remove** the following from each of the `package.json`'s
 
 ```diff
 - "publishConfig": {
