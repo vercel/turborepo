@@ -40,15 +40,15 @@ An example Pipeline configuration in `turbo.json`:
     },
     "test": {
       "dependsOn": ["build"],
-      "outputs": [""],
+      "outputs": [],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "lint": {
-      "outputs": [""]
+      "outputs": []
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint"],
-      "outputs": [""]
+      "outputs": []
     }
   }
 }
@@ -88,22 +88,22 @@ What you are declaring here in the `pipeline` object of the `turbo` configuratio
       // A package's `test` task depends on that package's
       // own `build` task being completed first.
       "dependsOn": ["build"],
-      "outputs": [""],
+      "outputs": [],
       // A package's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "lint": {
       // A package's `lint` task has no dependencies and
       // can be run whenever.
-      "outputs": [""]
+      "outputs": []
     },
     "deploy": {
       // A package's `deploy` task depends on the `build`,
       // `test`, and `lint` tasks of the same package
       // being completed.
       "dependsOn": ["build", "test", "lint"],
-      "outputs": [""]
+      "outputs": []
     }
   }
 }
@@ -142,7 +142,7 @@ An empty dependency list (`dependsOn` is either undefined or `[]`) means that a 
     "lint": {
       // A package's `lint` command has no dependencies and can be run at
       // whenever.
-      "outputs": [""]
+      "outputs": []
     }
   }
 }
@@ -164,7 +164,7 @@ Specifying `inputs` lets us define which files are relevant for a particular tas
       // A package's `test` task depends on that package's
       // own `build` task being completed first.
       "dependsOn": ["build"],
-      "outputs": [""],
+      "outputs": [],
       // A package's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
@@ -199,15 +199,15 @@ For these cases, you can express these relationships in your `pipeline` configur
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": [""],
+      "outputs": [],
     },
     "deploy": {
       "dependsOn": ["test", "build"],
-      "outputs": [""]
+      "outputs": []
     },
     "frontend#deploy": {
       "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"],
-      "outputs": [""]
+      "outputs": []
     }
   }
 }
