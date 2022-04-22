@@ -16,7 +16,7 @@ const help = `
 
   If <dir> is not provided up front you will be prompted for it.
 
-  Options:    
+  Options:
     --force             Bypass Git safety checks and forcibly run codemods
     --dry               Dry run (no changes are made to files)
     --print             Print transformed files to your terminal

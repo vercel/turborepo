@@ -94,6 +94,18 @@ export interface Pipeline {
    * @default true
    */
   cache?: boolean;
+
+  /**
+   * The set of glob patterns to consider as inputs to this task.
+   *
+   * Changes to files covered by these globs will cause a cache miss and force
+   * the task to rerun. Changes to files in the package not covered by these globs
+   * will not cause a cache miss.
+   *
+   * If omitted or empty, all files in the package are considered as inputs.
+   * @default []
+   */
+  inputs?: string[];
 }
 
 export interface RemoteCache {

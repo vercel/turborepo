@@ -32,19 +32,22 @@ type ApiClient struct {
 	HttpClient *retryablehttp.Client
 	teamID     string
 	teamSlug   string
+	// Whether or not to send preflight requests before uploads
+	usePreflight bool
 }
 
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
 var ErrTooManyFailures = errors.New("skipping HTTP Request, too many failures have occurred")
 
-func (api *ApiClient) SetToken(token string) {
-	api.Token = token
+// SetToken updates the ApiClient's Token
+func (c *ApiClient) SetToken(token string) {
+	c.Token = token
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
+func NewClient(baseURL string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64, usePreflight bool) *ApiClient {
 	client := &ApiClient{
-		baseUrl:            baseUrl,
+		baseUrl:            baseURL,
 		turboVersion:       turboVersion,
 		maxRemoteFailCount: maxRemoteFailCount,
 		HttpClient: &retryablehttp.Client{
@@ -57,8 +60,9 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID 
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
-		teamID:   teamID,
-		teamSlug: teamSlug,
+		teamID:       teamID,
+		teamSlug:     teamSlug,
+		usePreflight: usePreflight,
 	}
 	client.HttpClient.CheckRetry = client.checkRetry
 	return client
@@ -132,6 +136,39 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
+// doPreflight returns response with closed body, latest request url, and any errors to the caller
+func (c *ApiClient) doPreflight(requestURL string, requestMethod string, requestHeaders string) (*http.Response, string, error) {
+	req, err := retryablehttp.NewRequest(http.MethodOptions, requestURL, nil)
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Access-Control-Request-Method", requestMethod)
+	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
+	if err != nil {
+		return nil, requestURL, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
+	}
+
+	// If resp is not nil, ignore any errors
+	//  because most likely unimportant for preflight to handle.
+	// Let follow-up request handle potential errors.
+	resp, err := c.HttpClient.Do(req)
+	if resp == nil {
+		return resp, requestURL, err
+	}
+	defer resp.Body.Close() //nolint:golint,errcheck // nothing to do
+	// The client will continue following 307, 308 redirects until it hits
+	//  max redirects, gets an error, or gets a normal response.
+	// Get the url from the Location header or get the url used in the last
+	//  request (could have changed after following redirects).
+	// Note that net/http client does not continue redirecting the preflight
+	//  request with the OPTIONS method for 301, 302, and 303 redirects.
+	//  See golang/go Issue 18570.
+	if locationURL, err := resp.Location(); err == nil {
+		requestURL = locationURL.String()
+	} else {
+		requestURL = resp.Request.URL.String()
+	}
+	return resp, requestURL, nil
+}
+
 func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
 	if err := c.okToRequest(); err != nil {
 		return err
@@ -144,7 +181,16 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 		encoded = "?" + encoded
 	}
 
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), artifactBody)
+	requestURL := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	if c.usePreflight {
+		_, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
+		if err != nil {
+			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
+		}
+		requestURL = latestRequestURL
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodPut, requestURL, artifactBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -152,10 +198,10 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	if tag != "" {
 		req.Header.Set("x-artifact-tag", tag)
 	}
-
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
+
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -175,7 +221,17 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded), nil)
+
+	requestURL := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	if c.usePreflight {
+		_, latestRequestURL, err := c.doPreflight(requestURL, http.MethodGet, "Authorization, User-Agent")
+		if err != nil {
+			return nil, fmt.Errorf("pre-flight request failed before trying to fetch files in HTTP cache: %w", err)
+		}
+		requestURL = latestRequestURL
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodGet, requestURL, nil)
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
@@ -199,7 +255,17 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events"+encoded), body)
+
+	requestURL := c.makeUrl("/v8/artifacts/events" + encoded)
+	if c.usePreflight {
+		_, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPost, "Content-Type, Authorization, User-Agent")
+		if err != nil {
+			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
+		}
+		requestURL = latestRequestURL
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodPost, requestURL, body)
 	if err != nil {
 		return err
 	}
