@@ -59,7 +59,7 @@ This example comes with automated npm releases setup in a [GitHub Action](https:
 
 For more information about this automation, refer to the official [changesets documentation](https://github.com/changesets/changesets/blob/main/docs/automating-changesets.md)
 
-### NPM
+### npm
 
 If you want to publish package to the public npm registry and make them publicly available, this is already setup.
 
