@@ -5,9 +5,15 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "db:migrate:deploy": {},
-    "db:push": {},
-    "db:seed": {},
+    "db:migrate:deploy": {
+      "outputs": []
+    },
+    "db:push": {
+      "outputs": []
+    },
+    "db:seed": {
+      "outputs": []
+    },
     "dev": {
       "cache": false
     },
