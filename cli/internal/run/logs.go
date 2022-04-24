@@ -249,12 +249,12 @@ func (c *LogsCommand) Run(args []string) int {
 					c.Ui.Output(string(scan.Bytes()))
 				}
 			}
+		}
 			for i, dataPointName := range logsOptions.includeData {
 				// fmt.Sprintf uses the MetadataName.String() method
 				c.logInfo(c.Config.Logger, fmt.Sprintf("%v: %v", dataPointName, extraDataPoints[i]))
 			}
 		}
-	}
 
 	return 0
 }
