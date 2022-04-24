@@ -110,7 +110,7 @@ func (mplex cacheMultiplexer) Fetch(target string, key string, files []string) (
 			// Store this into other caches. We can ignore errors here because we know
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
-			mplex.storeUntil(target, key, start, duration, actualFiles, i)
+			mplex.storeUntil(target, key, start, duration, actualFiles, i) //nolint:golint,errcheck // nothing to do
 			return ok, actualFiles, start, duration, err
 		}
 	}

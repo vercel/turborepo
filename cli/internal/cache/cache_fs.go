@@ -170,7 +170,7 @@ func AppendHashesFile(path string, hash string) error {
 		return err
 	}
 
-	defer file.Close()
+	defer file.Close() //nolint:golint,errcheck // nothing to do
 
 	if _, err = file.WriteString(hash + "\n"); err != nil {
 		return err
@@ -186,7 +186,7 @@ func ReadHashesFile(path string) ([]string, error) {
 		return nil, err
 	}
 
-	defer file.Close()
+	defer file.Close() //nolint:golint,errcheck // nothing to do
 
 	var hashes []string
 	scanner := bufio.NewScanner(file)

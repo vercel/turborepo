@@ -238,7 +238,7 @@ func (c *LogsCommand) Run(args []string) int {
 				c.logWarning(c.Config.Logger, "", fmt.Errorf("error reading logs: %w", err))
 				continue
 			}
-			defer file.Close()
+			defer file.Close() //nolint:golint,errcheck // nothing to do
 			scan := bufio.NewScanner(file)
 			if logsOptions.outputLogsMode == HashLogs {
 				scan.Scan()
