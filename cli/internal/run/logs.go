@@ -241,7 +241,7 @@ func (c *LogsCommand) Run(args []string) int {
 			}
 			defer file.Close()
 			scan := bufio.NewScanner(file)
-			if logsOptions.outputLogsMode == "hash" {
+			if logsOptions.outputLogsMode == HashLogs {
 				scan.Scan()
 				c.Ui.Output(string(scan.Bytes()))
 			} else {
@@ -363,17 +363,16 @@ type LogsOptions struct {
 	// Replay task logs output mode
 	// full - show all,
 	// hash - only show task hash
-	// TODO: refactor to use run.LogsMode
-	outputLogsMode string
+	outputLogsMode LogsMode
 }
 
 func getDefaultLogsOptions() *LogsOptions {
 	return &LogsOptions{
 		listOnly:       false,
 		includeAll:     false,
-		sortType:       "task",
+		sortType:       TaskSort,
 		reverseSort:    false,
-		outputLogsMode: "full",
+		outputLogsMode: FullLogs,
 	}
 }
 
@@ -445,9 +444,9 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				outputLogsMode := arg[len("--output-logs="):]
 				switch outputLogsMode {
 				case "full":
-					logsOptions.outputLogsMode = outputLogsMode
+					logsOptions.outputLogsMode = FullLogs
 				case "hash-only":
-					logsOptions.outputLogsMode = "hash"
+					logsOptions.outputLogsMode = HashLogs
 				default:
 					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 				}
