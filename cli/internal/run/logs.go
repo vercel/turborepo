@@ -243,10 +243,10 @@ func (c *LogsCommand) Run(args []string) int {
 			scan := bufio.NewScanner(file)
 			if logsOptions.outputLogsMode == "hash" {
 				scan.Scan()
-				c.Ui.Output(ui.StripAnsi(string(scan.Bytes())))
+				c.Ui.Output(string(scan.Bytes()))
 			} else {
 				for scan.Scan() {
-					c.Ui.Output(ui.StripAnsi(string(scan.Bytes())))
+					c.Ui.Output(string(scan.Bytes()))
 				}
 			}
 			for i, dataPointName := range logsOptions.includeData {
