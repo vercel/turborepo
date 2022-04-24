@@ -25,7 +25,7 @@ import (
 // LogsCommand is a Command implementation that allows the user to view log replays
 type LogsCommand struct {
 	Config *config.Config
-	Ui     *cli.ColoredUi
+	UI     *cli.ColoredUi
 }
 
 // hashMetadata represents the files and duration metadata associated with
@@ -115,7 +115,7 @@ Options:
 
 // Run finds and replays task logs in the monorepo
 func (c *LogsCommand) Run(args []string) int {
-	logsOptions, err := parseLogsArgs(args, c.Ui)
+	logsOptions, err := parseLogsArgs(args, c.UI)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -215,7 +215,7 @@ func (c *LogsCommand) Run(args []string) int {
 		for _, dataPoint := range logsOptions.includeData {
 			header = append(header, string(dataPoint))
 		}
-		c.Ui.Output(strings.Join(header, ","))
+		c.UI.Output(strings.Join(header, ","))
 	}
 	for _, hash := range hashes {
 		extraDataPoints := make([]string, 0, len(logsOptions.includeData))
@@ -227,7 +227,7 @@ func (c *LogsCommand) Run(args []string) int {
 			if len(extraDataPoints) > 0 {
 				extraDataPointsValue = "," + strings.Join(extraDataPoints, ",")
 			}
-			c.Ui.Output(fmt.Sprintf("%v%v", hash.Hash, extraDataPointsValue))
+			c.UI.Output(fmt.Sprintf("%v%v", hash.Hash, extraDataPointsValue))
 			continue
 		}
 		if len(hash.ReplayPaths) == 0 {
@@ -243,10 +243,10 @@ func (c *LogsCommand) Run(args []string) int {
 			scan := bufio.NewScanner(file)
 			if logsOptions.outputLogsMode == HashLogs {
 				scan.Scan()
-				c.Ui.Output(strings.ReplaceAll(string(scan.Bytes()), "replaying output", "suppressing output"))
+				c.UI.Output(strings.ReplaceAll(string(scan.Bytes()), "replaying output", "suppressing output"))
 			} else {
 				for scan.Scan() {
-					c.Ui.Output(string(scan.Bytes()))
+					c.UI.Output(string(scan.Bytes()))
 				}
 			}
 		}
@@ -497,7 +497,7 @@ func (c *LogsCommand) logWarning(log hclog.Logger, prefix string, err error) {
 		prefix = " " + prefix + ": "
 	}
 
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
+	c.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 }
 
 // logError logs an error and outputs it to the UI.
@@ -508,12 +508,12 @@ func (c *LogsCommand) logError(log hclog.Logger, prefix string, err error) {
 		prefix += ": "
 	}
 
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
+	c.UI.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
 // logInfo logs an info message and outputs it to the UI.
 func (c *LogsCommand) logInfo(log hclog.Logger, message string) {
 	log.Info(message)
 
-	c.Ui.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.BlueString(" %v", message)))
+	c.UI.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.BlueString(" %v", message)))
 }

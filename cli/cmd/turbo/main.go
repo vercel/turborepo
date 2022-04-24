@@ -49,7 +49,7 @@ func main() {
 	}
 	args = args[:argsEnd]
 
-	ui := ui.BuildColoredUi(colorMode);
+	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
@@ -80,7 +80,7 @@ func main() {
 				nil
 		},
 		"logs": func() (cli.Command, error) {
-			return &run.LogsCommand{Config: cf, Ui: ui}, nil
+			return &run.LogsCommand{Config: cf, UI: ui}, nil
 		},
 		"prune": func() (cli.Command, error) {
 			return &prune.PruneCommand{Config: cf, Ui: ui}, nil
