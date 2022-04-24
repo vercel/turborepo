@@ -230,20 +230,21 @@ func (c *LogsCommand) Run(args []string) int {
 			c.Ui.Output(fmt.Sprintf("%v%v", hash.Hash, extraDataPointsValue))
 			continue
 		}
-		if logsOptions.outputLogsMode == HashLogs {
-			c.Ui.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash.Hash)))
-		} else {
-			if len(hash.ReplayPaths) == 0 {
-				c.logInfo(c.Config.Logger, fmt.Sprintf("%v: no logs found to replay", hash.Hash))
+		if len(hash.ReplayPaths) == 0 {
+			c.logInfo(c.Config.Logger, fmt.Sprintf("%v: no logs found to replay", hash.Hash))
+		}
+		for _, replayPath := range hash.ReplayPaths {
+			file, err := os.Open(replayPath)
+			if err != nil {
+				c.logWarning(c.Config.Logger, "", fmt.Errorf("error reading logs: %w", err))
+				continue
 			}
-			for _, replayPath := range hash.ReplayPaths {
-				file, err := os.Open(replayPath)
-				if err != nil {
-					c.logWarning(c.Config.Logger, "", fmt.Errorf("error reading logs: %w", err))
-					continue
-				}
-				defer file.Close()
-				scan := bufio.NewScanner(file)
+			defer file.Close()
+			scan := bufio.NewScanner(file)
+			if logsOptions.outputLogsMode == HashLogs {
+				scan.Scan()
+				c.Ui.Output(string(scan.Bytes()))
+			} else {
 				for scan.Scan() {
 					c.Ui.Output(string(scan.Bytes()))
 				}
