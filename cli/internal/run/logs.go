@@ -37,27 +37,27 @@ type hashMetadata struct {
 	End         time.Time
 }
 
-type SortMode string
+type sortMode string
 
 const (
-	TaskSort      SortMode = "task"
-	DurationSort  SortMode = "duration"
-	AlnumSort     SortMode = "alnum"
-	StartTimeSort SortMode = "start"
-	EndTimeSort   SortMode = "end"
-	QuerySort     SortMode = "query"
-	NothingSort   SortMode = "n/a"
+	TaskSort      sortMode = "task"
+	DurationSort  sortMode = "duration"
+	AlnumSort     sortMode = "alnum"
+	StartTimeSort sortMode = "start"
+	EndTimeSort   sortMode = "end"
+	QuerySort     sortMode = "query"
+	NothingSort   sortMode = "n/a"
 )
 
-type MetadataName string
+type metadataName string
 
 const (
-	DurationPoint  MetadataName = "duration"
-	StartTimePoint MetadataName = "start"
-	EndTimePoint   MetadataName = "end"
+	DurationPoint  metadataName = "duration"
+	StartTimePoint metadataName = "start"
+	EndTimePoint   metadataName = "end"
 )
 
-func (m MetadataName) String() string {
+func (m metadataName) String() string {
 	switch m {
 	case DurationPoint:
 		return "Elapsed Time"
@@ -250,7 +250,7 @@ func (c *LogsCommand) Run(args []string) int {
 			}
 		}
 		for i, dataPointName := range logsOptions.includeData {
-			// fmt.Sprintf uses the MetadataName.String() method
+			// fmt.Sprintf uses the metadataName.String() method
 			c.logInfo(c.Config.Logger, fmt.Sprintf("%v: %v", dataPointName, extraDataPoints[i]))
 		}
 	}
@@ -258,7 +258,7 @@ func (c *LogsCommand) Run(args []string) int {
 	return 0
 }
 
-func getDataPoint(dataType MetadataName, hash hashMetadata) string {
+func getDataPoint(dataType metadataName, hash hashMetadata) string {
 	switch dataType {
 	case DurationPoint:
 		return fmt.Sprintf("%v ms", hash.Duration)
@@ -341,7 +341,7 @@ type LogsOptions struct {
 	//  duration - show task elapsed duration
 	//  start - show task start time
 	//  end - show task end time
-	includeData []MetadataName
+	includeData []metadataName
 	// Show all results, not only from the last run
 	includeAll bool
 	// Path to last run file
@@ -353,7 +353,7 @@ type LogsOptions struct {
 	//  end - end time of each task (oldest to newest)
 	//  alnum - alphanumerically on hash string
 	//  query - match order of queryHashes
-	sortType SortMode
+	sortType sortMode
 	// True to reverse output order
 	reverseSort bool
 	// List of requested hashes to retrieve
@@ -403,8 +403,8 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 			case strings.HasPrefix(arg, "--include-metadata="):
 				rawMetadataNames := arg[len("--include-metadata="):]
 				metadataNames := strings.Split(rawMetadataNames, ",")
-				for _, metadataName := range metadataNames {
-					switch metadataName {
+				for _, metadataNameStr := range metadataNames {
+					switch metadataNameStr {
 					case "duration":
 						logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
 					case "start":
