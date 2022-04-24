@@ -19,7 +19,7 @@ var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdo
 var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
 var gray = color.New(color.Faint)
 var bold = color.New(color.Bold)
-var INFO_PREFIX = color.New(color.Bold, color.FgBlue, color.ReverseVideo).Sprint(" INFO ")
+var INFO_PREFIX = color.New(color.Bold, color.FgBlue, color.ReverseVideo).Sprint(" INFO ") //nolint:golint // TODO: don't use ALL_CAPS in Go names; use CamelCase
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
 
