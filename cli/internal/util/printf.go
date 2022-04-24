@@ -1,9 +1,12 @@
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package util
 
 import (
 	"fmt"
 	"io"
 	"os"
+
 	"github.com/vercel/turborepo/cli/internal/ui"
 )
 

@@ -1,4 +1,8 @@
 // Package cache abstracts storing and fetching previously run tasks
+
+// Adapted from https://github.com/thought-machine/please
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package cache
 
 import (

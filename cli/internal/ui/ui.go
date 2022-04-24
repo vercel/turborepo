@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"regexp"
@@ -24,13 +25,6 @@ var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).S
 
 var ansiRegex = regexp.MustCompile(ansiEscapeStr)
 
-func StripAnsi(str string) string {
-	if !IsTTY {
-		return ansiRegex.ReplaceAllString(str, "")
-	}
-	return str
-}
-
 // Dim prints out dimmed text
 func Dim(str string) string {
 	return gray.Sprint(str)
@@ -40,6 +34,10 @@ func Bold(str string) string {
 	return bold.Sprint(str)
 }
 
+// Adapted from go-rainbow
+// Copyright (c) 2017 Raphael Amorim
+// Source: https://github.com/raphamorim/go-rainbow
+// SPDX-License-Identifier: MIT
 func rgb(i int) (int, int, int) {
 	var f = 0.275
 
@@ -50,10 +48,12 @@ func rgb(i int) (int, int, int) {
 }
 
 // Rainbow function returns a formated colorized string ready to print it to the shell/terminal
+//
+// Adapted from go-rainbow
+// Copyright (c) 2017 Raphael Amorim
+// Source: https://github.com/raphamorim/go-rainbow
+// SPDX-License-Identifier: MIT
 func Rainbow(text string) string {
-	if !IsTTY {
-		return text
-	}
 	var rainbowStr []string
 	for index, value := range text {
 		r, g, b := rgb(index)
@@ -64,13 +64,48 @@ func Rainbow(text string) string {
 	return strings.Join(rainbowStr, "")
 }
 
+type stripAnsiWriter struct {
+	wrappedWriter io.Writer
+}
+
+func (into *stripAnsiWriter) Write(p []byte) (int, error) {
+	n, err := into.wrappedWriter.Write(ansiRegex.ReplaceAll(p, []byte{}))
+	if err != nil {
+		// The number of bytes returned here isn't directly related to the input bytes
+		// if ansi color codes were being stripped out, but we are counting on Stdout.Write
+		// not failing under typical operation as well.
+		return n, err
+	}
+
+	// Write must return a non-nil error if it returns n < len(p). Consequently, if the
+	// wrappedWrite.Write call succeeded we will return len(p) as the number of bytes
+	// written.
+	return len(p), nil
+}
+
 // Default returns the default colored ui
 func Default() *cli.ColoredUi {
+	return BuildColoredUi(ColorModeUndefined)
+}
+
+func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
+	colorMode = applyColorMode(colorMode)
+
+	var outWriter, errWriter io.Writer
+
+	if colorMode == ColorModeSuppressed {
+		outWriter = &stripAnsiWriter{wrappedWriter: os.Stdout}
+		errWriter = &stripAnsiWriter{wrappedWriter: os.Stderr}
+	} else {
+		outWriter = os.Stdout
+		errWriter = os.Stderr
+	}
+
 	return &cli.ColoredUi{
 		Ui: &cli.BasicUi{
 			Reader:      os.Stdin,
-			Writer:      os.Stdout,
-			ErrorWriter: os.Stderr,
+			Writer:      outWriter,
+			ErrorWriter: errWriter,
 		},
 		OutputColor: cli.UiColorNone,
 		InfoColor:   cli.UiColorNone,
