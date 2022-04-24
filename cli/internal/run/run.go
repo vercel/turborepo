@@ -650,7 +650,9 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	os.Remove(filepath.Join(rs.Opts.cacheFolder, "last-run.log"))
+	if err := os.Remove(filepath.Join(rs.Opts.cacheFolder, "last-run.log")); err != nil {
+		c.Ui.Warn(fmt.Sprintf("Failed to clear last run log: %v", err))
+	}
 	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
