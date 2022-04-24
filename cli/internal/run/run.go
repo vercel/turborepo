@@ -883,7 +883,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		return nil
 	}
 	// Cache ---------------------------------------------
-	cache.AppendHashesFile(filepath.Join(e.rs.Opts.cacheFolder, "last-run.log"), hash)
+	if err := cache.AppendHashesFile(filepath.Join(e.rs.Opts.cacheFolder, "last-run.log"), hash); err != nil {
+		targetUi.Warn(fmt.Sprintf("failed to update last run log: %v", err))
+	}
 	var hit bool
 	if !e.rs.Opts.forceExecution {
 		hit, _, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
