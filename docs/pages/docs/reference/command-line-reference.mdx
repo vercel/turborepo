@@ -644,7 +644,7 @@ turbo logs --list --all
 
 `type: string`
 
-Defaults to `task`. Set mode to order results. Use `task` to sort by the previous run's execution order (requires the file at [`--last-run-path`](#--last-run-path) to exist). Use `duration` to sort by time taken per task hash (lowest to highest). Use `start` to order by task start times. Use `end` to order by task end times. Use `alnum` to order by hash alphanumerically. Normally defaults to task. If specific hashes are given, defaults to the order they are given in. If [`--all`](#--all), defaults to alnum.
+Defaults to `task`. Set mode to order results. Use `task` to sort by the previous run's execution order (requires the file at [`--last-run-path`](#--last-run-path) to exist). Use `duration` to sort by time taken per task hash (lowest to highest). Use `start` to order by task start times. Use `end` to order by task end times. Use `alnum` to order by hash alphanumerically. Normally defaults to task. If specific hashes are given, defaults to the order they are given in. If [`--all`](#--all), defaults to `alnum`.
 
 ```sh
 turbo logs --sort=task
@@ -681,7 +681,7 @@ turbo logs --output-logs=hash-only
 
 `type: string`
 
-Also show the specified data points for each task. Can be given multiple times or as a comma-separated list. Options are duration, start, and end.
+Also show the specified data points for each task. Can be given multiple times or as a comma-separated list. Options are `duration`, `start`, `end`, and `all`.
 
 ```sh
 turbo logs --list --include-metadata=duration

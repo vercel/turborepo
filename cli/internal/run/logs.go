@@ -412,6 +412,10 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 						logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
 					case "end":
 						logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
+					case "all":
+						logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
+						logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
+						logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
 					default:
 						return nil, fmt.Errorf("invalid value(s) %v for --include-metadata CLI flag. This should be duration, start, or end", rawMetadataNames)
 					}
