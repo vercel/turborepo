@@ -40,30 +40,30 @@ type hashMetadata struct {
 type sortMode string
 
 const (
-	TaskSort      sortMode = "task"
-	DurationSort  sortMode = "duration"
-	AlnumSort     sortMode = "alnum"
-	StartTimeSort sortMode = "start"
-	EndTimeSort   sortMode = "end"
-	QuerySort     sortMode = "query"
-	NothingSort   sortMode = "n/a"
+	taskSort      sortMode = "task"
+	durationSort  sortMode = "duration"
+	alnumSort     sortMode = "alnum"
+	startTimeSort sortMode = "start"
+	endTimeSort   sortMode = "end"
+	querySort     sortMode = "query"
+	nothingSort   sortMode = "n/a"
 )
 
 type metadataName string
 
 const (
-	DurationPoint  metadataName = "duration"
-	StartTimePoint metadataName = "start"
-	EndTimePoint   metadataName = "end"
+	durationPoint  metadataName = "duration"
+	startTimePoint metadataName = "start"
+	endTimePoint   metadataName = "end"
 )
 
 func (m metadataName) String() string {
 	switch m {
-	case DurationPoint:
+	case durationPoint:
 		return "Elapsed Time"
-	case StartTimePoint:
+	case startTimePoint:
 		return "Start Time"
-	case EndTimePoint:
+	case endTimePoint:
 		return "End Time"
 	}
 	return ""
@@ -126,7 +126,7 @@ func (c *LogsCommand) Run(args []string) int {
 	c.Config.Logger.Trace("reverse", "value", logsOptions.reverseSort)
 
 	var lastRunHashes []string
-	if logsOptions.sortType == TaskSort || !logsOptions.includeAll {
+	if logsOptions.sortType == taskSort || !logsOptions.includeAll {
 		if !fs.FileExists(logsOptions.lastRunPath) {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve last run file: %v", logsOptions.lastRunPath))
 			metadataPaths := globby.GlobFiles(logsOptions.cacheFolder, []string{"*-meta.json"}, []string{})
@@ -194,15 +194,15 @@ func (c *LogsCommand) Run(args []string) int {
 	// sort task list
 	cmp := createAlnumComparator(hashes, logsOptions.reverseSort)
 	switch logsOptions.sortType {
-	case DurationSort:
+	case durationSort:
 		cmp = createDurationComparator(hashes, logsOptions.reverseSort)
-	case TaskSort:
+	case taskSort:
 		cmp = createReferenceIndexComparator(hashes, lastRunHashes, logsOptions.reverseSort)
-	case QuerySort:
+	case querySort:
 		cmp = createReferenceIndexComparator(hashes, logsOptions.queryHashes, logsOptions.reverseSort)
-	case StartTimeSort:
+	case startTimeSort:
 		cmp = createStartTimeComparator(hashes, logsOptions.reverseSort)
-	case EndTimeSort:
+	case endTimeSort:
 		cmp = createEndTimeComparator(hashes, logsOptions.reverseSort)
 	}
 	sort.SliceStable(hashes, cmp)
@@ -260,11 +260,11 @@ func (c *LogsCommand) Run(args []string) int {
 
 func getDataPoint(dataType metadataName, hash hashMetadata) string {
 	switch dataType {
-	case DurationPoint:
+	case durationPoint:
 		return fmt.Sprintf("%v ms", hash.Duration)
-	case StartTimePoint:
+	case startTimePoint:
 		return hash.Start.String()
-	case EndTimePoint:
+	case endTimePoint:
 		return hash.End.String()
 	}
 	return ""
@@ -369,7 +369,7 @@ func getDefaultLogsOptions() *LogsOptions {
 	return &LogsOptions{
 		listOnly:       false,
 		includeAll:     false,
-		sortType:       TaskSort,
+		sortType:       taskSort,
 		reverseSort:    false,
 		outputLogsMode: FullLogs,
 	}
@@ -386,7 +386,7 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 	unresolvedLastRunPath := ""
-	unresolvedSortType := NothingSort
+	unresolvedSortType := nothingSort
 	queryHashesSet := make(util.Set)
 
 	for _, arg := range args {
@@ -406,15 +406,15 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				for _, metadataNameStr := range metadataNames {
 					switch metadataNameStr {
 					case "duration":
-						logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
+						logsOptions.includeData = append(logsOptions.includeData, durationPoint)
 					case "start":
-						logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
+						logsOptions.includeData = append(logsOptions.includeData, startTimePoint)
 					case "end":
-						logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
+						logsOptions.includeData = append(logsOptions.includeData, endTimePoint)
 					case "all":
-						logsOptions.includeData = append(logsOptions.includeData, DurationPoint)
-						logsOptions.includeData = append(logsOptions.includeData, StartTimePoint)
-						logsOptions.includeData = append(logsOptions.includeData, EndTimePoint)
+						logsOptions.includeData = append(logsOptions.includeData, durationPoint)
+						logsOptions.includeData = append(logsOptions.includeData, startTimePoint)
+						logsOptions.includeData = append(logsOptions.includeData, endTimePoint)
 					default:
 						return nil, fmt.Errorf("invalid value(s) %v for --include-metadata CLI flag. This should be duration, start, or end", rawMetadataNames)
 					}
@@ -425,15 +425,15 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				inputSortType := arg[len("--sort="):]
 				switch inputSortType {
 				case "task":
-					unresolvedSortType = TaskSort
+					unresolvedSortType = taskSort
 				case "duration":
-					unresolvedSortType = DurationSort
+					unresolvedSortType = durationSort
 				case "start":
-					unresolvedSortType = StartTimeSort
+					unresolvedSortType = startTimeSort
 				case "end":
-					unresolvedSortType = EndTimeSort
+					unresolvedSortType = endTimeSort
 				case "alnum":
-					unresolvedSortType = AlnumSort
+					unresolvedSortType = alnumSort
 				default:
 					return nil, fmt.Errorf("invalid value %v for --sort CLI flag. This should be task, duration, start, end, or alnum", inputSortType)
 				}
@@ -466,13 +466,13 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 
 	// We can only set sortType once we know what the default should
 	//  be and whether or not it has been overridden
-	if len(logsOptions.queryHashes) > 0 && unresolvedSortType == NothingSort {
-		unresolvedSortType = QuerySort
+	if len(logsOptions.queryHashes) > 0 && unresolvedSortType == nothingSort {
+		unresolvedSortType = querySort
 	}
-	if logsOptions.includeAll && unresolvedSortType == NothingSort {
-		unresolvedSortType = StartTimeSort
+	if logsOptions.includeAll && unresolvedSortType == nothingSort {
+		unresolvedSortType = startTimeSort
 	}
-	if unresolvedSortType != NothingSort {
+	if unresolvedSortType != nothingSort {
 		logsOptions.sortType = unresolvedSortType
 	}
 
