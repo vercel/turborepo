@@ -233,27 +233,27 @@ func (c *LogsCommand) Run(args []string) int {
 		if logsOptions.outputLogsMode == HashLogs {
 			c.Ui.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash.Hash)))
 		} else {
-		if len(hash.ReplayPaths) == 0 {
-			c.logInfo(c.Config.Logger, fmt.Sprintf("%v: no logs found to replay", hash.Hash))
-		}
-		for _, replayPath := range hash.ReplayPaths {
-			file, err := os.Open(replayPath)
-			if err != nil {
-				c.logWarning(c.Config.Logger, "", fmt.Errorf("error reading logs: %w", err))
-				continue
+			if len(hash.ReplayPaths) == 0 {
+				c.logInfo(c.Config.Logger, fmt.Sprintf("%v: no logs found to replay", hash.Hash))
 			}
-			defer file.Close()
-			scan := bufio.NewScanner(file)
+			for _, replayPath := range hash.ReplayPaths {
+				file, err := os.Open(replayPath)
+				if err != nil {
+					c.logWarning(c.Config.Logger, "", fmt.Errorf("error reading logs: %w", err))
+					continue
+				}
+				defer file.Close()
+				scan := bufio.NewScanner(file)
 				for scan.Scan() {
 					c.Ui.Output(string(scan.Bytes()))
 				}
 			}
 		}
-			for i, dataPointName := range logsOptions.includeData {
-				// fmt.Sprintf uses the MetadataName.String() method
-				c.logInfo(c.Config.Logger, fmt.Sprintf("%v: %v", dataPointName, extraDataPoints[i]))
-			}
+		for i, dataPointName := range logsOptions.includeData {
+			// fmt.Sprintf uses the MetadataName.String() method
+			c.logInfo(c.Config.Logger, fmt.Sprintf("%v: %v", dataPointName, extraDataPoints[i]))
 		}
+	}
 
 	return 0
 }
@@ -439,7 +439,7 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 				unresolvedCacheFolder = arg[len("--cache-dir="):]
 			case strings.HasPrefix(arg, "--last-run-path="):
 				unresolvedLastRunPath = arg[len("--last-run-path="):]
-			case strings.HasPrefix(arg, "--output-logs"):
+			case strings.HasPrefix(arg, "--output-logs="):
 				outputLogsMode := arg[len("--output-logs="):]
 				switch outputLogsMode {
 				case "full":
