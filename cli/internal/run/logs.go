@@ -243,7 +243,7 @@ func (c *LogsCommand) Run(args []string) int {
 			scan := bufio.NewScanner(file)
 			if logsOptions.outputLogsMode == HashLogs {
 				scan.Scan()
-				c.Ui.Output(string(scan.Bytes()))
+				c.Ui.Output(strings.ReplaceAll(string(scan.Bytes()), "replaying output", "suppressing output"))
 			} else {
 				for scan.Scan() {
 					c.Ui.Output(string(scan.Bytes()))
