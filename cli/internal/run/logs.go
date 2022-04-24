@@ -19,7 +19,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
-	"github.com/pkg/errors"
 )
 
 // LogsCommand is a Command implementation that allows the user to view log replays
@@ -455,7 +454,7 @@ func parseLogsArgs(args []string, output cli.Ui) (*LogsOptions, error) {
 					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 				}
 			default:
-				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
+				return nil, fmt.Errorf("unknown flag: %v", arg)
 			}
 		} else if !strings.HasPrefix(arg, "-") {
 			if !queryHashesSet.Includes(arg) {
