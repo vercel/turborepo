@@ -75,10 +75,17 @@ jobs:
       - run: yarn install --frozen-lockfile
         working-directory: crates/turbopack/tests/node-file-trace
 
+      - name: Install nextest
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-nextest
+
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: test
+          command: nextest
+          args: run
 
       - name: Run cargo test (benchmarks)
         uses: actions-rs/cargo@v1
