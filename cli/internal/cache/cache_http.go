@@ -56,7 +56,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
 
-	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Read the entire artifact tar into memory so we can easily compute the signature.
 	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
 	// additional overhead by doing the ioutil.ReadAll here instead.
 	artifactBody, err := ioutil.ReadAll(r)
