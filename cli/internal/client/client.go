@@ -142,6 +142,7 @@ func (c *ApiClient) doPreflight(requestURL string, requestMethod string, request
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Access-Control-Request-Method", requestMethod)
 	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
+	req.Header.Set("Authorization", "Bearer "+c.Token)
 	if err != nil {
 		return nil, requestURL, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
@@ -182,18 +183,23 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	}
 
 	requestURL := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	allowAuth := true
 	if c.usePreflight {
-		_, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
+		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
 		if err != nil {
 			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
 		}
 		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
 	}
 
 	req, err := retryablehttp.NewRequest(http.MethodPut, requestURL, artifactBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if tag != "" {
 		req.Header.Set("x-artifact-tag", tag)
@@ -223,16 +229,21 @@ func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 	}
 
 	requestURL := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	allowAuth := true
 	if c.usePreflight {
-		_, latestRequestURL, err := c.doPreflight(requestURL, http.MethodGet, "Authorization, User-Agent")
+		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodGet, "Authorization, User-Agent")
 		if err != nil {
 			return nil, fmt.Errorf("pre-flight request failed before trying to fetch files in HTTP cache: %w", err)
 		}
 		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
 	}
 
 	req, err := retryablehttp.NewRequest(http.MethodGet, requestURL, nil)
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
 		return nil, fmt.Errorf("invalid cache URL: %w", err)
@@ -257,12 +268,15 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	}
 
 	requestURL := c.makeUrl("/v8/artifacts/events" + encoded)
+	allowAuth := true
 	if c.usePreflight {
-		_, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPost, "Content-Type, Authorization, User-Agent")
+		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPost, "Content-Type, Authorization, User-Agent")
 		if err != nil {
 			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
 		}
 		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
 	}
 
 	req, err := retryablehttp.NewRequest(http.MethodPost, requestURL, body)
@@ -270,7 +284,9 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	resp, err := c.HttpClient.Do(req)
 	if resp != nil && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
