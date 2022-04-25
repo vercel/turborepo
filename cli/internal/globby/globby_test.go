@@ -10,7 +10,7 @@ import (
 
 // setup prepares the test file system contents and returns the file system.
 func setup(files []string) afero.Fs {
-	var fs = afero.NewMemMapFs()
+	fs := afero.NewMemMapFs()
 
 	for _, file := range files {
 		// We don't need the handle, we don't need the error.
@@ -502,12 +502,12 @@ func TestGlobFilesFs(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		var fs = setup(tt.files)
+		fs := setup(tt.files)
 
 		t.Run(tt.name, func(t *testing.T) {
 			got := globFilesFs(fs, tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
 
-			var gotToSlash = make([]string, len(got))
+			gotToSlash := make([]string, len(got))
 			for index, path := range got {
 				gotToSlash[index] = filepath.ToSlash(path)
 			}

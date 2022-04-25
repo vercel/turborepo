@@ -9,10 +9,10 @@ import (
 	"github.com/spf13/afero"
 )
 
-var osFS = afero.NewOsFs()
+var _osFS = afero.NewOsFs()
 
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) []string {
-	return globFilesFs(osFS, basePath, includePatterns, excludePatterns)
+	return globFilesFs(_osFS, basePath, includePatterns, excludePatterns)
 }
 
 func globFilesFs(fs afero.Fs, basePath string, includePatterns []string, excludePatterns []string) []string {
@@ -32,7 +32,7 @@ func globFilesFs(fs afero.Fs, basePath string, includePatterns []string, exclude
 	excludePattern := "{" + strings.Join(exclude, ",") + "}"
 
 	_ = afero.Walk(fs, basePath, func(path string, info os.FileInfo, err error) error {
-		var isDir = info.IsDir()
+		isDir := info.IsDir()
 		if val, _ := doublestar.PathMatch(excludePattern, path); val {
 			if isDir {
 				return filepath.SkipDir
