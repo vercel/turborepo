@@ -1010,7 +1010,11 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		var relativePaths = make([]string, len(filesToBeCached))
 
 		for index, value := range filesToBeCached {
-			relativePath, _ := filepath.Rel(e.rs.Opts.cwd, value)
+			relativePath, err := filepath.Rel(e.rs.Opts.cwd, value)
+			if err != nil {
+				e.logError(targetLogger, "", fmt.Errorf("File path cannot be made relative: %w", err))
+				continue
+			}
 			relativePaths[index] = relativePath
 		}
 
