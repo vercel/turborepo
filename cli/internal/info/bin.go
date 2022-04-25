@@ -2,10 +2,10 @@ package info
 
 import (
 	"fmt"
-	"os"
-	"strings"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/ui"
+	"os"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
