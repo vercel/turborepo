@@ -210,7 +210,7 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
