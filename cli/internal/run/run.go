@@ -13,12 +13,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -26,6 +24,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
@@ -41,9 +40,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const TOPOLOGICAL_PIPELINE_DELIMITER = "^"
-const ENV_PIPELINE_DELIMITER = "$"
-
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
 	Config    *config.Config
@@ -55,8 +51,7 @@ type RunCommand struct {
 // It is not intended to include information specific to a particular run.
 type completeGraph struct {
 	TopologicalGraph dag.AcyclicGraph
-	Pipeline         map[string]fs.Pipeline
-	SCC              [][]dag.Vertex
+	Pipeline         fs.Pipeline
 	PackageInfos     map[interface{}]*fs.PackageJSON
 	GlobalHash       string
 	RootNode         string
@@ -96,7 +91,7 @@ func (c *RunCommand) Synopsis() string {
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
 	helpText := strings.TrimSpace(`
-Usage: turbo run <task> [options] ...
+Usage: turbo run <task> [options] [-- <args passed to tasks>]
 
     Run tasks across projects in your monorepo.
 
@@ -105,6 +100,8 @@ Usage: turbo run <task> [options] ...
     tasks already in the cache will skip re-execution and immediately move
     artifacts from the cache into the correct output folders (as if the task
     occurred again).
+
+    Arguments passed after '--' will be passed through to the named tasks.
 
 Options:
   --help                 Show this message.
@@ -133,8 +130,8 @@ Options:
                          mergebase. This uses the git diff ${target_branch}...
                          mechanism to identify which packages have changed.
   --team                 The slug or team ID of the remote cache team.
-  --token                A bearer token for remote caching. You can also set 
-                         the value of the current token by setting an 
+  --token                A bearer token for remote caching. You can also set
+                         the value of the current token by setting an
                          environment variable named TURBO_TOKEN.
   --ignore               Files to ignore when calculating changed files
                          (i.e. --since). Supports globs.
@@ -185,6 +182,22 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
+	// We use Cycles instead of Validate because
+	// our DAG has multiple roots (entrypoints).
+	// Validate mandates that there is only a single root node.
+	cycles := ctx.TopologicalGraph.Cycles()
+	if len(cycles) > 0 {
+		cycleLines := make([]string, len(cycles))
+		for i, cycle := range cycles {
+			vertices := make([]string, len(cycle))
+			for j, vertex := range cycle {
+				vertices[j] = vertex.(string)
+			}
+			cycleLines[i] = "\t" + strings.Join(vertices, ",")
+		}
+		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
+		return 1
+	}
 	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
@@ -212,7 +225,6 @@ func (c *RunCommand) Run(args []string) int {
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
 		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
-		SCC:              ctx.SCC,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
@@ -222,61 +234,14 @@ func (c *RunCommand) Run(args []string) int {
 		FilteredPkgs: filteredPkgs,
 		Opts:         runOptions,
 	}
-	backend := ctx.Backend
-	return c.runOperation(g, rs, backend, startAt)
+	packageManager := ctx.PackageManager
+	return c.runOperation(g, rs, packageManager, startAt)
 }
 
-func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
-	var topoVisit []interface{}
-	for _, node := range g.SCC {
-		v := node[0]
-		if v == g.RootNode {
-			continue
-		}
-		topoVisit = append(topoVisit, v)
-		pack := g.PackageInfos[v]
-
-		ancestralHashes := make([]string, 0, len(pack.InternalDeps))
-		if len(pack.InternalDeps) > 0 {
-			for _, ancestor := range pack.InternalDeps {
-				if h, ok := g.PackageInfos[ancestor]; ok {
-					ancestralHashes = append(ancestralHashes, h.Hash)
-				}
-			}
-			sort.Strings(ancestralHashes)
-		}
-		var hashable = struct {
-			hashOfFiles      string
-			ancestralHashes  []string
-			externalDepsHash string
-			globalHash       string
-		}{hashOfFiles: pack.FilesHash, ancestralHashes: ancestralHashes, externalDepsHash: pack.ExternalDepsHash, globalHash: g.GlobalHash}
-
-		var err error
-		pack.Hash, err = fs.HashObject(hashable)
-		if err != nil {
-			c.logError(c.Config.Logger, "", fmt.Errorf("[ERROR] %v: error computing combined hash: %v", pack.Name, err))
-			return 1
-		}
-		c.Config.Logger.Debug(fmt.Sprintf("%v: package ancestralHash", pack.Name), "hash", ancestralHashes)
-		c.Config.Logger.Debug(fmt.Sprintf("%v: package hash", pack.Name), "hash", pack.Hash)
-	}
-
-	c.Config.Logger.Debug("topological sort order", "value", topoVisit)
-
+func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) int {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
-	}
-
-	// If we are running in parallel, then we remove all the edges in the graph
-	// except for the root
-	if rs.Opts.parallel {
-		for _, edge := range g.TopologicalGraph.Edges() {
-			if edge.Target() != g.RootNode {
-				g.TopologicalGraph.RemoveEdge(edge)
-			}
-		}
 	}
 
 	engine, err := buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
@@ -284,6 +249,29 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
+	hashTracker := NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, rs.Opts.cwd)
+	if err != nil {
+		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
+		return 1
+	}
+
+	// If we are running in parallel, then we remove all the edges in the graph
+	// except for the root. Rebuild the task graph for backwards compatibility.
+	// We still use dependencies specified by the pipeline configuration.
+	if rs.Opts.parallel {
+		for _, edge := range g.TopologicalGraph.Edges() {
+			if edge.Target() != g.RootNode {
+				g.TopologicalGraph.RemoveEdge(edge)
+			}
+		}
+		engine, err = buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
+		if err != nil {
+			c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
+			return 1
+		}
+	}
+
 	exitCode := 0
 	if rs.Opts.dotGraph != "" {
 		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
@@ -292,7 +280,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 			return 1
 		}
 	} else if rs.Opts.dryRun {
-		tasksRun, err := c.executeDryRun(engine, g, rs, c.Config.Logger)
+		tasksRun, err := c.executeDryRun(engine, g, hashTracker, rs)
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
 			return 1
@@ -349,44 +337,31 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		if rs.Opts.stream {
 			c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		}
-		exitCode = c.executeTasks(g, rs, engine, backend, startAt)
+		exitCode = c.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
 	}
 
 	return exitCode
 }
 
-func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline map[string]fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
+func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
 	engine := core.NewScheduler(topoGraph)
-	for taskName, value := range pipeline {
+	for taskName, taskDefinition := range pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
-		if util.IsPackageTask(taskName) {
-			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
-					continue
+		isPackageTask := util.IsPackageTask(taskName)
+		for _, dependency := range taskDefinition.TaskDependencies {
+			if isPackageTask && util.IsPackageTask(dependency) {
+				err := engine.AddDep(dependency, taskName)
+				if err != nil {
+					return nil, err
 				}
-				if util.IsPackageTask(from) {
-					engine.AddDep(from, taskName)
-					continue
-				} else if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
-					topoDeps.Add(from[1:])
-				} else {
-					deps.Add(from)
-				}
-			}
-		} else {
-			for _, from := range value.DependsOn {
-				if strings.HasPrefix(from, ENV_PIPELINE_DELIMITER) {
-					continue
-				}
-				if strings.Contains(from, TOPOLOGICAL_PIPELINE_DELIMITER) {
-					topoDeps.Add(from[1:])
-				} else {
-					deps.Add(from)
-				}
+			} else {
+				deps.Add(dependency)
 			}
 		}
-
+		for _, dependency := range taskDefinition.TopologicalDependencies {
+			topoDeps.Add(dependency)
+		}
 		engine.AddTask(&core.Task{
 			Name:     taskName,
 			TopoDeps: topoDeps,
@@ -435,7 +410,7 @@ type RunOptions struct {
 	profile string
 	// Force task execution
 	forceExecution bool
-	// Cache results
+	// Cache results, false only if --no-cache is set, there is no flag to force caching
 	cache bool
 	// Cache folder
 	cacheFolder string
@@ -488,14 +463,14 @@ func getDefaultRunOptions() *RunOptions {
 	}
 }
 
-func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error) {
+func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOptions, error) {
 	var runOptions = getDefaultRunOptions()
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	runOptions.cwd = cwd
+	runOptions.cwd = cwd.ToStringDuringMigration()
 	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	if os.Getenv("TURBO_FORCE") == "true" {
@@ -613,6 +588,7 @@ func parseRunArgs(args []string, cwd string, output cli.Ui) (*RunOptions, error)
 				runOptions.remoteOnly = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
+			case strings.HasPrefix(arg, "--preflight"):
 			case strings.HasPrefix(arg, "--api"):
 			case strings.HasPrefix(arg, "--url"):
 			case strings.HasPrefix(arg, "--trace"):
@@ -664,7 +640,7 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, backend *api.LanguageBackend, startAt time.Time) int {
+func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *Tracker, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -679,18 +655,22 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
 	ec := &execContext{
-		colorCache: NewColorCache(),
-		runState:   runState,
-		rs:         rs,
-		ui:         &cli.ConcurrentUi{Ui: c.Ui},
-		turboCache: turboCache,
-		logger:     c.Config.Logger,
-		backend:    backend,
-		processes:  c.Processes,
+		colorCache:     NewColorCache(),
+		runState:       runState,
+		rs:             rs,
+		ui:             &cli.ConcurrentUi{Ui: c.Ui},
+		turboCache:     turboCache,
+		logger:         c.Config.Logger,
+		packageManager: packageManager,
+		processes:      c.Processes,
+		taskHashes:     hashes,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(ec.exec), core.ExecOpts{
+	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
+		deps := engine.TaskGraph.DownEdges(pt.taskID)
+		return ec.exec(pt, deps)
+	}), core.ExecOpts{
 		Parallel:    rs.Opts.parallel,
 		Concurrency: rs.Opts.concurrency,
 	})
@@ -703,11 +683,12 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 			if exitCodeErr.ExitCode > exitCode {
 				exitCode = exitCodeErr.ExitCode
 			}
+		} else if exitCode == 0 {
+			// We hit some error, it shouldn't be exit code 0
+			exitCode = 1
 		}
 		c.Ui.Error(err.Error())
 	}
-
-	ec.logReplayWaitGroup.Wait()
 
 	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
@@ -729,19 +710,20 @@ type hashedTask struct {
 	Dependents   []string `json:"dependents"`
 }
 
-func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs *runSpec, logger hclog.Logger) ([]hashedTask, error) {
+func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
 	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
-		command, ok := pt.pkg.Scripts[pt.task]
-		if !ok {
-			logger.Debug("no task in package, skipping")
-			logger.Debug("done", "status", "skipped")
-			return nil
-		}
 		passThroughArgs := rs.ArgsForTask(pt.task)
-		hash, err := pt.hash(passThroughArgs, logger)
+		deps := engine.TaskGraph.DownEdges(pt.taskID)
+		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 		if err != nil {
 			return err
+		}
+		command, ok := pt.pkg.Scripts[pt.task]
+		if !ok {
+			c.Config.Logger.Debug("no task in package, skipping")
+			c.Config.Logger.Debug("done", "status", "skipped")
+			return nil
 		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
@@ -774,7 +756,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 			Hash:         hash,
 			Command:      command,
 			Dir:          pt.pkg.Dir,
-			Outputs:      pt.ExternalOutputs(),
+			Outputs:      pt.taskDefinition.Outputs,
 			LogFile:      pt.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
@@ -794,26 +776,17 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, rs 
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, prefixUi cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup, silent bool, outputLogsMode LogsMode) {
-	defer wg.Done()
+func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string) {
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
-	if err != nil && !silent {
-		prefixUi.Warn(fmt.Sprintf("error reading logs: %v", err))
+	if err != nil {
+		output.Warn(fmt.Sprintf("error reading logs: %v", err))
 		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
 	}
 	defer f.Close()
-	if outputLogsMode != NoLogs {
-		scan := bufio.NewScanner(f)
-		if outputLogsMode == HashLogs {
-			//Writing to Stdout only the "cache hit, replaying output" line
-			scan.Scan()
-			prefixUi.Output(ui.StripAnsi(string(scan.Bytes())))
-		} else {
-			for scan.Scan() {
-				prefixUi.Output(ui.StripAnsi(string(scan.Bytes()))) //Writing to Stdout
-			}
-		}
+	scan := bufio.NewScanner(f)
+	for scan.Scan() {
+		output.Output(string(scan.Bytes())) //Writing to Stdout
 	}
 	logger.Debug("finish replaying logs")
 }
@@ -845,15 +818,15 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 }
 
 type execContext struct {
-	colorCache         *ColorCache
-	runState           *RunState
-	rs                 *runSpec
-	logReplayWaitGroup sync.WaitGroup
-	ui                 cli.Ui
-	turboCache         cache.Cache
-	logger             hclog.Logger
-	backend            *api.LanguageBackend
-	processes          *process.Manager
+	colorCache     *ColorCache
+	runState       *RunState
+	rs             *runSpec
+	ui             cli.Ui
+	turboCache     cache.Cache
+	logger         hclog.Logger
+	packageManager *packagemanager.PackageManager
+	processes      *process.Manager
+	taskHashes     *Tracker
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -866,18 +839,11 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(pt *packageTask) error {
+func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
 	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.pkg.Name, pt.task))
 	targetLogger.Debug("start")
-
-	// bail if the script doesn't exist
-	if _, ok := pt.pkg.Scripts[pt.task]; !ok {
-		targetLogger.Debug("no task in package, skipping")
-		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
-	}
 
 	// Setup tracer
 	tracer := e.runState.Run(util.GetTaskId(pt.pkg.Name, pt.task))
@@ -897,11 +863,21 @@ func (e *execContext) exec(pt *packageTask) error {
 	targetLogger.Debug("log file", "path", filepath.Join(e.rs.Opts.cwd, logFileName))
 
 	passThroughArgs := e.rs.ArgsForTask(pt.task)
-	hash, err := pt.hash(passThroughArgs, e.logger)
+	hash, err := e.taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 	e.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		e.ui.Error(fmt.Sprintf("Hashing error: %v", err))
 		// @TODO probably should abort fatally???
+	}
+	// TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
+	// the following block should never get hit. In the meantime, keep it after hashing
+	// so that downstream tasks can count on the hash existing
+	//
+	// bail if the script doesn't exist
+	if _, ok := pt.pkg.Scripts[pt.task]; !ok {
+		targetLogger.Debug("no task in package, skipping")
+		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
+		return nil
 	}
 	// Cache ---------------------------------------------
 	var hit bool
@@ -910,9 +886,15 @@ func (e *execContext) exec(pt *packageTask) error {
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
-			if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
-				e.logReplayWaitGroup.Add(1)
-				go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup, false, e.rs.Opts.cacheHitLogsMode)
+			switch e.rs.Opts.cacheHitLogsMode {
+			case HashLogs:
+				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
+			case FullLogs:
+				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
+					replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash)
+				}
+			default:
+				// NoLogs, do not output anything
 			}
 			targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
 			tracer(TargetCached, nil)
@@ -931,13 +913,9 @@ func (e *execContext) exec(pt *packageTask) error {
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
-	// @TODO: @jaredpalmer fix this hack to get the package manager's name
+
 	var cmd *exec.Cmd
-	if e.backend.Name == "nodejs-berry" {
-		cmd = exec.Command("yarn", argsactual...)
-	} else {
-		cmd = exec.Command(strings.TrimPrefix(e.backend.Name, "nodejs-"), argsactual...)
-	}
+	cmd = exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
@@ -946,7 +924,7 @@ func (e *execContext) exec(pt *packageTask) error {
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
 	var writer io.Writer
-	if !e.rs.Opts.cache || (pt.pipeline.Cache != nil && !*pt.pipeline.Cache) {
+	if !e.rs.Opts.cache || !pt.taskDefinition.ShouldCache {
 		writer = os.Stdout
 	} else {
 		// Setup log file
@@ -1024,7 +1002,7 @@ func (e *execContext) exec(pt *packageTask) error {
 	}
 
 	// Cache command outputs
-	if e.rs.Opts.cache && (pt.pipeline.Cache == nil || *pt.pipeline.Cache) {
+	if e.rs.Opts.cache && pt.taskDefinition.ShouldCache {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
@@ -1095,18 +1073,11 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
 }
 
 type packageTask struct {
-	taskID      string
-	task        string
-	packageName string
-	pkg         *fs.PackageJSON
-	pipeline    *fs.Pipeline
-}
-
-func (pt *packageTask) ExternalOutputs() []string {
-	if pt.pipeline.Outputs == nil {
-		return []string{"dist/**/*", "build/**/*"}
-	}
-	return pt.pipeline.Outputs
+	taskID         string
+	task           string
+	packageName    string
+	pkg            *fs.PackageJSON
+	taskDefinition *fs.TaskDefinition
 }
 
 func (pt *packageTask) RepoRelativeLogFile() string {
@@ -1115,49 +1086,24 @@ func (pt *packageTask) RepoRelativeLogFile() string {
 
 func (pt *packageTask) HashableOutputs() []string {
 	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
-	outputs = append(outputs, pt.ExternalOutputs()...)
+	outputs = append(outputs, pt.taskDefinition.Outputs...)
 	return outputs
 }
 
-func (pt *packageTask) hash(args []string, logger hclog.Logger) (string, error) {
-	// Hash ---------------------------------------------
-	outputs := pt.HashableOutputs()
-	logger.Debug("task output globs", "outputs", outputs)
-
-	// Hash the task-specific environment variables found in the dependsOnKey in the pipeline
-	var hashableEnvVars []string
-	var hashableEnvPairs []string
-	if len(pt.pipeline.DependsOn) > 0 {
-		for _, v := range pt.pipeline.DependsOn {
-			if strings.Contains(v, ENV_PIPELINE_DELIMITER) {
-				trimmed := strings.TrimPrefix(v, ENV_PIPELINE_DELIMITER)
-				hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-				hashableEnvVars = append(hashableEnvVars, trimmed)
-			}
-		}
-		sort.Strings(hashableEnvVars) // always sort them
-	}
-	logger.Debug("hashable env vars", "vars", hashableEnvVars)
-	hashable := struct {
-		Hash             string
-		Task             string
-		Outputs          []string
-		PassThruArgs     []string
-		HashableEnvPairs []string
-	}{
-		Hash:             pt.pkg.Hash,
-		Task:             pt.task,
-		Outputs:          outputs,
-		PassThruArgs:     args,
-		HashableEnvPairs: hashableEnvPairs,
-	}
-	return fs.HashObject(hashable)
+func (pt *packageTask) ToPackageFileHashKey() packageFileHashKey {
+	return (&packageFileSpec{
+		pkg:    pt.packageName,
+		inputs: pt.taskDefinition.Inputs,
+	}).ToKey()
 }
 
 func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 		name, task := util.GetPackageTaskFromId(taskID)
-		pkg := g.PackageInfos[name]
+		pkg, ok := g.PackageInfos[name]
+		if !ok {
+			return fmt.Errorf("cannot find package %v for task %v", name, taskID)
+		}
 		// first check for package-tasks
 		pipeline, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
 		if !ok {
@@ -1171,11 +1117,11 @@ func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) erro
 			pipeline = altpipe
 		}
 		return visitor(&packageTask{
-			taskID:      taskID,
-			task:        task,
-			packageName: name,
-			pkg:         pkg,
-			pipeline:    &pipeline,
+			taskID:         taskID,
+			task:           task,
+			packageName:    name,
+			pkg:            pkg,
+			taskDefinition: &pipeline,
 		})
 	}
 }

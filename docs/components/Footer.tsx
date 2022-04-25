@@ -88,7 +88,7 @@ export function Footer() {
                   ))}
                 </ul>
               </div>
-              <div className="mt-12 md:mt-0">
+              <div className="mt-12 md:!mt-0">
                 <FooterHeader>Support</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.support.map((item) => (
@@ -110,7 +110,7 @@ export function Footer() {
                   ))}
                 </ul>
               </div>
-              <div className="mt-12 md:mt-0">
+              <div className="mt-12 md:!mt-0">
                 <FooterHeader>Legal</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.legal.map((item) => (
@@ -122,7 +122,7 @@ export function Footer() {
               </div>
             </div>
           </div>
-          <div className="">
+          <div className="mt-12 xl:!mt-0">
             <FooterHeader>Subscribe to our newsletter</FooterHeader>
             <p className="mt-4 text-sm text-gray-600 dark:text-gray-500">
               Join the Turborepo newsletter and stay updated on new releases and

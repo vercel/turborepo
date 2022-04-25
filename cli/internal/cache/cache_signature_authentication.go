@@ -1,3 +1,6 @@
+// Adapted from https://github.com/thought-machine/please
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package cache
 
 import (
@@ -22,7 +25,7 @@ func (asa *ArtifactSignatureAuthentication) isEnabled() bool {
 }
 
 // If the secret key is not found or the secret key length is 0, an error is returned
-// Preference is given to the enviornment specifed secret key.
+// Preference is given to the environment specified secret key.
 func (asa *ArtifactSignatureAuthentication) secretKey() ([]byte, error) {
 	secret := os.Getenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY")
 	if len(secret) == 0 {

@@ -1,5 +1,9 @@
 // Package xxhash implements the 64-bit variant of xxHash (XXH64) as described
 // at http://cyan4973.github.io/xxHash/.
+
+// Adapted from https://cs.github.com/evanw/esbuild/blob/0c9ced59c8b3ea3bd8dd5feebafed1f47ed279dd/internal/xxhash
+// Copyright (c) 2016 Caleb Spare. All rights reserved.
+// SPDX-License-Identifier: MIT
 package xxhash
 
 import (
