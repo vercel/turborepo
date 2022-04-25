@@ -68,6 +68,16 @@ func NewClient(baseURL string, logger hclog.Logger, turboVersion string, teamID 
 	return client
 }
 
+// IsLoggedIn returns true if this ApiClient has a credential (token)
+func (c *ApiClient) IsLoggedIn() bool {
+	return c.Token != ""
+}
+
+// SetTeamID sets the team parameter used on all requests by this client
+func (c *ApiClient) SetTeamID(teamID string) {
+	c.teamID = teamID
+}
+
 func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
 	if err != nil {
 		if errors.As(err, &x509.UnknownAuthorityError{}) {
@@ -216,7 +226,9 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
+// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// Remote Caching server
+func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
