@@ -216,6 +216,8 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	return nil
 }
 
+// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// Remote Caching server
 func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
