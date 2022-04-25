@@ -1,15 +1,21 @@
 package globby
 
 import (
-	"github.com/vercel/turborepo/cli/internal/fs"
-
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/spf13/afero"
 )
 
+var _osFS = afero.NewOsFs()
+
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) []string {
+	return globFilesFs(_osFS, basePath, includePatterns, excludePatterns)
+}
+
+func globFilesFs(fs afero.Fs, basePath string, includePatterns []string, excludePatterns []string) []string {
 	var include []string
 	var exclude []string
 	var result []string
@@ -24,8 +30,10 @@ func GlobFiles(basePath string, includePatterns []string, excludePatterns []stri
 
 	includePattern := "{" + strings.Join(include, ",") + "}"
 	excludePattern := "{" + strings.Join(exclude, ",") + "}"
-	_ = fs.Walk(basePath, func(p string, isDir bool) error {
-		if val, _ := doublestar.PathMatch(excludePattern, p); val {
+
+	_ = afero.Walk(fs, basePath, func(path string, info os.FileInfo, err error) error {
+		isDir := info.IsDir()
+		if val, _ := doublestar.PathMatch(excludePattern, path); val {
 			if isDir {
 				return filepath.SkipDir
 			}
@@ -36,8 +44,8 @@ func GlobFiles(basePath string, includePatterns []string, excludePatterns []stri
 			return nil
 		}
 
-		if val, _ := doublestar.PathMatch(includePattern, p); val || len(includePatterns) == 0 {
-			result = append(result, p)
+		if val, _ := doublestar.PathMatch(includePattern, path); val || len(includePatterns) == 0 {
+			result = append(result, path)
 		}
 
 		return nil
