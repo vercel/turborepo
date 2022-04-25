@@ -237,10 +237,10 @@ module.exports = {
             main: "dist/index.js",
             types: "dist/index.d.ts",
             devDependencies: {
-              typescript: "*",
-              jest: "*",
-              "ts-jest": "*",
-              "@types/jest": "*",
+              typescript: "^4.6.3",
+              jest: "^27.0.0",
+              "ts-jest": "^27.0.0",
+              "@types/jest": "^27.0.0",
             },
             scripts: {
               build: "tsc",
