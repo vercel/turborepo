@@ -50,7 +50,7 @@ cmd/turbo/version.go: version.txt
 
 platform-all: cmd/turbo/version.go
 	make -j4 \
-	  platform-windows \
+	  platform-windows-64 \
 		platform-windows-32 \
 		platform-windows-arm64 \
 		platform-android-arm64 \
