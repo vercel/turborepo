@@ -793,10 +793,10 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 	return taskIDs, nil
 }
 
-var isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
+var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
 
 func commandLooksLikeTurbo(command string) bool {
-	return isTurbo.MatchString(command)
+	return _isTurbo.MatchString(command)
 }
 
 // Replay logs will try to replay logs back to the stdout

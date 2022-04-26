@@ -6,8 +6,10 @@ import (
 )
 
 const (
+	// TaskDelimiter separates a package name from a task name in a task id
 	TaskDelimiter = "#"
-	RootPkgName   = "//"
+	// RootPkgName is the reserved name that specifies the root package
+	RootPkgName = "//"
 )
 
 // GetTaskId returns a package-task identifier (e.g @feed/thing#build).
