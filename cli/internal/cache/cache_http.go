@@ -24,9 +24,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+type client interface {
+	PutArtifact(hash string, body []byte, duration int, tag string) error
+	FetchArtifact(hash string) (*http.Response, error)
+}
+
 type httpCache struct {
 	writable       bool
-	config         *config.Config
+	client         client
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
@@ -56,7 +61,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
 
-	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Read the entire artifact tar into memory so we can easily compute the signature.
 	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
 	// additional overhead by doing the ioutil.ReadAll here instead.
 	artifactBody, err := ioutil.ReadAll(r)
@@ -70,7 +75,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 		}
 	}
-	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
+	return cache.client.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -159,7 +164,7 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
+	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
 	}
@@ -299,7 +304,7 @@ func (cache *httpCache) Shutdown() {}
 func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
-		config:         config,
+		client:         config.ApiClient,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{

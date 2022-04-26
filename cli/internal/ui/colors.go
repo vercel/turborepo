@@ -47,8 +47,8 @@ func applyColorMode(colorMode ColorMode) ColorMode {
 	}
 
 	if color.NoColor {
-		return ColorModeSuppressed;
+		return ColorModeSuppressed
 	} else {
-		return ColorModeForced;
+		return ColorModeForced
 	}
 }
