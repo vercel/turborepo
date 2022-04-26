@@ -79,6 +79,22 @@ func TestSchedulerDefault(t *testing.T) {
 	}
 }
 
+func TestUnknownDependency(t *testing.T) {
+	g := &dag.AcyclicGraph{}
+	g.Add("a")
+	g.Add("b")
+	g.Add("c")
+	p := NewScheduler(g)
+	err := p.AddDep("unknown#custom", "build")
+	if err == nil {
+		t.Error("expected error for unknown package, got nil")
+	}
+	err = p.AddDep("a#custom", "build")
+	if err != nil {
+		t.Errorf("expected no error for package task with known package, got %v", err)
+	}
+}
+
 func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	// app1 -> libA
 	//              \

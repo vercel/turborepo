@@ -218,8 +218,8 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 
 func TestGetTargetsFromArguments(t *testing.T) {
 	type args struct {
-		arguments  []string
-		configJson *fs.TurboConfigJSON
+		arguments []string
+		pipeline  fs.Pipeline
 	}
 	tests := []struct {
 		name    string
@@ -231,12 +231,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles one defined target",
 			args: args{
 				arguments: []string{"build"},
-				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build"},
@@ -246,12 +244,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles multiple targets and ignores flags",
 			args: args{
 				arguments: []string{"build", "test", "--foo", "--bar"},
-				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build", "test"},
@@ -261,12 +257,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles pass through arguments after -- ",
 			args: args{
 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
-				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build", "test"},
@@ -276,12 +270,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles unknown pipeline targets ",
 			args: args{
 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
-				configJson: &fs.TurboConfigJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    nil,
@@ -291,7 +283,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJson)
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.pipeline)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -312,14 +304,14 @@ func Test_dontSquashTasks(t *testing.T) {
 
 	pipeline := map[string]fs.TaskDefinition{
 		"build": {
-			Outputs:   []string{},
+			Outputs:          []string{},
 			TaskDependencies: []string{"generate"},
 		},
 		"generate": {
-			Outputs:   []string{},
+			Outputs: []string{},
 		},
 		"b#build": {
-			Outputs:   []string{},
+			Outputs: []string{},
 		},
 	}
 	filteredPkgs := make(util.Set)

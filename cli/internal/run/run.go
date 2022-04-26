@@ -14,12 +14,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/api"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -27,6 +25,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
@@ -184,8 +183,25 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
+	// We use Cycles instead of Validate because
+	// our DAG has multiple roots (entrypoints).
+	// Validate mandates that there is only a single root node.
+	cycles := ctx.TopologicalGraph.Cycles()
+	if len(cycles) > 0 {
+		cycleLines := make([]string, len(cycles))
+		for i, cycle := range cycles {
+			vertices := make([]string, len(cycle))
+			for j, vertex := range cycle {
+				vertices[j] = vertex.(string)
+			}
+			cycleLines[i] = "\t" + strings.Join(vertices, ",")
+		}
+		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
+		return 1
+	}
+
 	pipeline := c.Config.TurboConfigJSON.Pipeline
-	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
+	targets, err := getTargetsFromArguments(args, pipeline)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -232,11 +248,11 @@ func (c *RunCommand) Run(args []string) int {
 		FilteredPkgs: filteredPkgs,
 		Opts:         runOptions,
 	}
-	backend := ctx.Backend
-	return c.runOperation(g, rs, backend, startAt)
+	packageManager := ctx.PackageManager
+	return c.runOperation(g, rs, packageManager, startAt)
 }
 
-func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.LanguageBackend, startAt time.Time) int {
+func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) int {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -335,7 +351,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, backend *api.La
 		if rs.Opts.stream {
 			c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		}
-		exitCode = c.executeTasks(g, rs, engine, backend, hashTracker, startAt)
+		exitCode = c.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
 	}
 
 	return exitCode
@@ -349,7 +365,10 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 		isPackageTask := util.IsPackageTask(taskName)
 		for _, dependency := range taskDefinition.TaskDependencies {
 			if isPackageTask && util.IsPackageTask(dependency) {
-				engine.AddDep(dependency, taskName)
+				err := engine.AddDep(dependency, taskName)
+				if err != nil {
+					return nil, err
+				}
 			} else {
 				deps.Add(dependency)
 			}
@@ -583,6 +602,7 @@ func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOption
 				runOptions.remoteOnly = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
+			case strings.HasPrefix(arg, "--preflight"):
 			case strings.HasPrefix(arg, "--api"):
 			case strings.HasPrefix(arg, "--url"):
 			case strings.HasPrefix(arg, "--trace"):
@@ -634,7 +654,7 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, backend *api.LanguageBackend, hashes *Tracker, startAt time.Time) int {
+func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *Tracker, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -649,15 +669,15 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
 	ec := &execContext{
-		colorCache: NewColorCache(),
-		runState:   runState,
-		rs:         rs,
-		ui:         &cli.ConcurrentUi{Ui: c.Ui},
-		turboCache: turboCache,
-		logger:     c.Config.Logger,
-		backend:    backend,
-		processes:  c.Processes,
-		taskHashes: hashes,
+		colorCache:     NewColorCache(),
+		runState:       runState,
+		rs:             rs,
+		ui:             &cli.ConcurrentUi{Ui: c.Ui},
+		turboCache:     turboCache,
+		logger:         c.Config.Logger,
+		packageManager: packageManager,
+		processes:      c.Processes,
+		taskHashes:     hashes,
 	}
 
 	// run the thing
@@ -677,11 +697,12 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 			if exitCodeErr.ExitCode > exitCode {
 				exitCode = exitCodeErr.ExitCode
 			}
+		} else if exitCode == 0 {
+			// We hit some error, it shouldn't be exit code 0
+			exitCode = 1
 		}
 		c.Ui.Error(err.Error())
 	}
-
-	ec.logReplayWaitGroup.Wait()
 
 	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
@@ -773,13 +794,13 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 }
 
 var isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
+
 func commandLooksLikeTurbo(command string) bool {
 	return isTurbo.MatchString(command)
 }
 
 // Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string) {
 	logger.Debug("start replaying logs")
 	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
 	if err != nil {
@@ -796,7 +817,7 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
-func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+func getTargetsFromArguments(arguments []string, pipeline fs.Pipeline) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
@@ -804,7 +825,7 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 		}
 		if !strings.HasPrefix(arg, "-") {
 			task := arg
-			if configJson.Pipeline.HasTask(task) {
+			if pipeline.HasTask(task) {
 				targets.Add(task)
 			} else {
 				return nil, fmt.Errorf("task `%v` not found in turbo `pipeline` in \"turbo.json\". Are you sure you added it?", task)
@@ -817,16 +838,15 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 }
 
 type execContext struct {
-	colorCache         *ColorCache
-	runState           *RunState
-	rs                 *runSpec
-	logReplayWaitGroup sync.WaitGroup
-	ui                 cli.Ui
-	turboCache         cache.Cache
-	logger             hclog.Logger
-	backend            *api.LanguageBackend
-	processes          *process.Manager
-	taskHashes         *Tracker
+	colorCache     *ColorCache
+	runState       *RunState
+	rs             *runSpec
+	ui             cli.Ui
+	turboCache     cache.Cache
+	logger         hclog.Logger
+	packageManager *packagemanager.PackageManager
+	processes      *process.Manager
+	taskHashes     *Tracker
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -891,8 +911,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
 			case FullLogs:
 				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
-					e.logReplayWaitGroup.Add(1)
-					go replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash, &e.logReplayWaitGroup)
+					replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash)
 				}
 			default:
 				// NoLogs, do not output anything
@@ -914,13 +933,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
-	// @TODO: @jaredpalmer fix this hack to get the package manager's name
+
 	var cmd *exec.Cmd
-	if e.backend.Name == "nodejs-berry" {
-		cmd = exec.Command("yarn", argsactual...)
-	} else {
-		cmd = exec.Command(strings.TrimPrefix(e.backend.Name, "nodejs-"), argsactual...)
-	}
+	cmd = exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
@@ -1011,8 +1026,19 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
-		filesToBeCached := globby.GlobFiles(pt.pkg.Dir, outputs, ignore)
-		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
+		filesToBeCached := globby.GlobFiles(filepath.Join(e.rs.Opts.cwd, pt.pkg.Dir), outputs, ignore)
+		relativePaths := make([]string, len(filesToBeCached))
+
+		for index, value := range filesToBeCached {
+			relativePath, err := filepath.Rel(e.rs.Opts.cwd, value)
+			if err != nil {
+				e.logError(targetLogger, "", fmt.Errorf("File path cannot be made relative: %w", err))
+				continue
+			}
+			relativePaths[index] = relativePath
+		}
+
+		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -1105,7 +1131,10 @@ func (pt *packageTask) ToPackageFileHashKey() packageFileHashKey {
 func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 		name, task := util.GetPackageTaskFromId(taskID)
-		pkg := g.PackageInfos[name]
+		pkg, ok := g.PackageInfos[name]
+		if !ok {
+			return fmt.Errorf("cannot find package %v for task %v", name, taskID)
+		}
 		// first check for package-tasks
 		pipeline, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
 		if !ok {
