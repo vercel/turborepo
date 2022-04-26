@@ -312,14 +312,14 @@ func Test_dontSquashTasks(t *testing.T) {
 
 	pipeline := map[string]fs.TaskDefinition{
 		"build": {
-			Outputs:   []string{},
+			Outputs:          []string{},
 			TaskDependencies: []string{"generate"},
 		},
 		"generate": {
-			Outputs:   []string{},
+			Outputs: []string{},
 		},
 		"b#build": {
-			Outputs:   []string{},
+			Outputs: []string{},
 		},
 	}
 	filteredPkgs := make(util.Set)
