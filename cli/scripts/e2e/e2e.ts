@@ -18,12 +18,12 @@ const basicPipeline = {
       dependsOn: ["^build"],
       outputs: ["dist/**"],
     },
-    "_root#build": {
+    "//#build": {
       dependsOn: [],
       outputs: ["dist/**"],
       inputs: ["rootbuild.js"],
     },
-    "_root#special": {
+    "//#special": {
       dependsOn: ["^build"],
       outputs: ["dist/**"],
       inputs: [],
@@ -123,7 +123,7 @@ function runSmokeTests<T>(
       const dryRun: DryRun = JSON.parse(results.stdout);
       // expect to run all packages
       const expectTaskId = includesTaskId(dryRun);
-      for (const pkg of ["a", "b", "c", "_root"]) {
+      for (const pkg of ["a", "b", "c", "//"]) {
         assert.ok(
           dryRun.packages.includes(pkg),
           `Expected to include package ${pkg}`
@@ -139,7 +139,7 @@ function runSmokeTests<T>(
         repo.turbo("run", ["build"], options)
       );
       assert.ok(
-        buildOutput.includes("_root:build: building"),
+        buildOutput.includes("//:build: building"),
         "Missing root build"
       );
 
@@ -449,22 +449,22 @@ function runSmokeTests<T>(
       const result = getCommandOutputAsArray(
         repo.turbo("run", ["special"], options)
       );
-      assert.ok(result.includes("_root:special: root task"));
+      assert.ok(result.includes("//:special: root task"));
       const secondPass = getCommandOutputAsArray(
         repo.turbo(
           "run",
-          ["special", "--filter=_root", "--output-logs=hash-only"],
+          ["special", "--filter=//", "--output-logs=hash-only"],
           options
         )
       );
       assert.ok(
         secondPass.includes(
-          `_root:special: cache hit, suppressing output ${getHashFromOutput(
+          `//:special: cache hit, suppressing output ${getHashFromOutput(
             secondPass,
-            "_root#special"
+            "//#special"
           )}`
         ),
-        "Rerun of _root:special should be cached"
+        "Rerun of //:special should be cached"
       );
     }
   );

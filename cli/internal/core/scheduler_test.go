@@ -206,9 +206,9 @@ func TestIncludeRootTasks(t *testing.T) {
 	}
 	actual := strings.TrimSpace(p.TaskGraph.String())
 	expected := fmt.Sprintf(`
-___ROOT___
 %v#test
   ___ROOT___
+___ROOT___
 app1#build
   libA#build
 app1#test

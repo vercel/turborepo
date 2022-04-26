@@ -7,7 +7,7 @@ import (
 
 const (
 	TASK_DELIMITER = "#"
-	RootPkgName    = "_root"
+	RootPkgName    = "//"
 )
 
 // GetTaskId returns a package-task identifier (e.g @feed/thing#build).
