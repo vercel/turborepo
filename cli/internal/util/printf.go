@@ -24,11 +24,11 @@ func Sprintf(format string, args ...interface{}) string {
 }
 
 func Printf(format string, args ...interface{}) {
-	Fprintf(os.Stderr, format, args...)
+	fmt.Fprint(os.Stderr, os.Expand(fmt.Sprintf(format, args...), replace))
 }
 
 func Fprintf(writer io.Writer, format string, args ...interface{}) {
-	fmt.Fprint(writer, Sprintf(format, args...))
+	fmt.Fprint(writer, os.Expand(fmt.Sprintf(format, args...), replace))
 }
 
 func replace(s string) string {

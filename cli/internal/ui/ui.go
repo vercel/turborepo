@@ -88,7 +88,7 @@ func Default() *cli.ColoredUi {
 }
 
 func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
-	colorMode = ApplyColorMode(colorMode)
+	colorMode = applyColorMode(colorMode)
 
 	var outWriter, errWriter io.Writer
 
