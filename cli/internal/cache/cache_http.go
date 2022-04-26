@@ -1,3 +1,6 @@
+// Adapted from https://github.com/thought-machine/please
+// Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 package cache
 
 import (
@@ -21,9 +24,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+type client interface {
+	PutArtifact(hash string, body []byte, duration int, tag string) error
+	FetchArtifact(hash string) (*http.Response, error)
+}
+
 type httpCache struct {
 	writable       bool
-	config         *config.Config
+	client         client
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
@@ -53,7 +61,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
 
-	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Read the entire artifact tar into memory so we can easily compute the signature.
 	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
 	// additional overhead by doing the ioutil.ReadAll here instead.
 	artifactBody, err := ioutil.ReadAll(r)
@@ -67,7 +75,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 		}
 	}
-	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
+	return cache.client.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -86,21 +94,24 @@ func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
 	}
 }
 
-func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
-	info, err := os.Lstat(name)
+func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error {
+	info, err := os.Lstat(repoRelativePath)
 	if err != nil {
 		return err
 	}
 	target := ""
 	if info.Mode()&os.ModeSymlink != 0 {
-		target, _ = os.Readlink(name)
+		target, err = os.Readlink(repoRelativePath)
+		if err != nil {
+			return err
+		}
 	}
 	hdr, err := tar.FileInfoHeader(info, filepath.ToSlash(target))
 	if err != nil {
 		return err
 	}
 	// Ensure posix path for filename written in header.
-	hdr.Name = filepath.ToSlash(name)
+	hdr.Name = filepath.ToSlash(repoRelativePath)
 	// Zero out all timestamps.
 	hdr.ModTime = mtime
 	hdr.AccessTime = mtime
@@ -115,7 +126,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, name string) error {
 	} else if info.IsDir() || target != "" {
 		return nil // nothing to write
 	}
-	f, err := os.Open(name)
+	f, err := os.Open(repoRelativePath)
 	if err != nil {
 		return err
 	}
@@ -153,7 +164,7 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
+	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
 	}
@@ -199,7 +210,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 	}
 	gzr, err := gzip.NewReader(artifactReader)
 	if err != nil {
-		return false, files, duration, err
+		return false, nil, 0, err
 	}
 	defer gzr.Close()
 	tr := tar.NewReader(gzr)
@@ -208,56 +219,76 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		if err != nil {
 			if err == io.EOF {
 				for _, link := range missingLinks {
-					if err := os.Symlink(link.Linkname, link.Name); err != nil {
-						return false, files, duration, err
+					err := restoreSymlink(link, true)
+					if err != nil {
+						return false, nil, 0, err
 					}
 				}
 
 				return true, files, duration, nil
 			}
-			return false, files, duration, err
+			return false, nil, 0, err
 		}
 		files = append(files, hdr.Name)
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(hdr.Name, fs.DirPermissions); err != nil {
-				return false, files, duration, err
+				return false, nil, 0, err
 			}
 		case tar.TypeReg:
 			if dir := path.Dir(hdr.Name); dir != "." {
 				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
-					return false, files, duration, err
+					return false, nil, 0, err
 				}
 			}
 			if f, err := os.OpenFile(hdr.Name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
-				return false, files, duration, err
+				return false, nil, 0, err
 			} else if _, err := io.Copy(f, tr); err != nil {
-				return false, files, duration, err
+				return false, nil, 0, err
 			} else if err := f.Close(); err != nil {
-				return false, files, duration, err
+				return false, nil, 0, err
 			}
 		case tar.TypeSymlink:
-			if dir := path.Dir(hdr.Name); dir != "." {
-				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
-					return false, files, duration, err
-				}
-			}
-			if _, err := os.Lstat(hdr.Name); err == nil {
-				if err := os.Remove(hdr.Name); err != nil {
-					return false, files, duration, err
-				}
-			} else if os.IsNotExist(err) {
+			if err := restoreSymlink(hdr, false); errors.Is(err, errNonexistentLinkTarget) {
 				missingLinks = append(missingLinks, hdr)
-				continue
-			}
-
-			if err := os.Symlink(hdr.Linkname, hdr.Name); err != nil {
-				return false, files, duration, err
+			} else if err != nil {
+				return false, nil, 0, err
 			}
 		default:
 			log.Printf("Unhandled file type %d for %s", hdr.Typeflag, hdr.Name)
 		}
 	}
+}
+
+var errNonexistentLinkTarget = errors.New("the link target does not exist")
+
+func restoreSymlink(hdr *tar.Header, allowNonexistentTargets bool) error {
+	// Note that hdr.Linkname is really the link target
+	linkTarget := filepath.FromSlash(hdr.Linkname)
+	repoRelativeLinkFilename := filepath.FromSlash(hdr.Name)
+	err := fs.EnsureDir(repoRelativeLinkFilename)
+	if err != nil {
+		return err
+	}
+	repoRelativeLinkTarget := filepath.Join(filepath.Dir(repoRelativeLinkFilename), linkTarget)
+	if _, err := os.Lstat(repoRelativeLinkTarget); err != nil {
+		if os.IsNotExist(err) {
+			if !allowNonexistentTargets {
+				return errNonexistentLinkTarget
+			}
+			// if we're allowing nonexistent link targets, proceed to creating the link
+		} else {
+			return err
+		}
+	}
+	// Ensure that the link we're about to create doesn't already exist
+	if err := os.Remove(repoRelativeLinkFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.Symlink(linkTarget, repoRelativeLinkFilename); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (cache *httpCache) Clean(target string) {
@@ -273,7 +304,7 @@ func (cache *httpCache) Shutdown() {}
 func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
-		config:         config,
+		client:         config.ApiClient,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{

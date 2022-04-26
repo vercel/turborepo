@@ -9,22 +9,20 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/api"
-	"github.com/vercel/turborepo/cli/internal/backends"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/pyr-sh/dag"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "the hero we needed"
+const GLOBAL_CACHE_KEY = "Ba weep granna weep ninny bong"
 
 // Context of the CLI
 type Context struct {
@@ -35,8 +33,7 @@ type Context struct {
 	RootNode         string
 	GlobalHash       string
 	Lockfile         *fs.YarnLockfile
-	SCC              [][]dag.Vertex
-	Backend          *api.LanguageBackend
+	PackageManager   *packagemanager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -86,7 +83,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 		// versions of the same package name, just assume its a match and don't check the range
 		// for an exact match.
 		return true
-	} else if protocol == "file" {
+	} else if protocol == "file" || protocol == "link" {
 		abs, err := filepath.Abs(filepath.Join(cwd, dependencyVersion))
 		if err != nil {
 			// Default to internal if we have the package but somehow cannot get the path
@@ -101,7 +98,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 		}
 		return isWithinRepo
 	} else if isProtocolExternal(protocol) {
-		// Other protocols are assumed to be external references ("github:", "link:", "file:" etc)
+		// Other protocols are assumed to be external references ("github:", etc)
 		return false
 	} else if dependencyVersion == "*" {
 		return true
@@ -129,15 +126,15 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if backend, err := backends.GetBackend(rootpath, config.RootPackageJSON); err != nil {
+		if packageManager, err := packagemanager.GetPackageManager(rootpath, config.RootPackageJSON); err != nil {
 			return err
 		} else {
-			c.Backend = backend
+			c.PackageManager = packageManager
 		}
 
-		// this should go into the backend abstraction
-		if util.IsYarn(c.Backend.Name) {
-			lockfile, err := fs.ReadLockfile(rootpath, c.Backend.Name, config.Cache.Dir)
+		// this should go into the packagemanager abstraction
+		if util.IsYarn(c.PackageManager.Name) {
+			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}
@@ -149,14 +146,17 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
 
-		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
+		spaces, err := c.PackageManager.GetWorkspaceGlobs(rootpath)
 
 		if err != nil {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
-		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.Backend, config.Logger, os.Environ())
-		// TODO(Gaspar): this error is unused?
+		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
+		if err != nil {
+			return fmt.Errorf("failed to calculate global hash: %v", err)
+		}
+
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
@@ -182,74 +182,20 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err := parseJSONWaitGroup.Wait(); err != nil {
 			return err
 		}
-		packageDepsHashGroup := new(errgroup.Group)
 		populateGraphWaitGroup := new(errgroup.Group)
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
 			populateGraphWaitGroup.Go(func() error {
 				return c.populateTopologicGraphForPackageJson(pkg, rootpath)
 			})
-			packageDepsHashGroup.Go(func() error {
-				return c.loadPackageDepsHash(pkg)
-			})
 		}
 
 		if err := populateGraphWaitGroup.Wait(); err != nil {
 			return err
 		}
-		if err := packageDepsHashGroup.Wait(); err != nil {
-			return err
-		}
 
-		// Only now can we get the SCC (i.e. topological order)
-		c.SCC = dag.StronglyConnected(&c.TopologicalGraph.Graph)
 		return nil
 	}
-}
-
-func (c *Context) loadPackageDepsHash(pkg *fs.PackageJSON) error {
-	pkg.Mu.Lock()
-	defer pkg.Mu.Unlock()
-	hashObject, pkgDepsErr := fs.GetPackageDeps(&fs.PackageDepsOptions{
-		PackagePath: pkg.Dir,
-	})
-	if pkgDepsErr != nil {
-		hashObject = make(map[string]string)
-		// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-		// the directory of a package.
-		ignore, err := safeCompileIgnoreFile(".gitignore")
-		if err != nil {
-			return err
-		}
-
-		ignorePkg, err := safeCompileIgnoreFile(filepath.Join(pkg.Dir, ".gitignore"))
-		if err != nil {
-			return err
-		}
-
-		fs.Walk(pkg.Dir, func(name string, isDir bool) error {
-			rootMatch := ignore.MatchesPath(name)
-			otherMatch := ignorePkg.MatchesPath(name)
-			if !rootMatch && !otherMatch {
-				if !isDir {
-					hash, err := fs.GitLikeHashFile(name)
-					if err != nil {
-						return fmt.Errorf("could not hash file %v. \n%w", name, err)
-					}
-					hashObject[strings.TrimPrefix(name, pkg.Dir+"/")] = hash
-				}
-			}
-			return nil
-		})
-
-		// ignorefile rules matched files
-	}
-	hashOfFiles, otherErr := fs.HashObject(hashObject)
-	if otherErr != nil {
-		return otherErr
-	}
-	pkg.FilesHash = hashOfFiles
-	return nil
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
@@ -267,7 +213,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	for dep, version := range pkg.Dependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if util.IsYarn(c.Backend.Name) {
+	if util.IsYarn(c.PackageManager.Name) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
@@ -385,7 +331,7 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 }
 
 func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if !util.IsYarn(c.Backend.Name) {
+	if !util.IsYarn(c.PackageManager.Name) {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
@@ -432,14 +378,6 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 	}
 }
 
-func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
-	if fs.FileExists(filepath) {
-		return gitignore.CompileIgnoreFile(filepath)
-	}
-	// no op
-	return gitignore.CompileIgnoreLines([]string{}...), nil
-}
-
 func getWorkspaceIgnores() []string {
 	return []string{
 		"**/node_modules/",
@@ -465,7 +403,7 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	return justNames, pairs
 }
 
-func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *api.LanguageBackend, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 
@@ -485,7 +423,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 		}
 
 		if len(globs) > 0 {
-			f := globby.GlobFiles(rootpath, globs, []string{})
+			f := globby.GlobFiles(rootpath, globs, getWorkspaceIgnores())
 			for _, val := range f {
 				globalDeps.Add(val)
 			}

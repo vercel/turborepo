@@ -17,6 +17,15 @@
       "preLaunchTask": "prepare e2e"
     },
     {
+      "name": "turbo --version",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/examples/basic",
+      "args": ["--version"]
+    },
+    {
       "name": "Build Basic",
       "type": "go",
       "request": "launch",
@@ -26,22 +35,22 @@
       "args": ["run", "build"]
     },
     {
-      "name": "Kitchen Sink Build",
+      "name": "Build Kitchen Sink",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/examples/kitchen-sink",
-      "args": ["run", "build", "--dry"]
+      "args": ["run", "build"]
     },
     {
-      "name": "Turbo Version",
+      "name": "Build Kitchen Sink (Dry Run)",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["--version"]
+      "cwd": "${workspaceRoot}/examples/kitchen-sink",
+      "args": ["run", "build"]
     },
     {
       "name": "Build All",
@@ -60,6 +69,6 @@
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}",
       "args": ["run", "build", "--force"]
-    }
+    },
   ]
 }

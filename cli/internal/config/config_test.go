@@ -2,14 +2,14 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 func TestSelectCwd(t *testing.T) {
-	defaultCwd, err := os.Getwd()
+	defaultCwd, err := fs.GetCwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
@@ -17,7 +17,7 @@ func TestSelectCwd(t *testing.T) {
 	cases := []struct {
 		Name      string
 		InputArgs []string
-		Expected  string
+		Expected  fs.AbsolutePath
 	}{
 		{
 			Name:      "default",
@@ -27,12 +27,12 @@ func TestSelectCwd(t *testing.T) {
 		{
 			Name:      "choose command-line flag cwd",
 			InputArgs: []string{"foo", "--cwd=zop"},
-			Expected:  "zop",
+			Expected:  defaultCwd.Join("zop"),
 		},
 		{
 			Name:      "ignore other flags not cwd",
 			InputArgs: []string{"foo", "--ignore-this-1", "--cwd=zop", "--ignore-this=2"},
-			Expected:  "zop",
+			Expected:  defaultCwd.Join("zop"),
 		},
 		{
 			Name:      "ignore args after pass through",
