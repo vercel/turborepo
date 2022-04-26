@@ -223,7 +223,7 @@ func (c *RunCommand) Run(args []string) int {
 	if isAllPackages {
 		// if there is a root task for any of our targets, we need to add it
 		for _, target := range targets {
-			key := util.RootTaskId(target)
+			key := util.RootTaskID(target)
 			if _, ok := pipeline[key]; ok {
 				filteredPkgs.Add(util.RootPkgName)
 				// we only need to know we're running a root task once to add it for consideration

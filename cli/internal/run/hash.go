@@ -209,7 +209,7 @@ type taskHashInputs struct {
 func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, error) {
 	dependencyHashSet := make(util.Set)
 
-	rootPrefix := th.rootNode + util.TASK_DELIMITER
+	rootPrefix := th.rootNode + util.TaskDelimiter
 	th.mu.RLock()
 	defer th.mu.RUnlock()
 	for _, dependency := range dependencySet {

@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	TASK_DELIMITER = "#"
-	RootPkgName    = "//"
+	TaskDelimiter = "#"
+	RootPkgName   = "//"
 )
 
 // GetTaskId returns a package-task identifier (e.g @feed/thing#build).
@@ -15,20 +15,21 @@ func GetTaskId(pkgName interface{}, target string) string {
 	if IsPackageTask(target) {
 		return target
 	}
-	return fmt.Sprintf("%v%v%v", pkgName, TASK_DELIMITER, target)
+	return fmt.Sprintf("%v%v%v", pkgName, TaskDelimiter, target)
 }
 
-func RootTaskId(target string) string {
+// RootTaskID returns the task id for running the given task in the root package
+func RootTaskID(target string) string {
 	return GetTaskId(RootPkgName, target)
 }
 
 // GetPackageTaskFromId returns a tuple of the package name and target task
 func GetPackageTaskFromId(taskId string) (packageName string, task string) {
-	arr := strings.Split(taskId, TASK_DELIMITER)
+	arr := strings.Split(taskId, TaskDelimiter)
 	return arr[0], arr[1]
 }
 
 // IsPackageTask returns true if a is a package-specific task (e.g. myapp#build)
 func IsPackageTask(task string) bool {
-	return strings.Contains(task, TASK_DELIMITER)
+	return strings.Contains(task, TaskDelimiter)
 }

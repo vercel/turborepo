@@ -187,7 +187,7 @@ func TestIncludeRootTasks(t *testing.T) {
 		Deps:     make(util.Set),
 	})
 	p.AddTask(&Task{
-		Name:     util.RootTaskId("test"),
+		Name:     util.RootTaskID("test"),
 		TopoDeps: make(util.Set),
 		Deps:     make(util.Set),
 	})
