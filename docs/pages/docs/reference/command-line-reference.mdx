@@ -119,7 +119,7 @@ turbo run build --cwd=./somewhere/else
 #### `--deps`
 
 <Callout type="error">
-  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependents-of-matched-packages) instead.
+  `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#include-dependents-of-matched-packages) instead.
 </Callout>
 
 Defaults to `true`. Include dependent packages/apps consumers in the execution.
@@ -161,7 +161,7 @@ Multiple filters can be combined to select distinct sets of targets. Additionall
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
 be in the final entrypoint selection.
 
-For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/features/filtering)
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/core-concepts/filtering)
 
 ```sh
 turbo run build --filter=my-pkg
@@ -245,7 +245,7 @@ Just a quick overview.
 #### `--include-dependencies`
 
 <Callout type="error">
-  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#include-dependencies-of-matched-packages) instead.
+  `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#include-dependencies-of-matched-packages) instead.
 </Callout>
 
 Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
@@ -324,7 +324,7 @@ The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment v
 #### `--scope`
 
 <Callout type="error">
-  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-package) instead.
+  `--scope` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#filter-by-package) instead.
 </Callout>
 
 `type: string[]`
@@ -349,7 +349,7 @@ turbo run build --serial
 #### `--since`
 
 <Callout type="error">
-  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/features/filtering#filter-by-changed-packages) instead.
+  `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#filter-by-changed-packages) instead.
 </Callout>
 
 Filter execution based on which packages have changed since a merge-base.
@@ -573,7 +573,7 @@ Logs you out of your Vercel account.
 
 ## `turbo link`
 
-Link the current directory to Remote Cache scope. The selected owner (either a user or and organization) will be able to share [cache artifacts](../features/caching) through [Remote Caching](../features/remote-caching).
+Link the current directory to Remote Cache scope. The selected owner (either a user or and organization) will be able to share [cache artifacts](../core-concepts/caching) through [Remote Caching](../core-concepts/remote-caching).
 You should run this command from the root of your monorepo.
 
 ### Options
