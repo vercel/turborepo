@@ -11,6 +11,9 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 
 ```yaml
 image: node:latest
+variables:
+  TURBO_TOKEN: $TURBO_TOKEN
+  TURBO_TEAM: $TURBO_TEAM
 stages:
   - build
 build:
@@ -20,6 +23,7 @@ build:
     - pnpm config set store-dir .pnpm-store
   script:
     - pnpm install
+    - pnpm build
   cache:
     key: "$CI_COMMIT_REF_SLUG"
     paths:
