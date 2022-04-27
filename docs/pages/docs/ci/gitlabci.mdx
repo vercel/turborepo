@@ -11,9 +11,10 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 
 ```yaml
 image: node:latest
-variables:
-  TURBO_TOKEN: $TURBO_TOKEN
-  TURBO_TEAM: $TURBO_TEAM
+# To use Remote Caching, uncomment the next lines and follow the steps below.
+# variables:
+#   TURBO_TOKEN: $TURBO_TOKEN
+#   TURBO_TEAM: $TURBO_TEAM
 stages:
   - build
 build:
