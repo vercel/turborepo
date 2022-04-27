@@ -3,14 +3,15 @@ package globby
 import (
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/spf13/afero"
 )
 
 // setup prepares the test file system contents and returns the file system.
-func setup(files []string) afero.Fs {
-	fs := afero.NewMemMapFs()
+func setup(files []string) afero.IOFS {
+	fs := afero.NewIOFS(afero.NewMemMapFs())
 
 	for _, file := range files {
 		// We don't need the handle, we don't need the error.
@@ -317,7 +318,7 @@ func TestGlobFilesFs(t *testing.T) {
 			},
 		},
 		{
-			name: "exclude everything with folder . does not apply at base path",
+			name: "exclude everything with folder . applies at base path",
 			files: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
@@ -329,12 +330,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"./"},
 			},
-			want: []string{
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
+			want: []string{},
 		},
 		{
 			name: "exclude everything with traversal applies at a non-base path",
@@ -352,7 +348,7 @@ func TestGlobFilesFs(t *testing.T) {
 			want: []string{},
 		},
 		{
-			name: "exclude everything with folder traversal (..) does not apply at base path",
+			name: "exclude everything with folder traversal (..) applies at base path",
 			files: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
@@ -364,12 +360,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"dist/../"},
 			},
-			want: []string{
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
+			want: []string{},
 		},
 		{
 			name: "how do globs even work bad glob microformat",
@@ -500,6 +491,26 @@ func TestGlobFilesFs(t *testing.T) {
 			},
 			want: []string{"/repos/some-app/package.json"},
 		},
+		{
+			name: "No-trailing slash basePath works",
+			files: []string{
+				"/repos/some-app/dist/index.html",
+				"/repos/some-app/dist/js/index.js",
+				"/repos/some-app/dist/js/lib.js",
+				"/repos/some-app/dist/js/node_modules/browserify.js",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"dist/**"},
+				excludePatterns: []string{},
+			},
+			want: []string{
+				"/repos/some-app/dist/index.html",
+				"/repos/some-app/dist/js/index.js",
+				"/repos/some-app/dist/js/lib.js",
+				"/repos/some-app/dist/js/node_modules/browserify.js",
+			},
+		},
 	}
 	for _, tt := range tests {
 		fs := setup(tt.files)
@@ -511,6 +522,8 @@ func TestGlobFilesFs(t *testing.T) {
 			for index, path := range got {
 				gotToSlash[index] = filepath.ToSlash(path)
 			}
+
+			sort.Strings(gotToSlash)
 
 			if !reflect.DeepEqual(gotToSlash, tt.want) {
 				t.Errorf("globFilesFs() = %v, want %v", gotToSlash, tt.want)
