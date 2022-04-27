@@ -7,7 +7,7 @@ description: How to use Travis CI with Turborepo to optimize your CI workflow
 
 The following example shows how to use Turborepo with [Travis CI](https://www.travis-ci.com/) and [pnpm](https://pnpm.io).
 
-Create a `.travis.yml` file:
+Create a file called `.travis.yml` in your repository with the following contents:
 
 ```yaml
 language: node_js
@@ -22,6 +22,8 @@ before_install:
   - pnpm config set store-dir ~/.pnpm-store
 install:
   - pnpm install
+script:
+  - pnpm run test
 ```
 
 > For more information visit the pnpm documenation section on Travis CI integration, view it [here](https://pnpm.io/continuous-integration#travis)
@@ -49,3 +51,7 @@ Copy the value to a safe place. You'll need it in a moment.
 3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
+
+```
+
+```
