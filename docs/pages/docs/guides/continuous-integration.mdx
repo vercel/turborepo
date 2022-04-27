@@ -86,7 +86,7 @@ Copy the value to a safe place. You'll need it in a moment.
 
 ```yaml highlight="6-8"
 # ...
- 
+
 jobs:
   build:
       name: Build and Test
@@ -105,5 +105,76 @@ jobs:
           uses: actions/checkout@v2
           with:
             fetch-depth: 2
+      # ...
+```
+
+## CircleCI
+
+The following example shows how to use Turborepo with CircleCI and yarn.
+
+Start by creating a `.circleci/config.yml` file
+
+```yaml
+version: 2.1
+orbs:
+  node: circleci/node@5.0.2
+workflows:
+  test:
+    jobs:
+      - test
+jobs:
+  test:
+    docker:
+      - image: cimg/node:lts
+    # To use Remote Caching, uncomment the next lines and follow the steps below.
+    # environment:
+    #  TURBO_TOKEN: $TURBO_TOKEN
+    #  TURBO_TEAM: $TURBO_TEAM
+    steps:
+      - checkout
+      - node/install-packages:
+          pkg-manager: yarn
+      - run:
+          command: yarn turbo run test
+```
+
+#### Remote Caching
+
+To use Remote Caching with CircleCI, add the following environment variables to your CircleCI workflow
+and make them available to your `turbo` commands.
+
+- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
+- `TURBO_TEAM` - The account to which the monorepo belongs
+
+To use Vercel Remote Caching, you can get the value of these variables in a few steps:
+
+1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
+
+![Vercel Access Tokens](/images/docs/vercel-tokens.png)
+![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+
+Copy the value to a safe place. You'll need it in a moment.
+
+2. Go to your CirclCI project settings and click on the **Environment Variables** tab. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+
+![CircleCI Environment Variables](/images/docs/circleci-environment-variables.png)
+![CircleCI Create Environment Variables](/images/docs/circleci-create-environment-variables.png)
+
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include `https://vercel.com` part, but only the slug.
+
+![Vercel Account Slug](/images/docs/vercel-slug.png)
+
+4. At the top of your CirclCI workflow, provide the following environment variables to jobs that use `turbo`:
+
+```yaml highlight="6-8"
+# ...
+jobs:
+  test:
+    docker:
+      - image: cimg/node:lts
+    environment:
+      TURBO_TOKEN: $TURBO_TOKEN
+      TURBO_TEAM: $TURBO_TEAM
+    steps:
       # ...
 ```

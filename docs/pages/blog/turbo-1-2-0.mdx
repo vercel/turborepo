@@ -9,9 +9,8 @@ ogImage: /images/blog/turbo-1-2-0/twitter-card.png
 # Turborepo 1.2
 
 import { Authors } from '../../components/Authors'
-import Bleed from 'nextra-theme-docs/bleed'
 
-<div className="text-sm mt-2 text-gray-500 dark:text-gray-400">Friday, April 8th, 2022</div>
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Friday, April 8th, 2022</div>
 
 <Authors authors={['jaredpalmer', 'becca__z', 'gaspargarcia_', 'gsoltis']} />
 
@@ -69,9 +68,11 @@ Dry runs are incredibly useful for two situations:
 - Debugging and testing run options
 - Using `turbo` filtering and task graphs for building automations
 
-<Bleed>
-  ![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
-</Bleed>
+<Nextra.Bleed>
+  <div className="lg:rounded-xl overflow-hidden">
+    ![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
+  </div>
+</Nextra.Bleed>
 
 We hope that this will improve visibility into what `turbo` is doing, speeding up debugging, and make it easier to leverage `turbo` in dynamic CI/CD systems.
 

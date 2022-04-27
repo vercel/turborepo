@@ -49,7 +49,7 @@ func main() {
 	}
 	args = args[:argsEnd]
 
-	ui := ui.BuildColoredUi(colorMode);
+	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()

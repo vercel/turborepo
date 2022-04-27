@@ -9,12 +9,11 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/api"
-	"github.com/vercel/turborepo/cli/internal/backends"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
@@ -34,7 +33,7 @@ type Context struct {
 	RootNode         string
 	GlobalHash       string
 	Lockfile         *fs.YarnLockfile
-	Backend          *api.LanguageBackend
+	PackageManager   *packagemanager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -127,15 +126,15 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if backend, err := backends.GetBackend(rootpath, config.RootPackageJSON); err != nil {
+		if packageManager, err := packagemanager.GetPackageManager(rootpath, config.RootPackageJSON); err != nil {
 			return err
 		} else {
-			c.Backend = backend
+			c.PackageManager = packageManager
 		}
 
-		// this should go into the backend abstraction
-		if util.IsYarn(c.Backend.Name) {
-			lockfile, err := fs.ReadLockfile(rootpath, c.Backend.Name, config.Cache.Dir)
+		// this should go into the packagemanager abstraction
+		if util.IsYarn(c.PackageManager.Name) {
+			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, config.Cache.Dir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}
@@ -147,14 +146,17 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
 
-		spaces, err := c.Backend.GetWorkspaceGlobs(rootpath)
+		spaces, err := c.PackageManager.GetWorkspaceGlobs(rootpath)
 
 		if err != nil {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
-		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.Backend, config.Logger, os.Environ())
-		// TODO(Gaspar): this error is unused?
+		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboConfigJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
+		if err != nil {
+			return fmt.Errorf("failed to calculate global hash: %v", err)
+		}
+
 		c.GlobalHash = globalHash
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
@@ -211,7 +213,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	for dep, version := range pkg.Dependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if util.IsYarn(c.Backend.Name) {
+	if util.IsYarn(c.PackageManager.Name) {
 		pkg.SubLockfile = make(fs.YarnLockfile)
 		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
@@ -329,7 +331,7 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 }
 
 func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if !util.IsYarn(c.Backend.Name) {
+	if !util.IsYarn(c.PackageManager.Name) {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
@@ -401,7 +403,7 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	return justNames, pairs
 }
 
-func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *api.LanguageBackend, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 

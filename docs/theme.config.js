@@ -133,19 +133,16 @@ const theme = {
   projectChatLink: "https://turborepo.org/discord",
   feedbackLink: "Question? Give us feedback →",
   banner: function Banner() {
-    // TODO
     return (
-      <div className="px-6 py-2 text-sm text-center text-white bg-black dark:bg-white dark:text-black">
-        <a
-          href="https://vercel.com/blog/vercel-acquires-turborepo?utm_source=turbo-site&amp;utm_medium=banner&amp;utm_campaign=turbo-website"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-white no-underline dark:text-black "
-          title="Go to the Vercel website"
-        >
-          Turborepo has joined Vercel. Read More →
-        </a>
-      </div>
+      <a
+        href="https://vercel.com/blog/vercel-acquires-turborepo?utm_source=turbo-site&amp;utm_medium=banner&amp;utm_campaign=turbo-website"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-current no-underline"
+        title="Go to the Vercel website"
+      >
+        Turborepo has joined Vercel. Read More →
+      </a>
     );
   },
   logo: function LogoActual() {
