@@ -29,7 +29,7 @@ This turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/design-system design-system
+npx degit vercel/turborepo/examples/with-changesets design-system
 cd design-system
 yarn install
 git init . && git add . && git commit -m "Init"
