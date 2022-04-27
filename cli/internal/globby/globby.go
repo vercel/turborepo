@@ -9,34 +9,11 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/spf13/afero"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 var _aferoOsFs = afero.NewOsFs()
 var _aferoIOFS = afero.NewIOFS(_aferoOsFs)
-
-// set is a naive partial implementation of a string set.
-// TODO: remove after we can use generics.
-type set struct {
-	storageMap map[string]bool
-}
-
-// Add a string to the set.
-func (s *set) Add(value string) {
-	s.storageMap[value] = true
-}
-
-// Returns a range of the set's values.
-func (s *set) Values() []string {
-	setValues := make([]string, len(s.storageMap))
-
-	i := 0
-	for key := range s.storageMap {
-		setValues[i] = key
-		i++
-	}
-
-	return setValues
-}
 
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) []string {
 	return globFilesFs(_aferoIOFS, basePath, includePatterns, excludePatterns)
@@ -61,9 +38,7 @@ func getRelativePath(from string, to string) (path string, err error) {
 func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, excludePatterns []string) []string {
 	var processedIncludes []string
 	var processedExcludes []string
-	var result = &set{
-		storageMap: map[string]bool{},
-	}
+	result := make(util.Set)
 
 	for _, includePattern := range includePatterns {
 		includePath := filepath.Join(basePath, includePattern)
@@ -137,5 +112,5 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 		return nil
 	}
 
-	return result.Values()
+	return result.UnsafeListOfStrings()
 }
