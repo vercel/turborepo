@@ -128,7 +128,7 @@ func (l *link) run() error {
 	l.ui.Info("  all your team’s Vercel projects. It also can share outputs")
 	l.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
 	l.ui.Info("  This results in faster build times and deployments for your team.")
-	l.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+	l.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/core-concepts/remote-caching${RESET}"))
 	l.ui.Info("")
 	currentDir, err := filepath.Abs(".")
 	if err != nil {

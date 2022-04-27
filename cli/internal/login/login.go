@@ -221,7 +221,7 @@ func loginSSO(c *config.Config, ssoTeam string, deps loginDeps) error {
 		deps.ui.Info("  all your team’s Vercel projects. It also can share outputs")
 		deps.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
 		deps.ui.Info("  This results in faster build times and deployments for your team.")
-		deps.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+		deps.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/core-concepts/remote-caching${RESET}"))
 		deps.ui.Info("")
 		deps.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {
