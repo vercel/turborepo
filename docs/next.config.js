@@ -32,6 +32,11 @@ module.exports = withNextra({
         permanent: true,
         destination: "/docs/guides/monorepo-tools",
       },
+      {
+        source: "/docs/guides/continuous-integration",
+        permanent: true,
+        destination: "/docs/ci",
+      },
     ];
   },
 });
