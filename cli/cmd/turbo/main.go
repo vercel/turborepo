@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/info"
 	"github.com/vercel/turborepo/cli/internal/login"
@@ -51,6 +52,7 @@ func main() {
 
 	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
+	fsys := afero.NewOsFs()
 
 	util.InitPrintf()
 
@@ -59,7 +61,7 @@ func main() {
 	c.ErrorWriter = os.Stderr
 	// Parse and validate cmd line flags and env vars
 	// Note that cf can be nil
-	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion)
+	cf, err := config.ParseAndValidate(c.Args, fsys, ui, turboVersion)
 	if err != nil {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)

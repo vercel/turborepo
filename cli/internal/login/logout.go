@@ -36,7 +36,7 @@ Usage: turbo logout
 
 // Run executes tasks in the monorepo
 func (c *LogoutCommand) Run(args []string) int {
-	if err := config.DeleteUserConfigFile(); err != nil {
+	if err := config.DeleteUserConfigFile(c.Config.Fs); err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not logout. Something went wrong: %w", err))
 		return 1
 	}
