@@ -104,12 +104,12 @@ Your pipeline both defines the way in which your NPM `package.json` scripts rela
 
 In the above example, the `build` and `test` tasks are dependent on their packages `dependencies` and `devDependencies` being built first, this is denoted with the `^` prefix.
 
-For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders relative to each packages's `package.json` by default if an override isn't added. Using the [`outputs`](./features/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
+For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders relative to each packages's `package.json` by default if an override isn't added. Using the [`outputs`](./core-concepts/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
 like in the example above, where the `.next/**` folder is selected to be the default cache outputs folder for the `build` task for each package. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
 
 Finally, the `dev` task has its caching disabled using the `cache` key with a value of `false`.
 
-See the [`Pipelines`](./features/pipelines) documentation for more details on how to configure your pipeline.
+See the [`Pipelines`](./core-concepts/pipelines) documentation for more details on how to configure your pipeline.
 
 ### Edit `.gitignore`
 

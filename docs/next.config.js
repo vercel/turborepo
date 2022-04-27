@@ -37,6 +37,11 @@ module.exports = withNextra({
         permanent: true,
         destination: "/docs/ci",
       },
+      {
+        source: "/docs/features/:path*",
+        permanent: true,
+        destination: "/docs/core-concepts/:path*",
+      },
     ];
   },
 });
