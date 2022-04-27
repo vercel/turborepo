@@ -1,0 +1,51 @@
+---
+title: Using Turborepo with Travis CI
+description: How to use Travis CI with Turborepo to optimize your CI workflow
+---
+
+# Using Turborepo with Travis CI
+
+The following example shows how to use Turborepo with [Travis CI](https://www.travis-ci.com/) and [pnpm](https://pnpm.io).
+
+Create a `.travis.yml` file:
+
+```yaml
+language: node_js
+node_js:
+  - lts/*
+cache:
+  npm: false
+  directories:
+    - "~/.pnpm-store"
+before_install:
+  - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
+  - pnpm config set store-dir ~/.pnpm-store
+install:
+  - pnpm install
+```
+
+> For more information visit the pnpm documenation section on Travis CI integration, view it [here](https://pnpm.io/continuous-integration#travis)
+
+## Remote Caching
+
+To use Remote Caching with Travis CI, add the following environment variables to your Travis CI project.
+
+- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
+- `TURBO_TEAM` - The account to which the monorepo belongs
+
+To use Vercel Remote Caching, you can get the value of these variables in a few steps:
+
+1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
+
+![Vercel Access Tokens](/images/docs/vercel-tokens.png)
+![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+
+Copy the value to a safe place. You'll need it in a moment.
+
+2. Go to your Travis repository settings and scroll down to the _Environment Variables_ section. Create a new variable called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+
+![Travis CI Variables](/images/docs/travis-ci-environment-variables.png)
+
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
+
+![Vercel Account Slug](/images/docs/vercel-slug.png)
