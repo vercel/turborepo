@@ -19,19 +19,19 @@ func GlobFiles(basePath string, includePatterns []string, excludePatterns []stri
 	return globFilesFs(_aferoIOFS, basePath, includePatterns, excludePatterns)
 }
 
-// getRelativePath ensures that the the requested file path is a child of `from`.
-func getRelativePath(from string, to string) (path string, err error) {
+// isRelativePath ensures that the the requested file path is a child of `from`.
+func isRelativePath(from string, to string) (isRelative bool, err error) {
 	relativePath, err := filepath.Rel(from, to)
 
 	if err != nil {
-		return "", err
+		return false, err
 	}
 
 	if strings.HasPrefix(relativePath, "..") {
-		return "", errors.New("the path you are attempting to specify is outside of the root")
+		return false, errors.New("the path you are attempting to specify is outside of the root")
 	}
 
-	return relativePath, nil
+	return true, nil
 }
 
 // globFilesFs searches the specified file system to ensure to enumerate all files to include.
@@ -42,21 +42,21 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 
 	for _, includePattern := range includePatterns {
 		includePath := filepath.Join(basePath, includePattern)
-		relativePath, err := getRelativePath(basePath, includePath)
+		isRelative, _ := isRelativePath(basePath, includePath)
 
-		if err == nil {
+		if isRelative {
 			// Includes only operate on files.
-			processedIncludes = append(processedIncludes, relativePath)
+			processedIncludes = append(processedIncludes, includePath)
 		}
 	}
 
 	for _, excludePattern := range excludePatterns {
 		excludePath := filepath.Join(basePath, excludePattern)
-		relativePath, err := getRelativePath(basePath, excludePath)
+		isRelative, _ := isRelativePath(basePath, excludePath)
 
-		if err == nil {
+		if isRelative {
 			// Excludes operate on entire folders.
-			processedExcludes = append(processedExcludes, filepath.Join(relativePath, "**"))
+			processedExcludes = append(processedExcludes, filepath.Join(excludePath, "**"))
 		}
 	}
 
@@ -66,10 +66,10 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 
 	// Do not use alternation if unnecessary.
 	if includeCount == 1 {
-		includePattern = filepath.Join(basePath, processedIncludes[0])
+		includePattern = processedIncludes[0]
 	} else if includeCount > 1 {
-		// We start from a basePath prefix which allows doublestar to optimize the access.
-		includePattern = filepath.Join(basePath, "{"+strings.Join(processedIncludes, ",")+"}")
+		// We use alternation from the very root of the path. This avoids fs.Stat of the basePath.
+		includePattern = "{" + strings.Join(processedIncludes, ",") + "}"
 	}
 
 	// We start with an empty string excludePattern which we only use if excludeCount > 0.
@@ -78,10 +78,10 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 
 	// Do not use alternation if unnecessary.
 	if excludeCount == 1 {
-		excludePattern = filepath.Join(basePath, processedExcludes[0])
+		excludePattern = processedExcludes[0]
 	} else if excludeCount > 1 {
-		// We start from a basePath prefix which allows doublestar to optimize the access.
-		excludePattern = filepath.Join(basePath, "{"+strings.Join(processedExcludes, ",")+"}")
+		// We use alternation from the very root of the path. This avoids fs.Stat of the basePath.
+		excludePattern = "{" + strings.Join(processedExcludes, ",") + "}"
 	}
 
 	// GlobWalk expects that everything uses Unix path conventions.
