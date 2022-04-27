@@ -1,0 +1,54 @@
+---
+title: Using Turborepo with GitLab CI
+description: How to use GitLab CI with Turborepo to optimize your CI workflow
+---
+
+# Using Turborepo with GitLab CI
+
+The following example shows how to use Turborepo with [GitLab CI](https://docs.gitlab.com/ee/ci/) and [pnpm](https://pnpm.io).
+
+Create a `.gitlab-ci.yml` file:
+
+```yaml
+image: node:latest
+stages:
+  - build
+build:
+  stage: build
+  before_script:
+    - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
+    - pnpm config set store-dir .pnpm-store
+  script:
+    - pnpm install
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .pnpm-store
+```
+
+> For more information visit the pnpm documenation section on GitLab CI integration, view it [here](https://pnpm.io/continuous-integration#gitlab)
+
+## Remote Caching
+
+To use Remote Caching with GitLab CI, add the following environment variables to your GitLab CI project.
+
+- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
+- `TURBO_TEAM` - The account to which the monorepo belongs
+
+To use Vercel Remote Caching, you can get the value of these variables in a few steps:
+
+1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
+
+![Vercel Access Tokens](/images/docs/vercel-tokens.png)
+![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+
+Copy the value to a safe place. You'll need it in a moment.
+
+2. Go to your GitLab repository settings and click on the **Settings** and then **CI/CD** tab. Create a new variable called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+
+![GitLab CI Variables](/images/docs/gitlab-ci-variables.png)
+![GitLab CI Create Variable](/images/docs/gitlab-ci-create-variable.png)
+
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
+
+![Vercel Account Slug](/images/docs/vercel-slug.png)
