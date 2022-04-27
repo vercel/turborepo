@@ -109,9 +109,9 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 		excludePattern = filepath.Join(basePath, "{"+strings.Join(processedExcludes, ",")+"}")
 	}
 
-	err := doublestar.GlobWalk(fs, includePattern, func(path string, dirEntry iofs.DirEntry) error {
-		// Root paths do not prepend the leading slash.
-		if !strings.HasPrefix(path, "/") {
+	err := doublestar.GlobWalk(fs, filepath.ToSlash(includePattern), func(path string, dirEntry iofs.DirEntry) error {
+		// Unix root paths do not prepend the leading slash.
+		if basePath == "/" && !strings.HasPrefix(path, "/") {
 			path = filepath.Join(basePath, path)
 		}
 
@@ -124,7 +124,7 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 			return nil
 		}
 
-		isExcluded, err := doublestar.Match(excludePattern, path)
+		isExcluded, err := doublestar.Match(filepath.ToSlash(excludePattern), filepath.ToSlash(path))
 
 		if err == nil && !isExcluded {
 			result.Add(path)
