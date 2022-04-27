@@ -13,9 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BinCommand is the structure for the bin command
 type BinCommand struct {
 	Config *config.Config
-	Ui     *cli.ColoredUi
+	UI     *cli.ColoredUi
 }
 
 // Synopsis of run command
@@ -23,7 +24,7 @@ func (c *BinCommand) Synopsis() string {
 	return "Get the path to the Turbo binary"
 }
 
-// Help returns information about the `bin` command
+// Help returns information about the bin command
 func (c *BinCommand) Help() string {
 	helpText := `
 Usage: turbo bin
@@ -33,6 +34,7 @@ Usage: turbo bin
 	return strings.TrimSpace(helpText)
 }
 
+// Run setups the command and runs it
 func (c *BinCommand) Run(args []string) int {
 	cmd := BinCmd(c)
 
@@ -54,13 +56,15 @@ func (c *BinCommand) Run(args []string) int {
 	return 1
 }
 
+// LogError prints an error to the UI and returns a BasicError
 func (c *BinCommand) LogError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	c.Config.Logger.Error("error", err)
-	c.Ui.Error(err.Error())
+	c.UI.Error(err.Error())
 	return &cmdutil.BasicError{}
 }
 
+// BinCmd returns the Cobra bin command
 func BinCmd(ch *BinCommand) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bin",
@@ -71,7 +75,7 @@ func BinCmd(ch *BinCommand) *cobra.Command {
 				return ch.LogError("could not get path to turbo binary: %w", err)
 			}
 
-			ch.Ui.Output(path)
+			ch.UI.Output(path)
 
 			return nil
 		},
