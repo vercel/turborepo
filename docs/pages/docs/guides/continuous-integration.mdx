@@ -59,7 +59,7 @@ jobs:
 #### Remote Caching
 
 To use Remote Caching with GitHub Actions, add the following environment variables to your GitHub Actions workflow
-and make them available to your `turbo` commands.
+to make them available to your `turbo` commands.
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
 - `TURBO_TEAM` - The account to which the monorepo belongs
@@ -78,7 +78,7 @@ Copy the value to a safe place. You'll need it in a moment.
 ![GitHub Secrets](/images/docs/github-actions-secrets.png)
 ![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include `https://vercel.com` part, but only the slug.
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
 
@@ -141,7 +141,7 @@ jobs:
 #### Remote Caching
 
 To use Remote Caching with CircleCI, add the following environment variables to your CircleCI workflow
-and make them available to your `turbo` commands.
+to make them available to your `turbo` commands.
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
 - `TURBO_TEAM` - The account to which the monorepo belongs
@@ -155,16 +155,16 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 Copy the value to a safe place. You'll need it in a moment.
 
-2. Go to your CirclCI project settings and click on the **Environment Variables** tab. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+2. Go to your CircleCI project settings and click on the **Environment Variables** tab. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
 
 ![CircleCI Environment Variables](/images/docs/circleci-environment-variables.png)
 ![CircleCI Create Environment Variables](/images/docs/circleci-create-environment-variables.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include `https://vercel.com` part, but only the slug.
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
 
-4. At the top of your CirclCI workflow, provide the following environment variables to jobs that use `turbo`:
+4. At the top of your CircleCI workflow, provide the following environment variables to jobs that use `turbo`:
 
 ```yaml highlight="6-8"
 # ...
