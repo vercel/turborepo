@@ -316,6 +316,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1db59621ec70f09c5e9b597b220c7a2b43611f4710dc03ceb8748637775692c"
 
 [[package]]
+name = "cargo-lock"
+version = "7.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c408da54db4c50d4693f7e649c299bc9de9c23ead86249e5368830bb32a734b"
+dependencies = [
+ "semver",
+ "serde",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "cast"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1285,6 +1297,7 @@ dependencies = [
  "clap 3.1.6",
  "json",
  "turbo-tasks",
+ "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbopack",
 ]
@@ -1890,6 +1903,9 @@ name = "semver"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a3381e03edd24287172047536f20cabde766e2cd3e65e6b00fb3af51c4f38d"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"
@@ -2456,6 +2472,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
+name = "toml"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2529,8 +2554,22 @@ dependencies = [
  "flurry",
  "lazy_static",
  "mopa",
+ "turbo-tasks-build",
  "turbo-tasks-macros",
  "weak-table",
+]
+
+[[package]]
+name = "turbo-tasks-build"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cargo-lock",
+ "pmutil",
+ "quote",
+ "serde",
+ "syn",
+ "toml",
 ]
 
 [[package]]
@@ -2547,6 +2586,7 @@ dependencies = [
  "sha2",
  "threadpool",
  "turbo-tasks",
+ "turbo-tasks-build",
 ]
 
 [[package]]
@@ -2582,6 +2622,7 @@ dependencies = [
  "swc_ecmascript",
  "testing",
  "turbo-tasks",
+ "turbo-tasks-build",
  "turbo-tasks-fs",
  "url",
 ]
