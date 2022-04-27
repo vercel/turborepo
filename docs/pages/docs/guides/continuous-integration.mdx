@@ -56,58 +56,6 @@ jobs:
           run: pnpm turbo run test
 ```
 
-#### Remote Caching
-
-To use Remote Caching with GitHub Actions, add the following environment variables to your GitHub Actions workflow
-to make them available to your `turbo` commands.
-
-- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
-- `TURBO_TEAM` - The account to which the monorepo belongs
-
-To use Vercel Remote Caching, you can get the value of these variables in a few steps:
-
-1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
-
-![Vercel Access Tokens](/images/docs/vercel-tokens.png)
-![Vercel Access Tokens](/images/docs/vercel-create-token.png)
-
-Copy the value to a safe place. You'll need it in a moment.
-
-2. Go to your GitHub repository settings and click on the **Secrets** and then **Actions** tab. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
-
-![GitHub Secrets](/images/docs/github-actions-secrets.png)
-![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
-
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
-
-![Vercel Account Slug](/images/docs/vercel-slug.png)
-
-4. At the top of your GitHub Actions workflow, provide the following environment variables to jobs that use `turbo`:
-
-```yaml highlight="6-8"
-# ...
-
-jobs:
-  build:
-      name: Build and Test
-      timeout-minutes: 15
-      runs-on: ${{ matrix.os }}
-      # To use Turborepo Remote Caching, set the following environment variables for the job.
-      env:
-        TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-      strategy:
-        matrix:
-          os: [ubuntu-latest, macos-latest]
-
-      steps:
-        - name: Check out code
-          uses: actions/checkout@v2
-          with:
-            fetch-depth: 2
-      # ...
-```
-
 ## CircleCI
 
 The following example shows how to use Turborepo with CircleCI and yarn.
@@ -138,13 +86,65 @@ jobs:
           command: yarn turbo run test
 ```
 
-#### Remote Caching
+## Travis CI
 
-To use Remote Caching with CircleCI, add the following environment variables to your CircleCI workflow
-to make them available to your `turbo` commands.
+The following example shows how to use Turborepo with Travis CI and pnpm.
 
-- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
-- `TURBO_TEAM` - The account to which the monorepo belongs
+Start by creating a `.travis.yml` file
+
+```yaml
+language: node_js
+node_js:
+  - lts/*
+cache:
+  npm: false
+  directories:
+    - "~/.pnpm-store"
+before_install:
+  - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
+  - pnpm config set store-dir ~/.pnpm-store
+install:
+  - pnpm install
+```
+
+> The pnpm docs have a section on Travis CI integration, view it [here](https://pnpm.io/continuous-integration#travis)
+
+Travis is fairly automatic and will build the repository based on the specific `build` command in package.json.
+
+For enabling remote caching, follow Travis' [Environment Variable](https://docs.travis-ci.com/user/environment-variables/) guide for setting secure environment variables.
+
+## GitLab CI
+
+The following example shows how to use Turborepo with GitLab CI and pnpm.
+
+Start by creating a `.gitlab-ci.yml` file and configure it with the custom pnpm support provided by the [pnpm docs](https://pnpm.io/continuous-integration#gitlab-ci)
+
+```yaml
+image: node:latest
+
+stages:
+  - build
+
+build:
+  stage: build
+  before_script:
+    - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
+    - pnpm config set store-dir .pnpm-store
+  script:
+    - pnpm install
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .pnpm-store
+```
+
+Remote caching environment variables can be configured through project settings. Follow GitLab's guide [here](https://docs.gitlab.com/ee/ci/variables/index.html#add-a-cicd-variable-to-a-project).
+
+## Remote Caching with Continuous Integration Providers
+
+All of the CI providers included in this section provide some kind of environment variable support which is the only requirement for enabling Turborepo Remote Caching.
+
+The various sample configurations have comments including the environment variable pattern necessary to enable remote caching for the respective CI provider.
 
 To use Vercel Remote Caching, you can get the value of these variables in a few steps:
 
@@ -155,26 +155,10 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 Copy the value to a safe place. You'll need it in a moment.
 
-2. Go to your CircleCI project settings and click on the **Environment Variables** tab. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
-
-![CircleCI Environment Variables](/images/docs/circleci-environment-variables.png)
-![CircleCI Create Environment Variables](/images/docs/circleci-create-environment-variables.png)
+2. Go to your CI provider's **Secrets/Environment Variable** setting dashboard. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
 
 3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
 
-4. At the top of your CircleCI workflow, provide the following environment variables to jobs that use `turbo`:
-
-```yaml highlight="6-8"
-# ...
-jobs:
-  test:
-    docker:
-      - image: cimg/node:lts
-    environment:
-      TURBO_TOKEN: $TURBO_TOKEN
-      TURBO_TEAM: $TURBO_TEAM
-    steps:
-      # ...
-```
+4. In your CI provider configuration file, uncomment the respective environment variable section to enable remote caching.
