@@ -1006,7 +1006,12 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
-		filesToBeCached := globby.GlobFiles(filepath.Join(e.rs.Opts.cwd, pt.pkg.Dir), outputs, ignore)
+
+		filesToBeCached, err := globby.GlobFiles(filepath.Join(e.rs.Opts.cwd, pt.pkg.Dir), outputs, ignore)
+		if err != nil {
+			return err
+		}
+
 		relativePaths := make([]string, len(filesToBeCached))
 
 		for index, value := range filesToBeCached {

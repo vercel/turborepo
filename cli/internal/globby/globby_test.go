@@ -30,10 +30,11 @@ func TestGlobFilesFs(t *testing.T) {
 		excludePatterns []string
 	}
 	tests := []struct {
-		name  string
-		files []string
-		args  args
-		want  []string
+		name    string
+		files   []string
+		args    args
+		want    []string
+		wantErr bool
 	}{
 		{
 			name:  "hello world",
@@ -396,12 +397,8 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"../spanish-inquisition/**", "dist/**"},
 				excludePatterns: []string{},
 			},
-			want: []string{
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
+			want:    []string{},
+			wantErr: true,
 		},
 		{
 			name: "globs and traversal and globs do not cross base path",
@@ -417,7 +414,8 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**/../../spanish-inquisition/**"},
 				excludePatterns: []string{},
 			},
-			want: []string{},
+			want:    []string{},
+			wantErr: true,
 		},
 		{
 			name: "traversal works within base path",
@@ -516,7 +514,12 @@ func TestGlobFilesFs(t *testing.T) {
 		fs := setup(tt.files)
 
 		t.Run(tt.name, func(t *testing.T) {
-			got := globFilesFs(fs, tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
+			got, err := globFilesFs(fs, tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("globFilesFs() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
 			gotToSlash := make([]string, len(got))
 			for index, path := range got {
