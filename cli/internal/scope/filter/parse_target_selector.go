@@ -26,7 +26,7 @@ func (ts *TargetSelector) IsValid() bool {
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
 
-// ParseTargetSelector is a function that returns PNPM compatible --filter command line flags
+// ParseTargetSelector is a function that returns pnpm compatible --filter command line flags
 func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, error) {
 	exclude := false
 	firstChar := rawSelector[0]
