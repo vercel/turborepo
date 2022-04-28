@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type ApiClient struct {
@@ -317,13 +318,24 @@ func (c *ApiClient) addTeamParam(params *url.Values) {
 	}
 }
 
+// Membership is the relationship between the logged-in user and a particular team
+type Membership struct {
+	Role string `json:"role"`
+}
+
 // Team is a Vercel Team object
 type Team struct {
-	ID        string `json:"id,omitempty"`
-	Slug      string `json:"slug,omitempty"`
-	Name      string `json:"name,omitempty"`
-	CreatedAt int    `json:"createdAt,omitempty"`
-	Created   string `json:"created,omitempty"`
+	ID         string     `json:"id,omitempty"`
+	Slug       string     `json:"slug,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	CreatedAt  int        `json:"createdAt,omitempty"`
+	Created    string     `json:"created,omitempty"`
+	Membership Membership `json:"membership"`
+}
+
+// IsOwner returns true if this Team data was fetched by an owner of the team
+func (t *Team) IsOwner() bool {
+	return t.Membership.Role == "OWNER"
 }
 
 // Pagination is a Vercel pagination object
@@ -415,6 +427,50 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 		return nil, fmt.Errorf("could not parse JSON response: %s", string(body))
 	}
 	return userResponse, nil
+}
+
+// statusResponse is the server response from /artifacts/status
+type statusResponse struct {
+	Status string `json:"status"`
+}
+
+// GetCachingStatus returns the server's perspective on whether or not remove caching
+// requests will be allowed.
+func (c *ApiClient) GetCachingStatus(teamID string) (util.CachingStatus, error) {
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/status"), nil)
+	if err != nil {
+		return util.CachingStatusDisabled, err
+	}
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return util.CachingStatusDisabled, err
+	}
+	// Explicitly ignore the error from closing the response body. We don't need
+	// to fail the method if we fail to close the response.
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		b, err := ioutil.ReadAll(resp.Body)
+		var responseText string
+		if err != nil {
+			responseText = fmt.Sprintf("failed to read response: %v", err)
+		} else {
+			responseText = string(b)
+		}
+		return util.CachingStatusDisabled, fmt.Errorf("failed to get caching status (%v): %s", resp.StatusCode, responseText)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return util.CachingStatusDisabled, fmt.Errorf("failed to read JSN response: %v", err)
+	}
+	statusResponse := statusResponse{}
+	err = json.Unmarshal(body, &statusResponse)
+	if err != nil {
+		return util.CachingStatusDisabled, fmt.Errorf("failed to read JSON response: %v", string(body))
+	}
+	return util.CachingStatusFromString(statusResponse.Status)
 }
 
 type verificationResponse struct {
