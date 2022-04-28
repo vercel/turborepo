@@ -8,7 +8,7 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Pipelining Package Tasks
 
-In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each NPM lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
+In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each npm lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
 
 Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold.
 
@@ -213,7 +213,7 @@ For these cases, you can express these relationships in your `pipeline` configur
 }
 ```
 
-In this example, we illustrate a `deploy` script of a `frontend` application depends on both the `deploy` and `health-check` NPM scripts of `backend` as well as the `test` script of a `ui` package. The syntax is `<package>#<task>`.
+In this example, we illustrate a `deploy` script of a `frontend` application depends on both the `deploy` and `health-check` npm scripts of `backend` as well as the `test` script of a `ui` package. The syntax is `<package>#<task>`.
 
 This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"deploy": { "dependsOn": ["test"] }`, but it does not. Since `test` and `deploy` scripts do not have topological dependencies (e.g. `^<task>`), they theoretically can get triggered anytime once their own package's `build` and `test` scripts have finished! Unless they are being used for applications/services for deployment orchestration, the general guidance is to get rid of these specific package-task to package-task dependencies in the pipeline as quickly as possible (so the builds can be optimized better).
 
