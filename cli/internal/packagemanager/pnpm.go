@@ -34,7 +34,7 @@ var nodejsPnpm = PackageManager{
 		}
 
 		if len(pnpmWorkspaces.Packages) == 0 {
-			return nil, fmt.Errorf("pnpm-workspace.yaml: no packages found. Turborepo requires PNPM workspaces and thus packages to be defined in the root pnpm-workspace.yaml")
+			return nil, fmt.Errorf("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml")
 		}
 
 		return pnpmWorkspaces.Packages, nil
