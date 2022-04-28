@@ -159,7 +159,10 @@ func (l *login) run(c *config.Config) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	l.writeUserConfig(&config.TurborepoConfig{Token: query.Get("token")})
+	err = l.writeUserConfig(&config.TurborepoConfig{Token: query.Get("token")})
+	if err != nil {
+		return errors.Wrap(err, "failed to write user config")
+	}
 	rawToken := query.Get("token")
 	l.client.SetToken(rawToken)
 	userResponse, err := l.client.GetUser()

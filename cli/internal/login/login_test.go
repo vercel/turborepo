@@ -60,7 +60,6 @@ type testResult struct {
 	clientErr           error
 	userConfigWritten   *config.TurborepoConfig
 	repoConfigWritten   *config.TurborepoConfig
-	clientTokenWritten  string
 	openedURL           string
 	stepCh              chan struct{}
 	client              dummyClient
