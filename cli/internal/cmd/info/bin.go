@@ -4,10 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/mitchellh/cli"
 	"github.com/spf13/cobra"
@@ -19,19 +18,14 @@ type BinCommand struct {
 	UI     *cli.ColoredUi
 }
 
-// Synopsis of run command
+// Synopsis of the bin command
 func (c *BinCommand) Synopsis() string {
-	return "Get the path to the Turbo binary"
+	return BinCmd(c).Short
 }
 
 // Help returns information about the bin command
 func (c *BinCommand) Help() string {
-	helpText := `
-Usage: turbo bin
-
-  Get the path to the Turbo binary
-`
-	return strings.TrimSpace(helpText)
+	return util.HelpForCobraCmd(BinCmd(c))
 }
 
 // Run setups the command and runs it
@@ -48,7 +42,7 @@ func (c *BinCommand) Run(args []string) int {
 		return 0
 	}
 
-	var cmdErr *cmdutil.Error
+	var cmdErr *util.ExitCodeError
 	if errors.As(err, &cmdErr) {
 		return cmdErr.ExitCode
 	}
@@ -61,7 +55,7 @@ func (c *BinCommand) LogError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	c.Config.Logger.Error("error", err)
 	c.UI.Error(err.Error())
-	return &cmdutil.BasicError{}
+	return &util.BasicError{}
 }
 
 // BinCmd returns the Cobra bin command
