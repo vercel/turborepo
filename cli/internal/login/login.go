@@ -74,12 +74,8 @@ func (c *LoginCommand) Run(args []string) int {
 				if err != nil {
 					if errors.Is(err, errUserCanceled) {
 						c.UI.Info("Canceled. Turborepo not set up.")
-					} else if errors.Is(err, errTryAfterEnable) {
-						c.UI.Info("Please run 'turbo link' again after remote caching has been enabled")
-					} else if errors.Is(err, errNeedCachingEnabled) {
-						c.UI.Info("Please contact your account owner to enable remote caching on Vercel.")
-					} else if errors.Is(err, errOverage) {
-						c.UI.Warn("TODO: hobby error message")
+					} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
+						c.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
 					} else {
 						login.logError(err)
 					}
