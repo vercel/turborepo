@@ -182,22 +182,12 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	// We use Cycles instead of Validate because
-	// our DAG has multiple roots (entrypoints).
-	// Validate mandates that there is only a single root node.
-	cycles := ctx.TopologicalGraph.Cycles()
-	if len(cycles) > 0 {
-		cycleLines := make([]string, len(cycles))
-		for i, cycle := range cycles {
-			vertices := make([]string, len(cycle))
-			for j, vertex := range cycle {
-				vertices[j] = vertex.(string)
-			}
-			cycleLines[i] = "\t" + strings.Join(vertices, ",")
-		}
-		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
+
+	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
+		c.logError(c.Config.Logger, "Invalid package dependency graph:\n%v", err)
 		return 1
 	}
+
 	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
@@ -377,11 +367,10 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 		return nil, err
 	}
 
-	for _, e := range engine.TaskGraph.Edges() {
-		if e.Source() == e.Target() {
-			return nil, fmt.Errorf("task %s depends on itself", e.Source())
-		}
+	if err := util.ValidateGraph(engine.TaskGraph); err != nil {
+		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
 	}
+
 	return engine, nil
 }
 
