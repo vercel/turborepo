@@ -23,6 +23,7 @@ type TurboJSON struct {
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
+// ReadTurboConfig toggles between reading from package.json or turbo.json to support early adopters.
 func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 	// If turbo.json exists, we use that
 	// If pkg.Turbo exists, we warn about running the migration
@@ -34,23 +35,25 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 		if rootPackageJSON.LegacyTurboConfig == nil {
 			// TODO: suggestion on how to create one
 			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
-		} else {
-			log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
-			return rootPackageJSON.LegacyTurboConfig, nil
 		}
-	} else {
-		turboJSON, err := ReadTurboJSON(turboJSONPath)
-		if err != nil {
-			return nil, fmt.Errorf("turbo.json: %w", err)
-		}
-		if rootPackageJSON.LegacyTurboConfig != nil {
-			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
-			rootPackageJSON.LegacyTurboConfig = nil
-		}
-		return turboJSON, nil
+		log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+		return rootPackageJSON.LegacyTurboConfig, nil
 	}
+
+	turboJSON, err := ReadTurboJSON(turboJSONPath)
+	if err != nil {
+		return nil, fmt.Errorf("turbo.json: %w", err)
+	}
+
+	if rootPackageJSON.LegacyTurboConfig != nil {
+		log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+		rootPackageJSON.LegacyTurboConfig = nil
+	}
+
+	return turboJSON, nil
 }
 
+// ReadTurboJSON reads turbo.json in to a struct
 func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
 	file, err := path.Open()
 	if err != nil {
@@ -67,8 +70,9 @@ func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
 	return turboJSON, nil
 }
 
+// RemoteCacheOptions is a struct for deserializing .remoteCache of turbo.json
 type RemoteCacheOptions struct {
-	TeamId    string `json:"teamId,omitempty"`
+	TeamID    string `json:"teamId,omitempty"`
 	Signature bool   `json:"signature,omitempty"`
 }
 
@@ -79,8 +83,10 @@ type pipelineJSON struct {
 	Inputs    []string  `json:"inputs,omitempty"`
 }
 
+// Pipeline is a struct for deserializing .pipeline in turbo.json
 type Pipeline map[string]TaskDefinition
 
+// GetTaskDefinition returns a TaskDefinition from a serialized definition in turbo.json
 func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	if entry, ok := pc[taskID]; ok {
 		return entry, true
@@ -90,6 +96,7 @@ func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	return entry, ok
 }
 
+// TaskDefinition is a representation of the turbo.json pipeline for further computation.
 type TaskDefinition struct {
 	Outputs                 []string
 	ShouldCache             bool
@@ -106,6 +113,7 @@ const (
 
 var defaultOutputs = []string{"dist/**/*", "build/**/*"}
 
+// UnmarshalJSON deserializes JSON into a TaskDefinition
 func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	rawPipeline := &pipelineJSON{}
 	if err := json.Unmarshal(data, &rawPipeline); err != nil {
