@@ -3,35 +3,131 @@ title: Using Turborepo with CircleCI
 description: How to use CircleCI with Turborepo to optimize your CI workflow
 ---
 
+import { Tabs, Tab } from '../../../components/Tabs'
+
 # Using Turborepo with CircleCI
 
-The following example shows how to use Turborepo with [CircleCI](https://circleci.com) and [Yarn](https://classic.yarnpkg.com).
+The following example shows how to use Turborepo with [CircleCI](https://circleci.com).
+
+For a given root `package.json`:
+
+```json
+{
+  "name": "my-turborepo",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "1.2.5"
+  }
+}
+```
+
+And a `turbo.json`:
+
+```json
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "baseBranch": "origin/main",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+  }
+}
+```
 
 Create a file called `.circleci/config.yml` in your repository with the following contents:
 
-```yaml
-version: 2.1
-orbs:
-  node: circleci/node@5.0.2
-workflows:
-  test:
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```yaml
+    version: 2.1
+    orbs:
+      node: circleci/node@5.0.2
+    workflows:
+      test:
+        jobs:
+          - test
     jobs:
-      - test
-jobs:
-  test:
-    docker:
-      - image: cimg/node:lts
-    # To use Remote Caching, uncomment the next lines and follow the steps below.
-    # environment:
-    #  TURBO_TOKEN: $TURBO_TOKEN
-    #  TURBO_TEAM: $TURBO_TEAM
-    steps:
-      - checkout
-      - node/install-packages:
-          pkg-manager: yarn
-      - run:
-          command: yarn turbo run test
-```
+      test:
+        docker:
+          - image: cimg/node:lts
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # environment:
+        #  TURBO_TOKEN: $TURBO_TOKEN
+        #  TURBO_TEAM: $TURBO_TEAM
+        steps:
+          - checkout
+          - node/install-packages
+          - run:
+            command: npm run build
+          - run:
+            command: npm run test
+    ```
+  </Tab>
+  <Tab>
+    ```yaml
+    version: 2.1
+    orbs:
+      node: circleci/node@5.0.2
+    workflows:
+      test:
+        jobs:
+          - test
+    jobs:
+      test:
+        docker:
+          - image: cimg/node:lts
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # environment:
+        #  TURBO_TOKEN: $TURBO_TOKEN
+        #  TURBO_TEAM: $TURBO_TEAM
+        steps:
+          - checkout
+          - node/install-packages:
+            pkg-manager: yarn
+          - run:
+            command: yarn build
+          - run:
+            command: yarn test
+    ```
+  </Tab>
+  <Tab>
+    ```yaml
+    version: 2.1
+    orbs:
+      node: circleci/node@5.0.2
+    workflows:
+      test:
+        jobs:
+          - test
+    jobs:
+      test:
+        docker:
+          - image: cimg/node:lts
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # environment:
+        #  TURBO_TOKEN: $TURBO_TOKEN
+        #  TURBO_TEAM: $TURBO_TEAM
+        steps:
+          - checkout
+          - node/install-packages:
+          - run:
+            command: npm i -g pnpm
+          - run:
+            command: pnpm build
+          - run:
+            command: pnpm test
+    ```
+  </Tab>
+</Tabs>
 
 ## Remote Caching
 
