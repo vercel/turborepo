@@ -304,6 +304,122 @@ func TestGetTargetsFromArguments(t *testing.T) {
 	}
 }
 
+func TestGetTargetsFromGlobArguments(t *testing.T) {
+	type args struct {
+		arguments  []string
+		configJSON *fs.TurboConfigJSON
+	}
+	pipelineConfig := map[string]fs.TaskDefinition{
+		"alpha:aaa:check":       {},
+		"alpha:aaa:update":      {},
+		"alpha:aaa:build":       {},
+		"alpha:bbb:check":       {},
+		"alpha:bbb:build":       {},
+		"alpha:ccc:iii:update":  {},
+		"alpha:ccc:iii:build":   {},
+		"alpha:ccc:jjj:check":   {},
+		"alpha:ccc:jjj:build":   {},
+		"beta:a*:update":        {},
+		"beta:a*:build":         {},
+		"charlie:ijk:xyz:check": {},
+		"charlie:build":         {},
+		"delta:check":           {},
+		"echo:check":            {},
+		"foxtrot:update":        {},
+		"foxtrot:build":         {},
+		"foxtrot:aaa:update":    {},
+		"foxtrot:aaa:clean":     {},
+		"foxtrot:aaa:456":       {},
+		"foxtrot:123:clean":     {},
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "handles single glob targets",
+			args: args{
+				arguments: []string{
+					"*check",           // no results
+					"alpha:*check",     // no results
+					"alpha:*:build",    // alpha:aaa:build alpha:bbb:build
+					"beta:*",           // no results
+					"beta:a\\*:update", // beta:a*:update
+					"foxtrot:*",        // foxtrot:build foxtrot:update
+				},
+				configJSON: &fs.TurboConfigJSON{
+					Pipeline: pipelineConfig,
+				},
+			},
+			want:    []string{"alpha:aaa:build", "alpha:bbb:build", "beta:a*:update", "foxtrot:build", "foxtrot:update"},
+			wantErr: false,
+		},
+		{
+			name: "handles double glob targets",
+			args: args{
+				arguments: []string{
+					"*:**:check",      // alpha:aaa:check alpha:bbb:check alpha:ccc:jjj:check charlie:ijk:xyz:check delta:check echo:check
+					"alpha:**:update", // alpha:aaa:update alpha:ccc:iii:update
+					"beta:**build",    // no results
+				},
+				configJSON: &fs.TurboConfigJSON{
+					Pipeline: pipelineConfig,
+				},
+			},
+			want:    []string{"alpha:aaa:check", "alpha:aaa:update", "alpha:bbb:check", "alpha:ccc:iii:update", "alpha:ccc:jjj:check", "charlie:ijk:xyz:check", "delta:check", "echo:check"},
+			wantErr: false,
+		},
+		{
+			name: "handles single and double glob targets",
+			args: args{
+				arguments: []string{
+					"foxtrot:**:*update", // foxtrot:aaa:update foxtrot:update
+					"*:check",            // delta:check echo:check
+					"alpha:ccc:**:build", // alpha:ccc:iii:build alpha:ccc:jjj:build
+					"alpha:bbb:*",        // alpha:bbb:build alpha:bbb:check
+				},
+				configJSON: &fs.TurboConfigJSON{
+					Pipeline: pipelineConfig,
+				},
+			},
+			want:    []string{"alpha:bbb:build", "alpha:bbb:check", "alpha:ccc:iii:build", "alpha:ccc:jjj:build", "delta:check", "echo:check", "foxtrot:aaa:update", "foxtrot:update"},
+			wantErr: false,
+		},
+		{
+			name: "handles wildcards, braces, and character class glob targets",
+			args: args{
+				arguments: []string{
+					"alpha:{a*,b*}:check",             // alpha:aaa:check alpha:bbb:check
+					"alpha:ccc:{iii,jjj}:build",       // alpha:ccc:iii:build alpha:ccc:jjj:build
+					"foxtrot:[a-z][a-z][a-z]:[^0-9]*", // foxtrot:aaa:clean foxtrot:aaa:update
+					"beta:a?:update",                  // beta:a*:update
+				},
+				configJSON: &fs.TurboConfigJSON{
+					Pipeline: pipelineConfig,
+				},
+			},
+			want:    []string{"alpha:aaa:check", "alpha:bbb:check", "alpha:ccc:iii:build", "alpha:ccc:jjj:build", "beta:a*:update", "foxtrot:aaa:clean", "foxtrot:aaa:update"},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJSON)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func Test_dontSquashTasks(t *testing.T) {
 	topoGraph := &dag.AcyclicGraph{}
 	topoGraph.Add("a")
