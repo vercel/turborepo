@@ -385,8 +385,6 @@ func getWorkspaceIgnores() []string {
 	return []string{
 		"**/node_modules/",
 		"**/bower_components/",
-		"**/test/",
-		"**/tests/",
 	}
 }
 
