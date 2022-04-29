@@ -5,7 +5,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 
 # Configuration Options
 
-You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and NPM users).
+You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and npm users).
 
 ## `baseBranch`
 
@@ -41,7 +41,7 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
 
 An object representing the task dependency graph of your project. `turbo` interprets these conventions to properly schedule, execute, and cache the outputs of tasks in your project.
 
-Each key in the `pipeline` object is the name of a task that can be executed by `turbo run`. If `turbo` finds a workspace package with a `package.json` `scripts` object with a matching key, it will apply the pipeline task configuration to that NPM script during execution. This allows you to use `pipeline` to set conventions across your entire Turborepo.
+Each key in the `pipeline` object is the name of a task that can be executed by `turbo run`. If `turbo` finds a workspace package with a `package.json` `scripts` object with a matching key, it will apply the pipeline task configuration to that npm script during execution. This allows you to use `pipeline` to set conventions across your entire Turborepo.
 
 ```jsonc
 {

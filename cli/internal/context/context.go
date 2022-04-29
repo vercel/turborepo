@@ -167,7 +167,10 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			justJsons = append(justJsons, filepath.Join(space, "package.json"))
 		}
 
-		f := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
+		f, err := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
+		if err != nil {
+			return err
+		}
 
 		for _, val := range f {
 			relativePkgPath, err := filepath.Rel(rootpath, val)
@@ -423,7 +426,10 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 		}
 
 		if len(globs) > 0 {
-			f := globby.GlobFiles(rootpath, globs, getWorkspaceIgnores())
+			f, err := globby.GlobFiles(rootpath, globs, getWorkspaceIgnores())
+			if err != nil {
+				return "", err
+			}
 			for _, val := range f {
 				globalDeps.Add(val)
 			}

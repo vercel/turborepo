@@ -3,30 +3,98 @@ title: Using Turborepo with Travis CI
 description: How to use Travis CI with Turborepo to optimize your CI workflow
 ---
 
+import { Tabs, Tab } from '../../../components/Tabs'
+
 # Using Turborepo with Travis CI
 
-The following example shows how to use Turborepo with [Travis CI](https://www.travis-ci.com/) and [pnpm](https://pnpm.io).
+The following example shows how to use Turborepo with [Travis CI](https://www.travis-ci.com/).
+
+For a given root `package.json`:
+
+```json
+{
+  "name": "my-turborepo",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "1.2.5"
+  }
+}
+```
+
+And a `turbo.json`:
+
+```json
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "baseBranch": "origin/main",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+  }
+}
+```
 
 Create a file called `.travis.yml` in your repository with the following contents:
 
-```yaml
-language: node_js
-node_js:
-  - lts/*
-cache:
-  npm: false
-  directories:
-    - "~/.pnpm-store"
-before_install:
-  - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
-  - pnpm config set store-dir ~/.pnpm-store
-install:
-  - pnpm install
-script:
-  - pnpm build
-```
-
-> For more information visit the pnpm documenation section on Travis CI integration, view it [here](https://pnpm.io/continuous-integration#travis)
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```yaml
+    language: node_js
+    node_js:
+      - lts/*
+    install:
+      - npm install
+    script:
+      - npm run build
+    script:
+      - npm run test
+    ```
+  </Tab>
+    <Tab>
+      Travis CI detects the use of Yarn by the presence of `yarn.lock`. It will automatically ensure it is installed.
+      ```yaml
+      language: node_js
+      node_js:
+        - lts/*
+      install:
+        - yarn
+      script:
+        - yarn build
+      script:
+        - yarn test
+      ```
+  </Tab>
+    <Tab>
+      ```yaml
+      language: node_js
+      node_js:
+        - lts/*
+      cache:
+        npm: false
+        directories:
+          - "~/.pnpm-store"
+      before_install:
+        - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
+        - pnpm config set store-dir ~/.pnpm-store
+      install:
+        - pnpm install
+      script:
+        - pnpm build
+      script:
+        - pnpm test
+      ```
+      > For more information visit the pnpm documenation section on Travis CI integration, view it [here](https://pnpm.io/continuous-integration#travis)
+  </Tab>
+</Tabs>
 
 ## Remote Caching
 
