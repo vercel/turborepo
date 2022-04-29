@@ -1,6 +1,6 @@
-# `turborepo` kitchen sink starter
+# Turborepo kitchen sink starter
 
-This is an official Yarn v1 starter Turborepo with multiple meta-frameworks all working in harmony and sharing packages.
+This is an official starter Turborepo with multiple meta-frameworks all working in harmony and sharing packages.
 
 ## What's inside?
 
@@ -14,7 +14,7 @@ This Turborepo includes the following packages and apps:
 - `blog`: a [Remix](https://remix.run/) blog
 - `logger`: isomorphic logger (a small wrapper around console.log)
 - `ui`: a dummy React UI library (which contains a single `<CounterButton>` component)
-- `scripts`: Jest and eslint configurations
+- `scripts`: Jest and ESLint configurations
 - `tsconfig`: tsconfig.json;s used throughout the monorepo
 
 Each package and app is 100% [TypeScript](https://www.typescriptlang.org/).
@@ -27,3 +27,14 @@ This turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
+
+## Using this example
+
+We do not have a starter yet in `create-turbo` for this quite yet. If you want to use this in the interim, you run the following command:
+
+```sh
+npx degit vercel/turborepo/examples/kitchen-sink kitchen-sink
+cd kitchen-sink
+yarn install
+git init . && git add . && git commit -m "Init"
+```
