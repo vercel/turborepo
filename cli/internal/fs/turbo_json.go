@@ -10,8 +10,8 @@ import (
 	"github.com/yosuke-furukawa/json5/encoding/json5"
 )
 
-// TurboConfigJSON is the root turborepo configuration
-type TurboConfigJSON struct {
+// TurboJSON is the root turborepo configuration
+type TurboJSON struct {
 	// Base Git branch
 	Base string `json:"baseBranch,omitempty"`
 	// Global root filesystem dependencies
@@ -23,7 +23,7 @@ type TurboConfigJSON struct {
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*TurboConfigJSON, error) {
+func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 	// If turbo.json exists, we use that
 	// If pkg.Turbo exists, we warn about running the migration
 	// Use pkg.Turbo if turbo.json doesn't exist
@@ -39,7 +39,7 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 			return rootPackageJSON.LegacyTurboConfig, nil
 		}
 	} else {
-		turbo, err := ReadTurboConfigJSON(turboJSONPath)
+		turboJSON, err := ReadTurboJSON(turboJSONPath)
 		if err != nil {
 			return nil, fmt.Errorf("turbo.json: %w", err)
 		}
@@ -47,24 +47,24 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
 			rootPackageJSON.LegacyTurboConfig = nil
 		}
-		return turbo, nil
+		return turboJSON, nil
 	}
 }
 
-func ReadTurboConfigJSON(path AbsolutePath) (*TurboConfigJSON, error) {
+func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
 	file, err := path.Open()
 	if err != nil {
 		return nil, err
 	}
 
-	var turboConfig *TurboConfigJSON
+	var turboJSON *TurboJSON
 	decoder := json5.NewDecoder(file)
-	err = decoder.Decode(&turboConfig)
+	err = decoder.Decode(&turboJSON)
 	if err != nil {
 		println("error unmarshalling", err.Error())
 		return nil, err
 	}
-	return turboConfig, nil
+	return turboJSON, nil
 }
 
 type RemoteCacheOptions struct {

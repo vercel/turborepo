@@ -198,7 +198,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
 		return 1
 	}
-	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
+	targets, err := getTargetsFromArguments(args, c.Config.TurboJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -224,7 +224,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
+		Pipeline:         c.Config.TurboJSON.Pipeline,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
@@ -793,7 +793,7 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
-func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+func getTargetsFromArguments(arguments []string, turboJSON *fs.TurboJSON) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
@@ -802,7 +802,7 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 		if !strings.HasPrefix(arg, "-") {
 			targets.Add(arg)
 			found := false
-			for task := range configJson.Pipeline {
+			for task := range turboJSON.Pipeline {
 				if task == arg {
 					found = true
 				}

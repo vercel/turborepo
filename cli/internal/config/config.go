@@ -48,7 +48,7 @@ type Config struct {
 	TurboVersion string
 	Cache        *CacheConfig
 	// turbo.json or legacy turbo config from package.json
-	TurboConfigJSON *fs.TurboConfigJSON
+	TurboJSON *fs.TurboJSON
 	// package.json at the root of the repo
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
@@ -103,7 +103,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		return nil, fmt.Errorf("package.json: %w", err)
 	}
-	turboConfigJson, err := fs.ReadTurboConfig(cwd, rootPackageJSON)
+	turboJSON, err := fs.ReadTurboConfig(cwd, rootPackageJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
 		RootPackageJSON: rootPackageJSON,
-		TurboConfigJSON: turboConfigJson,
+		TurboJSON:       turboJSON,
 		Cwd:             cwd,
 	}
 

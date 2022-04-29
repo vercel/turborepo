@@ -25,7 +25,7 @@ type PackageJSON struct {
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
 	SubLockfile            YarnLockfile
-	LegacyTurboConfig      *TurboConfigJSON `json:"turbo"`
+	LegacyTurboConfig      *TurboJSON `json:"turbo"`
 	Mu                     sync.Mutex
 	ExternalDepsHash       string
 }
