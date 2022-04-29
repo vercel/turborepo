@@ -40,9 +40,9 @@ export class Monorepo {
   [user]
     name = GitHub Actions
     email = actions@users.noreply.github.com
-  
+
   [init]
-   defaultBranch = main
+    defaultBranch = main
   `
     );
     execa.sync("git", ["init", "-q"], { cwd: this.root });
@@ -93,7 +93,7 @@ export class Monorepo {
         "pnpm-workspace.yaml": `packages:
 - packages/*`,
         "pnpm-lock.yaml": `lockfileVersion: 5.3
-        
+
 importers:
 
   .:
@@ -110,7 +110,7 @@ importers:
 
   packages/c:
     specifiers: {}
-        
+
         `,
       });
       execa.sync("pnpm", ["install", "--recursive"], {
@@ -171,7 +171,7 @@ importers:
 
   generateRepoFiles(turboConfig = {}) {
     this.commitFiles({
-      [`.gitignore`]: `node_modules\n.turbo\n!*-lock.json`,
+      [`.gitignore`]: `node_modules\n.turbo\n!*-lock.json\ndist/\n`,
       "package.json": {
         name: this.name,
         version: "0.1.0",
@@ -199,7 +199,7 @@ const path = require('path');
 console.log('building ${name}');
 
 if (!fs.existsSync(path.join(__dirname, 'dist'))){
-   fs.mkdirSync(path.join(__dirname, 'dist'));
+  fs.mkdirSync(path.join(__dirname, 'dist'));
 }
 
 fs.copyFileSync(

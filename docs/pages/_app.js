@@ -1,5 +1,7 @@
 import "../styles.css";
-import "../nextra-theme-docs/styles.css";
+import "nextra-theme-docs/style.css";
+import "../custom.css";
+
 import { SSRProvider } from "@react-aria/ssr";
 
 // Shim requestIdleCallback in Safari
@@ -9,7 +11,9 @@ if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
 }
 
 export default function Nextra({ Component, pageProps }) {
-  return (
+  const getLayout = Component.getLayout || ((page) => page);
+
+  return getLayout(
     <>
       <SSRProvider>
         <Component {...pageProps} />

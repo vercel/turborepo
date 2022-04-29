@@ -1,7 +1,7 @@
 const withNextra = require("nextra")({
-  theme: "./nextra-theme-docs",
+  theme: "nextra-theme-docs",
   themeConfig: "./theme.config.js",
-  unstable_contentDump: true,
+  unstable_flexsearch: true,
   unstable_staticImage: true,
 });
 
@@ -31,6 +31,16 @@ module.exports = withNextra({
         source: "/docs/guides/complimentary-tools",
         permanent: true,
         destination: "/docs/guides/monorepo-tools",
+      },
+      {
+        source: "/docs/guides/continuous-integration",
+        permanent: true,
+        destination: "/docs/ci",
+      },
+      {
+        source: "/docs/features/:path*",
+        permanent: true,
+        destination: "/docs/core-concepts/:path*",
       },
     ];
   },

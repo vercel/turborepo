@@ -88,6 +88,9 @@ type RunState struct {
 }
 
 func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
+	if runOptions.profile != "" {
+		chrometracing.EnableTracing()
+	}
 	return &RunState{
 		Success:   0,
 		Failure:   0,
@@ -279,7 +282,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(chrometracing.Path(), name, fs.DirPermissions); err != nil {
+		if err := fs.CopyFile(outputPath, name, fs.DirPermissions); err != nil {
 			return err
 		}
 	}
