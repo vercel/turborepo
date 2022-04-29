@@ -345,3 +345,26 @@ func Test_dontSquashTasks(t *testing.T) {
 		}
 	}
 }
+
+func Test_taskSelfRef(t *testing.T) {
+	topoGraph := &dag.AcyclicGraph{}
+	topoGraph.Add("a")
+	// no dependencies between packages
+
+	pipeline := map[string]fs.TaskDefinition{
+		"build": {
+			TaskDependencies: []string{"build"},
+		},
+	}
+	filteredPkgs := make(util.Set)
+	filteredPkgs.Add("a")
+	rs := &runSpec{
+		FilteredPkgs: filteredPkgs,
+		Targets:      []string{"build"},
+		Opts:         &RunOptions{},
+	}
+	_, err := buildTaskGraph(topoGraph, pipeline, rs)
+	if err == nil {
+		t.Fatalf("expected to failed to build task graph: %v", err)
+	}
+}

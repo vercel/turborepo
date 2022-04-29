@@ -376,6 +376,12 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 	}); err != nil {
 		return nil, err
 	}
+
+	for _, e := range engine.TaskGraph.Edges() {
+		if e.Source() == e.Target() {
+			return nil, fmt.Errorf("task %s depends on itself", e.Source())
+		}
+	}
 	return engine, nil
 }
 
