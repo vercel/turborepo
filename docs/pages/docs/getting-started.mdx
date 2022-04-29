@@ -25,7 +25,7 @@ To see more examples and starters, have a look at the [examples directory on Git
 
 Turborepo was designed to be incrementally adopted. Adding it to an existing monorepo takes only a few minutes.
 
-Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](https://npmjs.com), and [PNPM](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
+Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [npm](https://npmjs.com), and [pnpm](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
 
 - macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
 - Linux 32-bit, 64-bit, ARM, ARM 64-bit, MIPS 64-bit Little Endian, PowerPC 64-bit Little Endian, IBM Z 64-bit Big Endian
@@ -38,7 +38,7 @@ Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [NPM](http
 
 Add `turbo` as a development dependency in the root of your project.
 
-<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
     npm install turbo -D
@@ -75,7 +75,7 @@ If your git repo's base branch is NOT `origin/master` then you need to specify a
 
 In `turbo.json`, add the commands you want to "turbocharge" to your pipeline.
 
-Your pipeline both defines the way in which your NPM `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
+Your pipeline both defines the way in which your npm `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
 
 ```jsonc
 {
@@ -140,7 +140,7 @@ If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg
 }
 ```
 
-Now re-run your NPM client's install command just to be sure. You should be good to go now.
+Now re-run your npm client's install command just to be sure. You should be good to go now.
 
 ## Run stuff!
 

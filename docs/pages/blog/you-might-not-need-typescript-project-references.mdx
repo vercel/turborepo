@@ -50,9 +50,9 @@ As it turns out, the TypeScript Language Server (in VSCode) and Type Checker can
 Once you do this, this package can then be used _without_ project references or a TypeScript build step (either via `tsc` or `esbuild` etc) as long as you adhere to 2 rules:
 
 - **The consuming application of an internal package must transpile and typecheck it.**
-- **You should never publish an internal package to NPM.**
+- **You should never publish an internal package to npm.**
 
-As far as I can tell, this internal package pattern works with all Yarn/NPM/PNPM workspace implementations regardless of whether you are using Turborepo or some other tool. I have personally tested this pattern with several different meta frameworks (see below), but I'm sure that it works with others as well.
+As far as I can tell, this internal package pattern works with all yarn/npm/pnpm workspace implementations regardless of whether you are using Turborepo or some other tool. I have personally tested this pattern with several different meta frameworks (see below), but I'm sure that it works with others as well.
 
 ### Next.js
 
