@@ -3,9 +3,10 @@ package fs
 import (
 	"encoding/json"
 	"io/ioutil"
-	"os"
+	"strings"
 	"sync"
 
+	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/yosuke-furukawa/json5/encoding/json5"
 )
 
@@ -17,11 +18,13 @@ type TurboConfigJSON struct {
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
-	Pipeline map[string]Pipeline
+	Pipeline Pipeline
+	// Configuration options when interfacing with the remote cache
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
-	file, err := os.Open(path)
+func ReadTurboConfigJSON(path AbsolutePath) (*TurboConfigJSON, error) {
+	file, err := path.Open()
 	if err != nil {
 		return nil, err
 	}
@@ -36,32 +39,77 @@ func ReadTurboConfigJSON(path string) (*TurboConfigJSON, error) {
 	return turboConfig, nil
 }
 
-type PPipeline struct {
+type RemoteCacheOptions struct {
+	TeamId    string `json:"teamId,omitempty"`
+	Signature bool   `json:"signature,omitempty"`
+}
+
+type pipelineJSON struct {
 	Outputs   *[]string `json:"outputs"`
 	Cache     *bool     `json:"cache,omitempty"`
 	DependsOn []string  `json:"dependsOn,omitempty"`
+	Inputs    []string  `json:"inputs,omitempty"`
 }
 
-type Pipeline struct {
-	Outputs   []string `json:"-"`
-	Cache     *bool    `json:"cache,omitempty"`
-	DependsOn []string `json:"dependsOn,omitempty"`
-	PPipeline
+type Pipeline map[string]TaskDefinition
+
+func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
+	if entry, ok := pc[taskID]; ok {
+		return entry, true
+	}
+	_, task := util.GetPackageTaskFromId(taskID)
+	entry, ok := pc[task]
+	return entry, ok
 }
 
-func (c *Pipeline) UnmarshalJSON(data []byte) error {
-	if err := json.Unmarshal(data, &c.PPipeline); err != nil {
+type TaskDefinition struct {
+	Outputs                 []string
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
+}
+
+const (
+	envPipelineDelimiter         = "$"
+	topologicalPipelineDelimiter = "^"
+)
+
+var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+
+func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
+	rawPipeline := &pipelineJSON{}
+	if err := json.Unmarshal(data, &rawPipeline); err != nil {
 		return err
 	}
 	// We actually need a nil value to be able to unmarshal the json
 	// because we interpret the omission of outputs to be different
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
-	if c.PPipeline.Outputs != nil {
-		c.Outputs = *c.PPipeline.Outputs
+	if rawPipeline.Outputs != nil {
+		c.Outputs = *rawPipeline.Outputs
+	} else {
+		c.Outputs = defaultOutputs
 	}
-	c.Cache = c.PPipeline.Cache
-	c.DependsOn = c.PPipeline.DependsOn
+	if rawPipeline.Cache == nil {
+		c.ShouldCache = true
+	} else {
+		c.ShouldCache = *rawPipeline.Cache
+	}
+	c.EnvVarDependencies = []string{}
+	c.TopologicalDependencies = []string{}
+	c.TaskDependencies = []string{}
+	for _, dependency := range rawPipeline.DependsOn {
+		if strings.HasPrefix(dependency, envPipelineDelimiter) {
+			c.EnvVarDependencies = append(c.EnvVarDependencies, strings.TrimPrefix(dependency, envPipelineDelimiter))
+		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+		} else {
+			c.TaskDependencies = append(c.TaskDependencies, dependency)
+		}
+	}
+	c.Inputs = rawPipeline.Inputs
 	return nil
 }
 
@@ -79,15 +127,13 @@ type PackageJSON struct {
 	Workspaces             Workspaces        `json:"workspaces,omitempty"`
 	Private                bool              `json:"private,omitempty"`
 	PackageJSONPath        string
-	Hash                   string
-	Dir                    string
+	Dir                    string // relative path from repo root to the package
 	InternalDeps           []string
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
 	SubLockfile            YarnLockfile
 	LegacyTurboConfig      *TurboConfigJSON `json:"turbo"`
 	Mu                     sync.Mutex
-	FilesHash              string
 	ExternalDepsHash       string
 }
 

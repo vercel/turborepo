@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type ApiClient struct {
@@ -32,19 +33,22 @@ type ApiClient struct {
 	HttpClient *retryablehttp.Client
 	teamID     string
 	teamSlug   string
+	// Whether or not to send preflight requests before uploads
+	usePreflight bool
 }
 
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
 var ErrTooManyFailures = errors.New("skipping HTTP Request, too many failures have occurred")
 
-func (api *ApiClient) SetToken(token string) {
-	api.Token = token
+// SetToken updates the ApiClient's Token
+func (c *ApiClient) SetToken(token string) {
+	c.Token = token
 }
 
 // New creates a new ApiClient
-func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64) *ApiClient {
+func NewClient(baseURL string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64, usePreflight bool) *ApiClient {
 	client := &ApiClient{
-		baseUrl:            baseUrl,
+		baseUrl:            baseURL,
 		turboVersion:       turboVersion,
 		maxRemoteFailCount: maxRemoteFailCount,
 		HttpClient: &retryablehttp.Client{
@@ -57,11 +61,22 @@ func NewClient(baseUrl string, logger hclog.Logger, turboVersion string, teamID 
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
-		teamID:   teamID,
-		teamSlug: teamSlug,
+		teamID:       teamID,
+		teamSlug:     teamSlug,
+		usePreflight: usePreflight,
 	}
 	client.HttpClient.CheckRetry = client.checkRetry
 	return client
+}
+
+// IsLoggedIn returns true if this ApiClient has a credential (token)
+func (c *ApiClient) IsLoggedIn() bool {
+	return c.Token != ""
+}
+
+// SetTeamID sets the team parameter used on all requests by this client
+func (c *ApiClient) SetTeamID(teamID string) {
+	c.teamID = teamID
 }
 
 func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
@@ -132,7 +147,41 @@ func (c *ApiClient) UserAgent() string {
 	return fmt.Sprintf("turbo %v %v %v (%v)", c.turboVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) error {
+// doPreflight returns response with closed body, latest request url, and any errors to the caller
+func (c *ApiClient) doPreflight(requestURL string, requestMethod string, requestHeaders string) (*http.Response, string, error) {
+	req, err := retryablehttp.NewRequest(http.MethodOptions, requestURL, nil)
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Access-Control-Request-Method", requestMethod)
+	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if err != nil {
+		return nil, requestURL, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
+	}
+
+	// If resp is not nil, ignore any errors
+	//  because most likely unimportant for preflight to handle.
+	// Let follow-up request handle potential errors.
+	resp, err := c.HttpClient.Do(req)
+	if resp == nil {
+		return resp, requestURL, err
+	}
+	defer resp.Body.Close() //nolint:golint,errcheck // nothing to do
+	// The client will continue following 307, 308 redirects until it hits
+	//  max redirects, gets an error, or gets a normal response.
+	// Get the url from the Location header or get the url used in the last
+	//  request (could have changed after following redirects).
+	// Note that net/http client does not continue redirecting the preflight
+	//  request with the OPTIONS method for 301, 302, and 303 redirects.
+	//  See golang/go Issue 18570.
+	if locationURL, err := resp.Location(); err == nil {
+		requestURL = locationURL.String()
+	} else {
+		requestURL = resp.Request.URL.String()
+	}
+	return resp, requestURL, nil
+}
+
+func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
 	if err := c.okToRequest(); err != nil {
 		return err
 	}
@@ -143,14 +192,33 @@ func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) 
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPut, c.makeUrl("/v8/artifacts/"+hash+encoded), rawBody)
+
+	requestURL := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	allowAuth := true
+	if c.usePreflight {
+		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
+		if err != nil {
+			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
+		}
+		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodPut, requestURL, artifactBody)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("User-Agent", c.UserAgent())
+	if tag != "" {
+		req.Header.Set("x-artifact-tag", tag)
+	}
 	if err != nil {
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
+
 	if resp, err := c.HttpClient.Do(req); err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 	} else {
@@ -159,7 +227,9 @@ func (c *ApiClient) PutArtifact(hash string, duration int, rawBody interface{}) 
 	return nil
 }
 
-func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Response, error) {
+// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// Remote Caching server
+func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -170,8 +240,23 @@ func (c *ApiClient) FetchArtifact(hash string, rawBody interface{}) (*http.Respo
 	if encoded != "" {
 		encoded = "?" + encoded
 	}
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/"+hash+encoded), nil)
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+
+	requestURL := c.makeUrl("/v8/artifacts/" + hash + encoded)
+	allowAuth := true
+	if c.usePreflight {
+		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodGet, "Authorization, User-Agent")
+		if err != nil {
+			return nil, fmt.Errorf("pre-flight request failed before trying to fetch files in HTTP cache: %w", err)
+		}
+		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodGet, requestURL, nil)
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
 		return nil, fmt.Errorf("invalid cache URL: %w", err)
@@ -194,12 +279,27 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	if err != nil {
 		return err
 	}
-	req, err := retryablehttp.NewRequest(http.MethodPost, c.makeUrl("/v8/artifacts/events"+encoded), body)
+
+	requestURL := c.makeUrl("/v8/artifacts/events" + encoded)
+	allowAuth := true
+	if c.usePreflight {
+		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPost, "Content-Type, Authorization, User-Agent")
+		if err != nil {
+			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
+		}
+		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
+	}
+
+	req, err := retryablehttp.NewRequest(http.MethodPost, requestURL, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	resp, err := c.HttpClient.Do(req)
 	if resp != nil && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
@@ -218,13 +318,24 @@ func (c *ApiClient) addTeamParam(params *url.Values) {
 	}
 }
 
+// Membership is the relationship between the logged-in user and a particular team
+type Membership struct {
+	Role string `json:"role"`
+}
+
 // Team is a Vercel Team object
 type Team struct {
-	ID        string `json:"id,omitempty"`
-	Slug      string `json:"slug,omitempty"`
-	Name      string `json:"name,omitempty"`
-	CreatedAt int    `json:"createdAt,omitempty"`
-	Created   string `json:"created,omitempty"`
+	ID         string     `json:"id,omitempty"`
+	Slug       string     `json:"slug,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	CreatedAt  int        `json:"createdAt,omitempty"`
+	Created    string     `json:"created,omitempty"`
+	Membership Membership `json:"membership"`
+}
+
+// IsOwner returns true if this Team data was fetched by an owner of the team
+func (t *Team) IsOwner() bool {
+	return t.Membership.Role == "OWNER"
 }
 
 // Pagination is a Vercel pagination object
@@ -316,6 +427,50 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 		return nil, fmt.Errorf("could not parse JSON response: %s", string(body))
 	}
 	return userResponse, nil
+}
+
+// statusResponse is the server response from /artifacts/status
+type statusResponse struct {
+	Status string `json:"status"`
+}
+
+// GetCachingStatus returns the server's perspective on whether or not remove caching
+// requests will be allowed.
+func (c *ApiClient) GetCachingStatus(teamID string) (util.CachingStatus, error) {
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/status"), nil)
+	if err != nil {
+		return util.CachingStatusDisabled, err
+	}
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return util.CachingStatusDisabled, err
+	}
+	// Explicitly ignore the error from closing the response body. We don't need
+	// to fail the method if we fail to close the response.
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		b, err := ioutil.ReadAll(resp.Body)
+		var responseText string
+		if err != nil {
+			responseText = fmt.Sprintf("failed to read response: %v", err)
+		} else {
+			responseText = string(b)
+		}
+		return util.CachingStatusDisabled, fmt.Errorf("failed to get caching status (%v): %s", resp.StatusCode, responseText)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return util.CachingStatusDisabled, fmt.Errorf("failed to read JSN response: %v", err)
+	}
+	statusResponse := statusResponse{}
+	err = json.Unmarshal(body, &statusResponse)
+	if err != nil {
+		return util.CachingStatusDisabled, fmt.Errorf("failed to read JSON response: %v", string(body))
+	}
+	return util.CachingStatusFromString(statusResponse.Status)
 }
 
 type verificationResponse struct {

@@ -1,9 +1,9 @@
 <p align="center">
-   <img width="340" alt="Turborepo logo" src="https://user-images.githubusercontent.com/4060187/106504110-82f58d00-6494-11eb-87b7-a16d4f68bc5a.png">
+  <img width="340" alt="Turborepo logo" src="https://user-images.githubusercontent.com/4060187/106504110-82f58d00-6494-11eb-87b7-a16d4f68bc5a.png">
 </p>
 
-<p align="center">  
-  <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo">
+<p align="center">
+  <a aria-label="npm version" href="https://www.npmjs.com/package/turbo">
     <img alt="" src="https://badgen.net/npm/v/turbo">
   </a>
   <a aria-label="Vercel logo" href="https://vercel.com">

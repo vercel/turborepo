@@ -25,7 +25,7 @@ export interface Schema {
    * in the traditional dependency graph
    *
    * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)).
-   * 
+   *
    * @default []
    */
   globalDependencies?: string[];
@@ -34,18 +34,23 @@ export interface Schema {
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to properly schedule, execute, and cache the outputs of tasks in
    * your project.
-   * 
+   *
    * @default {}
    */
   pipeline: {
     /**
      * The name of a task that can be executed by turbo run. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the
-     * pipeline task configuration to that NPM script during execution. This allows you to
+     * pipeline task configuration to that npm script during execution. This allows you to
      * use pipeline to set conventions across your entire Turborepo.
      */
     [script: string]: Pipeline;
   };
+  /**
+   * Configuration options that control how turbo interfaces with the remote Cache.
+   * @default {}
+   */
+  remoteCache?: RemoteCache;
 }
 
 export interface Pipeline {
@@ -63,7 +68,7 @@ export interface Pipeline {
    *
    * Prefixing an item in dependsOn with a $ tells turbo that this pipeline task depends
    * the value of that environment variable.
-   * 
+   *
    * @default []
    */
   dependsOn?: string[];
@@ -89,4 +94,28 @@ export interface Pipeline {
    * @default true
    */
   cache?: boolean;
+
+  /**
+   * The set of glob patterns to consider as inputs to this task.
+   *
+   * Changes to files covered by these globs will cause a cache miss and force
+   * the task to rerun. Changes to files in the package not covered by these globs
+   * will not cause a cache miss.
+   *
+   * If omitted or empty, all files in the package are considered as inputs.
+   * @default []
+   */
+  inputs?: string[];
+}
+
+export interface RemoteCache {
+  /**
+   * Indicates if signature verification is enabled for requests to the remote cache. When
+   * `true`, Turborepo will sign every uploaded artifact using the value of the environment
+   * variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts
+   * that have an invalid signature or are missing a signature.
+   *
+   * @default false
+   */
+  signature?: boolean;
 }

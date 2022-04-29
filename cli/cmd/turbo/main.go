@@ -28,6 +28,7 @@ func main() {
 	traceFile := ""
 	cpuprofileFile := ""
 	argsEnd := 0
+	colorMode := uiPkg.GetColorModeFromEnv()
 	for _, arg := range args {
 		switch {
 		case strings.HasPrefix(arg, "--heap="):
@@ -36,6 +37,10 @@ func main() {
 			traceFile = arg[len("--trace="):]
 		case strings.HasPrefix(arg, "--cpuprofile="):
 			cpuprofileFile = arg[len("--cpuprofile="):]
+		case arg == "--color":
+			colorMode = ui.ColorModeForced
+		case arg == "--no-color":
+			colorMode = ui.ColorModeSuppressed
 		default:
 			// Strip any arguments that were handled above
 			args[argsEnd] = arg
@@ -44,10 +49,10 @@ func main() {
 	}
 	args = args[:argsEnd]
 
+	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
-	ui := ui.Default()
 
 	c.Args = args
 	c.HelpWriter = os.Stdout

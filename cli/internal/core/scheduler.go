@@ -53,13 +53,6 @@ type SchedulerExecutionOptions struct {
 
 func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
 	pkgs := options.Packages
-	if len(pkgs) == 0 {
-		// TODO(gsoltis): Is this behavior only used in tests?
-		for _, v := range p.TopologicGraph.Vertices() {
-			pkgs = append(pkgs, dag.VertexName(v))
-		}
-	}
-
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
 		// TODO(gsoltis): Is this behavior used?
@@ -100,6 +93,17 @@ func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
+func (p *Scheduler) getPackageAndTask(taskID string) (string, *Task, error) {
+	pkg, taskName := util.GetPackageTaskFromId(taskID)
+	if task, ok := p.Tasks[taskID]; ok {
+		return pkg, task, nil
+	}
+	if task, ok := p.Tasks[taskName]; ok {
+		return pkg, task, nil
+	}
+	return "", nil, fmt.Errorf("cannot find task for %v", taskID)
+}
+
 func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
@@ -120,10 +124,9 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 	for len(traversalQueue) > 0 {
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
-		pkg, taskName := util.GetPackageTaskFromId(taskId)
-		task, ok := p.Tasks[taskName]
-		if !ok {
-			return fmt.Errorf("task %v not found", taskId)
+		pkg, task, err := p.getPackageAndTask(taskId)
+		if err != nil {
+			return err
 		}
 		if !visited.Includes(taskId) {
 			visited.Add(taskId)
@@ -144,7 +147,7 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 				})
 			}
 
-			toTaskId := util.GetTaskId(pkg, taskName)
+			toTaskId := taskId
 			hasTopoDeps := task.TopoDeps.Len() > 0 && p.TopologicGraph.DownEdges(pkg).Len() > 0
 			hasDeps := deps.Len() > 0
 			hasPackageTaskDeps := false
@@ -215,7 +218,11 @@ func (p *Scheduler) AddTask(task *Task) *Scheduler {
 	return p
 }
 
-func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) *Scheduler {
+func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
+	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
+	if fromPkg != ROOT_NODE_NAME && !p.TopologicGraph.HasVertex(fromPkg) {
+		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
+	}
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
-	return p
+	return nil
 }

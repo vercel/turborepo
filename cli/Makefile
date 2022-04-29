@@ -40,7 +40,7 @@ fmt-go:
 install: | ./package.json
 	pnpm i --filter=cli...
 
-e2e: install 
+e2e: install
 	pnpm e2e
 
 cmd/turbo/version.go: version.txt
@@ -50,7 +50,7 @@ cmd/turbo/version.go: version.txt
 
 platform-all: cmd/turbo/version.go
 	make -j4 \
-	  platform-windows \
+	  platform-windows-64 \
 		platform-windows-32 \
 		platform-windows-arm64 \
 		platform-android-arm64 \
@@ -72,23 +72,31 @@ platform-all: cmd/turbo/version.go
 		platform-create-turbo
 
 
-platform-windows:
-	cd npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(GO_FLAGS) -o npm/turbo-windows-64/turbo.exe ./cmd/turbo
-
 platform-windows-32:
 	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version
 	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(GO_FLAGS) -o npm/turbo-windows-32/turbo.exe ./cmd/turbo
 
+platform-windows-64:
+	cd npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(GO_FLAGS) -o npm/turbo-windows-64/turbo.exe ./cmd/turbo
+
 platform-windows-arm64:
-	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64  go build $(GO_FLAGS) -o npm/turbo-windows-arm64/turbo.exe ./cmd/turbo
+	cd npm/turbo-windows-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build $(GO_FLAGS) -o npm/turbo-windows-arm64/turbo.exe ./cmd/turbo
 
 platform-unixlike:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
 	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+
+# To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
+# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
+platform-unixlike-cgo:
+	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
+	mkdir -p "$(NPMDIR)/bin"
+	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
@@ -97,7 +105,7 @@ platform-darwin:
 	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-unixlike
 
 platform-darwin-arm64:
-	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike
+	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-unixlike-cgo
 
 platform-freebsd:
 	make GOOS=freebsd GOARCH=amd64 NPMDIR=npm/turbo-freebsd-64 platform-unixlike
@@ -140,10 +148,10 @@ platform-neutral: | turbo
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 	node ./scripts/bump-version.js
 
-platform-create-turbo: 
+platform-create-turbo:
 	cd ../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
-platform-turbo-codemod: 
+platform-turbo-codemod:
 	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish:
@@ -159,8 +167,9 @@ publish-all: cmd/turbo/version.go
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 	rm -fr npm && git checkout npm
 	@echo Enter one-time password:
-	make publish-windows
 	make publish-windows-32
+	make publish-windows-64
+	make publish-windows-arm64
 	make publish-freebsd
 	make publish-freebsd-arm64
 	@echo Enter one-time password:
@@ -185,11 +194,14 @@ publish-all: cmd/turbo/version.go
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
 
-publish-windows: platform-windows
-	make test && cd npm/turbo-windows-64 && npm publish --tag $(TURBO_TAG)
-
 publish-windows-32: platform-windows-32
 	make test && cd npm/turbo-windows-32 && npm publish --tag $(TURBO_TAG)
+
+publish-windows-64: platform-windows-64
+	make test && cd npm/turbo-windows-64 && npm publish --tag $(TURBO_TAG)
+
+publish-windows-arm64: platform-windows-arm64
+	make test && cd npm/turbo-windows-arm64 && npm publish --tag $(TURBO_TAG)
 
 publish-darwin: platform-darwin
 	make test && cd npm/turbo-darwin-64 && npm publish --tag $(TURBO_TAG)
@@ -255,7 +267,7 @@ bench/nx: demo/nx
 	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo turbo
-	cd demo/turbo && ../../turbo run test 
+	cd demo/turbo && ../../turbo run test
 
 bench/turbo-new: demo/turbo
 	cd demo/turbo && ../../turbo-new run build test
@@ -277,6 +289,7 @@ clean:
 	rm -rf npm/turbo-linux-ppc64le/bin/turbo
 	rm -rf npm/turbo-windows-32/turbo.exe
 	rm -rf npm/turbo-windows-64/turbo.exe
+	rm -rf npm/turbo-windows-arm64/turbo.exe
 	rm -rf docs/.turbo
 	rm -rf docs/.next
 	rm -rf docs/node_modules
