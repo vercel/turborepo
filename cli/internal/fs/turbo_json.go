@@ -2,6 +2,8 @@ package fs
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -19,6 +21,34 @@ type TurboConfigJSON struct {
 	Pipeline Pipeline
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+}
+
+func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*TurboConfigJSON, error) {
+	// If turbo.json exists, we use that
+	// If pkg.Turbo exists, we warn about running the migration
+	// Use pkg.Turbo if turbo.json doesn't exist
+	// If neither exists, it's a fatal error
+	turboJSONPath := rootPath.Join("turbo.json")
+
+	if !turboJSONPath.FileExists() {
+		if rootPackageJSON.LegacyTurboConfig == nil {
+			// TODO: suggestion on how to create one
+			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+		} else {
+			log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+			return rootPackageJSON.LegacyTurboConfig, nil
+		}
+	} else {
+		turbo, err := ReadTurboConfigJSON(turboJSONPath)
+		if err != nil {
+			return nil, fmt.Errorf("turbo.json: %w", err)
+		}
+		if rootPackageJSON.LegacyTurboConfig != nil {
+			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+			rootPackageJSON.LegacyTurboConfig = nil
+		}
+		return turbo, nil
+	}
 }
 
 func ReadTurboConfigJSON(path AbsolutePath) (*TurboConfigJSON, error) {
