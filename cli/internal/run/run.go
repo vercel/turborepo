@@ -650,6 +650,9 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	if err := os.Remove(filepath.Join(rs.Opts.cacheFolder, "last-run.log")); err != nil {
+		c.Ui.Warn(fmt.Sprintf("Failed to clear last run log: %v", err))
+	}
 	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
@@ -880,9 +883,12 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		return nil
 	}
 	// Cache ---------------------------------------------
+	if err := cache.AppendHashesFile(filepath.Join(e.rs.Opts.cacheFolder, "last-run.log"), hash); err != nil {
+		targetUi.Warn(fmt.Sprintf("failed to update last run log: %v", err))
+	}
 	var hit bool
 	if !e.rs.Opts.forceExecution {
-		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
+		hit, _, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 		} else if hit {
@@ -1023,7 +1029,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 			relativePaths[index] = relativePath
 		}
 
-		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
+		if err := e.turboCache.Put(pt.pkg.Dir, hash, cmdTime, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
