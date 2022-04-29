@@ -1288,6 +1288,7 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-memory",
  "turbopack",
 ]
 
@@ -2482,6 +2483,7 @@ dependencies = [
  "threadpool",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-memory",
 ]
 
 [[package]]
@@ -2493,6 +2495,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "turbo-tasks-memory"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-std",
+ "event-listener",
+ "lazy_static",
+ "turbo-tasks",
 ]
 
 [[package]]
@@ -2519,6 +2532,7 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-memory",
  "url",
 ]
 
