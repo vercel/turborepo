@@ -7,31 +7,18 @@ description: A guide on workspaces to onboard onto using Turborepo.
 
 Turborepo makes use of workspaces to organize your apps and packages. But how do they work? This guide will walk you through the basics of workspaces.
 
-## External documentation
+## What are workspaces?
 
-First of all, it is important to note that workspaces themselves are not implemented by Turborepo.
-Instead, they are implemented by package managers.
-Since Turborepo requires the use of workspaces, we will still try to explain the basics of workspaces in this guide.
-The three package managers all have their implementation of workspaces, links to their respective documentation are listed below.
+Workspaces is a feature implemented by package managers to organize apps and packages. It is a way to organize your apps and packages into a single place.
+Each package manager has its own implementation of workspaces, links to their respective documentation are listed below.
 
 - [Npm workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces)
 - [Yarn workspaces](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
 - [Pnpm workspaces](https://pnpm.io/workspaces)
 
-## Installing packages
-
-A common issue beginners are facing is the installation of packages in a specific workspace.
-When not working in a monorepo, you can simply run `npm install <package>`, but now that installs that in the root.
-Now when you go into the folder of a workspace and run that command, the entire `node_modules` folder will also end up there.
-So, how do you install a package?
-
-Well, you run the following commands for the following package managers:
-
-| Package manager  | Command                                     | Example                         |
-| ---------------- | ------------------------------------------- | ------------------------------- |
-| npm              | `npm install <package> -w=<workspace>`      | `npm install react -w=web`      |
-| yarn             | `yarn workspace <workspace> add <package>`  | `yarn workspace web add react`  |
-| pnpm             | `pnpm add <package> --filter <workspace>`   | `pnpm add react --filter web`   |
+To summarize the workspaces feature, workspaces allow you to create folders, each called a workspace, each with its own package.json, and you can install packages into each workspace.
+A workspace can also depend on other workspaces.
+A workspace is generally either an app, an application that can be executed such as an api, or a package, an application that can be used as a dependency by other workspaces.
 
 ## Adding workspaces
 
@@ -70,6 +57,21 @@ Each folder that matches any of the globs in the lists is considered a workspace
 
 After creating the folder and adding it to the list of workspaces, we want to create the `package.json` file for the workspace.
 This `package.json` file will house all the information for the workspace, such as the version, dependencies, and scripts, just like a normal `package.json` file would.
+
+## Installing packages
+
+A common issue beginners are facing is the installation of packages in a specific workspace.
+When not working in a monorepo, you can simply run `npm install <package>`, but now that installs that in the root.
+Now when you go into the folder of a workspace and run that command, the entire `node_modules` folder will also end up there.
+So, how do you install a package?
+
+Well, you run the following commands for the following package managers:
+
+| Package manager  | Command                                     | Example                         |
+| ---------------- | ------------------------------------------- | ------------------------------- |
+| npm              | `npm install <package> -w=<workspace>`      | `npm install react -w=web`      |
+| yarn             | `yarn workspace <workspace> add <package>`  | `yarn workspace web add react`  |
+| pnpm             | `pnpm add <package> --filter <workspace>`   | `pnpm add react --filter web`   |
 
 ## Naming workspaces
 
