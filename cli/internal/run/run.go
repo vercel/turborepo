@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -650,7 +651,16 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
+	// Theoretically this is overkill, but bias towards not spamming the console
+	once := &sync.Once{}
+	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
+		// Currently the HTTP Cache is the only one that can be disabled.
+		// With a cache system refactor, we might consider giving names to the caches so
+		// we can accurately report them here.
+		once.Do(func() {
+			c.logWarning(c.Config.Logger, "Remote Caching is unavailable", err)
+		})
+	})
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
