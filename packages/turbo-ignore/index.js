@@ -10,7 +10,7 @@ console.log(
 );
 const root = getRoot();
 const scope = getScope();
-const command = `npx turbo run build --filter=${scope}...HEAD^ --dry=json`;
+const command = `npx turbo run build --filter=${scope}...[HEAD^] --dry=json`;
 console.log(`≫ Analyzing results of \`${command}\`...`);
 exec(
   command,
