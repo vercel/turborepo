@@ -26,22 +26,20 @@ A workspace is generally either an app, an application that can be executed such
 
 ### Setup workspaces
 
-First thing you'll want to setup when working with workspaces is to create a folder for your workspace.
+When using workspaces you'll first have to define the location of your workspaces.
+That is the folders that your package manager should look in for workspaces.
 
 A common pattern is to have an `apps` folder and a `packages` folder.
 The `apps` folder will contain workspaces that house launchable apps, such as a next.js app.
 The `packages` folder will contain workspaces that house packages that are used by either an app or another package.
-When you have decided where to put the workspace, you simply create a folder for it.
 
-After creating your folder, you need to make sure your package manager knows that your folder is a workspace folder.
-
-This step is different for `pnpm` than it is for `npm` and `yarn`.
+The configuration for this is different for `pnpm` than it is for `npm` and `yarn`.
 
 <Tabs items={['npm & yarn', 'pnpm']} storageKey="workspace-config-for-different-package-managers">
   <Tab>
 
-    For `npm` and `yarn`, you need to add the folder to the `workspaces` field in the root `package.json` file
-    This field contains a list of workspaces in the form of globs.
+    For `npm` and `yarn`, you need to add the folders you want to be workspaces to the `workspaces` field in the root `package.json` file
+    This field contains a list of workspace folders in the form of globs.
     An example workspaces section in a `package.json` file could look like this
 
     ```json
@@ -60,8 +58,8 @@ This step is different for `pnpm` than it is for `npm` and `yarn`.
 
   <Tab>
 
-    For `pnpm` you need to add the folder to the `pnpm-workspace.yaml` file that exists in your root.
-    This file contains a list of workspaces in the form of globs.
+    For `pnpm` you need to add the folders you want to be workspaces to the `pnpm-workspace.yaml` file that exists in your root.
+    This file contains a list of workspace folders in the form of globs.
     An example `pnpm-workspace.yaml` file could look like this
 
     ```yaml
@@ -92,8 +90,28 @@ monorepo/
 With the folder structure above, using the same workspace configuration, the `monorepo/docs/`, `monorepo/apps/api/`, `monorepo/apps/mobile/`, `monorepo/packages/config/`, and `monorepo/packages/tsconfig/` folders are all considered workspaces.
 While the `monorepo/sdk/` folder is not considered a workspace, it is not included in the workspace configuration.
 
-Last thing necessary for your workspace to be functional is a `package.json` inside the workspace folder.
-This `package.json` file will house all the information for the workspace, such as the name, version, dependencies, and scripts, just like a normal `package.json` file would.
+### Managing workspaces
+
+After defining the locations for your workspaces you will want to create your workspace.
+
+You do this by creating a folder for your workspace, and adding a `package.json` file to it.
+Remember, the workspace should also be defined using the method defined in the 'Setup workspaces' section.
+
+You may also want to move, delete, and rename your workspaces.
+
+Deleting is as easy as deleting the content of the folder.
+If you don't want to delete the folder, removing the folder from the workspace configuration, will also work.
+
+Moving a workspace can be done by moving the folder, then redefining the workspace configuration to include the new workspace location (and exclude the old location).
+
+Renaming a workspace can mean two things, you could either just rename the folder, or change the name inside the `package.json` file.
+When you rename the folder, the workspace configuration should also be updated.
+When changing the name in the `package.json` file it is important to ensure all dependencies of the workspace are updated.
+
+After any of these actions you will have to run an install.
+If there are any problems after that, you may have to delete your `node_modules` folder and run an install again.
+
+It is recommended to keep your workspace configuration up-to-date with the folders in the filesystem, this will prevent accidental recognition of workspaces.
 
 ### Managing dependencies
 
