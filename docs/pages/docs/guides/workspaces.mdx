@@ -159,8 +159,8 @@ Well, you run the following commands for the following package managers:
 Some issues can occur when choosing names for your workspaces.
 Therefore, we want to provide some guidelines and best practices.
 
-A maybe somewhat obvious, but essential point is that workspaces can't have the same name.
-Not only will it cause problems when doing an installation, but it also means you won't be able to target the workspace in any way since Turborepo and package managers won't know which workspace you are targeting.
+Workspaces can't have the same name.
+When workspaces do have the same name it will cause problems when doing an installation, and it also means you won't be able to target the workspace in any way since Turborepo and package managers won't know which workspace you are targeting.
 
 Another important thing is that you should not name your workspace the same name as an existing npm package.
 It gets worse if you also have that package as a dependency for one of your workspaces, this will not work and cause errors during installation.
