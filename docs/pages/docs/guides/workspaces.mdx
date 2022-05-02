@@ -229,16 +229,14 @@ Well, it differs for each package manager:
 Some issues can occur when choosing names for your workspaces.
 Therefore, we want to provide some guidelines and best practices.
 
-Workspaces can't have the same name.
-When workspaces do have the same name it will cause problems when doing an installation, and it also means you won't be able to target the workspace in any way since Turborepo and package managers won't know which workspace you are targeting.
+- **Names should be unique**
+  Workspaces can't have the same name.
+  When workspaces do have the same name it will cause problems when doing an installation, and it also means you won't be able to target the workspace since Turborepo and package managers won't know which workspace you are targeting.
+  A workspace should also not have the same name as an existing npm package, as it often leads to problems.
 
-Another important thing is that you should not name your workspace the same name as an existing npm package.
-It gets worse if you also have that package as a dependency for one of your workspaces, this will not work and cause errors during installation.
-If you don't have a dependency on the npm package, it should technically work.
-However, it is still a bad idea, since you may want to add a dependency to that package in the future, or you will have to refactor your entire code base if you ever decide you want to publish the package to npm yourself.
-
-A common naming convention for monorepos is to use the name of the monorepo, and the name of the workspace is separated by a slash and preceded by an @ symbol.
-An example of this would be `@todolist/app`, this convention prevents most npm naming collisions, and clearly shows that the workspace exists in the monorepo.
+- **Use the `@<project>/<workspace>` naming convention**
+  A common naming convention for monorepos is to use the name of the monorepo, and the name of the workspace, separated by a slash and preceded by an @ symbol.
+  An example of this would be `@todolist/api`, this convention prevents most npm naming collisions, and clearly shows that the workspace exists in the monorepo.
 
 ## Example projects
 
