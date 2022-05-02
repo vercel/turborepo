@@ -12,7 +12,7 @@ const path = require("path");
 const TURBO_BINARY_PATH = process.env.TURBO_BINARY_PATH;
 
 const knownWindowsPackages = {
-  // "win32 arm64 LE": "turbo-windows-arm64",
+  "win32 arm64 LE": "turbo-windows-arm64",
   "win32 ia32 LE": "turbo-windows-32",
   "win32 x64 LE": "turbo-windows-64",
 };

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_ParseTurboConfigJson(t *testing.T) {
+func Test_ReadTurboJSON(t *testing.T) {
 	defaultCwd, err := os.Getwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
@@ -18,7 +18,7 @@ func Test_ParseTurboConfigJson(t *testing.T) {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}
 	turboJSONPath := cwd.Join("testdata", "turbo.json")
-	turboConfig, err := ReadTurboConfigJSON(turboJSONPath)
+	turboJSON, err := ReadTurboJSON(turboJSONPath)
 	if err != nil {
 		t.Fatalf("invalid parse: %#v", err)
 	}
@@ -56,23 +56,23 @@ func Test_ParseTurboConfigJson(t *testing.T) {
 	}
 
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
-	if len(turboConfig.Pipeline) != len(pipelineExpected) {
+	if len(turboJSON.Pipeline) != len(pipelineExpected) {
 		expectedKeys := []string{}
 		for k := range pipelineExpected {
 			expectedKeys = append(expectedKeys, k)
 		}
 		actualKeys := []string{}
-		for k := range turboConfig.Pipeline {
+		for k := range turboJSON.Pipeline {
 			actualKeys = append(actualKeys, k)
 		}
 		t.Errorf("pipeline tasks mismatch. got %v, want %v", strings.Join(actualKeys, ","), strings.Join(expectedKeys, ","))
 	}
 	for taskName, expectedTaskDefinition := range pipelineExpected {
-		actualTaskDefinition, ok := turboConfig.Pipeline[taskName]
+		actualTaskDefinition, ok := turboJSON.Pipeline[taskName]
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
 		assert.EqualValuesf(t, expectedTaskDefinition, actualTaskDefinition, "task definition mismatch for %v", taskName)
 	}
-	assert.EqualValues(t, remoteCacheOptionsExpected, turboConfig.RemoteCacheOptions)
+	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
 }

@@ -41,7 +41,7 @@ export interface Schema {
     /**
      * The name of a task that can be executed by turbo run. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the
-     * pipeline task configuration to that NPM script during execution. This allows you to
+     * pipeline task configuration to that npm script during execution. This allows you to
      * use pipeline to set conventions across your entire Turborepo.
      */
     [script: string]: Pipeline;

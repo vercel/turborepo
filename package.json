@@ -20,11 +20,11 @@
       "prettier --write"
     ],
     "*.go": [
-      "cd cli && npm run format"
+      "sh -c \"cd cli && pnpm format\""
     ]
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
   },
-  "packageManager": "pnpm@6.32.2"
+  "packageManager": "pnpm@6.32.11"
 }
