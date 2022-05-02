@@ -47,11 +47,48 @@ This step is different for `pnpm` than it is for `npm` and `yarn`.
 
 For `pnpm` you need to add the folder to the `pnpm-workspace.yaml` file that exists in your root.
 This file contains a list of workspaces in the form of globs.
+An example `pnpm-workspace.yaml` file could look like this
+
+```yaml
+packages:
+  - "docs"
+  - "apps/*"
+  - "packages/*"
+```
 
 For `yarn` and `npm`, you need to add the folder to the `workspaces` field in the root `package.json` file
 This field contains a list of workspaces in the form of globs.
+An example workspaces section in a `package.json` file could look like this
 
-Each folder that matches any of the globs in the lists is considered a workspace folder.
+```json
+{
+  "name": "monorepo",
+  "version": "1.0.0",
+  "workspaces": [
+    "docs",
+    "apps/*",
+    "packages/*"
+  ]
+}
+```
+
+Each folder that matches any of the globs in the list is considered a workspace folder.
+In both of the provided examples above, the `apps` and `packages` folders both contain folders that are workspaces, and the `docs` folder itself is a workspace.
+
+```
+monorepo/
+├─ docs/
+├─ apps/
+│  ├─ api/
+│  ├─ mobile/
+├─ packages/
+│  ├─ tsconfig/
+│  ├─ config/
+├─ sdk/
+```
+
+With the folder structure above, using the same workspace configuration, the `monorepo/docs/`, `monorepo/apps/api/`, `monorepo/apps/mobile/`, `monorepo/packages/config/`, and `monorepo/packages/tsconfig/` folders are all considered workspaces.
+While the `monorepo/sdk/` folder is not considered a workspace, it is not included in the workspace configuration.
 
 ### A `package.json` file in the workspace folder
 
