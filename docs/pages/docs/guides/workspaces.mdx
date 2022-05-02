@@ -3,6 +3,8 @@ title: Workspaces
 description: A guide on workspaces to onboard onto using Turborepo.
 ---
 
+import {Tabs, Tab} from '../../../components/Tabs'
+
 # Workspaces
 
 Turborepo makes use of workspaces to organize your apps and packages. But how do they work? This guide will walk you through the basics of workspaces.
@@ -104,11 +106,53 @@ So, how do you install a package?
 
 Well, you run the following commands for the following package managers:
 
-| Package manager  | Command                                     | Example                         |
-| ---------------- | ------------------------------------------- | ------------------------------- |
-| npm              | `npm install <package> -w=<workspace>`      | `npm install react -w=web`      |
-| yarn             | `yarn workspace <workspace> add <package>`  | `yarn workspace web add react`  |
-| pnpm             | `pnpm add <package> --filter <workspace>`   | `pnpm add react --filter web`   |
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+
+    Command:
+
+    ```bash
+    npm install <package> -w=<workspace>
+    ```
+
+    Example:
+
+    ```bash
+    npm install react -w=web
+    ```
+
+  </Tab>
+  <Tab>
+
+    Command:
+
+    ```bash
+    yarn workspace <workspace> add <package>
+    ```
+
+    Example:
+
+    ```bash
+    yarn workspace web add react
+    ```
+
+  </Tab>
+  <Tab>
+
+    Command:
+
+    ```bash
+    pnpm add <package> --filter <workspace>
+    ```
+
+    Example:
+
+    ```bash
+    pnpm add react --filter web
+    ```
+
+  </Tab>
+</Tabs>
 
 ## Naming workspaces
 
