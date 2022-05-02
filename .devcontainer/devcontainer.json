@@ -1,25 +1,26 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-// https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.209.6/containers/go
 {
   "name": "turbo (go, node)",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      // Update the VARIANT arg to pick a version of Go: 1, 1.18, 1.17
+      // Update the VARIANT arg to pick a version of Go: 1, 1.16, 1.17
       // Append -bullseye or -buster to pin to an OS version.
       // Use -bullseye variants on local arm64/Apple Silicon.
-      "VARIANT": "1.18-bullseye",
+      "VARIANT": "1.17-bullseye",
       // Options
       "NODE_VERSION": "lts/*"
     }
   },
-  "runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
+  "runArgs": ["--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined"],
 
   // Set *default* container specific settings.json values on container create.
   "settings": {
     "go.toolsManagement.checkForUpdates": "local",
     "go.useLanguageServer": true,
-    "go.gopath": "/go"
+    "go.gopath": "/go",
+    "go.goroot": "/usr/local/go"
   },
 
   // Add the IDs of extensions you want installed when the container is created.
@@ -45,7 +46,7 @@
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": "go version",
 
-  // Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+  // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
   "remoteUser": "vscode",
   "features": {
     "docker-in-docker": "latest",
