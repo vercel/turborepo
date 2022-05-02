@@ -181,6 +181,43 @@ func (c *ApiClient) doPreflight(requestURL string, requestMethod string, request
 	return resp, requestURL, nil
 }
 
+type apiError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (ae *apiError) cacheDisabled() (*util.CacheDisabledError, error) {
+	if strings.HasPrefix(ae.Code, "remote_caching_") {
+		statusString := ae.Code[len("remote_caching_"):]
+		status, err := util.CachingStatusFromString(statusString)
+		if err != nil {
+			return nil, err
+		}
+		return &util.CacheDisabledError{
+			Status:  status,
+			Message: ae.Message,
+		}, nil
+	}
+	return nil, fmt.Errorf("unknown status %v: %v", ae.Code, ae.Message)
+}
+
+func (c *ApiClient) handle403(body io.Reader) error {
+	raw, err := ioutil.ReadAll(body)
+	if err != nil {
+		return fmt.Errorf("failed to read response %v", err)
+	}
+	apiError := &apiError{}
+	err = json.Unmarshal(raw, apiError)
+	if err != nil {
+		return fmt.Errorf("failed to read response (%v): %v", string(raw), err)
+	}
+	disabledErr, err := apiError.cacheDisabled()
+	if err != nil {
+		return err
+	}
+	return disabledErr
+}
+
 func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, tag string) error {
 	if err := c.okToRequest(); err != nil {
 		return err
@@ -219,10 +256,13 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 		return fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
 
-	if resp, err := c.HttpClient.Do(req); err != nil {
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
 		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
-	} else {
-		resp.Body.Close()
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusForbidden {
+		return c.handle403(resp.Body)
 	}
 	return nil
 }
@@ -262,7 +302,15 @@ func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 		return nil, fmt.Errorf("invalid cache URL: %w", err)
 	}
 
-	return c.HttpClient.Do(req)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch artifact: %v", err)
+	} else if resp.StatusCode == http.StatusForbidden {
+		err = c.handle403(resp.Body)
+		_ = resp.Body.Close()
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error {
@@ -384,6 +432,47 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 	return teamsResponse, nil
 }
 
+// GetTeam gets a particular Vercel Team. It returns nil if it's not found
+func (c *ApiClient) GetTeam(teamID string) (*Team, error) {
+	queryParams := make(url.Values)
+	queryParams.Add("teamId", teamID)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v2/team?"+queryParams.Encode()), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.UserAgent())
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	// We don't care if we fail to close the response body
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil // Doesn't exist, let calling code handle that case
+	} else if resp.StatusCode != http.StatusOK {
+		b, err := ioutil.ReadAll(resp.Body)
+		var responseText string
+		if err != nil {
+			responseText = fmt.Sprintf("failed to read response: %v", err)
+		} else {
+			responseText = string(b)
+		}
+		return nil, fmt.Errorf("failed to get team (%v): %s", resp.StatusCode, responseText)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read team response: %v", err)
+	}
+	team := &Team{}
+	err = json.Unmarshal(body, team)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON response: %v", string(body))
+	}
+	return team, nil
+}
+
 type User struct {
 	ID        string `json:"id,omitempty"`
 	Username  string `json:"username,omitempty"`
@@ -436,8 +525,10 @@ type statusResponse struct {
 
 // GetCachingStatus returns the server's perspective on whether or not remove caching
 // requests will be allowed.
-func (c *ApiClient) GetCachingStatus(teamID string) (util.CachingStatus, error) {
-	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/status"), nil)
+func (c *ApiClient) GetCachingStatus() (util.CachingStatus, error) {
+	values := make(url.Values)
+	c.addTeamParam(&values)
+	req, err := retryablehttp.NewRequest(http.MethodGet, c.makeUrl("/v8/artifacts/status?"+values.Encode()), nil)
 	if err != nil {
 		return util.CachingStatusDisabled, err
 	}

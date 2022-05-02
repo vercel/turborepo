@@ -152,7 +152,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not detect workspaces: %w", err)
 		}
 
-		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
+		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboJSON.Pipeline, config.TurboJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
 		if err != nil {
 			return fmt.Errorf("failed to calculate global hash: %v", err)
 		}
@@ -385,8 +385,6 @@ func getWorkspaceIgnores() []string {
 	return []string{
 		"**/node_modules/",
 		"**/bower_components/",
-		"**/test/",
-		"**/tests/",
 	}
 }
 
@@ -406,7 +404,7 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	return justNames, pairs
 }
 
-func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, externalGlobalDependencies []string, backend *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, backend *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 
@@ -462,11 +460,13 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, exter
 		rootExternalDepsHash string
 		hashedSortedEnvPairs []string
 		globalCacheKey       string
+		pipeline             fs.Pipeline
 	}{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
 		globalCacheKey:       GLOBAL_CACHE_KEY,
+		pipeline:             pipeline,
 	}
 	globalHash, err := fs.HashObject(globalHashable)
 	if err != nil {
