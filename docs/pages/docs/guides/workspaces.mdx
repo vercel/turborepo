@@ -35,10 +35,29 @@ The `packages` folder will contain workspaces that house packages that are used 
 
 The configuration for this is different for `pnpm` than it is for `npm` and `yarn`.
 
-<Tabs items={['npm & yarn', 'pnpm']} storageKey="workspace-config-for-different-package-managers">
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
 
-    For `npm` and `yarn`, you need to add the folders you want to be workspaces to the `workspaces` field in the root `package.json` file
+    For `npm` you need to add the folders you want to be workspaces to the `workspaces` field in the root `package.json` file
+    This field contains a list of workspace folders in the form of globs.
+    An example workspaces section in a `package.json` file could look like this
+
+    ```json
+    {
+      "name": "monorepo",
+      "version": "1.0.0",
+      "workspaces": [
+        "docs",
+        "apps/*",
+        "packages/*"
+      ]
+    }
+    ```
+
+  </Tab>
+  <Tab>
+
+    For `yarn` you need to add the folders you want to be workspaces to the `workspaces` field in the root `package.json` file
     This field contains a list of workspace folders in the form of globs.
     An example workspaces section in a `package.json` file could look like this
 
