@@ -642,6 +642,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "erased-serde"
+version = "0.3.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad132dd8d0d0b546348d7d86cb3191aad14b34e5f979781fc005c80d4ac67ffd"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "event-listener"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1285,6 +1294,7 @@ dependencies = [
  "async-std",
  "clap 3.1.6",
  "json",
+ "serde",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
@@ -1840,6 +1850,16 @@ checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_regex"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8136f1a4ea815d7eac4101cfd0b16dc0cb5e1fe1b8609dfd728058656b7badf"
+dependencies = [
+ "regex",
  "serde",
 ]
 
@@ -2445,6 +2465,7 @@ dependencies = [
  "anyhow",
  "async-std",
  "bitflags",
+ "erased-serde",
  "event-listener",
  "flurry",
  "lazy_static",
@@ -2479,6 +2500,7 @@ dependencies = [
  "lazy_static",
  "notify",
  "rstest",
+ "serde",
  "sha2",
  "threadpool",
  "turbo-tasks",
@@ -2524,6 +2546,8 @@ dependencies = [
  "rand",
  "regex",
  "rstest",
+ "serde",
+ "serde_regex",
  "swc_atoms",
  "swc_common",
  "swc_ecma_loader",
