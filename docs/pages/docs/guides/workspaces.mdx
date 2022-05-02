@@ -12,7 +12,7 @@ Turborepo makes use of workspaces to organize your apps and packages. But how do
 ## What are workspaces?
 
 Workspaces are a feature implemented by package managers to assist with working on multiple apps and packages in the same codebase.
-Turborepo is compatible with 3 different package managers. Each with its own implementation of workspaces, links to their respective documentation are listed below. Please note that there are slight nuances between implementations and functionality. 
+Turborepo is compatible with 3 different package managers. Each with its own implementation of workspaces, links to their respective documentation are listed below. Please note that there are slight nuances between implementations and functionality.
 
 - [npm workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces)
 - [yarn workspaces](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
@@ -22,57 +22,57 @@ Workspaces allow you to create folders, each called a workspace, each with its o
 A workspace can also depend on other workspaces.
 A workspace is generally either an app, an application that can be executed such as an api, or a package, an application that can be used as a dependency by other workspaces.
 
-## Adding workspaces
+## Working with workspaces
 
-Another common issue is that users don't know how to add a workspace to the monorepo.
+### Setup workspaces
 
-To add a workspace, you need a few things.
+First thing you'll want to setup when working with workspaces is to create a folder for your workspace.
 
-1. A folder for your workspace
-2. Something that indicates that a folder is a workspace
-3. A `package.json` file in the workspace folder
-
-### A folder for your workspace
-
-First, you need to decide where you want to put your workspace.
 A common pattern is to have an `apps` folder and a `packages` folder.
 The `apps` folder will contain workspaces that house launchable apps, such as a next.js app.
 The `packages` folder will contain workspaces that house packages that are used by either an app or another package.
-
 When you have decided where to put the workspace, you simply create a folder for it.
-
-### Something that indicates that a folder is a workspace
 
 After creating your folder, you need to make sure your package manager knows that your folder is a workspace folder.
 
 This step is different for `pnpm` than it is for `npm` and `yarn`.
 
-For `pnpm` you need to add the folder to the `pnpm-workspace.yaml` file that exists in your root.
-This file contains a list of workspaces in the form of globs.
-An example `pnpm-workspace.yaml` file could look like this
+<Tabs items={['npm & yarn', 'pnpm']} storageKey="workspace-config-for-different-package-managers">
+  <Tab>
 
-```yaml
-packages:
-  - "docs"
-  - "apps/*"
-  - "packages/*"
-```
+    For `npm` and `yarn`, you need to add the folder to the `workspaces` field in the root `package.json` file
+    This field contains a list of workspaces in the form of globs.
+    An example workspaces section in a `package.json` file could look like this
 
-For `yarn` and `npm`, you need to add the folder to the `workspaces` field in the root `package.json` file
-This field contains a list of workspaces in the form of globs.
-An example workspaces section in a `package.json` file could look like this
+    ```json
+    {
+      "name": "monorepo",
+      "version": "1.0.0",
+      "workspaces": [
+        "docs",
+        "apps/*",
+        "packages/*"
+      ]
+    }
+    ```
 
-```json
-{
-  "name": "monorepo",
-  "version": "1.0.0",
-  "workspaces": [
-    "docs",
-    "apps/*",
-    "packages/*"
-  ]
-}
-```
+  </Tab>
+
+  <Tab>
+
+    For `pnpm` you need to add the folder to the `pnpm-workspace.yaml` file that exists in your root.
+    This file contains a list of workspaces in the form of globs.
+    An example `pnpm-workspace.yaml` file could look like this
+
+    ```yaml
+    packages:
+      - "docs"
+      - "apps/*"
+      - "packages/*"
+    ```
+
+  </Tab>
+</Tabs>
 
 Each folder that matches any of the globs in the list is considered a workspace folder.
 In both of the provided examples above, the `apps` and `packages` folders both contain folders that are workspaces, and the `docs` folder itself is a workspace.
@@ -92,63 +92,115 @@ monorepo/
 With the folder structure above, using the same workspace configuration, the `monorepo/docs/`, `monorepo/apps/api/`, `monorepo/apps/mobile/`, `monorepo/packages/config/`, and `monorepo/packages/tsconfig/` folders are all considered workspaces.
 While the `monorepo/sdk/` folder is not considered a workspace, it is not included in the workspace configuration.
 
-### A `package.json` file in the workspace folder
+Last thing necessary for your workspace to be functional is a `package.json` inside the workspace folder.
+This `package.json` file will house all the information for the workspace, such as the name, version, dependencies, and scripts, just like a normal `package.json` file would.
 
-After creating the folder and adding it to the list of workspaces, we want to create the `package.json` file for the workspace.
-This `package.json` file will house all the information for the workspace, such as the version, dependencies, and scripts, just like a normal `package.json` file would.
+### Managing dependencies
 
-## Installing packages
+Managing dependencies in a workspace is slightly different than managing dependencies without workspaces.
+Normally, you would use the `npm install|uninstall|update <package>`, `yarn add|remove|upgrade <package>` and `pnpm add|remove|up <package>` commands to manage packages.
+However, this won't work the same when using workspaces, since they will only manage the dependencies of the entire monorepo.
+So, how do you manage dependencies?
 
-Installing packages in a workspace is slightly different than installing packages normally.
-When not working in a monorepo, you can simply run `npm install <package>`, but now that installs the package in the root of the monorepo.
-You may think moving into a workspace folder and running the command there would work, but instead the entire `node_modules` folder will end up there
-So, how do you install a package?
-
-Well, you run the following commands for the following package managers:
+Well, it differs for each package manager:
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
 
-    Command:
-
+    **Install**
     ```bash
     npm install <package> -w=<workspace>
     ```
 
     Example:
-
     ```bash
     npm install react -w=web
+    ```
+
+    **Uninstall**
+    ```bash
+    npm uninstall <package> -w=<workspace>
+    ```
+
+    Example:
+    ```bash
+    npm uninstall react -w=web
+    ```
+
+    **Update**
+    ```bash
+    npm update <package> -w=<workspace>
+    ```
+
+    Example:
+    ```bash
+    npm update react -w=web
     ```
 
   </Tab>
   <Tab>
 
-    Command:
-
+    **Install**
     ```bash
     yarn workspace <workspace> add <package>
     ```
 
     Example:
-
     ```bash
     yarn workspace web add react
+    ```
+
+    **Uninstall**
+    ```bash
+    yarn workspace <workspace> remove <package>
+    ```
+
+    Example:
+    ```bash
+    yarn workspace web remove react
+    ```
+
+    **Update**
+    ```bash
+    yarn workspace <workspace> upgrade <package>
+    ```
+
+    Example:
+    ```bash
+    yarn workspace web upgrade react
     ```
 
   </Tab>
   <Tab>
 
-    Command:
-
+    **Install**
     ```bash
     pnpm add <package> --filter <workspace>
     ```
 
     Example:
-
     ```bash
     pnpm add react --filter web
+    ```
+
+    **Uninstall**
+     ```bash
+    pnpm uninstall <package> --filter <workspace>
+    ```
+
+    Example:
+    ```bash
+    pnpm uninstall react --filter web
+    ```
+
+    **Update**
+     ```bash
+    pnpm up <package> --filter <workspace>
+    ```
+
+    Example:
+    ```bash
+    pnpm up react --filter web
     ```
 
   </Tab>
