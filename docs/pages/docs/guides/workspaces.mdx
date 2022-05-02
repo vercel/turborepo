@@ -99,9 +99,9 @@ This `package.json` file will house all the information for the workspace, such 
 
 ## Installing packages
 
-A common issue beginners are facing is the installation of packages in a specific workspace.
-When not working in a monorepo, you can simply run `npm install <package>`, but now that installs that in the root.
-Now when you go into the folder of a workspace and run that command, the entire `node_modules` folder will also end up there.
+Installing packages in a workspace is slightly different than installing packages normally.
+When not working in a monorepo, you can simply run `npm install <package>`, but now that installs the package in the root of the monorepo.
+You may think moving into a workspace folder and running the command there would work, but instead the entire `node_modules` folder will end up there
 So, how do you install a package?
 
 Well, you run the following commands for the following package managers:
