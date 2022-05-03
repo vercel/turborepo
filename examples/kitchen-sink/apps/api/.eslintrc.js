@@ -1,4 +1,4 @@
 module.exports = {
   root: true,
-  extends: ['acme-server'],
-}
+  extends: ["custom-server"],
+};

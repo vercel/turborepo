@@ -2,7 +2,7 @@ module.exports = {
   extends: ["eslint:recommended"],
   env: {
     node: true,
-    es6: true
+    es6: true,
   },
   parserOptions: {
     ecmaVersion: "latest",
@@ -12,8 +12,8 @@ module.exports = {
     {
       files: ["**/__tests__/**/*"],
       env: {
-        jest: true
-      }
-    }
-  ]
+        jest: true,
+      },
+    },
+  ],
 };
