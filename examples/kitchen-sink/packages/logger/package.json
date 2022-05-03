@@ -12,7 +12,7 @@
     "test": "jest",
     "dev": "tsc -w",
     "build": "tsc",
-    "lint": "TIMING=1 eslint src --fix",
+    "lint": "TIMING=1 eslint src/**/*.ts* --fix",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "devDependencies": {
@@ -20,6 +20,7 @@
     "scripts": "*",
     "jest": "^26.6.3",
     "eslint": "^7.32.0",
+    "eslint-config-acme": "*",
     "tsconfig": "*",
     "typescript": "^4.5.3"
   },
