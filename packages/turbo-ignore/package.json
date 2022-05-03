@@ -1,0 +1,19 @@
+{
+  "name": "turbo-ignore",
+  "version": "0.0.39",
+  "description": "",
+  "main": "index.js",
+  "bin": "index.js",
+  "keywords": [],
+  "author": "Jared Palmer",
+  "license": "MPL-2.0",
+  "scripts": {
+    "build": "tsup index.js --format=cjs && cp ./package.json ./dist/package.json",
+    "release": "pnpm build && cd dist && npm publish"
+  },
+  "devDependencies": {
+    "@manypkg/find-root": "^1.1.0",
+    "esbuild": "^0.14.38",
+    "tsup": "^5.12.1"
+  }
+}

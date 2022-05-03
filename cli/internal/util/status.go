@@ -29,3 +29,14 @@ func CachingStatusFromString(raw string) (CachingStatus, error) {
 		return CachingStatusDisabled, fmt.Errorf("unknown caching status: %v", raw)
 	}
 }
+
+// CacheDisabledError is an error used to indicate that remote caching
+// is not available.
+type CacheDisabledError struct {
+	Status  CachingStatus
+	Message string
+}
+
+func (cd *CacheDisabledError) Error() string {
+	return cd.Message
+}
