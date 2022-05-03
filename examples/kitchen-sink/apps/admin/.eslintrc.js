@@ -1,1 +1,4 @@
-module.exports = require("scripts/eslint-preset");
+module.exports = {
+  root: true,
+  extends: ["acme"],
+};
