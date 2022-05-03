@@ -653,7 +653,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
+	turboCache, err := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
@@ -661,6 +661,14 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 			c.logWarning(c.Config.Logger, "Remote Caching is unavailable", err)
 		})
 	})
+	if err != nil {
+		if errors.Is(err, cache.ErrNoCachesEnabled) {
+			c.logError(c.Config.Logger, "No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+		} else {
+			c.logError(c.Config.Logger, "Failed to set up caching", err)
+		}
+		return 1
+	}
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())

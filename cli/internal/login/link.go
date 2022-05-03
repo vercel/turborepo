@@ -167,13 +167,17 @@ func (l *link) run() error {
 	}
 	isUser := (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username)
 	var chosenTeam client.Team
-	if !isUser {
+	var accountID string
+	if isUser {
+		accountID = userResponse.User.ID
+	} else {
 		for _, team := range teamsResponse.Teams {
 			if team.Name == chosenTeamName {
 				chosenTeam = team
 				break
 			}
 		}
+		accountID = chosenTeam.ID
 		l.apiClient.SetTeamID(chosenTeam.ID)
 	}
 
@@ -213,7 +217,7 @@ func (l *link) run() error {
 
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
 	err = config.WriteRepoConfigFile(&config.TurborepoConfig{
-		TeamId: chosenTeam.ID,
+		TeamId: accountID,
 		ApiUrl: l.apiURL,
 	})
 	if err != nil {
