@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/mitchellh/cli"
@@ -55,7 +57,7 @@ func (c *BinCommand) LogError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	c.Config.Logger.Error("error", err)
 	c.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
-	return &util.BasicError{}
+	return err
 }
 
 // BinCmd returns the Cobra bin command
