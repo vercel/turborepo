@@ -54,7 +54,7 @@ func (c *BinCommand) Run(args []string) int {
 func (c *BinCommand) LogError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	c.Config.Logger.Error("error", err)
-	c.UI.Error(err.Error())
+	c.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 	return &util.BasicError{}
 }
 
