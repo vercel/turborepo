@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -198,7 +199,7 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
 		return 1
 	}
-	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
+	targets, err := getTargetsFromArguments(args, c.Config.TurboJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -224,7 +225,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
+		Pipeline:         c.Config.TurboJSON.Pipeline,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
@@ -650,7 +651,16 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
+	// Theoretically this is overkill, but bias towards not spamming the console
+	once := &sync.Once{}
+	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
+		// Currently the HTTP Cache is the only one that can be disabled.
+		// With a cache system refactor, we might consider giving names to the caches so
+		// we can accurately report them here.
+		once.Do(func() {
+			c.logWarning(c.Config.Logger, "Remote Caching is unavailable", err)
+		})
+	})
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
@@ -793,7 +803,7 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
-func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+func getTargetsFromArguments(arguments []string, turboJSON *fs.TurboJSON) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
@@ -802,7 +812,7 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 		if !strings.HasPrefix(arg, "-") {
 			targets.Add(arg)
 			found := false
-			for task := range configJson.Pipeline {
+			for task := range turboJSON.Pipeline {
 				if task == arg {
 					found = true
 				}
