@@ -44,16 +44,22 @@ type CacheEvent struct {
 // the but CLI continues to try to use it.
 type OnCacheRemoved = func(cache Cache, err error)
 
+// ErrNoCachesEnabled is returned when both the filesystem and http cache are unavailable
+var ErrNoCachesEnabled = errors.New("no caches are enabled")
+
 // New creates a new cache
-func New(config *config.Config, remoteOnly bool, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) Cache {
-	c := newSyncCache(config, remoteOnly, recorder, onCacheRemoved)
-	if config.Cache.Workers > 0 {
-		return newAsyncCache(c, config)
+func New(config *config.Config, remoteOnly bool, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+	c, err := newSyncCache(config, remoteOnly, recorder, onCacheRemoved)
+	if err != nil {
+		return nil, err
 	}
-	return c
+	if config.Cache.Workers > 0 {
+		return newAsyncCache(c, config), nil
+	}
+	return c, nil
 }
 
-func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) Cache {
+func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	mplex := &cacheMultiplexer{
 		onCacheRemoved: onCacheRemoved,
 	}
@@ -65,11 +71,11 @@ func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Rec
 		mplex.caches = append(mplex.caches, newHTTPCache(config, recorder))
 	}
 	if len(mplex.caches) == 0 {
-		return nil
+		return nil, ErrNoCachesEnabled
 	} else if len(mplex.caches) == 1 {
-		return mplex.caches[0] // Skip the extra layer of indirection
+		return mplex.caches[0], nil // Skip the extra layer of indirection
 	}
-	return mplex
+	return mplex, nil
 }
 
 // A cacheMultiplexer multiplexes several caches into one.
