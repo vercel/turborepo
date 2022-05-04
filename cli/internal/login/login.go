@@ -14,12 +14,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -61,12 +63,14 @@ func (c *LoginCommand) Run(args []string) int {
 		Short: "Login to your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			login := login{
-				ui:                  c.UI,
-				logger:              c.Config.Logger,
-				openURL:             browser.OpenBrowser,
-				client:              c.Config.ApiClient,
-				writeUserConfig:     config.WriteUserConfigFile,
-				writeRepoConfig:     config.WriteRepoConfigFile,
+				ui:       c.UI,
+				logger:   c.Config.Logger,
+				fsys:     c.Config.Fs,
+				repoRoot: c.Config.Cwd,
+				openURL:  browser.OpenBrowser,
+				client:   c.Config.ApiClient,
+				//writeUserConfig:     config.WriteUserConfigFile,
+				//writeRepoConfig:     config.WriteRepoConfigFile,
 				promptEnableCaching: promptEnableCaching,
 			}
 			if ssoTeam != "" {
@@ -112,12 +116,14 @@ type userClient interface {
 type configWriter = func(cf *config.TurborepoConfig) error
 
 type login struct {
-	ui                  *cli.ColoredUi
-	logger              hclog.Logger
-	openURL             browserClient
-	client              userClient
-	writeUserConfig     configWriter
-	writeRepoConfig     configWriter
+	ui       *cli.ColoredUi
+	logger   hclog.Logger
+	fsys     afero.Fs
+	repoRoot fs.AbsolutePath
+	openURL  browserClient
+	client   userClient
+	//writeUserConfig     configWriter
+	//writeRepoConfig     configWriter
 	promptEnableCaching func() (bool, error)
 }
 
@@ -159,9 +165,9 @@ func (l *login) run(c *config.Config) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	err = l.writeUserConfig(&config.TurborepoConfig{Token: query.Get("token")})
+	err = config.WriteUserConfigFile(l.fsys, &config.TurborepoConfig{Token: query.Get("token")})
 	if err != nil {
-		return errors.Wrap(err, "failed to write user config")
+		return err
 	}
 	rawToken := query.Get("token")
 	l.client.SetToken(rawToken)
@@ -234,7 +240,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	err = l.writeUserConfig(&config.TurborepoConfig{Token: verifiedUser.Token})
+	err = config.WriteUserConfigFile(l.fsys, &config.TurborepoConfig{Token: verifiedUser.Token})
 	if err != nil {
 		return errors.Wrap(err, "failed to save auth token")
 	}
@@ -246,7 +252,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 		if err != nil {
 			return err
 		}
-		err = l.writeRepoConfig(&config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
+		err = config.WriteRepoConfigFile(l.fsys, l.repoRoot, &config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
 		if err != nil {
 			return errors.Wrap(err, "failed to save teamId")
 		}
