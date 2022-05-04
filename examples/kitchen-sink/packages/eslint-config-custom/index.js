@@ -1,5 +1,5 @@
 module.exports = {
-  extends: ["react-app"],
+  extends: ["next"],
   settings: {
     react: {
       version: "detect",
