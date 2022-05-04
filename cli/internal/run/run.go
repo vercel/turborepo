@@ -308,7 +308,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 			p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 			fmt.Fprintln(p, "Name\tPath\t")
 			for _, pkg := range packagesInScope {
-				fmt.Fprintln(p, fmt.Sprintf("%s\t%s\t", pkg, g.PackageInfos[pkg].Dir))
+				fmt.Fprintf(p, "%s\t%s\t\n", pkg, g.PackageInfos[pkg].Dir)
 			}
 			p.Flush()
 
@@ -932,8 +932,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
 
-	var cmd *exec.Cmd
-	cmd = exec.Command(e.packageManager.Command, argsactual...)
+	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
