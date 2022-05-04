@@ -308,7 +308,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 			p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 			fmt.Fprintln(p, "Name\tPath\t")
 			for _, pkg := range packagesInScope {
-				fmt.Fprintln(p, fmt.Sprintf("%s\t%s\t", pkg, g.PackageInfos[pkg].Dir))
+				fmt.Fprintf(p, "%s\t%s\t\n", pkg, g.PackageInfos[pkg].Dir)
 			}
 			p.Flush()
 
@@ -653,7 +653,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
+	turboCache, err := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
@@ -661,6 +661,14 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 			c.logWarning(c.Config.Logger, "Remote Caching is unavailable", err)
 		})
 	})
+	if err != nil {
+		if errors.Is(err, cache.ErrNoCachesEnabled) {
+			c.logError(c.Config.Logger, "No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+		} else {
+			c.logError(c.Config.Logger, "Failed to set up caching", err)
+		}
+		return 1
+	}
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
@@ -924,8 +932,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
 
-	var cmd *exec.Cmd
-	cmd = exec.Command(e.packageManager.Command, argsactual...)
+	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
