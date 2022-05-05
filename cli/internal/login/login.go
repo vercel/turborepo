@@ -59,18 +59,18 @@ const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 func (c *LoginCommand) Run(args []string) int {
 	var ssoTeam string
 	loginCommand := &cobra.Command{
-		Use:   "turbo login",
-		Short: "Login to your Vercel account",
+		Use:           "turbo login",
+		Short:         "Login to your Vercel account",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			login := login{
-				ui:       c.UI,
-				logger:   c.Config.Logger,
-				fsys:     c.Config.Fs,
-				repoRoot: c.Config.Cwd,
-				openURL:  browser.OpenBrowser,
-				client:   c.Config.ApiClient,
-				//writeUserConfig:     config.WriteUserConfigFile,
-				//writeRepoConfig:     config.WriteRepoConfigFile,
+				ui:                  c.UI,
+				logger:              c.Config.Logger,
+				fsys:                c.Config.Fs,
+				repoRoot:            c.Config.Cwd,
+				openURL:             browser.OpenBrowser,
+				client:              c.Config.ApiClient,
 				promptEnableCaching: promptEnableCaching,
 			}
 			if ssoTeam != "" {
