@@ -31,14 +31,14 @@ You can also clone a Turborepo starter repository to get a head start on your pr
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces, a set of features implemented by [npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description), [Yarn](https://classic.yarnpkg.com/lang/en/docs/workspaces/), and [pnpm](https://pnpm.io/workspaces) that allows you to manage multiple packages from your local files system from within a singular top-level, root package. Workspaces are required to use `turbo`. For more information on managing your workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
+`turbo` is built on top of Workspaces,  way of managing multiple packages from within a single root package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
 
-A common folder structure is to have applications in the `/apps` folder and packages in the `/packages` folders, but that's not a requirement. The configuration of these folders is different for each package manager.
+You can configure workspaces whatever way you want, but a common example folder structure is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
 <Tabs items={['npm', 'Yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
 <div/>
-Ensure that you have specified all `workspaces` in your root `package.json`:
+Specify your `workspaces` in your root `package.json`:
 
 ```json filename="package.json"
 {
@@ -52,7 +52,7 @@ Ensure that you have specified all `workspaces` in your root `package.json`:
   </Tab>
   <Tab>
 <div/>
-Ensure that you have specified all `workspaces` in your root `package.json`:
+Specify your `workspaces` in your root `package.json`:
 
 ```json filename="package.json"
 {
@@ -66,7 +66,7 @@ Ensure that you have specified all `workspaces` in your root `package.json`:
   </Tab>
   <Tab>
 <div/>
-Ensure that you have specified all `packages` in `pnpm-workspaces.yaml`.
+Specify your `packages` in `pnpm-workspaces.yaml`.
 ```yaml filename="pnpm-workspace.yaml"
 packages:
   - "packages/*"
@@ -74,6 +74,8 @@ packages:
 ```
   </Tab>
 </Tabs>
+
+After configuring your workspaces, re-run your package manager's `install` command.
 
 <Callout>
   Note: Nested workspaces are not supported. You can flatten your workspaces as a workaround.
@@ -198,7 +200,7 @@ Re-run your npm client's install command to check your configuration.
 
 ## Create `package.json` scripts
 
-Add or update `scripts` in your root `package.json` to call `turbo` scripts.
+Add or update `scripts` in your root `package.json` and have them delegate to `turbo`.
 
 ```jsonc filename="./package.json"
 {
@@ -213,19 +215,19 @@ Add or update `scripts` in your root `package.json` to call `turbo` scripts.
 
 ## Build your monorepo
 
-<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'Yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
-    ```bash
+    ```sh
     npm run build
     ```
   </Tab>
   <Tab>
-    ```bash
+    ```sh
     yarn build
     ```
   </Tab>
   <Tab>
-    ```bash
+    ```sh
     pnpm build
     ```
   </Tab>
