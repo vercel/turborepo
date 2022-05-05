@@ -12,7 +12,7 @@ This Turborepo includes the following packages and apps:
 - `@acme/core`: core React components
 - `@acme/utils`: shared React utilities
 - `@acme/tsconfig`: shared `tsconfig.json`s used throughout the monorepo
-- `eslint-preset-acme`: ESLint preset
+- `eslint-config-acme`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
 
 Each package and app is 100% [TypeScript](https://www.typescriptlang.org/).
 
@@ -35,9 +35,9 @@ yarn install
 git init . && git add . && git commit -m "Init"
 ```
 
-### Changing the NPM organization scope
+### Changing the npm organization scope
 
-The NPM organization scope for this design system starter is `@acme`. To change this, it's a bit manual at the moment, but you'll need to do the following:
+The npm organization scope for this design system starter is `@acme`. To change this, it's a bit manual at the moment, but you'll need to do the following:
 
 - Rename folders in `packages/*` to replace `acme` with your desired scope
 - Search and replace `acme` with your desired scope
@@ -45,11 +45,11 @@ The NPM organization scope for this design system starter is `@acme`. To change 
 
 ### Publishing packages
 
-#### NPM
+#### npm
 
-If you want to publish package to the public NPM registry and make them publicly available, this is already setup for you.
+If you want to publish package to the public npm registry and make them publicly available, this is already setup for you.
 
-To publish packages to a private NPM organization scope, **remove** the following from each of the `package.json`'s
+To publish packages to a private npm organization scope, **remove** the following from each of the `package.json`'s
 
 ```diff
 - "publishConfig": {

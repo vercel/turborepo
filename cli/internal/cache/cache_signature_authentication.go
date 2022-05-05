@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io"
 	"os"
 )
 
@@ -75,17 +74,6 @@ func (asa *ArtifactSignatureAuthentication) validate(hash string, artifactBody [
 	return hmac.Equal([]byte(computedTag), []byte(expectedTag)), nil
 }
 
-func (asa *ArtifactSignatureAuthentication) streamValidator(hash string, incomingReader io.ReadCloser) (io.ReadCloser, *StreamValidator, error) {
-	tag, err := asa.getTagGenerator(hash)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tee := io.TeeReader(incomingReader, tag)
-	artifactReader := readCloser{tee, incomingReader}
-	return artifactReader, &StreamValidator{tag}, nil
-}
-
 type StreamValidator struct {
 	currentHash hash.Hash
 }
@@ -97,9 +85,4 @@ func (sv *StreamValidator) Validate(expectedTag string) bool {
 
 func (sv *StreamValidator) CurrentValue() string {
 	return base64.StdEncoding.EncodeToString(sv.currentHash.Sum(nil))
-}
-
-type readCloser struct {
-	io.Reader
-	io.Closer
 }

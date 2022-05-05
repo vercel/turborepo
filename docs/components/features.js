@@ -43,7 +43,7 @@ const features = [
   },
   // {
   //   name: 'Package manager agnostic',
-  //   description: `Turborepo works with Yarn v1, Yarn v2, NPM, and PNPM workspaces.`,
+  //   description: `Turborepo works with Yarn v1, Yarn v2, npm, and pnpm workspaces.`,
   //   icon: LightningBoltIcon,
   // },
   // {
