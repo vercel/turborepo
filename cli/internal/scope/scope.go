@@ -92,9 +92,13 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*f
 		// that the changes we're interested in are scoped, but we need to handle
 		// global dependencies changing as well. A future optimization might be to
 		// scope changed files more deeply if we know there are no global dependencies.
-		changedFiles := []string{}
+		var changedFiles []string
 		if since != "" {
-			changedFiles = scm.ChangedFiles(since, true, o.Cwd)
+			scmChangedFiles, err := scm.ChangedFiles(since, true, o.Cwd)
+			if err != nil {
+				return nil, err
+			}
+			changedFiles = scmChangedFiles
 		}
 		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, changedFiles); err != nil {
 			return nil, err
