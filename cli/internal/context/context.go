@@ -146,34 +146,26 @@ func WithGraph(rootpath string, config *config.Config) Option {
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
 
-		spaces, err := c.PackageManager.GetWorkspaceGlobs(rootpath)
-
-		if err != nil {
-			return fmt.Errorf("could not detect workspaces: %w", err)
-		}
-
 		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboJSON.Pipeline, config.TurboJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
 		if err != nil {
 			return fmt.Errorf("failed to calculate global hash: %v", err)
 		}
 
 		c.GlobalHash = globalHash
+
+		// Get the workspaces from the package manager.
+		workspaces, err := c.PackageManager.GetWorkspaces(rootpath)
+
+		if err != nil {
+			return fmt.Errorf("workspace configuration error: %w", err)
+		}
+
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
 		parseJSONWaitGroup := new(errgroup.Group)
-		justJsons := make([]string, 0, len(spaces))
-		for _, space := range spaces {
-			justJsons = append(justJsons, filepath.Join(space, "package.json"))
-		}
-
-		f, err := globby.GlobFiles(rootpath, justJsons, getWorkspaceIgnores())
-		if err != nil {
-			return err
-		}
-
-		for _, val := range f {
-			relativePkgPath, err := filepath.Rel(rootpath, val)
+		for _, workspace := range workspaces {
+			relativePkgPath, err := filepath.Rel(rootpath, workspace)
 			if err != nil {
 				return fmt.Errorf("non-nested package.json path %w", err)
 			}
@@ -381,13 +373,6 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 	}
 }
 
-func getWorkspaceIgnores() []string {
-	return []string{
-		"**/node_modules/",
-		"**/bower_components/",
-	}
-}
-
 // getHashableTurboEnvVarsFromOs returns a list of environment variables names and
 // that are safe to include in the global hash
 func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
@@ -404,7 +389,7 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 	return justNames, pairs
 }
 
-func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, backend *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 
@@ -424,10 +409,16 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 		}
 
 		if len(globs) > 0 {
-			f, err := globby.GlobFiles(rootpath, globs, getWorkspaceIgnores())
+			ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 			if err != nil {
 				return "", err
 			}
+
+			f, err := globby.GlobFiles(rootpath, globs, ignores)
+			if err != nil {
+				return "", err
+			}
+
 			for _, val := range f {
 				globalDeps.Add(val)
 			}
@@ -444,10 +435,10 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 	sort.Strings(globalHashableEnvPairs)
 	logger.Debug("global hash env vars", "vars", globalHashableEnvNames)
 
-	if !util.IsYarn(backend.Name) {
+	if !util.IsYarn(packageManager.Name) {
 		// If we are not in Yarn, add the specfile and lockfile to global deps
-		globalDeps.Add(filepath.Join(rootpath, backend.Specfile))
-		globalDeps.Add(filepath.Join(rootpath, backend.Lockfile))
+		globalDeps.Add(filepath.Join(rootpath, packageManager.Specfile))
+		globalDeps.Add(filepath.Join(rootpath, packageManager.Lockfile))
 	}
 
 	// No prefix, global deps already have full paths
