@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
-	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/login"
 	"github.com/vercel/turborepo/cli/internal/process"
@@ -21,6 +20,7 @@ import (
 	"github.com/fatih/color"
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
+	"github.com/spf13/afero"
 )
 
 func main() {
