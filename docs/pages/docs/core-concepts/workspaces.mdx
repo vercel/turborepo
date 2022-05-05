@@ -87,11 +87,11 @@ monorepo/
 Using the same workspace configuration, the `monorepo/docs/`, `monorepo/apps/api/`, `monorepo/apps/mobile/`, `monorepo/packages/config/`, and `monorepo/packages/tsconfig/` folders are all considered workspaces.
 The `monorepo/sdk/` folder is not considered a workspace and it is not included in the workspace configuration.
 
-### Managing workspaces
+## Managing workspaces
 
 When you move, delete, or rename your workspaces, you will have to make sure that all folders linked within your `package.json` matches. Anytime you change the configuration of your workspace, make sure you all dependencies of the workspace are also updated. Re-run your npm client's install command to check your configuration. If there are any problems after that, you may have to delete your `node_modules` folder and run an install again.
 
-### Managing dependencies
+## Managing dependencies
 
 To manage dependencies within workspaces in your monorepo, you will need to run commands that will only manage the dependencies of each workspace rather than for entire monorepo.
 

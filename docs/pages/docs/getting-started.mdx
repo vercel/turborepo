@@ -29,7 +29,7 @@ You can also clone a Turborepo starter repository to get a head start on your pr
 - NetBSD AMD64
 - Android ARM 64-bit
 
-### Configure workspaces
+## Configure workspaces
 
 `turbo` is built on top of Workspaces, a set of features implemented by [npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description), [Yarn](https://classic.yarnpkg.com/lang/en/docs/workspaces/), and [pnpm](https://pnpm.io/workspaces) that allows you to manage multiple packages from your local files system from within a singular top-level, root package. Workspaces are required to use `turbo`. For more information on managing your workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
 
@@ -79,7 +79,7 @@ packages:
   Note: Nested workspaces are not supported. You can flatten your workspaces as a workaround.
 </Callout>
 
-### Install `turbo`
+## Install `turbo`
 
 Add `turbo` as a development dependency in the root of your project.
 
@@ -103,7 +103,7 @@ Add `turbo` as a development dependency in the root of your project.
 
 The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
 
-### Create `turbo.json`
+## Create `turbo.json`
 
 In your root directory, create an empty file named `turbo.json`. This will hold the configuration for Turborepo in your project.
 
@@ -116,7 +116,7 @@ If your git repo's base branch is not `origin/master`, then you need to specify 
 }
 ```
 
-### Create a `pipeline`
+## Create a `pipeline`
 
 To define your project's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of your project. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the `package.json` scripts defined in all of your workspaces in your monorepo.
 
@@ -178,7 +178,7 @@ npx turbo run build test lint deploy
 
 Turborepo will then efficiently schedule execution minimizing idle CPUs.
 
-### Edit `.gitignore`
+## Edit `.gitignore`
 
 Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
 
@@ -250,7 +250,7 @@ Turborepo can use a technique known as Remote Caching to share cache artifacts a
 
 Remote caching is available with zero configuration on [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link).
 
-#### Using Remote Caching for Local development
+### Using Remote Caching for Local development
 
 If you want to link your local turborepo to your Remote Cache you can authenticate the Turborepo CLI with your Vercel account:
 
