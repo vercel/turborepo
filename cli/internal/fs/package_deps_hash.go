@@ -166,9 +166,7 @@ func gitLsTree(path string, gitPath string) (string, error) {
 
 func gitLsFiles(path string, gitPath string, patterns []string) (string, error) {
 	cmd := exec.Command("git", "ls-files", "-s", "--")
-	for _, pattern := range patterns {
-		cmd.Args = append(cmd.Args, pattern)
-	}
+	cmd.Args = append(cmd.Args, patterns...)
 	cmd.Dir = path
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -222,7 +220,7 @@ func parseGitLsFiles(output string) (map[string]string, error) {
 				// 0 - the whole string
 				// 1 - the hash
 				// 2 - the filename
-				if match != nil && len(match) == 3 {
+				if len(match) == 3 {
 					hash := match[1]
 					filename := parseGitFilename(match[2])
 					changes[filename] = hash

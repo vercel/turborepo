@@ -20,7 +20,7 @@ ewatch: scripts/...
 	nodemon --exec "make turbo && make e2e" -e .ts,.go
 
 check-go-version:
-	@go version | grep ' go1\.17\.5 ' || (echo 'Please install Go version 1.17.5' && false)
+	@go version | grep ' go1\.18\.0 ' || (echo 'Please install Go version 1.18.0' && false)
 
 # This "TURBO_RACE" variable exists at the request of a user on GitHub who
 # wants to run "make test" on an unsupported version of macOS (version 10.9).

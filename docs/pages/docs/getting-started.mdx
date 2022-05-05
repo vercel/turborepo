@@ -7,7 +7,9 @@ import Callout from "../../components/callout";
 import Beta from "../../components/beta";
 import { Tabs, Tab } from '../../components/Tabs'
 
-# Getting Started with Turborepo
+# Getting started with Turborepo
+
+Turborepo is a blazing fast build system for JavaScript/TypeScript monorepos: codebases containing multiple projects, often using multiple frameworks, in a single unified code repository. Implement Turborepo to your project incrementally to gain the benefits of Turborepo at your own pace.
 
 ## Clone an example or starter monorepo
 
@@ -56,7 +58,7 @@ Ensure that you have specified all `workspaces` in your root `package.json` like
 
   </Tab>
   <Tab>
-<div/>    
+<div/>
 Ensure that you have specified all `workspaces` in your root `package.json` like so:
 
 ```json filename="package.json"
@@ -90,7 +92,7 @@ Now re-run your NPM client's install command just to be sure.
 
 Add `turbo` as a development dependency in the root of your project.
 
-<Tabs items={['NPM', 'Yarn', 'PNPM']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
     npm install turbo -D
@@ -185,7 +187,7 @@ npx turbo run build test lint deploy
 
 Turborepo will then efficiently schedule execution minimizing idle CPUs.
 
-See the [`pipeline`](./features/pipelines) documentation for more details on how to configure your `pipeline`.
+See the [`Pipelines`](./core-concepts/pipelines) documentation for more details on how to configure your pipeline.
 
 ### Edit `.gitignore`
 
@@ -219,6 +221,8 @@ Add or update `scripts` in your root `package.json` to call `turbo` scripts.
   }
 }
 ```
+
+Now re-run your npm client's install command just to be sure. You should be good to go now.
 
 ## Run stuff!
 

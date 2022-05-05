@@ -29,7 +29,7 @@ Not only is hashing faster in v0.4.0, but also _a lot_ smarter.
 
 The major change is that `turbo` no longer includes the hash of the contents of the root lockfile in its hasher (the algorithm responsible for determining if a given task exists in the cache or needs to be executed). Instead, `turbo` now hashes the set of the resolved versions of a package's `dependencies` and `devDependencies` based on the root lockfile.
 
-The old behavior would explode the cache whenever the root lockfile changed in any way. With this new behavior, changing the lockfile will only bust the cache for those package's impacted by the added/changed/removed dependencies. While this sounds complicated, again all it means is that when you install/remove/update dependencies from NPM, only those packages that are actually impacted by the changes will need to be rebuilt.
+The old behavior would explode the cache whenever the root lockfile changed in any way. With this new behavior, changing the lockfile will only bust the cache for those package's impacted by the added/changed/removed dependencies. While this sounds complicated, again all it means is that when you install/remove/update dependencies from npm, only those packages that are actually impacted by the changes will need to be rebuilt.
 
 ## Experimental: Pruned Workspaces
 
@@ -119,13 +119,13 @@ So what exactly is the output of the `turbo prune`? A folder called `out` with t
 - A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target
 - A _new_ pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
 
-Thanks to the above, Docker can now be set up to only rebuild each application when there is a real reason to do so. So `frontend` will only rebuild when its source or dependencies (either internal or from NPM) have actually changed. Same same for `admin` and `backend`. Changes to `ui`, either to its source code or dependencies, will trigger rebuilds of both `frontend` and `admin`, but _not_ `backend`.
+Thanks to the above, Docker can now be set up to only rebuild each application when there is a real reason to do so. So `frontend` will only rebuild when its source or dependencies (either internal or from npm) have actually changed. Same same for `admin` and `backend`. Changes to `ui`, either to its source code or dependencies, will trigger rebuilds of both `frontend` and `admin`, but _not_ `backend`.
 
 While this example seems trivial, just imagine if each app takes up to 20 minutes to build and deploy. These savings really start to add up quickly, especially on large teams.
 
 ## Pipelines
 
-To give you even more control over your Turborepo, we've added `pipeline` to `turbo`'s configuration. This new field in lets you specify how the NPM scripts in your monorepo relate to each other as well as some additional per-task options. `turbo` then uses this information to optimally schedule your tasks in your monorepo, collapsing waterfalls that would otherwise exist.
+To give you even more control over your Turborepo, we've added `pipeline` to `turbo`'s configuration. This new field in lets you specify how the npm scripts in your monorepo relate to each other as well as some additional per-task options. `turbo` then uses this information to optimally schedule your tasks in your monorepo, collapsing waterfalls that would otherwise exist.
 
 Here's how it works:
 
