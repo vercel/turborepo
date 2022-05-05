@@ -3,10 +3,12 @@ package fs
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 )
@@ -113,6 +115,22 @@ func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]stri
 	return result, nil
 }
 
+// threadsafeBufferWriter is a wrapper around a byte buffer and a lock, allowing
+// multiple goroutines to write to the same buffer. No attempt is made to
+// lock around reading, which should only be done once no more writing will occur.
+type threadsafeBufferWriter struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (tsbw *threadsafeBufferWriter) Write(p []byte) (int, error) {
+	tsbw.mu.Lock()
+	defer tsbw.mu.Unlock()
+	return tsbw.buffer.Write(p)
+}
+
+var _ io.Writer = (*threadsafeBufferWriter)(nil)
+
 // gitHashForFiles a list of files returns a map of with their git hash values. It uses
 // git hash-object under the hood.
 // Note that filesToHash must have full paths.
@@ -122,15 +140,28 @@ func gitHashForFiles(filesToHash []string) (map[string]string, error) {
 		input := []string{"hash-object"}
 		input = append(input, filesToHash...)
 		cmd := exec.Command("git", input...)
-		// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
-		out, err := cmd.CombinedOutput()
+		// exec.Command writes to stdout and stderr from different goroutines,
+		// but only if they aren't the same io.Writer. Since we're passing different
+		// io.Writer instances that can optionally write to the same buffer, we need
+		// to do the locking ourselves.
+		var allout threadsafeBufferWriter
+		var stdout bytes.Buffer
+		// write stdout to both the stdout buffer, and the combined output buffer
+		// we don't expect to need stderr, but in the event that something goes wrong,
+		// we'd like to report the entirety of the output in the order it was output.
+		mw := io.MultiWriter(&allout, &stdout)
+		cmd.Stdout = mw
+		cmd.Stderr = &allout
+		err := cmd.Run()
 		if err != nil {
-			return nil, fmt.Errorf("git hash-object exited with status: %w", err)
+			output := string(allout.buffer.Bytes())
+			return nil, fmt.Errorf("git hash-object exited with status: %w. Output:\n%v", err, output)
 		}
-		offByOne := strings.Split(string(out), "\n") // there is an extra ""
+		offByOne := strings.Split(string(stdout.Bytes()), "\n") // there is an extra ""
 		hashes := offByOne[:len(offByOne)-1]
 		if len(hashes) != len(filesToHash) {
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes", len(filesToHash), len(hashes))
+			output := string(allout.buffer.Bytes())
+			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes. Full output:\n%v", len(filesToHash), len(hashes), output)
 		}
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
