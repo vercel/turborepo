@@ -68,12 +68,12 @@ func CopyFile(from string, to string, mode os.FileMode) error {
 		return err
 	}
 	defer fromFile.Close()
-	return WriteFile(fromFile, to, mode)
+	return writeFileFromStream(fromFile, to, mode)
 }
 
-// WriteFile writes data from a reader to the file named 'to', with an attempt to perform
+// writeFileFromStream writes data from a reader to the file named 'to', with an attempt to perform
 // a copy & rename to avoid chaos if anything goes wrong partway.
-func WriteFile(fromFile io.Reader, to string, mode os.FileMode) error {
+func writeFileFromStream(fromFile io.Reader, to string, mode os.FileMode) error {
 	dir, file := filepath.Split(to)
 	if dir != "" {
 		if err := os.MkdirAll(dir, DirPermissions); err != nil {
