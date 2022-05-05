@@ -206,7 +206,7 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve packages to run: %v", err))
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
@@ -1019,7 +1019,12 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
 
-		filesToBeCached, err := globby.GlobFiles(filepath.Join(e.rs.Opts.cwd, pt.pkg.Dir), outputs, ignore)
+		repoRelativeGlobs := make([]string, len(outputs))
+		for index, output := range outputs {
+			repoRelativeGlobs[index] = filepath.Join(pt.pkg.Dir, output)
+		}
+
+		filesToBeCached, err := globby.GlobFiles(e.rs.Opts.cwd, repoRelativeGlobs, ignore)
 		if err != nil {
 			return err
 		}

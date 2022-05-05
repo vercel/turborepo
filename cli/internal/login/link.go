@@ -54,8 +54,10 @@ type linkAPIClient interface {
 func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 	var dontModifyGitIgnore bool
 	cmd := &cobra.Command{
-		Use:   "turbo link",
-		Short: "Link your local directory to a Vercel organization and enable remote caching.",
+		Use:           "turbo link",
+		Short:         "Link your local directory to a Vercel organization and enable remote caching.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			link := &link{
 				ui:                  ui,
