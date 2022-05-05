@@ -1,6 +1,7 @@
 package packagemanager
 
 import (
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
@@ -256,13 +257,19 @@ func Test_GetWorkspaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotWorkspaces, err := tt.pm.GetWorkspaces(tt.rootPath)
+
+			gotToSlash := make([]string, len(gotWorkspaces))
+			for index, workspace := range gotWorkspaces {
+				gotToSlash[index] = filepath.ToSlash(workspace)
+			}
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetWorkspaces() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			sort.Strings(gotWorkspaces)
-			if !reflect.DeepEqual(gotWorkspaces, tt.want) {
-				t.Errorf("GetWorkspaces() = %v, want %v", gotWorkspaces, tt.want)
+			sort.Strings(gotToSlash)
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("GetWorkspaces() = %v, want %v", gotToSlash, tt.want)
 			}
 		})
 	}
@@ -298,12 +305,18 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotWorkspaceIgnores, err := tt.pm.GetWorkspaceIgnores(tt.rootPath)
+
+			gotToSlash := make([]string, len(gotWorkspaceIgnores))
+			for index, ignore := range gotWorkspaceIgnores {
+				gotToSlash[index] = filepath.ToSlash(ignore)
+			}
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetWorkspaceIgnores() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotWorkspaceIgnores, tt.want) {
-				t.Errorf("GetWorkspaceIgnores() = %v, want %v", gotWorkspaceIgnores, tt.want)
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("GetWorkspaceIgnores() = %v, want %v", gotToSlash, tt.want)
 			}
 		})
 	}
