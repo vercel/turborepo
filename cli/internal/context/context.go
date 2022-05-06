@@ -163,7 +163,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		// We will parse all package.json's simultaneously. We use a
 		// wait group because we cannot fully populate the graph (the next step)
 		// until all parsing is complete
-		parseJSONWaitGroup := new(errgroup.Group)
+		parseJSONWaitGroup := &errgroup.Group{}
 		for _, workspace := range workspaces {
 			relativePkgPath, err := filepath.Rel(rootpath, workspace)
 			if err != nil {
@@ -177,7 +177,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 		if err := parseJSONWaitGroup.Wait(); err != nil {
 			return err
 		}
-		populateGraphWaitGroup := new(errgroup.Group)
+		populateGraphWaitGroup := &errgroup.Group{}
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
 			populateGraphWaitGroup.Go(func() error {
