@@ -1,5 +1,5 @@
 ---
-title: Getting Started
+title: Getting Started with Turborepo
 description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
@@ -7,16 +7,17 @@ import Callout from "../../components/callout";
 import Beta from "../../components/beta";
 import { Tabs, Tab } from '../../components/Tabs'
 
-# Getting started with Turborepo
+# Overview
 
-Turborepo is a build system for JavaScript/TypeScript monorepos: codebases containing multiple projects, often using multiple frameworks, in a single unified code repository. You can adopt Turborepo to your project incrementally to gain the benefits of Turborepo at your own pace.
+Turborepo is a build system for JavaScript and TypeScript monorepos: codebases containing multiple projects, often using multiple frameworks, in a single unified code repository. Monorepos have many advantages, but they require appropriate tooling in order to scale. Turborepo leverages advanced build system ideas and techniques to speed up development, without the configuration and complexity. By abstracting the configurations, scripts, and tooling, Turborepo allows you to start shipping fast.
 
-Turborepo is designed to integrate incrementally into new and existing projects. To create a new monorepo, you can get started with:
+You can incrementally adopt Turborepo for new and existing projects. To create a new monorepo, get started with:
 
 ```sh
 npx create-turbo@latest
 ```
-You can also clone a Turborepo starter repository to get a head start on your project. To see Turborepo examples and starter, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turborepo/blob/main/examples).
+
+You can also clone a Turborepo starter repository to get a head start on your project. To see Turborepo examples and starters, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turborepo/blob/main/examples).
 
 ## Add Turborepo to your existing monorepo
 
@@ -31,7 +32,7 @@ You can also clone a Turborepo starter repository to get a head start on your pr
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces,  way of managing multiple packages from within a single root package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
+`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single root package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
 
 You can configure workspaces whatever way you want, but a common example folder structure is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
@@ -78,7 +79,7 @@ packages:
 After configuring your workspaces, re-run your package manager's `install` command.
 
 <Callout>
-  Note: Nested workspaces are not supported. You can flatten your workspaces as a workaround.
+  Note: Nested workspaces are not supported. As package names are required to be unique, moving each package to be a child of the root package should meet your needs.
 </Callout>
 
 ## Install `turbo`
@@ -120,11 +121,11 @@ If your git repo's base branch is not `origin/master`, then you need to specify 
 
 ## Create a `pipeline`
 
-To define your project's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of your project. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the `package.json` scripts defined in all of your workspaces in your monorepo.
+To define your project's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of your project. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
 
 Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./features/caching). For more information on configuring your pipeline, see the [`Pipelines`](./core-concepts/pipelines) documentation.
 
-Packages that do not have have this script defined in their `package.json`'s list of `scripts` will be ignored and skipped over during `turbo run`.
+Packages that do not have the specified script defined in their `package.json`'s list of `scripts` will be ignored by `turbo`.
 
 ```jsonc filename="./turbo.json"
 {
@@ -132,9 +133,9 @@ Packages that do not have have this script defined in their `package.json`'s lis
   "pipeline": {
     "build": {
       // A package's `build` script depends on that package's
-      // topological dependencies' and devDependencies'
+      // dependencies' and devDependencies'
       // `build` tasks  being completed first
-      // (that's what the `^` symbol signifies).
+      // (the `^` symbol signifies `upstream`).
       "dependsOn": ["^build"],
       // note: output globs are relative to each package's `package.json`
       // (and not the monorepo root)
@@ -167,18 +168,18 @@ Packages that do not have have this script defined in their `package.json`'s lis
 
 The rough execution order for a given package based on the `dependsOn` keys:
 
-1. `build` once its dependencies have run their `build` commands
-2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs)
-3. `lint` can run whenever and has no filesystem outputs (just logs)
-4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished, no outputs
+1. `build` once its upstream dependencies have run their `build` commands
+2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs) within a package
+3. `lint` runs in an arbitrary order as it has no upstream dependencies
+4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished.
 
 After execution, the full pipline can run:
 
-```bash
+```sh
 npx turbo run build test lint deploy
 ```
 
-Turborepo will then efficiently schedule execution minimizing idle CPUs.
+`turbo` will then schedule execution of each the tasks to optimize usage of the machine's resources.
 
 ## Edit `.gitignore`
 
@@ -196,7 +197,7 @@ Make sure that your task artifacts, the files and folders you want cached, are a
 + .next/**
 ```
 
-Re-run your npm client's install command to check your configuration.
+Re-run your npm client's `install` command to check your configuration.
 
 ## Create `package.json` scripts
 
@@ -238,6 +239,7 @@ Depending on your monorepo setup, some artifacts might already be caching proper
 ## Configure Remote Caching <Beta/>
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
+
 At the moment, Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
 
 > Remote Caching has entered the chat.
