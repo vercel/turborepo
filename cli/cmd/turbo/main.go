@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/cmd/auth"
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/login"
@@ -88,7 +89,7 @@ func main() {
 			return &login.LinkCommand{Config: cf, Ui: ui}, nil
 		},
 		"unlink": func() (cli.Command, error) {
-			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
+			return &auth.UnlinkCommand{Config: cf, UI: ui}, nil
 		},
 		"login": func() (cli.Command, error) {
 			return &login.LoginCommand{Config: cf, UI: ui}, nil
