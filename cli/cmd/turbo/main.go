@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -10,6 +11,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
 	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/daemon"
 	"github.com/vercel/turborepo/cli/internal/login"
 	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
@@ -49,6 +51,7 @@ func main() {
 		}
 	}
 	args = args[:argsEnd]
+	ctx := context.Background()
 
 	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
@@ -77,7 +80,7 @@ func main() {
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
-			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes},
+			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes, Ctx: ctx},
 				nil
 		},
 		"prune": func() (cli.Command, error) {
@@ -97,6 +100,9 @@ func main() {
 		},
 		"bin": func() (cli.Command, error) {
 			return &info.BinCommand{Config: cf, UI: ui}, nil
+		},
+		"daemon": func() (cli.Command, error) {
+			return &daemon.Command{Config: cf, UI: ui}, nil
 		},
 	}
 

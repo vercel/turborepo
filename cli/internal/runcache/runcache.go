@@ -47,6 +47,7 @@ type Opts struct {
 	CacheHitLogsMode  LogsMode
 	CacheMissLogsMode LogsMode
 	LogReplayer       LogReplayer
+	OutputWatcher     OutputWatcher
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
@@ -125,6 +126,7 @@ type RunCache struct {
 	writesDisabled    bool
 	repoRoot          fs.AbsolutePath
 	logReplayer       LogReplayer
+	outputWatcher     OutputWatcher
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
@@ -137,9 +139,13 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 		writesDisabled:    opts.SkipWrites,
 		repoRoot:          repoRoot,
 		logReplayer:       opts.LogReplayer,
+		outputWatcher:     opts.OutputWatcher,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
+	}
+	if rc.outputWatcher == nil {
+		rc.outputWatcher = &NoOpOutputWatcher{}
 	}
 	return rc
 }
@@ -164,9 +170,20 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 		}
 		return false, nil
 	}
-	// TODO(gsoltis): check if we need to restore goes here
-	// That will be an opportunity to prune down the set of outputs as well
-	hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, tc.repoRelativeGlobs)
+	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(tc.hash, tc.repoRelativeGlobs)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
+		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
+		changedOutputGlobs = tc.repoRelativeGlobs
+	}
+	if len(changedOutputGlobs) == 0 {
+		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+		return true, nil
+	}
+
+	// Note that we currently don't use the output globs when restoring, but we could in the
+	// future to avoid doing unnecessary file I/O
+	hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
 	if err != nil {
 		return false, err
 	} else if !hit {
@@ -174,6 +191,11 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 			terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
+	}
+	if err = tc.rc.outputWatcher.NotifyOutputsWritten(tc.hash, tc.repoRelativeGlobs); err != nil {
+		// Don't fail the whole operation just because we failed to watch the outputs
+		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
+		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 	}
 	switch tc.rc.cacheHitLogsMode {
 	case HashLogs:
@@ -272,7 +294,17 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 		relativePaths[index] = relativePath
 	}
 
-	return tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths)
+	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths); err != nil {
+		return err
+	}
+	err = tc.rc.outputWatcher.NotifyOutputsWritten(tc.hash, tc.repoRelativeGlobs)
+	if err != nil {
+		// Don't fail the cache write because we also failed to record it, we will just do
+		// extra I/O in the future restoring files that haven't changed from cache
+		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
+		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+	}
+	return nil
 }
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific

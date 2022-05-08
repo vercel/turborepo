@@ -3,6 +3,15 @@ package util
 // Set is a set data structure.
 type Set map[interface{}]interface{}
 
+// SetFromStrings creates a Set containing the strings from the given slice
+func SetFromStrings(sl []string) Set {
+	set := make(Set, len(sl))
+	for _, item := range sl {
+		set.Add(item)
+	}
+	return set
+}
+
 // Hashable is the interface used by set to get the hash code of a value.
 // If this isn't given, then the value of the item being added to the set
 // itself is used as the comparison value.

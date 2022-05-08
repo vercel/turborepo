@@ -22,6 +22,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/core"
+	"github.com/vercel/turborepo/cli/internal/daemon"
+	"github.com/vercel/turborepo/cli/internal/daemonclient"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/nodes"
@@ -48,6 +50,7 @@ type RunCommand struct {
 	Config    *config.Config
 	Ui        *cli.ColoredUi
 	Processes *process.Manager
+	Ctx       gocontext.Context
 }
 
 // completeGraph represents the common state inferred from the filesystem and pipeline.
@@ -151,11 +154,13 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 	if !config.IsLoggedIn() {
 		opts.cacheOpts.SkipRemote = true
 	}
+	ctx := gocontext.Background()
 	return &run{
 		opts:      opts,
 		config:    config,
 		ui:        output,
 		processes: processes,
+		ctx:       ctx,
 	}
 }
 
@@ -192,6 +197,7 @@ type run struct {
 	config    *config.Config
 	ui        cli.Ui
 	processes *process.Manager
+	ctx       gocontext.Context
 }
 
 func (r *run) run(targets []string) error {
@@ -199,6 +205,15 @@ func (r *run) run(targets []string) error {
 	ctx, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
+	}
+	turbodClient, err := daemon.GetClient(r.ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
+	if err != nil {
+		r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+	} else {
+		defer func() { _ = turbodClient.Close() }()
+		r.config.Logger.Debug("running in daemon mode")
+		daemonClient := daemonclient.New(r.ctx, turbodClient)
+		r.opts.runcacheOpts.OutputWatcher = daemonClient
 	}
 
 	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
@@ -563,14 +578,13 @@ func hasGraphViz() bool {
 }
 
 func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
-	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
 		analyticsSink = r.config.ApiClient
 	} else {
 		analyticsSink = analytics.NullSink
 	}
-	analyticsClient := analytics.NewClient(goctx, analyticsSink, r.config.Logger.Named("analytics"))
+	analyticsClient := analytics.NewClient(r.ctx, analyticsSink, r.config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
