@@ -17,7 +17,7 @@ Turborepo is compatible with three package managers, [npm](https://docs.npmjs.co
 
 To use workspaces, you'll first need to declare their file system locations to your package manager
 
-A common pattern is to have an `apps` folder and a `packages` folder. The `apps` folder can contain workspaces for launchable apps, such as a `next.js` app. The `packages` folder can contain workspaces for packages that are used by either an app or another package.
+A convention is to have an `apps` folder and a `packages` folder. The `apps` folder can contain workspaces for launchable apps, such as a Next.js or Svelte app. The `packages` folder can contain workspaces for packages that are used by either an app, or another package.
 
 You should consider how to name your workspace in a monorepo, since this will be different than working in single repositories. To avoid npm naming collisions, you can use the name of the monorepo and name of the workspace, separated by a slash and preceded by an `@`. For example, `@todolist/api`.
 
