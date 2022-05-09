@@ -33,6 +33,7 @@ func (c *LogoutCommand) Help() string {
 func (c *LogoutCommand) Run(args []string) int {
 	cmd := LogoutCmd(c)
 
+	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 	cmd.CompletionOptions.DisableDefaultCmd = true
 
@@ -51,8 +52,8 @@ func (c *LogoutCommand) Run(args []string) int {
 	return 1
 }
 
-// LogError prints an error to the UI and returns a formatted error
-func (c *LogoutCommand) LogError(format string, args ...interface{}) error {
+// logError prints an error to the UI and returns a formatted error
+func (c *LogoutCommand) logError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	c.Config.Logger.Error("error", err)
 	c.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
@@ -66,7 +67,7 @@ func LogoutCmd(ch *LogoutCommand) *cobra.Command {
 		Short: "Logout of your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.DeleteUserConfigFile(ch.Config.Fs); err != nil {
-				return ch.LogError("could not logout. Something went wrong: %w", err)
+				return ch.logError("could not logout. Something went wrong: %w", err)
 			}
 
 			ch.UI.Info(util.Sprintf("${GREY}>>> Logged out${RESET}"))
