@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/afero"
+	"github.com/vercel/turborepo/cli/internal/cmd/info"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/info"
 	"github.com/vercel/turborepo/cli/internal/login"
 	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
@@ -21,6 +20,7 @@ import (
 	"github.com/fatih/color"
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
+	"github.com/spf13/afero"
 )
 
 func main() {
@@ -97,7 +97,7 @@ func main() {
 			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
 		},
 		"bin": func() (cli.Command, error) {
-			return &info.BinCommand{Config: cf, Ui: ui}, nil
+			return &info.BinCommand{Config: cf, UI: ui}, nil
 		},
 	}
 

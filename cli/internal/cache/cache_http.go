@@ -88,7 +88,7 @@ func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
 	for _, file := range files {
 		// log.Printf("caching file %v", file)
 		if err := cache.storeFile(tw, file); err != nil {
-			log.Printf("[ERROR] Error uploading artifacts to HTTP cache: %s", err)
+			log.Printf("[ERROR] Error uploading artifact %s to HTTP cache due to: %s", file, err)
 			// TODO(jaredpalmer): How can we cancel the request at this point?
 		}
 	}
