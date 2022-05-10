@@ -7,6 +7,8 @@ import (
 	"github.com/pyr-sh/dag"
 )
 
+// ValidateGraph checks that a given DAG has no cycles and no self-referential edges.
+// We differ from the underlying DAG Validate method in that we allow multiple roots.
 func ValidateGraph(graph *dag.AcyclicGraph) error {
 	// We use Cycles instead of Validate because
 	// our DAG has multiple roots (entrypoints).
