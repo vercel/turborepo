@@ -76,7 +76,7 @@ func (c *LoginCommand) Run(args []string) int {
 			if ssoTeam != "" {
 				err := login.loginSSO(c.Config, ssoTeam)
 				if err != nil {
-					if errors.Is(err, errUserCanceled) {
+					if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
 						c.UI.Info("Canceled. Turborepo not set up.")
 					} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
 						c.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
@@ -88,7 +88,11 @@ func (c *LoginCommand) Run(args []string) int {
 			} else {
 				err := login.run(c.Config)
 				if err != nil {
-					login.logError(err)
+					if errors.Is(err, context.Canceled) {
+						c.UI.Info("Canceled. Turborepo not set up.")
+					} else {
+						login.logError(err)
+					}
 					return err
 				}
 			}
