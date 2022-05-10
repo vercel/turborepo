@@ -95,7 +95,7 @@ func main() {
 			return &login.LoginCommand{Config: cf, UI: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
-			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
+			return &auth.LogoutCommand{Config: cf, UI: ui}, nil
 		},
 		"bin": func() (cli.Command, error) {
 			return &info.BinCommand{Config: cf, UI: ui}, nil
