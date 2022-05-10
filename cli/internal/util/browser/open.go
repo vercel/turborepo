@@ -32,9 +32,6 @@ func OpenBrowser(url string) error {
 
 func posixBinExists(bin string) bool {
 	err := exec.Command("which", bin).Run()
-	if err != nil {
-		// we mostly don't care what the error is, it suggests the binary is not usable
-		return false
-	}
-	return true
+	// we mostly don't care what the error is, it suggests the binary is not usable
+	return err == nil
 }
