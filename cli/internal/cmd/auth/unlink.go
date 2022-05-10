@@ -33,6 +33,7 @@ func (c *UnlinkCommand) Help() string {
 func (c *UnlinkCommand) Run(args []string) int {
 	cmd := UnlinkCmd(c)
 
+	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 	cmd.CompletionOptions.DisableDefaultCmd = true
 
@@ -51,8 +52,8 @@ func (c *UnlinkCommand) Run(args []string) int {
 	return 1
 }
 
-// LogError prints an error to the UI and returns a formatted error
-func (c *UnlinkCommand) LogError(format string, args ...interface{}) error {
+// logError prints an error to the UI and returns a formatted error
+func (c *UnlinkCommand) logError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 	c.Config.Logger.Error("error", err)
 	c.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
@@ -66,7 +67,7 @@ func UnlinkCmd(ch *UnlinkCommand) *cobra.Command {
 		Short: "Unlink the current directory from your Vercel organization and disable Remote Caching (beta)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.WriteRepoConfigFile(ch.Config.Fs, ch.Config.Cwd, &config.TurborepoConfig{}); err != nil {
-				return ch.LogError("could not unlink. Something went wrong: %w", err)
+				return ch.logError("could not unlink. Something went wrong: %w", err)
 			}
 
 			ch.UI.Output(util.Sprintf("${GREY}> Disabled Remote Caching${RESET}"))
