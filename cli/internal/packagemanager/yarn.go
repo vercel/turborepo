@@ -18,7 +18,7 @@ var nodejsYarn = PackageManager{
 	Lockfile:   "yarn.lock",
 	PackageDir: "node_modules",
 
-	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+	getWorkspaceGlobs: func(rootpath string) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
@@ -27,6 +27,28 @@ var nodejsYarn = PackageManager{
 			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
 		}
 		return pkg.Workspaces, nil
+	},
+
+	getWorkspaceIgnores: func(pm PackageManager, rootpath string) ([]string, error) {
+		// function: https://github.com/yarnpkg/yarn/blob/3119382885ea373d3c13d6a846de743eca8c914b/src/config.js#L799
+
+		// Yarn is unique in ignore patterns handling.
+		// The only time it does globbing is for package.json or yarn.json and it scopes the search to each workspace.
+		// For example: `apps/*/node_modules/**/+(package.json|yarn.json)`
+		// The `extglob` `+(package.json|yarn.json)` (from micromatch) after node_modules/** is redundant.
+
+		globs, err := pm.getWorkspaceGlobs(rootpath)
+		if err != nil {
+			return nil, err
+		}
+
+		ignores := make([]string, len(globs))
+
+		for i, glob := range globs {
+			ignores[i] = filepath.Join(glob, "/node_modules/**")
+		}
+
+		return ignores, nil
 	},
 
 	// Versions older than 2.0 are yarn, after that they become berry
@@ -48,7 +70,7 @@ var nodejsYarn = PackageManager{
 	},
 
 	// Detect for yarn needs to identify which version of yarn is running on the system.
-	Detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
+	detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 
