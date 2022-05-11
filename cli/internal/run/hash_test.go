@@ -22,6 +22,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
+	repoRoot := fs.UnsafeToAbsolutePath(root)
 	pkgName := "libA"
 	type fileHash struct {
 		contents string
@@ -85,7 +86,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
 	}
-	hashes, err := manuallyHashPackage(pkg, []string{}, root)
+	hashes, err := manuallyHashPackage(pkg, []string{}, repoRoot)
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -111,7 +112,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, root)
+	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, repoRoot)
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}

@@ -36,7 +36,7 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
+func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
 	// Add all the checked in hashes.
 	// TODO(gsoltis): are these platform-dependent paths?
 	var result map[string]string
@@ -47,7 +47,7 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 		}
 		result = parseGitLsTree(gitLsOutput)
 	} else {
-		gitLsOutput, err := gitLsFiles(p.PackagePath, p.GitPath, p.InputPatterns)
+		gitLsOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.GitPath, p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -195,10 +195,10 @@ func gitLsTree(path string, gitPath string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func gitLsFiles(path string, gitPath string, patterns []string) (string, error) {
+func gitLsFiles(path AbsolutePath, gitPath string, patterns []string) (string, error) {
 	cmd := exec.Command("git", "ls-files", "-s", "--")
 	cmd.Args = append(cmd.Args, patterns...)
-	cmd.Dir = path
+	cmd.Dir = path.ToString()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)

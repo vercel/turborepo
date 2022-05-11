@@ -66,13 +66,13 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, rootPath string) (string, error) {
-	hashObject, pkgDepsErr := fs.GetPackageDeps(&fs.PackageDepsOptions{
+func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) (string, error) {
+	hashObject, pkgDepsErr := fs.GetPackageDeps(repoRoot, &fs.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
 	})
 	if pkgDepsErr != nil {
-		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, rootPath)
+		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, repoRoot)
 		if err != nil {
 			return "", err
 		}
@@ -85,16 +85,16 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, rootPath string) (string, 
 	return hashOfFiles, nil
 }
 
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath string) (map[string]string, error) {
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[string]string, error) {
 	hashObject := make(map[string]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
-	ignore, err := safeCompileIgnoreFile(filepath.Join(rootPath, ".gitignore"))
+	ignore, err := safeCompileIgnoreFile(rootPath.Join(".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(filepath.Join(rootPath, pkg.Dir, ".gitignore"))
+	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir, ".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath string) 
 		includePattern = "{" + strings.Join(inputs, ",") + "}"
 	}
 
-	pathPrefix := filepath.Join(rootPath, pkg.Dir)
+	pathPrefix := rootPath.Join(pkg.Dir).ToString()
 	toTrim := filepath.FromSlash(pathPrefix + "/")
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		rootMatch := ignore.MatchesPath(name)
@@ -138,7 +138,7 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, rootPath string) error {
+func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot fs.AbsolutePath) error {
 	hashTasks := make(util.Set)
 	for _, v := range allTasks {
 		taskID, ok := v.(string)
@@ -172,7 +172,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 				if !ok {
 					return fmt.Errorf("cannot find package %v", ht.pkg)
 				}
-				hash, err := ht.hash(pkg, rootPath)
+				hash, err := ht.hash(pkg, repoRoot)
 				if err != nil {
 					return err
 				}
