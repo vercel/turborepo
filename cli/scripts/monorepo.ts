@@ -246,7 +246,7 @@ fs.copyFileSync(
     return execa.sync("git", ["checkout", "-B", branch], { cwd: this.root });
   }
 
-  commitFiles(files, options: { executable: boolean } = { executable: false }) {
+  modifyFiles(files: { [filename: string]: string }) {
     for (const [file, contents] of Object.entries(files)) {
       let out = "";
       if (typeof contents !== "string") {
@@ -265,16 +265,11 @@ fs.copyFileSync(
       }
 
       fs.writeFileSync(fullPath, out);
-
-      if (options.executable) {
-        fs.chmodSync(
-          this.subdir != null
-            ? path.join(this.root, this.subdir, file)
-            : path.join(this.root, file),
-          fs.constants.S_IXUSR | fs.constants.S_IRUSR | fs.constants.S_IROTH
-        );
-      }
     }
+  }
+
+  commitFiles(files) {
+    this.modifyFiles(files);
     execa.sync(
       "git",
       [
