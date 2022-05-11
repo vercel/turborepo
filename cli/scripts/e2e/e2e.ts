@@ -300,6 +300,11 @@ function runSmokeTests<T>(
       );
 
       // run a task without dependencies
+
+      // ensure that uncommitted irrelevant changes are also ignored
+      repo.modifyFiles({
+        [path.join("packages", "a", "README.md")]: "important text",
+      });
       const lintOutput = getCommandOutputAsArray(
         repo.turbo(
           "run",
