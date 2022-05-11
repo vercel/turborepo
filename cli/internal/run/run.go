@@ -894,7 +894,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	var hit bool
-	if !e.rs.Opts.forceExecution {
+	// If we aren't forcing execution, and the task is not explicitly marked cache: false,
+	// then try to read from the cache first.
+	if !e.rs.Opts.forceExecution && pt.taskDefinition.ShouldCache {
 		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
