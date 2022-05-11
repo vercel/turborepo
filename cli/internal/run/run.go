@@ -241,7 +241,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		return 1
 	}
 	hashTracker := NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
-	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, rs.Opts.cwd)
+	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, c.Config.Cwd)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
 		return 1
