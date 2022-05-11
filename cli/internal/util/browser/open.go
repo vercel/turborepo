@@ -12,7 +12,11 @@ func OpenBrowser(url string) error {
 
 	switch runtime.GOOS {
 	case "linux":
-		err = exec.Command("xdg-open", url).Start()
+		if posixBinExists("wslview") {
+			err = exec.Command("wslview", url).Start()
+		} else {
+			err = exec.Command("xdg-open", url).Start()
+		}
 	case "windows":
 		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	case "darwin":
@@ -24,4 +28,10 @@ func OpenBrowser(url string) error {
 		return err
 	}
 	return nil
+}
+
+func posixBinExists(bin string) bool {
+	err := exec.Command("which", bin).Run()
+	// we mostly don't care what the error is, it suggests the binary is not usable
+	return err == nil
 }
