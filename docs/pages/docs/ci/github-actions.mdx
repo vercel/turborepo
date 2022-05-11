@@ -71,25 +71,15 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
           steps:
             - name: Check out code
-              uses: actions/checkout@v3
-
-            - name: Setup Cache
-              uses: actions/cache@v3
+              uses: actions/checkout@v2
               with:
-                path: |
-                  node_modules/.cache/turbo
-                  # if you use pnpm, uncomment the following lines
-                  # node_modules/.pnpm
-                  # ~/.pnpm-store
-                key: ${{ runner.os }}-${{ matrix.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-                restore-keys: |
-                  ${{ runner.os }}-${{ matrix.os }}-
-                  ${{ runner.os }}-
+                fetch-depth: 2
 
             - name: Setup Node.js environment
               uses: actions/setup-node@v2
               with:
                 node-version: 16
+                cache: 'npm'
 
             - name: Install dependencies
               run: npm install
