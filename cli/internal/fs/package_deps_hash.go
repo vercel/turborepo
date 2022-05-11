@@ -66,7 +66,7 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]st
 	}
 
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(p.PackagePath, p.GitPath)
+	gitStatusOutput, err := gitStatus(repoRoot.Join(p.PackagePath), p.GitPath, p.InputPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -303,15 +303,21 @@ func parseGitFilename(filename string) string {
 }
 
 // gitStatus executes "git status" in a folder
-func gitStatus(path string, gitPath string) (string, error) {
+func gitStatus(path AbsolutePath, gitPath string, inputPatterns []string) (string, error) {
 	// log.Printf("[TRACE] gitStatus start")
 	// defer log.Printf("[TRACE] gitStatus end")
 	p := "git"
 	if len(gitPath) > 0 {
 		p = gitPath
 	}
-	cmd := exec.Command(p, "status", "-s", "-u", ".")
-	cmd.Dir = path
+	cmd := exec.Command(p)
+	cmd.Args = append(cmd.Args, []string{"status", "-s", "-u"}...)
+	if len(inputPatterns) == 0 {
+		cmd.Args = append(cmd.Args, ".")
+	} else {
+		cmd.Args = append(cmd.Args, inputPatterns...)
+	}
+	cmd.Dir = path.ToString()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to read git status: %w", err)
