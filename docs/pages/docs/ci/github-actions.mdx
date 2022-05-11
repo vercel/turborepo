@@ -78,18 +78,13 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
               with:
                 path: |
                   node_modules/.cache/turbo
-                  # if you use pnpm, uncomment the following lines
-                  # node_modules/.pnpm
-                  # ~/.pnpm-store
-                key: ${{ runner.os }}-${{ matrix.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-                restore-keys: |
-                  ${{ runner.os }}-${{ matrix.os }}-
-                  ${{ runner.os }}-
+                key: turbo
 
             - name: Setup Node.js environment
               uses: actions/setup-node@v2
               with:
                 node-version: 16
+                cache: 'npm'
 
             - name: Install dependencies
               run: npm install
@@ -127,9 +122,14 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
           steps:
             - name: Check out code
-              uses: actions/checkout@v2
+              uses: actions/checkout@v3
+
+            - name: Setup Cache
+              uses: actions/cache@v3
               with:
-                fetch-depth: 2
+                path: |
+                  node_modules/.cache/turbo
+                key: turbo
 
             - name: Setup Node.js environment
               uses: actions/setup-node@v2
@@ -173,13 +173,18 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
           steps:
             - name: Check out code
-              uses: actions/checkout@v2
-              with:
-                fetch-depth: 2
+              uses: actions/checkout@v3
 
-            - uses: pnpm/action-setup@v2.0.1
+            - uses: pnpm/action-setup@v2.1.0
               with:
-                version: 6.32.2
+                version: 6.32.12
+
+            - name: Setup Cache
+              uses: actions/cache@v3
+              with:
+                path: |
+                  node_modules/.cache/turbo
+                key: turbo
 
             - name: Setup Node.js environment
               uses: actions/setup-node@v2
@@ -246,8 +251,6 @@ jobs:
 
       steps:
         - name: Check out code
-          uses: actions/checkout@v2
-          with:
-            fetch-depth: 2
+          uses: actions/checkout@v3
       # ...
 ```
