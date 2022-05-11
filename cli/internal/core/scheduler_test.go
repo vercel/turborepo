@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
@@ -23,7 +24,29 @@ func TestSchedulerDefault(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "b"))
 	g.Connect(dag.BasicEdge("c", "a"))
 
-	p := NewScheduler(&g)
+	p := NewScheduler(&g, map[interface{}]*fs.PackageJSON{
+		"a": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+		"b": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+		"c": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+	})
 	topoDeps := make(util.Set)
 	topoDeps.Add("build")
 	deps := make(util.Set)
@@ -79,12 +102,158 @@ func TestSchedulerDefault(t *testing.T) {
 	}
 }
 
+func TestSchedulerIgnoreNonexistent(t *testing.T) {
+	testCases := []struct {
+		Name     string
+		Packages []string
+		Tasks    []string
+		Expected string
+	}{
+		{
+			"test c",
+			[]string{"c"},
+			[]string{"test"},
+			`___ROOT___
+a#build
+  ___ROOT___
+b#build
+  ___ROOT___
+c#test
+  a#build
+  b#build
+`,
+		},
+		{
+			"build c",
+			[]string{"c"},
+			[]string{"build"},
+			"",
+		},
+		{
+			"build all",
+			[]string{"a", "b", "c"},
+			[]string{"build"},
+			`___ROOT___
+a#build
+  ___ROOT___
+b#build
+  ___ROOT___
+`,
+		},
+		{
+			"test all",
+			[]string{"a", "b", "c"},
+			[]string{"test"},
+			`___ROOT___
+a#build
+  ___ROOT___
+b#build
+  ___ROOT___
+b#test
+  ___ROOT___
+c#test
+  a#build
+  b#build
+`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			var g dag.AcyclicGraph
+			g.Add("a")
+			g.Add("b")
+			g.Add("c")
+			g.Connect(dag.BasicEdge("c", "b"))
+			g.Connect(dag.BasicEdge("c", "a"))
+
+			p := NewScheduler(&g, map[interface{}]*fs.PackageJSON{
+				"a": {
+					Scripts: map[string]string{
+						"build": "build-cmd",
+					},
+				},
+				"b": {
+					Scripts: map[string]string{
+						"build": "build-cmd",
+						"test":  "test-cmd",
+					},
+				},
+				"c": {
+					Scripts: map[string]string{
+						"test": "test-cmd",
+					},
+				},
+			})
+			topoDeps := make(util.Set)
+			topoDeps.Add("build")
+			deps := make(util.Set)
+			p.AddTask(&Task{
+				Name:     "build",
+				TopoDeps: topoDeps,
+				Deps:     deps,
+			})
+			p.AddTask(&Task{
+				Name:     "test",
+				TopoDeps: topoDeps,
+				Deps:     deps,
+			})
+
+			err := p.Prepare(&SchedulerExecutionOptions{
+				Packages:  tc.Packages,
+				TaskNames: tc.Tasks,
+				TasksOnly: false,
+			})
+
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+
+			errs := p.Execute(testVisitor, ExecOpts{
+				Concurrency: 10,
+			})
+
+			for _, err := range errs {
+				t.Fatalf("%v", err)
+			}
+
+			actual := strings.TrimSpace(p.TaskGraph.String())
+			//expected := strings.TrimSpace(leafStringAll)
+			expected := strings.TrimSpace(tc.Expected)
+			if actual != expected {
+				t.Fatalf("bad: \n\nactual---\n%s\n\n expected---\n%s", actual, expected)
+			}
+		})
+	}
+}
+
 func TestUnknownDependency(t *testing.T) {
 	g := &dag.AcyclicGraph{}
 	g.Add("a")
 	g.Add("b")
 	g.Add("c")
-	p := NewScheduler(g)
+	p := NewScheduler(g, map[interface{}]*fs.PackageJSON{
+		"a": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+		"b": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+		"c": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+	})
 	err := p.AddDep("unknown#custom", "build")
 	if err == nil {
 		t.Error("expected error for unknown package, got nil")
@@ -117,7 +286,44 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 
-	p := NewScheduler(graph)
+	p := NewScheduler(graph, map[interface{}]*fs.PackageJSON{
+		"app1": {
+			Scripts: map[string]string{
+				"build": "build-cmd",
+				"test":  "test-cmd",
+			},
+		},
+		"app2": {
+			Scripts: map[string]string{
+				"build": "build-cmd",
+				"test":  "test-cmd",
+			},
+		},
+		"libA": {
+			Scripts: map[string]string{
+				"build": "build-cmd",
+				"test":  "test-cmd",
+			},
+		},
+		"libB": {
+			Scripts: map[string]string{
+				"build": "build-cmd",
+				"test":  "test-cmd",
+			},
+		},
+		"libC": {
+			Scripts: map[string]string{
+				"build": "build-cmd",
+				"test":  "test-cmd",
+			},
+		},
+		"libD": {
+			Scripts: map[string]string{
+				"build": "build-cmd",
+				"test":  "test-cmd",
+			},
+		},
+	})
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 	p.AddTask(&Task{
@@ -174,7 +380,29 @@ func TestSchedulerTasksOnly(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "b"))
 	g.Connect(dag.BasicEdge("c", "a"))
 
-	p := NewScheduler(&g)
+	p := NewScheduler(&g, map[interface{}]*fs.PackageJSON{
+		"a": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+		"b": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+		"c": {
+			Scripts: map[string]string{
+				"build":   "build-cmd",
+				"test":    "test-cmd",
+				"prepare": "prepare-cmd",
+			},
+		},
+	})
 	topoDeps := make(util.Set)
 	topoDeps.Add("build")
 	deps := make(util.Set)

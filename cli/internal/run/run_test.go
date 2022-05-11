@@ -330,7 +330,14 @@ func Test_dontSquashTasks(t *testing.T) {
 		Targets:      []string{"build"},
 		Opts:         &RunOptions{},
 	}
-	engine, err := buildTaskGraph(topoGraph, pipeline, rs)
+	engine, err := buildTaskGraph(topoGraph, pipeline, rs, map[interface{}]*fs.PackageJSON{
+		"a": {
+			Scripts: map[string]string{"build": "build-command", "generate": "generate-command"},
+		},
+		"b": {
+			Scripts: map[string]string{"build": "build-command", "generate": "generate-command"},
+		},
+	})
 	if err != nil {
 		t.Fatalf("failed to build task graph: %v", err)
 	}
@@ -363,7 +370,11 @@ func Test_taskSelfRef(t *testing.T) {
 		Targets:      []string{"build"},
 		Opts:         &RunOptions{},
 	}
-	_, err := buildTaskGraph(topoGraph, pipeline, rs)
+	_, err := buildTaskGraph(topoGraph, pipeline, rs, map[interface{}]*fs.PackageJSON{
+		"a": {
+			Scripts: map[string]string{"build": "build-command"},
+		},
+	})
 	if err == nil {
 		t.Fatalf("expected to failed to build task graph: %v", err)
 	}
