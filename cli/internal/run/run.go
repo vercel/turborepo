@@ -734,9 +734,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 		}
 		command, ok := pt.pkg.Scripts[pt.task]
 		if !ok {
-			c.Config.Logger.Debug("no task in package, skipping")
-			c.Config.Logger.Debug("done", "status", "skipped")
-			return nil
+			command = "<NONEXISTENT>"
 		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
