@@ -274,7 +274,7 @@ async function run() {
     chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
   );
   console.log();
-  console.log(`We suggest that you begin by typing:`);
+  console.log(`We suggest that you login by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
     console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
