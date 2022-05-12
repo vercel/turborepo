@@ -26,6 +26,8 @@ func (ts *TargetSelector) IsValid() bool {
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
 
+var targetSelectorRegex = regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]+\})?((?:\.{3})?\[[^\]]+\])?$`)
+
 // ParseTargetSelector is a function that returns pnpm compatible --filter command line flags
 func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, error) {
 	exclude := false
@@ -52,8 +54,8 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 			selector = selector[1:]
 		}
 	}
-	regex := regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]+\})?((?:\.{3})?\[[^\]]+\])?$`)
-	matches := regex.FindAllStringSubmatch(selector, -1)
+
+	matches := targetSelectorRegex.FindAllStringSubmatch(selector, -1)
 
 	diff := ""
 	parentDir := ""
