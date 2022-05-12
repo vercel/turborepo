@@ -1,4 +1,4 @@
-package fs
+package workspace
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/encoding/lstree"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -26,28 +28,23 @@ type PackageDepsOptions struct {
 	// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
 	// containing package.json. If omitted, the default value is the current working directory.
 	PackagePath string
-	// ExcludedPaths is an optional array of file path exclusions. If a file should be omitted from the list
-	// of dependencies, use this to exclude it.
-	ExcludedPaths []string
-	// GitPath is an optional alternative path to the git installation
-	GitPath string
 
 	InputPatterns []string
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
+func GetPackageDeps(repoRoot fs.AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
 	// Add all the checked in hashes.
 	// TODO(gsoltis): are these platform-dependent paths?
 	var result map[string]string
 	if len(p.InputPatterns) == 0 {
-		gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
+		gitLsOutput, err := gitLsTree(p.PackagePath)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
-		result = parseGitLsTree(gitLsOutput)
+		result = gitLsOutput
 	} else {
-		gitLsOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.GitPath, p.InputPatterns)
+		gitLsOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -58,15 +55,8 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]st
 		result = parsedLines
 	}
 
-	if len(p.ExcludedPaths) > 0 {
-		for _, p := range p.ExcludedPaths {
-			// @todo explore optimization
-			delete(result, p)
-		}
-	}
-
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(repoRoot.Join(p.PackagePath), p.GitPath, p.InputPatterns)
+	gitStatusOutput, err := gitStatus(repoRoot.Join(p.PackagePath), p.InputPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -184,18 +174,28 @@ func UnescapeChars(in []byte) []byte {
 }
 
 // gitLsTree executes "git ls-tree" in a folder
-func gitLsTree(path string, gitPath string) (string, error) {
-
+func gitLsTree(path string) (map[string]string, error) {
 	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
 	cmd.Dir = path
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
+	out, _ := cmd.StdoutPipe()
+
+	cmd.Start()
+	reader := lstree.NewReader(out)
+	records, err := reader.ReadAll()
+	cmd.Wait()
+
+	changes := make(map[string]string, len(records))
+
+	for _, record := range records {
+		changes[record[2]] = record[3]
 	}
-	return strings.TrimSpace(string(out)), nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", err)
+	}
+	return changes, nil
 }
 
-func gitLsFiles(path AbsolutePath, gitPath string, patterns []string) (string, error) {
+func gitLsFiles(path fs.AbsolutePath, patterns []string) (string, error) {
 	cmd := exec.Command("git", "ls-files", "-s", "--")
 	cmd.Args = append(cmd.Args, patterns...)
 	cmd.Dir = path.ToString()
@@ -303,14 +303,10 @@ func parseGitFilename(filename string) string {
 }
 
 // gitStatus executes "git status" in a folder
-func gitStatus(path AbsolutePath, gitPath string, inputPatterns []string) (string, error) {
+func gitStatus(path fs.AbsolutePath, inputPatterns []string) (string, error) {
 	// log.Printf("[TRACE] gitStatus start")
 	// defer log.Printf("[TRACE] gitStatus end")
-	p := "git"
-	if len(gitPath) > 0 {
-		p = gitPath
-	}
-	cmd := exec.Command(p)
+	cmd := exec.Command("git")
 	cmd.Args = append(cmd.Args, []string{"status", "-s", "-u"}...)
 	if len(inputPatterns) == 0 {
 		cmd.Args = append(cmd.Args, ".")
