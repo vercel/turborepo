@@ -56,13 +56,16 @@ var packageManagers = []PackageManager{
 	nodejsPnpm,
 }
 
+var (
+	packageManagerPattern = `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
+	packageManagerRegex   = regexp.MustCompile(packageManagerPattern)
+)
+
 // ParsePackageManagerString takes a package manager version string parses it into consituent components
 func ParsePackageManagerString(packageManager string) (manager string, version string, err error) {
-	pattern := `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
-	re := regexp.MustCompile(pattern)
-	match := re.FindString(packageManager)
+	match := packageManagerRegex.FindString(packageManager)
 	if len(match) == 0 {
-		return "", "", fmt.Errorf("We could not parse packageManager field in package.json, expected: %s, received: %s", pattern, packageManager)
+		return "", "", fmt.Errorf("We could not parse packageManager field in package.json, expected: %s, received: %s", packageManagerPattern, packageManager)
 	}
 
 	return strings.Split(match, "@")[0], strings.Split(match, "@")[1], nil

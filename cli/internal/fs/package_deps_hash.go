@@ -206,22 +206,24 @@ func gitLsFiles(path AbsolutePath, gitPath string, patterns []string) (string, e
 	return strings.TrimSpace(string(out)), nil
 }
 
+// lsTreeRegex parses ls-tree output
+// A line is expected to look like:
+// 100644 blob 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8    src/typings/tsd.d.ts
+// 160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack
+var lsTreeRegex = regexp.MustCompile(`([0-9]{6})\s(blob|commit)\s([a-f0-9]{40})\s*(.*)`)
+
 func parseGitLsTree(output string) map[string]string {
 	changes := make(map[string]string)
 	if len(output) > 0 {
-		// A line is expected to look like:
-		// 100644 blob 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8    src/typings/tsd.d.ts
-		// 160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack
-		gitRex := regexp.MustCompile(`([0-9]{6})\s(blob|commit)\s([a-f0-9]{40})\s*(.*)`)
-		outputLines := strings.Split(output, "\n")
 
+		outputLines := strings.Split(output, "\n")
 		for _, line := range outputLines {
 			if len(line) > 0 {
-				matches := gitRex.MatchString(line)
+				matches := lsTreeRegex.MatchString(line)
 				if matches {
 					// this looks like this
 					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
-					match := gitRex.FindAllStringSubmatch(line, -1)
+					match := lsTreeRegex.FindAllStringSubmatch(line, -1)
 					if len(match[0][3]) > 0 && len(match[0][4]) > 0 {
 						hash := match[0][3]
 						filename := parseGitFilename(match[0][4])
@@ -235,18 +237,21 @@ func parseGitLsTree(output string) map[string]string {
 	return changes
 }
 
+// lsFilesRegex parses ls-files output
+// A line is expected to look like:
+// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
+// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
+var lsFilesRegex = regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+
 func parseGitLsFiles(output string) (map[string]string, error) {
 	changes := make(map[string]string)
 	if len(output) > 0 {
-		// A line is expected to look like:
-		// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
-		// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
-		gitRex := regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+
 		outputLines := strings.Split(output, "\n")
 
 		for _, line := range outputLines {
 			if len(line) > 0 {
-				match := gitRex.FindStringSubmatch(line)
+				match := lsFilesRegex.FindStringSubmatch(line)
 				// we found matches, and the slice has three parts:
 				// 0 - the whole string
 				// 1 - the hash
@@ -264,12 +269,13 @@ func parseGitLsFiles(output string) (map[string]string, error) {
 	return changes, nil
 }
 
+// If there are no double-quotes around the string, then there are no escaped characters
+// to decode, so just return
+var dubQuoteRegex = regexp.MustCompile(`^".+"$`)
+
 // Couldn't figure out how to deal with special characters. Skipping for now.
 // @todo see https://github.com/microsoft/rushstack/blob/925ad8c9e22997c1edf5fe38c53fa618e8180f70/libraries/package-deps-hash/src/getPackageDeps.ts#L19
 func parseGitFilename(filename string) string {
-	// If there are no double-quotes around the string, then there are no escaped characters
-	// to decode, so just return
-	dubQuoteRegex := regexp.MustCompile(`^".+"$`)
 	if !dubQuoteRegex.MatchString(filename) {
 		return filename
 	}
@@ -326,6 +332,8 @@ func gitStatus(path AbsolutePath, gitPath string, inputPatterns []string) (strin
 	return strings.TrimSpace(string(out)), nil
 }
 
+var gitStatusRegex = regexp.MustCompile(`("(\\"|[^"])+")|(\S+\s*)`)
+
 func parseGitStatus(output string, PackagePath string) map[string]string {
 	// log.Printf("[TRACE] parseGitStatus start")
 	// defer log.Printf("[TRACE] parseGitStatus end")
@@ -342,13 +350,13 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 		return changes
 	}
 	// log.Printf("[TRACE] parseGitStatus result: found git changes")
-	gitRex := regexp.MustCompile(`("(\\"|[^"])+")|(\S+\s*)`)
+
 	// Note: The output of git hash-object uses \n newlines regardless of OS.
 	outputLines := strings.Split(output, "\n")
 
 	for _, line := range outputLines {
 		if len(line) > 0 {
-			matches := gitRex.MatchString(line)
+			matches := gitStatusRegex.MatchString(line)
 			if matches {
 				// changeType is in the format of "XY" where "X" is the status of the file in the index and "Y" is the status of
 				// the file in the working tree. Some example statuses:
@@ -363,7 +371,7 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 
 				// Lloks like this
 				//[["?? " "" "" "?? "] ["package_deps_hash_test.go" "" "" "package_deps_hash_test.go"]]
-				match := gitRex.FindAllStringSubmatch(line, -1)
+				match := gitStatusRegex.FindAllStringSubmatch(line, -1)
 				if len(match[0]) > 1 {
 					changeType := match[0][0]
 					fileNameMatches := match[1][1:]
