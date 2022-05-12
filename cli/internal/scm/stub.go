@@ -19,8 +19,8 @@ func (s *stub) ChangesIn(diffSpec string, relativeTo string) []string {
 	return nil
 }
 
-func (s *stub) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) []string {
-	return nil
+func (s *stub) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+	return nil, nil
 }
 
 func (s *stub) IgnoreFiles(string, []string) error {

@@ -18,14 +18,14 @@ type mockSCM struct {
 	changed []string
 }
 
-func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) []string {
+func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
 	changed := []string{}
 	for _, change := range m.changed {
 		if strings.HasPrefix(change, relativeTo) {
 			changed = append(changed, change)
 		}
 	}
-	return changed
+	return changed, nil
 }
 
 func TestResolvePackages(t *testing.T) {
