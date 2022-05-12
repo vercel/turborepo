@@ -22,7 +22,7 @@ func (w *Workspace) Hash() (string, error) {
 	// - The list of files.
 	// - The sub-portion of dependencies that apply to it.
 
-	hashObject, pkgDepsErr := fs.GetPackageDeps(w.RootPath, &fs.PackageDepsOptions{
+	hashObject, pkgDepsErr := GetPackageDeps(w.RootPath, &PackageDepsOptions{
 		PackagePath:   w.SpecFile.Dir,
 		InputPatterns: []string{},
 	})
@@ -45,7 +45,7 @@ func (w *Workspace) HashSelective(patterns []string) (string, error) {
 	// We account for:
 	// - The list of files specified by the patterns.
 	// - The sub-portion of dependencies that apply to it.
-	hashObject, pkgDepsErr := fs.GetPackageDeps(w.RootPath, &fs.PackageDepsOptions{
+	hashObject, pkgDepsErr := GetPackageDeps(w.RootPath, &PackageDepsOptions{
 		PackagePath:   w.SpecFile.Dir,
 		InputPatterns: patterns,
 	})

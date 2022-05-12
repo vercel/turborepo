@@ -1,0 +1,41 @@
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**"
+      ]
+    },
+    "lint": {
+      "outputs": [],
+      "dependsOn": [
+        "$MY_VAR"
+      ],
+      "cache": true
+    },
+    "dev": {
+      "cache": false
+    },
+    "publish": {
+      "outputs": [
+        "dist/**"
+      ],
+      "inputs": [
+        "build/**/*"
+      ],
+      "dependsOn": [
+        "^publish",
+        "build",
+        "admin#lint"
+      ],
+      "cache": false
+    }
+  },
+  "remoteCache": {
+    "teamId": "team_id",
+    "signature": true
+  }
+}

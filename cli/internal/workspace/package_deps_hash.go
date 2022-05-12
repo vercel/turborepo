@@ -1,4 +1,4 @@
-package fs
+package workspace
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -31,7 +32,7 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
+func GetPackageDeps(repoRoot fs.AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
 	// Add all the checked in hashes.
 	// TODO(gsoltis): are these platform-dependent paths?
 	var result map[string]string
@@ -183,7 +184,7 @@ func gitLsTree(path string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func gitLsFiles(path AbsolutePath, patterns []string) (string, error) {
+func gitLsFiles(path fs.AbsolutePath, patterns []string) (string, error) {
 	cmd := exec.Command("git", "ls-files", "-s", "--")
 	cmd.Args = append(cmd.Args, patterns...)
 	cmd.Dir = path.ToString()
@@ -291,7 +292,7 @@ func parseGitFilename(filename string) string {
 }
 
 // gitStatus executes "git status" in a folder
-func gitStatus(path AbsolutePath, inputPatterns []string) (string, error) {
+func gitStatus(path fs.AbsolutePath, inputPatterns []string) (string, error) {
 	// log.Printf("[TRACE] gitStatus start")
 	// defer log.Printf("[TRACE] gitStatus end")
 	cmd := exec.Command("git")

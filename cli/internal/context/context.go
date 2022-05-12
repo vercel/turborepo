@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/workspace"
 
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
@@ -442,7 +443,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 	}
 
 	// No prefix, global deps already have full paths
-	globalFileHashMap, err := fs.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
+	globalFileHashMap, err := workspace.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}
