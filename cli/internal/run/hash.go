@@ -5,16 +5,14 @@ package run
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/pyr-sh/dag"
-	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/workspace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -58,78 +56,18 @@ func (pfs *packageFileSpec) ToKey() packageFileHashKey {
 	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
 }
 
-func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
-	if fs.FileExists(filepath) {
-		return gitignore.CompileIgnoreFile(filepath)
-	}
-	// no op
-	return gitignore.CompileIgnoreLines([]string{}...), nil
-}
-
 func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) (string, error) {
-	hashObject, pkgDepsErr := fs.GetPackageDeps(repoRoot, &fs.PackageDepsOptions{
-		PackagePath:   pkg.Dir,
-		InputPatterns: pfs.inputs,
-	})
-	if pkgDepsErr != nil {
-		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, repoRoot)
-		if err != nil {
-			return "", err
-		}
-		hashObject = manualHashObject
-	}
-	hashOfFiles, otherErr := fs.HashObject(hashObject)
-	if otherErr != nil {
-		return "", otherErr
-	}
-	return hashOfFiles, nil
-}
-
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[string]string, error) {
-	hashObject := make(map[string]string)
-	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-	// the directory of a package.
-	ignore, err := safeCompileIgnoreFile(rootPath.Join(".gitignore").ToString())
-	if err != nil {
-		return nil, err
+	currentWorkspace := &workspace.Workspace{
+		RootPath: repoRoot,
+		Path:     pkg.Dir,
+		SpecFile: pkg,
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir, ".gitignore").ToString())
-	if err != nil {
-		return nil, err
+	if len(pfs.inputs) > 0 {
+		return currentWorkspace.HashSelective(pfs.inputs)
 	}
 
-	includePattern := ""
-	if len(inputs) > 0 {
-		includePattern = "{" + strings.Join(inputs, ",") + "}"
-	}
-
-	pathPrefix := rootPath.Join(pkg.Dir).ToString()
-	toTrim := filepath.FromSlash(pathPrefix + "/")
-	fs.Walk(pathPrefix, func(name string, isDir bool) error {
-		rootMatch := ignore.MatchesPath(name)
-		otherMatch := ignorePkg.MatchesPath(name)
-		if !rootMatch && !otherMatch {
-			if !isDir {
-				if includePattern != "" {
-					val, err := doublestar.PathMatch(includePattern, name)
-					if err != nil {
-						return err
-					}
-					if !val {
-						return nil
-					}
-				}
-				hash, err := fs.GitLikeHashFile(name)
-				if err != nil {
-					return fmt.Errorf("could not hash file %v. \n%w", name, err)
-				}
-				hashObject[strings.TrimPrefix(name, toTrim)] = hash
-			}
-		}
-		return nil
-	})
-	return hashObject, nil
+	return currentWorkspace.Hash()
 }
 
 // packageFileHashes is a map from a package and optional input globs to the hash of
