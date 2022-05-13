@@ -218,8 +218,8 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 
 func TestGetTargetsFromArguments(t *testing.T) {
 	type args struct {
-		arguments  []string
-		configJson *fs.TurboConfigJSON
+		arguments []string
+		turboJSON *fs.TurboJSON
 	}
 	tests := []struct {
 		name    string
@@ -231,7 +231,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles one defined target",
 			args: args{
 				arguments: []string{"build"},
-				configJson: &fs.TurboConfigJSON{
+				turboJSON: &fs.TurboJSON{
 					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
@@ -246,7 +246,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles multiple targets and ignores flags",
 			args: args{
 				arguments: []string{"build", "test", "--foo", "--bar"},
-				configJson: &fs.TurboConfigJSON{
+				turboJSON: &fs.TurboJSON{
 					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
@@ -261,7 +261,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles pass through arguments after -- ",
 			args: args{
 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
-				configJson: &fs.TurboConfigJSON{
+				turboJSON: &fs.TurboJSON{
 					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
@@ -276,7 +276,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles unknown pipeline targets ",
 			args: args{
 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
-				configJson: &fs.TurboConfigJSON{
+				turboJSON: &fs.TurboJSON{
 					Pipeline: map[string]fs.TaskDefinition{
 						"build":      {},
 						"test":       {},
@@ -291,7 +291,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.configJson)
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.turboJSON)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -343,5 +343,28 @@ func Test_dontSquashTasks(t *testing.T) {
 		if _, ok := engine.Tasks[task]; !ok {
 			t.Errorf("expected to find task %v in the task graph, but it is missing", task)
 		}
+	}
+}
+
+func Test_taskSelfRef(t *testing.T) {
+	topoGraph := &dag.AcyclicGraph{}
+	topoGraph.Add("a")
+	// no dependencies between packages
+
+	pipeline := map[string]fs.TaskDefinition{
+		"build": {
+			TaskDependencies: []string{"build"},
+		},
+	}
+	filteredPkgs := make(util.Set)
+	filteredPkgs.Add("a")
+	rs := &runSpec{
+		FilteredPkgs: filteredPkgs,
+		Targets:      []string{"build"},
+		Opts:         &RunOptions{},
+	}
+	_, err := buildTaskGraph(topoGraph, pipeline, rs)
+	if err == nil {
+		t.Fatalf("expected to failed to build task graph: %v", err)
 	}
 }
