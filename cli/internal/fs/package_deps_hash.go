@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/encoding/lstree"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -40,7 +41,7 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]st
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
-		result = parseGitLsTree(gitLsOutput)
+		result = gitLsOutput
 	} else {
 		gitLsOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.InputPatterns)
 		if err != nil {
@@ -172,15 +173,26 @@ func UnescapeChars(in []byte) []byte {
 }
 
 // gitLsTree executes "git ls-tree" in a folder
-func gitLsTree(path string) (string, error) {
+func gitLsTree(path string) (map[string]string, error) {
 
 	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
 	cmd.Dir = path
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
+	out, _ := cmd.StdoutPipe()
+
+	cmd.Start()
+	reader := lstree.NewReader(out)
+	records, err := reader.ReadAll()
+	cmd.Wait()
+
+	changes := make(map[string]string, len(records))
+
+	for _, record := range records {
+		changes[record[3]] = record[2]
 	}
-	return strings.TrimSpace(string(out)), nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", err)
+	}
+	return changes, nil
 }
 
 func gitLsFiles(path AbsolutePath, patterns []string) (string, error) {
