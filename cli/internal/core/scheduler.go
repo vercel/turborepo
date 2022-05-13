@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
@@ -12,6 +13,8 @@ import (
 const ROOT_NODE_NAME = "___ROOT___"
 
 type Task struct {
+	// Name is the name of this task in the pipeline, not necessarily the command. For instance,
+	// for a package task, the name might be `b#test`, whereas for a generic task it would be `test`
 	Name string
 	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
 	Deps util.Set
@@ -29,15 +32,18 @@ type Scheduler struct {
 	// Tasks are a map of tasks in the scheduler
 	Tasks           map[string]*Task
 	PackageTaskDeps [][]string
+	// PackageInfos is a reference to the package.json for each package
+	packageInfos map[interface{}]*fs.PackageJSON
 }
 
 // NewScheduler creates a new scheduler given a topologic graph of workspace package names
-func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
+func NewScheduler(topologicalGraph *dag.AcyclicGraph, packageInfos map[interface{}]*fs.PackageJSON) *Scheduler {
 	return &Scheduler{
 		Tasks:           make(map[string]*Task),
 		TopologicGraph:  topologicalGraph,
 		TaskGraph:       &dag.AcyclicGraph{},
 		PackageTaskDeps: [][]string{},
+		packageInfos:    packageInfos,
 	}
 }
 
@@ -104,6 +110,16 @@ func (p *Scheduler) getPackageAndTask(taskID string) (string, *Task, error) {
 	return "", nil, fmt.Errorf("cannot find task for %v", taskID)
 }
 
+func (p *Scheduler) packageHasTask(taskID string) bool {
+	pkg, task := util.GetPackageTaskFromId(taskID)
+	pkgInfo, ok := p.packageInfos[pkg]
+	if !ok {
+		return false
+	}
+	_, ok = pkgInfo.Scripts[task]
+	return ok
+}
+
 func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
@@ -128,7 +144,7 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 		if err != nil {
 			return err
 		}
-		if !visited.Includes(taskId) {
+		if !visited.Includes(taskId) && p.packageHasTask(taskId) {
 			visited.Add(taskId)
 			deps := task.Deps
 

@@ -235,7 +235,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		vertexSet.Add(v)
 	}
 
-	engine, err := buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
+	engine, err := buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs, g.PackageInfos)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
@@ -256,7 +256,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 				g.TopologicalGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
+		engine, err = buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs, g.PackageInfos)
 		if err != nil {
 			c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 			return 1
@@ -334,8 +334,8 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 	return exitCode
 }
 
-func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
-	engine := core.NewScheduler(topoGraph)
+func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec, packageInfos map[interface{}]*fs.PackageJSON) (*core.Scheduler, error) {
+	engine := core.NewScheduler(topoGraph, packageInfos)
 	for taskName, taskDefinition := range pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
