@@ -10,9 +10,11 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
+    "patch-package": "^6.4.7",
     "prettier": "^2.5.1",
     "turbo": "latest"
   }
