@@ -92,8 +92,9 @@ func TestRecursiveCopyOrLinkFile(t *testing.T) {
 	dstLinkPath := filepath.Join(dst.Path(), "child", "link")
 	dstLinkDest, err := os.Readlink(dstLinkPath)
 	assert.NilError(t, err, "Readlink")
-	if dstLinkDest != "../b" {
-		t.Errorf("Readlink got %v, want ../b", dstLinkDest)
+	expectedLinkDest := filepath.FromSlash("../b")
+	if dstLinkDest != expectedLinkDest {
+		t.Errorf("Readlink got %v, want %v", dstLinkDest, expectedLinkDest)
 	}
 	dstBrokenLinkPath := filepath.Join(dst.Path(), "child", "broken")
 	brokenLinkExists := PathExists(dstBrokenLinkPath)
