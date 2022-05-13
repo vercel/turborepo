@@ -174,24 +174,36 @@ func UnescapeChars(in []byte) []byte {
 
 // gitLsTree executes "git ls-tree" in a folder
 func gitLsTree(path string) (map[string]string, error) {
-
-	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
+	cmd := exec.Command("git", "ls-tree", "HEAD", "-z", "-r")
 	cmd.Dir = path
-	out, _ := cmd.StdoutPipe()
 
-	cmd.Start()
+	out, pipeError := cmd.StdoutPipe()
+	if pipeError != nil {
+		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", pipeError)
+	}
+
+	startError := cmd.Start()
+	if startError != nil {
+		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", startError)
+	}
+
 	reader := lstree.NewReader(out)
-	records, err := reader.ReadAll()
-	cmd.Wait()
-
-	changes := make(map[string]string, len(records))
-
-	for _, record := range records {
-		changes[record[3]] = record[2]
+	entries, readErr := reader.ReadAll()
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", readErr)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", err)
+
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", waitErr)
 	}
+
+	changes := make(map[string]string, len(entries))
+
+	for _, entry := range entries {
+		changes[entry[3]] = entry[2]
+	}
+
 	return changes, nil
 }
 
@@ -204,37 +216,6 @@ func gitLsFiles(path AbsolutePath, patterns []string) (string, error) {
 		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// lsTreeRegex parses ls-tree output
-// A line is expected to look like:
-// 100644 blob 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8    src/typings/tsd.d.ts
-// 160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack
-var lsTreeRegex = regexp.MustCompile(`([0-9]{6})\s(blob|commit)\s([a-f0-9]{40})\s*(.*)`)
-
-func parseGitLsTree(output string) map[string]string {
-	changes := make(map[string]string)
-	if len(output) > 0 {
-
-		outputLines := strings.Split(output, "\n")
-		for _, line := range outputLines {
-			if len(line) > 0 {
-				matches := lsTreeRegex.MatchString(line)
-				if matches {
-					// this looks like this
-					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
-					match := lsTreeRegex.FindAllStringSubmatch(line, -1)
-					if len(match[0][3]) > 0 && len(match[0][4]) > 0 {
-						hash := match[0][3]
-						filename := parseGitFilename(match[0][4])
-						changes[filename] = hash
-					}
-					// @todo error
-				}
-			}
-		}
-	}
-	return changes
 }
 
 // lsFilesRegex parses ls-files output
