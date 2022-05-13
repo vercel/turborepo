@@ -89,7 +89,7 @@ func main() {
 			return &login.LinkCommand{Config: cf, Ui: ui}, nil
 		},
 		"unlink": func() (cli.Command, error) {
-			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
+			return &auth.UnlinkCommand{Config: cf, UI: ui}, nil
 		},
 		"login": func() (cli.Command, error) {
 			return &login.LoginCommand{Config: cf, UI: ui}, nil
