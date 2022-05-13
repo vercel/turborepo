@@ -241,7 +241,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		return 1
 	}
 	hashTracker := NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
-	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, rs.Opts.cwd)
+	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, c.Config.Cwd)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
 		return 1
@@ -734,9 +734,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 		}
 		command, ok := pt.pkg.Scripts[pt.task]
 		if !ok {
-			c.Config.Logger.Debug("no task in package, skipping")
-			c.Config.Logger.Debug("done", "status", "skipped")
-			return nil
+			command = "<NONEXISTENT>"
 		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
@@ -894,7 +892,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	var hit bool
-	if !e.rs.Opts.forceExecution {
+	// If we aren't forcing execution, and the task is not explicitly marked cache: false,
+	// then try to read from the cache first.
+	if !e.rs.Opts.forceExecution && pt.taskDefinition.ShouldCache {
 		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))

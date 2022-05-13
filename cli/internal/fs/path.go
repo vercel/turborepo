@@ -61,6 +61,12 @@ func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
 }
 
+// ToString returns the string representation of this absolute path. Used for
+// interfacing with APIs that require a string
+func (ap AbsolutePath) ToString() string {
+	return ap.asString()
+}
+
 // EnsureDirFS ensures that the directory containing the given filename is created
 func EnsureDirFS(fs afero.Fs, filename AbsolutePath) error {
 	dir := filename.Dir()

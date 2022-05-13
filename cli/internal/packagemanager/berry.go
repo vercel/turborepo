@@ -18,7 +18,7 @@ var nodejsBerry = PackageManager{
 	Lockfile:   "yarn.lock",
 	PackageDir: "node_modules",
 
-	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+	getWorkspaceGlobs: func(rootpath string) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
@@ -27,6 +27,16 @@ var nodejsBerry = PackageManager{
 			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
 		}
 		return pkg.Workspaces, nil
+	},
+
+	getWorkspaceIgnores: func(pm PackageManager, rootpath string) ([]string, error) {
+		// Matches upstream values:
+		// Key code: https://github.com/yarnpkg/berry/blob/8e0c4b897b0881878a1f901230ea49b7c8113fbe/packages/yarnpkg-core/sources/Workspace.ts#L64-L70
+		return []string{
+			"**/node_modules",
+			"**/.git",
+			"**/.yarn",
+		}, nil
 	},
 
 	// Versions newer than 2.0 are berry, and before that we simply call them yarn.
@@ -49,7 +59,7 @@ var nodejsBerry = PackageManager{
 
 	// Detect for berry needs to identify which version of yarn is running on the system.
 	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
-	Detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
+	detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 
