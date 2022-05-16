@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -31,6 +32,8 @@ type LinkCommand struct {
 type link struct {
 	ui                  cli.Ui
 	logger              hclog.Logger
+	fsys                afero.Fs
+	cwd                 fs.AbsolutePath
 	modifyGitIgnore     bool
 	apiURL              string
 	apiClient           linkAPIClient
@@ -51,12 +54,16 @@ type linkAPIClient interface {
 func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 	var dontModifyGitIgnore bool
 	cmd := &cobra.Command{
-		Use:   "turbo link",
-		Short: "Link your local directory to a Vercel organization and enable remote caching.",
+		Use:           "turbo link",
+		Short:         "Link your local directory to a Vercel organization and enable remote caching.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			link := &link{
 				ui:                  ui,
 				logger:              config.Logger,
+				fsys:                config.Fs,
+				cwd:                 config.Cwd,
 				modifyGitIgnore:     !dontModifyGitIgnore,
 				apiURL:              config.ApiUrl,
 				apiClient:           config.ApiClient,
@@ -167,15 +174,19 @@ func (l *link) run() error {
 	}
 	isUser := (chosenTeamName == userResponse.User.Name) || (chosenTeamName == userResponse.User.Username)
 	var chosenTeam client.Team
-	if !isUser {
+	var teamID string
+	if isUser {
+		teamID = userResponse.User.ID
+	} else {
 		for _, team := range teamsResponse.Teams {
 			if team.Name == chosenTeamName {
 				chosenTeam = team
 				break
 			}
 		}
-		l.apiClient.SetTeamID(chosenTeam.ID)
+		teamID = chosenTeam.ID
 	}
+	l.apiClient.SetTeamID(teamID)
 
 	cachingStatus, err := l.apiClient.GetCachingStatus()
 	if err != nil {
@@ -212,8 +223,8 @@ func (l *link) run() error {
 	}
 
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	err = config.WriteRepoConfigFile(&config.TurborepoConfig{
-		TeamId: chosenTeam.ID,
+	err = config.WriteRepoConfigFile(l.fsys, l.cwd, &config.TurborepoConfig{
+		TeamId: teamID,
 		ApiUrl: l.apiURL,
 	})
 	if err != nil {

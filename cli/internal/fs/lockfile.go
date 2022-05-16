@@ -11,6 +11,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var rnLineEnding = regexp.MustCompile("\"|:\r\n$")
+var nLineEnding = regexp.MustCompile("\"|:\n$")
+var r = regexp.MustCompile(`^[\w"]`)
+var double = regexp.MustCompile(`\:\"\:`)
+var o = regexp.MustCompile(`\"\s\"`)
+
+// deals with colons
+// integrity sha-... -> integrity: sha-...
+// "@apollo/client" latest -> "@apollo/client": latest
+// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
+// apollo-client "0.0.0" -> apollo-client: "0.0.0"
+var a = regexp.MustCompile(`(\w|\")\s(\"|\w)`)
+
 // ReadLockfile will read `yarn.lock` into memory (either from the cache or fresh)
 func ReadLockfile(rootpath string, backendName string, cacheDir string) (*YarnLockfile, error) {
 	var lockfile YarnLockfile
@@ -35,21 +48,11 @@ func ReadLockfile(rootpath string, backendName string, cacheDir string) (*YarnLo
 			hasLF := !bytes.HasSuffix(contentsB, []byte("\r\n"))
 			if hasLF {
 				lines = strings.Split(string(contentsB), "\n")
-				l = regexp.MustCompile("\"|:\n$")
+				l = nLineEnding
 			} else {
 				lines = strings.Split(strings.TrimRight(string(contentsB), "\r\n"), "\r\n")
-				l = regexp.MustCompile("\"|:\r\n$")
+				l = rnLineEnding
 			}
-
-			r := regexp.MustCompile(`^[\w"]`)
-			double := regexp.MustCompile(`\:\"\:`)
-			o := regexp.MustCompile(`\"\s\"`)
-			// deals with colons
-			// integrity sha-... -> integrity: sha-...
-			// "@apollo/client" latest -> "@apollo/client": latest
-			// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
-			// apollo-client "0.0.0" -> apollo-client: "0.0.0"
-			a := regexp.MustCompile(`(\w|\")\s(\"|\w)`)
 
 			for i, line := range lines {
 				if r.MatchString(line) {
