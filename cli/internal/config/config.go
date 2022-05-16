@@ -246,7 +246,11 @@ func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 		} else if strings.HasPrefix(arg, "--cwd=") {
 			if len(arg[len("--cwd="):]) > 0 {
 				cwdArgRaw := arg[len("--cwd="):]
-				cwdArg, err := fs.CheckedToAbsolutePath(cwdArgRaw)
+				resolved, err := filepath.EvalSymlinks(cwdArgRaw)
+				if err != nil {
+					return "", err
+				}
+				cwdArg, err := fs.CheckedToAbsolutePath(resolved)
 				if err != nil {
 					// the argument is a relative path. Join it with our actual cwd
 					return cwd.Join(cwdArgRaw), nil
