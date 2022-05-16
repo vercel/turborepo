@@ -173,15 +173,13 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, c.Config.Cwd, c.Ui)
+	runOptions, err := parseRunArgs(args, c.Config, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
 
-	c.Config.Cache.Dir = runOptions.cacheFolder
-
-	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config))
+	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config, runOptions.cacheOpts.Dir))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -224,8 +222,7 @@ func (c *RunCommand) Run(args []string) int {
 		}
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
-	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
-	fs.EnsureDir(runOptions.cacheFolder)
+	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
@@ -419,8 +416,6 @@ type RunOptions struct {
 	forceExecution bool
 	// Cache results, false only if --no-cache is set, there is no flag to force caching
 	cache bool
-	// Cache folder
-	cacheFolder string
 	// Immediately exit on task failure
 	bail            bool
 	passThroughArgs []string
@@ -434,8 +429,8 @@ type RunOptions struct {
 	cacheMissLogsMode LogsMode
 	dryRun            bool
 	dryRunJson        bool
-	// Only use the Remote Cache and ignore the local cache
-	remoteOnly bool
+
+	cacheOpts cache.Opts
 }
 
 func (ro *RunOptions) scopeOpts() *scope.Opts {
@@ -451,7 +446,7 @@ func (ro *RunOptions) scopeOpts() *scope.Opts {
 	}
 }
 
-func getDefaultRunOptions() *RunOptions {
+func getDefaultRunOptions(config *config.Config) *RunOptions {
 	return &RunOptions{
 		bail:                true,
 		includeDependents:   true,
@@ -465,26 +460,31 @@ func getDefaultRunOptions() *RunOptions {
 		only:                false,
 		cacheHitLogsMode:    FullLogs,
 		cacheMissLogsMode:   FullLogs,
-		remoteOnly:          false,
+
+		cacheOpts: cache.Opts{
+			Dir:     cache.DefaultLocation(config.Cwd),
+			Workers: config.Cache.Workers,
+		},
 	}
 }
 
-func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOptions, error) {
-	var runOptions = getDefaultRunOptions()
+func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOptions, error) {
+	runOptions := getDefaultRunOptions(config)
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	runOptions.cwd = cwd.ToStringDuringMigration()
-	unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
+	runOptions.cwd = config.Cwd.ToStringDuringMigration()
+	var unresolvedCacheFolder string
+	// unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	if os.Getenv("TURBO_FORCE") == "true" {
 		runOptions.forceExecution = true
 	}
 
 	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
-		runOptions.remoteOnly = true
+		runOptions.cacheOpts.SkipFilesystem = true
 	}
 
 	for argIndex, arg := range args {
@@ -590,7 +590,7 @@ func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOption
 					runOptions.dryRunJson = true
 				}
 			case strings.HasPrefix(arg, "--remote-only"):
-				runOptions.remoteOnly = true
+				runOptions.cacheOpts.SkipFilesystem = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--preflight"):
@@ -608,7 +608,12 @@ func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOption
 	}
 
 	// We can only set this cache folder after we know actual cwd
-	runOptions.cacheFolder = filepath.Join(runOptions.cwd, unresolvedCacheFolder)
+	if unresolvedCacheFolder != "" {
+		runOptions.cacheOpts.Dir = fs.ResolveUnknownPath(config.Cwd, unresolvedCacheFolder)
+	}
+	if !config.IsLoggedIn() {
+		runOptions.cacheOpts.SkipRemote = true
+	}
 
 	return runOptions, nil
 }
@@ -652,7 +657,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache, err := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
+	turboCache, err := cache.New(rs.Opts.cacheOpts, c.Config, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.

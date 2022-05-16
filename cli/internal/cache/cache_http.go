@@ -301,7 +301,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         config.ApiClient,
