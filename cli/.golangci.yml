@@ -9,10 +9,15 @@ linters:
   enable:
     - errcheck
     - goimports
-    - golint
     - govet
     - staticcheck
     - revive
+    - nakedret
+
+linters-settings:
+  nakedret:
+    # Aggressively disallow naked returns
+    max-func-lines: 3
 
 issues:
   exclude-use-default: false

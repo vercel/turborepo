@@ -24,9 +24,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+type client interface {
+	PutArtifact(hash string, body []byte, duration int, tag string) error
+	FetchArtifact(hash string) (*http.Response, error)
+}
+
 type httpCache struct {
 	writable       bool
-	config         *config.Config
+	client         client
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
@@ -70,7 +75,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 		}
 	}
-	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
+	return cache.client.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -83,7 +88,7 @@ func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
 	for _, file := range files {
 		// log.Printf("caching file %v", file)
 		if err := cache.storeFile(tw, file); err != nil {
-			log.Printf("[ERROR] Error uploading artifacts to HTTP cache: %s", err)
+			log.Printf("[ERROR] Error uploading artifact %s to HTTP cache due to: %s", file, err)
 			// TODO(jaredpalmer): How can we cancel the request at this point?
 		}
 	}
@@ -159,27 +164,25 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
+	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
 	}
 	defer resp.Body.Close()
-	files := []string{}
-	missingLinks := []*tar.Header{}
-	duration := 0
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil, 0, nil // doesn't exist - not an error
+	} else if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return false, nil, 0, fmt.Errorf("%s", string(b))
+	}
 	// If present, extract the duration from the response.
+	duration := 0
 	if resp.Header.Get("x-artifact-duration") != "" {
 		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
 		if err != nil {
 			return false, nil, 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
 		}
 		duration = intVar
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return false, files, duration, nil // doesn't exist - not an error
-	} else if resp.StatusCode != http.StatusOK {
-		b, _ := ioutil.ReadAll(resp.Body)
-		return false, files, duration, fmt.Errorf("%s", string(b))
 	}
 	artifactReader := resp.Body
 	if cache.signerVerifier.isEnabled() {
@@ -203,6 +206,8 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		// The artifact has been verified and the body can be read and untarred
 		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
 	}
+	files := []string{}
+	missingLinks := []*tar.Header{}
 	gzr, err := gzip.NewReader(artifactReader)
 	if err != nil {
 		return false, nil, 0, err
@@ -299,14 +304,14 @@ func (cache *httpCache) Shutdown() {}
 func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
-		config:         config,
+		client:         config.ApiClient,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
 			teamId:  config.TeamId,
-			enabled: config.TurboConfigJSON.RemoteCacheOptions.Signature,
+			enabled: config.TurboJSON.RemoteCacheOptions.Signature,
 		},
 	}
 }

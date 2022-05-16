@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -182,23 +183,13 @@ func (c *RunCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	// We use Cycles instead of Validate because
-	// our DAG has multiple roots (entrypoints).
-	// Validate mandates that there is only a single root node.
-	cycles := ctx.TopologicalGraph.Cycles()
-	if len(cycles) > 0 {
-		cycleLines := make([]string, len(cycles))
-		for i, cycle := range cycles {
-			vertices := make([]string, len(cycle))
-			for j, vertex := range cycle {
-				vertices[j] = vertex.(string)
-			}
-			cycleLines[i] = "\t" + strings.Join(vertices, ",")
-		}
-		c.logError(c.Config.Logger, "", fmt.Errorf("Found cycles in package dependency graph:\n%v", strings.Join(cycleLines, "\n")))
+
+	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
+		c.logError(c.Config.Logger, "Invalid package dependency graph:\n%v", err)
 		return 1
 	}
-	targets, err := getTargetsFromArguments(args, c.Config.TurboConfigJSON)
+
+	targets, err := getTargetsFromArguments(args, c.Config.TurboJSON)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -215,7 +206,7 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed resolve packages to run %v", err))
+		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve packages to run: %v", err))
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
@@ -224,7 +215,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         c.Config.TurboConfigJSON.Pipeline,
+		Pipeline:         c.Config.TurboJSON.Pipeline,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
@@ -250,7 +241,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		return 1
 	}
 	hashTracker := NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
-	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, rs.Opts.cwd)
+	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, c.Config.Cwd)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
 		return 1
@@ -307,7 +298,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 			p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 			fmt.Fprintln(p, "Name\tPath\t")
 			for _, pkg := range packagesInScope {
-				fmt.Fprintln(p, fmt.Sprintf("%s\t%s\t", pkg, g.PackageInfos[pkg].Dir))
+				fmt.Fprintf(p, "%s\t%s\t\n", pkg, g.PackageInfos[pkg].Dir)
 			}
 			p.Flush()
 
@@ -376,6 +367,11 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 	}); err != nil {
 		return nil, err
 	}
+
+	if err := util.ValidateGraph(engine.TaskGraph); err != nil {
+		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
+	}
+
 	return engine, nil
 }
 
@@ -650,7 +646,24 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 	analyticsClient := analytics.NewClient(goctx, analyticsSink, c.Config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient)
+	// Theoretically this is overkill, but bias towards not spamming the console
+	once := &sync.Once{}
+	turboCache, err := cache.New(c.Config, rs.Opts.remoteOnly, analyticsClient, func(_cache cache.Cache, err error) {
+		// Currently the HTTP Cache is the only one that can be disabled.
+		// With a cache system refactor, we might consider giving names to the caches so
+		// we can accurately report them here.
+		once.Do(func() {
+			c.logWarning(c.Config.Logger, "Remote Caching is unavailable", err)
+		})
+	})
+	if err != nil {
+		if errors.Is(err, cache.ErrNoCachesEnabled) {
+			c.logError(c.Config.Logger, "No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+		} else {
+			c.logError(c.Config.Logger, "Failed to set up caching", err)
+		}
+		return 1
+	}
 	defer turboCache.Shutdown()
 	runState := NewRunState(rs.Opts, startAt)
 	runState.Listen(c.Ui, time.Now())
@@ -721,9 +734,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 		}
 		command, ok := pt.pkg.Scripts[pt.task]
 		if !ok {
-			c.Config.Logger.Debug("no task in package, skipping")
-			c.Config.Logger.Debug("done", "status", "skipped")
-			return nil
+			command = "<NONEXISTENT>"
 		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
@@ -793,7 +804,7 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
-func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON) ([]string, error) {
+func getTargetsFromArguments(arguments []string, turboJSON *fs.TurboJSON) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
@@ -802,7 +813,7 @@ func getTargetsFromArguments(arguments []string, configJson *fs.TurboConfigJSON)
 		if !strings.HasPrefix(arg, "-") {
 			targets.Add(arg)
 			found := false
-			for task := range configJson.Pipeline {
+			for task := range turboJSON.Pipeline {
 				if task == arg {
 					found = true
 				}
@@ -881,7 +892,9 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	var hit bool
-	if !e.rs.Opts.forceExecution {
+	// If we aren't forcing execution, and the task is not explicitly marked cache: false,
+	// then try to read from the cache first.
+	if !e.rs.Opts.forceExecution && pt.taskDefinition.ShouldCache {
 		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -914,8 +927,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	argsactual := append([]string{"run"}, pt.task)
 	argsactual = append(argsactual, passThroughArgs...)
 
-	var cmd *exec.Cmd
-	cmd = exec.Command(e.packageManager.Command, argsactual...)
+	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
@@ -1006,8 +1018,29 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
-		filesToBeCached := globby.GlobFiles(pt.pkg.Dir, outputs, ignore)
-		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), filesToBeCached); err != nil {
+
+		repoRelativeGlobs := make([]string, len(outputs))
+		for index, output := range outputs {
+			repoRelativeGlobs[index] = filepath.Join(pt.pkg.Dir, output)
+		}
+
+		filesToBeCached, err := globby.GlobFiles(e.rs.Opts.cwd, repoRelativeGlobs, ignore)
+		if err != nil {
+			return err
+		}
+
+		relativePaths := make([]string, len(filesToBeCached))
+
+		for index, value := range filesToBeCached {
+			relativePath, err := filepath.Rel(e.rs.Opts.cwd, value)
+			if err != nil {
+				e.logError(targetLogger, "", fmt.Errorf("File path cannot be made relative: %w", err))
+				continue
+			}
+			relativePaths[index] = relativePath
+		}
+
+		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
