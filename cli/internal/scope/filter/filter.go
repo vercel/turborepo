@@ -202,7 +202,15 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		parentDir := selector.parentDir
 		for pkgName := range changedPkgs {
 			if parentDir != "" {
-				if pkg, ok := r.PackageInfos[pkgName]; !ok {
+				if pkgName == util.RootPkgName {
+					// The root package changed, only add it if
+					// the parentDir is equivalent to the root
+					if matches, err := doublestar.PathMatch(parentDir, r.Cwd); err != nil {
+						return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", parentDir, r.Cwd, err)
+					} else if matches {
+						entryPackages.Add(pkgName)
+					}
+				} else if pkg, ok := r.PackageInfos[pkgName]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
 				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
@@ -217,11 +225,15 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		// get packages by path
 		selectorWasUsed = true
 		parentDir := selector.parentDir
-		for name, pkg := range r.PackageInfos {
-			if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
-				return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
-			} else if matches {
-				entryPackages.Add(name)
+		if parentDir == r.Cwd {
+			entryPackages.Add(util.RootPkgName)
+		} else {
+			for name, pkg := range r.PackageInfos {
+				if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
+					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
+				} else if matches {
+					entryPackages.Add(name)
+				}
 			}
 		}
 	}
@@ -311,6 +323,7 @@ func matchPackageNamesToVertices(pattern string, vertices []dag.Vertex) (util.Se
 	for _, v := range vertices {
 		packages.Add(v)
 	}
+	packages.Add(util.RootPkgName)
 	return matchPackageNames(pattern, packages)
 }
 

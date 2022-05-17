@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -189,7 +190,8 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	targets, err := getTargetsFromArguments(args, c.Config.TurboJSON)
+	pipeline := c.Config.TurboJSON.Pipeline
+	targets, err := getTargetsFromArguments(args, pipeline)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve targets: %w", err))
 		return 1
@@ -204,9 +206,20 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve packages to run: %v", err))
+	}
+	if isAllPackages {
+		// if there is a root task for any of our targets, we need to add it
+		for _, target := range targets {
+			key := util.RootTaskID(target)
+			if _, ok := pipeline[key]; ok {
+				filteredPkgs.Add(util.RootPkgName)
+				// we only need to know we're running a root task once to add it for consideration
+				break
+			}
+		}
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
 	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheFolder)
@@ -215,7 +228,7 @@ func (c *RunCommand) Run(args []string) int {
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
 		TopologicalGraph: ctx.TopologicalGraph,
-		Pipeline:         c.Config.TurboJSON.Pipeline,
+		Pipeline:         pipeline,
 		PackageInfos:     ctx.PackageInfos,
 		GlobalHash:       ctx.GlobalHash,
 		RootNode:         ctx.RootNode,
@@ -736,6 +749,10 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 		if !ok {
 			command = "<NONEXISTENT>"
 		}
+		isRootTask := pt.packageName == util.RootPkgName
+		if isRootTask && commandLooksLikeTurbo(command) {
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", pt.task, command)
+		}
 		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
 		if err != nil {
 			return err
@@ -786,6 +803,12 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 	return taskIDs, nil
 }
 
+var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
+
+func commandLooksLikeTurbo(command string) bool {
+	return _isTurbo.MatchString(command)
+}
+
 // Replay logs will try to replay logs back to the stdout
 func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string) {
 	logger.Debug("start replaying logs")
@@ -804,22 +827,18 @@ func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logF
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
-func getTargetsFromArguments(arguments []string, turboJSON *fs.TurboJSON) ([]string, error) {
+func getTargetsFromArguments(arguments []string, pipeline fs.Pipeline) ([]string, error) {
 	targets := make(util.Set)
 	for _, arg := range arguments {
 		if arg == "--" {
 			break
 		}
 		if !strings.HasPrefix(arg, "-") {
-			targets.Add(arg)
-			found := false
-			for task := range turboJSON.Pipeline {
-				if task == arg {
-					found = true
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("task `%v` not found in turbo pipeline in package.json. Are you sure you added it?", arg)
+			task := arg
+			if pipeline.HasTask(task) {
+				targets.Add(task)
+			} else {
+				return nil, fmt.Errorf("task `%v` not found in turbo `pipeline` in \"turbo.json\". Are you sure you added it?", task)
 			}
 		}
 	}
@@ -853,15 +872,15 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.pkg.Name, pt.task))
+	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.packageName, pt.task))
 	targetLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.Run(util.GetTaskId(pt.pkg.Name, pt.task))
+	tracer := e.runState.Run(util.GetTaskId(pt.packageName, pt.task))
 
 	// Create a logger
-	pref := e.colorCache.PrefixColor(pt.pkg.Name)
-	actualPrefix := pref("%s:%s: ", pt.pkg.Name, pt.task)
+	pref := e.colorCache.PrefixColor(pt.packageName)
+	actualPrefix := pref("%s:%s: ", pt.packageName, pt.task)
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: actualPrefix,
