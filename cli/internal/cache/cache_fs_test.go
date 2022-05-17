@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
 )
@@ -20,6 +21,10 @@ type testingUtil interface {
 	Cleanup(f func())
 }
 
+// subdirForTest creates a sub directory of `cwd` and registers it for
+// deletion by the testing framework at the end of the test.
+// Some cache code currently assumes relative paths from `cwd`, so it is not
+// yet feasible to use temp directories.
 func subdirForTest(t *testing.T) string {
 	var tt interface{} = t
 	if tu, ok := tt.(testingUtil); ok {
@@ -41,8 +46,22 @@ func deleteOnFinish(t *testing.T, dir string) {
 }
 
 func TestPut(t *testing.T) {
-	src := subdirForTest(t)
+	// Set up a test source and cache directory
+	// The "source" directory simulates a package
+	//
+	// <src>/
+	//   b
+	//   child/
+	//     a
+	//     link -> ../b
+	//     broken -> missing
+	//
+	// Ensure we end up with a matching directory under a
+	// "cache" directory:
+	//
+	// <dst>/the-hash/<src>/...
 
+	src := subdirForTest(t)
 	childDir := filepath.Join(src, "child")
 	err := os.Mkdir(childDir, os.ModeDir|0777)
 	assert.NilError(t, err, "Mkdir")
@@ -67,7 +86,6 @@ func TestPut(t *testing.T) {
 	srcBrokenLinkPath := filepath.Join(childDir, "broken")
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
 
-	// TODO(gsoltis): doesn't work, because it implicitly runs from cwd
 	files := []string{
 		filepath.Join(src, filepath.FromSlash("child/a")),      // aPath,
 		filepath.Join(src, "b"),                                // bPath,
@@ -87,6 +105,7 @@ func TestPut(t *testing.T) {
 	err = cache.Put("unused", hash, duration, files)
 	assert.NilError(t, err, "Put")
 
+	// Verify that we got the files that we're expecting
 	dstCachePath := filepath.Join(dst, hash)
 
 	dstAPath := filepath.Join(dstCachePath, src, "child", "a")
@@ -119,9 +138,29 @@ func TestPut(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
+	// Set up a test cache directory and target output directory
+	// The "cacheDir" directory simulates a cached package
+	//
+	// <cacheDir>/
+	//   the-hash-meta.json
+	//   the-hash/
+	//     some-package/
+	//       b
+	//       child/
+	//         a
+	//         link -> ../b
+	//         broken -> missing
+	//
+	// Ensure we end up with a matching directory under a
+	// "some-package" directory:
+	//
+	// "some-package"/...
+
+	cwd, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
 	cacheDir := subdirForTest(t)
 	src := filepath.Join(cacheDir, "the-hash", "some-package")
-	err := os.MkdirAll(src, os.ModeDir|0777)
+	err = os.MkdirAll(src, os.ModeDir|0777)
 	assert.NilError(t, err, "mkdirAll")
 
 	childDir := filepath.Join(src, "child")
@@ -158,11 +197,43 @@ func TestFetch(t *testing.T) {
 		recorder:       dr,
 	}
 
-	deleteOnFinish(t, "the-output")
-	hit, files, _, err := cache.Fetch("the-output", "the-hash", []string{})
+	dstOutputPath := "some-package"
+	deleteOnFinish(t, dstOutputPath)
+	hit, files, _, err := cache.Fetch(cwd.ToStringDuringMigration(), "the-hash", []string{})
 	assert.NilError(t, err, "Fetch")
 	if !hit {
 		t.Error("Fetch got false, want true")
 	}
+	if len(files) != 0 {
+		// Not for any particular reason, but currently the fs cache doesn't return the
+		// list of files copied
+		t.Errorf("len(files) got %v, want 0", len(files))
+	}
 	t.Logf("files %v", files)
+
+	dstAPath := filepath.Join(dstOutputPath, "child", "a")
+	got, err := turbofs.SameFile(aPath, dstAPath)
+	assert.NilError(t, err, "SameFile")
+	if !got {
+		t.Errorf("SameFile(%v, %v) got false, want true", aPath, dstAPath)
+	}
+
+	dstBPath := filepath.Join(dstOutputPath, "b")
+	got, err = turbofs.SameFile(bPath, dstBPath)
+	assert.NilError(t, err, "SameFile")
+	if !got {
+		t.Errorf("SameFile(%v, %v) got false, want true", bPath, dstBPath)
+	}
+
+	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
+	target, err := os.Readlink(dstLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != linkTarget {
+		t.Errorf("Readlink got %v, want %v", target, linkTarget)
+	}
+
+	// We currently don't restore broken symlinks. This is probably a bug
+	dstBrokenLinkPath := filepath.Join(dstOutputPath, "child", "broken")
+	_, err = os.Readlink(dstBrokenLinkPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }

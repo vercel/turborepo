@@ -10,6 +10,10 @@ import (
 )
 
 func TestCopyOrLinkFile(t *testing.T) {
+	// Directory layout:
+	//
+	// <src>/
+	//   foo
 	src := fs.NewDir(t, "copy-or-link")
 	dst := fs.NewDir(t, "copy-or-link-dist")
 	srcFilePath := filepath.Join(src.Path(), "foo")
@@ -28,6 +32,11 @@ func TestCopyOrLinkFile(t *testing.T) {
 		t.Errorf("SameFile(%v, %v) got false, want true", srcFilePath, dstFilePath)
 	}
 
+	// Directory layout:
+	//
+	// <src>/
+	//   foo
+	//   foo-ptr -> foo
 	srcLinkPath := filepath.Join(src.Path(), "foo-ptr")
 	dstLinkPath := filepath.Join(dst.Path(), "foo-ptr")
 	err = os.Symlink("foo", srcLinkPath)
@@ -46,6 +55,14 @@ func TestCopyOrLinkFile(t *testing.T) {
 }
 
 func TestRecursiveCopyOrLinkFile(t *testing.T) {
+	// Directory layout:
+	//
+	// <src>/
+	//   b
+	//   child/
+	//     a
+	//     link -> ../b
+	//     broken -> missing
 	src := fs.NewDir(t, "recursive-copy-or-link")
 	dst := fs.NewDir(t, "recursive-copy-or-link-dist")
 	childDir := filepath.Join(src.Path(), "child")
