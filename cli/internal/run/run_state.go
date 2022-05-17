@@ -15,7 +15,7 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// A RunResult represents a single event in the build process, i.e. a target starting or finishing
+// RunResult represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
 type RunResult struct {
 	// Timestamp of this event
@@ -34,7 +34,7 @@ type RunResult struct {
 	// Tests TestSuite
 }
 
-// A RunResultStatus represents the status of a target when we log a build result.
+// RunResultStatus represents the status of a target when we log a build result.
 type RunResultStatus int
 
 // The collection of expected build result statuses.
@@ -77,6 +77,8 @@ type RunState struct {
 	startedAt time.Time
 }
 
+// NewRunState creates a RunState instance for tracking events during the
+// course of a run.
 func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
