@@ -338,9 +338,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
 		c.Ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
-		if rs.Opts.stream {
-			c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		}
+		c.Ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		exitCode = c.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
 	}
 
@@ -399,8 +397,6 @@ type RunOptions struct {
 	includeDependencies bool
 	// List of globs of file paths to ignore from execution scope calculation
 	ignore []string
-	// Whether to stream log outputs
-	stream bool
 	// Show a dot graph
 	dotGraph string
 	// List of globs to global files whose contents will be included in the global hash calculation
@@ -464,7 +460,6 @@ func getDefaultRunOptions() *RunOptions {
 		cache:               true,
 		profile:             "", // empty string does no tracing
 		forceExecution:      false,
-		stream:              true,
 		only:                false,
 		cacheHitLogsMode:    FullLogs,
 		cacheMissLogsMode:   FullLogs,
@@ -540,8 +535,7 @@ func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOption
 			case strings.HasPrefix(arg, "--force"):
 				runOptions.forceExecution = true
 			case strings.HasPrefix(arg, "--stream"):
-				runOptions.stream = true
-
+				output.Warn("[WARNING] The --stream flag is unnecesary and has been deprecated. It will be removed in future versions of turbo.")
 			case strings.HasPrefix(arg, "--graph="): // this one must com before the next
 				if len(arg[len("--graph="):]) > 0 {
 					runOptions.dotGraph = arg[len("--graph="):]
@@ -611,11 +605,6 @@ func parseRunArgs(args []string, cwd fs.AbsolutePath, output cli.Ui) (*RunOption
 		}
 	}
 
-	// Force streaming output in CI/CD non-interactive mode
-	if !ui.IsTTY || ui.IsCI {
-		runOptions.stream = true
-	}
-
 	// We can only set this cache folder after we know actual cwd
 	runOptions.cacheFolder = filepath.Join(runOptions.cwd, unresolvedCacheFolder)
 
@@ -678,8 +667,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		return 1
 	}
 	defer turboCache.Shutdown()
-	runState := NewRunState(rs.Opts, startAt)
-	runState.Listen(c.Ui, time.Now())
+	runState := NewRunState(startAt, rs.Opts.profile)
 	ec := &execContext{
 		colorCache:     NewColorCache(),
 		runState:       runState,
@@ -922,7 +910,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 			case HashLogs:
 				targetUi.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(hash)))
 			case FullLogs:
-				if e.rs.Opts.stream && fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
+				if fs.FileExists(filepath.Join(e.rs.Opts.cwd, logFileName)) {
 					replayLogs(targetLogger, e.ui, e.rs.Opts, logFileName, hash)
 				}
 			default:
@@ -933,11 +921,11 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 
 			return nil
 		}
-		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
+		if e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(hash)))
 		}
 	} else {
-		if e.rs.Opts.stream && e.rs.Opts.cacheHitLogsMode != NoLogs {
+		if e.rs.Opts.cacheHitLogsMode != NoLogs {
 			targetUi.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(hash)))
 		}
 	}
@@ -1007,27 +995,10 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		tracer(TargetBuildFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
 		if e.rs.Opts.bail {
-			if e.rs.Opts.stream {
-				targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
-			} else {
-				f, err := os.Open(filepath.Join(e.rs.Opts.cwd, logFileName))
-				if err != nil {
-					targetUi.Warn(fmt.Sprintf("failed reading logs: %v", err))
-				}
-				defer f.Close()
-				scan := bufio.NewScanner(f)
-				e.ui.Error("")
-				e.ui.Error(util.Sprintf("%s ${RED}%s finished with error${RESET}", ui.ERROR_PREFIX, util.GetTaskId(pt.pkg.Name, pt.task)))
-				e.ui.Error("")
-				for scan.Scan() {
-					e.ui.Output(util.Sprintf("${RED}%s:%s: ${RESET}%s", pt.pkg.Name, pt.task, scan.Bytes())) //Writing to Stdout
-				}
-			}
+			targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
 			e.processes.Close()
 		} else {
-			if e.rs.Opts.stream {
-				targetUi.Warn("command finished with error, but continuing...")
-			}
+			targetUi.Warn("command finished with error, but continuing...")
 		}
 		return err
 	}

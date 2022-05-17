@@ -3,8 +3,6 @@ package run
 import (
 	"fmt"
 	"log"
-	"math"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -12,8 +10,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
-
-	cursor "github.com/vercel/turborepo/cli/internal/ui/term"
 
 	"github.com/google/chrometracing"
 	"github.com/mitchellh/cli"
@@ -72,23 +68,17 @@ type RunState struct {
 	mu      sync.Mutex
 	Ordered []string
 	state   map[string]*BuildTargetState
-	done    chan string
 	Success int
 	Failure int
 	// Is the output streaming?
-	Cached     int
-	Attempted  int
-	Scope      []string
-	Changed    []string
-	runOptions *RunOptions
-	cursor     *cursor.Cursor
-	ticker     *time.Ticker
+	Cached    int
+	Attempted int
 
 	startedAt time.Time
 }
 
-func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
-	if runOptions.profile != "" {
+func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
+	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
 	return &RunState{
@@ -98,9 +88,7 @@ func NewRunState(runOptions *RunOptions, startedAt time.Time) *RunState {
 		Attempted: 0,
 		state:     make(map[string]*BuildTargetState),
 
-		cursor:     cursor.New(),
-		runOptions: runOptions,
-		startedAt:  startedAt,
+		startedAt: startedAt,
 	}
 }
 
@@ -178,9 +166,6 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	case result.Status == TargetBuildFailed:
 		r.Failure++
 		r.Attempted++
-		if r.runOptions.bail && !r.runOptions.stream {
-			r.done <- result.Label
-		}
 	case result.Status == TargetCached:
 		r.Cached++
 		r.Attempted++
@@ -188,47 +173,6 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 		r.Success++
 		r.Attempted++
 	}
-}
-
-func (r *RunState) Listen(Ui cli.Ui, startAt time.Time) {
-	if r.runOptions.stream {
-		return
-	}
-	r.ticker = time.NewTicker(100 * time.Millisecond)
-	r.done = make(chan string)
-	lineBuffer := 10
-	go func(r *RunState, Ui cli.Ui) {
-		z := r
-		i := 0
-		for {
-			select {
-			case outcome := <-z.done:
-				if !r.runOptions.stream {
-					if outcome == "done" {
-						if i != 0 {
-							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
-						}
-					} else {
-						if i != 0 {
-							cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
-						}
-						z.Render(Ui, startAt, i, lineBuffer)
-					}
-				}
-			case <-z.ticker.C:
-				if !r.runOptions.stream {
-					if i != 0 {
-						cursor.EraseLinesAbove(os.Stdout, lineBuffer+2)
-					}
-					z.Render(Ui, startAt, i, lineBuffer)
-					i++
-				}
-			default:
-				continue
-			}
-		}
-	}(r, Ui)
-
 }
 
 func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuffer int) {
@@ -287,31 +231,14 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		}
 	}
 
-	if !r.runOptions.stream {
-		r.ticker.Stop()
-		r.done <- "done"
-	}
 	maybeFullTurbo := ""
 	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
-	if r.runOptions.stream {
-		Ui.Output("") // Clear the line
-		Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
-		Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
-		Ui.Output("")
-	} else {
-
-		incrementality := fmt.Sprintf("%.f%% incremental", math.Round(float64(r.Cached)/float64(r.Attempted)*100))
-		if r.Failure > 0 {
-			r.Render(Ui, r.startedAt, 3, len(r.Ordered))
-			Ui.Output(util.Sprintf("${BOLD_RED}>>> BUILDING...FINISHED WITH ERRORS${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
-		} else {
-			Ui.Output(util.Sprintf("${BOLD}>>> TURBO${RESET}"))
-			Ui.Output(util.Sprintf("${BOLD}>>> BUILDING...FINISHED${RESET} ${GREY}(%s) %s${RESET} %s${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond).String(), incrementality, maybeFullTurbo))
-		}
-
-	}
+	Ui.Output("") // Clear the line
+	Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
+	Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
+	Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
+	Ui.Output("")
 	return nil
 }
