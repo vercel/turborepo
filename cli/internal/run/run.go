@@ -31,6 +31,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
@@ -254,7 +255,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
-	hashTracker := NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	hashTracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
 	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, c.Config.Cwd)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
@@ -639,7 +640,7 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *Tracker, startAt time.Time) int {
+func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -725,7 +726,7 @@ type hashedTask struct {
 	Dependents   []string `json:"dependents"`
 }
 
-func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *Tracker, rs *runSpec) ([]hashedTask, error) {
+func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
 	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(pt.Task)
@@ -845,7 +846,7 @@ type execContext struct {
 	logger         hclog.Logger
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
-	taskHashes     *Tracker
+	taskHashes     *taskhash.Tracker
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {

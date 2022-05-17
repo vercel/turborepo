@@ -1,6 +1,7 @@
-package run
+// package taskhash handles calculating dependency hashes for nodes in the task execution
+// graph.
 
-// TODO(gsoltis): This should eventually either be its own package or part of core
+package taskhash
 
 import (
 	"fmt"
