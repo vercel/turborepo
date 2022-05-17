@@ -995,7 +995,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		tracer(TargetBuildFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
 		if e.rs.Opts.bail {
-			targetUi.Error(fmt.Sprintf("Error: command finished with error: %s", err))
+			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			e.processes.Close()
 		} else {
 			targetUi.Warn("command finished with error, but continuing...")
