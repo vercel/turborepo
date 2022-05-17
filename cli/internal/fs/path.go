@@ -94,10 +94,20 @@ func (ap AbsolutePath) EnsureDir() error {
 	return EnsureDir(ap.asString())
 }
 
+// Create is the AbsolutePath wrapper for os.Create
+func (ap AbsolutePath) Create() (*os.File, error) {
+	return os.Create(ap.asString())
+}
+
 // ToString returns the string representation of this absolute path. Used for
 // interfacing with APIs that require a string
 func (ap AbsolutePath) ToString() string {
 	return ap.asString()
+}
+
+// RelativePathString returns the relative path from this AbsolutePath to another absolute path in string form as a string
+func (ap AbsolutePath) RelativePathString(path string) (string, error) {
+	return filepath.Rel(ap.asString(), path)
 }
 
 // EnsureDirFS ensures that the directory containing the given filename is created

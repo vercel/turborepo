@@ -12,6 +12,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
@@ -37,16 +38,13 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:            "",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -58,17 +56,14 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:            "",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -80,16 +75,13 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:            "",
 				concurrency:         12,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -101,16 +93,13 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:            "g.png",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -122,17 +111,14 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:            "g.png",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
 				passThroughArgs:     []string{"--boop", "zoop"},
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -140,18 +126,16 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--force"},
 			&RunOptions{
 				includeDependents: true,
-				stream:            true,
 				bail:              true,
 				concurrency:       10,
-				cache:             true,
-				forceExecution:    true,
 				profile:           "",
 				cwd:               defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:  FullLogs,
-				cacheMissLogsMode: FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{
+					SkipReads: true,
 				},
 			},
 		},
@@ -160,19 +144,16 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--remote-only"},
 			&RunOptions{
 				includeDependents: true,
-				stream:            true,
 				bail:              true,
 				concurrency:       10,
-				cache:             true,
 				profile:           "",
 				cwd:               defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:  FullLogs,
-				cacheMissLogsMode: FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:            defaultCacheFolder,
 					Workers:        10,
 					SkipFilesystem: true,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -180,16 +161,16 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--no-cache"},
 			&RunOptions{
 				includeDependents: true,
-				stream:            true,
 				bail:              true,
 				concurrency:       10,
 				profile:           "",
 				cwd:               defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:  FullLogs,
-				cacheMissLogsMode: FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{
+					SkipWrites: true,
 				},
 			},
 		},
@@ -202,17 +183,14 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:            "g.png",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
 				passThroughArgs:     []string{},
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -223,14 +201,12 @@ func TestParseConfig(t *testing.T) {
 				filterPatterns:    []string{"bar", "...[main]"},
 				bail:              true,
 				concurrency:       10,
-				cache:             true,
 				cwd:               defaultCwd.ToStringDuringMigration(),
-				cacheHitLogsMode:  FullLogs,
-				cacheMissLogsMode: FullLogs,
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 	}
@@ -273,16 +249,13 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		dotGraph:            "",
 		concurrency:         10,
 		includeDependencies: false,
-		cache:               true,
-		forceExecution:      false,
 		profile:             "",
 		cwd:                 cwd.ToStringDuringMigration(),
-		cacheHitLogsMode:    FullLogs,
-		cacheMissLogsMode:   FullLogs,
 		cacheOpts: cache.Opts{
 			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
 			Workers: 10,
 		},
+		runcacheOpts: runcache.Opts{},
 	}
 
 	ui := &cli.BasicUi{
