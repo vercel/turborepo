@@ -1418,7 +1418,6 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
- "turbo-tasks-memory-cache",
  "turbo-tasks-rocksdb",
  "turbopack",
 ]
@@ -2699,21 +2698,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-std",
+ "concurrent-queue",
  "event-listener",
  "flurry",
  "lazy_static",
- "turbo-tasks",
-]
-
-[[package]]
-name = "turbo-tasks-memory-cache"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-std",
- "event-listener",
- "flurry",
- "lazy_static",
+ "num_cpus",
  "turbo-tasks",
 ]
 
