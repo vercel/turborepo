@@ -30,6 +30,12 @@ func GetCwd() (AbsolutePath, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid working directory: %w", err)
 	}
+	// We evaluate symlinks here because the package managers
+	// we support do the same.
+	cwdRaw, err = filepath.EvalSymlinks(cwdRaw)
+	if err != nil {
+		return "", fmt.Errorf("evaluating symlinks in cwd: %w", err)
+	}
 	cwd, err := CheckedToAbsolutePath(cwdRaw)
 	if err != nil {
 		return "", fmt.Errorf("cwd is not an absolute path %v: %v", cwdRaw, err)
