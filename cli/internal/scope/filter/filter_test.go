@@ -87,6 +87,15 @@ func Test_filter(t *testing.T) {
 		Expected  []string
 	}{
 		{
+			"select root package",
+			[]*TargetSelector{
+				{
+					namePattern: util.RootPkgName,
+				},
+			},
+			[]string{util.RootPkgName},
+		},
+		{
 			"select only package dependencies (excluding the package itself)",
 			[]*TargetSelector{
 				{
@@ -226,6 +235,15 @@ func Test_filter(t *testing.T) {
 			},
 			[]string{"project-0"},
 		},
+		{
+			"select root package by directory",
+			[]*TargetSelector{
+				{
+					parentDir: root,
+				},
+			},
+			[]string{util.RootPkgName},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -360,6 +378,7 @@ func Test_SCM(t *testing.T) {
 	changedPackages := make(util.Set)
 	changedPackages.Add("package-1")
 	changedPackages.Add("package-2")
+	changedPackages.Add(util.RootPkgName)
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("package-1")
@@ -406,7 +425,17 @@ func Test_SCM(t *testing.T) {
 					diff: "HEAD~1",
 				},
 			},
-			[]string{"package-1", "package-2"},
+			[]string{"package-1", "package-2", util.RootPkgName},
+		},
+		{
+			"all changed packages with parent dir exact match",
+			[]*TargetSelector{
+				{
+					diff:      "HEAD~1",
+					parentDir: root,
+				},
+			},
+			[]string{util.RootPkgName},
 		},
 		{
 			"changed packages in directory",
