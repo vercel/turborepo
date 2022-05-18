@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/encoding/lstree"
+	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
 )
 
 // Predefine []byte variables to avoid runtime allocations.
@@ -187,7 +187,7 @@ func gitLsTree(path string) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", startError)
 	}
 
-	reader := lstree.NewReader(out)
+	reader := gitoutput.NewReader(out)
 	entries, readErr := reader.ReadAll()
 	if readErr != nil {
 		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", readErr)

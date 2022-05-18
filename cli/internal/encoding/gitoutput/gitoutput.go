@@ -1,5 +1,5 @@
-// Package lstree reads the output of calls to `git ls-tree`.
-package lstree
+// Package gitoutput reads the output of calls to `git ls-tree`.
+package gitoutput
 
 import (
 	"bufio"
