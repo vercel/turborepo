@@ -281,7 +281,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		}
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
-		if rs.Opts.dryRunJson {
+		if rs.Opts.dryRunJSON {
 			dryRun := &struct {
 				Packages []string     `json:"packages"`
 				Tasks    []hashedTask `json:"tasks"`
@@ -409,7 +409,7 @@ type RunOptions struct {
 	// Restrict execution to only the listed task names. Default false
 	only       bool
 	dryRun     bool
-	dryRunJson bool
+	dryRunJSON bool
 
 	cacheOpts    cache.Opts
 	runcacheOpts runcache.Opts
@@ -560,12 +560,12 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 			case strings.HasPrefix(arg, "--dry-run"):
 				runOptions.dryRun = true
 				if strings.HasPrefix(arg, "--dry-run=json") {
-					runOptions.dryRunJson = true
+					runOptions.dryRunJSON = true
 				}
 			case strings.HasPrefix(arg, "--dry"):
 				runOptions.dryRun = true
 				if strings.HasPrefix(arg, "--dry=json") {
-					runOptions.dryRunJson = true
+					runOptions.dryRunJSON = true
 				}
 			case strings.HasPrefix(arg, "--remote-only"):
 				runOptions.cacheOpts.SkipFilesystem = true

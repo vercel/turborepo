@@ -121,6 +121,8 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 	return constraint.Check(pkgVersion)
 }
 
+// WithGraph attaches information about the package dependency graph to the Context instance being
+// constructed.
 func WithGraph(rootpath string, config *config.Config, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
