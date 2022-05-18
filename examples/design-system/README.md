@@ -17,10 +17,10 @@ As well as a few others tools preconfigured:
 
 ## Getting Started
 
-Clone the design system example locally or [from GitHub](https://github.com/vercel/turborepo/tree/main/examples/with-changesets):
+Clone the design system example locally or [from GitHub](https://github.com/vercel/turborepo/tree/main/examples/design-system):
 
 ```bash
-npx degit vercel/turborepo/examples/with-changesets design-system
+npx degit vercel/turborepo/examples/design-system design-system
 cd design-system
 yarn install
 ```
