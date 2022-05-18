@@ -102,7 +102,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         pkg: [yarn, npm]
-        example: [basic]
+        example: [basic, design-system]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Sponge
