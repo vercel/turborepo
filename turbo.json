@@ -1,11 +1,6 @@
 {
   "$schema": "./docs/public/schema.json",
   "baseBranch": "origin/main",
-  "globalDependencies": [
-    "$CONVERTKIT_API_KEY",
-    "$CONVERTKIT_API_SECRET",
-    "$CONVERTKIT_FORM_ID"
-  ],
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],
@@ -35,6 +30,19 @@
     "docs#build": {
       "outputs": [".next/**"],
       "dependsOn": ["^build", "docs#schema"]
+    },
+    "//#run-example": {
+      "outputs": [],
+      "inputs": [
+        "examples/**/*.ts",
+        "examples/**/*.tsx",
+        "examples/**/*.json",
+        "examples/**/*.js",
+        "examples/**/*.yaml",
+        "cli/**/*.go",
+        "./scripts/run-example.sh"
+      ],
+      "dependsOn": []
     }
   }
 }
