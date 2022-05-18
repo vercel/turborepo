@@ -187,7 +187,7 @@ func gitLsTree(path string) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", startError)
 	}
 
-	reader := gitoutput.NewReader(out)
+	reader := gitoutput.NewLSTreeReader(out)
 	entries, readErr := reader.ReadAll()
 	if readErr != nil {
 		return nil, fmt.Errorf("failed to read `git ls-tree`: %w", readErr)

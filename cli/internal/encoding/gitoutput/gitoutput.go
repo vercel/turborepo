@@ -9,6 +9,16 @@ import (
 	"io"
 )
 
+type field int
+
+const (
+	ObjectMode  field = 1
+	ObjectType  field = 2
+	ObjectName  field = 3
+	ObjectStage field = 4
+	Path        field = 5
+)
+
 // Separators that appear in the output of `git ls-tree`
 const space rune = ' '
 const tab rune = '\t'
@@ -32,11 +42,12 @@ func (e *ParseError) Unwrap() error { return e.Err }
 
 // These are the errors that can be returned in ParseError.Err.
 var (
-	ErrInvalidObjectMode = errors.New("object mode is not valid")
-	ErrInvalidObjectType = errors.New("object type is not valid")
-	ErrInvalidObjectName = errors.New("object name is not valid")
-	ErrInvalidPath       = errors.New("path is not valid")
-	ErrFieldCount        = errors.New("too many fields")
+	ErrInvalidObjectMode  = errors.New("object mode is not valid")
+	ErrInvalidObjectType  = errors.New("object type is not valid")
+	ErrInvalidObjectName  = errors.New("object name is not valid")
+	ErrInvalidObjectStage = errors.New("object stage is not valid")
+	ErrInvalidPath        = errors.New("path is not valid")
+	ErrFieldCount         = errors.New("too many fields")
 )
 
 // A Reader reads records from `git ls-tree`'s output`. The Reader converts
@@ -46,6 +57,9 @@ type Reader struct {
 	// the backing array of the previous call's returned slice for performance.
 	// By default, each call to Read returns newly allocated memory owned by the caller.
 	ReuseRecord bool
+
+	// Fields specifies the type of each field.
+	Fields []field
 
 	reader *bufio.Reader
 
@@ -73,10 +87,19 @@ type Reader struct {
 	lastRecord []string
 }
 
-// NewReader returns a new Reader that reads from r.
-func NewReader(reader io.Reader) *Reader {
+// NewLSTreeReader returns a new Reader that reads from r.
+func NewLSTreeReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
+		Fields: []field{ObjectMode, ObjectType, ObjectName, Path},
+	}
+}
+
+// NewLSFilesReader returns a new Reader that reads from r.
+func NewLSFilesReader(reader io.Reader) *Reader {
+	return &Reader{
+		reader: bufio.NewReader(reader),
+		Fields: []field{ObjectMode, ObjectName, ObjectStage, Path},
 	}
 }
 
@@ -158,75 +181,18 @@ func (r *Reader) readEntry() ([]byte, error) {
 	return entry, err
 }
 
-func checkValid(fieldNumber int, value *[]byte) error {
-	switch fieldNumber {
-	case 0:
-		return checkObjectMode(value)
-	case 1:
-		return checkObjectType(value)
-	case 2:
-		return checkObjectName(value)
-	case 3:
-		return checkPath(value)
+func getSeparator(fieldNumber int, fieldCount int) rune {
+	remaining := fieldCount - fieldNumber
+
+	switch remaining {
 	default:
-		return ErrFieldCount
+		return space
+	case 2:
+		return tab
+	case 1:
+		return nul
 	}
 }
-
-func checkObjectMode(value *[]byte) error {
-	if len(*value) != 6 {
-		return ErrInvalidObjectMode
-	}
-
-	// 0-7 are 0x30 - 0x37
-	for _, currentByte := range *value {
-		if (currentByte ^ 0x30) > 7 {
-			return ErrInvalidObjectMode
-		}
-	}
-
-	// length of 6, 0-7
-	return nil
-}
-
-func checkObjectType(value *[]byte) error {
-	// Because of the space separator, there is no way to pass in a space.
-	index := bytes.Index(_allowedObjectType, *value)
-	if index != -1 && _allowedObjectType[index+len(*value)] != byte(space) {
-		return ErrInvalidObjectType
-	}
-	return nil
-}
-
-func checkObjectName(value *[]byte) error {
-	if len(*value) != 40 {
-		return ErrInvalidObjectName
-	}
-
-	// 0-9 are 0x30 - 0x39
-	// a-f are 0x61 - 0x66
-	for _, currentByte := range *value {
-		isNumber := (currentByte ^ 0x30) < 10
-		numericAlpha := (currentByte ^ 0x60)
-		isAlpha := (numericAlpha < 7) && (numericAlpha > 0)
-		if !(isNumber || isAlpha) {
-			return ErrInvalidObjectName
-		}
-	}
-
-	// length of 40, hex
-	return nil
-}
-
-func checkPath(value *[]byte) error {
-	// Exists at all.
-	if len(*value) == 0 {
-		return ErrInvalidPath
-	}
-	return nil
-}
-
-var separators = []rune{space, space, tab, nul}
 
 // readRecord reads a single record.
 func (r *Reader) readRecord(dst []string) ([]string, error) {
@@ -241,11 +207,16 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 	r.fieldPositions = r.fieldPositions[:0]
 	pos := position{entry: r.numEntry, col: 1}
 
-	for fieldNumber, separator := range separators {
+	fieldCount := len(r.Fields)
+
+	for fieldNumber, fieldType := range r.Fields {
+		separator := getSeparator(fieldNumber, fieldCount)
+
+		// TODO: Make sure it isn't past a different separator.
 		length := bytes.IndexRune(entry, separator)
 		field := entry[:length]
 
-		fieldError := checkValid(fieldNumber, &field)
+		fieldError := checkValid(fieldType, &field)
 		if fieldError != nil {
 			return nil, fieldError
 		}

@@ -30,7 +30,7 @@ type readTest struct {
 // They are removed before parsing and are used to verify the position
 // information reported by FieldPos.
 
-var readTests = []readTest{
+var lsTreeTests = []readTest{
 	{
 		Name:   "simple",
 		Input:  "§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§package.json\000",
@@ -58,16 +58,26 @@ var readTests = []readTest{
 	},
 }
 
+var lsFilesTests = []readTest{
+	{
+		Name:   "simple",
+		Input:  "§100644 §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 §0\t§package.json\000",
+		Output: [][]string{{"100644", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "0", "package.json"}},
+	},
+}
+
 func TestRead(t *testing.T) {
 	newReader := func(tt readTest) (*Reader, [][][2]int, map[int][2]int) {
 		positions, errPositions, input := makePositions(tt.Input)
-		r := NewReader(strings.NewReader(input))
+		// TODO: Better Toggle
+		// r := NewLSTreeReader(strings.NewReader(input))
+		r := NewLSFilesReader(strings.NewReader(input))
 
 		r.ReuseRecord = tt.ReuseRecord
 		return r, positions, errPositions
 	}
 
-	for _, tt := range readTests {
+	for _, tt := range lsFilesTests {
 		t.Run(tt.Name, func(t *testing.T) {
 			r, positions, errPositions := newReader(tt)
 			out, err := r.ReadAll()
@@ -218,11 +228,12 @@ func (r *nTimes) Read(p []byte) (n int, err error) {
 	}
 }
 
+// TODO: track other types.
 // benchmarkRead measures reading the provided ls-tree data.
 // initReader, if non-nil, modifies the Reader before it's used.
 func benchmarkRead(b *testing.B, initReader func(*Reader), rows string) {
 	b.ReportAllocs()
-	r := NewReader(&nTimes{s: rows, n: b.N})
+	r := NewLSTreeReader(&nTimes{s: rows, n: b.N})
 	if initReader != nil {
 		initReader(r)
 	}
