@@ -50,9 +50,6 @@ jobs:
         run: |
           cd cli && make e2e
 
-      - name: Benchmark and Smoke Tests
-        run: cd cli && make bench/turbo
-
   build-win:
     name: build and test
     timeout-minutes: 10
@@ -95,9 +92,6 @@ jobs:
       - name: E2E Tests
         run: cd cli && make e2e
 
-      - name: Benchmark and Smoke Tests
-        run: cd cli && make bench/turbo
-
   examples:
     name: run examples
     timeout-minutes: 15
@@ -109,6 +103,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        pkg: [yarn, pnpm, npm]
+        example: [kitchen-sink, design-system]
+        include:
+          - pkg: pnpm
+            example: with-pnpm
 
     steps:
       - name: Install Sponge
@@ -141,8 +140,8 @@ jobs:
           node-version: 16
           cache: pnpm
 
-      - name: Check examples
+      - name: Check ${{matrix.example}} example with ${{ matrix.pkg }}
         shell: bash
         env:
           FORCE_COLOR: true
-        run: ./scripts/run-examples.sh
+        run: ./scripts/run-example.sh ${{ matrix.example }} ${{ matrix.pkg }}
