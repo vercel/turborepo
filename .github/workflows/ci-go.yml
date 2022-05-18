@@ -143,8 +143,11 @@ jobs:
           node-version: 16
           cache: pnpm
 
+      - name: Build the cli
+        run: cd cli && go build ./cmd/turbo/...
+
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
         env:
           FORCE_COLOR: true
-        run: ./scripts/run-example.sh "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: ./cli/turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
