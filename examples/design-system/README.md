@@ -23,6 +23,7 @@ Clone the design system example locally or [from GitHub](https://github.com/verc
 npx degit vercel/turborepo/examples/design-system design-system
 cd design-system
 yarn install
+git init . && git add . && git commit -m "Init"
 ```
 
 ### Useful Commands
