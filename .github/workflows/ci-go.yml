@@ -101,11 +101,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        pkg: [yarn, npm]
+        manager: [yarn, npm]
         example: [basic, design-system]
         include:
-          - pkg: pnpm
+          - manager: pnpm
             example: with-pnpm
+
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Sponge
@@ -138,8 +139,8 @@ jobs:
           node-version: 16
           cache: pnpm
 
-      - name: Check ${{matrix.example}} example with ${{ matrix.pkg }}
+      - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
         env:
           FORCE_COLOR: true
-        run: ./scripts/run-example.sh "${{ matrix.example }}" "${{ matrix.pkg }}"
+        run: ./scripts/run-example.sh "${{ matrix.example }}" "${{ matrix.manager }}"
