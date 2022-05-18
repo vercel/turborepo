@@ -95,9 +95,7 @@ jobs:
   examples:
     name: run examples
     timeout-minutes: 15
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -143,11 +141,10 @@ jobs:
           node-version: 16
           cache: pnpm
 
-      - name: Build the cli
-        run: cd cli && go build ./cmd/turbo/...
-
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
         env:
           FORCE_COLOR: true
-        run: ./cli/turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+        run: ./turbow.sh run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"

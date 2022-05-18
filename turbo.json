@@ -38,7 +38,15 @@
     },
     "//#run-example": {
       "outputs": [],
-      "inputs": ["examples/**/.ts", "examples/**/.tsx", "cli/**/.go"],
+      "inputs": [
+        "examples/**/*.ts",
+        "examples/**/*.tsx",
+        "examples/**/*.json",
+        "examples/**/*.js",
+        "examples/**/*.yaml",
+        "cli/**/.go",
+        "./scripts/run-example.sh"
+      ],
       "dependsOn": []
     }
   }
