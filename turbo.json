@@ -1,11 +1,6 @@
 {
   "$schema": "./docs/public/schema.json",
   "baseBranch": "origin/main",
-  "globalDependencies": [
-    "$CONVERTKIT_API_KEY",
-    "$CONVERTKIT_API_SECRET",
-    "$CONVERTKIT_FORM_ID"
-  ],
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],

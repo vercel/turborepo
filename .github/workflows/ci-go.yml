@@ -147,4 +147,5 @@ jobs:
           FORCE_COLOR: true
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_REMOTE_ONLY: true
         run: ./turbow.sh run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
