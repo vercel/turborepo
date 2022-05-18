@@ -35,6 +35,11 @@
     "docs#build": {
       "outputs": [".next/**"],
       "dependsOn": ["^build", "docs#schema"]
+    },
+    "//#run-example": {
+      "outputs": [],
+      "inputs": ["examples/**/.ts", "examples/**/.tsx", "cli/**/.go"],
+      "dependsOn": []
     }
   }
 }
