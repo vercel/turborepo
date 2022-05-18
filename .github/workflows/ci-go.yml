@@ -105,8 +105,6 @@ jobs:
         example: [basic, design-system]
         include:
           - manager: pnpm
-          - manager: pnpm
-            example: with-pnpm
 
     runs-on: ${{ matrix.os }}
     steps:
