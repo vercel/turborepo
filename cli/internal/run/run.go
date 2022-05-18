@@ -26,10 +26,12 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
+	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/process"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
@@ -253,7 +255,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		c.Ui.Error(fmt.Sprintf("Error preparing engine: %s", err))
 		return 1
 	}
-	hashTracker := NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	hashTracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
 	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, c.Config.Cwd)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
@@ -638,7 +640,7 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *Tracker, startAt time.Time) int {
+func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) int {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if c.Config.IsLoggedIn() {
@@ -681,8 +683,8 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
-		deps := engine.TaskGraph.DownEdges(pt.taskID)
+	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+		deps := engine.TaskGraph.DownEdges(pt.TaskID)
 		return ec.exec(pt, deps)
 	}), core.ExecOpts{
 		Parallel:    rs.Opts.parallel,
@@ -724,24 +726,24 @@ type hashedTask struct {
 	Dependents   []string `json:"dependents"`
 }
 
-func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *Tracker, rs *runSpec) ([]hashedTask, error) {
+func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *packageTask) error {
-		passThroughArgs := rs.ArgsForTask(pt.task)
-		deps := engine.TaskGraph.DownEdges(pt.taskID)
+	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+		passThroughArgs := rs.ArgsForTask(pt.Task)
+		deps := engine.TaskGraph.DownEdges(pt.TaskID)
 		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 		if err != nil {
 			return err
 		}
-		command, ok := pt.pkg.Scripts[pt.task]
+		command, ok := pt.Command()
 		if !ok {
 			command = "<NONEXISTENT>"
 		}
-		isRootTask := pt.packageName == util.RootPkgName
+		isRootTask := pt.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", pt.task, command)
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", pt.Task, command)
 		}
-		ancestors, err := engine.TaskGraph.Ancestors(pt.taskID)
+		ancestors, err := engine.TaskGraph.Ancestors(pt.TaskID)
 		if err != nil {
 			return err
 		}
@@ -752,7 +754,7 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 				stringAncestors = append(stringAncestors, dep.(string))
 			}
 		}
-		descendents, err := engine.TaskGraph.Descendents(pt.taskID)
+		descendents, err := engine.TaskGraph.Descendents(pt.TaskID)
 		if err != nil {
 			return err
 		}
@@ -766,13 +768,13 @@ func (c *RunCommand) executeDryRun(engine *core.Scheduler, g *completeGraph, tas
 		sort.Strings(stringDescendents)
 
 		taskIDs = append(taskIDs, hashedTask{
-			TaskID:       pt.taskID,
-			Task:         pt.task,
-			Package:      pt.packageName,
+			TaskID:       pt.TaskID,
+			Task:         pt.Task,
+			Package:      pt.PackageName,
 			Hash:         hash,
 			Command:      command,
-			Dir:          pt.pkg.Dir,
-			Outputs:      pt.taskDefinition.Outputs,
+			Dir:          pt.Pkg.Dir,
+			Outputs:      pt.TaskDefinition.Outputs,
 			LogFile:      pt.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
@@ -844,7 +846,7 @@ type execContext struct {
 	logger         hclog.Logger
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
-	taskHashes     *Tracker
+	taskHashes     *taskhash.Tracker
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -857,18 +859,18 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
+func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	targetLogger := e.logger.Named(fmt.Sprintf("%v:%v", pt.packageName, pt.task))
+	targetLogger := e.logger.Named(pt.OutputPrefix())
 	targetLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.Run(util.GetTaskId(pt.packageName, pt.task))
+	tracer := e.runState.Run(pt.TaskID)
 
 	// Create a logger
-	pref := e.colorCache.PrefixColor(pt.packageName)
-	actualPrefix := pref("%s:%s: ", pt.packageName, pt.task)
+	pref := e.colorCache.PrefixColor(pt.PackageName)
+	actualPrefix := pref("%s: ", pt.OutputPrefix())
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: actualPrefix,
@@ -877,10 +879,10 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 		WarnPrefix:   actualPrefix,
 	}
 
-	logFileName := filepath.Join(pt.pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.task))
+	logFileName := pt.RepoRelativeLogFile()
 	targetLogger.Debug("log file", "path", filepath.Join(e.rs.Opts.cwd, logFileName))
 
-	passThroughArgs := e.rs.ArgsForTask(pt.task)
+	passThroughArgs := e.rs.ArgsForTask(pt.Task)
 	hash, err := e.taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 	e.logger.Debug("task hash", "value", hash)
 	if err != nil {
@@ -892,7 +894,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// so that downstream tasks can count on the hash existing
 	//
 	// bail if the script doesn't exist
-	if _, ok := pt.pkg.Scripts[pt.task]; !ok {
+	if _, ok := pt.Command(); !ok {
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
@@ -901,7 +903,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	var hit bool
 	// If we aren't forcing execution, and the task is not explicitly marked cache: false,
 	// then try to read from the cache first.
-	if !e.rs.Opts.forceExecution && pt.taskDefinition.ShouldCache {
+	if !e.rs.Opts.forceExecution && pt.TaskDefinition.ShouldCache {
 		hit, _, _, err = e.turboCache.Fetch(e.rs.Opts.cwd, hash, nil)
 		if err != nil {
 			targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -931,11 +933,11 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 
 	// Setup command execution
-	argsactual := append([]string{"run"}, pt.task)
+	argsactual := append([]string{"run"}, pt.Task)
 	argsactual = append(argsactual, passThroughArgs...)
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
-	cmd.Dir = pt.pkg.Dir
+	cmd.Dir = pt.Pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 
@@ -943,7 +945,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
 	var writer io.Writer
-	if !e.rs.Opts.cache || !pt.taskDefinition.ShouldCache {
+	if !e.rs.Opts.cache || !pt.TaskDefinition.ShouldCache {
 		writer = os.Stdout
 	} else {
 		// Setup log file
@@ -1004,14 +1006,14 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 	}
 
 	// Cache command outputs
-	if e.rs.Opts.cache && pt.taskDefinition.ShouldCache {
+	if e.rs.Opts.cache && pt.TaskDefinition.ShouldCache {
 		outputs := pt.HashableOutputs()
 		targetLogger.Debug("caching output", "outputs", outputs)
 		ignore := []string{}
 
 		repoRelativeGlobs := make([]string, len(outputs))
 		for index, output := range outputs {
-			repoRelativeGlobs[index] = filepath.Join(pt.pkg.Dir, output)
+			repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir, output)
 		}
 
 		filesToBeCached, err := globby.GlobFiles(e.rs.Opts.cwd, repoRelativeGlobs, ignore)
@@ -1030,7 +1032,7 @@ func (e *execContext) exec(pt *packageTask, deps dag.Set) error {
 			relativePaths[index] = relativePath
 		}
 
-		if err := e.turboCache.Put(pt.pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
+		if err := e.turboCache.Put(pt.Pkg.Dir, hash, int(time.Since(cmdTime).Milliseconds()), relativePaths); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -1095,32 +1097,7 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
 	return nil
 }
 
-type packageTask struct {
-	taskID         string
-	task           string
-	packageName    string
-	pkg            *fs.PackageJSON
-	taskDefinition *fs.TaskDefinition
-}
-
-func (pt *packageTask) RepoRelativeLogFile() string {
-	return filepath.Join(pt.pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.task))
-}
-
-func (pt *packageTask) HashableOutputs() []string {
-	outputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.task)}
-	outputs = append(outputs, pt.taskDefinition.Outputs...)
-	return outputs
-}
-
-func (pt *packageTask) ToPackageFileHashKey() packageFileHashKey {
-	return (&packageFileSpec{
-		pkg:    pt.packageName,
-		inputs: pt.taskDefinition.Inputs,
-	}).ToKey()
-}
-
-func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) error) func(taskID string) error {
+func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 		name, task := util.GetPackageTaskFromId(taskID)
 		pkg, ok := g.PackageInfos[name]
@@ -1139,12 +1116,12 @@ func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *packageTask) erro
 			// override if we need to...
 			pipeline = altpipe
 		}
-		return visitor(&packageTask{
-			taskID:         taskID,
-			task:           task,
-			packageName:    name,
-			pkg:            pkg,
-			taskDefinition: &pipeline,
+		return visitor(&nodes.PackageTask{
+			TaskID:         taskID,
+			Task:           task,
+			PackageName:    name,
+			Pkg:            pkg,
+			TaskDefinition: &pipeline,
 		})
 	}
 }

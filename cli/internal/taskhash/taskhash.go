@@ -1,6 +1,7 @@
-package run
+// package taskhash handles calculating dependency hashes for nodes in the task execution
+// graph.
 
-// TODO(gsoltis): This should eventually either be its own package or part of core
+package taskhash
 
 import (
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -50,10 +52,17 @@ type packageFileSpec struct {
 	inputs []string
 }
 
+func specFromPackageTask(pt *nodes.PackageTask) packageFileSpec {
+	return packageFileSpec{
+		pkg:    pt.PackageName,
+		inputs: pt.TaskDefinition.Inputs,
+	}
+}
+
 // packageFileHashKey is a hashable representation of a packageFileSpec.
 type packageFileHashKey string
 
-func (pfs *packageFileSpec) ToKey() packageFileHashKey {
+func (pfs packageFileSpec) ToKey() packageFileHashKey {
 	sort.Strings(pfs.inputs)
 	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
 }
@@ -237,15 +246,15 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(pt *packageTask, dependencySet dag.Set, args []string) (string, error) {
-	pkgFileHashKey := pt.ToPackageFileHashKey()
+func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Set, args []string) (string, error) {
+	pkgFileHashKey := specFromPackageTask(pt).ToKey()
 	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
 	outputs := pt.HashableOutputs()
 	hashableEnvPairs := []string{}
-	for _, envVar := range pt.taskDefinition.EnvVarDependencies {
+	for _, envVar := range pt.TaskDefinition.EnvVarDependencies {
 		hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", envVar, os.Getenv(envVar)))
 	}
 	sort.Strings(hashableEnvPairs)
@@ -255,8 +264,8 @@ func (th *Tracker) CalculateTaskHash(pt *packageTask, dependencySet dag.Set, arg
 	}
 	hash, err := fs.HashObject(&taskHashInputs{
 		hashOfFiles:          hashOfFiles,
-		externalDepsHash:     pt.pkg.ExternalDepsHash,
-		task:                 pt.task,
+		externalDepsHash:     pt.Pkg.ExternalDepsHash,
+		task:                 pt.Task,
 		outputs:              outputs,
 		passThruArgs:         args,
 		hashableEnvPairs:     hashableEnvPairs,
@@ -264,10 +273,10 @@ func (th *Tracker) CalculateTaskHash(pt *packageTask, dependencySet dag.Set, arg
 		taskDependencyHashes: taskDependencyHashes,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to hash task %v: %v", pt.taskID, hash)
+		return "", fmt.Errorf("failed to hash task %v: %v", pt.TaskID, hash)
 	}
 	th.mu.Lock()
-	th.packageTaskHashes[pt.taskID] = hash
+	th.packageTaskHashes[pt.TaskID] = hash
 	th.mu.Unlock()
 	return hash, nil
 }
