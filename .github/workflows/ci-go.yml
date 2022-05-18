@@ -103,6 +103,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         pkg: [yarn, npm]
         example: [basic, design-system]
+        include:
+          - pkg: pnpm
+            example: with-pnpm
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Sponge
@@ -124,6 +127,18 @@ jobs:
         with:
           go-version: 1.18.0
         id: go
+
+      - uses: pnpm/action-setup@v2.1.0
+        with:
+          version: 6.32.11
+        if: ${{ matrix.pkg }} == "pnpm"
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: pnpm
+        if: ${{ matrix.pkg }} == "pnpm"
 
       - name: Check ${{matrix.example}} example with ${{ matrix.pkg }}
         shell: bash
