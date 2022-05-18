@@ -235,6 +235,10 @@ func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion stri
 
 // Selects the current working directory from OS
 // and overrides with the `--cwd=` input argument
+// The various package managers we support resolve symlinks at this stage,
+// so we do as well. This means that relative references out of the monorepo
+// will be relative to the resolved path, not necessarily the path that the
+// user uses to access the monorepo.
 func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 	cwd, err := fs.GetCwd()
 	if err != nil {
@@ -246,7 +250,11 @@ func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 		} else if strings.HasPrefix(arg, "--cwd=") {
 			if len(arg[len("--cwd="):]) > 0 {
 				cwdArgRaw := arg[len("--cwd="):]
-				cwdArg, err := fs.CheckedToAbsolutePath(cwdArgRaw)
+				resolved, err := filepath.EvalSymlinks(cwdArgRaw)
+				if err != nil {
+					return "", err
+				}
+				cwdArg, err := fs.CheckedToAbsolutePath(resolved)
 				if err != nil {
 					// the argument is a relative path. Join it with our actual cwd
 					return cwd.Join(cwdArgRaw), nil

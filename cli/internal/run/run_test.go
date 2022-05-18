@@ -31,7 +31,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         10,
@@ -50,7 +49,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--scope=foo", "--scope=blah"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         10,
@@ -70,7 +68,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--concurrency=12"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         12,
@@ -89,7 +86,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "g.png",
 				concurrency:         10,
@@ -108,7 +104,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "g.png",
 				concurrency:         10,
@@ -128,7 +123,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png", "--"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "g.png",
 				concurrency:         10,
@@ -149,7 +143,6 @@ func TestParseConfig(t *testing.T) {
 			&RunOptions{
 				includeDependents: true,
 				filterPatterns:    []string{"bar", "...[main]"},
-				stream:            true,
 				bail:              true,
 				concurrency:       10,
 				cache:             true,
@@ -182,7 +175,6 @@ func TestParseConfig(t *testing.T) {
 func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 	expected := &RunOptions{
 		includeDependents:   true,
-		stream:              true,
 		bail:                true,
 		dotGraph:            "",
 		concurrency:         10,
@@ -219,7 +211,7 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 func TestGetTargetsFromArguments(t *testing.T) {
 	type args struct {
 		arguments []string
-		turboJSON *fs.TurboJSON
+		pipeline  fs.Pipeline
 	}
 	tests := []struct {
 		name    string
@@ -231,12 +223,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles one defined target",
 			args: args{
 				arguments: []string{"build"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build"},
@@ -246,12 +236,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles multiple targets and ignores flags",
 			args: args{
 				arguments: []string{"build", "test", "--foo", "--bar"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build", "test"},
@@ -261,12 +249,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles pass through arguments after -- ",
 			args: args{
 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build", "test"},
@@ -276,12 +262,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles unknown pipeline targets ",
 			args: args{
 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    nil,
@@ -291,7 +275,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.turboJSON)
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.pipeline)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
 				return
