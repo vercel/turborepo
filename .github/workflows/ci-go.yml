@@ -102,7 +102,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
-        example: [basic, design-system]
+        example: [basic, design-system, kitchen-sink]
         include:
           - os: ubuntu-latest
             manager: pnpm
