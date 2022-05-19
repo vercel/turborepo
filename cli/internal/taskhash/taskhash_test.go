@@ -95,10 +95,10 @@ func Test_manuallyHashPackage(t *testing.T) {
 	count := 0
 	for path, spec := range files {
 		if strings.HasPrefix(path, prefix) {
-			got, ok := hashes[path[prefixLen:]]
+			got, ok := hashes[fs.UnsafeToRepoRelativeUnixPath(path[prefixLen:])]
 			if !ok {
 				if spec.hash != "" {
-					t.Errorf("did not find hash for %v, but wanted one", path)
+					t.Errorf("did not find hash for %v, but wanted one %v", path, prefixLen)
 				}
 			} else if got != spec.hash {
 				t.Errorf("hash of %v, got %v want %v", path, got, spec.hash)
@@ -119,7 +119,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	for path, spec := range files {
 		if strings.HasPrefix(path, prefix) {
 			shouldInclude := strings.HasSuffix(path, "file")
-			got, ok := justFileHashes[path[prefixLen:]]
+			got, ok := justFileHashes[fs.UnsafeToRepoRelativeUnixPath(path[prefixLen:])]
 			if !ok && shouldInclude {
 				if spec.hash != "" {
 					t.Errorf("did not find hash for %v, but wanted one", path)

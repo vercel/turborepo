@@ -89,10 +89,19 @@ func gitHashObject(repoRoot AbsolutePath, filesToHash []string) (map[RepoRelativ
 		}
 
 		go func() {
-			defer stdinPipe.Close()
+			defer func() {
+				stdinPipeCloseError := stdinPipe.Close()
+				if stdinPipeCloseError != nil {
+					return
+				}
+			}()
+
 			for _, file := range filesToHash {
 				// Expects paths to be one per line so we escape newlines
-				io.WriteString(stdinPipe, strings.ReplaceAll(file, "\n", "\\n")+"\n")
+				_, err := io.WriteString(stdinPipe, strings.ReplaceAll(file, "\n", "\\n")+"\n")
+				if err != nil {
+					return
+				}
 			}
 		}()
 
