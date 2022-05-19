@@ -21,17 +21,17 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelativeUnixPath]string, error) {
+func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeUnixPath]string, error) {
 	// Add all the checked in hashes.
-	var result map[RepoRelativeUnixPath]string
+	var result map[RelativeUnixPath]string
 	if len(p.InputPatterns) == 0 {
-		gitLsTreeOutput, err := gitLsTree(repoRoot, p.PackagePath)
+		gitLsTreeOutput, err := gitLsTree(rootPath, p.PackagePath)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
 		result = gitLsTreeOutput
 	} else {
-		gitLsFilesOutput, err := gitLsFiles(repoRoot, p.PackagePath, p.InputPatterns)
+		gitLsFilesOutput, err := gitLsFiles(rootPath, p.PackagePath, p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -39,7 +39,7 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 	}
 
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(repoRoot, p.PackagePath, p.InputPatterns)
+	gitStatusOutput, err := gitStatus(rootPath, p.PackagePath, p.InputPatterns)
 	if err != nil {
 		return nil, fmt.Errorf("Could not get git hashes from git status")
 	}
@@ -53,7 +53,7 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 		}
 	}
 
-	hashes, err := gitHashObject(repoRoot, filesToHash)
+	hashes, err := gitHashObject(rootPath, filesToHash)
 	if err != nil {
 		return nil, err
 	}
@@ -68,20 +68,20 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(repoRoot AbsolutePath, files []string) (map[RepoRelativeUnixPath]string, error) {
-	result, hashError := gitHashObject(repoRoot, files)
+func GetHashableDeps(rootPath AbsolutePath, files []string) (map[RelativeUnixPath]string, error) {
+	result, hashError := gitHashObject(rootPath, files)
 	if hashError != nil {
 		return nil, hashError
 	}
 
-	repoRootString := repoRoot.ToString()
-	relativeResult := make(map[RepoRelativeUnixPath]string)
+	rootPathString := rootPath.ToString()
+	relativeResult := make(map[RelativeUnixPath]string)
 	for file, hash := range result {
-		relativePath, err := filepath.Rel(repoRootString, file.ToString())
+		relativePath, err := filepath.Rel(rootPathString, file.ToString())
 		if err != nil {
 			return nil, err
 		}
-		relativeResult[UnsafeToRepoRelativeUnixPath(relativePath)] = hash
+		relativeResult[UnsafeToRelativeUnixPath(relativePath)] = hash
 	}
 
 	return relativeResult, nil
@@ -90,13 +90,13 @@ func GetHashableDeps(repoRoot AbsolutePath, files []string) (map[RepoRelativeUni
 // gitHashObject takes a list of files returns a map of with their git hash values.
 // It uses git hash-object under the hood.
 // Note that filesToHash must have full paths.
-func gitHashObject(repoRoot AbsolutePath, filesToHash []string) (map[RepoRelativeUnixPath]string, error) {
+func gitHashObject(rootPath AbsolutePath, filesToHash []string) (map[RelativeUnixPath]string, error) {
 	fileCount := len(filesToHash)
-	changes := make(map[RepoRelativeUnixPath]string, fileCount)
+	changes := make(map[RelativeUnixPath]string, fileCount)
 
 	if fileCount > 0 {
 		cmd := exec.Command("git", "hash-object", "--stdin-paths")
-		cmd.Dir = repoRoot.ToString()
+		cmd.Dir = rootPath.ToString()
 
 		stdinPipe, stdinPipeError := cmd.StdinPipe()
 		if stdinPipeError != nil {
@@ -163,7 +163,7 @@ func gitHashObject(repoRoot AbsolutePath, filesToHash []string) (map[RepoRelativ
 
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
-			changes[UnsafeToRepoRelativeUnixPath(filepath)] = hash
+			changes[UnsafeToRelativeUnixPath(filepath)] = hash
 		}
 	}
 
@@ -195,38 +195,38 @@ func runGitCommand(cmd *exec.Cmd, name string, handler func(io.Reader) *gitoutpu
 	return entries, nil
 }
 
-func gitLsTree(repoRoot AbsolutePath, path string) (map[RepoRelativeUnixPath]string, error) {
+func gitLsTree(rootPath AbsolutePath, path string) (map[RelativeUnixPath]string, error) {
 	cmd := exec.Command("git", "ls-tree", "-r", "-z", "HEAD")
-	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
+	cmd.Dir = filepath.Join(rootPath.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make(map[RepoRelativeUnixPath]string, len(entries))
+	changes := make(map[RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		changes[UnsafeToRepoRelativeUnixPath(entry[3])] = entry[2]
+		changes[UnsafeToRelativeUnixPath(entry[3])] = entry[2]
 	}
 
 	return changes, nil
 }
 
-func gitLsFiles(repoRoot AbsolutePath, path string, patterns []string) (map[RepoRelativeUnixPath]string, error) {
+func gitLsFiles(rootPath AbsolutePath, path string, patterns []string) (map[RelativeUnixPath]string, error) {
 	cmd := exec.Command("git", "ls-files", "-s", "-z", "--")
 	cmd.Args = append(cmd.Args, patterns...)
-	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
+	cmd.Dir = filepath.Join(rootPath.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make(map[RepoRelativeUnixPath]string, len(entries))
+	changes := make(map[RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		changes[UnsafeToRepoRelativeUnixPath(entry[3])] = entry[1]
+		changes[UnsafeToRelativeUnixPath(entry[3])] = entry[1]
 	}
 
 	return changes, nil
@@ -237,24 +237,24 @@ type status struct {
 	y string
 }
 
-func gitStatus(repoRoot AbsolutePath, path string, patterns []string) (map[RepoRelativeUnixPath]status, error) {
+func gitStatus(rootPath AbsolutePath, path string, patterns []string) (map[RelativeUnixPath]status, error) {
 	cmd := exec.Command("git", "status", "-u", "-z", "--")
 	if len(patterns) == 0 {
 		cmd.Args = append(cmd.Args, ".")
 	} else {
 		cmd.Args = append(cmd.Args, patterns...)
 	}
-	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
+	cmd.Dir = filepath.Join(rootPath.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make(map[RepoRelativeUnixPath]status, len(entries))
+	changes := make(map[RelativeUnixPath]status, len(entries))
 
 	for _, entry := range entries {
-		changes[UnsafeToRepoRelativeUnixPath(entry[2])] = status{x: entry[0], y: entry[1]}
+		changes[UnsafeToRelativeUnixPath(entry[2])] = status{x: entry[0], y: entry[1]}
 	}
 
 	return changes, nil

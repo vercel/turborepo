@@ -26,7 +26,7 @@ func Test_GetHashableDeps(t *testing.T) {
 		t.Fatalf("failed to hash files: %v", err)
 	}
 	// Note that the paths here are platform independent, so hardcoded slashes should be fine
-	expected := []RepoRelativeUnixPath{
+	expected := []RelativeUnixPath{
 		"../turbo.json",
 		"Makefile",
 		"cmd/turbo/main.go",
@@ -37,7 +37,7 @@ func Test_GetHashableDeps(t *testing.T) {
 		}
 	}
 	if len(hashes) != len(expected) {
-		keys := []RepoRelativeUnixPath{}
+		keys := []RelativeUnixPath{}
 		for key := range hashes {
 			keys = append(keys, key)
 		}

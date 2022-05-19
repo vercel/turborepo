@@ -464,7 +464,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}
 	globalHashable := struct {
-		globalFileHashMap    map[fs.RepoRelativeUnixPath]string
+		globalFileHashMap    map[fs.RelativeUnixPath]string
 		rootExternalDepsHash string
 		hashedSortedEnvPairs []string
 		globalCacheKey       string
