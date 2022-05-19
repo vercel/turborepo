@@ -459,12 +459,12 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 	}
 
 	// No prefix, global deps already have full paths
-	globalFileHashMap, err := fs.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
+	globalFileHashMap, err := fs.GetHashableDeps(fs.UnsafeToAbsolutePath(rootpath), globalDeps.UnsafeListOfStrings())
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}
 	globalHashable := struct {
-		globalFileHashMap    map[string]string
+		globalFileHashMap    map[fs.RepoRelativeUnixPath]string
 		rootExternalDepsHash string
 		hashedSortedEnvPairs []string
 		globalCacheKey       string

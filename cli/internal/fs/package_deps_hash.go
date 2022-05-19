@@ -1,15 +1,13 @@
 package fs
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
 )
 
@@ -27,13 +25,13 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 	// Add all the checked in hashes.
 	var result map[RepoRelativeUnixPath]string
 	if len(p.InputPatterns) == 0 {
-		gitLsTreeOutput, err := gitLsTree(p.PackagePath)
+		gitLsTreeOutput, err := gitLsTree(repoRoot, p.PackagePath)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
 		result = gitLsTreeOutput
 	} else {
-		gitLsFilesOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.InputPatterns)
+		gitLsFilesOutput, err := gitLsFiles(repoRoot, p.PackagePath, p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -41,7 +39,7 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 	}
 
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(repoRoot.Join(p.PackagePath), p.InputPatterns)
+	gitStatusOutput, err := gitStatus(repoRoot, p.PackagePath, p.InputPatterns)
 	if err != nil {
 		return nil, fmt.Errorf("Could not get git hashes from git status")
 	}
@@ -51,91 +49,97 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 		if status.x == "D" || status.y == "D" {
 			delete(result, filePath)
 		} else {
-			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filePath.ToString()))
+			filesToHash = append(filesToHash, filePath.ToString())
 		}
 	}
-	hashes, err := GetHashableDeps(filesToHash, p.PackagePath)
+
+	hashes, err := gitHashObject(repoRoot, filesToHash)
 	if err != nil {
 		return nil, err
 	}
 
-	for platformIndependentPath, hash := range hashes {
-		result[UnsafeToRepoRelativeUnixPath(platformIndependentPath)] = hash
+	// Zip up file paths and hashes together
+	for filePath, hash := range hashes {
+		result[filePath] = hash
 	}
+
 	return result, nil
 }
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]string, error) {
-	fileHashes, err := gitHashForFiles(absolutePaths)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to hash files %v", strings.Join(absolutePaths, ", "))
-	}
-	result := make(map[string]string)
-	for filename, hash := range fileHashes {
-		// Normalize path as POSIX-style and relative to "relativeTo"
-		relativePath, err := filepath.Rel(relativeTo, filename)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get relative path from %v to %v", relativeTo, relativePath)
-		}
-		key := filepath.ToSlash(relativePath)
-		result[key] = hash
-	}
-	return result, nil
+func GetHashableDeps(repoRoot AbsolutePath, files []string) (map[RepoRelativeUnixPath]string, error) {
+	return gitHashObject(repoRoot, files)
 }
 
-// threadsafeBufferWriter is a wrapper around a byte buffer and a lock, allowing
-// multiple goroutines to write to the same buffer. No attempt is made to
-// lock around reading, which should only be done once no more writing will occur.
-type threadsafeBufferWriter struct {
-	mu     sync.Mutex
-	buffer bytes.Buffer
-}
-
-func (tsbw *threadsafeBufferWriter) Write(p []byte) (int, error) {
-	tsbw.mu.Lock()
-	defer tsbw.mu.Unlock()
-	return tsbw.buffer.Write(p)
-}
-
-var _ io.Writer = (*threadsafeBufferWriter)(nil)
-
-// gitHashForFiles a list of files returns a map of with their git hash values. It uses
-// git hash-object under the hood.
+// gitHashObject takes a list of files returns a map of with their git hash values.
+// It uses git hash-object under the hood.
 // Note that filesToHash must have full paths.
-func gitHashForFiles(filesToHash []string) (map[string]string, error) {
-	changes := make(map[string]string)
-	if len(filesToHash) > 0 {
-		input := []string{"hash-object"}
-		input = append(input, filesToHash...)
-		cmd := exec.Command("git", input...)
-		// exec.Command writes to stdout and stderr from different goroutines,
-		// but only if they aren't the same io.Writer. Since we're passing different
-		// io.Writer instances that can optionally write to the same buffer, we need
-		// to do the locking ourselves.
-		var allout threadsafeBufferWriter
-		var stdout bytes.Buffer
-		// write stdout to both the stdout buffer, and the combined output buffer
-		// we don't expect to need stderr, but in the event that something goes wrong,
-		// we'd like to report the entirety of the output in the order it was output.
-		mw := io.MultiWriter(&allout, &stdout)
-		cmd.Stdout = mw
-		cmd.Stderr = &allout
-		err := cmd.Run()
-		if err != nil {
-			output := string(allout.buffer.Bytes())
-			return nil, fmt.Errorf("git hash-object exited with status: %w. Output:\n%v", err, output)
+func gitHashObject(repoRoot AbsolutePath, filesToHash []string) (map[RepoRelativeUnixPath]string, error) {
+	fileCount := len(filesToHash)
+	changes := make(map[RepoRelativeUnixPath]string, fileCount)
+
+	if fileCount > 0 {
+		cmd := exec.Command("git", "hash-object", "--stdin-paths")
+		cmd.Dir = repoRoot.ToString()
+
+		stdinPipe, stdinPipeError := cmd.StdinPipe()
+		if stdinPipeError != nil {
+			return nil, stdinPipeError
 		}
-		offByOne := strings.Split(string(stdout.Bytes()), "\n") // there is an extra ""
-		hashes := offByOne[:len(offByOne)-1]
-		if len(hashes) != len(filesToHash) {
-			output := string(allout.buffer.Bytes())
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes. Full output:\n%v", len(filesToHash), len(hashes), output)
+
+		go func() {
+			defer stdinPipe.Close()
+			for _, file := range filesToHash {
+				// Expects paths to be one per line so we escape newlines
+				io.WriteString(stdinPipe, strings.ReplaceAll(file, "\n", "\\n")+"\n")
+			}
+		}()
+
+		stdoutPipe, stdoutPipeError := cmd.StdoutPipe()
+		if stdoutPipeError != nil {
+			return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", stdoutPipeError)
 		}
+
+		startError := cmd.Start()
+		if startError != nil {
+			return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", startError)
+		}
+
+		index := 0
+		hashes := make([]string, len(filesToHash))
+		scanner := bufio.NewScanner(stdoutPipe)
+
+		for scanner.Scan() {
+			hash := scanner.Text()
+			scanError := scanner.Err()
+			if scanError != nil {
+				return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", scanError)
+			}
+
+			// TODO: verify hash is SHA-like
+			if len(hash) != 40 {
+				return nil, fmt.Errorf("failed to read `git %s`: %s", "hash-object", "invalid hash received")
+			}
+
+			// Worked, save it off.
+			hashes[index] = hash
+			index++
+		}
+
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", waitErr)
+		}
+
+		hashCount := len(hashes)
+		if fileCount != hashCount {
+			return nil, fmt.Errorf("failed to read `git %s`: %d files, %d hashes", "hash-object", fileCount, hashCount)
+		}
+
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
-			changes[filepath] = hash
+			changes[UnsafeToRepoRelativeUnixPath(filepath)] = hash
 		}
 	}
 
@@ -167,9 +171,9 @@ func runGitCommand(cmd *exec.Cmd, name string, handler func(io.Reader) *gitoutpu
 	return entries, nil
 }
 
-func gitLsTree(path string) (map[RepoRelativeUnixPath]string, error) {
-	cmd := exec.Command("git", "ls-tree", "HEAD", "-z", "-r")
-	cmd.Dir = path
+func gitLsTree(repoRoot AbsolutePath, path string) (map[RepoRelativeUnixPath]string, error) {
+	cmd := exec.Command("git", "ls-tree", "--full-name", "-r", "-z", "HEAD")
+	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
 	if err != nil {
@@ -185,10 +189,10 @@ func gitLsTree(path string) (map[RepoRelativeUnixPath]string, error) {
 	return changes, nil
 }
 
-func gitLsFiles(path AbsolutePath, patterns []string) (map[RepoRelativeUnixPath]string, error) {
-	cmd := exec.Command("git", "ls-files", "-s", "-z", "--")
+func gitLsFiles(repoRoot AbsolutePath, path string, patterns []string) (map[RepoRelativeUnixPath]string, error) {
+	cmd := exec.Command("git", "ls-files", "--full-name", "-s", "-z", "--")
 	cmd.Args = append(cmd.Args, patterns...)
-	cmd.Dir = path.ToString()
+	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
 	if err != nil {
@@ -209,14 +213,14 @@ type status struct {
 	y string
 }
 
-func gitStatus(path AbsolutePath, patterns []string) (map[RepoRelativeUnixPath]status, error) {
+func gitStatus(repoRoot AbsolutePath, path string, patterns []string) (map[RepoRelativeUnixPath]status, error) {
 	cmd := exec.Command("git", "status", "-u", "-z", "--")
 	if len(patterns) == 0 {
 		cmd.Args = append(cmd.Args, ".")
 	} else {
 		cmd.Args = append(cmd.Args, patterns...)
 	}
-	cmd.Dir = path.ToString()
+	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
 	if err != nil {
