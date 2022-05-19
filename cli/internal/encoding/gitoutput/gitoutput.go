@@ -1,4 +1,4 @@
-// Package gitoutput reads the output of calls to `git ls-tree`.
+// Package gitoutput reads the output of calls to `git`.
 package gitoutput
 
 import (
@@ -12,23 +12,23 @@ import (
 type field int
 
 const (
-	// ObjectMode is the mode field from git outputs. e.g. 100644
+	// ObjectMode is the mode field from `git`` outputs. e.g. 100644
 	ObjectMode field = 1
-	// ObjectType is the set of allowed types from git outputs: blob, tree, commit
+	// ObjectType is the set of allowed types from `git`` outputs: blob, tree, commit
 	ObjectType field = 2
 	// ObjectName is the 40-character SHA hash
 	ObjectName field = 3
 	// ObjectStage is a value 0-3.
 	ObjectStage field = 4
-	// StatusX is the first character of the two-character output from git status.
+	// StatusX is the first character of the two-character output from `git status`.
 	StatusX field = 5
-	// StatusY is the second character of the two-character output from git status.
+	// StatusY is the second character of the two-character output from `git status`.
 	StatusY field = 6
-	// Path is the file path relative to the repository root in git.
+	// Path is the file path under version control in `git`.
 	Path field = 7
 )
 
-// Separators that appear in the output of `git ls-tree`
+// Separators that appear in the output of `git`
 const space rune = ' '
 const tab rune = '\t'
 const nul rune = '\000'
@@ -59,8 +59,7 @@ var (
 	ErrFieldCount           = errors.New("too many fields")
 )
 
-// A Reader reads records from `git ls-tree`'s output`. The Reader converts
-// all \r\n sequences in its input to plain \n.
+// A Reader reads records from `git`'s output`.
 type Reader struct {
 	// ReuseRecord controls whether calls to Read may return a slice sharing
 	// the backing array of the previous call's returned slice for performance.
@@ -72,7 +71,7 @@ type Reader struct {
 
 	reader *bufio.Reader
 
-	// numEntry is the current entry being read in the ls-tree output.
+	// numEntry is the current entry being read in the `git` output.
 	numEntry int
 
 	// rawBuffer is an entry buffer only used by the readEntry method.
@@ -80,8 +79,6 @@ type Reader struct {
 
 	// recordBuffer holds the unescaped fields, one after another.
 	// The fields can be accessed by using the indexes in fieldIndexes.
-	// E.g., For the row `a,"b","c""d",e`, recordBuffer will contain `abc"de`
-	// and fieldIndexes will contain the indexes [1, 2, 5, 6].
 	recordBuffer []byte
 
 	// fieldIndexes is an index of fields inside recordBuffer.
@@ -96,7 +93,7 @@ type Reader struct {
 	lastRecord []string
 }
 
-// NewLSTreeReader returns a new Reader that reads from r.
+// NewLSTreeReader returns a new Reader that reads from reader.
 func NewLSTreeReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
@@ -104,7 +101,7 @@ func NewLSTreeReader(reader io.Reader) *Reader {
 	}
 }
 
-// NewLSFilesReader returns a new Reader that reads from r.
+// NewLSFilesReader returns a new Reader that reads from reader.
 func NewLSFilesReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
@@ -112,7 +109,7 @@ func NewLSFilesReader(reader io.Reader) *Reader {
 	}
 }
 
-// NewStatusReader returns a new Reader that reads from r.
+// NewStatusReader returns a new Reader that reads from reader.
 func NewStatusReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
