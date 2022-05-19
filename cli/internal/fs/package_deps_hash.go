@@ -69,7 +69,22 @@ func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[RepoRelat
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
 func GetHashableDeps(repoRoot AbsolutePath, files []string) (map[RepoRelativeUnixPath]string, error) {
-	return gitHashObject(repoRoot, files)
+	result, hashError := gitHashObject(repoRoot, files)
+	if hashError != nil {
+		return nil, hashError
+	}
+
+	repoRootString := repoRoot.ToString()
+	relativeResult := make(map[RepoRelativeUnixPath]string)
+	for file, hash := range result {
+		relativePath, err := filepath.Rel(repoRootString, file.ToString())
+		if err != nil {
+			return nil, err
+		}
+		relativeResult[UnsafeToRepoRelativeUnixPath(relativePath)] = hash
+	}
+
+	return relativeResult, nil
 }
 
 // gitHashObject takes a list of files returns a map of with their git hash values.
@@ -181,7 +196,7 @@ func runGitCommand(cmd *exec.Cmd, name string, handler func(io.Reader) *gitoutpu
 }
 
 func gitLsTree(repoRoot AbsolutePath, path string) (map[RepoRelativeUnixPath]string, error) {
-	cmd := exec.Command("git", "ls-tree", "--full-name", "-r", "-z", "HEAD")
+	cmd := exec.Command("git", "ls-tree", "-r", "-z", "HEAD")
 	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
 
 	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
@@ -199,7 +214,7 @@ func gitLsTree(repoRoot AbsolutePath, path string) (map[RepoRelativeUnixPath]str
 }
 
 func gitLsFiles(repoRoot AbsolutePath, path string, patterns []string) (map[RepoRelativeUnixPath]string, error) {
-	cmd := exec.Command("git", "ls-files", "--full-name", "-s", "-z", "--")
+	cmd := exec.Command("git", "ls-files", "-s", "-z", "--")
 	cmd.Args = append(cmd.Args, patterns...)
 	cmd.Dir = filepath.Join(repoRoot.ToString(), path)
 
