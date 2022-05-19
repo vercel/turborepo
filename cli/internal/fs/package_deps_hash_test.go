@@ -3,51 +3,10 @@ package fs
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
-
-// @todo special characters
-// func Test_parseGitFilename(t *testing.T) {
-// 	assert.EqualValues(t, `some/path/to/a/file name`, parseGitFilename(`some/path/to/a/file name`))
-// 	assert.EqualValues(t, `some/path/to/a/file name`, parseGitFilename(`some/path/to/a/file name`))
-// 	assert.EqualValues(t, `some/path/to/a/file?name`, parseGitFilename(`"some/path/to/a/file?name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file\\name`, parseGitFilename(`"some/path/to/a/file\\\\name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file"name`, parseGitFilename(`"some/path/to/a/file\\"name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file"name`, parseGitFilename(`"some/path/to/a/file\\"name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file网网name`, parseGitFilename(`"some/path/to/a/file\\347\\275\\221\\347\\275\\221name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file\\347\\网name`, parseGitFilename(`"some/path/to/a/file\\\\347\\\\\\347\\275\\221name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file\\网网name`, parseGitFilename(`"some/path/to/a/file\\\\\\347\\275\\221\\347\\275\\221name"`))
-// }
-
-func Test_parseGitStatus(t *testing.T) {
-
-	want := map[string]string{
-		"turboooz.config.js":        "R",
-		"package_deps_hash.go":      "??",
-		"package_deps_hash_test.go": "??",
-	}
-	input := `
-R  turbo.config.js -> turboooz.config.js
-?? package_deps_hash.go
-?? package_deps_hash_test.go`
-	assert.EqualValues(t, want, parseGitStatus(input, ""))
-}
-func Test_getPackageDeps(t *testing.T) {
-
-	want := map[string]string{
-		"turboooz.config.js":        "R",
-		"package_deps_hash.go":      "??",
-		"package_deps_hash_test.go": "??",
-	}
-	input := `
-R  turbo.config.js -> turboooz.config.js
-?? package_deps_hash.go
-?? package_deps_hash_test.go`
-	assert.EqualValues(t, want, parseGitStatus(input, ""))
-}
 
 func Test_GetHashableDeps(t *testing.T) {
 	cwd, err := os.Getwd()
@@ -85,5 +44,42 @@ func Test_GetHashableDeps(t *testing.T) {
 			keys = append(keys, key)
 		}
 		t.Errorf("hashes mismatch. got %v want %v", strings.Join(keys, ", "), strings.Join(expected, ", "))
+	}
+}
+
+func TestGetPackageDeps(t *testing.T) {
+	type args struct {
+		repoRoot AbsolutePath
+		p        *PackageDepsOptions
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    map[RepoRelativeUnixPath]string
+		wantErr bool
+	}{
+		{
+			name: "Simple",
+			args: args{
+				repoRoot: UnsafeToAbsolutePath("/Users/nathanhammond/repos/vercel/turborepo"),
+				p: &PackageDepsOptions{
+					PackagePath: "cli",
+				},
+			},
+			want:    map[RepoRelativeUnixPath]string{},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetPackageDeps(tt.args.repoRoot, tt.args.p)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetPackageDeps() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetPackageDeps() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

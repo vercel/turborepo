@@ -18,6 +18,7 @@ type readTest struct {
 	Name      string
 	Input     string
 	Output    [][]string
+	Reader    func(io.Reader) *Reader
 	Positions [][][2]int
 	Errors    []error
 
@@ -35,11 +36,13 @@ var lsTreeTests = []readTest{
 		Name:   "simple",
 		Input:  "§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§package.json\000",
 		Output: [][]string{{"100644", "blob", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "package.json"}},
+		Reader: NewLSTreeReader,
 	},
 	{
 		Name:   "no trailing nul",
 		Input:  "§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§package.json",
 		Output: [][]string{{"100644", "blob", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "package.json"}},
+		Reader: NewLSTreeReader,
 	},
 	{
 		Name:  "weird file names",
@@ -55,6 +58,7 @@ var lsTreeTests = []readTest{
 			{"040000", "tree", "5759aadaea2cde55468a61e7104eb0a9d86c1d30", "packages"},
 			{"100644", "blob", "33d0621ee2f4da4a2f6f6bdd51a42618d181e337", "turbo.json"},
 		},
+		Reader: NewLSTreeReader,
 	},
 }
 
@@ -63,21 +67,34 @@ var lsFilesTests = []readTest{
 		Name:   "simple",
 		Input:  "§100644 §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 §0\t§package.json\000",
 		Output: [][]string{{"100644", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "0", "package.json"}},
+		Reader: NewLSFilesReader,
+	},
+}
+
+var statusTests = []readTest{
+	{
+		Name:   "simple",
+		Input:  "§A§D §package.json\000",
+		Output: [][]string{{"A", "D", "package.json"}},
+		Reader: NewStatusReader,
 	},
 }
 
 func TestRead(t *testing.T) {
 	newReader := func(tt readTest) (*Reader, [][][2]int, map[int][2]int) {
 		positions, errPositions, input := makePositions(tt.Input)
-		// TODO: Better Toggle
-		// r := NewLSTreeReader(strings.NewReader(input))
-		r := NewLSFilesReader(strings.NewReader(input))
+		r := tt.Reader(strings.NewReader(input))
 
 		r.ReuseRecord = tt.ReuseRecord
 		return r, positions, errPositions
 	}
 
-	for _, tt := range lsFilesTests {
+	allTests := []readTest{}
+	allTests = append(allTests, lsTreeTests...)
+	allTests = append(allTests, lsFilesTests...)
+	allTests = append(allTests, statusTests...)
+
+	for _, tt := range allTests {
 		t.Run(tt.Name, func(t *testing.T) {
 			r, positions, errPositions := newReader(tt)
 			out, err := r.ReadAll()

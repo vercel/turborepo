@@ -11,6 +11,21 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// RepoRelativeUnixPath is a "/"-formatted path relative to the repository root.
+type RepoRelativeUnixPath string
+
+// ToString returns the string representation of this repo-relative Unix path.
+// Used for interfacing with APIs that require a string
+func (p RepoRelativeUnixPath) ToString() string {
+	return string(p)
+}
+
+// UnsafeToRepoRelativeUnixPath ingests an arbitrary string and treats it as
+// a RepoRelativeUnixPath.
+func UnsafeToRepoRelativeUnixPath(s string) RepoRelativeUnixPath {
+	return RepoRelativeUnixPath(s)
+}
+
 // AbsolutePath represents a platform-dependent absolute path on the filesystem,
 // and is used to enfore correct path manipulation
 type AbsolutePath string

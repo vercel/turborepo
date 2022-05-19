@@ -2,7 +2,8 @@ package gitoutput
 
 import "bytes"
 
-var four = []byte{0x04}
+var _allowedObjectType = []byte("blob tree commit ")
+var _allowedStatusChars = []byte(" MTADRCU?!")
 
 func checkValid(fieldType field, value *[]byte) error {
 	switch fieldType {
@@ -14,6 +15,10 @@ func checkValid(fieldType field, value *[]byte) error {
 		return checkObjectName(value)
 	case ObjectStage:
 		return checkObjectStage(value)
+	case StatusX:
+		return checkStatusX(value)
+	case StatusY:
+		return checkStatusY(value)
 	case Path:
 		return checkPath(value)
 	default:
@@ -78,6 +83,22 @@ func checkObjectStage(value *[]byte) error {
 		}
 	}
 
+	return nil
+}
+
+func checkStatusX(value *[]byte) error {
+	index := bytes.Index(_allowedStatusChars, *value)
+	if index == -1 {
+		return ErrInvalidObjectStatusX
+	}
+	return nil
+}
+
+func checkStatusY(value *[]byte) error {
+	index := bytes.Index(_allowedStatusChars, *value)
+	if index == -1 {
+		return ErrInvalidObjectStatusY
+	}
 	return nil
 }
 

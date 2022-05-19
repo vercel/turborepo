@@ -12,19 +12,26 @@ import (
 type field int
 
 const (
-	ObjectMode  field = 1
-	ObjectType  field = 2
-	ObjectName  field = 3
+	// ObjectMode is the mode field from git outputs. e.g. 100644
+	ObjectMode field = 1
+	// ObjectType is the set of allowed types from git outputs: blob, tree, commit
+	ObjectType field = 2
+	// ObjectName is the 40-character SHA hash
+	ObjectName field = 3
+	// ObjectStage is a value 0-3.
 	ObjectStage field = 4
-	Path        field = 5
+	// StatusX is the first character of the two-character output from git status.
+	StatusX field = 5
+	// StatusY is the second character of the two-character output from git status.
+	StatusY field = 6
+	// Path is the file path relative to the repository root in git.
+	Path field = 7
 )
 
 // Separators that appear in the output of `git ls-tree`
 const space rune = ' '
 const tab rune = '\t'
 const nul rune = '\000'
-
-var _allowedObjectType = []byte("blob tree commit ")
 
 // A ParseError is returned for parsing errors.
 // Entries and columns are both 1-indexed.
@@ -42,12 +49,14 @@ func (e *ParseError) Unwrap() error { return e.Err }
 
 // These are the errors that can be returned in ParseError.Err.
 var (
-	ErrInvalidObjectMode  = errors.New("object mode is not valid")
-	ErrInvalidObjectType  = errors.New("object type is not valid")
-	ErrInvalidObjectName  = errors.New("object name is not valid")
-	ErrInvalidObjectStage = errors.New("object stage is not valid")
-	ErrInvalidPath        = errors.New("path is not valid")
-	ErrFieldCount         = errors.New("too many fields")
+	ErrInvalidObjectMode    = errors.New("object mode is not valid")
+	ErrInvalidObjectType    = errors.New("object type is not valid")
+	ErrInvalidObjectName    = errors.New("object name is not valid")
+	ErrInvalidObjectStage   = errors.New("object stage is not valid")
+	ErrInvalidObjectStatusX = errors.New("object status x is not valid")
+	ErrInvalidObjectStatusY = errors.New("object status y is not valid")
+	ErrInvalidPath          = errors.New("path is not valid")
+	ErrFieldCount           = errors.New("too many fields")
 )
 
 // A Reader reads records from `git ls-tree`'s output`. The Reader converts
@@ -100,6 +109,14 @@ func NewLSFilesReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
 		Fields: []field{ObjectMode, ObjectName, ObjectStage, Path},
+	}
+}
+
+// NewStatusReader returns a new Reader that reads from r.
+func NewStatusReader(reader io.Reader) *Reader {
+	return &Reader{
+		reader: bufio.NewReader(reader),
+		Fields: []field{StatusX, StatusY, Path},
 	}
 }
 
@@ -181,6 +198,18 @@ func (r *Reader) readEntry() ([]byte, error) {
 	return entry, err
 }
 
+func getFieldLength(fieldType field, fieldNumber int, fieldCount int, entry *[]byte) (int, int) {
+	switch fieldType {
+	case StatusX:
+		return 1, 0
+	case StatusY:
+		return 1, 1
+	default:
+		// TODO: Make sure it isn't past a different separator.
+		return bytes.IndexRune(*entry, getSeparator(fieldNumber, fieldCount)), 1
+	}
+}
+
 func getSeparator(fieldNumber int, fieldCount int) rune {
 	remaining := fieldCount - fieldNumber
 
@@ -210,10 +239,7 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 	fieldCount := len(r.Fields)
 
 	for fieldNumber, fieldType := range r.Fields {
-		separator := getSeparator(fieldNumber, fieldCount)
-
-		// TODO: Make sure it isn't past a different separator.
-		length := bytes.IndexRune(entry, separator)
+		length, advance := getFieldLength(fieldType, fieldNumber, fieldCount, &entry)
 		field := entry[:length]
 
 		fieldError := checkValid(fieldType, &field)
@@ -221,7 +247,7 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 			return nil, fieldError
 		}
 
-		offset := length + 1
+		offset := length + advance
 		entry = entry[offset:]
 		r.recordBuffer = append(r.recordBuffer, field...)
 		r.fieldIndexes = append(r.fieldIndexes, len(r.recordBuffer))
