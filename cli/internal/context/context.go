@@ -121,7 +121,9 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 	return constraint.Check(pkgVersion)
 }
 
-func WithGraph(rootpath string, config *config.Config) Option {
+// WithGraph attaches information about the package dependency graph to the Context instance being
+// constructed.
+func WithGraph(rootpath string, config *config.Config, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
@@ -134,7 +136,7 @@ func WithGraph(rootpath string, config *config.Config) Option {
 
 		// this should go into the packagemanager abstraction
 		if util.IsYarn(c.PackageManager.Name) {
-			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, config.Cache.Dir)
+			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, cacheDir)
 			if err != nil {
 				return fmt.Errorf("yarn.lock: %w", err)
 			}

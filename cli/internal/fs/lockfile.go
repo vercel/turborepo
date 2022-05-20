@@ -25,14 +25,15 @@ var o = regexp.MustCompile(`\"\s\"`)
 var a = regexp.MustCompile(`(\w|\")\s(\"|\w)`)
 
 // ReadLockfile will read `yarn.lock` into memory (either from the cache or fresh)
-func ReadLockfile(rootpath string, backendName string, cacheDir string) (*YarnLockfile, error) {
+func ReadLockfile(rootpath string, backendName string, cacheDir AbsolutePath) (*YarnLockfile, error) {
 	var lockfile YarnLockfile
 	var prettyLockFile = YarnLockfile{}
 	hash, err := HashFile(filepath.Join(rootpath, "yarn.lock"))
 	if err != nil {
 		return &YarnLockfile{}, fmt.Errorf("failed to hash lockfile: %w", err)
 	}
-	contentsOfLock, err := ioutil.ReadFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
+	turboLockFile := cacheDir.Join(fmt.Sprintf("%v-turbo-lock.yaml", hash))
+	contentsOfLock, err := turboLockFile.ReadFile()
 	if err != nil {
 		contentsB, err := ioutil.ReadFile(filepath.Join(rootpath, "yarn.lock"))
 		if err != nil {
@@ -96,20 +97,13 @@ func ReadLockfile(rootpath string, backendName string, cacheDir string) (*YarnLo
 
 		better, err := yaml.Marshal(&prettyLockFile)
 		if err != nil {
-			fmt.Println(err.Error())
-			return &YarnLockfile{}, err
+			return nil, err
 		}
-		if err = EnsureDir(cacheDir); err != nil {
-			fmt.Println(err.Error())
-			return &YarnLockfile{}, err
+		if err = turboLockFile.EnsureDir(); err != nil {
+			return nil, err
 		}
-		if err = EnsureDir(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash))); err != nil {
-			fmt.Println(err.Error())
-			return &YarnLockfile{}, err
-		}
-		if err = ioutil.WriteFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)), []byte(better), 0644); err != nil {
-			fmt.Println(err.Error())
-			return &YarnLockfile{}, err
+		if err = turboLockFile.WriteFile([]byte(better), 0644); err != nil {
+			return nil, err
 		}
 	} else {
 		if contentsOfLock != nil {
