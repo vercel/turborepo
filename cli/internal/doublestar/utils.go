@@ -28,9 +28,9 @@ package doublestar
 // "safe" in the context of your application. Perhaps you could use Match() to
 // validate against a list of approved base directories?
 //
-func SplitPattern(p string) (base, pattern string) {
-	base = "."
-	pattern = p
+func SplitPattern(p string) (string, string) {
+	base := "."
+	pattern := p
 
 	splitIdx := -1
 	for i := 0; i < len(p); i++ {
@@ -48,7 +48,7 @@ func SplitPattern(p string) (base, pattern string) {
 		return p[:splitIdx], p[splitIdx+1:]
 	}
 
-	return
+	return base, pattern
 }
 
 // Finds the next comma, but ignores any commas that appear inside nested `{}`.

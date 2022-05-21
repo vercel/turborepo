@@ -5,7 +5,7 @@ package doublestar
 
 import "path/filepath"
 
-// Validate a pattern. Patterns are validated while they run in Match(),
+// ValidatePattern validates a pattern. Patterns are validated while they run in Match(),
 // PathMatch(), and Glob(), so, you normally wouldn't need to call this.
 // However, there are cases where this might be useful: for example, if your
 // program allows a user to enter a pattern that you'll run at a later time,
@@ -17,7 +17,7 @@ func ValidatePattern(s string) bool {
 	return doValidatePattern(s, '/')
 }
 
-// Like ValidatePattern, only uses your OS path separator. In other words, use
+// ValidatePathPattern only uses your OS path separator. In other words, use
 // ValidatePattern if you would normally use Match() or Glob(). Use
 // ValidatePathPattern if you would normally use PathMatch(). Keep in mind,
 // Glob() requires '/' separators, even if your OS uses something else.

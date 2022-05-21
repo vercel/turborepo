@@ -203,7 +203,9 @@ MATCH:
 				continue
 
 			case '{':
-				startOfSegment = false
+				// Note: removed 'startOfSegment = false' here.
+				// This block is guaranteed to return, so assigning it was useless
+				// and triggering a lint error
 				patIdx++
 				closingIdx := indexMatchedClosingAlt(pattern[patIdx:], separator != '\\')
 				if closingIdx == -1 {
@@ -314,7 +316,7 @@ func isZeroLengthPattern(pattern string, separator rune) (ret bool, err error) {
 			// no closing '}'
 			return false, ErrBadPattern
 		}
-		closingIdx += 1
+		closingIdx++
 
 		patIdx := 1
 		for {

@@ -200,7 +200,7 @@ func BenchmarkMatch(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
 			if tt.isStandard {
-				Match(tt.pattern, tt.testPath)
+				_, _ = Match(tt.pattern, tt.testPath)
 			}
 		}
 	}
@@ -211,7 +211,7 @@ func BenchmarkGoMatch(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
 			if tt.isStandard {
-				path.Match(tt.pattern, tt.testPath)
+				_, _ = path.Match(tt.pattern, tt.testPath)
 			}
 		}
 	}
@@ -292,7 +292,7 @@ func BenchmarkPathMatch(b *testing.B) {
 			if tt.isStandard && tt.testOnDisk {
 				pattern := filepath.FromSlash(tt.pattern)
 				testPath := filepath.FromSlash(tt.testPath)
-				PathMatch(pattern, testPath)
+				_, _ = PathMatch(pattern, testPath)
 			}
 		}
 	}
@@ -305,7 +305,7 @@ func BenchmarkGoPathMatch(b *testing.B) {
 			if tt.isStandard && tt.testOnDisk {
 				pattern := filepath.FromSlash(tt.pattern)
 				testPath := filepath.FromSlash(tt.testPath)
-				filepath.Match(pattern, testPath)
+				_, _ = filepath.Match(pattern, testPath)
 			}
 		}
 	}
@@ -388,7 +388,7 @@ func BenchmarkGlob(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
 			if tt.isStandard && tt.testOnDisk {
-				Glob(fsys, tt.pattern)
+				_, _ = Glob(fsys, tt.pattern)
 			}
 		}
 	}
@@ -400,7 +400,7 @@ func BenchmarkGlobWalk(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
 			if tt.isStandard && tt.testOnDisk {
-				GlobWalk(fsys, tt.pattern, func(p string, d fs.DirEntry) error {
+				_ = GlobWalk(fsys, tt.pattern, func(p string, d fs.DirEntry) error {
 					return nil
 				})
 			}
@@ -414,7 +414,7 @@ func BenchmarkGoGlob(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, tt := range matchTests {
 			if tt.isStandard && tt.testOnDisk {
-				fs.Glob(fsys, tt.pattern)
+				_, _ = fs.Glob(fsys, tt.pattern)
 			}
 		}
 	}
@@ -475,7 +475,7 @@ func touch(parts ...string) {
 	if err != nil {
 		log.Fatalf("Could not create test file %v: %v\n", filename, err)
 	}
-	f.Close()
+	_ = f.Close()
 }
 
 func symlink(oldname, newname string) {
