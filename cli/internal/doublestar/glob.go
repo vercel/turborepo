@@ -321,15 +321,10 @@ func isPathDir(fsys fs.FS, name string) bool {
 }
 
 // Returns whether or not the given DirEntry is a directory. If the DirEntry
-// represents a symbolic link, the link is followed by running fs.Stat() on
-// `path.Join(dir, name)`
+// represents a symbolic link, return false
 func isDir(fsys fs.FS, dir string, name string, info fs.DirEntry) bool {
 	if (info.Type() & fs.ModeSymlink) > 0 {
-		finfo, err := fs.Stat(fsys, path.Join(dir, name))
-		if err != nil {
-			return false
-		}
-		return finfo.IsDir()
+		return false
 	}
 	return info.IsDir()
 }

@@ -104,12 +104,13 @@ var matchTests = []MatchTest{
 	{"a/**", "a/", true, nil, false, false, 7, 7},
 	{"a/**", "a/b", true, nil, false, true, 7, 7},
 	{"a/**", "a/b/c", true, nil, false, true, 7, 7},
-	{"**/c", "c", true, nil, false, true, 5, 4},
-	{"**/c", "b/c", true, nil, false, true, 5, 4},
-	{"**/c", "a/b/c", true, nil, false, true, 5, 4},
-	{"**/c", "a/b", false, nil, false, true, 5, 4},
-	{"**/c", "abcd", false, nil, false, true, 5, 4},
-	{"**/c", "a/abc", false, nil, false, true, 5, 4},
+	// These tests differ since we've disabled walking symlinks
+	{"**/c", "c", true, nil, false, true, 4, 4},
+	{"**/c", "b/c", true, nil, false, true, 4, 4},
+	{"**/c", "a/b/c", true, nil, false, true, 4, 4},
+	{"**/c", "a/b", false, nil, false, true, 4, 4},
+	{"**/c", "abcd", false, nil, false, true, 4, 4},
+	{"**/c", "a/abc", false, nil, false, true, 4, 4},
 	{"a/**/b", "a/b", true, nil, false, true, 2, 2},
 	{"a/**/c", "a/b/c", true, nil, false, true, 2, 2},
 	{"a/**/d", "a/b/c/d", true, nil, false, true, 1, 1},
@@ -142,9 +143,11 @@ var matchTests = []MatchTest{
 	{"**/【*", "abc/【test】.txt", true, nil, false, true, 1, 1},
 	// unfortunately, io/fs can't handle this, so neither can Glob =(
 	{"broken-symlink", "broken-symlink", true, nil, true, false, 1, 1},
+	// We don't care about matching a particular file, we want to verify
+	// that we don't traverse the symlink
 	{"working-symlink/c/*", "working-symlink/c/d", true, nil, true, !onWindows, 1, 1},
-	{"working-sym*/*", "working-symlink/c", true, nil, true, !onWindows, 1, 1},
-	{"b/**/f", "b/symlink-dir/f", true, nil, false, !onWindows, 2, 2},
+	{"working-sym*/*", "irrelevant", false, nil, false, !onWindows, 0, 0},
+	{"b/**/f", "irrelevant", false, nil, false, !onWindows, 0, 0},
 }
 
 func TestValidatePattern(t *testing.T) {
@@ -547,5 +550,8 @@ func TestMain(m *testing.M) {
 		symlink("a/b", "test/working-symlink")
 	}
 
-	os.Exit(m.Run())
+	// os.Exit(m.Run())
+	exitCode := m.Run()
+	_ = os.RemoveAll("test")
+	os.Exit(exitCode)
 }
