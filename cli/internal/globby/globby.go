@@ -7,8 +7,8 @@ import (
 
 	iofs "io/fs"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/spf13/afero"
+	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 

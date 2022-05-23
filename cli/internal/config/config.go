@@ -67,8 +67,6 @@ func (c *Config) IsLoggedIn() bool {
 type CacheConfig struct {
 	// Number of async workers
 	Workers int
-	// Cache directory
-	Dir string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
@@ -220,7 +218,6 @@ func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion stri
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
-			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
 		RootPackageJSON: rootPackageJSON,
 		TurboJSON:       turboJSON,
