@@ -32,14 +32,14 @@ You can also clone a Turborepo starter repository to get a head start on your pr
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single root package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
+`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
 
 You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
 <Tabs items={['npm', 'Yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
 <div/>
-Specify your `workspaces` in your root `package.json`:
+Specify your `workspaces` in your monorepo's root `package.json` file:
 
 ```json filename="package.json"
 {
@@ -53,7 +53,7 @@ Specify your `workspaces` in your root `package.json`:
   </Tab>
   <Tab>
 <div/>
-Specify your `workspaces` in your root `package.json`:
+Specify your `workspaces` in your monorepo's root `package.json` file:
 
 ```json filename="package.json"
 {
@@ -79,12 +79,12 @@ packages:
 After configuring your workspaces, re-run your package manager's `install` command.
 
 <Callout>
-  Note: Nested workspaces are not supported. As package names are required to be unique, moving each package to be a child of the root package should meet your needs.
+  Note: Nested workspaces are not supported. As package names are required to be unique, moving each package to be a child of the monorepo's root package should meet your needs.
 </Callout>
 
 ## Install `turbo`
 
-Add `turbo` as a development dependency in the root of your project.
+Add `turbo` as a development dependency in the root of your monorepo.
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -108,7 +108,7 @@ The `turbo` package is a little shell that will install the proper `turbo-<os>-<
 
 ## Create `turbo.json`
 
-In your root directory, create an empty file named `turbo.json`. This will hold the configuration for Turborepo in your project.
+In your project directory, create an empty file named `turbo.json`. This will hold the configuration for Turborepo in your project.
 
 If your git repo's base branch is not `origin/master`, then you need to specify a `baseBranch` too. For example, `origin/main`.
 
@@ -121,7 +121,7 @@ If your git repo's base branch is not `origin/master`, then you need to specify 
 
 ## Create a `pipeline`
 
-To define your project's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of your project. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
+To define your project's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
 
 Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./features/caching). For more information on configuring your pipeline, see the [`Pipelines`](./core-concepts/pipelines) documentation.
 
@@ -201,7 +201,7 @@ Re-run your npm client's `install` command to check your configuration.
 
 ## Create `package.json` scripts
 
-Add or update `scripts` in your root `package.json` and have them delegate to `turbo`.
+Add or update `scripts` in your monorepo's root `package.json` file and have them delegate to `turbo`.
 
 ```jsonc filename="./package.json"
 {
