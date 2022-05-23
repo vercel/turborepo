@@ -3,10 +3,12 @@ package fs
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 )
@@ -24,28 +26,23 @@ type PackageDepsOptions struct {
 	// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
 	// containing package.json. If omitted, the default value is the current working directory.
 	PackagePath string
-	// ExcludedPaths is an optional array of file path exclusions. If a file should be omitted from the list
-	// of dependencies, use this to exclude it.
-	ExcludedPaths []string
-	// GitPath is an optional alternative path to the git installation
-	GitPath string
 
 	InputPatterns []string
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
+func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
 	// Add all the checked in hashes.
 	// TODO(gsoltis): are these platform-dependent paths?
 	var result map[string]string
 	if len(p.InputPatterns) == 0 {
-		gitLsOutput, err := gitLsTree(p.PackagePath, p.GitPath)
+		gitLsOutput, err := gitLsTree(p.PackagePath)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
 		result = parseGitLsTree(gitLsOutput)
 	} else {
-		gitLsOutput, err := gitLsFiles(p.PackagePath, p.GitPath, p.InputPatterns)
+		gitLsOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -56,15 +53,8 @@ func GetPackageDeps(p *PackageDepsOptions) (map[string]string, error) {
 		result = parsedLines
 	}
 
-	if len(p.ExcludedPaths) > 0 {
-		for _, p := range p.ExcludedPaths {
-			// @todo explore optimization
-			delete(result, p)
-		}
-	}
-
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(p.PackagePath, p.GitPath)
+	gitStatusOutput, err := gitStatus(repoRoot.Join(p.PackagePath), p.InputPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +103,22 @@ func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]stri
 	return result, nil
 }
 
+// threadsafeBufferWriter is a wrapper around a byte buffer and a lock, allowing
+// multiple goroutines to write to the same buffer. No attempt is made to
+// lock around reading, which should only be done once no more writing will occur.
+type threadsafeBufferWriter struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (tsbw *threadsafeBufferWriter) Write(p []byte) (int, error) {
+	tsbw.mu.Lock()
+	defer tsbw.mu.Unlock()
+	return tsbw.buffer.Write(p)
+}
+
+var _ io.Writer = (*threadsafeBufferWriter)(nil)
+
 // gitHashForFiles a list of files returns a map of with their git hash values. It uses
 // git hash-object under the hood.
 // Note that filesToHash must have full paths.
@@ -122,15 +128,28 @@ func gitHashForFiles(filesToHash []string) (map[string]string, error) {
 		input := []string{"hash-object"}
 		input = append(input, filesToHash...)
 		cmd := exec.Command("git", input...)
-		// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
-		out, err := cmd.CombinedOutput()
+		// exec.Command writes to stdout and stderr from different goroutines,
+		// but only if they aren't the same io.Writer. Since we're passing different
+		// io.Writer instances that can optionally write to the same buffer, we need
+		// to do the locking ourselves.
+		var allout threadsafeBufferWriter
+		var stdout bytes.Buffer
+		// write stdout to both the stdout buffer, and the combined output buffer
+		// we don't expect to need stderr, but in the event that something goes wrong,
+		// we'd like to report the entirety of the output in the order it was output.
+		mw := io.MultiWriter(&allout, &stdout)
+		cmd.Stdout = mw
+		cmd.Stderr = &allout
+		err := cmd.Run()
 		if err != nil {
-			return nil, fmt.Errorf("git hash-object exited with status: %w", err)
+			output := string(allout.buffer.Bytes())
+			return nil, fmt.Errorf("git hash-object exited with status: %w. Output:\n%v", err, output)
 		}
-		offByOne := strings.Split(string(out), "\n") // there is an extra ""
+		offByOne := strings.Split(string(stdout.Bytes()), "\n") // there is an extra ""
 		hashes := offByOne[:len(offByOne)-1]
 		if len(hashes) != len(filesToHash) {
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes", len(filesToHash), len(hashes))
+			output := string(allout.buffer.Bytes())
+			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes. Full output:\n%v", len(filesToHash), len(hashes), output)
 		}
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
@@ -153,7 +172,7 @@ func UnescapeChars(in []byte) []byte {
 }
 
 // gitLsTree executes "git ls-tree" in a folder
-func gitLsTree(path string, gitPath string) (string, error) {
+func gitLsTree(path string) (string, error) {
 
 	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
 	cmd.Dir = path
@@ -164,12 +183,10 @@ func gitLsTree(path string, gitPath string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func gitLsFiles(path string, gitPath string, patterns []string) (string, error) {
+func gitLsFiles(path AbsolutePath, patterns []string) (string, error) {
 	cmd := exec.Command("git", "ls-files", "-s", "--")
-	for _, pattern := range patterns {
-		cmd.Args = append(cmd.Args, pattern)
-	}
-	cmd.Dir = path
+	cmd.Args = append(cmd.Args, patterns...)
+	cmd.Dir = path.ToString()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
@@ -177,22 +194,24 @@ func gitLsFiles(path string, gitPath string, patterns []string) (string, error) 
 	return strings.TrimSpace(string(out)), nil
 }
 
+// lsTreeRegex parses ls-tree output
+// A line is expected to look like:
+// 100644 blob 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8    src/typings/tsd.d.ts
+// 160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack
+var lsTreeRegex = regexp.MustCompile(`([0-9]{6})\s(blob|commit)\s([a-f0-9]{40})\s*(.*)`)
+
 func parseGitLsTree(output string) map[string]string {
 	changes := make(map[string]string)
 	if len(output) > 0 {
-		// A line is expected to look like:
-		// 100644 blob 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8    src/typings/tsd.d.ts
-		// 160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack
-		gitRex := regexp.MustCompile(`([0-9]{6})\s(blob|commit)\s([a-f0-9]{40})\s*(.*)`)
-		outputLines := strings.Split(output, "\n")
 
+		outputLines := strings.Split(output, "\n")
 		for _, line := range outputLines {
 			if len(line) > 0 {
-				matches := gitRex.MatchString(line)
+				matches := lsTreeRegex.MatchString(line)
 				if matches {
 					// this looks like this
 					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
-					match := gitRex.FindAllStringSubmatch(line, -1)
+					match := lsTreeRegex.FindAllStringSubmatch(line, -1)
 					if len(match[0][3]) > 0 && len(match[0][4]) > 0 {
 						hash := match[0][3]
 						filename := parseGitFilename(match[0][4])
@@ -206,23 +225,26 @@ func parseGitLsTree(output string) map[string]string {
 	return changes
 }
 
+// lsFilesRegex parses ls-files output
+// A line is expected to look like:
+// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
+// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
+var lsFilesRegex = regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+
 func parseGitLsFiles(output string) (map[string]string, error) {
 	changes := make(map[string]string)
 	if len(output) > 0 {
-		// A line is expected to look like:
-		// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
-		// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
-		gitRex := regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+
 		outputLines := strings.Split(output, "\n")
 
 		for _, line := range outputLines {
 			if len(line) > 0 {
-				match := gitRex.FindStringSubmatch(line)
+				match := lsFilesRegex.FindStringSubmatch(line)
 				// we found matches, and the slice has three parts:
 				// 0 - the whole string
 				// 1 - the hash
 				// 2 - the filename
-				if match != nil && len(match) == 3 {
+				if len(match) == 3 {
 					hash := match[1]
 					filename := parseGitFilename(match[2])
 					changes[filename] = hash
@@ -235,12 +257,13 @@ func parseGitLsFiles(output string) (map[string]string, error) {
 	return changes, nil
 }
 
+// If there are no double-quotes around the string, then there are no escaped characters
+// to decode, so just return
+var dubQuoteRegex = regexp.MustCompile(`^".+"$`)
+
 // Couldn't figure out how to deal with special characters. Skipping for now.
 // @todo see https://github.com/microsoft/rushstack/blob/925ad8c9e22997c1edf5fe38c53fa618e8180f70/libraries/package-deps-hash/src/getPackageDeps.ts#L19
 func parseGitFilename(filename string) string {
-	// If there are no double-quotes around the string, then there are no escaped characters
-	// to decode, so just return
-	dubQuoteRegex := regexp.MustCompile(`^".+"$`)
 	if !dubQuoteRegex.MatchString(filename) {
 		return filename
 	}
@@ -274,15 +297,17 @@ func parseGitFilename(filename string) string {
 }
 
 // gitStatus executes "git status" in a folder
-func gitStatus(path string, gitPath string) (string, error) {
+func gitStatus(path AbsolutePath, inputPatterns []string) (string, error) {
 	// log.Printf("[TRACE] gitStatus start")
 	// defer log.Printf("[TRACE] gitStatus end")
-	p := "git"
-	if len(gitPath) > 0 {
-		p = gitPath
+	cmd := exec.Command("git")
+	cmd.Args = append(cmd.Args, []string{"status", "-s", "-u"}...)
+	if len(inputPatterns) == 0 {
+		cmd.Args = append(cmd.Args, ".")
+	} else {
+		cmd.Args = append(cmd.Args, inputPatterns...)
 	}
-	cmd := exec.Command(p, "status", "-s", "-u", ".")
-	cmd.Dir = path
+	cmd.Dir = path.ToString()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to read git status: %w", err)
@@ -290,6 +315,8 @@ func gitStatus(path string, gitPath string) (string, error) {
 	// log.Printf("[TRACE] gitStatus result: %v", strings.TrimSpace(string(out)))
 	return strings.TrimSpace(string(out)), nil
 }
+
+var gitStatusRegex = regexp.MustCompile(`("(\\"|[^"])+")|(\S+\s*)`)
 
 func parseGitStatus(output string, PackagePath string) map[string]string {
 	// log.Printf("[TRACE] parseGitStatus start")
@@ -307,13 +334,13 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 		return changes
 	}
 	// log.Printf("[TRACE] parseGitStatus result: found git changes")
-	gitRex := regexp.MustCompile(`("(\\"|[^"])+")|(\S+\s*)`)
+
 	// Note: The output of git hash-object uses \n newlines regardless of OS.
 	outputLines := strings.Split(output, "\n")
 
 	for _, line := range outputLines {
 		if len(line) > 0 {
-			matches := gitRex.MatchString(line)
+			matches := gitStatusRegex.MatchString(line)
 			if matches {
 				// changeType is in the format of "XY" where "X" is the status of the file in the index and "Y" is the status of
 				// the file in the working tree. Some example statuses:
@@ -328,7 +355,7 @@ func parseGitStatus(output string, PackagePath string) map[string]string {
 
 				// Lloks like this
 				//[["?? " "" "" "?? "] ["package_deps_hash_test.go" "" "" "package_deps_hash_test.go"]]
-				match := gitRex.FindAllStringSubmatch(line, -1)
+				match := gitStatusRegex.FindAllStringSubmatch(line, -1)
 				if len(match[0]) > 1 {
 					changeType := match[0][0]
 					fileNameMatches := match[1][1:]
