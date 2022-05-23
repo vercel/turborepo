@@ -84,7 +84,7 @@ Run `yarn build` to confirm compilation is working correctly. You should see a f
 ```bash
 acme-core
 └── dist
-    ├── index.t.ts  <-- Types
+    ├── index.d.ts  <-- Types
     ├── index.js    <-- CommonJS version
     └── index.mjs   <-- ES Modules version
 ```
