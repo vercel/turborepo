@@ -231,7 +231,7 @@ in your pipeline, but want to include the `build` script defined in the root `pa
 `turbo run build`, you must opt the root into it by also including `"//#build": {...}` in your configuration.
 Conversely, you _do not_ need to define a generic `"my-task": {...}` entry if all you need is `"//#my-task": {...}`.
 
-A sample pipeline that defines the root task `publish` and opts the root into `test` might look like:
+A sample pipeline that defines the root task `format` and opts the root into `test` might look like:
 
 ```jsonc
 {
@@ -250,11 +250,11 @@ A sample pipeline that defines the root task `publish` and opts the root into `t
       "dependsOn": [],
       "outputs": []
     },
-    // This will cause the "publish" script in the root package.json
-    // to be run when "turbo run publish" is run. Since the general
-    // "publish" task is not defined, only the root's "publish" script
+    // This will cause the "format" script in the root package.json
+    // to be run when "turbo run format" is run. Since the general
+    // "format" task is not defined, only the root's "format" script
     // will be run.
-    "//#publish": {
+    "//#format": {
       "dependsOn": [],
       "outputs": ["dist/**/*"],
       "inputs": ["version.txt"]

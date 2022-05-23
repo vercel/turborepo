@@ -43,8 +43,8 @@ turbo run build --filter=my-pkg
 turbo run build --filter=@foo/bar
 # Build all packages that start with 'admin-', letting turbo infer task dependencies from the pipeline defined in turbo.json
 turbo run build --filter=admin-*
-# Run the publish script from the root "package.json" file:
-turbo run publish --filter=//
+# Run the format script from the root "package.json" file:
+turbo run format --filter=//
 ```
 
 ### Include dependents of matched packages
