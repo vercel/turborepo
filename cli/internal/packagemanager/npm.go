@@ -15,7 +15,7 @@ var nodejsNpm = PackageManager{
 	Lockfile:   "package-lock.json",
 	PackageDir: "node_modules",
 
-	GetWorkspaceGlobs: func(rootpath string) ([]string, error) {
+	getWorkspaceGlobs: func(rootpath string) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
@@ -26,11 +26,21 @@ var nodejsNpm = PackageManager{
 		return pkg.Workspaces, nil
 	},
 
+	getWorkspaceIgnores: func(pm PackageManager, rootpath string) ([]string, error) {
+		// Matches upstream values:
+		// function: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L73
+		// key code: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L90-L96
+		// call site: https://github.com/npm/cli/blob/7a858277171813b37d46a032e49db44c8624f78f/lib/workspaces/get-workspaces.js#L14
+		return []string{
+			"**/node_modules/**",
+		}, nil
+	},
+
 	Matches: func(manager string, version string) (bool, error) {
 		return manager == "npm", nil
 	},
 
-	Detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
+	detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
 		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
 		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
 

@@ -1,6 +1,9 @@
 package packagemanager
 
 import (
+	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -187,7 +190,133 @@ func Test_readPackageManager(t *testing.T) {
 				return
 			}
 			if gotPackageManager.Name != tt.want {
-				t.Errorf("GetPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
+				t.Errorf("readPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
+			}
+		})
+	}
+}
+
+func Test_GetWorkspaces(t *testing.T) {
+	type test struct {
+		name     string
+		pm       PackageManager
+		rootPath string
+		want     []string
+		wantErr  bool
+	}
+
+	rootPath := map[string]string{
+		"nodejs-npm":   "../../../examples/basic",
+		"nodejs-berry": "../../../examples/basic",
+		"nodejs-yarn":  "../../../examples/basic",
+		"nodejs-pnpm":  "../../../examples/with-pnpm",
+	}
+
+	want := map[string][]string{
+		"nodejs-npm": {
+			"../../../examples/basic/apps/docs/package.json",
+			"../../../examples/basic/apps/web/package.json",
+			"../../../examples/basic/packages/eslint-config-custom/package.json",
+			"../../../examples/basic/packages/tsconfig/package.json",
+			"../../../examples/basic/packages/ui/package.json",
+		},
+		"nodejs-berry": {
+			"../../../examples/basic/apps/docs/package.json",
+			"../../../examples/basic/apps/web/package.json",
+			"../../../examples/basic/packages/eslint-config-custom/package.json",
+			"../../../examples/basic/packages/tsconfig/package.json",
+			"../../../examples/basic/packages/ui/package.json",
+		},
+		"nodejs-yarn": {
+			"../../../examples/basic/apps/docs/package.json",
+			"../../../examples/basic/apps/web/package.json",
+			"../../../examples/basic/packages/eslint-config-custom/package.json",
+			"../../../examples/basic/packages/tsconfig/package.json",
+			"../../../examples/basic/packages/ui/package.json",
+		},
+		"nodejs-pnpm": {
+			"../../../examples/with-pnpm/apps/docs/package.json",
+			"../../../examples/with-pnpm/apps/web/package.json",
+			"../../../examples/with-pnpm/packages/eslint-config-custom/package.json",
+			"../../../examples/with-pnpm/packages/tsconfig/package.json",
+			"../../../examples/with-pnpm/packages/ui/package.json",
+		},
+	}
+
+	tests := make([]test, len(packageManagers))
+	for i, packageManager := range packageManagers {
+		tests[i] = test{
+			name:     packageManager.Name,
+			pm:       packageManager,
+			rootPath: rootPath[packageManager.Name],
+			want:     want[packageManager.Name],
+			wantErr:  false,
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotWorkspaces, err := tt.pm.GetWorkspaces(tt.rootPath)
+
+			gotToSlash := make([]string, len(gotWorkspaces))
+			for index, workspace := range gotWorkspaces {
+				gotToSlash[index] = filepath.ToSlash(workspace)
+			}
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetWorkspaces() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			sort.Strings(gotToSlash)
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("GetWorkspaces() = %v, want %v", gotToSlash, tt.want)
+			}
+		})
+	}
+}
+
+func Test_GetWorkspaceIgnores(t *testing.T) {
+	type test struct {
+		name     string
+		pm       PackageManager
+		rootPath string
+		want     []string
+		wantErr  bool
+	}
+
+	want := map[string][]string{
+		"nodejs-npm":   {"**/node_modules/**"},
+		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
+		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
+		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**"},
+	}
+
+	tests := make([]test, len(packageManagers))
+	for i, packageManager := range packageManagers {
+		tests[i] = test{
+			name:     packageManager.Name,
+			pm:       packageManager,
+			rootPath: "../../../examples/basic",
+			want:     want[packageManager.Name],
+			wantErr:  false,
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotWorkspaceIgnores, err := tt.pm.GetWorkspaceIgnores(tt.rootPath)
+
+			gotToSlash := make([]string, len(gotWorkspaceIgnores))
+			for index, ignore := range gotWorkspaceIgnores {
+				gotToSlash[index] = filepath.ToSlash(ignore)
+			}
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetWorkspaceIgnores() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("GetWorkspaceIgnores() = %v, want %v", gotToSlash, tt.want)
 			}
 		})
 	}

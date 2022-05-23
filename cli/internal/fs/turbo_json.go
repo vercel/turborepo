@@ -96,6 +96,23 @@ func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	return entry, ok
 }
 
+// HasTask returns true if the given task is defined in the pipeline, either directly or
+// via a package task (`pkg#task`)
+func (pc Pipeline) HasTask(task string) bool {
+	for key := range pc {
+		if key == task {
+			return true
+		}
+		if util.IsPackageTask(key) {
+			_, taskName := util.GetPackageTaskFromId(key)
+			if taskName == task {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // TaskDefinition is a representation of the turbo.json pipeline for further computation.
 type TaskDefinition struct {
 	Outputs                 []string

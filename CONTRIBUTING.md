@@ -37,4 +37,4 @@ TURBO_BINARY_PATH=~/repos/vercel/turborepo/cli/turbo.exe npm install
 TURBO_BINARY_PATH=~/repos/vercel/turborepo/cli/turbo.exe npm link turbo
 ```
 
-If you're using a different package manager replace `npm` accordingly.
+If you're using a different package manager replace npm accordingly.
