@@ -48,6 +48,8 @@ var nodejsPnpm = PackageManager{
 		return []string{
 			"**/node_modules/**",
 			"**/bower_components/**",
+			"**/test/**",
+			"**/tests/**",
 		}, nil
 	},
 
