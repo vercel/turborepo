@@ -130,8 +130,11 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = io.Copy(tw, f)
+	if errors.Is(err, tar.ErrWriteTooLong) {
+		log.Printf("Error writing %v to tar file, info: %v, mode: %v, is regular: %v", repoRelativePath, info, info.Mode(), info.Mode().IsRegular())
+	}
 	return err
 }
 
