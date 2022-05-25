@@ -911,8 +911,6 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 			os.Exit(1)
 		}
 	}
-	defer func() { _ = writer.Close() }()
-
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
 	logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
@@ -923,9 +921,31 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	// Flush/Reset any error we recorded
 	logStreamerErr.FlushRecord()
 	logStreamerOut.FlushRecord()
+	closeOutputs := func() error {
+		var closeErrors []error
+		if err := logStreamerOut.Close(); err != nil {
+			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
+		}
+		if err := logStreamerErr.Close(); err != nil {
+			closeErrors = append(closeErrors, errors.Wrap(err, "log stderr"))
+		}
+		if err := writer.Close(); err != nil {
+			closeErrors = append(closeErrors, errors.Wrap(err, "log file"))
+		}
+		if len(closeErrors) > 0 {
+			msgs := make([]string, len(closeErrors))
+			for i, err := range closeErrors {
+				msgs[i] = err.Error()
+			}
+			return fmt.Errorf("could not flush log output: %v", strings.Join(msgs, ", "))
+		}
+		return nil
+	}
 
 	// Run the command
 	if err := e.processes.Exec(cmd); err != nil {
+		// close off our outputs. We errored, so we mostly don't care if we fail to close
+		_ = closeOutputs()
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
 		if errors.Is(err, process.ErrClosing) {
@@ -942,15 +962,19 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		return err
 	}
 
-	// Cache command outputs
-	duration := int(time.Since(cmdTime).Milliseconds())
-	if err = taskCache.SaveOutputs(targetLogger, targetUi, duration); err != nil {
-		e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
+	duration := time.Since(cmdTime)
+	// Close off our outputs and cache them
+	if err := closeOutputs(); err != nil {
+		e.logError(targetLogger, "", err)
+	} else {
+		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
+		}
 	}
 
 	// Clean up tracing
 	tracer(TargetBuilt, nil)
-	targetLogger.Debug("done", "status", "complete", "duration", time.Since(cmdTime))
+	targetLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }
 
