@@ -960,7 +960,9 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
 		c.Ui.Output("")
 		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		if ui.IsTTY {
-			browser.OpenBrowser(outputFilename.ToString())
+			if err := browser.OpenBrowser(outputFilename.ToString()); err != nil {
+				c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprintf("failed to open browser. Please navigate to file://%v", outputFilename))
+			}
 		}
 		return nil
 	}
