@@ -83,7 +83,7 @@ Create a file called `.travis.yml` in your repository with the following content
         directories:
           - "~/.pnpm-store"
       before_install:
-        - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@7.0.0-rc.9
+        - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@6.32.2
         - pnpm config set store-dir ~/.pnpm-store
       install:
         - pnpm install

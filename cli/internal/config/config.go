@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
+	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
 
@@ -49,11 +49,13 @@ type Config struct {
 	TurboVersion string
 	Cache        *CacheConfig
 	// turbo.json or legacy turbo config from package.json
-	TurboConfigJSON *fs.TurboConfigJSON
+	TurboJSON *fs.TurboJSON
 	// package.json at the root of the repo
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
 	Cwd fs.AbsolutePath
+	// The filesystem to use for any filesystem interactions
+	Fs afero.Fs
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -65,14 +67,12 @@ func (c *Config) IsLoggedIn() bool {
 type CacheConfig struct {
 	// Number of async workers
 	Workers int
-	// Cache directory
-	Dir string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
-func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
+func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion string) (c *Config, err error) {
 
 	// Special check for ./turbo invocation without any args
 	// Return the help message
@@ -104,12 +104,24 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		return nil, fmt.Errorf("package.json: %w", err)
 	}
-	turboConfigJson, err := ReadTurboConfig(cwd, rootPackageJSON)
+	turboJSON, err := fs.ReadTurboConfig(cwd, rootPackageJSON)
 	if err != nil {
 		return nil, err
 	}
-	userConfig, _ := ReadUserConfigFile()
-	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
+	userConfig, err := ReadUserConfigFile(fsys)
+	if err != nil {
+		return nil, fmt.Errorf("reading user config file: %v", err)
+	}
+	if userConfig == nil {
+		userConfig = defaultUserConfig()
+	}
+	partialConfig, err := ReadRepoConfigFile(fsys, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("reading repo config file: %v", err)
+	}
+	if partialConfig == nil {
+		partialConfig = defaultRepoConfig()
+	}
 	partialConfig.Token = userConfig.Token
 
 	enverr := envconfig.Process("TURBO", partialConfig)
@@ -206,11 +218,11 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
-			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
 		RootPackageJSON: rootPackageJSON,
-		TurboConfigJSON: turboConfigJson,
+		TurboJSON:       turboJSON,
 		Cwd:             cwd,
+		Fs:              fsys,
 	}
 
 	c.ApiClient.SetToken(partialConfig.Token)
@@ -218,36 +230,12 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	return c, nil
 }
 
-func ReadTurboConfig(rootPath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
-	// If turbo.json exists, we use that
-	// If pkg.Turbo exists, we warn about running the migration
-	// Use pkg.Turbo if turbo.json doesn't exist
-	// If neither exists, it's a fatal error
-	turboJSONPath := rootPath.Join("turbo.json")
-
-	if !turboJSONPath.FileExists() {
-		if rootPackageJSON.LegacyTurboConfig == nil {
-			// TODO: suggestion on how to create one
-			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
-		} else {
-			log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
-			return rootPackageJSON.LegacyTurboConfig, nil
-		}
-	} else {
-		turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
-		if err != nil {
-			return nil, fmt.Errorf("turbo.json: %w", err)
-		}
-		if rootPackageJSON.LegacyTurboConfig != nil {
-			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
-			rootPackageJSON.LegacyTurboConfig = nil
-		}
-		return turbo, nil
-	}
-}
-
 // Selects the current working directory from OS
 // and overrides with the `--cwd=` input argument
+// The various package managers we support resolve symlinks at this stage,
+// so we do as well. This means that relative references out of the monorepo
+// will be relative to the resolved path, not necessarily the path that the
+// user uses to access the monorepo.
 func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 	cwd, err := fs.GetCwd()
 	if err != nil {
@@ -259,7 +247,11 @@ func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 		} else if strings.HasPrefix(arg, "--cwd=") {
 			if len(arg[len("--cwd="):]) > 0 {
 				cwdArgRaw := arg[len("--cwd="):]
-				cwdArg, err := fs.CheckedToAbsolutePath(cwdArgRaw)
+				resolved, err := filepath.EvalSymlinks(cwdArgRaw)
+				if err != nil {
+					return "", err
+				}
+				cwdArg, err := fs.CheckedToAbsolutePath(resolved)
 				if err != nil {
 					// the argument is a relative path. Join it with our actual cwd
 					return cwd.Join(cwdArgRaw), nil

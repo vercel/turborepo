@@ -63,7 +63,10 @@ func (o *Opts) asFilterPatterns() []string {
 	return patterns
 }
 
-func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
+// ResolvePackages translates specified flags to a set of entry point packages for
+// the selected tasks. Returns the selected packages and whether or not the selected
+// packages represents a default "all packages".
+func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
 		Graph:                &ctx.TopologicalGraph,
 		PackageInfos:         ctx.PackageInfos,
@@ -71,19 +74,20 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 		PackagesChangedSince: opts.getPackageChangeFunc(scm, ctx.PackageInfos),
 	}
 	filterPatterns := opts.asFilterPatterns()
+	isAllPackages := len(filterPatterns) == 0
 	filteredPkgs, err := filterResolver.GetPackagesFromPatterns(filterPatterns)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	if len(filterPatterns) == 0 {
+	if isAllPackages {
 		// no filters specified, run every package
 		for _, f := range ctx.PackageNames {
 			filteredPkgs.Add(f)
 		}
 	}
 	filteredPkgs.Delete(ctx.RootNode)
-	return filteredPkgs, nil
+	return filteredPkgs, isAllPackages, nil
 }
 
 func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedSince {
@@ -92,9 +96,13 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*f
 		// that the changes we're interested in are scoped, but we need to handle
 		// global dependencies changing as well. A future optimization might be to
 		// scope changed files more deeply if we know there are no global dependencies.
-		changedFiles := []string{}
+		var changedFiles []string
 		if since != "" {
-			changedFiles = scm.ChangedFiles(since, true, o.Cwd)
+			scmChangedFiles, err := scm.ChangedFiles(since, true, o.Cwd)
+			if err != nil {
+				return nil, err
+			}
+			changedFiles = scmChangedFiles
 		}
 		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, changedFiles); err != nil {
 			return nil, err
@@ -148,20 +156,19 @@ func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
 
 func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
 	changedPackages := make(util.Set)
-	for k, pkgInfo := range packageInfos {
-		partialPath := pkgInfo.Dir
-		if someFileHasPrefix(partialPath, changedFiles) {
-			changedPackages.Add(k)
+	for _, changedFile := range changedFiles {
+		found := false
+		for pkgName, pkgInfo := range packageInfos {
+			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir) {
+				changedPackages.Add(pkgName)
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Consider the root package to have changed
+			changedPackages.Add(util.RootPkgName)
 		}
 	}
 	return changedPackages
-}
-
-func someFileHasPrefix(prefix string, files []string) bool {
-	for _, f := range files {
-		if strings.HasPrefix(f, prefix) {
-			return true
-		}
-	}
-	return false
 }

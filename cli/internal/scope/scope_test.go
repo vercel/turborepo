@@ -18,14 +18,14 @@ type mockSCM struct {
 	changed []string
 }
 
-func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) []string {
+func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
 	changed := []string{}
 	for _, change := range m.changed {
 		if strings.HasPrefix(change, relativeTo) {
 			changed = append(changed, change)
 		}
 	}
-	return changed
+	return changed, nil
 }
 
 func TestResolvePackages(t *testing.T) {
@@ -87,6 +87,7 @@ func TestResolvePackages(t *testing.T) {
 		name                string
 		changed             []string
 		expected            []string
+		expectAllPackages   bool
 		scope               []string
 		since               string
 		ignore              string
@@ -179,9 +180,10 @@ func TestResolvePackages(t *testing.T) {
 		},
 		{
 			// no changes, no base to compare against, defaults to everything
-			name:     "no changes or scope specified, build everything",
-			since:    "",
-			expected: []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			name:              "no changes or scope specified, build everything",
+			since:             "",
+			expected:          []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			expectAllPackages: true,
 		},
 		{
 			// a dependent library changed, no deps beyond the scope are build
@@ -207,7 +209,7 @@ func TestResolvePackages(t *testing.T) {
 			scm := &mockSCM{
 				changed: tc.changed,
 			}
-			pkgs, err := ResolvePackages(&Opts{
+			pkgs, isAllPackages, err := ResolvePackages(&Opts{
 				Patterns:            tc.scope,
 				Since:               tc.since,
 				IgnorePatterns:      []string{tc.ignore},
@@ -228,6 +230,9 @@ func TestResolvePackages(t *testing.T) {
 			}
 			if !reflect.DeepEqual(pkgs, expected) {
 				t.Errorf("ResolvePackages got %v, want %v", pkgs, expected)
+			}
+			if isAllPackages != tc.expectAllPackages {
+				t.Errorf("isAllPackages got %v, want %v", isAllPackages, tc.expectAllPackages)
 			}
 		})
 	}

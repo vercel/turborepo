@@ -10,15 +10,18 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -56,28 +59,50 @@ const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 func (c *LoginCommand) Run(args []string) int {
 	var ssoTeam string
 	loginCommand := &cobra.Command{
-		Use:   "turbo login",
-		Short: "Login to your Vercel account",
+		Use:           "turbo login",
+		Short:         "Login to your Vercel account",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := loginDeps{
-				ui:              c.UI,
-				openURL:         browser.OpenBrowser,
-				client:          c.Config.ApiClient,
-				writeUserConfig: config.WriteUserConfigFile,
-				writeRepoConfig: config.WriteRepoConfigFile,
+			login := login{
+				ui:                  c.UI,
+				logger:              c.Config.Logger,
+				fsys:                c.Config.Fs,
+				repoRoot:            c.Config.Cwd,
+				openURL:             browser.OpenBrowser,
+				client:              c.Config.ApiClient,
+				promptEnableCaching: promptEnableCaching,
 			}
 			if ssoTeam != "" {
-				return loginSSO(c.Config, ssoTeam, deps)
+				err := login.loginSSO(c.Config, ssoTeam)
+				if err != nil {
+					if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
+						c.UI.Info("Canceled. Turborepo not set up.")
+					} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
+						c.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+					} else {
+						login.logError(err)
+					}
+					return err
+				}
+			} else {
+				err := login.run(c.Config)
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						c.UI.Info("Canceled. Turborepo not set up.")
+					} else {
+						login.logError(err)
+					}
+					return err
+				}
 			}
-			return run(c.Config, deps)
+			return nil
 		},
 	}
 	loginCommand.Flags().StringVar(&ssoTeam, "sso-team", "", "attempt to authenticate to the specified team using SSO")
 	loginCommand.SetArgs(args)
 	err := loginCommand.Execute()
 	if err != nil {
-		c.Config.Logger.Error("error", err)
-		c.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 		return 1
 	}
 	return 0
@@ -88,24 +113,42 @@ type userClient interface {
 	SetToken(token string)
 	GetUser() (*client.UserResponse, error)
 	VerifySSOToken(token string, tokenName string) (*client.VerifiedSSOUser, error)
-}
-type configWriter = func(cf *config.TurborepoConfig) error
-
-type loginDeps struct {
-	ui              *cli.ColoredUi
-	openURL         browserClient
-	client          userClient
-	writeUserConfig configWriter
-	writeRepoConfig configWriter
+	SetTeamID(teamID string)
+	GetCachingStatus() (util.CachingStatus, error)
+	GetTeam(teamID string) (*client.Team, error)
 }
 
-func run(c *config.Config, deps loginDeps) error {
-	c.Logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
-	c.Logger.Debug(fmt.Sprintf("api url: %v", c.ApiUrl))
-	c.Logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
+type login struct {
+	ui       *cli.ColoredUi
+	logger   hclog.Logger
+	fsys     afero.Fs
+	repoRoot fs.AbsolutePath
+	openURL  browserClient
+	client   userClient
+	//writeUserConfig     configWriter
+	//writeRepoConfig     configWriter
+	promptEnableCaching func() (bool, error)
+}
+
+func (l *login) logError(err error) {
+	l.logger.Error("error", err)
+	l.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+}
+
+func (l *login) directUserToURL(url string) {
+	err := l.openURL(url)
+	if err != nil {
+		l.ui.Warn(fmt.Sprintf("Failed to open browser. Please visit %v in your browser", url))
+	}
+}
+
+func (l *login) run(c *config.Config) error {
+	l.logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
+	l.logger.Debug(fmt.Sprintf("api url: %v", c.ApiUrl))
+	l.logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginUrl, redirectURL)
-	deps.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
+	l.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
 
 	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -120,10 +163,7 @@ func run(c *config.Config, deps loginDeps) error {
 	}
 
 	s := ui.NewSpinner(os.Stdout)
-	err = deps.openURL(loginURL)
-	if err != nil {
-		return errors.Wrapf(err, "failed to open %v", loginURL)
-	}
+	l.directUserToURL(loginURL)
 	s.Start("Waiting for your authorization...")
 	err = oss.Wait()
 	if err != nil {
@@ -132,25 +172,28 @@ func run(c *config.Config, deps loginDeps) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	deps.writeUserConfig(&config.TurborepoConfig{Token: query.Get("token")})
+	err = config.WriteUserConfigFile(l.fsys, &config.TurborepoConfig{Token: query.Get("token")})
+	if err != nil {
+		return err
+	}
 	rawToken := query.Get("token")
-	deps.client.SetToken(rawToken)
-	userResponse, err := deps.client.GetUser()
+	l.client.SetToken(rawToken)
+	userResponse, err := l.client.GetUser()
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	deps.ui.Info("")
-	deps.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
-	deps.ui.Info("")
-	deps.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-	deps.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
-	deps.ui.Info("")
-	deps.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
-	deps.ui.Info("")
+	l.ui.Info("")
+	l.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
+	l.ui.Info("")
+	l.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
+	l.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
+	l.ui.Info("")
+	l.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+	l.ui.Info("")
 	return nil
 }
 
-func loginSSO(c *config.Config, ssoTeam string, deps loginDeps) error {
+func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	query := make(url.Values)
 	query.Add("teamId", ssoTeam)
@@ -171,10 +214,7 @@ func loginSSO(c *config.Config, ssoTeam string, deps loginDeps) error {
 		return errors.Wrap(err, "failed to start local server")
 	}
 	s := ui.NewSpinner(os.Stdout)
-	err = deps.openURL(loginURL)
-	if err != nil {
-		return errors.Wrapf(err, "failed to open %v", loginURL)
-	}
+	l.directUserToURL(loginURL)
 	s.Start("Waiting for your authorization...")
 	err = oss.Wait()
 	if err != nil {
@@ -193,45 +233,84 @@ func loginSSO(c *config.Config, ssoTeam string, deps loginDeps) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to make sso token name")
 	}
-	verifiedUser, err := deps.client.VerifySSOToken(verificationToken, tokenName)
+	verifiedUser, err := l.client.VerifySSOToken(verificationToken, tokenName)
 	if err != nil {
 		return errors.Wrap(err, "failed to verify SSO token")
 	}
 
-	deps.client.SetToken(verifiedUser.Token)
-	userResponse, err := deps.client.GetUser()
+	l.client.SetToken(verifiedUser.Token)
+	l.client.SetTeamID(verifiedUser.TeamID)
+	userResponse, err := l.client.GetUser()
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	err = deps.writeUserConfig(&config.TurborepoConfig{Token: verifiedUser.Token})
+	err = config.WriteUserConfigFile(l.fsys, &config.TurborepoConfig{Token: verifiedUser.Token})
 	if err != nil {
 		return errors.Wrap(err, "failed to save auth token")
 	}
-	deps.ui.Info("")
-	deps.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
-	deps.ui.Info("")
+	l.ui.Info("")
+	l.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
+	l.ui.Info("")
 	if verifiedUser.TeamID != "" {
-		err = deps.writeRepoConfig(&config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
+		err = l.verifyCachingEnabled(verifiedUser.TeamID)
+		if err != nil {
+			return err
+		}
+		err = config.WriteRepoConfigFile(l.fsys, l.repoRoot, &config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
 		if err != nil {
 			return errors.Wrap(err, "failed to save teamId")
 		}
-		deps.ui.Info(util.Sprintf("${CYAN}Remote Caching enabled for %s${RESET}", ssoTeam))
-		deps.ui.Info("")
-		deps.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
-		deps.ui.Info("  all your team’s Vercel projects. It also can share outputs")
-		deps.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
-		deps.ui.Info("  This results in faster build times and deployments for your team.")
-		deps.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/core-concepts/remote-caching${RESET}"))
-		deps.ui.Info("")
-		deps.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
+		l.ui.Info(util.Sprintf("${CYAN}Remote Caching enabled for %s${RESET}", ssoTeam))
+		l.ui.Info("")
+		l.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
+		l.ui.Info("  all your team’s Vercel projects. It also can share outputs")
+		l.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
+		l.ui.Info("  This results in faster build times and deployments for your team.")
+		l.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+		l.ui.Info("")
+		l.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {
 
-		deps.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-		deps.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
-		deps.ui.Info("")
-		deps.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+		l.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
+		l.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
+		l.ui.Info("")
+		l.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
 	}
-	deps.ui.Info("")
+	l.ui.Info("")
+	return nil
+}
+
+func (l *login) verifyCachingEnabled(teamID string) error {
+	cachingStatus, err := l.client.GetCachingStatus()
+	if err != nil {
+		return err
+	}
+	switch cachingStatus {
+	case util.CachingStatusDisabled:
+		team, err := l.client.GetTeam(teamID)
+		if err != nil {
+			return err
+		} else if team == nil {
+			return fmt.Errorf("unable to find team %v", teamID)
+		}
+		if team.IsOwner() {
+			shouldEnable, err := l.promptEnableCaching()
+			if err != nil {
+				return err
+			}
+			if shouldEnable {
+				url := fmt.Sprintf("https://vercel.com/teams/%v/settings/billing", team.Slug)
+				l.ui.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
+				l.directUserToURL(url)
+				return errTryAfterEnable
+			}
+		}
+		return errNeedCachingEnabled
+	case util.CachingStatusOverLimit:
+		return errOverage
+	case util.CachingStatusEnabled:
+	default:
+	}
 	return nil
 }
 

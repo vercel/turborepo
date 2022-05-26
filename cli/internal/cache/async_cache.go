@@ -5,8 +5,6 @@ package cache
 
 import (
 	"sync"
-
-	"github.com/vercel/turborepo/cli/internal/config"
 )
 
 // An asyncCache is a wrapper around a Cache interface that handles incoming
@@ -28,13 +26,13 @@ type cacheRequest struct {
 	files    []string
 }
 
-func newAsyncCache(realCache Cache, config *config.Config) Cache {
+func newAsyncCache(realCache Cache, opts Opts) Cache {
 	c := &asyncCache{
 		requests:  make(chan cacheRequest),
 		realCache: realCache,
 	}
-	c.wg.Add(config.Cache.Workers)
-	for i := 0; i < config.Cache.Workers; i++ {
+	c.wg.Add(opts.Workers)
+	for i := 0; i < opts.Workers; i++ {
 		go c.run()
 	}
 	return c

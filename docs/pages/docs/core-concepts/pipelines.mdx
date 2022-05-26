@@ -222,6 +222,54 @@ This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"d
   [`outputs`](../reference/configuration#outputs) at the moment.**
 </Callout>
 
+### Running tasks defined in the root `package.json`
+
+`turbo` can run tasks that exist in the `package.json` file at the root of the monorepo.
+These must be added to the pipeline configuration using the form `"//#<task>": {...}`. This is
+true even for tasks that already have their own entry. For example, if you already have `"build": {...}`
+in your pipeline, but want to include the `build` script defined in the root `package.json` when running
+`turbo run build`, you must opt the root into it by also including `"//#build": {...}` in your configuration.
+Conversely, you _do not_ need to define a generic `"my-task": {...}` entry if all you need is `"//#my-task": {...}`.
+
+A sample pipeline that defines the root task `format` and opts the root into `test` might look like:
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+    },
+    // This will cause the "test" script to be included when
+    // "turbo run test" is run
+    "//#test": {
+      "dependsOn": [],
+      "outputs": []
+    },
+    // This will cause the "format" script in the root package.json
+    // to be run when "turbo run format" is run. Since the general
+    // "format" task is not defined, only the root's "format" script
+    // will be run.
+    "//#format": {
+      "dependsOn": [],
+      "outputs": ["dist/**/*"],
+      "inputs": ["version.txt"]
+    },
+  }
+}
+```
+
+**A note on recursion**: Scripts defined in the root `package.json` often call `turbo` themselves.
+For example, the `build` script might be `turbo run build`. In this situation, including `//#build` in
+`turbo run build` will cause infinite recursion. It is for this reason that tasks run from the root must
+be explicitly opted into via including `//#<task>` in the pipeline configuration. `turbo` includes
+some best-effort checking to produce an error in the recursion situations, but it is up to you to to only
+opt in those tasks which don't themselves trigger a `turbo` run that would recurse.
+
 <Callout type="idea" icon={<HeartIcon  className="h-5 w-5 mt-1 text-gray-400" aria-hidden="true" />}>
 Turborepo's Pipeline API design and this page of documentation was inspired by [Microsoft's Lage project](https://microsoft.github.io/lage/docs/Guide/pipeline#defining-a-pipeline).
 Shoutout to [Kenneth Chau](https://twitter.com/kenneth_chau) for the idea of fanning out tasks in such a concise and elegant way.

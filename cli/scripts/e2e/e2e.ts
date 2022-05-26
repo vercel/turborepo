@@ -18,6 +18,16 @@ const basicPipeline = {
       dependsOn: ["^build"],
       outputs: ["dist/**"],
     },
+    "//#build": {
+      dependsOn: [],
+      outputs: ["dist/**"],
+      inputs: ["rootbuild.js"],
+    },
+    "//#special": {
+      dependsOn: ["^build"],
+      outputs: ["dist/**"],
+      inputs: [],
+    },
   },
   globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
 };
@@ -113,7 +123,7 @@ function runSmokeTests<T>(
       const dryRun: DryRun = JSON.parse(results.stdout);
       // expect to run all packages
       const expectTaskId = includesTaskId(dryRun);
-      for (const pkg of ["a", "b", "c"]) {
+      for (const pkg of ["a", "b", "c", "//"]) {
         assert.ok(
           dryRun.packages.includes(pkg),
           `Expected to include package ${pkg}`
@@ -125,7 +135,13 @@ function runSmokeTests<T>(
       }
 
       // actually run the build
-      repo.turbo("run", ["build"], options);
+      const buildOutput = getCommandOutputAsArray(
+        repo.turbo("run", ["build"], options)
+      );
+      assert.ok(
+        buildOutput.includes("//:build: building"),
+        "Missing root build"
+      );
 
       // assert that hashes are stable across multiple runs
       const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
@@ -300,6 +316,11 @@ function runSmokeTests<T>(
       );
 
       // run a task without dependencies
+
+      // ensure that uncommitted irrelevant changes are also ignored
+      repo.modifyFiles({
+        [path.join("packages", "a", "README.md")]: "important text",
+      });
       const lintOutput = getCommandOutputAsArray(
         repo.turbo(
           "run",
@@ -427,6 +448,32 @@ function runSmokeTests<T>(
     }
   );
 
+  suite(
+    `${npmClient} runs root tasks${options.cwd ? " from " + options.cwd : ""}`,
+    async () => {
+      const result = getCommandOutputAsArray(
+        repo.turbo("run", ["special"], options)
+      );
+      assert.ok(result.includes("//:special: root task"));
+      const secondPass = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["special", "--filter=//", "--output-logs=hash-only"],
+          options
+        )
+      );
+      assert.ok(
+        secondPass.includes(
+          `//:special: cache hit, suppressing output ${getHashFromOutput(
+            secondPass,
+            "//#special"
+          )}`
+        ),
+        "Rerun of //:special should be cached"
+      );
+    }
+  );
+
   if (npmClient === "yarn") {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
@@ -500,7 +547,9 @@ function getLockfileForPackageManager(ws: PackageManager) {
 function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
-  return (results.stdout + results.stderr).split("\n");
+  return (results.stdout + results.stderr)
+    .split("\n")
+    .map((line) => line.replace("\r", ""));
 }
 
 function getHashFromOutput(lines: string[], taskId: string): string {
