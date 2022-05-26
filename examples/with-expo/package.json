@@ -6,7 +6,8 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run build"
+    "build": "turbo run build",
+    "clean": "turbo run clean && rm -rf node_modules"
   },
   "dependencies": {
     "turbo": "^1.2.14"
