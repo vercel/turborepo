@@ -1,0 +1,26 @@
+{
+  "name": "@acme/ui",
+  "version": "0.0.0",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "license": "MIT",
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "tsup src/index.tsx --format esm,cjs --dts --external react",
+    "dev": "tsup src/index.tsx --format esm,cjs --watch --dts --external react"
+  },
+  "devDependencies": {},
+  "dependencies": {
+    "@acme/tsconfig": "*",
+    "@types/react": "^18.0.9",
+    "@types/react-native": "^0.67.7",
+    "react": "^18.1.0",
+    "react-native": "^0.68.2",
+    "tsup": "^6.0.1",
+    "typescript": "^4.7.2"
+  }
+}
