@@ -28,16 +28,16 @@ func TestParseConfig(t *testing.T) {
 	cases := []struct {
 		Name     string
 		Args     []string
-		Expected *RunOptions
+		Expected *Opts
 	}{
 		{
 			"string flags",
 			[]string{"foo"},
-			&RunOptions{
-				bail:        true,
-				dotGraph:    "",
-				concurrency: 10,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -49,11 +49,11 @@ func TestParseConfig(t *testing.T) {
 		{
 			"scope",
 			[]string{"foo", "--scope=foo", "--scope=blah"},
-			&RunOptions{
-				bail:        true,
-				dotGraph:    "",
-				concurrency: 10,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -69,11 +69,11 @@ func TestParseConfig(t *testing.T) {
 		{
 			"concurrency",
 			[]string{"foo", "--concurrency=12"},
-			&RunOptions{
-				bail:        true,
-				dotGraph:    "",
-				concurrency: 12,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 12,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -85,11 +85,12 @@ func TestParseConfig(t *testing.T) {
 		{
 			"graph",
 			[]string{"foo", "--graph=g.png"},
-			&RunOptions{
-				bail:        true,
-				dotGraph:    "g.png",
-				concurrency: 10,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+					dotGraph:    "g.png",
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -101,12 +102,13 @@ func TestParseConfig(t *testing.T) {
 		{
 			"passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
-			&RunOptions{
-				bail:            true,
-				dotGraph:        "g.png",
-				concurrency:     10,
-				profile:         "",
-				passThroughArgs: []string{"--boop", "zoop"},
+			&Opts{
+				runOpts: runOpts{
+					bail:            true,
+					concurrency:     10,
+					dotGraph:        "g.png",
+					passThroughArgs: []string{"--boop", "zoop"},
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -118,10 +120,11 @@ func TestParseConfig(t *testing.T) {
 		{
 			"force",
 			[]string{"foo", "--force"},
-			&RunOptions{
-				bail:        true,
-				concurrency: 10,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -135,10 +138,11 @@ func TestParseConfig(t *testing.T) {
 		{
 			"remote-only",
 			[]string{"foo", "--remote-only"},
-			&RunOptions{
-				bail:        true,
-				concurrency: 10,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:            defaultCacheFolder,
 					Workers:        10,
@@ -151,10 +155,11 @@ func TestParseConfig(t *testing.T) {
 		{
 			"no-cache",
 			[]string{"foo", "--no-cache"},
-			&RunOptions{
-				bail:        true,
-				concurrency: 10,
-				profile:     "",
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -168,12 +173,13 @@ func TestParseConfig(t *testing.T) {
 		{
 			"Empty passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--"},
-			&RunOptions{
-				bail:            true,
-				dotGraph:        "g.png",
-				concurrency:     10,
-				profile:         "",
-				passThroughArgs: []string{},
+			&Opts{
+				runOpts: runOpts{
+					bail:            true,
+					concurrency:     10,
+					dotGraph:        "g.png",
+					passThroughArgs: []string{},
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -185,9 +191,11 @@ func TestParseConfig(t *testing.T) {
 		{
 			"can specify filter patterns",
 			[]string{"foo", "--filter=bar", "--filter=...[main]"},
-			&RunOptions{
-				bail:        true,
-				concurrency: 10,
+			&Opts{
+				runOpts: runOpts{
+					bail:        true,
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -232,11 +240,11 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		t.Errorf("failed to get cwd: %v", err)
 	}
 	cwd := defaultCwd.Join("zop")
-	expected := &RunOptions{
-		bail:        true,
-		dotGraph:    "",
-		concurrency: 10,
-		profile:     "",
+	expected := &Opts{
+		runOpts: runOpts{
+			bail:        true,
+			concurrency: 10,
+		},
 		cacheOpts: cache.Opts{
 			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
 			Workers: 10,
@@ -377,7 +385,7 @@ func Test_dontSquashTasks(t *testing.T) {
 	rs := &runSpec{
 		FilteredPkgs: filteredPkgs,
 		Targets:      []string{"build"},
-		Opts:         &RunOptions{},
+		Opts:         &Opts{},
 	}
 	engine, err := buildTaskGraph(topoGraph, pipeline, rs)
 	if err != nil {
@@ -410,7 +418,7 @@ func Test_taskSelfRef(t *testing.T) {
 	rs := &runSpec{
 		FilteredPkgs: filteredPkgs,
 		Targets:      []string{"build"},
-		Opts:         &RunOptions{},
+		Opts:         &Opts{},
 	}
 	_, err := buildTaskGraph(topoGraph, pipeline, rs)
 	if err == nil {
