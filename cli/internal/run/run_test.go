@@ -35,7 +35,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 				},
 				cacheOpts: cache.Opts{
@@ -51,7 +50,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--scope=foo", "--scope=blah"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 				},
 				cacheOpts: cache.Opts{
@@ -71,7 +69,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--concurrency=12"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 12,
 				},
 				cacheOpts: cache.Opts{
@@ -87,7 +84,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 					dotGraph:    "g.png",
 				},
@@ -104,7 +100,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
 			&Opts{
 				runOpts: runOpts{
-					bail:            true,
 					concurrency:     10,
 					dotGraph:        "g.png",
 					passThroughArgs: []string{"--boop", "zoop"},
@@ -122,7 +117,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--force"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 				},
 				cacheOpts: cache.Opts{
@@ -140,7 +134,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--remote-only"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 				},
 				cacheOpts: cache.Opts{
@@ -157,7 +150,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--no-cache"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 				},
 				cacheOpts: cache.Opts{
@@ -175,7 +167,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png", "--"},
 			&Opts{
 				runOpts: runOpts{
-					bail:            true,
 					concurrency:     10,
 					dotGraph:        "g.png",
 					passThroughArgs: []string{},
@@ -193,7 +184,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--filter=bar", "--filter=...[main]"},
 			&Opts{
 				runOpts: runOpts{
-					bail:        true,
 					concurrency: 10,
 				},
 				cacheOpts: cache.Opts{
@@ -204,6 +194,22 @@ func TestParseConfig(t *testing.T) {
 				scopeOpts: scope.Opts{
 					FilterPatterns: []string{"bar", "...[main]"},
 				},
+			},
+		},
+		{
+			"continue on errors",
+			[]string{"foo", "--continue"},
+			&Opts{
+				runOpts: runOpts{
+					continueOnError: true,
+					concurrency:     10,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 	}
@@ -242,7 +248,6 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 	cwd := defaultCwd.Join("zop")
 	expected := &Opts{
 		runOpts: runOpts{
-			bail:        true,
 			concurrency: 10,
 		},
 		cacheOpts: cache.Opts{

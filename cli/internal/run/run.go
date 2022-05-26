@@ -394,7 +394,8 @@ type runOpts struct {
 	// Whether to emit a perf profile
 	profile string
 	// Immediately exit on task failure
-	bail            bool
+	//bail            bool
+	continueOnError bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
 	only       bool
@@ -405,7 +406,6 @@ type runOpts struct {
 func getDefaultOptions(config *config.Config) *Opts {
 	return &Opts{
 		runOpts: runOpts{
-			bail:        true,
 			concurrency: 10,
 		},
 		cacheOpts: cache.Opts{
@@ -479,7 +479,7 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*Opts, e
 			case strings.HasPrefix(arg, "--cache-dir"):
 				unresolvedCacheFolder = arg[len("--cache-dir="):]
 			case strings.HasPrefix(arg, "--continue"):
-				opts.runOpts.bail = false
+				opts.runOpts.continueOnError = true
 			case strings.HasPrefix(arg, "--force"):
 				opts.runcacheOpts.SkipReads = true
 			case strings.HasPrefix(arg, "--stream"):
@@ -859,7 +859,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		e.logError(targetLogger, actualPrefix, err)
-		if e.rs.Opts.runOpts.bail {
+		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
@@ -905,7 +905,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		}
 		tracer(TargetBuildFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
-		if e.rs.Opts.runOpts.bail {
+		if !e.rs.Opts.runOpts.continueOnError {
 			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			e.processes.Close()
 		} else {
