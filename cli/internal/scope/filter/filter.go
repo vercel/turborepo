@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )

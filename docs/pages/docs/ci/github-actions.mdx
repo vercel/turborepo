@@ -65,6 +65,7 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
           # env:
           #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          #  TURBO_REMOTE_ONLY: true
           strategy:
             matrix:
               os: [ubuntu-latest, macos-latest]

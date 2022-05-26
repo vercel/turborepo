@@ -12,6 +12,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
@@ -39,6 +40,11 @@ type CacheEvent struct {
 	Duration int    `mapstructure:"duration"`
 }
 
+// DefaultLocation returns the default filesystem cache location, given a repo root
+func DefaultLocation(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+	return repoRoot.Join("node_modules", ".cache", "turbo")
+}
+
 // OnCacheRemoved defines a callback that the cache system calls if a particular cache
 // needs to be removed. In practice, this happens when Remote Caching has been disabled
 // the but CLI continues to try to use it.
@@ -47,28 +53,44 @@ type OnCacheRemoved = func(cache Cache, err error)
 // ErrNoCachesEnabled is returned when both the filesystem and http cache are unavailable
 var ErrNoCachesEnabled = errors.New("no caches are enabled")
 
+// Opts holds configuration options for the cache
+// TODO(gsoltis): further refactor this into fs cache opts and http cache opts
+type Opts struct {
+	Dir            fs.AbsolutePath
+	SkipRemote     bool
+	SkipFilesystem bool
+	Workers        int
+}
+
 // New creates a new cache
-func New(config *config.Config, remoteOnly bool, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	c, err := newSyncCache(config, remoteOnly, recorder, onCacheRemoved)
+func New(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+	c, err := newSyncCache(opts, config, recorder, onCacheRemoved)
 	if err != nil {
 		return nil, err
 	}
-	if config.Cache.Workers > 0 {
-		return newAsyncCache(c, config), nil
+	if opts.Workers > 0 {
+		return newAsyncCache(c, opts), nil
 	}
 	return c, nil
 }
 
-func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	mplex := &cacheMultiplexer{
 		onCacheRemoved: onCacheRemoved,
+		opts:           opts,
 	}
-	if config.Cache.Dir != "" && !remoteOnly {
-		mplex.caches = append(mplex.caches, newFsCache(config, recorder))
+	// if config.Cache.Dir != "" && !remoteOnly {
+	if !opts.SkipFilesystem {
+		fsCache, err := newFsCache(opts, recorder)
+		if err != nil {
+			return nil, err
+		}
+		mplex.caches = append(mplex.caches, fsCache)
 	}
-	if config.IsLoggedIn() {
+	//if config.IsLoggedIn() {
+	if !opts.SkipRemote {
 		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
-		mplex.caches = append(mplex.caches, newHTTPCache(config, recorder))
+		mplex.caches = append(mplex.caches, newHTTPCache(opts, config, recorder))
 	}
 	if len(mplex.caches) == 0 {
 		return nil, ErrNoCachesEnabled
@@ -82,6 +104,7 @@ func newSyncCache(config *config.Config, remoteOnly bool, recorder analytics.Rec
 // Used when we have several active (eg. http, dir).
 type cacheMultiplexer struct {
 	caches         []Cache
+	opts           Opts
 	mu             sync.RWMutex
 	onCacheRemoved OnCacheRemoved
 }

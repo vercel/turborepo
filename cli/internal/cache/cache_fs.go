@@ -12,7 +12,6 @@ import (
 	"runtime"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"golang.org/x/sync/errgroup"
 )
@@ -24,8 +23,11 @@ type fsCache struct {
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(config *config.Config, recorder analytics.Recorder) Cache {
-	return &fsCache{cacheDirectory: config.Cache.Dir, recorder: recorder}
+func newFsCache(opts Opts, recorder analytics.Recorder) (Cache, error) {
+	if err := opts.Dir.MkdirAll(); err != nil {
+		return nil, err
+	}
+	return &fsCache{cacheDirectory: opts.Dir.ToStringDuringMigration(), recorder: recorder}, nil
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
