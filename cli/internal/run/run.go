@@ -414,9 +414,7 @@ func getDefaultRunOptions(config *config.Config) *RunOptions {
 			Dir:     cache.DefaultLocation(config.Cwd),
 			Workers: config.Cache.Workers,
 		},
-		scopeOpts: scope.Opts{
-			IncludeDependents: true,
-		},
+		scopeOpts: scope.Opts{},
 	}
 }
 
@@ -476,7 +474,7 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 				runOptions.profile = fmt.Sprintf("%v-profile.json", time.Now().UnixNano())
 
 			case strings.HasPrefix(arg, "--no-deps"):
-				runOptions.scopeOpts.IncludeDependents = false
+				runOptions.scopeOpts.SkipDependents = true
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.runcacheOpts.SkipWrites = true
 			case strings.HasPrefix(arg, "--cacheFolder"):

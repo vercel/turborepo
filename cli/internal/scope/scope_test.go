@@ -208,7 +208,7 @@ func TestResolvePackages(t *testing.T) {
 				IgnorePatterns:      []string{tc.ignore},
 				GlobalDepPatterns:   tc.globalDeps,
 				IncludeDependencies: tc.includeDependencies,
-				IncludeDependents:   tc.includeDependents,
+				SkipDependents:      !tc.includeDependents,
 			}, "dummy-repo-root", scm, &context.Context{
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,

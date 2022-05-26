@@ -18,8 +18,8 @@ import (
 type Opts struct {
 	// IncludeDependencies is whether to include pkg.dependencies in execution (defaults to false)
 	IncludeDependencies bool
-	// IncludeDependents is whether to include dependent impacted consumers in execution (defaults to true)
-	IncludeDependents bool
+	// SkipDependents is whether to skip dependent impacted consumers in execution (defaults to false)
+	SkipDependents bool
 	// Entrypoints is a list of package entrypoints
 	Entrypoints []string
 	// Since is the git ref used to calculate changed packages
@@ -37,7 +37,7 @@ func (o *Opts) asFilterPatterns() []string {
 	patterns := make([]string, len(o.FilterPatterns))
 	copy(patterns, o.FilterPatterns)
 	prefix := ""
-	if o.IncludeDependents {
+	if !o.SkipDependents {
 		prefix = "..."
 	}
 	suffix := ""

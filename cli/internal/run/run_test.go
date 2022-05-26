@@ -44,9 +44,7 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
@@ -64,8 +62,7 @@ func TestParseConfig(t *testing.T) {
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-					Entrypoints:       []string{"foo", "blah"},
+					Entrypoints: []string{"foo", "blah"},
 				},
 			},
 		},
@@ -83,9 +80,7 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
@@ -102,9 +97,7 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
@@ -122,9 +115,7 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
@@ -142,9 +133,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipReads: true,
 				},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts: scope.Opts{},
 			},
 		},
 		{
@@ -161,9 +150,7 @@ func TestParseConfig(t *testing.T) {
 					SkipFilesystem: true,
 				},
 				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
@@ -181,9 +168,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipWrites: true,
 				},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts: scope.Opts{},
 			},
 		},
 		{
@@ -201,9 +186,7 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-				},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
@@ -219,8 +202,7 @@ func TestParseConfig(t *testing.T) {
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts: scope.Opts{
-					IncludeDependents: true,
-					FilterPatterns:    []string{"bar", "...[main]"},
+					FilterPatterns: []string{"bar", "...[main]"},
 				},
 			},
 		},
@@ -269,9 +251,7 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 			Workers: 10,
 		},
 		runcacheOpts: runcache.Opts{},
-		scopeOpts: scope.Opts{
-			IncludeDependents: true,
-		},
+		scopeOpts:    scope.Opts{},
 	}
 
 	ui := &cli.BasicUi{
