@@ -38,7 +38,6 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:    "",
 				concurrency: 10,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -55,7 +54,6 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:    "",
 				concurrency: 10,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -76,7 +74,6 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:    "",
 				concurrency: 12,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -93,7 +90,6 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:    "g.png",
 				concurrency: 10,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -110,7 +106,6 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:        "g.png",
 				concurrency:     10,
 				profile:         "",
-				cwd:             defaultCwd.ToStringDuringMigration(),
 				passThroughArgs: []string{"--boop", "zoop"},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
@@ -127,7 +122,6 @@ func TestParseConfig(t *testing.T) {
 				bail:        true,
 				concurrency: 10,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -145,7 +139,6 @@ func TestParseConfig(t *testing.T) {
 				bail:        true,
 				concurrency: 10,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:            defaultCacheFolder,
 					Workers:        10,
@@ -162,7 +155,6 @@ func TestParseConfig(t *testing.T) {
 				bail:        true,
 				concurrency: 10,
 				profile:     "",
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -181,7 +173,6 @@ func TestParseConfig(t *testing.T) {
 				dotGraph:        "g.png",
 				concurrency:     10,
 				profile:         "",
-				cwd:             defaultCwd.ToStringDuringMigration(),
 				passThroughArgs: []string{},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
@@ -197,7 +188,6 @@ func TestParseConfig(t *testing.T) {
 			&RunOptions{
 				bail:        true,
 				concurrency: 10,
-				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -247,7 +237,6 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		dotGraph:    "",
 		concurrency: 10,
 		profile:     "",
-		cwd:         cwd.ToStringDuringMigration(),
 		cacheOpts: cache.Opts{
 			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
 			Workers: 10,

@@ -1,7 +1,6 @@
 package run
 
 import (
-	"bufio"
 	gocontext "context"
 	"encoding/json"
 	"flag"
@@ -170,7 +169,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config, runOptions.cacheOpts.Dir))
+	ctx, err := context.New(context.WithGraph(c.Config, runOptions.cacheOpts.Dir))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -188,7 +187,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	scmInstance, err := scm.FromInRepo(runOptions.cwd)
+	scmInstance, err := scm.FromInRepo(c.Config.Cwd.ToStringDuringMigration())
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
 			c.logWarning(c.Config.Logger, "", err)
@@ -268,7 +267,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 
 	exitCode := 0
 	if rs.Opts.dotGraph != "" {
-		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
+		err := c.generateDotGraph(engine.TaskGraph, c.Config.Cwd.Join(rs.Opts.dotGraph))
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
 			return 1
@@ -384,8 +383,6 @@ type RunOptions struct {
 	concurrency int
 	// Whether to execute in parallel (defaults to false)
 	parallel bool
-	// Current working directory
-	cwd string
 	// Whether to emit a perf profile
 	profile string
 	// Immediately exit on task failure
@@ -425,9 +422,7 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	runOptions.cwd = config.Cwd.ToStringDuringMigration()
 	var unresolvedCacheFolder string
-	// unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	if os.Getenv("TURBO_FORCE") == "true" {
 		runOptions.runcacheOpts.SkipReads = true
@@ -756,22 +751,6 @@ func commandLooksLikeTurbo(command string) bool {
 	return _isTurbo.MatchString(command)
 }
 
-// Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string) {
-	logger.Debug("start replaying logs")
-	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
-	if err != nil {
-		output.Warn(fmt.Sprintf("error reading logs: %v", err))
-		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
-	}
-	defer f.Close()
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		output.Output(string(scan.Bytes())) //Writing to Stdout
-	}
-	logger.Debug("finish replaying logs")
-}
-
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
 // Return targets are always unique sorted alphabetically.
 func getTargetsFromArguments(arguments []string, pipeline fs.Pipeline) ([]string, error) {
@@ -950,14 +929,14 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	return nil
 }
 
-func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename string) error {
+func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename fs.AbsolutePath) error {
 	graphString := string(taskGraph.Dot(&dag.DotOpts{
 		Verbose:    true,
 		DrawCycles: true,
 	}))
-	ext := filepath.Ext(outputFilename)
+	ext := outputFilename.Ext()
 	if ext == ".html" {
-		f, err := os.Create(outputFilename)
+		f, err := outputFilename.Create()
 		if err != nil {
 			return fmt.Errorf("error writing graph: %w", err)
 		}
@@ -978,22 +957,22 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
   </body>
   </html>`)
 		c.Ui.Output("")
-		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename)))
+		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		if ui.IsTTY {
-			browser.OpenBrowser(outputFilename)
+			browser.OpenBrowser(outputFilename.ToString())
 		}
 		return nil
 	}
 	hasDot := hasGraphViz()
 	if hasDot {
-		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename}
+		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename.ToString()}
 		cmd := exec.Command("dot", dotArgs...)
 		cmd.Stdin = strings.NewReader(graphString)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
 		} else {
 			c.Ui.Output("")
-			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename)))
+			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		}
 	} else {
 		c.Ui.Output("")

@@ -99,6 +99,11 @@ func (ap AbsolutePath) Create() (*os.File, error) {
 	return os.Create(ap.asString())
 }
 
+// Ext implements filepath.Ext for an absolute path
+func (ap AbsolutePath) Ext() string {
+	return filepath.Ext(ap.asString())
+}
+
 // ToString returns the string representation of this absolute path. Used for
 // interfacing with APIs that require a string
 func (ap AbsolutePath) ToString() string {
