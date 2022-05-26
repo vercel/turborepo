@@ -87,16 +87,18 @@ func GetHashableDeps(rootPath AbsolutePath, files []string) (map[RelativeUnixPat
 	return relativeResult, nil
 }
 
-// gitHashObject takes a list of files returns a map of with their git hash values.
-// It uses git hash-object under the hood.
-// Note that filesToHash must have full paths.
+// gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
 func gitHashObject(rootPath AbsolutePath, filesToHash []string) (map[RelativeUnixPath]string, error) {
 	fileCount := len(filesToHash)
-	changes := make(map[RelativeUnixPath]string, fileCount)
+	output := make(map[RelativeUnixPath]string, fileCount)
 
 	if fileCount > 0 {
-		cmd := exec.Command("git", "hash-object", "--stdin-paths")
-		cmd.Dir = rootPath.ToString()
+		cmd := exec.Command(
+			"git",           // Using `git` from $PATH,
+			"hash-object",   // hash a file,
+			"--stdin-paths", // using a list of newline-separated paths from stdin.
+		)
+		cmd.Dir = rootPath.ToString() // Start at this directory.
 
 		stdinPipe, stdinPipeError := cmd.StdinPipe()
 		if stdinPipeError != nil {
@@ -163,99 +165,130 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []string) (map[RelativeUni
 
 		for i, hash := range hashes {
 			filepath := filesToHash[i]
-			changes[UnsafeToRelativeUnixPath(filepath)] = hash
+			output[UnsafeToRelativeUnixPath(filepath)] = hash
 		}
 	}
 
-	return changes, nil
+	return output, nil
 }
 
-func runGitCommand(cmd *exec.Cmd, name string, handler func(io.Reader) *gitoutput.Reader) ([][]string, error) {
+// runGitCommand provides boilerplate command handling for `ls-tree`, `ls-files`, and `status`
+func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *gitoutput.Reader) ([][]string, error) {
 	out, pipeError := cmd.StdoutPipe()
 	if pipeError != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", name, pipeError)
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, pipeError)
 	}
 
 	startError := cmd.Start()
 	if startError != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", name, startError)
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, startError)
 	}
 
 	reader := handler(out)
 	entries, readErr := reader.ReadAll()
 	if readErr != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", name, readErr)
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, readErr)
 	}
 
 	waitErr := cmd.Wait()
 	if waitErr != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", name, waitErr)
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, waitErr)
 	}
 
 	return entries, nil
 }
 
+// gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
+// that are present in the `git` index at a particular revision.
 func gitLsTree(rootPath AbsolutePath, path string) (map[RelativeUnixPath]string, error) {
-	cmd := exec.Command("git", "ls-tree", "-r", "-z", "HEAD")
-	cmd.Dir = filepath.Join(rootPath.ToString(), path)
+	cmd := exec.Command(
+		"git",     // Using `git` from $PATH,
+		"ls-tree", // list the contents of the git index,
+		"-r",      // recursively,
+		"-z",      // with each file output formatted as \000-terminated strings,
+		"HEAD",    // at this specified version.
+	)
+	cmd.Dir = filepath.Join(rootPath.ToString(), path) // Start at this directory.
 
 	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make(map[RelativeUnixPath]string, len(entries))
+	output := make(map[RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		changes[UnsafeToRelativeUnixPath(entry[3])] = entry[2]
+		output[UnsafeToRelativeUnixPath(entry[3])] = entry[2]
 	}
 
-	return changes, nil
+	return output, nil
 }
 
+// gitLsTree returns a map of paths to their SHA hashes starting from a list of patterns relative to a directory
+// that are present in the `git` index at a particular revision.
 func gitLsFiles(rootPath AbsolutePath, path string, patterns []string) (map[RelativeUnixPath]string, error) {
-	cmd := exec.Command("git", "ls-files", "-s", "-z", "--")
-	cmd.Args = append(cmd.Args, patterns...)
-	cmd.Dir = filepath.Join(rootPath.ToString(), path)
+	cmd := exec.Command(
+		"git",      // Using `git` from $PATH,
+		"ls-files", // tell me about git index information of some files,
+		"--stage",  // including information about the state of the object so that we can get the hashes,
+		"-z",       // with each file output formatted as \000-terminated strings,
+		"--",       // and any additional argument you see is a path, promise.
+	)
+
+	// FIXME: Globbing is accomplished implicitly using shell expansion.
+	cmd.Args = append(cmd.Args, patterns...)           // Pass in input patterns as arguments.
+	cmd.Dir = filepath.Join(rootPath.ToString(), path) // Start at this directory.
 
 	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make(map[RelativeUnixPath]string, len(entries))
+	output := make(map[RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		changes[UnsafeToRelativeUnixPath(entry[3])] = entry[1]
+		output[UnsafeToRelativeUnixPath(entry[3])] = entry[1]
 	}
 
-	return changes, nil
+	return output, nil
 }
 
-type status struct {
+// statusCode represents the two-letter status code from `git status` with two "named" fields, x & y.
+// They have different meanings based upon the actual state of the working tree. Using x & y maps
+// to upstream behavior.
+type statusCode struct {
 	x string
 	y string
 }
 
-func gitStatus(rootPath AbsolutePath, path string, patterns []string) (map[RelativeUnixPath]status, error) {
-	cmd := exec.Command("git", "status", "-u", "-z", "--")
+// gitStatus returns a map of paths to their `git` status code. This can be used to identify what should
+// be done with files that do not currently match what is in the index.
+func gitStatus(rootPath AbsolutePath, path string, patterns []string) (map[RelativeUnixPath]statusCode, error) {
+	cmd := exec.Command(
+		"git",               // Using `git` from $PATH,
+		"status",            // tell me about the status of the working tree,
+		"--untracked-files", // including information about untracked files,
+		"-z",                // with each file output formatted as \000-terminated strings,
+		"--",                // and any additional argument you see is a path, promise.
+	)
 	if len(patterns) == 0 {
-		cmd.Args = append(cmd.Args, ".")
+		cmd.Args = append(cmd.Args, ".") // Operate in the current directory instead of the root of the working tree.
 	} else {
-		cmd.Args = append(cmd.Args, patterns...)
+		// FIXME: Globbing is accomplished implicitly using shell expansion.
+		cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
 	}
-	cmd.Dir = filepath.Join(rootPath.ToString(), path)
+	cmd.Dir = filepath.Join(rootPath.ToString(), path) // Start at this directory.
 
 	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
 	if err != nil {
 		return nil, err
 	}
 
-	changes := make(map[RelativeUnixPath]status, len(entries))
+	output := make(map[RelativeUnixPath]statusCode, len(entries))
 
 	for _, entry := range entries {
-		changes[UnsafeToRelativeUnixPath(entry[2])] = status{x: entry[0], y: entry[1]}
+		output[UnsafeToRelativeUnixPath(entry[2])] = statusCode{x: entry[0], y: entry[1]}
 	}
 
-	return changes, nil
+	return output, nil
 }
