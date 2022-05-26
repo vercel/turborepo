@@ -62,7 +62,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts: scope.Opts{
-					Entrypoints: []string{"foo", "blah"},
+					LegacyFilter: scope.LegacyFilter{
+						Entrypoints: []string{"foo", "blah"},
+					},
 				},
 			},
 		},

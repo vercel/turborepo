@@ -203,12 +203,14 @@ func TestResolvePackages(t *testing.T) {
 				changed: tc.changed,
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
-				Entrypoints:         tc.scope,
-				Since:               tc.since,
-				IgnorePatterns:      []string{tc.ignore},
-				GlobalDepPatterns:   tc.globalDeps,
-				IncludeDependencies: tc.includeDependencies,
-				SkipDependents:      !tc.includeDependents,
+				LegacyFilter: LegacyFilter{
+					Entrypoints:         tc.scope,
+					Since:               tc.since,
+					IncludeDependencies: tc.includeDependencies,
+					SkipDependents:      !tc.includeDependents,
+				},
+				IgnorePatterns:    []string{tc.ignore},
+				GlobalDepPatterns: tc.globalDeps,
 			}, "dummy-repo-root", scm, &context.Context{
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,

@@ -450,11 +450,11 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
-					runOptions.scopeOpts.Since = arg[len("--since="):]
+					runOptions.scopeOpts.LegacyFilter.Since = arg[len("--since="):]
 				}
 			case strings.HasPrefix(arg, "--scope="):
 				if len(arg[len("--scope="):]) > 0 {
-					runOptions.scopeOpts.Entrypoints = append(runOptions.scopeOpts.Entrypoints, arg[len("--scope="):])
+					runOptions.scopeOpts.LegacyFilter.Entrypoints = append(runOptions.scopeOpts.LegacyFilter.Entrypoints, arg[len("--scope="):])
 				}
 			case strings.HasPrefix(arg, "--ignore="):
 				if len(arg[len("--ignore="):]) > 0 {
@@ -474,7 +474,7 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 				runOptions.profile = fmt.Sprintf("%v-profile.json", time.Now().UnixNano())
 
 			case strings.HasPrefix(arg, "--no-deps"):
-				runOptions.scopeOpts.SkipDependents = true
+				runOptions.scopeOpts.LegacyFilter.SkipDependents = true
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.runcacheOpts.SkipWrites = true
 			case strings.HasPrefix(arg, "--cacheFolder"):
@@ -506,9 +506,9 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
-				runOptions.scopeOpts.IncludeDependencies = true
+				runOptions.scopeOpts.LegacyFilter.IncludeDependencies = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
-				runOptions.scopeOpts.IncludeDependencies = true
+				runOptions.scopeOpts.LegacyFilter.IncludeDependencies = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--output-logs="):

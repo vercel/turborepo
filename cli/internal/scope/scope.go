@@ -15,7 +15,9 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util/filter"
 )
 
-type Opts struct {
+// LegacyFilter holds the options in use before the filter syntax. They have their own rules
+// for how they are compiled into filter expressions.
+type LegacyFilter struct {
 	// IncludeDependencies is whether to include pkg.dependencies in execution (defaults to false)
 	IncludeDependencies bool
 	// SkipDependents is whether to skip dependent impacted consumers in execution (defaults to false)
@@ -24,6 +26,11 @@ type Opts struct {
 	Entrypoints []string
 	// Since is the git ref used to calculate changed packages
 	Since string
+}
+
+// Opts holds the options for how to select the entrypoint packages for a turbo run
+type Opts struct {
+	LegacyFilter LegacyFilter
 	// IgnorePatterns is the list of globs of file paths to ignore from execution scope calculation
 	IgnorePatterns []string
 	// GlobalDepPatterns is a list of globs to global files whose contents will be included in the global hash calculation
@@ -33,27 +40,26 @@ type Opts struct {
 }
 
 // asFilterPatterns normalizes legacy selectors to filter syntax
-func (o *Opts) asFilterPatterns() []string {
-	patterns := make([]string, len(o.FilterPatterns))
-	copy(patterns, o.FilterPatterns)
+func (l *LegacyFilter) asFilterPatterns() []string {
+	var patterns []string
 	prefix := ""
-	if !o.SkipDependents {
+	if !l.SkipDependents {
 		prefix = "..."
 	}
 	suffix := ""
-	if o.IncludeDependencies {
+	if l.IncludeDependencies {
 		suffix = "..."
 	}
 	since := ""
-	if o.Since != "" {
-		since = fmt.Sprintf("[%v]", o.Since)
+	if l.Since != "" {
+		since = fmt.Sprintf("[%v]", l.Since)
 	}
-	if len(o.Entrypoints) > 0 {
+	if len(l.Entrypoints) > 0 {
 		// --scope implies our tweaked syntax to see if any dependency matches
 		if since != "" {
 			since = "..." + since
 		}
-		for _, pattern := range o.Entrypoints {
+		for _, pattern := range l.Entrypoints {
 			if strings.HasPrefix(pattern, "!") {
 				patterns = append(patterns, pattern)
 			} else {
@@ -79,7 +85,9 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 		Cwd:                  cwd,
 		PackagesChangedSince: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos),
 	}
-	filterPatterns := opts.asFilterPatterns()
+	filterPatterns := opts.FilterPatterns
+	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
+	filterPatterns = append(filterPatterns, legacyFilterPatterns...)
 	isAllPackages := len(filterPatterns) == 0
 	filteredPkgs, err := filterResolver.GetPackagesFromPatterns(filterPatterns)
 	if err != nil {
