@@ -16,14 +16,20 @@ import (
 )
 
 type Opts struct {
+	// IncludeDependencies is whether to include pkg.dependencies in execution (defaults to false)
 	IncludeDependencies bool
-	IncludeDependents   bool
-	Patterns            []string
-	Since               string
-	Cwd                 string
-	IgnorePatterns      []string
-	GlobalDepPatterns   []string
-	FilterPatterns      []string
+	// IncludeDependents is whether to include dependent impacted consumers in execution (defaults to true)
+	IncludeDependents bool
+	// Entrypoints is a list of package entrypoints
+	Entrypoints []string
+	// Since is the git ref used to calculate changed packages
+	Since string
+	// IgnorePatterns is the list of globs of file paths to ignore from execution scope calculation
+	IgnorePatterns []string
+	// GlobalDepPatterns is a list of globs to global files whose contents will be included in the global hash calculation
+	GlobalDepPatterns []string
+	// Patterns are the filter patterns supplied to --filter on the commandline
+	FilterPatterns []string
 }
 
 // asFilterPatterns normalizes legacy selectors to filter syntax
@@ -42,12 +48,12 @@ func (o *Opts) asFilterPatterns() []string {
 	if o.Since != "" {
 		since = fmt.Sprintf("[%v]", o.Since)
 	}
-	if len(o.Patterns) > 0 {
+	if len(o.Entrypoints) > 0 {
 		// --scope implies our tweaked syntax to see if any dependency matches
 		if since != "" {
 			since = "..." + since
 		}
-		for _, pattern := range o.Patterns {
+		for _, pattern := range o.Entrypoints {
 			if strings.HasPrefix(pattern, "!") {
 				patterns = append(patterns, pattern)
 			} else {
@@ -66,12 +72,12 @@ func (o *Opts) asFilterPatterns() []string {
 // ResolvePackages translates specified flags to a set of entry point packages for
 // the selected tasks. Returns the selected packages and whether or not the selected
 // packages represents a default "all packages".
-func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
+func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
 		Graph:                &ctx.TopologicalGraph,
 		PackageInfos:         ctx.PackageInfos,
-		Cwd:                  opts.Cwd,
-		PackagesChangedSince: opts.getPackageChangeFunc(scm, ctx.PackageInfos),
+		Cwd:                  cwd,
+		PackagesChangedSince: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos),
 	}
 	filterPatterns := opts.asFilterPatterns()
 	isAllPackages := len(filterPatterns) == 0
@@ -90,7 +96,9 @@ func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, 
 	return filteredPkgs, isAllPackages, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedSince {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedSince {
+	// Note that "since" here is *not* o.Since. Each filter expression can have its own value for
+	// "since", apart from the value specified via --since.
 	return func(since string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
@@ -98,7 +106,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*f
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
 		if since != "" {
-			scmChangedFiles, err := scm.ChangedFiles(since, true, o.Cwd)
+			scmChangedFiles, err := scm.ChangedFiles(since, true, cwd)
 			if err != nil {
 				return nil, err
 			}

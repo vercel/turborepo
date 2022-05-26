@@ -13,6 +13,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/runcache"
+	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
@@ -33,103 +34,107 @@ func TestParseConfig(t *testing.T) {
 			"string flags",
 			[]string{"foo"},
 			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				dotGraph:    "",
+				concurrency: 10,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"scope",
 			[]string{"foo", "--scope=foo", "--scope=blah"},
 			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				scope:               []string{"foo", "blah"},
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				dotGraph:    "",
+				concurrency: 10,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+					Entrypoints:       []string{"foo", "blah"},
+				},
 			},
 		},
 		{
 			"concurrency",
 			[]string{"foo", "--concurrency=12"},
 			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         12,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				dotGraph:    "",
+				concurrency: 12,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"graph",
 			[]string{"foo", "--graph=g.png"},
 			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "g.png",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				dotGraph:    "g.png",
+				concurrency: 10,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
 			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "g.png",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
-				passThroughArgs:     []string{"--boop", "zoop"},
+				bail:            true,
+				dotGraph:        "g.png",
+				concurrency:     10,
+				profile:         "",
+				cwd:             defaultCwd.ToStringDuringMigration(),
+				passThroughArgs: []string{"--boop", "zoop"},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"force",
 			[]string{"foo", "--force"},
 			&RunOptions{
-				includeDependents: true,
-				bail:              true,
-				concurrency:       10,
-				profile:           "",
-				cwd:               defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				concurrency: 10,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -137,34 +142,38 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipReads: true,
 				},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"remote-only",
 			[]string{"foo", "--remote-only"},
 			&RunOptions{
-				includeDependents: true,
-				bail:              true,
-				concurrency:       10,
-				profile:           "",
-				cwd:               defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				concurrency: 10,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:            defaultCacheFolder,
 					Workers:        10,
 					SkipFilesystem: true,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"no-cache",
 			[]string{"foo", "--no-cache"},
 			&RunOptions{
-				includeDependents: true,
-				bail:              true,
-				concurrency:       10,
-				profile:           "",
-				cwd:               defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				concurrency: 10,
+				profile:     "",
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -172,41 +181,47 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipWrites: true,
 				},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"Empty passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--"},
 			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "g.png",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
-				passThroughArgs:     []string{},
+				bail:            true,
+				dotGraph:        "g.png",
+				concurrency:     10,
+				profile:         "",
+				cwd:             defaultCwd.ToStringDuringMigration(),
+				passThroughArgs: []string{},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+				},
 			},
 		},
 		{
 			"can specify filter patterns",
 			[]string{"foo", "--filter=bar", "--filter=...[main]"},
 			&RunOptions{
-				includeDependents: true,
-				filterPatterns:    []string{"bar", "...[main]"},
-				bail:              true,
-				concurrency:       10,
-				cwd:               defaultCwd.ToStringDuringMigration(),
+				bail:        true,
+				concurrency: 10,
+				cwd:         defaultCwd.ToStringDuringMigration(),
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					IncludeDependents: true,
+					FilterPatterns:    []string{"bar", "...[main]"},
+				},
 			},
 		},
 	}
@@ -244,18 +259,19 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 	}
 	cwd := defaultCwd.Join("zop")
 	expected := &RunOptions{
-		includeDependents:   true,
-		bail:                true,
-		dotGraph:            "",
-		concurrency:         10,
-		includeDependencies: false,
-		profile:             "",
-		cwd:                 cwd.ToStringDuringMigration(),
+		bail:        true,
+		dotGraph:    "",
+		concurrency: 10,
+		profile:     "",
+		cwd:         cwd.ToStringDuringMigration(),
 		cacheOpts: cache.Opts{
 			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
 			Workers: 10,
 		},
 		runcacheOpts: runcache.Opts{},
+		scopeOpts: scope.Opts{
+			IncludeDependents: true,
+		},
 	}
 
 	ui := &cli.BasicUi{

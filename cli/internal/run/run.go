@@ -197,7 +197,7 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, isAllPackages, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&runOptions.scopeOpts, c.Config.Cwd.ToStringDuringMigration(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve packages to run: %v", err))
 	}
@@ -377,28 +377,13 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 }
 
 // RunOptions holds the current run operations configuration
-
 type RunOptions struct {
-	// patterns supplied to --filter on the commandline
-	filterPatterns []string
-	// Whether to include dependent impacted consumers in execution (defaults to true)
-	includeDependents bool
-	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
-	includeDependencies bool
-	// List of globs of file paths to ignore from execution scope calculation
-	ignore []string
 	// Show a dot graph
 	dotGraph string
-	// List of globs to global files whose contents will be included in the global hash calculation
-	globalDeps []string
-	// Filtered list of package entrypoints
-	scope []string
 	// Force execution to be serially one-at-a-time
 	concurrency int
 	// Whether to execute in parallel (defaults to false)
 	parallel bool
-	// Git diff used to calculate changed packages
-	since string
 	// Current working directory
 	cwd string
 	// Whether to emit a perf profile
@@ -413,35 +398,24 @@ type RunOptions struct {
 
 	cacheOpts    cache.Opts
 	runcacheOpts runcache.Opts
-}
-
-func (ro *RunOptions) scopeOpts() *scope.Opts {
-	return &scope.Opts{
-		IncludeDependencies: ro.includeDependencies,
-		IncludeDependents:   ro.includeDependents,
-		Patterns:            ro.scope,
-		Since:               ro.since,
-		Cwd:                 ro.cwd,
-		IgnorePatterns:      ro.ignore,
-		GlobalDepPatterns:   ro.globalDeps,
-		FilterPatterns:      ro.filterPatterns,
-	}
+	scopeOpts    scope.Opts
 }
 
 func getDefaultRunOptions(config *config.Config) *RunOptions {
 	return &RunOptions{
-		bail:                true,
-		includeDependents:   true,
-		parallel:            false,
-		concurrency:         10,
-		dotGraph:            "",
-		includeDependencies: false,
-		profile:             "", // empty string does no tracing
-		only:                false,
+		bail:        true,
+		parallel:    false,
+		concurrency: 10,
+		dotGraph:    "",
+		profile:     "", // empty string does no tracing
+		only:        false,
 
 		cacheOpts: cache.Opts{
 			Dir:     cache.DefaultLocation(config.Cwd),
 			Workers: config.Cache.Workers,
+		},
+		scopeOpts: scope.Opts{
+			IncludeDependents: true,
 		},
 	}
 }
@@ -474,23 +448,23 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 			case strings.HasPrefix(arg, "--filter="):
 				filterPattern := arg[len("--filter="):]
 				if filterPattern != "" {
-					runOptions.filterPatterns = append(runOptions.filterPatterns, filterPattern)
+					runOptions.scopeOpts.FilterPatterns = append(runOptions.scopeOpts.FilterPatterns, filterPattern)
 				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
-					runOptions.since = arg[len("--since="):]
+					runOptions.scopeOpts.Since = arg[len("--since="):]
 				}
 			case strings.HasPrefix(arg, "--scope="):
 				if len(arg[len("--scope="):]) > 0 {
-					runOptions.scope = append(runOptions.scope, arg[len("--scope="):])
+					runOptions.scopeOpts.Entrypoints = append(runOptions.scopeOpts.Entrypoints, arg[len("--scope="):])
 				}
 			case strings.HasPrefix(arg, "--ignore="):
 				if len(arg[len("--ignore="):]) > 0 {
-					runOptions.ignore = append(runOptions.ignore, arg[len("--ignore="):])
+					runOptions.scopeOpts.IgnorePatterns = append(runOptions.scopeOpts.IgnorePatterns, arg[len("--ignore="):])
 				}
 			case strings.HasPrefix(arg, "--global-deps="):
 				if len(arg[len("--global-deps="):]) > 0 {
-					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
+					runOptions.scopeOpts.GlobalDepPatterns = append(runOptions.scopeOpts.GlobalDepPatterns, arg[len("--global-deps="):])
 				}
 			case strings.HasPrefix(arg, "--parallel"):
 				runOptions.parallel = true
@@ -502,7 +476,7 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 				runOptions.profile = fmt.Sprintf("%v-profile.json", time.Now().UnixNano())
 
 			case strings.HasPrefix(arg, "--no-deps"):
-				runOptions.includeDependents = false
+				runOptions.scopeOpts.IncludeDependents = false
 			case strings.HasPrefix(arg, "--no-cache"):
 				runOptions.runcacheOpts.SkipWrites = true
 			case strings.HasPrefix(arg, "--cacheFolder"):
@@ -534,9 +508,9 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
-				runOptions.includeDependencies = true
+				runOptions.scopeOpts.IncludeDependencies = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
-				runOptions.includeDependencies = true
+				runOptions.scopeOpts.IncludeDependencies = true
 			case strings.HasPrefix(arg, "--only"):
 				runOptions.only = true
 			case strings.HasPrefix(arg, "--output-logs="):
