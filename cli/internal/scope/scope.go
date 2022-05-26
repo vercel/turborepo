@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/scm"
@@ -28,6 +29,17 @@ type LegacyFilter struct {
 	Since string
 }
 
+var _sinceHelp = `Limit/Set scope to changed packages since a
+mergebase. This uses the git diff ${target_branch}...
+mechanism to identify which packages have changed.`
+
+func addLegacyFlags(opts *LegacyFilter, flags *pflag.FlagSet) {
+	flags.BoolVar(&opts.IncludeDependencies, "include-dependencies", false, "Include the dependencies of tasks in execution.")
+	flags.BoolVar(&opts.SkipDependents, "no-deps", false, "Exclude dependent task consumers from execution.")
+	flags.StringArrayVar(&opts.Entrypoints, "scope", nil, "Specify package(s) to act as entry points for task execution. Supports globs.")
+	flags.StringVar(&opts.Since, "since", "", _sinceHelp)
+}
+
 // Opts holds the options for how to select the entrypoint packages for a turbo run
 type Opts struct {
 	LegacyFilter LegacyFilter
@@ -37,6 +49,25 @@ type Opts struct {
 	GlobalDepPatterns []string
 	// Patterns are the filter patterns supplied to --filter on the commandline
 	FilterPatterns []string
+}
+
+var (
+	_filterHelp = `Use the given selector to specify package(s) to act as
+entry points. The syntax mirrors pnpm's syntax, and
+additional documentation and examples can be found in
+turbo's documentation https://turborepo.org/docs/reference/command-line-reference#--filter
+--filter can be specified multiple times. Packages that
+match any filter will be included.`
+	_ignoreHelp    = `Files to ignore when calculating changed files (i.e. --since). Supports globs.`
+	_globalDepHelp = `Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory.`
+)
+
+// AddFlags adds the flags relevant to this package to the given FlagSet
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
+	flags.StringArrayVar(&opts.FilterPatterns, "filter", nil, _filterHelp)
+	flags.StringArrayVar(&opts.IgnorePatterns, "ignore", nil, _ignoreHelp)
+	flags.StringArrayVar(&opts.GlobalDepPatterns, "global-deps", nil, _globalDepHelp)
+	addLegacyFlags(&opts.LegacyFilter, flags)
 }
 
 // asFilterPatterns normalizes legacy selectors to filter syntax

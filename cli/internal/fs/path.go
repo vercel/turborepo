@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+	"github.com/spf13/pflag"
 )
 
 // AbsolutePath represents a platform-dependent absolute path on the filesystem,
@@ -147,4 +148,37 @@ func ReadFile(fs afero.Fs, filename AbsolutePath) ([]byte, error) {
 // RemoveFile removes the file at the given path
 func RemoveFile(fs afero.Fs, filename AbsolutePath) error {
 	return fs.Remove(filename.asString())
+}
+
+type pathValue struct {
+	base     AbsolutePath
+	current  *AbsolutePath
+	defValue string
+}
+
+func (pv *pathValue) String() string {
+	if *pv.current == "" {
+		return ResolveUnknownPath(pv.base, pv.defValue).ToString()
+	}
+	return pv.current.ToString()
+}
+
+func (pv *pathValue) Set(value string) error {
+	*pv.current = ResolveUnknownPath(pv.base, value)
+	return nil
+}
+
+func (pv *pathValue) Type() string {
+	return "path"
+}
+
+var _ pflag.Value = &pathValue{}
+
+func AbsolutePathVar(flags *pflag.FlagSet, target *AbsolutePath, name string, root AbsolutePath, usage string, defValue string) {
+	value := &pathValue{
+		base:     root,
+		current:  target,
+		defValue: defValue,
+	}
+	flags.Var(value, name, usage)
 }
