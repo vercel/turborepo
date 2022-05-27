@@ -239,7 +239,7 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 		length, advance := getFieldLength(fieldType, fieldNumber, fieldCount, &entry)
 		field := entry[:length]
 
-		fieldError := checkValid(fieldType, &field)
+		fieldError := checkValid(fieldType, field)
 		if fieldError != nil {
 			return nil, fieldError
 		}
