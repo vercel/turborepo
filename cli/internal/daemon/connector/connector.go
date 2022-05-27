@@ -182,6 +182,7 @@ func (c *Connector) connectInternal() (Client, error) {
 			}
 			attempts++
 		}
+		// TODO: ensure that we try starting the server again after trying to kill it
 	}
 	if attempts == _maxAttempts {
 		return nil, ErrTooManyAttempts
@@ -205,6 +206,7 @@ func (c *Connector) getClientConn() (*clientAndConn, error) {
 func (c *Connector) sendHello(client server.TurboClient) error {
 	_, err := client.Hello(c.Ctx, &server.HelloRequest{
 		Version: c.TurboVersion,
+		// TODO: add session id
 	})
 	status := status.Convert(err)
 	switch status.Code() {
