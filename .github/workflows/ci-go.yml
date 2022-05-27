@@ -36,12 +36,11 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 16
-          # cache: pnpm
 
       - name: Install pnpm
         run: npm install -g pnpm@6.32.11
 
-      - name: Setup Node.js environment
+      - name: Setup Node.js environment, now with pnpm
         uses: actions/setup-node@v3
         with:
           node-version: 16
@@ -141,7 +140,7 @@ jobs:
           go-version: 1.18.0
         id: go
 
-      # - uses: pnpm/action-setup@v2.1.0
+      # - uses: pnpm/action-setup@v2.2.1
       #   with:
       #     version: 6.32.11
 
@@ -149,10 +148,15 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 16
-          # cache: pnpm
 
       - name: Install pnpm
         run: npm install -g pnpm@6.32.11
+
+      - name: Setup Node.js environment, now with pnpm
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: pnpm
 
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
