@@ -51,13 +51,15 @@ func (c *PruneCommand) Run(args []string) int {
 }
 
 type opts struct {
-	scope  string
-	docker bool
+	scope     string
+	docker    bool
+	outputDir string
 }
 
 func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
 	flags.StringVar(&opts.scope, "scope", "", "Specify package to act as entry point for pruned monorepo (required).")
 	flags.BoolVar(&opts.docker, "docker", false, "Output pruned workspace into 'full' and 'json' directories optimized for Docker layer caching.")
+	flags.StringVar(&opts.outputDir, "out-dir", "out", "Set the root directory for files output by this command")
 	// No-op the cwd flag while the root level command is not yet cobra
 	_ = flags.String("cwd", "", "")
 	if err := flags.MarkHidden("cwd"); err != nil {
@@ -114,8 +116,6 @@ type prune struct {
 	config *config.Config
 }
 
-var _outputDir = "out"
-
 // Prune creates a smaller monorepo with only the required workspaces
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.config.Cwd)
@@ -128,7 +128,7 @@ func (p *prune) prune(opts *opts) error {
 	if !scopeIsValid {
 		return errors.Errorf("invalid scope: package %v not found", opts.scope)
 	}
-	outDir := p.config.Cwd.Join(_outputDir)
+	outDir := p.config.Cwd.Join(opts.outputDir)
 	p.logger.Trace("target", "value", target.Name)
 	p.logger.Trace("directory", "value", target.Dir)
 	p.logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
