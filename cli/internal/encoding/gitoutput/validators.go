@@ -5,7 +5,8 @@ import "bytes"
 var _allowedObjectType = []byte("blob tree commit ")
 var _allowedStatusChars = []byte(" MTADRCU?!")
 
-func checkValid(fieldType field, value []byte) error {
+// checkValid provides a uniform interface for calling `gitoutput` validators.`
+func checkValid(fieldType Field, value []byte) error {
 	switch fieldType {
 	case ObjectMode:
 		return checkObjectMode(value)
@@ -22,10 +23,12 @@ func checkValid(fieldType field, value []byte) error {
 	case Path:
 		return checkPath(value)
 	default:
-		return ErrFieldCount
+		return ErrUnknownField
 	}
 }
 
+// checkObjectMode asserts that a byte slice is a six digit octal string (100644).
+// It does not attempt to ensure that the values in particular positions are reasonable.
 func checkObjectMode(value []byte) error {
 	if len(value) != 6 {
 		return ErrInvalidObjectMode
@@ -42,8 +45,10 @@ func checkObjectMode(value []byte) error {
 	return nil
 }
 
+// checkObjectType asserts that a byte slice is a valid possibility (blob, tree, commit).
 func checkObjectType(value []byte) error {
-	// Because of the space separator, there is no way to pass in a space.
+	// Because of the space separator there is no way to pass in a space.
+	// We use that trick to enable fast lookups in _allowedObjectType.
 	index := bytes.Index(_allowedObjectType, value)
 	if index != -1 && _allowedObjectType[index+len(value)] != byte(space) {
 		return ErrInvalidObjectType
@@ -72,6 +77,7 @@ func CheckObjectName(value []byte) error {
 	return nil
 }
 
+// checkObjectStage asserts that a byte slice is a valid possibility (0-3).
 func checkObjectStage(value []byte) error {
 	// 0-3 are 0x30 - 0x33
 	if len(value) != 1 {
@@ -87,6 +93,7 @@ func checkObjectStage(value []byte) error {
 	return nil
 }
 
+// checkStatusX asserts that a byte slice is a valid possibility (" MTADRCU?!").
 func checkStatusX(value []byte) error {
 	index := bytes.Index(_allowedStatusChars, value)
 	if index == -1 {
@@ -95,6 +102,7 @@ func checkStatusX(value []byte) error {
 	return nil
 }
 
+// checkStatusX asserts that a byte slice is a valid possibility (" MTADRCU?!").
 func checkStatusY(value []byte) error {
 	index := bytes.Index(_allowedStatusChars, value)
 	if index == -1 {
@@ -103,6 +111,7 @@ func checkStatusY(value []byte) error {
 	return nil
 }
 
+// checkPath asserts that a byte slice is non-empty.
 func checkPath(value []byte) error {
 	// Exists at all.
 	if len(value) == 0 {

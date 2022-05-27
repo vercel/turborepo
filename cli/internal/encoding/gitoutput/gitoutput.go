@@ -9,23 +9,29 @@ import (
 	"io"
 )
 
-type field int
+var _lsTreeFields = []Field{ObjectMode, ObjectType, ObjectName, Path}
+var _lsFilesFields = []Field{ObjectMode, ObjectName, ObjectStage, Path}
+var _statusFields = []Field{StatusX, StatusY, Path}
+
+// Field is the type for fields available in outputs to `git`.
+// Used for naming and sensible call sites.
+type Field int
 
 const (
 	// ObjectMode is the mode field from `git`` outputs. e.g. 100644
-	ObjectMode field = 1
+	ObjectMode Field = 1
 	// ObjectType is the set of allowed types from `git`` outputs: blob, tree, commit
-	ObjectType field = 2
+	ObjectType Field = 2
 	// ObjectName is the 40-character SHA hash
-	ObjectName field = 3
+	ObjectName Field = 3
 	// ObjectStage is a value 0-3.
-	ObjectStage field = 4
+	ObjectStage Field = 4
 	// StatusX is the first character of the two-character output from `git status`.
-	StatusX field = 5
+	StatusX Field = 5
 	// StatusY is the second character of the two-character output from `git status`.
-	StatusY field = 6
+	StatusY Field = 6
 	// Path is the file path under version control in `git`.
-	Path field = 7
+	Path Field = 7
 )
 
 // Separators that appear in the output of `git`
@@ -56,7 +62,7 @@ var (
 	ErrInvalidObjectStatusX = errors.New("object status x is not valid")
 	ErrInvalidObjectStatusY = errors.New("object status y is not valid")
 	ErrInvalidPath          = errors.New("path is not valid")
-	ErrFieldCount           = errors.New("too many fields")
+	ErrUnknownField         = errors.New("unkown field")
 )
 
 // A Reader reads records from `git`'s output`.
@@ -67,7 +73,7 @@ type Reader struct {
 	ReuseRecord bool
 
 	// Fields specifies the type of each field.
-	Fields []field
+	Fields []Field
 
 	reader *bufio.Reader
 
@@ -97,7 +103,7 @@ type Reader struct {
 func NewLSTreeReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
-		Fields: []field{ObjectMode, ObjectType, ObjectName, Path},
+		Fields: _lsTreeFields,
 	}
 }
 
@@ -105,7 +111,7 @@ func NewLSTreeReader(reader io.Reader) *Reader {
 func NewLSFilesReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
-		Fields: []field{ObjectMode, ObjectName, ObjectStage, Path},
+		Fields: _lsFilesFields,
 	}
 }
 
@@ -113,7 +119,7 @@ func NewLSFilesReader(reader io.Reader) *Reader {
 func NewStatusReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
-		Fields: []field{StatusX, StatusY, Path},
+		Fields: _statusFields,
 	}
 }
 
@@ -195,7 +201,7 @@ func (r *Reader) readEntry() ([]byte, error) {
 	return entry, err
 }
 
-func getFieldLength(fieldType field, fieldNumber int, fieldCount int, entry *[]byte) (int, int) {
+func getFieldLength(fieldType Field, fieldNumber int, fieldCount int, entry *[]byte) (int, int) {
 	switch fieldType {
 	case StatusX:
 		return 1, 0

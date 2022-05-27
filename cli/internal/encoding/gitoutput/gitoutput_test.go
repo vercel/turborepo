@@ -127,8 +127,8 @@ func TestRead(t *testing.T) {
 				if !reflect.DeepEqual(err, wantErr) {
 					t.Fatalf("Read() error at record %d:\ngot %v (%#v)\nwant %v (%#v)", recNum, err, err, wantErr, wantErr)
 				}
-				// ErrFieldCount is explicitly non-fatal.
-				if err != nil && !errors.Is(err, ErrFieldCount) {
+				// ErrUnknownField is explicitly non-fatal.
+				if err != nil && !errors.Is(err, ErrUnknownField) {
 					if recNum < len(tt.Output) {
 						t.Fatalf("need more records; got %d want %d", recNum, len(tt.Output))
 					}

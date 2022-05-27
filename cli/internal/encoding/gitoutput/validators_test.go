@@ -4,7 +4,7 @@ import "testing"
 
 func Test_checkValid(t *testing.T) {
 	type args struct {
-		fieldType field
+		fieldType Field
 		value     []byte
 	}
 	tests := []struct {

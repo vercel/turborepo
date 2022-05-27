@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
@@ -86,11 +85,20 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[
 		)
 		cmd.Dir = rootPath.ToString() // Start at this directory.
 
+		// The functionality for gitHashObject is different enough that it isn't reasonable to
+		// generalize the behavior for `runGitCmd`. In fact, it doesn't even use the `gitoutput`
+		// encoding library, instead relying on its own separate `bufio.Scanner`.
+
+		// We're going to send the list of files in via `stdin`, so we grab that pipe.
+		// This prevents a huge number of encoding issues and shell compatibility issues
+		// before they even start.
 		stdinPipe, stdinPipeError := cmd.StdinPipe()
 		if stdinPipeError != nil {
 			return nil, stdinPipeError
 		}
 
+		// Kick the processing off in a goroutine so while that is doing its thing we can go ahead
+		// and wire up the consumer of `stdout`.
 		go func() {
 			defer func() {
 				stdinPipeCloseError := stdinPipe.Close()
@@ -100,7 +108,8 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[
 			}()
 
 			for _, file := range filesToHash {
-				// Expects paths to be one per line so we escape newlines
+				// `git hash-object` expects paths to be one per line so we escape newlines.
+				// Other than that, we just write everything with full Unicode.
 				_, err := io.WriteString(stdinPipe, strings.ReplaceAll(file.ToString(), "\n", "\\n")+"\n")
 				if err != nil {
 					return
@@ -108,54 +117,73 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[
 			}
 		}()
 
+		// This gives us an io.ReadCloser so that we never have to read the entire input in
+		// at a single time. It is doing stream processing instead of string processing.
 		stdoutPipe, stdoutPipeError := cmd.StdoutPipe()
 		if stdoutPipeError != nil {
-			return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", stdoutPipeError)
+			return nil, fmt.Errorf("failed to read `git hash-object`: %w", stdoutPipeError)
 		}
 
 		startError := cmd.Start()
 		if startError != nil {
-			return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", startError)
+			return nil, fmt.Errorf("failed to read `git hash-object`: %w", startError)
 		}
 
+		// The output of `git hash-object` is a 40-character SHA per input, then a newline.
+		// We need to track the SHA that corresponds to the input file path.
 		index := 0
 		hashes := make([]string, len(filesToHash))
 		scanner := bufio.NewScanner(stdoutPipe)
 
+		// Read the output line-by-line (which is our separator) until exhausted.
 		for scanner.Scan() {
-			hash := scanner.Text()
+			bytes := scanner.Bytes()
+
 			scanError := scanner.Err()
 			if scanError != nil {
-				return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", scanError)
+				return nil, fmt.Errorf("failed to read `git hash-object`: %w", scanError)
 			}
 
-			// TODO: verify hash is SHA-like
-			if len(hash) != 40 {
-				return nil, fmt.Errorf("failed to read `git %s`: %s", "hash-object", "invalid hash received")
+			hashError := gitoutput.CheckObjectName(bytes)
+			if hashError != nil {
+				return nil, fmt.Errorf("failed to read `git hash-object`: %s", "invalid hash received")
 			}
 
 			// Worked, save it off.
-			hashes[index] = hash
+			hashes[index] = string(bytes)
 			index++
 		}
 
+		// Waits until stdout is closed before proceeding.
 		waitErr := cmd.Wait()
 		if waitErr != nil {
-			return nil, fmt.Errorf("failed to read `git %s`: %w", "hash-object", waitErr)
+			return nil, fmt.Errorf("failed to read `git hash-object`: %w", waitErr)
 		}
 
+		// Make sure we end up with a matching number of files and hashes.
 		hashCount := len(hashes)
 		if fileCount != hashCount {
-			return nil, fmt.Errorf("failed to read `git %s`: %d files, %d hashes", "hash-object", fileCount, hashCount)
+			return nil, fmt.Errorf("failed to read `git hash-object`: %d files %d hashes", fileCount, hashCount)
 		}
 
+		// The API of this method specifies that we return a `map[RelativeUnixPath]string`.
+		// However, we have been permissive in what we accept in terms of file path because
+		// it turns out that `git hash-object` is also permissive.
+		//
+		// This type checking code is used to ensure that we provide a consistent result—
+		// even in a mixed input situation.
 		for i, hash := range hashes {
 			var key RelativeUnixPath
+
+			// Only four types implement FilePathInterface.
 			switch filePath := filesToHash[i].(type) {
+
 			case RelativeUnixPath:
 				key = filePath
+
 			case RelativeSystemPath:
 				key = filePath.ToRelativeUnixPath()
+
 			case AbsoluteUnixPath:
 				systemRootPath := StringToSystemPath(rootPath.ToString())
 				unixRootPath := systemRootPath.ToUnixPath()
@@ -164,6 +192,7 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[
 					return nil, err
 				}
 				key = relativeUnixPath
+
 			case AbsoluteSystemPath:
 				systemRootPath := StringToSystemPath(rootPath.ToString())
 				relativeSystemPath, err := filePath.Rel(systemRootPath)
@@ -171,7 +200,12 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[
 					return nil, err
 				}
 				key = relativeSystemPath.ToRelativeUnixPath()
+
+			default:
+				panic("FilePathInterface types not exhausted.")
+
 			}
+
 			output[key] = hash
 		}
 	}
@@ -180,8 +214,9 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[
 }
 
 // runGitCommand provides boilerplate command handling for `ls-tree`, `ls-files`, and `status`
+// Rather than doing string processing, it does stream processing of `stdout`.
 func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *gitoutput.Reader) ([][]string, error) {
-	out, pipeError := cmd.StdoutPipe()
+	stdoutPipe, pipeError := cmd.StdoutPipe()
 	if pipeError != nil {
 		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, pipeError)
 	}
@@ -191,7 +226,7 @@ func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *g
 		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, startError)
 	}
 
-	reader := handler(out)
+	reader := handler(stdoutPipe)
 	entries, readErr := reader.ReadAll()
 	if readErr != nil {
 		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, readErr)
@@ -215,7 +250,7 @@ func gitLsTree(rootPath AbsolutePath, path string) (map[RelativeUnixPath]string,
 		"-z",      // with each file output formatted as \000-terminated strings,
 		"HEAD",    // at this specified version.
 	)
-	cmd.Dir = filepath.Join(rootPath.ToString(), path) // Start at this directory.
+	cmd.Dir = rootPath.Join(path).ToString() // Start at this directory.
 
 	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
 	if err != nil {
@@ -243,8 +278,8 @@ func gitLsFiles(rootPath AbsolutePath, path string, patterns []string) (map[Rela
 	)
 
 	// FIXME: Globbing is accomplished implicitly using shell expansion.
-	cmd.Args = append(cmd.Args, patterns...)           // Pass in input patterns as arguments.
-	cmd.Dir = filepath.Join(rootPath.ToString(), path) // Start at this directory.
+	cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
+	cmd.Dir = rootPath.Join(path).ToString() // Start at this directory.
 
 	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
 	if err != nil {
@@ -284,7 +319,7 @@ func gitStatus(rootPath AbsolutePath, path string, patterns []string) (map[Relat
 		// FIXME: Globbing is accomplished implicitly using shell expansion.
 		cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
 	}
-	cmd.Dir = filepath.Join(rootPath.ToString(), path) // Start at this directory.
+	cmd.Dir = rootPath.Join(path).ToString() // Start at this directory.
 
 	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
 	if err != nil {
