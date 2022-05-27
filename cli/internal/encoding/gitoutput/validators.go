@@ -2,10 +2,10 @@ package gitoutput
 
 import "bytes"
 
-var _allowedObjectType = []byte("blob tree commit ")
+var _allowedObjectType = []byte(" blob tree commit ")
 var _allowedStatusChars = []byte(" MTADRCU?!")
 
-// checkValid provides a uniform interface for calling `gitoutput` validators.`
+// checkValid provides a uniform interface for calling `gitoutput` validators.
 func checkValid(fieldType Field, value []byte) error {
 	switch fieldType {
 	case ObjectMode:
@@ -47,10 +47,30 @@ func checkObjectMode(value []byte) error {
 
 // checkObjectType asserts that a byte slice is a valid possibility (blob, tree, commit).
 func checkObjectType(value []byte) error {
+	typeLength := len(value)
+	// Based upon:
+	// min(len("blob"), len("tree"), len("commit"))
+	// max(len("blob"), len("tree"), len("commit"))
+	if typeLength < 4 || typeLength > 6 {
+		return ErrInvalidObjectType
+	}
+
 	// Because of the space separator there is no way to pass in a space.
 	// We use that trick to enable fast lookups in _allowedObjectType.
 	index := bytes.Index(_allowedObjectType, value)
-	if index != -1 && _allowedObjectType[index+len(value)] != byte(space) {
+
+	// Impossible to match at 0, not found is -1.
+	if index < 1 {
+		return ErrInvalidObjectType
+	}
+
+	// Followed by a space.
+	if _allowedObjectType[index-1] != byte(space) {
+		return ErrInvalidObjectType
+	}
+
+	// Preceded by a space.
+	if _allowedObjectType[index+typeLength] != byte(space) {
 		return ErrInvalidObjectType
 	}
 	return nil
@@ -84,10 +104,9 @@ func checkObjectStage(value []byte) error {
 		return ErrInvalidObjectStage
 	}
 
-	for _, currentByte := range value {
-		if (currentByte ^ 0x30) >= 4 {
-			return ErrInvalidObjectStage
-		}
+	currentByte := value[0]
+	if (currentByte ^ 0x30) >= 4 {
+		return ErrInvalidObjectStage
 	}
 
 	return nil
@@ -95,6 +114,10 @@ func checkObjectStage(value []byte) error {
 
 // checkStatusX asserts that a byte slice is a valid possibility (" MTADRCU?!").
 func checkStatusX(value []byte) error {
+	if len(value) != 1 {
+		return ErrInvalidObjectStatusX
+	}
+
 	index := bytes.Index(_allowedStatusChars, value)
 	if index == -1 {
 		return ErrInvalidObjectStatusX
@@ -104,16 +127,12 @@ func checkStatusX(value []byte) error {
 
 // checkStatusX asserts that a byte slice is a valid possibility (" MTADRCU?!").
 func checkStatusY(value []byte) error {
-	index := bytes.Index(_allowedStatusChars, value)
-	if index == -1 {
-		return ErrInvalidObjectStatusY
-	}
-	return nil
+	return checkStatusX(value)
 }
 
 // checkPath asserts that a byte slice is non-empty.
 func checkPath(value []byte) error {
-	// Exists at all.
+	// Exists at all. This is best effort as trying to be fully-compatible is silly.
 	if len(value) == 0 {
 		return ErrInvalidPath
 	}
