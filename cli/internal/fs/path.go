@@ -11,13 +11,200 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// RelativeUnixPath is a "/"-formatted path relative to the repository root.
+type AbsoluteSystemPath string
+type RelativeSystemPath string
+type AbsoluteUnixPath string
 type RelativeUnixPath string
 
-// ToString returns the string representation of this repo-relative Unix path.
-// Used for interfacing with APIs that require a string
+type AbsoluteUnixPathInterface interface {
+	filePathStamp()
+	absolutePathStamp()
+	unixPathStamp()
+
+	ToString() string
+}
+
+type RelativeUnixPathInterface interface {
+	filePathStamp()
+	relativePathStamp()
+	unixPathStamp()
+
+	ToString() string
+}
+
+type AbsoluteSystemPathInterface interface {
+	filePathStamp()
+	absolutePathStamp()
+	systemPathStamp()
+
+	ToString() string
+}
+
+type RelativeSystemPathInterface interface {
+	filePathStamp()
+	relativePathStamp()
+	systemPathStamp()
+
+	ToString() string
+}
+
+type AbsolutePathInterface interface {
+	filePathStamp()
+	absolutePathStamp()
+
+	ToString() string
+}
+
+type RelativePathInterface interface {
+	filePathStamp()
+	relativePathStamp()
+
+	ToString() string
+}
+
+// UnixPath represents a path whose separators are '/'.
+type UnixPathInterface interface {
+	filePathStamp()
+	unixPathStamp()
+
+	Rel(UnixPathInterface) (RelativeUnixPath, error)
+	ToSystemPath() SystemPathInterface
+	ToUnixPath() UnixPathInterface
+	ToString() string
+}
+
+// SystemPath represents a path whose separators are system-dependent.
+type SystemPathInterface interface {
+	filePathStamp()
+	systemPathStamp()
+
+	Rel(SystemPathInterface) (RelativeSystemPath, error)
+	ToSystemPath() SystemPathInterface
+	ToUnixPath() UnixPathInterface
+	ToString() string
+}
+
+type FilePathInterface interface {
+	filePathStamp()
+
+	ToSystemPath() SystemPathInterface
+	ToUnixPath() UnixPathInterface
+	ToString() string
+}
+
+// For interface reasons, we need a way to distinguish between
+// Absolute/Relative/System/Unix/File paths so we stamp them.
+func (_ AbsoluteUnixPath) absolutePathStamp()   {}
+func (_ AbsoluteSystemPath) absolutePathStamp() {}
+
+func (_ RelativeUnixPath) relativePathStamp()   {}
+func (_ RelativeSystemPath) relativePathStamp() {}
+
+func (_ AbsoluteUnixPath) unixPathStamp() {}
+func (_ RelativeUnixPath) unixPathStamp() {}
+
+func (_ AbsoluteSystemPath) systemPathStamp() {}
+func (_ RelativeSystemPath) systemPathStamp() {}
+
+func (_ AbsoluteUnixPath) filePathStamp()   {}
+func (_ RelativeUnixPath) filePathStamp()   {}
+func (_ AbsoluteSystemPath) filePathStamp() {}
+func (_ RelativeSystemPath) filePathStamp() {}
+
+func StringToUnixPath(path string) UnixPathInterface {
+	if filepath.IsAbs(path) {
+		return AbsoluteUnixPath(filepath.ToSlash(path))
+	} else {
+		return RelativeUnixPath(filepath.ToSlash(path))
+	}
+}
+
+func StringToSystemPath(path string) SystemPathInterface {
+	if filepath.IsAbs(path) {
+		return AbsoluteSystemPath(filepath.FromSlash(path))
+	} else {
+		return RelativeSystemPath(filepath.FromSlash(path))
+	}
+}
+
+func (p AbsoluteUnixPath) ToSystemPath() SystemPathInterface {
+	return AbsoluteSystemPath(filepath.FromSlash(p.ToString()))
+}
+
+func (p RelativeUnixPath) ToSystemPath() SystemPathInterface {
+	return RelativeSystemPath(filepath.FromSlash(p.ToString()))
+}
+
+func (p AbsoluteSystemPath) ToSystemPath() SystemPathInterface {
+	return p
+}
+
+func (p RelativeSystemPath) ToSystemPath() SystemPathInterface {
+	return p
+}
+
+func (p AbsoluteUnixPath) ToUnixPath() UnixPathInterface {
+	return p
+}
+
+func (p RelativeUnixPath) ToUnixPath() UnixPathInterface {
+	return p
+}
+
+func (p AbsoluteSystemPath) ToUnixPath() UnixPathInterface {
+	return AbsoluteUnixPath(filepath.ToSlash(p.ToString()))
+}
+
+func (p RelativeSystemPath) ToUnixPath() UnixPathInterface {
+	return RelativeUnixPath(filepath.ToSlash(p.ToString()))
+}
+
+func (p AbsoluteUnixPath) Rel(basePath UnixPathInterface) (RelativeUnixPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return RelativeUnixPath(processed), err
+}
+
+func (p RelativeUnixPath) Rel(basePath UnixPathInterface) (RelativeUnixPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return RelativeUnixPath(processed), err
+}
+
+func (p AbsoluteSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return RelativeSystemPath(processed), err
+}
+
+func (p RelativeSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return RelativeSystemPath(processed), err
+}
+
+// ToString returns a string represenation of this Path.
+// Used for interfacing with APIs that require a string.
+func (p AbsoluteUnixPath) ToString() string {
+	return string(p)
+}
+
+// ToString returns a string represenation of this Path.
+// Used for interfacing with APIs that require a string.
 func (p RelativeUnixPath) ToString() string {
 	return string(p)
+}
+
+// ToString returns a string represenation of this Path.
+// Used for interfacing with APIs that require a string.
+func (p AbsoluteSystemPath) ToString() string {
+	return string(p)
+}
+
+// ToString returns a string represenation of this Path.
+// Used for interfacing with APIs that require a string.
+func (p RelativeSystemPath) ToString() string {
+	return string(p)
+}
+
+func (p RelativeSystemPath) ToRelativeUnixPath() RelativeUnixPath {
+	return p.ToUnixPath().(RelativeUnixPath)
 }
 
 // UnsafeToRelativeUnixPath ingests an arbitrary string and treats it as

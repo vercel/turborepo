@@ -18,10 +18,12 @@ func Test_GetHashableDeps(t *testing.T) {
 	if filepath.Base(cliDir) != "cli" {
 		t.Fatalf("did not find cli dir, found %v", cliDir)
 	}
-	turboPath := filepath.Join(cliDir, "..", "turbo.json")
-	makefilePath := filepath.Join(cliDir, "Makefile")
-	mainPath := filepath.Join(cliDir, "cmd", "turbo", "main.go")
-	hashes, err := GetHashableDeps(UnsafeToAbsolutePath(cliDir), []string{turboPath, makefilePath, mainPath})
+
+	turboPath := StringToSystemPath(filepath.Join(cliDir, "..", "turbo.json"))
+	makefilePath := StringToSystemPath(filepath.Join(cliDir, "Makefile"))
+	mainPath := StringToSystemPath(filepath.Join(cliDir, "cmd", "turbo", "main.go"))
+
+	hashes, err := GetHashableDeps(UnsafeToAbsolutePath(cliDir), []FilePathInterface{turboPath, makefilePath, mainPath})
 	if err != nil {
 		t.Fatalf("failed to hash files: %v", err)
 	}

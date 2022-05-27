@@ -44,12 +44,12 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeU
 		return nil, fmt.Errorf("Could not get git hashes from git status")
 	}
 
-	var filesToHash []string
+	var filesToHash []FilePathInterface
 	for filePath, status := range gitStatusOutput {
 		if status.x == "D" || status.y == "D" {
 			delete(result, filePath)
 		} else {
-			filesToHash = append(filesToHash, filePath.ToString())
+			filesToHash = append(filesToHash, filePath)
 		}
 	}
 
@@ -68,27 +68,13 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeU
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath AbsolutePath, files []string) (map[RelativeUnixPath]string, error) {
-	result, hashError := gitHashObject(rootPath, files)
-	if hashError != nil {
-		return nil, hashError
-	}
-
-	rootPathString := rootPath.ToString()
-	relativeResult := make(map[RelativeUnixPath]string)
-	for file, hash := range result {
-		relativePath, err := filepath.Rel(rootPathString, file.ToString())
-		if err != nil {
-			return nil, err
-		}
-		relativeResult[UnsafeToRelativeUnixPath(relativePath)] = hash
-	}
-
-	return relativeResult, nil
+func GetHashableDeps(rootPath AbsolutePath, files []FilePathInterface) (map[RelativeUnixPath]string, error) {
+	return gitHashObject(rootPath, files)
 }
 
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
-func gitHashObject(rootPath AbsolutePath, filesToHash []string) (map[RelativeUnixPath]string, error) {
+// It will always accept a system path. On Windows it *also* accepts Unix paths.
+func gitHashObject(rootPath AbsolutePath, filesToHash []FilePathInterface) (map[RelativeUnixPath]string, error) {
 	fileCount := len(filesToHash)
 	output := make(map[RelativeUnixPath]string, fileCount)
 
@@ -115,7 +101,7 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []string) (map[RelativeUni
 
 			for _, file := range filesToHash {
 				// Expects paths to be one per line so we escape newlines
-				_, err := io.WriteString(stdinPipe, strings.ReplaceAll(file, "\n", "\\n")+"\n")
+				_, err := io.WriteString(stdinPipe, strings.ReplaceAll(file.ToString(), "\n", "\\n")+"\n")
 				if err != nil {
 					return
 				}
@@ -164,8 +150,29 @@ func gitHashObject(rootPath AbsolutePath, filesToHash []string) (map[RelativeUni
 		}
 
 		for i, hash := range hashes {
-			filepath := filesToHash[i]
-			output[UnsafeToRelativeUnixPath(filepath)] = hash
+			var key RelativeUnixPath
+			switch filePath := filesToHash[i].(type) {
+			case RelativeUnixPath:
+				key = filePath
+			case RelativeSystemPath:
+				key = filePath.ToRelativeUnixPath()
+			case AbsoluteUnixPath:
+				systemRootPath := StringToSystemPath(rootPath.ToString())
+				unixRootPath := systemRootPath.ToUnixPath()
+				relativeUnixPath, err := filePath.Rel(unixRootPath)
+				if err != nil {
+					return nil, err
+				}
+				key = relativeUnixPath
+			case AbsoluteSystemPath:
+				systemRootPath := StringToSystemPath(rootPath.ToString())
+				relativeSystemPath, err := filePath.Rel(systemRootPath)
+				if err != nil {
+					return nil, err
+				}
+				key = relativeSystemPath.ToRelativeUnixPath()
+			}
+			output[key] = hash
 		}
 	}
 
