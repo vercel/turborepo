@@ -49,6 +49,8 @@ Options:
   --docker               Output pruned workspace into 'full'
                          and 'json' directories optimized for
                          Docker layer caching. (default false)
+  --output               Specify the relative path to output
+                         directory. (default 'out')
 `
 	return strings.TrimSpace(helpText)
 }
@@ -57,10 +59,11 @@ type PruneOptions struct {
 	scope  string
 	cwd    string
 	docker bool
+	output string
 }
 
 func parsePruneArgs(args []string, cwd fs.AbsolutePath) (*PruneOptions, error) {
-	var options = &PruneOptions{cwd: cwd.ToStringDuringMigration()}
+	var options = &PruneOptions{cwd: cwd.ToStringDuringMigration(), output: "out"}
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one target must be specified.")
@@ -73,6 +76,8 @@ func parsePruneArgs(args []string, cwd fs.AbsolutePath) (*PruneOptions, error) {
 				options.scope = arg[len("--scope="):]
 			case strings.HasPrefix(arg, "--docker"):
 				options.docker = true
+			case strings.HasPrefix(arg, "--output"):
+				options.output = arg[len("--output="):]
 			case strings.HasPrefix(arg, "--cwd="):
 			default:
 				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
@@ -109,7 +114,9 @@ func (c *PruneCommand) Run(args []string) int {
 	c.Config.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
 	c.Config.Logger.Trace("internal deps", "value", target.InternalDeps)
 	c.Config.Logger.Trace("docker", "value", pruneOptions.docker)
-	c.Config.Logger.Trace("out dir", "value", filepath.Join(pruneOptions.cwd, "out"))
+
+	outDir := filepath.Join(pruneOptions.cwd, pruneOptions.output)
+	c.Config.Logger.Trace("out dir", "value", outDir)
 
 	if !util.IsYarn(ctx.PackageManager.Name) {
 		c.logError(c.Config.Logger, "", fmt.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name))
@@ -125,9 +132,9 @@ func (c *PruneCommand) Run(args []string) int {
 		}
 	}
 
-	logger.Printf("Generating pruned monorepo for %v in %v", ui.Bold(pruneOptions.scope), ui.Bold(filepath.Join(pruneOptions.cwd, "out")))
+	logger.Printf("Generating pruned monorepo for %v in %v", ui.Bold(pruneOptions.scope), ui.Bold(outDir))
 
-	err = fs.EnsureDir(filepath.Join(pruneOptions.cwd, "out", "package.json"))
+	err = fs.EnsureDir(filepath.Join(outDir, "package.json"))
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not create directory: %w", err))
 		return 1
@@ -148,8 +155,8 @@ func (c *PruneCommand) Run(args []string) int {
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
 		if pruneOptions.docker {
-			targetDir := filepath.Join(pruneOptions.cwd, "out", "full", ctx.PackageInfos[internalDep].Dir)
-			jsonDir := filepath.Join(pruneOptions.cwd, "out", "json", ctx.PackageInfos[internalDep].PackageJSONPath)
+			targetDir := filepath.Join(outDir, "full", ctx.PackageInfos[internalDep].Dir)
+			jsonDir := filepath.Join(outDir, "json", ctx.PackageInfos[internalDep].PackageJSONPath)
 			if err := fs.EnsureDir(targetDir); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("failed to create folder %v for %v: %w", targetDir, internalDep, err))
 				return 1
@@ -167,7 +174,7 @@ func (c *PruneCommand) Run(args []string) int {
 				return 1
 			}
 		} else {
-			targetDir := filepath.Join(pruneOptions.cwd, "out", ctx.PackageInfos[internalDep].Dir)
+			targetDir := filepath.Join(outDir, ctx.PackageInfos[internalDep].Dir)
 			if err := fs.EnsureDir(targetDir); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("failed to create folder %v for %v: %w", targetDir, internalDep, err))
 				return 1
@@ -187,44 +194,44 @@ func (c *PruneCommand) Run(args []string) int {
 	c.Config.Logger.Trace("new workspaces", "value", workspaces)
 	if pruneOptions.docker {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile(".gitignore", filepath.Join(outDir, "full", ".gitignore"), fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root .gitignore: %w", err))
 				return 1
 			}
 		}
 		// We only need to actually copy turbo.json into "full" folder since it isn't needed for installation in docker
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile("turbo.json", filepath.Join(pruneOptions.cwd, "out", "full", "turbo.json"), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile("turbo.json", filepath.Join(outDir, "full", "turbo.json"), fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root turbo.json: %w", err))
 				return 1
 			}
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "full", "package.json"), fs.DirPermissions); err != nil {
+		if err := fs.CopyFile("package.json", filepath.Join(outDir, "full", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
 			return 1
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "json", "package.json"), fs.DirPermissions); err != nil {
+		if err := fs.CopyFile("package.json", filepath.Join(outDir, "json", "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
 			return 1
 		}
 	} else {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", ".gitignore"), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile(".gitignore", filepath.Join(outDir, ".gitignore"), fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root .gitignore: %w", err))
 				return 1
 			}
 		}
 
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile("turbo.json", filepath.Join(pruneOptions.cwd, "out", "turbo.json"), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile("turbo.json", filepath.Join(outDir, "turbo.json"), fs.DirPermissions); err != nil {
 				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root turbo.json: %w", err))
 				return 1
 			}
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "package.json"), fs.DirPermissions); err != nil {
+		if err := fs.CopyFile("package.json", filepath.Join(outDir, "package.json"), fs.DirPermissions); err != nil {
 			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
 			return 1
 		}
@@ -239,13 +246,13 @@ func (c *PruneCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to materialize sub-lockfile. This can happen if your lockfile contains merge conflicts or is somehow corrupted. Please report this if it occurs: %w", err))
 		return 1
 	}
-	err = ioutil.WriteFile(filepath.Join(pruneOptions.cwd, "out", "yarn.lock"), b.Bytes(), fs.DirPermissions)
+	err = ioutil.WriteFile(filepath.Join(outDir, "yarn.lock"), b.Bytes(), fs.DirPermissions)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to write sub-lockfile: %w", err))
 		return 1
 	}
 
-	tmpGeneratedLockfile, err := os.Create(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"))
+	tmpGeneratedLockfile, err := os.Create(filepath.Join(outDir, "yarn-tmp.lock"))
 	tmpGeneratedLockfileWriter := bufio.NewWriter(tmpGeneratedLockfile)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed create temporary lockfile: %w", err))
@@ -259,7 +266,7 @@ func (c *PruneCommand) Run(args []string) int {
 	}
 
 	// because of yarn being yarn, we need to inject lines in between each block of YAML to make it "valid" SYML
-	generatedLockfile, err := os.Open(filepath.Join(filepath.Join(pruneOptions.cwd, "out", "yarn.lock")))
+	generatedLockfile, err := os.Open(filepath.Join(filepath.Join(outDir, "yarn.lock")))
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to massage lockfile: %w", err))
 		return 1
@@ -284,7 +291,7 @@ func (c *PruneCommand) Run(args []string) int {
 	generatedLockfile.Close()
 
 	// Rename the file
-	err = os.Rename(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"), filepath.Join(pruneOptions.cwd, "out", "yarn.lock"))
+	err = os.Rename(filepath.Join(outDir, "yarn-tmp.lock"), filepath.Join(outDir, "yarn.lock"))
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed finalize lockfile: %w", err))
 		return 1
