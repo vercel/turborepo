@@ -178,25 +178,25 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 	}
 	if len(changedOutputGlobs) == 0 {
 		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
-		return true, nil
+	} else {
+		// Note that we currently don't use the output globs when restoring, but we could in the
+		// future to avoid doing unnecessary file I/O
+		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
+		if err != nil {
+			return false, err
+		} else if !hit {
+			if tc.rc.cacheMissLogsMode != NoLogs {
+				terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
+			}
+			return false, nil
+		}
+		if err := tc.rc.outputWatcher.NotifyOutputsWritten(tc.hash, tc.repoRelativeGlobs); err != nil {
+			// Don't fail the whole operation just because we failed to watch the outputs
+			logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
+			terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+		}
 	}
 
-	// Note that we currently don't use the output globs when restoring, but we could in the
-	// future to avoid doing unnecessary file I/O
-	hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
-	if err != nil {
-		return false, err
-	} else if !hit {
-		if tc.rc.cacheMissLogsMode != NoLogs {
-			terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
-		}
-		return false, nil
-	}
-	if err = tc.rc.outputWatcher.NotifyOutputsWritten(tc.hash, tc.repoRelativeGlobs); err != nil {
-		// Don't fail the whole operation just because we failed to watch the outputs
-		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
-		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
-	}
 	switch tc.rc.cacheHitLogsMode {
 	case HashLogs:
 		terminal.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))

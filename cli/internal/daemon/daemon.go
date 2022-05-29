@@ -138,10 +138,9 @@ var (
 	errInactivityTimeout = errors.New("turbod shut down from inactivity")
 )
 
-func (d *daemon) debounceServers(sockPath fs.AbsolutePath, pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
-	if sockPath.FileExists() {
-		return "", errors.Wrapf(errAlreadyRunning, "socket file already exists at %v", sockPath)
-	}
+// debounceServers attempts to ensure that only one daemon is running from the given pid file path
+// at a time.
+func (d *daemon) debounceServers(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
 	lockFile, err := lockfile.New(pidPath.ToString())
 	if err != nil {
 		return "", err
@@ -160,16 +159,22 @@ type rpcServer interface {
 func (d *daemon) runTurboServer(rpcServer rpcServer) error {
 	defer d.cancel()
 
-	sockPath := getUnixSocket(d.repoRoot)
 	pidPath := getPidFile(d.repoRoot)
-	if err := sockPath.EnsureDir(); err != nil {
+	if err := pidPath.EnsureDir(); err != nil {
 		return err
 	}
-	d.logger.Debug(fmt.Sprintf("Using socket path %v (%v)\n", sockPath, len(sockPath)))
-	lockFile, err := d.debounceServers(sockPath, pidPath)
+	lockFile, err := d.debounceServers(pidPath)
 	if err != nil {
 		return err
 	}
+	defer d.unlockPid(lockFile)
+	// If we have the lock, assume that we are the owners of the socket file,
+	// whether it already exists or not. That means we are free to remove it.
+	sockPath := getUnixSocket(d.repoRoot)
+	if err := sockPath.Remove(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	d.logger.Debug(fmt.Sprintf("Using socket path %v (%v)\n", sockPath, len(sockPath)))
 	lis, err := net.Listen("unix", sockPath.ToString())
 	if err != nil {
 		return err
@@ -206,10 +211,13 @@ func (d *daemon) runTurboServer(rpcServer rpcServer) error {
 	// or an inactivity timeout.
 	for range errCh {
 	}
-	if err := lockFile.Unlock(); err != nil {
-		d.logError(errors.Wrapf(err, "failed unlocking pid file at %v", pidPath))
-	}
 	return exitErr
+}
+
+func (d *daemon) unlockPid(lockFile lockfile.Lockfile) {
+	if err := lockFile.Unlock(); err != nil {
+		d.logError(errors.Wrapf(err, "failed unlocking pid file at %v", lockFile))
+	}
 }
 
 func (d *daemon) onRequest(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {

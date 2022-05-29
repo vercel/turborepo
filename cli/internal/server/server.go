@@ -51,8 +51,9 @@ func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string) (*S
 	fileWatcher := filewatcher.New(logger.Named("FileWatcher"), repoRoot, watcher)
 	globWatcher := globwatcher.New(logger.Named("GlobWatcher"), repoRoot)
 	server := &Server{
-		watcher:     fileWatcher,
-		globWatcher: globWatcher,
+		watcher:      fileWatcher,
+		globWatcher:  globWatcher,
+		turboVersion: turboVersion,
 	}
 	server.watcher.AddClient(globWatcher)
 	if err := server.watcher.Start(); err != nil {

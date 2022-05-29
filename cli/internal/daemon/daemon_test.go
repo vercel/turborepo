@@ -3,12 +3,15 @@ package daemon
 import (
 	"context"
 	"errors"
-	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/nightlyone/lockfile"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"google.golang.org/grpc"
@@ -16,38 +19,59 @@ import (
 	"gotest.tools/v3/fs"
 )
 
+func testBin() string {
+	if runtime.GOOS == "windows" {
+		return "node.exe"
+	}
+	return "node"
+}
+
 func TestDaemonDebounce(t *testing.T) {
 	repoRootRaw := fs.NewDir(t, "daemon-test")
 	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
 
-	sockPath := getUnixSocket(repoRoot)
-	err := sockPath.EnsureDir()
 	pidPath := getPidFile(repoRoot)
+	err := pidPath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
-	err = sockPath.WriteFile([]byte("junk"), 0644)
-	assert.NilError(t, err, "WriteFile")
+	// Write a garbage pid
+	// err = pidPath.WriteFile([]byte("99999999"), 0644)
+	// assert.NilError(t, err, "WriteFile")
 
 	d := &daemon{}
-	_, err = d.debounceServers(sockPath, pidPath)
-	if !errors.Is(err, errAlreadyRunning) {
-		t.Errorf("debounce err got %v, want %v", err, errAlreadyRunning)
-	}
-
-	err = sockPath.Remove()
-	assert.NilError(t, err, "Remove")
-	lockFile, err := d.debounceServers(sockPath, pidPath)
+	// the lockfile library handles removing pids from dead owners
+	_, err = d.debounceServers(pidPath)
 	assert.NilError(t, err, "debounceServers")
 
-	if !pidPath.FileExists() {
-		t.Errorf("expected to create and lock %v", pidPath)
+	// Start up a node process and fake a pid file for it.
+	// Ensure that we can't start the daemon while the node process is live
+	bin := testBin()
+	node := exec.Command(bin)
+	err = node.Start()
+	assert.NilError(t, err, "Start")
+	stopNode := func() error {
+		if err := node.Process.Kill(); err != nil {
+			return err
+		}
+		// We expect an error from node, we just sent a kill signal
+		_ = node.Wait()
+		return nil
 	}
+	// In case we fail the test, still try to kill the node process
+	t.Cleanup(func() { _ = stopNode() })
+	nodePid := node.Process.Pid
+	err = pidPath.WriteFile([]byte(strconv.Itoa(nodePid)), 0644)
+	assert.NilError(t, err, "WriteFile")
 
-	owner, err := lockFile.GetOwner()
-	assert.NilError(t, err, "GetOwner")
-	ourPid := os.Getpid()
-	if owner.Pid != ourPid {
-		t.Errorf("lock pid got %v, want %v", owner.Pid, ourPid)
-	}
+	_, err = d.debounceServers(pidPath)
+	assert.ErrorIs(t, err, lockfile.ErrBusy)
+
+	// Stop the node process, but leave the pid file there
+	// This simulates a crash
+	err = stopNode()
+	assert.NilError(t, err, "stopNode")
+	// the lockfile library handles removing pids from dead owners
+	_, err = d.debounceServers(pidPath)
+	assert.NilError(t, err, "debounceServers")
 }
 
 type testRPCServer struct{}

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/nightlyone/lockfile"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"google.golang.org/grpc"
@@ -36,7 +37,10 @@ func getPidFile(dir turbofs.AbsolutePath) turbofs.AbsolutePath {
 	return dir.Join("turbod-test.pid")
 }
 
-func TestConnectAndHello_ConnectFails(t *testing.T) {
+func TestConnectFailsWithoutGrpcServer(t *testing.T) {
+	// We aren't starting a server that is going to write
+	// to our socket file, so we should see a series of connection
+	// failures, followed by ErrTooManyAttempts
 	logger := hclog.Default()
 	dir := fs.NewDir(t, "daemon-test")
 	dirPath := turbofs.UnsafeToAbsolutePath(dir.Path())
@@ -44,28 +48,21 @@ func TestConnectAndHello_ConnectFails(t *testing.T) {
 	assert.NilError(t, err, "MkdirAll")
 
 	sockPath := getUnixSocket(dirPath)
-	err = sockPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
-	// Simulate the socket already existing, with no live daemon
-	err = sockPath.WriteFile([]byte("junk"), 0644)
-	assert.NilError(t, err, "WriteFile")
 	pidPath := getPidFile(dirPath)
-	err = sockPath.EnsureDir()
+	err = pidPath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
 	ctx := context.Background()
+	bin := testBin()
 	c := &Connector{
 		Logger:   logger,
-		Bin:      "nonexistent",
+		Bin:      bin,
 		Opts:     Opts{},
 		SockPath: sockPath,
 		PidPath:  pidPath,
 		Ctx:      ctx,
 	}
-	conn, err := c.Connect()
-	assert.NilError(t, err, "connect")
-	defer func() { _ = conn.Close() }()
-	err = c.sendHello(conn)
-	assert.ErrorIs(t, err, errConnectionFailure)
+	_, err = c.connectInternal()
+	assert.ErrorIs(t, err, ErrTooManyAttempts)
 }
 
 func TestKillDeadServerNoPid(t *testing.T) {
@@ -77,11 +74,8 @@ func TestKillDeadServerNoPid(t *testing.T) {
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
-	err = sockPath.EnsureDir()
+	err = pidPath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
-	// Simulate the socket already existing, with no live daemon
-	err = sockPath.WriteFile([]byte("junk"), 0644)
-	assert.NilError(t, err, "WriteFile")
 	ctx := context.Background()
 	c := &Connector{
 		Logger:   logger,
@@ -92,12 +86,8 @@ func TestKillDeadServerNoPid(t *testing.T) {
 		Ctx:      ctx,
 	}
 
-	err = c.killDeadServer()
+	err = c.killDeadServer(99999)
 	assert.NilError(t, err, "killDeadServer")
-	stillExists := sockPath.FileExists()
-	if stillExists {
-		t.Error("sockPath still exists, expected it to be cleaned up")
-	}
 }
 
 func TestKillDeadServerNoProcess(t *testing.T) {
@@ -126,15 +116,11 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 		Ctx:      ctx,
 	}
 
-	err = c.killDeadServer()
-	assert.NilError(t, err, "killDeadServer")
-	stillExists := sockPath.FileExists()
-	if stillExists {
-		t.Error("sockPath still exists, expected it to be cleaned up")
-	}
-	stillExists = pidPath.FileExists()
-	if stillExists {
-		t.Error("pidPath still exists, expected it to be cleaned up")
+	err = c.killDeadServer(99999)
+	assert.ErrorIs(t, err, lockfile.ErrDeadOwner)
+	stillExists := pidPath.FileExists()
+	if !stillExists {
+		t.Error("pidPath should still exist, expected the user to clean it up")
 	}
 }
 
@@ -173,15 +159,11 @@ func TestKillDeadServerWithProcess(t *testing.T) {
 		Ctx:      ctx,
 	}
 
-	err = c.killDeadServer()
+	err = c.killDeadServer(pid)
 	assert.NilError(t, err, "killDeadServer")
-	stillExists := sockPath.FileExists()
-	if stillExists {
-		t.Error("sockPath still exists, expected it to be cleaned up")
-	}
-	stillExists = pidPath.FileExists()
-	if stillExists {
-		t.Error("pidPath still exists, expected it to be cleaned up")
+	stillExists := pidPath.FileExists()
+	if !stillExists {
+		t.Error("pidPath no longer exists, expected client to not clean it up")
 	}
 	err = cmd.Wait()
 	exitErr := &exec.ExitError{}
@@ -194,9 +176,14 @@ type mockServer struct {
 	server.UnimplementedTurboServer
 	helloErr     error
 	shutdownResp *server.ShutdownResponse
+	pidFile      turbofs.AbsolutePath
 }
 
+// Simulates server exiting by cleaning up the pid file
 func (s *mockServer) Shutdown(ctx context.Context, req *server.ShutdownRequest) (*server.ShutdownResponse, error) {
+	if err := s.pidFile.Remove(); err != nil {
+		return nil, err
+	}
 	return s.shutdownResp, nil
 }
 
@@ -218,9 +205,6 @@ func TestKillLiveServer(t *testing.T) {
 	pidPath := getPidFile(dirPath)
 	err = sockPath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
-	// Simulate socket and pid existing
-	err = sockPath.WriteFile([]byte("junk"), 0644)
-	assert.NilError(t, err, "WriteFile")
 	err = pidPath.WriteFile([]byte("99999"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
@@ -239,6 +223,7 @@ func TestKillLiveServer(t *testing.T) {
 	mock := &mockServer{
 		shutdownResp: &server.ShutdownResponse{},
 		helloErr:     st.Err(),
+		pidFile:      pidPath,
 	}
 	lis := bufconn.Listen(1024 * 1024)
 	grpcServer := grpc.NewServer()
@@ -262,7 +247,7 @@ func TestKillLiveServer(t *testing.T) {
 	if !errors.Is(err, errVersionMismatch) {
 		t.Errorf("sendHello error got %v, want %v", err, errVersionMismatch)
 	}
-	err = c.killLiveServer(client)
+	err = c.killLiveServer(client, 99999)
 	assert.NilError(t, err, "killLiveServer")
 	// Expect the pid file and socket files to have been cleaned up
 	if pidPath.FileExists() {
