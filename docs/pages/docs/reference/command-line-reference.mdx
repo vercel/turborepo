@@ -451,7 +451,7 @@ turbo run build -vvv
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target package.
 
-This command will generate folder called `out` with the following inside of it:
+This command will generate folder called `out` by default (can be set via the `--output` option) with the following inside of it:
 
 - The full source code of all internal packages that are needed to build the target
 - A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
@@ -494,7 +494,7 @@ This command will generate folder called `out` with the following inside of it:
 
 Default to `false`. Passing this flag will alter the outputted folder with the pruned workspace to make it easier to use with [Docker best practices / layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/).
 
-With the `--docker` flag. The `prune` command will generate folder called `out` with the following inside of it:
+With the `--docker` flag. The `prune` command will generate folder called `out` by default (can be set via the `--output` option) with the following inside of it:
 
 - A folder `json` with the pruned workspace's `package.json`s
 - A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
@@ -538,6 +538,12 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 │           └── package.json
 └── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
 ```
+
+#### `--output`
+
+`type: string`
+
+Default to `out`. If set, the `prune` command will generate an output folder with the specified name, relative to the working directory of the command.
 
 ## `turbo login`
 
