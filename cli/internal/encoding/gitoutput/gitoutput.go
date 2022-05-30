@@ -62,7 +62,7 @@ var (
 	ErrInvalidObjectStatusX = errors.New("object status x is not valid")
 	ErrInvalidObjectStatusY = errors.New("object status y is not valid")
 	ErrInvalidPath          = errors.New("path is not valid")
-	ErrUnknownField         = errors.New("unkown field")
+	ErrUnknownField         = errors.New("unknown field")
 )
 
 // A Reader reads records from `git`'s output`.

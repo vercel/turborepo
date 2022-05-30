@@ -11,17 +11,20 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// The goal is to be able to teach the Go type system about four
+// The goal is to be able to teach the Go type system about six
 // different types of paths:
 // - AbsoluteSystemPath
 // - RelativeSystemPath
+// - RepoRelativeSystemPath
 // - AbsoluteUnixPath
 // - RelativeUnixPath
+// - RepoRelativeUnixPath
 //
 // There is a second portion which allows clustering particular
 // dimensions of these four types:
 // - AbsolutePathInterface
 // - RelativePathInterface
+// - RepoRelativePathInterface
 // - UnixPathInterface
 // - SystemPathInterface
 // - FilePathInterface
@@ -40,11 +43,17 @@ type AbsoluteSystemPath string
 // RelativeSystemPath is a relative path using system separators.
 type RelativeSystemPath string
 
+// RepoRelativeSystemPath is a relative path from the repository using system separators.
+type RepoRelativeSystemPath string
+
 // AbsoluteUnixPath is a root-relative path using Unix `/` separators.
 type AbsoluteUnixPath string
 
 // RelativeUnixPath is a relative path using Unix `/` separators.
 type RelativeUnixPath string
+
+// RepoRelativeUnixPath is a relative path from the repository using Unix `/` separators.
+type RepoRelativeUnixPath string
 
 // AbsoluteUnixPathInterface specifies the members that mark an interface
 // for structurally typing so the Go compiler can understand it.
@@ -61,6 +70,17 @@ type AbsoluteUnixPathInterface interface {
 type RelativeUnixPathInterface interface {
 	filePathStamp()
 	relativePathStamp()
+	unixPathStamp()
+
+	ToString() string
+}
+
+// RepoRelativeUnixPathInterface specifies the members that mark an interface
+// for structurally typing so the Go compiler can understand it.
+type RepoRelativeUnixPathInterface interface {
+	filePathStamp()
+	relativePathStamp()
+	repoRelativeStamp()
 	unixPathStamp()
 
 	ToString() string
@@ -86,6 +106,17 @@ type RelativeSystemPathInterface interface {
 	ToString() string
 }
 
+// RepoRelativeSystemPathInterface specifies the members that mark an interface
+// for structurally typing so the Go compiler can understand it.
+type RepoRelativeSystemPathInterface interface {
+	filePathStamp()
+	relativePathStamp()
+	repoRelativeStamp()
+	systemPathStamp()
+
+	ToString() string
+}
+
 // AbsolutePathInterface specifies additional dimensions that a particular
 // object can have that are independent from each other.
 type AbsolutePathInterface interface {
@@ -100,6 +131,16 @@ type AbsolutePathInterface interface {
 type RelativePathInterface interface {
 	filePathStamp()
 	relativePathStamp()
+
+	ToString() string
+}
+
+// RepoRelativePathInterface specifies additional dimensions that a particular
+// object can have that are independent from each other.
+type RepoRelativePathInterface interface {
+	filePathStamp()
+	relativePathStamp()
+	repoRelativeStamp()
 
 	ToString() string
 }
@@ -139,23 +180,29 @@ type FilePathInterface interface {
 }
 
 // For interface reasons, we need a way to distinguish between
-// Absolute/Relative/System/Unix/File paths so we stamp them.
+// Absolute/Repo/Relative/System/Unix/File paths so we stamp them.
 func (AbsoluteUnixPath) absolutePathStamp()   {}
 func (AbsoluteSystemPath) absolutePathStamp() {}
 
-func (RelativeUnixPath) relativePathStamp()   {}
-func (RelativeSystemPath) relativePathStamp() {}
+func (RelativeUnixPath) relativePathStamp()       {}
+func (RelativeSystemPath) relativePathStamp()     {}
+func (RepoRelativeUnixPath) relativePathStamp()   {}
+func (RepoRelativeSystemPath) relativePathStamp() {}
 
-func (AbsoluteUnixPath) unixPathStamp() {}
-func (RelativeUnixPath) unixPathStamp() {}
+func (AbsoluteUnixPath) unixPathStamp()     {}
+func (RelativeUnixPath) unixPathStamp()     {}
+func (RepoRelativeUnixPath) unixPathStamp() {}
 
-func (AbsoluteSystemPath) systemPathStamp() {}
-func (RelativeSystemPath) systemPathStamp() {}
+func (AbsoluteSystemPath) systemPathStamp()     {}
+func (RelativeSystemPath) systemPathStamp()     {}
+func (RepoRelativeSystemPath) systemPathStamp() {}
 
-func (AbsoluteUnixPath) filePathStamp()   {}
-func (RelativeUnixPath) filePathStamp()   {}
-func (AbsoluteSystemPath) filePathStamp() {}
-func (RelativeSystemPath) filePathStamp() {}
+func (AbsoluteUnixPath) filePathStamp()       {}
+func (RelativeUnixPath) filePathStamp()       {}
+func (RepoRelativeUnixPath) filePathStamp()   {}
+func (AbsoluteSystemPath) filePathStamp()     {}
+func (RelativeSystemPath) filePathStamp()     {}
+func (RepoRelativeSystemPath) filePathStamp() {}
 
 // StringToUnixPath parses a path string from an unknown source
 // and converts it into a Unix path. The only valid separator for
@@ -187,6 +234,11 @@ func (p RelativeUnixPath) ToSystemPath() SystemPathInterface {
 	return RelativeSystemPath(filepath.FromSlash(p.ToString()))
 }
 
+// ToSystemPath converts a RelativeUnixPath to a SystemPath.
+func (p RepoRelativeUnixPath) ToSystemPath() SystemPathInterface {
+	return RepoRelativeSystemPath(filepath.FromSlash(p.ToString()))
+}
+
 // ToSystemPath called on a AbsoluteSystemPath returns itself.
 // It exists to enable simpler code at call sites.
 func (p AbsoluteSystemPath) ToSystemPath() SystemPathInterface {
@@ -196,6 +248,12 @@ func (p AbsoluteSystemPath) ToSystemPath() SystemPathInterface {
 // ToSystemPath called on a RelativeSystemPath returns itself.
 // It exists to enable simpler code at call sites.
 func (p RelativeSystemPath) ToSystemPath() SystemPathInterface {
+	return p
+}
+
+// ToSystemPath called on a RelativeSystemPath returns itself.
+// It exists to enable simpler code at call sites.
+func (p RepoRelativeSystemPath) ToSystemPath() SystemPathInterface {
 	return p
 }
 
@@ -211,6 +269,12 @@ func (p RelativeUnixPath) ToUnixPath() UnixPathInterface {
 	return p
 }
 
+// ToUnixPath called on a RepoRelativeUnixPath returns itself.
+// It exists to enable simpler code at call sites.
+func (p RepoRelativeUnixPath) ToUnixPath() UnixPathInterface {
+	return p
+}
+
 // ToUnixPath converts a AbsoluteSystemPath to a UnixPath.
 func (p AbsoluteSystemPath) ToUnixPath() UnixPathInterface {
 	return AbsoluteUnixPath(filepath.ToSlash(p.ToString()))
@@ -219,6 +283,11 @@ func (p AbsoluteSystemPath) ToUnixPath() UnixPathInterface {
 // ToUnixPath converts a RelativeSystemPath to a UnixPath.
 func (p RelativeSystemPath) ToUnixPath() UnixPathInterface {
 	return RelativeUnixPath(filepath.ToSlash(p.ToString()))
+}
+
+// ToUnixPath converts a RepoRelativeSystemPath to a UnixPath.
+func (p RepoRelativeSystemPath) ToUnixPath() UnixPathInterface {
+	return RepoRelativeUnixPath(filepath.ToSlash(p.ToString()))
 }
 
 // Rel calculates the relative path between a AbsoluteUnixPath and any other UnixPath.
@@ -233,6 +302,12 @@ func (p RelativeUnixPath) Rel(basePath UnixPathInterface) (RelativeUnixPath, err
 	return RelativeUnixPath(processed), err
 }
 
+// Rel calculates the relative path between a RepoRelativeUnixPath and any other UnixPath.
+func (p RepoRelativeUnixPath) Rel(basePath UnixPathInterface) (RelativeUnixPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return RelativeUnixPath(processed), err
+}
+
 // Rel calculates the relative path between a AbsoluteSystemPath and any other SystemPath.
 func (p AbsoluteSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPath, error) {
 	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
@@ -241,6 +316,12 @@ func (p AbsoluteSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPat
 
 // Rel calculates the relative path between a RelativeSystemPath and any other SystemPath.
 func (p RelativeSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return RelativeSystemPath(processed), err
+}
+
+// Rel calculates the relative path between a RelativeSystemPath and any other SystemPath.
+func (p RepoRelativeSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPath, error) {
 	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
 	return RelativeSystemPath(processed), err
 }
@@ -259,6 +340,12 @@ func (p RelativeUnixPath) ToString() string {
 
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
+func (p RepoRelativeUnixPath) ToString() string {
+	return string(p)
+}
+
+// ToString returns a string represenation of this Path.
+// Used for interfacing with APIs that require a string.
 func (p AbsoluteSystemPath) ToString() string {
 	return string(p)
 }
@@ -266,6 +353,12 @@ func (p AbsoluteSystemPath) ToString() string {
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
 func (p RelativeSystemPath) ToString() string {
+	return string(p)
+}
+
+// ToString returns a string represenation of this Path.
+// Used for interfacing with APIs that require a string.
+func (p RepoRelativeSystemPath) ToString() string {
 	return string(p)
 }
 
@@ -277,6 +370,26 @@ func (p RelativeSystemPath) ToRelativeUnixPath() RelativeUnixPath {
 // ToRelativeSystemPath converts from RelativeUnixPath to RelativeSystemPath.
 func (p RelativeUnixPath) ToRelativeSystemPath() RelativeSystemPath {
 	return p.ToSystemPath().(RelativeSystemPath)
+}
+
+// ToRepoRelativeUnixPath converts from RelativeSystemPath to RepoRelativeUnixPath.
+func (p RepoRelativeSystemPath) ToRepoRelativeUnixPath() RepoRelativeUnixPath {
+	return p.ToUnixPath().(RepoRelativeUnixPath)
+}
+
+// ToRepoRelativeSystemPath converts from RelativeUnixPath to RelativeSystemPath.
+func (p RepoRelativeUnixPath) ToRepoRelativeSystemPath() RepoRelativeSystemPath {
+	return p.ToSystemPath().(RepoRelativeSystemPath)
+}
+
+// ToRelativeSystemPath converts from RepoRelativeSystemPath to RelativeSystemPath.
+func (p RepoRelativeSystemPath) ToRelativeSystemPath() RelativeSystemPath {
+	return RelativeSystemPath(p)
+}
+
+// ToRelativeUnixPath converts from RepoRelativeUnixPath to RelativeSystemPath.
+func (p RepoRelativeUnixPath) ToRelativeUnixPath() RelativeUnixPath {
+	return RelativeUnixPath(p)
 }
 
 // ToAbsoluteUnixPath converts from AbsoluteSystemPath to AbsoluteUnixPath.

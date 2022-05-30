@@ -71,7 +71,7 @@ func Test_checkValid(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Unkown",
+			name: "Unknown",
 			args: args{
 				fieldType: Field(12),
 				value:     []byte("unused"),
