@@ -8,9 +8,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
-func getFixture(id int) AbsoluteSystemPath {
+func getFixture(id int) turbopath.AbsoluteSystemPath {
 	cwd, _ := os.Getwd()
 	root := filepath.VolumeName(cwd) + string(os.PathSeparator)
 	checking := cwd
@@ -26,7 +28,7 @@ func getFixture(id int) AbsoluteSystemPath {
 			for _, file := range files {
 				fileName := file.Name()
 				if strings.Index(fileName, fmt.Sprintf("%02d-", id)) == 0 {
-					return AbsoluteSystemPath(filepath.Join(fixtureDirectory, fileName))
+					return turbopath.AbsoluteSystemPath(filepath.Join(fixtureDirectory, fileName))
 				}
 			}
 		}
@@ -40,25 +42,25 @@ func Test_gitHashObject(t *testing.T) {
 	fixturePath := getFixture(1)
 	tests := []struct {
 		name        string
-		rootPath    AbsoluteSystemPath
-		filesToHash []RelativeUnixPath
-		want        map[RelativeUnixPath]string
+		rootPath    turbopath.AbsoluteSystemPath
+		filesToHash []turbopath.RelativeUnixPath
+		want        map[turbopath.RelativeUnixPath]string
 		wantErr     bool
 	}{
 		{
 			name:        "No paths",
 			rootPath:    fixturePath,
-			filesToHash: []RelativeUnixPath{},
-			want:        map[RelativeUnixPath]string{},
+			filesToHash: []turbopath.RelativeUnixPath{},
+			want:        map[turbopath.RelativeUnixPath]string{},
 		},
 		{
 			name:     "Special characters",
 			rootPath: fixturePath,
-			filesToHash: []RelativeUnixPath{
-				AbsoluteSystemPath(fixturePath.Join("new\nline").ToString()),
-				AbsoluteSystemPath(fixturePath.Join("\"quote\"").ToString()),
+			filesToHash: []turbopath.RelativeUnixPath{
+				turbopath.RelativeUnixPath("new\nline"),
+				turbopath.RelativeUnixPath("\"quote\""),
 			},
-			want: map[RelativeUnixPath]string{
+			want: map[turbopath.RelativeUnixPath]string{
 				"new\nline": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 				"\"quote\"": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 			},
@@ -66,29 +68,15 @@ func Test_gitHashObject(t *testing.T) {
 		{
 			name:     "Absolute paths come back relative to rootPath",
 			rootPath: fixturePath.Join("child"),
-			filesToHash: []RelativeUnixPath{
-				AbsoluteSystemPath(fixturePath.Join("root.json").ToString()),
-				AbsoluteSystemPath(fixturePath.Join("child", "child.json").ToString()),
-				AbsoluteSystemPath(fixturePath.Join("child", "grandchild", "grandchild.json").ToString()),
+			filesToHash: []turbopath.RelativeUnixPath{
+				turbopath.RelativeUnixPath("../root.json"),
+				turbopath.RelativeUnixPath("child.json"),
+				turbopath.RelativeUnixPath("grandchild/grandchild.json"),
 			},
-			want: map[RelativeUnixPath]string{
+			want: map[turbopath.RelativeUnixPath]string{
 				"../root.json":               "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 				"child.json":                 "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 				"grandchild/grandchild.json": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-			},
-		},
-		{
-			name:     "RelativeSystemPath inputs are relative to rootPath",
-			rootPath: fixturePath.Join(),
-			filesToHash: []RelativeUnixPath{
-				RelativeSystemPath(filepath.Join("root.json")),
-				RelativeSystemPath(filepath.Join("child", "child.json")),
-				RelativeSystemPath(filepath.Join("child", "grandchild", "grandchild.json")),
-			},
-			want: map[RelativeUnixPath]string{
-				"root.json":                        "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-				"child/child.json":                 "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-				"child/grandchild/grandchild.json": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 			},
 		},
 	}

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
@@ -21,9 +21,9 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeUnixPath]string, error) {
+func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath.RelativeUnixPath]string, error) {
 	// Add all the checked in hashes.
-	var result map[RelativeUnixPath]string
+	var result map[turbopath.RelativeUnixPath]string
 	if len(p.InputPatterns) == 0 {
 		gitLsTreeOutput, err := gitLsTree(rootPath.Join(p.PackagePath))
 		if err != nil {
@@ -44,7 +44,7 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeU
 		return nil, fmt.Errorf("Could not get git hashes from git status")
 	}
 
-	var filesToHash []RelativeUnixPath
+	var filesToHash []turbopath.RelativeUnixPath
 	for filePath, status := range gitStatusOutput {
 		if status.x == "D" || status.y == "D" {
 			delete(result, filePath)
@@ -53,7 +53,7 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeU
 		}
 	}
 
-	convertedRootPath := AbsoluteSystemPath(rootPath.ToString())
+	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString())
 	hashes, err := gitHashObject(convertedRootPath, filesToHash)
 	if err != nil {
 		return nil, err
@@ -69,9 +69,9 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[RelativeU
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath AbsolutePath, files []AbsoluteSystemPath) (map[RelativeUnixPath]string, error) {
-	output := make([]RelativeUnixPath, len(files))
-	convertedRootPath := AbsoluteSystemPath(rootPath.ToString())
+func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.RelativeUnixPath]string, error) {
+	output := make([]turbopath.RelativeUnixPath, len(files))
+	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString())
 
 	for index, file := range files {
 		relativeSystemPath, err := file.Rel(convertedRootPath)
@@ -89,9 +89,9 @@ func GetHashableDeps(rootPath AbsolutePath, files []AbsoluteSystemPath) (map[Rel
 // Note: relative paths passed to `git hash-object` are processed as relative to the *repository* root.
 // For that reason we convert all paths to absolute paths relative to the rootPath prior to passing them
 // to `git hash-object`.
-func gitHashObject(rootPath AbsoluteSystemPath, filesToHash []RelativeUnixPath) (map[RelativeUnixPath]string, error) {
+func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopath.RelativeUnixPath) (map[turbopath.RelativeUnixPath]string, error) {
 	fileCount := len(filesToHash)
-	output := make(map[RelativeUnixPath]string, fileCount)
+	output := make(map[turbopath.RelativeUnixPath]string, fileCount)
 
 	if fileCount > 0 {
 		cmd := exec.Command(
@@ -127,7 +127,7 @@ func gitHashObject(rootPath AbsoluteSystemPath, filesToHash []RelativeUnixPath) 
 			// This function needs to be relative to `rootPath`.
 			// We convert all files to absolute paths and assume that they will be inside of the repository.
 			for _, file := range filesToHash {
-				converted := AbsoluteUnixPath(path.Join(rootPath.ToAbsoluteUnixPath().ToString(), file.ToString()))
+				converted := rootPath.ToAbsoluteUnixPath().Join(file)
 
 				// `git hash-object` expects paths to be one per line so we must escape newlines.
 				// In order to understand the escapes, the path must be quoted.
@@ -193,7 +193,7 @@ func gitHashObject(rootPath AbsoluteSystemPath, filesToHash []RelativeUnixPath) 
 			return nil, fmt.Errorf("failed to read `git hash-object`: %d files %d hashes", fileCount, hashCount)
 		}
 
-		// The API of this method specifies that we return a `map[RelativeUnixPath]string`.
+		// The API of this method specifies that we return a `map[turbopath.RelativeUnixPath]string`.
 		for i, hash := range hashes {
 			filePath := filesToHash[i]
 			output[filePath] = hash
@@ -232,7 +232,7 @@ func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *g
 
 // gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
 // that are present in the `git` index at a particular revision.
-func gitLsTree(rootPath AbsolutePath) (map[RelativeUnixPath]string, error) {
+func gitLsTree(rootPath AbsolutePath) (map[turbopath.RelativeUnixPath]string, error) {
 	cmd := exec.Command(
 		"git",     // Using `git` from $PATH,
 		"ls-tree", // list the contents of the git index,
@@ -247,10 +247,10 @@ func gitLsTree(rootPath AbsolutePath) (map[RelativeUnixPath]string, error) {
 		return nil, err
 	}
 
-	output := make(map[RelativeUnixPath]string, len(entries))
+	output := make(map[turbopath.RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		output[UnsafeToRelativeUnixPath(entry[3])] = entry[2]
+		output[turbopath.RelativeUnixPath(entry[3])] = entry[2]
 	}
 
 	return output, nil
@@ -258,7 +258,7 @@ func gitLsTree(rootPath AbsolutePath) (map[RelativeUnixPath]string, error) {
 
 // gitLsTree returns a map of paths to their SHA hashes starting from a list of patterns relative to a directory
 // that are present in the `git` index at a particular revision.
-func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[RelativeUnixPath]string, error) {
+func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.RelativeUnixPath]string, error) {
 	cmd := exec.Command(
 		"git",      // Using `git` from $PATH,
 		"ls-files", // tell me about git index information of some files,
@@ -276,10 +276,10 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[RelativeUnixPath]
 		return nil, err
 	}
 
-	output := make(map[RelativeUnixPath]string, len(entries))
+	output := make(map[turbopath.RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		output[UnsafeToRelativeUnixPath(entry[3])] = entry[1]
+		output[turbopath.RelativeUnixPath(entry[3])] = entry[1]
 	}
 
 	return output, nil
@@ -289,7 +289,7 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[RelativeUnixPath]
 // This is used to convert repo-relative paths to cwd-relative paths.
 //
 // `git rev-parse --show-cdup` always returns Unix paths, even on Windows.
-func getTraversePath(rootPath AbsolutePath) (RelativeUnixPath, error) {
+func getTraversePath(rootPath AbsolutePath) (turbopath.RelativeUnixPath, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-cdup")
 	cmd.Dir = rootPath.ToString()
 
@@ -300,7 +300,7 @@ func getTraversePath(rootPath AbsolutePath) (RelativeUnixPath, error) {
 
 	trimmedTraversePath := strings.TrimSuffix(string(traversePath), "\n")
 
-	return RelativeUnixPath(trimmedTraversePath), nil
+	return turbopath.RelativeUnixPath(trimmedTraversePath), nil
 }
 
 // statusCode represents the two-letter status code from `git status` with two "named" fields, x & y.
@@ -318,7 +318,7 @@ type statusCode struct {
 // We need to calculate where the repository's location is in order to determine what the full path is
 // before we can return those paths relative to the calling directory, normalizing to the behavior of
 // `ls-files` and `ls-tree`.
-func gitStatus(rootPath AbsolutePath, patterns []string) (map[RelativeUnixPath]statusCode, error) {
+func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.RelativeUnixPath]statusCode, error) {
 	cmd := exec.Command(
 		"git",               // Using `git` from $PATH,
 		"status",            // tell me about the status of the working tree,
@@ -345,20 +345,15 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[RelativeUnixPath]s
 		return nil, err
 	}
 
-	output := make(map[RelativeUnixPath]statusCode, len(entries))
-	convertedRootPath := AbsoluteSystemPath(rootPath.ToString()).ToAbsoluteUnixPath()
+	output := make(map[turbopath.RelativeUnixPath]statusCode, len(entries))
+	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString()).ToAbsoluteUnixPath()
 
 	for _, entry := range entries {
-		pathFromStatus := RepoRelativeUnixPath(entry[2])
-		var outputPath RelativeUnixPath
+		pathFromStatus := turbopath.RepoRelativeUnixPath(entry[2])
+		var outputPath turbopath.RelativeUnixPath
 
 		if len(traversePath) > 0 {
-			// Need to use path, not filepath, since this is all Unix.
-			fileFullPath := AbsoluteUnixPath(path.Join(
-				convertedRootPath.ToString(),
-				traversePath.ToString(),
-				pathFromStatus.ToString(),
-			))
+			fileFullPath := convertedRootPath.Join(traversePath).Join(pathFromStatus.ToRelativeUnixPath())
 
 			relativePath, err := fileFullPath.Rel(convertedRootPath)
 			if err != nil {
@@ -367,7 +362,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[RelativeUnixPath]s
 
 			outputPath = relativePath
 		} else {
-			outputPath = pathFromStatus.ToRelativeUnixPath().ToString()
+			outputPath = pathFromStatus.ToRelativeUnixPath()
 		}
 
 		output[outputPath] = statusCode{x: entry[0], y: entry[1]}
