@@ -14,25 +14,25 @@ import (
 
 func getFixture(id int) turbopath.AbsoluteSystemPath {
 	cwd, _ := os.Getwd()
-	root := filepath.VolumeName(cwd) + string(os.PathSeparator)
-	checking := cwd
+	root := turbopath.AbsoluteSystemPath(filepath.VolumeName(cwd) + string(os.PathSeparator))
+	checking := turbopath.AbsoluteSystemPath(cwd)
 
 	for checking != root {
-		fixtureDirectory := filepath.Join(checking, "fixtures")
-		_, err := os.Stat(fixtureDirectory)
+		fixtureDirectory := checking.Join("fixtures")
+		_, err := os.Stat(fixtureDirectory.ToString())
 		if !errors.Is(err, os.ErrNotExist) {
 			// Found the fixture directory!
-			files, _ := os.ReadDir(fixtureDirectory)
+			files, _ := os.ReadDir(fixtureDirectory.ToString())
 
 			// Grab the specified fixture.
 			for _, file := range files {
-				fileName := file.Name()
-				if strings.Index(fileName, fmt.Sprintf("%02d-", id)) == 0 {
-					return turbopath.AbsoluteSystemPath(filepath.Join(fixtureDirectory, fileName))
+				fileName := turbopath.RelativeSystemPath(file.Name())
+				if strings.Index(fileName.ToString(), fmt.Sprintf("%02d-", id)) == 0 {
+					return turbopath.AbsoluteSystemPath(fixtureDirectory.Join(fileName))
 				}
 			}
 		}
-		checking = filepath.Join(checking, "..")
+		checking = checking.Join("..")
 	}
 
 	panic("fixtures not found!")
