@@ -174,6 +174,9 @@ func (pv *pathValue) Type() string {
 
 var _ pflag.Value = &pathValue{}
 
+// AbsolutePathVar adds a flag interpreted as an absolute path to the given FlagSet.
+// It currently requires a root because relative paths are interpreted relative to the
+// given root.
 func AbsolutePathVar(flags *pflag.FlagSet, target *AbsolutePath, name string, root AbsolutePath, usage string, defValue string) {
 	value := &pathValue{
 		base:     root,
