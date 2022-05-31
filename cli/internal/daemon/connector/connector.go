@@ -180,11 +180,11 @@ func (c *Connector) connectInternal() (*clientAndConn, error) {
 			return nil, errors.Wrap(err, "pid file appears stale. If no daemon is running, please remove it")
 		} else if os.IsNotExist(err) {
 			// The pid file doesn't exist. Start a daemon
-			if pid, err := c.startDaemon(); err != nil {
+			pid, err := c.startDaemon()
+			if err != nil {
 				return nil, err
-			} else {
-				serverPid = pid
 			}
+			serverPid = pid
 		} else {
 			serverPid = daemonProcess.Pid
 		}

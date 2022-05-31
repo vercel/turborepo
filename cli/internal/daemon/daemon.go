@@ -133,10 +133,7 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 	return cmd
 }
 
-var (
-	errAlreadyRunning    = errors.New("turbod is already running")
-	errInactivityTimeout = errors.New("turbod shut down from inactivity")
-)
+var errInactivityTimeout = errors.New("turbod shut down from inactivity")
 
 // debounceServers attempts to ensure that only one daemon is running from the given pid file path
 // at a time.
