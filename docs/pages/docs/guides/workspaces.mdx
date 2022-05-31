@@ -1,0 +1,266 @@
+---
+title: Workspaces
+description: A guide on workspaces to onboard onto using Turborepo.
+---
+
+import {Tabs, Tab} from '../../../components/Tabs'
+
+# Workspaces
+
+Turborepo makes use of workspaces to organize your apps and packages. But how do they work? This guide will walk you through the basics of workspaces.
+
+## What are workspaces?
+
+Workspaces are a feature implemented by package managers to assist with working on multiple apps and packages in the same codebase.
+Turborepo is compatible with 3 different package managers. Each with its own implementation of workspaces, links to their respective documentation are listed below. Please note that there are slight nuances between implementations and functionality.
+
+- [npm workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces)
+- [yarn workspaces](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
+- [pnpm workspaces](https://pnpm.io/workspaces)
+
+## Working with workspaces
+
+### Setup workspaces
+
+When using workspaces you'll first have to define the location of your workspaces.
+That is the folders that your package manager should look in for workspaces.
+
+A common pattern is to have an `apps` folder and a `packages` folder.
+The `apps` folder will contain workspaces that house launchable apps, such as a next.js app.
+The `packages` folder will contain workspaces that house packages that are used by either an app or another package.
+
+The configuration for this is different for `pnpm` than it is for `npm` and `yarn`.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+
+    For `npm` you need to add the folders you want to be workspaces to the `workspaces` field in the root `package.json` file
+    This field contains a list of workspace folders in the form of globs.
+    An example workspaces section in a `package.json` file could look like this
+
+    ```json
+    {
+      "name": "monorepo",
+      "version": "1.0.0",
+      "workspaces": [
+        "docs",
+        "apps/*",
+        "packages/*"
+      ]
+    }
+    ```
+
+  </Tab>
+  <Tab>
+
+    For `yarn` you need to add the folders you want to be workspaces to the `workspaces` field in the root `package.json` file
+    This field contains a list of workspace folders in the form of globs.
+    An example workspaces section in a `package.json` file could look like this
+
+    ```json
+    {
+      "name": "monorepo",
+      "version": "1.0.0",
+      "workspaces": [
+        "docs",
+        "apps/*",
+        "packages/*"
+      ]
+    }
+    ```
+
+  </Tab>
+
+  <Tab>
+
+    For `pnpm` you need to add the folders you want to be workspaces to the `pnpm-workspace.yaml` file that exists in your root.
+    This file contains a list of workspace folders in the form of globs.
+    An example `pnpm-workspace.yaml` file could look like this
+
+    ```yaml
+    packages:
+      - "docs"
+      - "apps/*"
+      - "packages/*"
+    ```
+
+  </Tab>
+</Tabs>
+
+Each folder that matches any of the globs in the list is considered a workspace folder.
+In both of the provided examples above, the `apps` and `packages` folders both contain folders that are workspaces, and the `docs` folder itself is a workspace.
+
+```
+monorepo/
+├─ docs/
+├─ apps/
+│  ├─ api/
+│  ├─ mobile/
+├─ packages/
+│  ├─ tsconfig/
+│  ├─ config/
+├─ sdk/
+```
+
+With the folder structure above, using the same workspace configuration, the `monorepo/docs/`, `monorepo/apps/api/`, `monorepo/apps/mobile/`, `monorepo/packages/config/`, and `monorepo/packages/tsconfig/` folders are all considered workspaces.
+While the `monorepo/sdk/` folder is not considered a workspace, it is not included in the workspace configuration.
+
+### Managing workspaces
+
+After defining the locations for your workspaces you will want to create your workspace.
+
+You do this by creating a folder for your workspace, and adding a `package.json` file to it.
+Remember, the workspace should also be defined using the method defined in the 'Setup workspaces' section.
+
+You may also want to move, delete, and rename your workspaces.
+
+Deleting is as easy as deleting the content of the folder.
+If you don't want to delete the folder, removing the folder from the workspace configuration, will also work.
+
+Moving a workspace can be done by moving the folder, then redefining the workspace configuration to include the new workspace location (and exclude the old location).
+
+Renaming a workspace can mean two things, you could either just rename the folder, or change the name inside the `package.json` file.
+When you rename the folder, the workspace configuration should also be updated.
+When changing the name in the `package.json` file it is important to ensure all dependencies of the workspace are updated.
+
+After any of these actions you will have to run an install.
+If there are any problems after that, you may have to delete your `node_modules` folder and run an install again.
+
+It is recommended to keep your workspace configuration up-to-date with the folders in the filesystem, this will prevent accidental recognition of workspaces.
+
+### Managing dependencies
+
+Managing dependencies in a workspace is slightly different than managing dependencies without workspaces.
+Normally, you would use the `npm install|uninstall|update <package>`, `yarn add|remove|upgrade <package>` and `pnpm add|remove|up <package>` commands to manage packages.
+However, this won't work the same when using workspaces, since they will only manage the dependencies of the entire monorepo.
+So, how do you manage dependencies?
+
+Well, it differs for each package manager:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+
+    **Install**
+    ```bash
+    npm install <package> -w=<workspace>
+    ```
+
+    Example:
+    ```bash
+    npm install react -w=web
+    ```
+
+    **Uninstall**
+    ```bash
+    npm uninstall <package> -w=<workspace>
+    ```
+
+    Example:
+    ```bash
+    npm uninstall react -w=web
+    ```
+
+    **Update**
+    ```bash
+    npm update <package> -w=<workspace>
+    ```
+
+    Example:
+    ```bash
+    npm update react -w=web
+    ```
+
+  </Tab>
+  <Tab>
+
+    **Install**
+    ```bash
+    yarn workspace <workspace> add <package>
+    ```
+
+    Example:
+    ```bash
+    yarn workspace web add react
+    ```
+
+    **Uninstall**
+    ```bash
+    yarn workspace <workspace> remove <package>
+    ```
+
+    Example:
+    ```bash
+    yarn workspace web remove react
+    ```
+
+    **Update**
+    ```bash
+    yarn workspace <workspace> upgrade <package>
+    ```
+
+    Example:
+    ```bash
+    yarn workspace web upgrade react
+    ```
+
+  </Tab>
+  <Tab>
+
+    **Install**
+    ```bash
+    pnpm add <package> --filter <workspace>
+    ```
+
+    Example:
+    ```bash
+    pnpm add react --filter web
+    ```
+
+    **Uninstall**
+     ```bash
+    pnpm uninstall <package> --filter <workspace>
+    ```
+
+    Example:
+    ```bash
+    pnpm uninstall react --filter web
+    ```
+
+    **Update**
+     ```bash
+    pnpm up <package> --filter <workspace>
+    ```
+
+    Example:
+    ```bash
+    pnpm up react --filter web
+    ```
+
+  </Tab>
+</Tabs>
+
+## Naming workspaces
+
+Some issues can occur when choosing names for your workspaces.
+Therefore, we want to provide some guidelines and best practices.
+
+- **Names should be unique**
+  Workspaces can't have the same name.
+  When workspaces do have the same name it will cause problems when doing an installation, and it also means you won't be able to target the workspace since Turborepo and package managers won't know which workspace you are targeting.
+  A workspace should also not have the same name as an existing npm package, as it often leads to problems.
+
+- **Use the `@<project>/<workspace>` naming convention**
+  A common naming convention for monorepos is to use the name of the monorepo, and the name of the workspace, separated by a slash and preceded by an @ symbol.
+  An example of this would be `@todolist/api`, this convention prevents most npm naming collisions, and clearly shows that the workspace exists in the monorepo.
+
+## Example projects
+
+A couple of example projects that use Turborepo have been created.
+They can all be found on the Turborepo GitHub.
+
+The repository has the following examples:
+
+- [basic](https://github.com/vercel/turborepo/tree/main/examples/basic): A basic monorepo that uses yarn, has documentation using Next.js and a frontend, also using Next.js. It also has a next.js UI package.
+- [design-system](https://github.com/vercel/turborepo/tree/main/examples/design-system): An official React design system starter.
+- [kitchen-sink](https://github.com/vercel/turborepo/tree/main/examples/kitchen-sink): A more elaborate example, which has four apps, an API using express, a storefront using Next.js, an admin panel using Vite, and a blog using Remix.
+- [with-pnpm](https://github.com/vercel/turborepo/tree/main/examples/with-pnpm): An official starter repo that uses the pnpm package manager.
