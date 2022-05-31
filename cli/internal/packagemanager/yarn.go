@@ -61,7 +61,7 @@ var nodejsYarn = PackageManager{
 		if err != nil {
 			return false, fmt.Errorf("could not parse yarn version: %w", err)
 		}
-		c, err := semver.NewConstraint("<2.0.0")
+		c, err := semver.NewConstraint("<2.0.0-0")
 		if err != nil {
 			return false, fmt.Errorf("could not create constraint: %w", err)
 		}
