@@ -40,6 +40,11 @@ func getFixture(id int) turbopath.AbsoluteSystemPath {
 
 func Test_gitHashObject(t *testing.T) {
 	fixturePath := getFixture(1)
+	traversePath, err := getTraversePath(AbsolutePath(fixturePath))
+	if err != nil {
+		return
+	}
+
 	tests := []struct {
 		name        string
 		rootPath    turbopath.AbsoluteSystemPath
@@ -78,6 +83,24 @@ func Test_gitHashObject(t *testing.T) {
 				"child.json":                 "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 				"grandchild/grandchild.json": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
 			},
+		},
+		{
+			name:     "Traverse outside of the repo",
+			rootPath: fixturePath.Join(traversePath.ToRelativeSystemPath()).Join(".."),
+			filesToHash: []turbopath.RelativeUnixPath{
+				turbopath.RelativeUnixPath("null.json"),
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:     "Nonexistent file",
+			rootPath: fixturePath,
+			filesToHash: []turbopath.RelativeUnixPath{
+				turbopath.RelativeUnixPath("nonexistent.json"),
+			},
+			want:    nil,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
