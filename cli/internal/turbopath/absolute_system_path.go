@@ -40,6 +40,6 @@ func (p AbsoluteSystemPath) ToAbsoluteUnixPath() AbsoluteUnixPath {
 }
 
 // Join appends relative path segments to this AbsoluteSystemPath.
-func (p AbsoluteSystemPath) Join(additional RelativeSystemPath) AbsoluteSystemPath {
-	return AbsoluteSystemPath(filepath.Join(p.ToString(), additional.ToString()))
+func (p AbsoluteSystemPath) Join(additional ...RelativeSystemPath) AbsoluteSystemPath {
+	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(toStringArray(additional)...)))
 }

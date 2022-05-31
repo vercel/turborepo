@@ -171,3 +171,11 @@ func StringToSystemPath(path string) SystemPathInterface {
 	}
 	return RelativeSystemPath(filepath.FromSlash(path))
 }
+
+func toStringArray[T FilePathInterface](source []T) []string {
+	output := make([]string, len(source))
+	for index, path := range source {
+		output[index] = path.ToString()
+	}
+	return output
+}

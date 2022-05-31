@@ -45,6 +45,6 @@ func (p RepoRelativeSystemPath) ToRelativeSystemPath() RelativeSystemPath {
 }
 
 // Join appends relative path segments to this RepoRelativeSystemPath.
-func (p RepoRelativeSystemPath) Join(additional RelativeSystemPath) RepoRelativeSystemPath {
-	return RepoRelativeSystemPath(filepath.Join(p.ToString(), additional.ToString()))
+func (p RepoRelativeSystemPath) Join(additional ...RelativeSystemPath) RepoRelativeSystemPath {
+	return RepoRelativeSystemPath(filepath.Join(p.ToString(), filepath.Join(toStringArray(additional)...)))
 }

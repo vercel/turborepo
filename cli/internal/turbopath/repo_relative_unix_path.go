@@ -48,6 +48,6 @@ func (p RepoRelativeUnixPath) ToRelativeUnixPath() RelativeUnixPath {
 }
 
 // Join appends relative path segments to this RelativeUnixPath.
-func (p RepoRelativeUnixPath) Join(additional RelativeUnixPath) RepoRelativeUnixPath {
-	return RepoRelativeUnixPath(path.Join(p.ToString(), additional.ToString()))
+func (p RepoRelativeUnixPath) Join(additional ...RelativeUnixPath) RepoRelativeUnixPath {
+	return RepoRelativeUnixPath(path.Join(p.ToString(), path.Join(toStringArray(additional)...)))
 }
