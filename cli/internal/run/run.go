@@ -1,7 +1,6 @@
 package run
 
 import (
-	"bufio"
 	gocontext "context"
 	"encoding/json"
 	"flag"
@@ -65,14 +64,14 @@ type completeGraph struct {
 type runSpec struct {
 	Targets      []string
 	FilteredPkgs util.Set
-	Opts         *RunOptions
+	Opts         *Opts
 }
 
 func (rs *runSpec) ArgsForTask(task string) []string {
-	passThroughArgs := make([]string, 0, len(rs.Opts.passThroughArgs))
+	passThroughArgs := make([]string, 0, len(rs.Opts.runOpts.passThroughArgs))
 	for _, target := range rs.Targets {
 		if target == task {
-			passThroughArgs = append(passThroughArgs, rs.Opts.passThroughArgs...)
+			passThroughArgs = append(passThroughArgs, rs.Opts.runOpts.passThroughArgs...)
 		}
 	}
 	return passThroughArgs
@@ -164,13 +163,13 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	runOptions, err := parseRunArgs(args, c.Config, c.Ui)
+	opts, err := parseRunArgs(args, c.Config, c.Ui)
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
 
-	ctx, err := context.New(context.WithGraph(runOptions.cwd, c.Config, runOptions.cacheOpts.Dir))
+	ctx, err := context.New(context.WithGraph(c.Config, opts.cacheOpts.Dir))
 	if err != nil {
 		c.logError(c.Config.Logger, "", err)
 		return 1
@@ -188,7 +187,7 @@ func (c *RunCommand) Run(args []string) int {
 		return 1
 	}
 
-	scmInstance, err := scm.FromInRepo(runOptions.cwd)
+	scmInstance, err := scm.FromInRepo(c.Config.Cwd.ToStringDuringMigration())
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
 			c.logWarning(c.Config.Logger, "", err)
@@ -197,7 +196,7 @@ func (c *RunCommand) Run(args []string) int {
 			return 1
 		}
 	}
-	filteredPkgs, isAllPackages, err := scope.ResolvePackages(runOptions.scopeOpts(), scmInstance, ctx, c.Ui, c.Config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&opts.scopeOpts, c.Config.Cwd.ToStringDuringMigration(), scmInstance, ctx, c.Ui, c.Config.Logger)
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("failed to resolve packages to run: %v", err))
 	}
@@ -213,7 +212,7 @@ func (c *RunCommand) Run(args []string) int {
 		}
 	}
 	c.Config.Logger.Debug("global hash", "value", ctx.GlobalHash)
-	c.Config.Logger.Debug("local cache folder", "path", runOptions.cacheOpts.Dir)
+	c.Config.Logger.Debug("local cache folder", "path", opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
@@ -226,7 +225,7 @@ func (c *RunCommand) Run(args []string) int {
 	rs := &runSpec{
 		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
-		Opts:         runOptions,
+		Opts:         opts,
 	}
 	packageManager := ctx.PackageManager
 	return c.runOperation(g, rs, packageManager, startAt)
@@ -244,7 +243,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		return 1
 	}
 	hashTracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
-	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.concurrency, c.Config.Cwd)
+	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, c.Config.Cwd)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error hashing package files: %s", err))
 		return 1
@@ -253,7 +252,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root. Rebuild the task graph for backwards compatibility.
 	// We still use dependencies specified by the pipeline configuration.
-	if rs.Opts.parallel {
+	if rs.Opts.runOpts.parallel {
 		for _, edge := range g.TopologicalGraph.Edges() {
 			if edge.Target() != g.RootNode {
 				g.TopologicalGraph.RemoveEdge(edge)
@@ -267,13 +266,13 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 	}
 
 	exitCode := 0
-	if rs.Opts.dotGraph != "" {
-		err := c.generateDotGraph(engine.TaskGraph, filepath.Join(rs.Opts.cwd, rs.Opts.dotGraph))
+	if rs.Opts.runOpts.dotGraph != "" {
+		err := c.generateDotGraph(engine.TaskGraph, c.Config.Cwd.Join(rs.Opts.runOpts.dotGraph))
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
 			return 1
 		}
-	} else if rs.Opts.dryRun {
+	} else if rs.Opts.runOpts.dryRun {
 		tasksRun, err := c.executeDryRun(engine, g, hashTracker, rs)
 		if err != nil {
 			c.logError(c.Config.Logger, "", err)
@@ -281,7 +280,7 @@ func (c *RunCommand) runOperation(g *completeGraph, rs *runSpec, packageManager 
 		}
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
-		if rs.Opts.dryRunJSON {
+		if rs.Opts.runOpts.dryRunJSON {
 			dryRun := &struct {
 				Packages []string     `json:"packages"`
 				Tasks    []hashedTask `json:"tasks"`
@@ -364,7 +363,7 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 	if err := engine.Prepare(&core.SchedulerExecutionOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,
-		TasksOnly: rs.Opts.only,
+		TasksOnly: rs.Opts.runOpts.only,
 	}); err != nil {
 		return nil, err
 	}
@@ -376,199 +375,167 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 	return engine, nil
 }
 
-// RunOptions holds the current run operations configuration
+// Opts holds the current run operations configuration
+type Opts struct {
+	runOpts      runOpts
+	cacheOpts    cache.Opts
+	runcacheOpts runcache.Opts
+	scopeOpts    scope.Opts
+}
 
-type RunOptions struct {
-	// patterns supplied to --filter on the commandline
-	filterPatterns []string
-	// Whether to include dependent impacted consumers in execution (defaults to true)
-	includeDependents bool
-	// Whether to include includeDependencies (pkg.dependencies) in execution (defaults to false)
-	includeDependencies bool
-	// List of globs of file paths to ignore from execution scope calculation
-	ignore []string
+// runOpts holds the options that control the execution of a turbo run
+type runOpts struct {
 	// Show a dot graph
 	dotGraph string
-	// List of globs to global files whose contents will be included in the global hash calculation
-	globalDeps []string
-	// Filtered list of package entrypoints
-	scope []string
 	// Force execution to be serially one-at-a-time
 	concurrency int
 	// Whether to execute in parallel (defaults to false)
 	parallel bool
-	// Git diff used to calculate changed packages
-	since string
-	// Current working directory
-	cwd string
 	// Whether to emit a perf profile
 	profile string
-	// Immediately exit on task failure
-	bail            bool
+	// If true, continue task executions even if a task fails.
+	continueOnError bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
 	only       bool
 	dryRun     bool
 	dryRunJSON bool
-
-	cacheOpts    cache.Opts
-	runcacheOpts runcache.Opts
 }
 
-func (ro *RunOptions) scopeOpts() *scope.Opts {
-	return &scope.Opts{
-		IncludeDependencies: ro.includeDependencies,
-		IncludeDependents:   ro.includeDependents,
-		Patterns:            ro.scope,
-		Since:               ro.since,
-		Cwd:                 ro.cwd,
-		IgnorePatterns:      ro.ignore,
-		GlobalDepPatterns:   ro.globalDeps,
-		FilterPatterns:      ro.filterPatterns,
-	}
-}
-
-func getDefaultRunOptions(config *config.Config) *RunOptions {
-	return &RunOptions{
-		bail:                true,
-		includeDependents:   true,
-		parallel:            false,
-		concurrency:         10,
-		dotGraph:            "",
-		includeDependencies: false,
-		profile:             "", // empty string does no tracing
-		only:                false,
-
+func getDefaultOptions(config *config.Config) *Opts {
+	return &Opts{
+		runOpts: runOpts{
+			concurrency: 10,
+		},
 		cacheOpts: cache.Opts{
 			Dir:     cache.DefaultLocation(config.Cwd),
 			Workers: config.Cache.Workers,
 		},
+		scopeOpts: scope.Opts{},
 	}
 }
 
-func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOptions, error) {
-	runOptions := getDefaultRunOptions(config)
+func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*Opts, error) {
+	opts := getDefaultOptions(config)
 
 	if len(args) == 0 {
 		return nil, errors.Errorf("At least one task must be specified.")
 	}
 
-	runOptions.cwd = config.Cwd.ToStringDuringMigration()
 	var unresolvedCacheFolder string
-	// unresolvedCacheFolder := filepath.FromSlash("./node_modules/.cache/turbo")
 
 	if os.Getenv("TURBO_FORCE") == "true" {
-		runOptions.runcacheOpts.SkipReads = true
+		opts.runcacheOpts.SkipReads = true
 	}
 
 	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
-		runOptions.cacheOpts.SkipFilesystem = true
+		opts.cacheOpts.SkipFilesystem = true
 	}
 
 	for argIndex, arg := range args {
 		if arg == "--" {
-			runOptions.passThroughArgs = args[argIndex+1:]
+			opts.runOpts.passThroughArgs = args[argIndex+1:]
 			break
 		} else if strings.HasPrefix(arg, "--") {
 			switch {
 			case strings.HasPrefix(arg, "--filter="):
 				filterPattern := arg[len("--filter="):]
 				if filterPattern != "" {
-					runOptions.filterPatterns = append(runOptions.filterPatterns, filterPattern)
+					opts.scopeOpts.FilterPatterns = append(opts.scopeOpts.FilterPatterns, filterPattern)
 				}
 			case strings.HasPrefix(arg, "--since="):
 				if len(arg[len("--since="):]) > 0 {
-					runOptions.since = arg[len("--since="):]
+					opts.scopeOpts.LegacyFilter.Since = arg[len("--since="):]
 				}
 			case strings.HasPrefix(arg, "--scope="):
 				if len(arg[len("--scope="):]) > 0 {
-					runOptions.scope = append(runOptions.scope, arg[len("--scope="):])
+					opts.scopeOpts.LegacyFilter.Entrypoints = append(opts.scopeOpts.LegacyFilter.Entrypoints, arg[len("--scope="):])
 				}
 			case strings.HasPrefix(arg, "--ignore="):
 				if len(arg[len("--ignore="):]) > 0 {
-					runOptions.ignore = append(runOptions.ignore, arg[len("--ignore="):])
+					opts.scopeOpts.IgnorePatterns = append(opts.scopeOpts.IgnorePatterns, arg[len("--ignore="):])
 				}
 			case strings.HasPrefix(arg, "--global-deps="):
 				if len(arg[len("--global-deps="):]) > 0 {
-					runOptions.globalDeps = append(runOptions.globalDeps, arg[len("--global-deps="):])
+					opts.scopeOpts.GlobalDepPatterns = append(opts.scopeOpts.GlobalDepPatterns, arg[len("--global-deps="):])
 				}
 			case strings.HasPrefix(arg, "--parallel"):
-				runOptions.parallel = true
+				opts.runOpts.parallel = true
 			case strings.HasPrefix(arg, "--profile="): // this one must com before the next
 				if len(arg[len("--profile="):]) > 0 {
-					runOptions.profile = arg[len("--profile="):]
+					opts.runOpts.profile = arg[len("--profile="):]
 				}
 			case strings.HasPrefix(arg, "--profile"):
-				runOptions.profile = fmt.Sprintf("%v-profile.json", time.Now().UnixNano())
+				opts.runOpts.profile = fmt.Sprintf("%v-profile.json", time.Now().UnixNano())
 
 			case strings.HasPrefix(arg, "--no-deps"):
-				runOptions.includeDependents = false
+				opts.scopeOpts.LegacyFilter.SkipDependents = true
 			case strings.HasPrefix(arg, "--no-cache"):
-				runOptions.runcacheOpts.SkipWrites = true
+				opts.runcacheOpts.SkipWrites = true
 			case strings.HasPrefix(arg, "--cacheFolder"):
 				output.Warn("[WARNING] The --cacheFolder flag has been deprecated and will be removed in future versions of turbo. Please use `--cache-dir` instead")
 				unresolvedCacheFolder = arg[len("--cacheFolder="):]
 			case strings.HasPrefix(arg, "--cache-dir"):
 				unresolvedCacheFolder = arg[len("--cache-dir="):]
 			case strings.HasPrefix(arg, "--continue"):
-				runOptions.bail = false
+				opts.runOpts.continueOnError = true
 			case strings.HasPrefix(arg, "--force"):
-				runOptions.runcacheOpts.SkipReads = true
+				opts.runcacheOpts.SkipReads = true
 			case strings.HasPrefix(arg, "--stream"):
 				output.Warn("[WARNING] The --stream flag is unnecesary and has been deprecated. It will be removed in future versions of turbo.")
 			case strings.HasPrefix(arg, "--graph="): // this one must com before the next
 				if len(arg[len("--graph="):]) > 0 {
-					runOptions.dotGraph = arg[len("--graph="):]
+					opts.runOpts.dotGraph = arg[len("--graph="):]
 				}
 			case strings.HasPrefix(arg, "--graph"):
-				runOptions.dotGraph = fmt.Sprintf("graph-%v.jpg", time.Now().UnixNano())
+				opts.runOpts.dotGraph = fmt.Sprintf("graph-%v.jpg", time.Now().UnixNano())
 			case strings.HasPrefix(arg, "--serial"):
 				output.Warn("[WARNING] The --serial flag has been deprecated and will be removed in future versions of turbo. Please use `--concurrency=1` instead")
-				runOptions.concurrency = 1
+				opts.runOpts.concurrency = 1
 			case strings.HasPrefix(arg, "--concurrency"):
 				concurrencyRaw := arg[len("--concurrency="):]
 				if concurrency, err := util.ParseConcurrency(concurrencyRaw); err != nil {
 					return nil, err
 				} else {
-					runOptions.concurrency = concurrency
+					opts.runOpts.concurrency = concurrency
 				}
 			case strings.HasPrefix(arg, "--includeDependencies"):
 				output.Warn("[WARNING] The --includeDependencies flag has renamed to --include-dependencies for consistency. Please use `--include-dependencies` instead")
-				runOptions.includeDependencies = true
+				opts.scopeOpts.LegacyFilter.IncludeDependencies = true
 			case strings.HasPrefix(arg, "--include-dependencies"):
-				runOptions.includeDependencies = true
+				opts.scopeOpts.LegacyFilter.IncludeDependencies = true
 			case strings.HasPrefix(arg, "--only"):
-				runOptions.only = true
+				opts.runOpts.only = true
 			case strings.HasPrefix(arg, "--output-logs="):
 				outputLogsMode := arg[len("--output-logs="):]
 				switch outputLogsMode {
 				case "full":
-					runOptions.runcacheOpts.CacheMissLogsMode = runcache.FullLogs
-					runOptions.runcacheOpts.CacheHitLogsMode = runcache.FullLogs
+					opts.runcacheOpts.CacheMissLogsMode = runcache.FullLogs
+					opts.runcacheOpts.CacheHitLogsMode = runcache.FullLogs
 				case "none":
-					runOptions.runcacheOpts.CacheMissLogsMode = runcache.NoLogs
-					runOptions.runcacheOpts.CacheHitLogsMode = runcache.NoLogs
+					opts.runcacheOpts.CacheMissLogsMode = runcache.NoLogs
+					opts.runcacheOpts.CacheHitLogsMode = runcache.NoLogs
 				case "hash-only":
-					runOptions.runcacheOpts.CacheMissLogsMode = runcache.HashLogs
-					runOptions.runcacheOpts.CacheHitLogsMode = runcache.HashLogs
+					opts.runcacheOpts.CacheMissLogsMode = runcache.HashLogs
+					opts.runcacheOpts.CacheHitLogsMode = runcache.HashLogs
 				case "new-only":
-					runOptions.runcacheOpts.CacheMissLogsMode = runcache.FullLogs
-					runOptions.runcacheOpts.CacheHitLogsMode = runcache.HashLogs
+					opts.runcacheOpts.CacheMissLogsMode = runcache.FullLogs
+					opts.runcacheOpts.CacheHitLogsMode = runcache.HashLogs
 				default:
 					output.Warn(fmt.Sprintf("[WARNING] unknown value %v for --output-logs CLI flag. Falling back to full", outputLogsMode))
 				}
 			case strings.HasPrefix(arg, "--dry-run"):
-				runOptions.dryRun = true
+				opts.runOpts.dryRun = true
 				if strings.HasPrefix(arg, "--dry-run=json") {
-					runOptions.dryRunJSON = true
+					opts.runOpts.dryRunJSON = true
 				}
 			case strings.HasPrefix(arg, "--dry"):
-				runOptions.dryRun = true
+				opts.runOpts.dryRun = true
 				if strings.HasPrefix(arg, "--dry=json") {
-					runOptions.dryRunJSON = true
+					opts.runOpts.dryRunJSON = true
 				}
 			case strings.HasPrefix(arg, "--remote-only"):
-				runOptions.cacheOpts.SkipFilesystem = true
+				opts.cacheOpts.SkipFilesystem = true
 			case strings.HasPrefix(arg, "--team"):
 			case strings.HasPrefix(arg, "--token"):
 			case strings.HasPrefix(arg, "--preflight"):
@@ -587,13 +554,13 @@ func parseRunArgs(args []string, config *config.Config, output cli.Ui) (*RunOpti
 
 	// We can only set this cache folder after we know actual cwd
 	if unresolvedCacheFolder != "" {
-		runOptions.cacheOpts.Dir = fs.ResolveUnknownPath(config.Cwd, unresolvedCacheFolder)
+		opts.cacheOpts.Dir = fs.ResolveUnknownPath(config.Cwd, unresolvedCacheFolder)
 	}
 	if !config.IsLoggedIn() {
-		runOptions.cacheOpts.SkipRemote = true
+		opts.cacheOpts.SkipRemote = true
 	}
 
-	return runOptions, nil
+	return opts, nil
 }
 
 // logError logs an error and outputs it to the UI.
@@ -652,7 +619,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		return 1
 	}
 	defer turboCache.Shutdown()
-	runState := NewRunState(startAt, rs.Opts.profile)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, c.Config.Cwd, rs.Opts.runcacheOpts)
 	ec := &execContext{
 		colorCache:     NewColorCache(),
@@ -672,8 +639,8 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
 		return ec.exec(pt, deps)
 	}), core.ExecOpts{
-		Parallel:    rs.Opts.parallel,
-		Concurrency: rs.Opts.concurrency,
+		Parallel:    rs.Opts.runOpts.parallel,
+		Concurrency: rs.Opts.runOpts.concurrency,
 	})
 
 	// Track if we saw any child with a non-zero exit code
@@ -691,7 +658,7 @@ func (c *RunCommand) executeTasks(g *completeGraph, rs *runSpec, engine *core.Sc
 		c.Ui.Error(err.Error())
 	}
 
-	if err := runState.Close(c.Ui, rs.Opts.profile); err != nil {
+	if err := runState.Close(c.Ui, rs.Opts.runOpts.profile); err != nil {
 		c.Ui.Error(fmt.Sprintf("Error with profiler: %s", err.Error()))
 		return 1
 	}
@@ -782,22 +749,6 @@ var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", rege
 
 func commandLooksLikeTurbo(command string) bool {
 	return _isTurbo.MatchString(command)
-}
-
-// Replay logs will try to replay logs back to the stdout
-func replayLogs(logger hclog.Logger, output cli.Ui, runOptions *RunOptions, logFileName, hash string) {
-	logger.Debug("start replaying logs")
-	f, err := os.Open(filepath.Join(runOptions.cwd, logFileName))
-	if err != nil {
-		output.Warn(fmt.Sprintf("error reading logs: %v", err))
-		logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
-	}
-	defer f.Close()
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		output.Output(string(scan.Bytes())) //Writing to Stdout
-	}
-	logger.Debug("finish replaying logs")
 }
 
 // GetTargetsFromArguments returns a list of targets from the arguments and Turbo config.
@@ -907,7 +858,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		e.logError(targetLogger, actualPrefix, err)
-		if e.rs.Opts.bail {
+		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
@@ -953,7 +904,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		}
 		tracer(TargetBuildFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
-		if e.rs.Opts.bail {
+		if !e.rs.Opts.runOpts.continueOnError {
 			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			e.processes.Close()
 		} else {
@@ -978,14 +929,14 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	return nil
 }
 
-func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename string) error {
+func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename fs.AbsolutePath) error {
 	graphString := string(taskGraph.Dot(&dag.DotOpts{
 		Verbose:    true,
 		DrawCycles: true,
 	}))
-	ext := filepath.Ext(outputFilename)
+	ext := outputFilename.Ext()
 	if ext == ".html" {
-		f, err := os.Create(outputFilename)
+		f, err := outputFilename.Create()
 		if err != nil {
 			return fmt.Errorf("error writing graph: %w", err)
 		}
@@ -1006,22 +957,24 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
   </body>
   </html>`)
 		c.Ui.Output("")
-		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename)))
+		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		if ui.IsTTY {
-			browser.OpenBrowser(outputFilename)
+			if err := browser.OpenBrowser(outputFilename.ToString()); err != nil {
+				c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprintf("failed to open browser. Please navigate to file://%v", filepath.ToSlash(outputFilename.ToString())))
+			}
 		}
 		return nil
 	}
 	hasDot := hasGraphViz()
 	if hasDot {
-		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename}
+		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename.ToString()}
 		cmd := exec.Command("dot", dotArgs...)
 		cmd.Stdin = strings.NewReader(graphString)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
 		} else {
 			c.Ui.Output("")
-			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename)))
+			c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		}
 	} else {
 		c.Ui.Output("")

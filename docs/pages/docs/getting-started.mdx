@@ -250,13 +250,9 @@ Turborepo can use a technique known as Remote Caching to share cache artifacts a
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 
-### Link your turborepo to your Remote Cache
-
-Remote caching is available with zero configuration on [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link).
-
 ### Using Remote Caching for Local development
 
-If you want to link your local turborepo to your Remote Cache you can authenticate the Turborepo CLI with your Vercel account:
+Turborepo uses [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link) as its default remote caching provider. If you want to link your local turborepo to your Remote Cache you can authenticate the Turborepo CLI with your Vercel account:
 
 ```sh
 npx turbo login

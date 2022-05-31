@@ -2,8 +2,8 @@ package scope
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
@@ -18,14 +18,8 @@ type mockSCM struct {
 	changed []string
 }
 
-func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
-	changed := []string{}
-	for _, change := range m.changed {
-		if strings.HasPrefix(change, relativeTo) {
-			changed = append(changed, change)
-		}
-	}
-	return changed, nil
+func (m *mockSCM) ChangedFiles(_fromCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
+	return m.changed, nil
 }
 
 func TestResolvePackages(t *testing.T) {
@@ -210,13 +204,15 @@ func TestResolvePackages(t *testing.T) {
 				changed: tc.changed,
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
-				Patterns:            tc.scope,
-				Since:               tc.since,
-				IgnorePatterns:      []string{tc.ignore},
-				GlobalDepPatterns:   tc.globalDeps,
-				IncludeDependencies: tc.includeDependencies,
-				IncludeDependents:   tc.includeDependents,
-			}, scm, &context.Context{
+				LegacyFilter: LegacyFilter{
+					Entrypoints:         tc.scope,
+					Since:               tc.since,
+					IncludeDependencies: tc.includeDependencies,
+					SkipDependents:      !tc.includeDependents,
+				},
+				IgnorePatterns:    []string{tc.ignore},
+				GlobalDepPatterns: tc.globalDeps,
+			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,
 				TopologicalGraph: graph,
