@@ -1,5 +1,5 @@
 ---
-title: Getting Started
+title: Getting Started with Turborepo
 description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
@@ -7,25 +7,21 @@ import Callout from "../../components/callout";
 import Beta from "../../components/beta";
 import { Tabs, Tab } from '../../components/Tabs'
 
-# Getting Started with Turborepo
+# Overview
 
-## Clone an example or starter monorepo
+Turborepo is a build system for JavaScript and TypeScript monorepos: codebases containing multiple projects, often using multiple frameworks, in a single unified code repository. Monorepos have many advantages, but they require appropriate tooling in order to scale. Turborepo leverages advanced build system ideas and techniques to speed up development, without the configuration and complexity. By abstracting the configurations, scripts, and tooling, Turborepo allows you to start shipping fast.
 
-If you're starting a brand new monorepo, you can get started with a single command.
+You can incrementally adopt Turborepo for new and existing projects. To create a new monorepo, get started with:
 
 ```sh
 npx create-turbo@latest
 ```
 
-Follow the prompts to bootstrap a brand new Turborepo.
-
-To see more examples and starters, have a look at the [examples directory on GitHub](https://github.com/vercel/turborepo/blob/main/examples)
+You can also clone a Turborepo starter repository to get a head start on your monorepo. To see Turborepo examples and starters, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turborepo/tree/main/examples).
 
 ## Add Turborepo to your existing monorepo
 
-Turborepo was designed to be incrementally adopted. Adding it to an existing monorepo takes only a few minutes.
-
-Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [npm](https://npmjs.com), and [pnpm](https://pnpm.io/) workspaces. The `turbo` CLI works on the following operating systems.
+`turbo` works with [Yarn](https://classic.yarnpkg.com/lang/en/), [npm](https://npmjs.com), and [pnpm](https://pnpm.io/) on the following operating systems:
 
 - macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
 - Linux 32-bit, 64-bit, ARM, ARM 64-bit, MIPS 64-bit Little Endian, PowerPC 64-bit Little Endian, IBM Z 64-bit Big Endian
@@ -34,9 +30,61 @@ Turborepo works with [Yarn v1](https://classic.yarnpkg.com/lang/en/), [npm](http
 - NetBSD AMD64
 - Android ARM 64-bit
 
-### Install `turbo`
+## Configure workspaces
 
-Add `turbo` as a development dependency in the root of your project.
+`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
+
+You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
+
+<Tabs items={['npm', 'Yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+<div/>
+Specify your `workspaces` in your monorepo's root `package.json` file:
+
+```json filename="package.json"
+{
+ "workspaces": [
+   "packages/*",
+   "apps/*"
+  ]
+}
+```
+
+  </Tab>
+  <Tab>
+<div/>
+Specify your `workspaces` in your monorepo's root `package.json` file:
+
+```json filename="package.json"
+{
+ "workspaces": [
+   "packages/*",
+   "apps/*"
+  ]
+}
+```
+
+  </Tab>
+  <Tab>
+<div/>
+Specify your `packages` in `pnpm-workspaces.yaml`.
+```yaml filename="pnpm-workspace.yaml"
+packages:
+  - "packages/*"
+  - "apps/*"
+```
+  </Tab>
+</Tabs>
+
+After configuring your workspaces, re-run your package manager's `install` command.
+
+<Callout>
+  Note: Nested workspaces are not supported. As package names are required to be unique, moving each package to be a child of the monorepo's root package should meet your needs.
+</Callout>
+
+## Install `turbo`
+
+Add `turbo` as a development dependency in the root of your monorepo.
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -56,70 +104,92 @@ Add `turbo` as a development dependency in the root of your project.
   </Tab>
 </Tabs>
 
-The `turbo` package is a little shell that will install the proper `@turborepo/*` packages.
+The `turbo` package is a little shell that will install the proper `turbo-<os>-<arch>` package for you operating system and architecture.
 
-### Create `turbo.json`
+## Create `turbo.json`
 
-In your root directory, create an empty file named `turbo.json`.
-This will hold the configuration for Turborepo in your project.
-If your git repo's base branch is NOT `origin/master` then you need to specify a `baseBranch` too (for example, ours is set to `origin/main`).
+In the root of your monorepo, create an empty file named `turbo.json`. This will hold the configuration for Turborepo.
 
-```json
+If your git repo's base branch is not `origin/master`, then you need to specify a `baseBranch` too. For example, `origin/main`.
+
+```json filename="./turbo.json"
 {
   "$schema": "https://turborepo.org/schema.json",
   "baseBranch": "origin/main"
 }
 ```
 
-### Create a `pipeline`
+## Create a `pipeline`
 
-In `turbo.json`, add the commands you want to "turbocharge" to your pipeline.
+To define your monorepo's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
 
-Your pipeline both defines the way in which your npm `package.json` scripts relate to each other, and configures cache artifacts for those scripts. These relationships and cache settings are then fanned out and applied to all package tasks across your entire monorepo.
+Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./features/caching). For more information on configuring your pipeline, see the [`Pipelines`](./core-concepts/pipelines) documentation.
 
-```jsonc
+Packages that do not have the specified script defined in their `package.json`'s list of `scripts` will be ignored by `turbo`.
+
+```jsonc filename="./turbo.json"
 {
   "$schema": "https://turborepo.org/schema.json",
-  "baseBranch": "origin/main",
   "pipeline": {
     "build": {
+      // A package's `build` script depends on that package's
+      // dependencies' and devDependencies'
+      // `build` tasks  being completed first
+      // (the `^` symbol signifies `upstream`).
       "dependsOn": ["^build"],
       // note: output globs are relative to each package's `package.json`
       // (and not the monorepo root)
       "outputs": [".next/**"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      // A package's `test` script depends on that package's
+      // own `build` script being completed first.
+      "dependsOn": ["build"],
+      "outputs": [],
+      // A package's `test` script should only be rerun when
+      // either a `.tsx` or `.ts` file has changed in `src` or `test` folders.
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "lint": {
+      // A package's `lint` script has no dependencies and
+      // can be run whenever. It also has no filesystem outputs.
       "outputs": []
     },
-    "dev": {
-      "cache": false
+    "deploy": {
+      // A package's `deploy` script depends on the `build`,
+      // `test`, and `lint` scripts of the same package
+      // being completed. It also has no filesystem outputs.
+      "dependsOn": ["build", "test", "lint"],
+      "outputs": []
     }
   }
 }
 ```
 
-In the above example, the `build` and `test` tasks are dependent on their packages `dependencies` and `devDependencies` being built first, this is denoted with the `^` prefix.
+The rough execution order for a given package based on the `dependsOn` keys:
 
-For each script in each workspace's `package.json`, Turborepo will cache files outputted to `dist/**` and `build/**` folders relative to each packages's `package.json` by default if an override isn't added. Using the [`outputs`](./core-concepts/caching#configuring-cache-outputs-1) array allows you to override the default cache folders,
-like in the example above, where the `.next/**` folder is selected to be the default cache outputs folder for the `build` task for each package. Turborepo will automatically record and cache logs to `.turbo/turbo-<script>.log` for you, so you don't ever need to specify that in the `outputs` array.
+1. `build` once its upstream dependencies have run their `build` commands
+2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs) within a package
+3. `lint` runs in an arbitrary order as it has no upstream dependencies
+4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished.
 
-Finally, the `dev` task has its caching disabled using the `cache` key with a value of `false`.
+After execution, the full pipline can run:
 
-See the [`Pipelines`](./core-concepts/pipelines) documentation for more details on how to configure your pipeline.
+```sh
+npx turbo run build test lint deploy
+```
 
-### Edit `.gitignore`
+`turbo` will then schedule the execution of each task(s) to optimize usage of the machine's resources.
 
-Next, add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
+## Edit `.gitignore`
+
+Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
 
 ```diff
 + .turbo
 ```
 
-Make sure that your task artifacts (the files you want to be cached) are also ignored. As a rule, any files/folder that you want cached should be gitignored.
+Make sure that your task artifacts, the files and folders you want cached, are also included in your `.gitignore`.
 
 ```diff
 + build/**
@@ -127,36 +197,49 @@ Make sure that your task artifacts (the files you want to be cached) are also ig
 + .next/**
 ```
 
-### Ensure workspaces are configured
+Re-run your npm client's `install` command to check your configuration.
 
-If you are moving from another tool to [Yarn workspaces](https://classic.yarnpkg.com/en/docs/workspaces/), be sure to also specify all `workspaces` in your `package.json`. The convention we follow is for applications to go into the `/apps` folder and packages to go in `/packages` folders.
+## Create `package.json` scripts
 
-```diff
+Add or update `scripts` in your monorepo's root `package.json` file and have them delegate to `turbo`.
+
+```jsonc filename="./package.json"
 {
-+ "workspaces": [
-+    "packages/*",
-+    "apps/*"
-+  ]
+  "scripts": {
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "dev": "turbo dev"
+  }
 }
 ```
 
-Now re-run your npm client's install command just to be sure. You should be good to go now.
+## Build your monorepo
 
-## Run stuff!
+<Tabs items={['npm', 'Yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run build
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    yarn build
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm build
+    ```
+  </Tab>
+</Tabs>
 
-To build with your freshly installed `turbo`, type the following:
+Depending on your monorepo setup, some artifacts might already be caching properly. In the next sections, we'll show how `turbo` works, how `scope` works, and then how to get caching working after that.
 
-### Yarn
-
-```sh
-yarn turbo run build
-```
-
-Now run it again. Depending on your monorepo setup, some stuff might already be caching properly. If not, no worries! In the next sections, we'll discuss how `turbo` works, how `scope` works, and then how to get caching working after that.
-
-## Setup Remote Caching <Beta/>
+## Configure Remote Caching <Beta/>
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
+
 At the moment, Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")? What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
 
 > Remote Caching has entered the chat.
@@ -167,36 +250,37 @@ Turborepo can use a technique known as Remote Caching to share cache artifacts a
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 
-### Link Your Turborepo to Your Remote Cache
+### Link your turborepo to your Remote Cache
 
 Remote caching is available with zero configuration on [Vercel](https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link).
 
-#### Using Remote Caching for Local development
+### Using Remote Caching for Local development
 
-If you want to link your local turborepo to your Remote Cache you do so by first authenticating the Turborepo CLI with your Vercel account:
+If you want to link your local turborepo to your Remote Cache you can authenticate the Turborepo CLI with your Vercel account:
 
 ```sh
 npx turbo login
 ```
 
-Next, you can link your turborepo to your remote cache by running the following command:
+Then, link your turborepo to your remote cache:
 
 ```
 npx turbo link
 ```
 
 Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
-Your cache artifacts will now be stored locally _and_ in your Remote Cache. To verify that this worked, delete your local Turborepo cache:
+Your cache artifacts will now be stored locally and in your Remote Cache. To verify that this worked, delete your local Turborepo cache:
 
 ```sh
 rm -rf ./node_modules/.cache/turbo
 ```
 
-Now run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
+Run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
 
 <Callout>
   **Note: When connecting to an sso-enabled Vercel team, you must provide your Team slug as an argument to `npx turbo login`.**
 </Callout>
+
 ```
 npx turbo login --sso-team=<team-slug>
 ```
