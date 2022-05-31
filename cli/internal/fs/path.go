@@ -2,6 +2,7 @@ package fs
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -21,6 +22,15 @@ func CheckedToAbsolutePath(s string) (AbsolutePath, error) {
 	return "", fmt.Errorf("%v is not an absolute path", s)
 }
 
+// ResolveUnknownPath returns unknown if it is an absolute path, otherwise, it
+// assumes unknown is a path relative to the given root.
+func ResolveUnknownPath(root AbsolutePath, unknown string) AbsolutePath {
+	if filepath.IsAbs(unknown) {
+		return AbsolutePath(unknown)
+	}
+	return root.Join(unknown)
+}
+
 func UnsafeToAbsolutePath(s string) AbsolutePath {
 	return AbsolutePath(s)
 }
@@ -29,6 +39,12 @@ func GetCwd() (AbsolutePath, error) {
 	cwdRaw, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("invalid working directory: %w", err)
+	}
+	// We evaluate symlinks here because the package managers
+	// we support do the same.
+	cwdRaw, err = filepath.EvalSymlinks(cwdRaw)
+	if err != nil {
+		return "", fmt.Errorf("evaluating symlinks in cwd: %w", err)
 	}
 	cwd, err := CheckedToAbsolutePath(cwdRaw)
 	if err != nil {
@@ -50,8 +66,10 @@ func (ap AbsolutePath) asString() string {
 func (ap AbsolutePath) Dir() AbsolutePath {
 	return AbsolutePath(filepath.Dir(ap.asString()))
 }
+
+// MkdirAll is the AbsolutePath wrapper for os.MkdirAll
 func (ap AbsolutePath) MkdirAll() error {
-	return os.MkdirAll(ap.asString(), DirPermissions)
+	return os.MkdirAll(ap.asString(), DirPermissions|0644)
 }
 func (ap AbsolutePath) Open() (*os.File, error) {
 	return os.Open(ap.asString())
@@ -61,10 +79,35 @@ func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
 }
 
+// ReadFile reads the contents of the specified file
+func (ap AbsolutePath) ReadFile() ([]byte, error) {
+	return ioutil.ReadFile(ap.asString())
+}
+
+// WriteFile writes the contents of the specified file
+func (ap AbsolutePath) WriteFile(contents []byte, mode os.FileMode) error {
+	return ioutil.WriteFile(ap.asString(), contents, mode)
+}
+
+// EnsureDir ensures that the directory containing this file exists
+func (ap AbsolutePath) EnsureDir() error {
+	return EnsureDir(ap.asString())
+}
+
+// Create is the AbsolutePath wrapper for os.Create
+func (ap AbsolutePath) Create() (*os.File, error) {
+	return os.Create(ap.asString())
+}
+
 // ToString returns the string representation of this absolute path. Used for
 // interfacing with APIs that require a string
 func (ap AbsolutePath) ToString() string {
 	return ap.asString()
+}
+
+// RelativePathString returns the relative path from this AbsolutePath to another absolute path in string form as a string
+func (ap AbsolutePath) RelativePathString(path string) (string, error) {
+	return filepath.Rel(ap.asString(), path)
 }
 
 // EnsureDirFS ensures that the directory containing the given filename is created

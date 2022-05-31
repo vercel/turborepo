@@ -34,6 +34,8 @@ Supports exact matches (`--filter=my-pkg`), and globs (`--filter=*my-pkg*`) are 
 Scoped packages (`@foo/bar`) can be abbreviated to just the package name (`bar`) as long as the package name
 is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
 
+The root package can be selected using the token `//`.
+
 ```sh
 # Build 'my-pkg', letting turbo infer task dependencies from the pipeline defined in turbo.json
 turbo run build --filter=my-pkg
@@ -41,6 +43,8 @@ turbo run build --filter=my-pkg
 turbo run build --filter=@foo/bar
 # Build all packages that start with 'admin-', letting turbo infer task dependencies from the pipeline defined in turbo.json
 turbo run build --filter=admin-*
+# Run the format script from the root "package.json" file:
+turbo run format --filter=//
 ```
 
 ### Include dependents of matched packages

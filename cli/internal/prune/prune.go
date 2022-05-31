@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -90,7 +91,8 @@ func (c *PruneCommand) Run(args []string) int {
 		c.logError(c.Config.Logger, "", err)
 		return 1
 	}
-	ctx, err := context.New(context.WithGraph(pruneOptions.cwd, c.Config))
+	cacheDir := cache.DefaultLocation(c.Config.Cwd)
+	ctx, err := context.New(context.WithGraph(pruneOptions.cwd, c.Config, cacheDir))
 
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not construct graph: %w", err))

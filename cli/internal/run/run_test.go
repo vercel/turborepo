@@ -9,7 +9,10 @@ import (
 
 	"github.com/mitchellh/cli"
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
@@ -31,18 +34,17 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -50,19 +52,18 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--scope=foo", "--scope=blah"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				scope:               []string{"foo", "blah"},
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -70,18 +71,17 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--concurrency=12"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "",
 				concurrency:         12,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -89,18 +89,17 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "g.png",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -108,19 +107,71 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "g.png",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				passThroughArgs:     []string{"--boop", "zoop"},
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+			},
+		},
+		{
+			"force",
+			[]string{"foo", "--force"},
+			&RunOptions{
+				includeDependents: true,
+				bail:              true,
+				concurrency:       10,
+				profile:           "",
+				cwd:               defaultCwd.ToStringDuringMigration(),
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{
+					SkipReads: true,
+				},
+			},
+		},
+		{
+			"remote-only",
+			[]string{"foo", "--remote-only"},
+			&RunOptions{
+				includeDependents: true,
+				bail:              true,
+				concurrency:       10,
+				profile:           "",
+				cwd:               defaultCwd.ToStringDuringMigration(),
+				cacheOpts: cache.Opts{
+					Dir:            defaultCacheFolder,
+					Workers:        10,
+					SkipFilesystem: true,
+				},
+				runcacheOpts: runcache.Opts{},
+			},
+		},
+		{
+			"no-cache",
+			[]string{"foo", "--no-cache"},
+			&RunOptions{
+				includeDependents: true,
+				bail:              true,
+				concurrency:       10,
+				profile:           "",
+				cwd:               defaultCwd.ToStringDuringMigration(),
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{
+					SkipWrites: true,
+				},
 			},
 		},
 		{
@@ -128,19 +179,18 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo", "--graph=g.png", "--"},
 			&RunOptions{
 				includeDependents:   true,
-				stream:              true,
 				bail:                true,
 				dotGraph:            "g.png",
 				concurrency:         10,
 				includeDependencies: false,
-				cache:               true,
-				forceExecution:      false,
 				profile:             "",
 				cwd:                 defaultCwd.ToStringDuringMigration(),
-				cacheFolder:         defaultCacheFolder.ToStringDuringMigration(),
 				passThroughArgs:     []string{},
-				cacheHitLogsMode:    FullLogs,
-				cacheMissLogsMode:   FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 		{
@@ -149,14 +199,14 @@ func TestParseConfig(t *testing.T) {
 			&RunOptions{
 				includeDependents: true,
 				filterPatterns:    []string{"bar", "...[main]"},
-				stream:            true,
 				bail:              true,
 				concurrency:       10,
-				cache:             true,
 				cwd:               defaultCwd.ToStringDuringMigration(),
-				cacheFolder:       defaultCacheFolder.ToStringDuringMigration(),
-				cacheHitLogsMode:  FullLogs,
-				cacheMissLogsMode: FullLogs,
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
 			},
 		},
 	}
@@ -167,10 +217,18 @@ func TestParseConfig(t *testing.T) {
 		ErrorWriter: os.Stderr,
 	}
 
+	cf := &config.Config{
+		Cwd:    defaultCwd,
+		Token:  "some-token",
+		TeamId: "my-team",
+		Cache: &config.CacheConfig{
+			Workers: 10,
+		},
+	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 
-			actual, err := parseRunArgs(tc.Args, defaultCwd, ui)
+			actual, err := parseRunArgs(tc.Args, cf, ui)
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
@@ -180,20 +238,24 @@ func TestParseConfig(t *testing.T) {
 }
 
 func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	cwd := defaultCwd.Join("zop")
 	expected := &RunOptions{
 		includeDependents:   true,
-		stream:              true,
 		bail:                true,
 		dotGraph:            "",
 		concurrency:         10,
 		includeDependencies: false,
-		cache:               true,
-		forceExecution:      false,
 		profile:             "",
-		cwd:                 "zop",
-		cacheFolder:         filepath.FromSlash("zop/node_modules/.cache/turbo"),
-		cacheHitLogsMode:    FullLogs,
-		cacheMissLogsMode:   FullLogs,
+		cwd:                 cwd.ToStringDuringMigration(),
+		cacheOpts: cache.Opts{
+			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
+			Workers: 10,
+		},
+		runcacheOpts: runcache.Opts{},
 	}
 
 	ui := &cli.BasicUi{
@@ -203,11 +265,19 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 	}
 
 	t.Run("accepts cwd argument", func(t *testing.T) {
+		cf := &config.Config{
+			Cwd:    cwd,
+			Token:  "some-token",
+			TeamId: "my-team",
+			Cache: &config.CacheConfig{
+				Workers: 10,
+			},
+		}
 		// Note that the Run parsing actually ignores `--cwd=` arg since
 		// the `--cwd=` is parsed when setting up the global Config. This value is
 		// passed directly as an argument to the parser.
 		// We still need to ensure run accepts cwd flag and doesn't error.
-		actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, "zop", ui)
+		actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, cf, ui)
 		if err != nil {
 			t.Fatalf("invalid parse: %#v", err)
 		}
@@ -219,7 +289,7 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 func TestGetTargetsFromArguments(t *testing.T) {
 	type args struct {
 		arguments []string
-		turboJSON *fs.TurboJSON
+		pipeline  fs.Pipeline
 	}
 	tests := []struct {
 		name    string
@@ -231,12 +301,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles one defined target",
 			args: args{
 				arguments: []string{"build"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build"},
@@ -246,12 +314,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles multiple targets and ignores flags",
 			args: args{
 				arguments: []string{"build", "test", "--foo", "--bar"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build", "test"},
@@ -261,12 +327,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles pass through arguments after -- ",
 			args: args{
 				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    []string{"build", "test"},
@@ -276,12 +340,10 @@ func TestGetTargetsFromArguments(t *testing.T) {
 			name: "handles unknown pipeline targets ",
 			args: args{
 				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
-				turboJSON: &fs.TurboJSON{
-					Pipeline: map[string]fs.TaskDefinition{
-						"build":      {},
-						"test":       {},
-						"thing#test": {},
-					},
+				pipeline: map[string]fs.TaskDefinition{
+					"build":      {},
+					"test":       {},
+					"thing#test": {},
 				},
 			},
 			want:    nil,
@@ -291,7 +353,7 @@ func TestGetTargetsFromArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.turboJSON)
+			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.pipeline)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
 				return
