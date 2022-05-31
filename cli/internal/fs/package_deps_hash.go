@@ -289,7 +289,7 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.Relativ
 // This is used to convert repo-relative paths to cwd-relative paths.
 //
 // `git rev-parse --show-cdup` always returns Unix paths, even on Windows.
-func getTraversePath(rootPath AbsolutePath) (turbopath.RelativeUnixPath, error) {
+func getTraversePath(rootPath turbopath.AbsolutePathInterface) (turbopath.RelativeUnixPath, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-cdup")
 	cmd.Dir = rootPath.ToString()
 
@@ -340,13 +340,13 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Relative
 		return nil, err
 	}
 
-	traversePath, err := getTraversePath(rootPath)
+	output := make(map[turbopath.RelativeUnixPath]statusCode, len(entries))
+	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString()).ToAbsoluteUnixPath()
+
+	traversePath, err := getTraversePath(convertedRootPath)
 	if err != nil {
 		return nil, err
 	}
-
-	output := make(map[turbopath.RelativeUnixPath]statusCode, len(entries))
-	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString()).ToAbsoluteUnixPath()
 
 	for _, entry := range entries {
 		pathFromStatus := turbopath.RepoRelativeUnixPath(entry[2])

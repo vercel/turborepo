@@ -113,7 +113,7 @@ func TestSpecialCharacters(t *testing.T) {
 
 func Test_gitHashObject(t *testing.T) {
 	fixturePath := getFixture(1)
-	traversePath, err := getTraversePath(AbsolutePath(fixturePath))
+	traversePath, err := getTraversePath(fixturePath)
 	if err != nil {
 		return
 	}
@@ -173,6 +173,44 @@ func Test_gitHashObject(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("gitHashObject() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getTraversePath(t *testing.T) {
+	fixturePath := getFixture(1)
+
+	type args struct {
+	}
+	tests := []struct {
+		name     string
+		rootPath turbopath.AbsolutePathInterface
+		want     turbopath.RelativeUnixPath
+		wantErr  bool
+	}{
+		{
+			name:     "From fixture location",
+			rootPath: fixturePath,
+			want:     turbopath.RelativeUnixPath("../../"),
+			wantErr:  false,
+		},
+		{
+			name:     "Traverse out of git repo",
+			rootPath: fixturePath.Join("..", "..", ".."),
+			want:     "",
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTraversePath(tt.rootPath)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getTraversePath() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getTraversePath() = %v, want %v", got, tt.want)
 			}
 		})
 	}
