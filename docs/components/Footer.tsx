@@ -13,7 +13,7 @@ const Vercel = ({ height = 20 }) => (
 
 function FooterLink({ href, children }) {
   const classes =
-    "text-sm text-gray-500 no-underline betterbetterhover:hover:betterhover:hover:text-gray-700 betterbetterhover:hover:dark:betterhover:hover:text-white  transition";
+    "text-sm text-gray-500 no-underline betterhover:hover:text-gray-700 betterhover:hover:dark:text-white transition";
   if (href.startsWith("http")) {
     return (
       <a href={href} className={classes}>
