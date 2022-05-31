@@ -13,6 +13,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/runcache"
+	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
@@ -27,109 +28,97 @@ func TestParseConfig(t *testing.T) {
 	cases := []struct {
 		Name     string
 		Args     []string
-		Expected *RunOptions
+		Expected *Opts
 	}{
 		{
 			"string flags",
 			[]string{"foo"},
-			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
 			"scope",
 			[]string{"foo", "--scope=foo", "--scope=blah"},
-			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				scope:               []string{"foo", "blah"},
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					LegacyFilter: scope.LegacyFilter{
+						Entrypoints: []string{"foo", "blah"},
+					},
+				},
 			},
 		},
 		{
 			"concurrency",
 			[]string{"foo", "--concurrency=12"},
-			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "",
-				concurrency:         12,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 12,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
 			"graph",
 			[]string{"foo", "--graph=g.png"},
-			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "g.png",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+					dotGraph:    "g.png",
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
 			"passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--", "--boop", "zoop"},
-			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "g.png",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
-				passThroughArgs:     []string{"--boop", "zoop"},
+			&Opts{
+				runOpts: runOpts{
+					concurrency:     10,
+					dotGraph:        "g.png",
+					passThroughArgs: []string{"--boop", "zoop"},
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
 			"force",
 			[]string{"foo", "--force"},
-			&RunOptions{
-				includeDependents: true,
-				bail:              true,
-				concurrency:       10,
-				profile:           "",
-				cwd:               defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -137,34 +126,32 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipReads: true,
 				},
+				scopeOpts: scope.Opts{},
 			},
 		},
 		{
 			"remote-only",
 			[]string{"foo", "--remote-only"},
-			&RunOptions{
-				includeDependents: true,
-				bail:              true,
-				concurrency:       10,
-				profile:           "",
-				cwd:               defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:            defaultCacheFolder,
 					Workers:        10,
 					SkipFilesystem: true,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
 			"no-cache",
 			[]string{"foo", "--no-cache"},
-			&RunOptions{
-				includeDependents: true,
-				bail:              true,
-				concurrency:       10,
-				profile:           "",
-				cwd:               defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
@@ -172,41 +159,57 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipWrites: true,
 				},
+				scopeOpts: scope.Opts{},
 			},
 		},
 		{
 			"Empty passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--"},
-			&RunOptions{
-				includeDependents:   true,
-				bail:                true,
-				dotGraph:            "g.png",
-				concurrency:         10,
-				includeDependencies: false,
-				profile:             "",
-				cwd:                 defaultCwd.ToStringDuringMigration(),
-				passThroughArgs:     []string{},
+			&Opts{
+				runOpts: runOpts{
+					concurrency:     10,
+					dotGraph:        "g.png",
+					passThroughArgs: []string{},
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 		{
 			"can specify filter patterns",
 			[]string{"foo", "--filter=bar", "--filter=...[main]"},
-			&RunOptions{
-				includeDependents: true,
-				filterPatterns:    []string{"bar", "...[main]"},
-				bail:              true,
-				concurrency:       10,
-				cwd:               defaultCwd.ToStringDuringMigration(),
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{},
+				scopeOpts: scope.Opts{
+					FilterPatterns: []string{"bar", "...[main]"},
+				},
+			},
+		},
+		{
+			"continue on errors",
+			[]string{"foo", "--continue"},
+			&Opts{
+				runOpts: runOpts{
+					continueOnError: true,
+					concurrency:     10,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
 			},
 		},
 	}
@@ -243,19 +246,16 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		t.Errorf("failed to get cwd: %v", err)
 	}
 	cwd := defaultCwd.Join("zop")
-	expected := &RunOptions{
-		includeDependents:   true,
-		bail:                true,
-		dotGraph:            "",
-		concurrency:         10,
-		includeDependencies: false,
-		profile:             "",
-		cwd:                 cwd.ToStringDuringMigration(),
+	expected := &Opts{
+		runOpts: runOpts{
+			concurrency: 10,
+		},
 		cacheOpts: cache.Opts{
 			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
 			Workers: 10,
 		},
 		runcacheOpts: runcache.Opts{},
+		scopeOpts:    scope.Opts{},
 	}
 
 	ui := &cli.BasicUi{
@@ -390,7 +390,7 @@ func Test_dontSquashTasks(t *testing.T) {
 	rs := &runSpec{
 		FilteredPkgs: filteredPkgs,
 		Targets:      []string{"build"},
-		Opts:         &RunOptions{},
+		Opts:         &Opts{},
 	}
 	engine, err := buildTaskGraph(topoGraph, pipeline, rs)
 	if err != nil {
@@ -423,7 +423,7 @@ func Test_taskSelfRef(t *testing.T) {
 	rs := &runSpec{
 		FilteredPkgs: filteredPkgs,
 		Targets:      []string{"build"},
-		Opts:         &RunOptions{},
+		Opts:         &Opts{},
 	}
 	_, err := buildTaskGraph(topoGraph, pipeline, rs)
 	if err == nil {

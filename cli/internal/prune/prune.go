@@ -92,7 +92,7 @@ func (c *PruneCommand) Run(args []string) int {
 		return 1
 	}
 	cacheDir := cache.DefaultLocation(c.Config.Cwd)
-	ctx, err := context.New(context.WithGraph(pruneOptions.cwd, c.Config, cacheDir))
+	ctx, err := context.New(context.WithGraph(c.Config, cacheDir))
 
 	if err != nil {
 		c.logError(c.Config.Logger, "", fmt.Errorf("could not construct graph: %w", err))

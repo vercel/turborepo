@@ -123,8 +123,9 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(rootpath string, config *config.Config, cacheDir fs.AbsolutePath) Option {
+func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
+		rootpath := config.Cwd.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
