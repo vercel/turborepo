@@ -1,8 +1,4 @@
-package turbopath
-
-import "path/filepath"
-
-// The goal is to be able to teach the Go type system about six
+// Package turbopath teaches the Go type system about six
 // different types of paths:
 // - AbsoluteSystemPath
 // - RelativeSystemPath
@@ -27,6 +23,9 @@ import "path/filepath"
 //
 // Much of this is dreadfully repetitive because of intentional
 // limitations in the Go type system.
+package turbopath
+
+import "path/filepath"
 
 // AbsoluteUnixPathInterface specifies the members that mark an interface
 // for structurally typing so the Go compiler can understand it.
