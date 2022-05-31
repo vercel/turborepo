@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -211,7 +212,7 @@ func TestResolvePackages(t *testing.T) {
 				},
 				IgnorePatterns:    []string{tc.ignore},
 				GlobalDepPatterns: tc.globalDeps,
-			}, "dummy-repo-root", scm, &context.Context{
+			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,
 				TopologicalGraph: graph,

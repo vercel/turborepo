@@ -393,8 +393,7 @@ type runOpts struct {
 	parallel bool
 	// Whether to emit a perf profile
 	profile string
-	// Immediately exit on task failure
-	//bail            bool
+	// If true, continue task executions even if a task fails.
 	continueOnError bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
@@ -961,7 +960,7 @@ func (c *RunCommand) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilenam
 		c.Ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		if ui.IsTTY {
 			if err := browser.OpenBrowser(outputFilename.ToString()); err != nil {
-				c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprintf("failed to open browser. Please navigate to file://%v", outputFilename))
+				c.Ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprintf("failed to open browser. Please navigate to file://%v", filepath.ToSlash(outputFilename.ToString())))
 			}
 		}
 		return nil
