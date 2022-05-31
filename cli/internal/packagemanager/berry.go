@@ -49,7 +49,8 @@ var nodejsBerry = PackageManager{
 		if err != nil {
 			return false, fmt.Errorf("could not parse yarn version: %w", err)
 		}
-		c, err := semver.NewConstraint(">=2.0.0")
+		// -0 allows pre-releases versions to be considered valid
+		c, err := semver.NewConstraint(">=2.0.0-0")
 		if err != nil {
 			return false, fmt.Errorf("could not create constraint: %w", err)
 		}
