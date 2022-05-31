@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -461,12 +462,16 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 		hashedSortedEnvPairs []string
 		globalCacheKey       string
 		pipeline             fs.Pipeline
+		os                   string
+		arch                 string
 	}{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
 		globalCacheKey:       GLOBAL_CACHE_KEY,
 		pipeline:             pipeline,
+		os:                   runtime.GOOS,
+		arch:                 runtime.GOARCH,
 	}
 	globalHash, err := fs.HashObject(globalHashable)
 	if err != nil {
