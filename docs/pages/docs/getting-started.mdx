@@ -32,7 +32,7 @@ You can also clone a Turborepo starter repository to get a head start on your mo
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./core-concepts/workspaces) documentation.
+`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./guides/workspaces) documentation.
 
 You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
@@ -280,3 +280,13 @@ Run the same build again. If things are working properly, `turbo` should not exe
 ```
 npx turbo login --sso-team=<team-slug>
 ```
+
+## Next Steps
+
+You're now up and running with Turborepo, but there are still a few things to do:
+
+- [Understand how Turborepo caching works](./core-concepts/caching)
+- [Correctly handle environment variables](./core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+- [Learn to orchestrate task running with pipelines](./core-concepts/pipelines)
+- [Efficiently filter package tasks](./core-concepts/filtering)
+- [Configure Turborepo with your CI provider](./ci)
