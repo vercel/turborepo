@@ -76,39 +76,75 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot fs.AbsolutePath) {
 // New creates a new cache
 func New(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	c, err := newSyncCache(opts, config, recorder, onCacheRemoved)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
 	}
 	if opts.Workers > 0 {
-		return newAsyncCache(c, opts), nil
+		return newAsyncCache(c, opts), err
 	}
-	return c, nil
+	return c, err
 }
 
+// newSyncCache can return an error with a usable noopCache.
 func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	mplex := &cacheMultiplexer{
-		onCacheRemoved: onCacheRemoved,
-		opts:           opts,
-	}
-	// if config.Cache.Dir != "" && !remoteOnly {
-	if !opts.SkipFilesystem {
-		fsCache, err := newFsCache(opts, recorder)
+	// Check to see if the user has turned off particular cache implementations.
+	useFsCache := !opts.SkipFilesystem
+	useHTTPCache := !opts.SkipRemote
+
+	// Since the above two flags are not mutually exclusive it is possible to configure
+	// yourself out of having a cache. We should tell you about it but we shouldn't fail
+	// your build for that reason.
+	//
+	// Further, since the httpCache can be removed at runtime, we need to insert a noopCache
+	// as a backup if you are configured to have *just* an httpCache.
+	//
+	// This is reduced from (!useFsCache && !useHTTPCache) || (!useFsCache & useHTTPCache)
+	useNoopCache := !useFsCache
+
+	// Build up an array of cache implementations, we can only ever have 1 or 2.
+	cacheImplementations := make([]Cache, 0, 2)
+
+	if useFsCache {
+		implementation, err := newFsCache(opts, recorder)
 		if err != nil {
 			return nil, err
 		}
-		mplex.caches = append(mplex.caches, fsCache)
+		cacheImplementations = append(cacheImplementations, implementation)
 	}
-	//if config.IsLoggedIn() {
-	if !opts.SkipRemote {
+
+	if useHTTPCache {
 		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
-		mplex.caches = append(mplex.caches, newHTTPCache(opts, config, recorder))
+		implementation := newHTTPCache(opts, config, recorder)
+		cacheImplementations = append(cacheImplementations, implementation)
 	}
-	if len(mplex.caches) == 0 {
-		return nil, ErrNoCachesEnabled
-	} else if len(mplex.caches) == 1 {
-		return mplex.caches[0], nil // Skip the extra layer of indirection
+
+	if useNoopCache {
+		implementation := newNoopCache()
+		cacheImplementations = append(cacheImplementations, implementation)
 	}
-	return mplex, nil
+
+	// Precisely two cache implementations:
+	// fsCache and httpCache OR httpCache and noopCache
+	useMultiplexer := len(cacheImplementations) > 1
+	if useMultiplexer {
+		// We have early-returned any possible errors for this scenario.
+		return &cacheMultiplexer{
+			onCacheRemoved: onCacheRemoved,
+			opts:           opts,
+			caches:         cacheImplementations,
+		}, nil
+	}
+
+	// Precisely one cache implementation: fsCache OR noopCache
+	implementation := cacheImplementations[0]
+	_, isNoopCache := implementation.(*noopCache)
+
+	// We want to let the user know something is wonky, but we don't want
+	// to trigger their build to fail.
+	if isNoopCache {
+		return implementation, ErrNoCachesEnabled
+	}
+	return implementation, nil
 }
 
 // A cacheMultiplexer multiplexes several caches into one.

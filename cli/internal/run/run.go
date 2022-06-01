@@ -562,9 +562,10 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	})
 	if err != nil {
 		if errors.Is(err, cache.ErrNoCachesEnabled) {
-			return errors.New("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching")
+			r.logWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+		} else {
+			return errors.Wrap(err, "failed to set up caching")
 		}
-		return errors.Wrap(err, "failed to set up caching")
 	}
 	defer turboCache.Shutdown()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
