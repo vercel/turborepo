@@ -1,9 +1,14 @@
 package cache
 
 import (
+	"os"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/analytics"
+	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -144,4 +149,127 @@ func TestFetchCachingDisabled(t *testing.T) {
 		}
 	}
 	mplex.mu.RUnlock()
+}
+
+type nullRecorder struct{}
+
+func (nullRecorder) LogEvent(analytics.EventPayload) {}
+
+func TestNew(t *testing.T) {
+	// Test will bomb if this fails, no need to specially handle the error
+	cwd, _ := os.Getwd()
+
+	type args struct {
+		opts           Opts
+		config         *config.Config
+		recorder       analytics.Recorder
+		onCacheRemoved OnCacheRemoved
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    Cache
+		wantErr bool
+	}{
+		{
+			name: "With no caches configured, new returns a noopCache and an error",
+			args: args{
+				opts: Opts{
+					SkipFilesystem: true,
+					SkipRemote:     true,
+				},
+				config:         &config.Config{},
+				recorder:       &nullRecorder{},
+				onCacheRemoved: func(Cache, error) {},
+			},
+			want:    &noopCache{},
+			wantErr: true,
+		},
+		{
+			name: "With just httpCache configured, new returns an httpCache and a noopCache",
+			args: args{
+				opts: Opts{
+					SkipFilesystem: true,
+					SkipRemote:     false,
+				},
+				config: &config.Config{
+					TurboJSON: &fs.TurboJSON{
+						RemoteCacheOptions: fs.RemoteCacheOptions{
+							Signature: true,
+						},
+					},
+				},
+				recorder:       &nullRecorder{},
+				onCacheRemoved: func(Cache, error) {},
+			},
+			want: &cacheMultiplexer{
+				caches: []Cache{&httpCache{}, &noopCache{}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "With just fsCache configured, new returns only an fsCache",
+			args: args{
+				opts: Opts{
+					Dir:            fs.AbsolutePath(cwd),
+					SkipFilesystem: false,
+					SkipRemote:     true,
+				},
+				config:         &config.Config{},
+				recorder:       &nullRecorder{},
+				onCacheRemoved: func(Cache, error) {},
+			},
+			want:    &fsCache{},
+			wantErr: false,
+		},
+		{
+			name: "With both configured, new returns an fsCache and httpCache",
+			args: args{
+				opts: Opts{
+					Dir:            fs.AbsolutePath(cwd),
+					SkipFilesystem: false,
+					SkipRemote:     false,
+				},
+				config: &config.Config{
+					TurboJSON: &fs.TurboJSON{
+						RemoteCacheOptions: fs.RemoteCacheOptions{
+							Signature: true,
+						},
+					},
+				},
+				recorder:       &nullRecorder{},
+				onCacheRemoved: func(Cache, error) {},
+			},
+			want: &cacheMultiplexer{
+				caches: []Cache{&fsCache{}, &httpCache{}},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := New(tt.args.opts, tt.args.config, tt.args.recorder, tt.args.onCacheRemoved)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			switch multiplexer := got.(type) {
+			case *cacheMultiplexer:
+				want := tt.want.(*cacheMultiplexer)
+				for i := range multiplexer.caches {
+					if reflect.TypeOf(multiplexer.caches[i]) != reflect.TypeOf(want.caches[i]) {
+						t.Errorf("New() = %v, want %v", reflect.TypeOf(multiplexer.caches[i]), reflect.TypeOf(want.caches[i]))
+					}
+				}
+			case *fsCache:
+				if reflect.TypeOf(got) != reflect.TypeOf(tt.want) {
+					t.Errorf("New() = %v, want %v", reflect.TypeOf(got), reflect.TypeOf(tt.want))
+				}
+			case *noopCache:
+				if reflect.TypeOf(got) != reflect.TypeOf(tt.want) {
+					t.Errorf("New() = %v, want %v", reflect.TypeOf(got), reflect.TypeOf(tt.want))
+				}
+			}
+		})
+	}
 }
