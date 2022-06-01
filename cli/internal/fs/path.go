@@ -120,6 +120,11 @@ func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())
 }
 
+// Base implements filepath.Base for an absolute path
+func (ap AbsolutePath) Base() string {
+	return filepath.Base(ap.asString())
+}
+
 // GetVolumeRoot returns the root directory given an absolute path.
 func GetVolumeRoot(absolutePath string) string {
 	return filepath.VolumeName(absolutePath) + string(os.PathSeparator)

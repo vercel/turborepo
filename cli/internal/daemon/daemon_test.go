@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
 	"google.golang.org/grpc"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/fs"
@@ -96,7 +95,6 @@ outer:
 func TestDaemonLifecycle(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	tui := ui.Default()
 	repoRootRaw := fs.NewDir(t, "daemon-test")
 	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
 
@@ -104,7 +102,6 @@ func TestDaemonLifecycle(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	d := &daemon{
-		ui:         tui,
 		logger:     logger,
 		repoRoot:   repoRoot,
 		timeout:    10 * time.Second,
@@ -140,7 +137,6 @@ func TestDaemonLifecycle(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	tui := ui.Default()
 	repoRootRaw := fs.NewDir(t, "daemon-test")
 	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
 
@@ -148,7 +144,6 @@ func TestTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	d := &daemon{
-		ui:         tui,
 		logger:     logger,
 		repoRoot:   repoRoot,
 		timeout:    5 * time.Millisecond,

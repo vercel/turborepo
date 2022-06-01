@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/fatih/color"
+	"github.com/adrg/xdg"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/nightlyone/lockfile"
@@ -19,7 +21,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
-	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"google.golang.org/grpc"
 )
@@ -32,7 +33,7 @@ type Command struct {
 
 // Run runs the daemon command
 func (c *Command) Run(args []string) int {
-	cmd := getCmd(c.Config, c.UI)
+	cmd := getCmd(c.Config)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -43,18 +44,17 @@ func (c *Command) Run(args []string) int {
 
 // Help returns information about the `daemon` command
 func (c *Command) Help() string {
-	cmd := getCmd(c.Config, c.UI)
+	cmd := getCmd(c.Config)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Synopsis of daemon command
 func (c *Command) Synopsis() string {
-	cmd := getCmd(c.Config, c.UI)
+	cmd := getCmd(c.Config)
 	return cmd.Short
 }
 
 type daemon struct {
-	ui         cli.Ui
 	logger     hclog.Logger
 	repoRoot   fs.AbsolutePath
 	timeout    time.Duration
@@ -64,14 +64,24 @@ type daemon struct {
 	cancel     context.CancelFunc
 }
 
-func getDaemonFileRoot(repoRoot fs.AbsolutePath) fs.AbsolutePath {
-	tempDir := fs.GetTempDir("turbod")
-
+func getRepoHash(repoRoot fs.AbsolutePath) string {
 	pathHash := sha256.Sum256([]byte(repoRoot.ToString()))
 	// We grab a substring of the hash because there is a 108-character limit on the length
 	// of a filepath for unix domain socket.
-	hexHash := hex.EncodeToString(pathHash[:])[:16]
+	return hex.EncodeToString(pathHash[:])[:16]
+}
+
+func getDaemonFileRoot(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+	tempDir := fs.GetTempDir("turbod")
+	hexHash := getRepoHash(repoRoot)
 	return tempDir.Join(hexHash)
+}
+
+func getLogFilePath(repoRoot fs.AbsolutePath) string {
+	hexHash := getRepoHash(repoRoot)
+	base := repoRoot.Base()
+	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
+	return filepath.Join("logs", logFilename)
 }
 
 func getUnixSocket(repoRoot fs.AbsolutePath) fs.AbsolutePath {
@@ -87,10 +97,13 @@ func getPidFile(repoRoot fs.AbsolutePath) fs.AbsolutePath {
 // logError logs an error and outputs it to the UI.
 func (d *daemon) logError(err error) {
 	d.logger.Error("error", err)
-	d.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 
-func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
+// we're only appending, and we're creating the file if it doesn't exist.
+// we do not need to read the log file.
+var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
+
+func getCmd(config *config.Config) *cobra.Command {
 	var idleTimeout time.Duration
 	cmd := &cobra.Command{
 		Use:           "turbo daemon",
@@ -98,15 +111,23 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithCancel(context.Background())
+			logFilePath, err := xdg.DataFile(getLogFilePath(config.Cwd))
+			if err != nil {
+				return err
+			}
+			logFile, err := os.OpenFile(logFilePath, _logFileFlags, 0644)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = logFile.Close() }()
 			logger := hclog.New(&hclog.LoggerOptions{
-				Output: os.Stdout,
+				Output: io.MultiWriter(logFile, os.Stdout),
 				Level:  hclog.Debug,
-				Color:  hclog.AutoColor,
+				Color:  hclog.ColorOff,
 				Name:   "turbod",
 			})
+			ctx, cancel := context.WithCancel(context.Background())
 			d := &daemon{
-				ui:         ui,
 				logger:     logger,
 				repoRoot:   config.Cwd,
 				timeout:    idleTimeout,
@@ -155,7 +176,6 @@ type rpcServer interface {
 
 func (d *daemon) runTurboServer(rpcServer rpcServer) error {
 	defer d.cancel()
-
 	pidPath := getPidFile(d.repoRoot)
 	if err := pidPath.EnsureDir(); err != nil {
 		return err
