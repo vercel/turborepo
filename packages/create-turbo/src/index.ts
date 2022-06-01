@@ -93,6 +93,7 @@ async function run() {
           ])
         ).dir
   );
+  const projectName = path.basename(projectDir);
 
   const isYarnInstalled = shouldUseYarn();
   const isPnpmInstalled = shouldUsePnpm();
@@ -175,6 +176,7 @@ async function run() {
   appPkg.packageManager = `${answers.packageManager}@${getPackageManagerVersion(
     answers.packageManager
   )}`;
+  appPkg.name = projectName;
 
   // write package.json
   await fse.writeFile(
