@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	sync "sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
@@ -27,6 +28,8 @@ type Server struct {
 	globWatcher  *globwatcher.GlobWatcher
 	turboVersion string
 	closer       *closer
+	started      time.Time
+	logFilePath  string
 }
 
 type closer struct {
@@ -43,7 +46,7 @@ func (c *closer) close() {
 }
 
 // New returns a new instance of Server
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string) (*Server, error) {
+func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath string) (*Server, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -54,6 +57,8 @@ func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string) (*S
 		watcher:      fileWatcher,
 		globWatcher:  globWatcher,
 		turboVersion: turboVersion,
+		started:      time.Now(),
+		logFilePath:  logFilePath,
 	}
 	server.watcher.AddClient(globWatcher)
 	if err := server.watcher.Start(); err != nil {
@@ -113,4 +118,15 @@ func (s *Server) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownR
 	}
 	err := status.Error(codes.NotFound, "shutdown mechanism not found")
 	return nil, err
+}
+
+// Status implements the Status rpc from turbo.proto
+func (s *Server) Status(ctx context.Context, req *StatusRequest) (*StatusResponse, error) {
+	uptime := uint64(time.Since(s.started).Milliseconds())
+	return &StatusResponse{
+		DaemonStatus: &DaemonStatus{
+			LogFile:    s.logFilePath,
+			UptimeMsec: uptime,
+		},
+	}, nil
 }

@@ -25,7 +25,8 @@ var (
 	errVersionMismatch   = errors.New("daemon version does not match client version")
 	errConnectionFailure = errors.New("could not connect to daemon")
 	// ErrTooManyAttempts is returned when the client fails to connect too many times
-	ErrTooManyAttempts = errors.New("reached maximum number of attempts contacting daemon")
+	ErrTooManyAttempts  = errors.New("reached maximum number of attempts contacting daemon")
+	ErrDaemonNotRunning = errors.New("the daemon is not running")
 )
 
 // Opts is the set of configurable options for the client connection,
@@ -33,6 +34,7 @@ var (
 // it needs to be started.
 type Opts struct {
 	ServerTimeout time.Duration
+	DontStart     bool // if true, don't attempt to start the daemon
 }
 
 // Client represents a connection to the daemon process
@@ -58,11 +60,34 @@ type Connector struct {
 	TurboVersion string
 }
 
+type ConnectionError struct {
+	SockPath fs.AbsolutePath
+	PidPath  fs.AbsolutePath
+	cause    error
+}
+
+func (ce *ConnectionError) Error() string {
+	return fmt.Sprintf(`connection to turbo daemon process failed. Please ensure the following:
+	- the unix domain socket at %v has been removed
+	- the process identified by the pid at %v is not running, and remove %v
+	You can also run without the daemon process by passing --no-daemon`, ce.SockPath, ce.PidPath, ce.PidPath)
+}
+
+// Cause allows a connection error to work with errors.As
+func (ce *ConnectionError) Cause() error {
+	return ce.cause
+}
+
 func (c *Connector) wrapConnectionError(err error) error {
-	return errors.Wrapf(err, `connection to turbo daemon process failed. Please ensure the following:
- - the unix domain socket at %v has been removed
- - the process identified by the pid at %v is not running, and remove %v
- You can also run without the daemon process by passing --no-daemon`, c.SockPath, c.PidPath, c.PidPath)
+	/*return errors.Wrapf(err, `connection to turbo daemon process failed. Please ensure the following:
+	- the unix domain socket at %v has been removed
+	- the process identified by the pid at %v is not running, and remove %v
+	You can also run without the daemon process by passing --no-daemon`, c.SockPath, c.PidPath, c.PidPath)*/
+	return &ConnectionError{
+		SockPath: c.SockPath,
+		PidPath:  c.PidPath,
+		cause:    err,
+	}
 }
 
 func (c *Connector) addr() string {
@@ -179,6 +204,9 @@ func (c *Connector) connectInternal() (*clientAndConn, error) {
 			// start a daemon here.
 			return nil, errors.Wrap(err, "pid file appears stale. If no daemon is running, please remove it")
 		} else if os.IsNotExist(err) {
+			if c.Opts.DontStart {
+				return nil, ErrDaemonNotRunning
+			}
 			// The pid file doesn't exist. Start a daemon
 			pid, err := c.startDaemon()
 			if err != nil {

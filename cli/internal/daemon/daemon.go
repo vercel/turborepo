@@ -33,7 +33,7 @@ type Command struct {
 
 // Run runs the daemon command
 func (c *Command) Run(args []string) int {
-	cmd := getCmd(c.Config)
+	cmd := getCmd(c.Config, c.UI)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -44,13 +44,13 @@ func (c *Command) Run(args []string) int {
 
 // Help returns information about the `daemon` command
 func (c *Command) Help() string {
-	cmd := getCmd(c.Config)
+	cmd := getCmd(c.Config, c.UI)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Synopsis of daemon command
 func (c *Command) Synopsis() string {
-	cmd := getCmd(c.Config)
+	cmd := getCmd(c.Config, c.UI)
 	return cmd.Short
 }
 
@@ -103,7 +103,7 @@ func (d *daemon) logError(err error) {
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-func getCmd(config *config.Config) *cobra.Command {
+func getCmd(config *config.Config, output cli.Ui) *cobra.Command {
 	var idleTimeout time.Duration
 	cmd := &cobra.Command{
 		Use:           "turbo daemon",
@@ -136,7 +136,7 @@ func getCmd(config *config.Config) *cobra.Command {
 				ctx:        ctx,
 				cancel:     cancel,
 			}
-			turboServer, err := server.New(d.logger.Named("rpc server"), config.Cwd, config.TurboVersion)
+			turboServer, err := server.New(d.logger.Named("rpc server"), config.Cwd, config.TurboVersion, logFilePath)
 			if err != nil {
 				d.logError(err)
 				return err
@@ -151,6 +151,7 @@ func getCmd(config *config.Config) *cobra.Command {
 		},
 	}
 	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 2*time.Hour, "Set the idle timeout for turbod")
+	addStatusCmd(cmd, config, output)
 	return cmd
 }
 
@@ -283,7 +284,7 @@ func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logge
 	}
 	client, err := c.Connect()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to connect to turbo daemon. If necessary, run with --no-daemon")
+		return nil, err
 	}
 	return client, nil
 }

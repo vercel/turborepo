@@ -7,6 +7,7 @@ package server;
 service Turbo {
   rpc Hello (HelloRequest) returns (HelloResponse);
   rpc Shutdown (ShutdownRequest) returns (ShutdownResponse);
+  rpc Status (StatusRequest) returns (StatusResponse);
   // Implement cache watching
   rpc NotifyOutputsWritten (NotifyOutputsWrittenRequest) returns (NotifyOutputsWrittenResponse);
   rpc GetChangedOutputs (GetChangedOutputsRequest) returns (GetChangedOutputsResponse);
@@ -23,6 +24,13 @@ message ShutdownRequest {}
 
 message ShutdownResponse {}
 
+message StatusRequest {}
+
+
+message StatusResponse {
+  DaemonStatus daemonStatus = 1;
+}
+
 message NotifyOutputsWrittenRequest {
   repeated string output_globs = 1;
   string hash = 2;
@@ -37,4 +45,9 @@ message GetChangedOutputsRequest {
 
 message GetChangedOutputsResponse {
   repeated string changed_output_globs = 1;
+}
+
+message DaemonStatus {
+  string log_file = 1;
+  uint64 uptime_msec = 2;
 }

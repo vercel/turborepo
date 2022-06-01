@@ -42,3 +42,12 @@ func (d *DaemonClient) NotifyOutputsWritten(hash string, repoRelativeOutputGlobs
 	})
 	return err
 }
+
+// Status returns the DaemonStatus from the daemon
+func (d *DaemonClient) Status() (*server.DaemonStatus, error) {
+	resp, err := d.client.Status(d.ctx, &server.StatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.DaemonStatus, nil
+}
