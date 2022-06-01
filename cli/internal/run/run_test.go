@@ -2,13 +2,11 @@ package run
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
-	"github.com/mitchellh/cli"
 	"github.com/pyr-sh/dag"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -26,9 +24,10 @@ func TestParseConfig(t *testing.T) {
 	}
 	defaultCacheFolder := defaultCwd.Join(filepath.FromSlash("node_modules/.cache/turbo"))
 	cases := []struct {
-		Name     string
-		Args     []string
-		Expected *Opts
+		Name          string
+		Args          []string
+		Expected      *Opts
+		ExpectedTasks []string
 	}{
 		{
 			"string flags",
@@ -44,6 +43,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"scope",
@@ -63,6 +63,7 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 			},
+			[]string{"foo"},
 		},
 		{
 			"concurrency",
@@ -78,6 +79,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"graph",
@@ -94,6 +96,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"passThroughArgs",
@@ -111,6 +114,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"force",
@@ -128,6 +132,7 @@ func TestParseConfig(t *testing.T) {
 				},
 				scopeOpts: scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"remote-only",
@@ -144,6 +149,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"no-cache",
@@ -161,6 +167,7 @@ func TestParseConfig(t *testing.T) {
 				},
 				scopeOpts: scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"Empty passThroughArgs",
@@ -178,6 +185,7 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
 		{
 			"can specify filter patterns",
@@ -195,6 +203,7 @@ func TestParseConfig(t *testing.T) {
 					FilterPatterns: []string{"bar", "...[main]"},
 				},
 			},
+			[]string{"foo"},
 		},
 		{
 			"continue on errors",
@@ -211,13 +220,42 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
+			[]string{"foo"},
 		},
-	}
-
-	ui := &cli.BasicUi{
-		Reader:      os.Stdin,
-		Writer:      os.Stdout,
-		ErrorWriter: os.Stderr,
+		{
+			"relative cache dir",
+			[]string{"foo", "--continue", "--cache-dir=bar"},
+			&Opts{
+				runOpts: runOpts{
+					continueOnError: true,
+					concurrency:     10,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCwd.Join("bar"),
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
+			},
+			[]string{"foo"},
+		},
+		{
+			"absolute cache dir",
+			[]string{"foo", "--continue", "--cache-dir=" + defaultCwd.Join("bar").ToString()},
+			&Opts{
+				runOpts: runOpts{
+					continueOnError: true,
+					concurrency:     10,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCwd.Join("bar"),
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
+			},
+			[]string{"foo"},
+		},
 	}
 
 	cf := &config.Config{
@@ -230,12 +268,17 @@ func TestParseConfig(t *testing.T) {
 	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-
-			actual, err := parseRunArgs(tc.Args, cf, ui)
+			flags := pflag.NewFlagSet("test-flags", pflag.ExitOnError)
+			opts := optsFromFlags(flags, cf)
+			err := flags.Parse(tc.Args)
+			remainingArgs := flags.Args()
+			tasks, passThroughArgs := parseTasksAndPassthroughArgs(remainingArgs, flags)
+			opts.runOpts.passThroughArgs = passThroughArgs
 			if err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			}
-			assert.EqualValues(t, tc.Expected, actual)
+			assert.EqualValues(t, tc.Expected, opts)
+			assert.EqualValues(t, tc.ExpectedTasks, tasks)
 		})
 	}
 }
@@ -258,12 +301,6 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		scopeOpts:    scope.Opts{},
 	}
 
-	ui := &cli.BasicUi{
-		Reader:      os.Stdin,
-		Writer:      os.Stdout,
-		ErrorWriter: os.Stderr,
-	}
-
 	t.Run("accepts cwd argument", func(t *testing.T) {
 		cf := &config.Config{
 			Cwd:    cwd,
@@ -273,97 +310,20 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 				Workers: 10,
 			},
 		}
+		flags := pflag.NewFlagSet("test-flags", pflag.ExitOnError)
+		opts := optsFromFlags(flags, cf)
+		err := flags.Parse([]string{"foo", "--cwd=zop"})
 		// Note that the Run parsing actually ignores `--cwd=` arg since
 		// the `--cwd=` is parsed when setting up the global Config. This value is
 		// passed directly as an argument to the parser.
 		// We still need to ensure run accepts cwd flag and doesn't error.
-		actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, cf, ui)
+		//actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, cf, ui)
 		if err != nil {
 			t.Fatalf("invalid parse: %#v", err)
 		}
-		assert.EqualValues(t, expected, actual)
+		assert.EqualValues(t, expected, opts)
 	})
 
-}
-
-func TestGetTargetsFromArguments(t *testing.T) {
-	type args struct {
-		arguments []string
-		pipeline  fs.Pipeline
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []string
-		wantErr bool
-	}{
-		{
-			name: "handles one defined target",
-			args: args{
-				arguments: []string{"build"},
-				pipeline: map[string]fs.TaskDefinition{
-					"build":      {},
-					"test":       {},
-					"thing#test": {},
-				},
-			},
-			want:    []string{"build"},
-			wantErr: false,
-		},
-		{
-			name: "handles multiple targets and ignores flags",
-			args: args{
-				arguments: []string{"build", "test", "--foo", "--bar"},
-				pipeline: map[string]fs.TaskDefinition{
-					"build":      {},
-					"test":       {},
-					"thing#test": {},
-				},
-			},
-			want:    []string{"build", "test"},
-			wantErr: false,
-		},
-		{
-			name: "handles pass through arguments after -- ",
-			args: args{
-				arguments: []string{"build", "test", "--", "--foo", "build", "--cache-dir"},
-				pipeline: map[string]fs.TaskDefinition{
-					"build":      {},
-					"test":       {},
-					"thing#test": {},
-				},
-			},
-			want:    []string{"build", "test"},
-			wantErr: false,
-		},
-		{
-			name: "handles unknown pipeline targets ",
-			args: args{
-				arguments: []string{"foo", "test", "--", "--foo", "build", "--cache-dir"},
-				pipeline: map[string]fs.TaskDefinition{
-					"build":      {},
-					"test":       {},
-					"thing#test": {},
-				},
-			},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTargetsFromArguments(tt.args.arguments, tt.args.pipeline)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetTargetsFromArguments() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetTargetsFromArguments() = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }
 
 func Test_dontSquashTasks(t *testing.T) {

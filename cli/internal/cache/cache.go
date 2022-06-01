@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -60,6 +61,16 @@ type Opts struct {
 	SkipRemote     bool
 	SkipFilesystem bool
 	Workers        int
+}
+
+var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
+allow reading and caching artifacts using the remote cache.`
+
+// AddFlags adds cache-related flags to the given FlagSet
+func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot fs.AbsolutePath) {
+	// skipping remote caching not currently a flag
+	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
+	fs.AbsolutePathVar(flags, &opts.Dir, "cache-dir", repoRoot, "Specify local filesystem cache directory.", "./node_modules/.cache/turbo")
 }
 
 // New creates a new cache
