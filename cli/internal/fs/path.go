@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+	"github.com/spf13/pflag"
 )
 
 // AbsolutePath represents a platform-dependent absolute path on the filesystem,
@@ -99,6 +100,11 @@ func (ap AbsolutePath) Create() (*os.File, error) {
 	return os.Create(ap.asString())
 }
 
+// Ext implements filepath.Ext for an absolute path
+func (ap AbsolutePath) Ext() string {
+	return filepath.Ext(ap.asString())
+}
+
 // ToString returns the string representation of this absolute path. Used for
 // interfacing with APIs that require a string
 func (ap AbsolutePath) ToString() string {
@@ -142,4 +148,40 @@ func ReadFile(fs afero.Fs, filename AbsolutePath) ([]byte, error) {
 // RemoveFile removes the file at the given path
 func RemoveFile(fs afero.Fs, filename AbsolutePath) error {
 	return fs.Remove(filename.asString())
+}
+
+type pathValue struct {
+	base     AbsolutePath
+	current  *AbsolutePath
+	defValue string
+}
+
+func (pv *pathValue) String() string {
+	if *pv.current == "" {
+		return ResolveUnknownPath(pv.base, pv.defValue).ToString()
+	}
+	return pv.current.ToString()
+}
+
+func (pv *pathValue) Set(value string) error {
+	*pv.current = ResolveUnknownPath(pv.base, value)
+	return nil
+}
+
+func (pv *pathValue) Type() string {
+	return "path"
+}
+
+var _ pflag.Value = &pathValue{}
+
+// AbsolutePathVar adds a flag interpreted as an absolute path to the given FlagSet.
+// It currently requires a root because relative paths are interpreted relative to the
+// given root.
+func AbsolutePathVar(flags *pflag.FlagSet, target *AbsolutePath, name string, root AbsolutePath, usage string, defValue string) {
+	value := &pathValue{
+		base:     root,
+		current:  target,
+		defValue: defValue,
+	}
+	flags.Var(value, name, usage)
 }
