@@ -23,7 +23,7 @@ type fsCache struct {
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(opts Opts, recorder analytics.Recorder) (Cache, error) {
+func newFsCache(opts Opts, recorder analytics.Recorder) (*fsCache, error) {
 	if err := opts.Dir.MkdirAll(); err != nil {
 		return nil, err
 	}
