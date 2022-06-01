@@ -36,6 +36,7 @@ type link struct {
 	cwd                 fs.AbsolutePath
 	modifyGitIgnore     bool
 	apiURL              string
+	loginURL            string
 	apiClient           linkAPIClient
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
@@ -66,6 +67,7 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 				cwd:                 config.Cwd,
 				modifyGitIgnore:     !dontModifyGitIgnore,
 				apiURL:              config.ApiUrl,
+				loginURL:            config.LoginUrl,
 				apiClient:           config.ApiClient,
 				promptSetup:         promptSetup,
 				promptTeam:          promptTeam,
@@ -226,6 +228,7 @@ func (l *link) run() error {
 	err = config.WriteRepoConfigFile(l.fsys, l.cwd, &config.TurborepoConfig{
 		TeamId: teamID,
 		ApiUrl: l.apiURL,
+		LoginUrl: l.loginURL,
 	})
 	if err != nil {
 		return fmt.Errorf("could not link current directory to team/user.\n%w", err)
