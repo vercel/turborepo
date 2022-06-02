@@ -10,13 +10,14 @@ GO_FLAGS += -trimpath
 
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 
-turbo: protos $(SRC_FILES) go.mod
+turbo: compile-protos $(SRC_FILES) go.mod
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
-protos: internal/server/turbo.proto
+compile-protos: internal/server/turbo.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     internal/server/turbo.proto
+	touch compile-protos
 
 # These tests are for development
 test: test-go vet-go
