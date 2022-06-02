@@ -460,6 +460,11 @@ var _persistentFlags = []string{
 }
 
 func noopPersistentOptsDuringMigration(flags *pflag.FlagSet) {
+	_ = flags.CountP("verbosity", "v", "verbosity")
+	if err := flags.MarkHidden("verbosity"); err != nil {
+		// fail fast if we've misconfigured our flags
+		panic(err)
+	}
 	for _, flag := range _persistentFlags {
 		_ = flags.String(flag, "", "")
 		if err := flags.MarkHidden(flag); err != nil {
