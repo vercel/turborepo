@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
-	"google.golang.org/grpc"
+	"github.com/vercel/turborepo/cli/internal/server"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/fs"
 )
@@ -75,7 +75,7 @@ func TestDaemonDebounce(t *testing.T) {
 
 type testRPCServer struct{}
 
-func (ts *testRPCServer) Register(grpcServer *grpc.Server) {}
+func (ts *testRPCServer) Register(grpcServer server.GRPCServer) {}
 
 func waitForFile(t *testing.T, filename turbofs.AbsolutePath, timeout time.Duration) {
 	deadline := time.After(timeout)

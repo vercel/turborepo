@@ -27,13 +27,23 @@ type Server struct {
 	watcher      *filewatcher.FileWatcher
 	globWatcher  *globwatcher.GlobWatcher
 	turboVersion string
-	closer       *closer
 	started      time.Time
 	logFilePath  string
+	repoRoot     fs.AbsolutePath
+	closerMu     sync.Mutex
+	closer       *closer
+}
+
+// GRPCServer is the interface that the turbo server needs to the underlying
+// GRPC server. This lets the turbo server register itself, as well as provides
+// a hook for shutting down the server.
+type GRPCServer interface {
+	grpc.ServiceRegistrar
+	GracefulStop()
 }
 
 type closer struct {
-	grpcServer *grpc.Server
+	grpcServer GRPCServer
 	once       sync.Once
 }
 
@@ -59,13 +69,39 @@ func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, log
 		turboVersion: turboVersion,
 		started:      time.Now(),
 		logFilePath:  logFilePath,
+		repoRoot:     repoRoot,
 	}
 	server.watcher.AddClient(globWatcher)
+	server.watcher.AddClient(server)
 	if err := server.watcher.Start(); err != nil {
 		return nil, errors.Wrapf(err, "watching %v", repoRoot)
 	}
 	return server, nil
 }
+
+func (s *Server) tryClose() bool {
+	s.closerMu.Lock()
+	defer s.closerMu.Unlock()
+	if s.closer != nil {
+		s.closer.close()
+		return true
+	}
+	return false
+}
+
+// OnFileWatchEvent implements filewatcher.FileWatchClient.OnFileWatchEvent
+// In the event that the root of the monorepo is deleted, shut down the server.
+func (s *Server) OnFileWatchEvent(ev fsnotify.Event) {
+	if ev.Op&fsnotify.Remove != 0 && ev.Name == s.repoRoot.ToString() {
+		_ = s.tryClose()
+	}
+}
+
+// OnFileWatchError implements filewatcher.FileWatchClient.OnFileWatchError
+func (s *Server) OnFileWatchError(err error) {}
+
+// OnFileWatchClosed implements filewatcher.FileWatchClient.OnFileWatchClosed
+func (s *Server) OnFileWatchClosed() {}
 
 // Close is used for shutting down this copy of the server
 func (s *Server) Close() error {
@@ -73,10 +109,12 @@ func (s *Server) Close() error {
 }
 
 // Register registers this server to respond to GRPC requests
-func (s *Server) Register(grpcServer *grpc.Server) {
+func (s *Server) Register(grpcServer GRPCServer) {
+	s.closerMu.Lock()
 	s.closer = &closer{
 		grpcServer: grpcServer,
 	}
+	s.closerMu.Unlock()
 	RegisterTurboServer(grpcServer, s)
 }
 
@@ -112,8 +150,7 @@ func (s *Server) Hello(ctx context.Context, req *HelloRequest) (*HelloResponse, 
 
 // Shutdown implements the Shutdown rpc from turbo.proto
 func (s *Server) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownResponse, error) {
-	if s.closer != nil {
-		s.closer.close()
+	if s.tryClose() {
 		return &ShutdownResponse{}, nil
 	}
 	err := status.Error(codes.NotFound, "shutdown mechanism not found")

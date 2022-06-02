@@ -172,7 +172,7 @@ func (d *daemon) debounceServers(pidPath fs.AbsolutePath) (lockfile.Lockfile, er
 }
 
 type rpcServer interface {
-	Register(grpcServer *grpc.Server)
+	Register(grpcServer server.GRPCServer)
 }
 
 func (d *daemon) runTurboServer(rpcServer rpcServer) error {
