@@ -206,14 +206,16 @@ func (r *run) run(targets []string) error {
 	if err != nil {
 		return err
 	}
-	turbodClient, err := daemon.GetClient(r.ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
-	if err != nil {
-		r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
-	} else {
-		defer func() { _ = turbodClient.Close() }()
-		r.config.Logger.Debug("running in daemon mode")
-		daemonClient := daemonclient.New(r.ctx, turbodClient)
-		r.opts.runcacheOpts.OutputWatcher = daemonClient
+	if !r.opts.runOpts.noDaemon {
+		turbodClient, err := daemon.GetClient(r.ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
+		if err != nil {
+			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+		} else {
+			defer func() { _ = turbodClient.Close() }()
+			r.config.Logger.Debug("running in daemon mode")
+			daemonClient := daemonclient.New(r.ctx, turbodClient)
+			r.opts.runcacheOpts.OutputWatcher = daemonClient
+		}
 	}
 
 	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
@@ -427,6 +429,7 @@ type runOpts struct {
 	only       bool
 	dryRun     bool
 	dryRunJSON bool
+	noDaemon   bool
 }
 
 var (
@@ -447,6 +450,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.StringVar(&opts.profile, "profile", "", _profileHelp)
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
 	flags.BoolVar(&opts.only, "only", false, "Run only the specified tasks, not their dependencies")
+	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
 		panic(err)
