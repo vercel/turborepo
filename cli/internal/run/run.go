@@ -441,7 +441,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 		Name:        "dry-run",
 		Usage:       _dryRunHelp,
 		DefValue:    "",
-		NoOptDefVal: "text|json",
+		NoOptDefVal: _dryRunNoValue,
 		Value:       &dryRunValue{opts: opts},
 	})
 }
@@ -469,6 +469,16 @@ func noopPersistentOptsDuringMigration(flags *pflag.FlagSet) {
 	}
 }
 
+const (
+	_dryRunText      = "dry run"
+	_dryRunJSONText  = "json"
+	_dryRunJSONValue = "json"
+	_dryRunNoValue   = "text|json"
+	_dryRunTextValue = "text"
+)
+
+// dryRunValue implements a flag that can be treated as a boolean (--dry-run)
+// or a string (--dry-run=json).
 type dryRunValue struct {
 	opts *runOpts
 }
@@ -477,18 +487,23 @@ var _ pflag.Value = &dryRunValue{}
 
 func (d *dryRunValue) String() string {
 	if d.opts.dryRunJSON {
-		return "json"
+		return _dryRunJSONText
 	} else if d.opts.dryRun {
-		return "dry run"
+		return _dryRunText
 	}
 	return ""
 }
 
 func (d *dryRunValue) Set(value string) error {
-	if value == "json" {
+	if value == _dryRunJSONValue {
 		d.opts.dryRun = true
 		d.opts.dryRunJSON = true
-	} else if value == "text|json" {
+	} else if value == _dryRunNoValue {
+		// this case matches the NoOptDefValue, which is used when the flag
+		// is passed, but does not have a value (i.e. boolean flag)
+		d.opts.dryRun = true
+	} else if value == _dryRunTextValue {
+		// "text" is equivalent to just setting the boolean flag
 		d.opts.dryRun = true
 	} else {
 		return fmt.Errorf("invalid dry-run mode: %v", value)
@@ -496,6 +511,8 @@ func (d *dryRunValue) Set(value string) error {
 	return nil
 }
 
+// Type implements Value.Type, and in this case is used to
+// show the alias in the usage test.
 func (d *dryRunValue) Type() string {
 	return "/ dry "
 }
