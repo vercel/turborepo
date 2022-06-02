@@ -33,6 +33,13 @@ const (
 	NoLogs
 )
 
+const (
+	logsModeFull     = "full"
+	logsModeHashOnly = "hash-only"
+	logsModeNewOnly  = "new-only"
+	logsModeNone     = "none"
+)
+
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
 	SkipReads         bool
@@ -71,13 +78,13 @@ type logsModeValue struct {
 
 func (l *logsModeValue) String() string {
 	if l.opts.CacheHitLogsMode == FullLogs && l.opts.CacheMissLogsMode == FullLogs {
-		return "full"
+		return logsModeFull
 	} else if l.opts.CacheHitLogsMode == NoLogs && l.opts.CacheMissLogsMode == NoLogs {
-		return "none"
+		return logsModeNone
 	} else if l.opts.CacheHitLogsMode == HashLogs && l.opts.CacheMissLogsMode == HashLogs {
-		return "hash-only"
+		return logsModeHashOnly
 	} else if l.opts.CacheHitLogsMode == HashLogs && l.opts.CacheMissLogsMode == FullLogs {
-		return "new-only"
+		return logsModeNewOnly
 	} else {
 		panic(fmt.Sprintf("Invalid output logs mode. Hit %v, miss %v", l.opts.CacheHitLogsMode, l.opts.CacheMissLogsMode))
 	}
@@ -85,16 +92,16 @@ func (l *logsModeValue) String() string {
 
 func (l *logsModeValue) Set(value string) error {
 	switch value {
-	case "full":
+	case logsModeFull:
 		l.opts.CacheMissLogsMode = FullLogs
 		l.opts.CacheHitLogsMode = FullLogs
-	case "none":
+	case logsModeNone:
 		l.opts.CacheMissLogsMode = NoLogs
 		l.opts.CacheHitLogsMode = NoLogs
-	case "hash-only":
+	case logsModeHashOnly:
 		l.opts.CacheMissLogsMode = HashLogs
 		l.opts.CacheHitLogsMode = HashLogs
-	case "new-only":
+	case logsModeNewOnly:
 		l.opts.CacheMissLogsMode = FullLogs
 		l.opts.CacheHitLogsMode = HashLogs
 	default:
