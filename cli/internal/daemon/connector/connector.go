@@ -25,7 +25,9 @@ var (
 	errVersionMismatch   = errors.New("daemon version does not match client version")
 	errConnectionFailure = errors.New("could not connect to daemon")
 	// ErrTooManyAttempts is returned when the client fails to connect too many times
-	ErrTooManyAttempts  = errors.New("reached maximum number of attempts contacting daemon")
+	ErrTooManyAttempts = errors.New("reached maximum number of attempts contacting daemon")
+	// ErrDaemonNotRunning is returned when the client cannot contact the daemon and has
+	// been instructed not to attempt to start a new daemon
 	ErrDaemonNotRunning = errors.New("the daemon is not running")
 )
 
@@ -60,6 +62,8 @@ type Connector struct {
 	TurboVersion string
 }
 
+// ConnectionError is returned in the error case from connect. It wraps the underlying
+// cause and adds a message with the relevant files for the user to check.
 type ConnectionError struct {
 	SockPath fs.AbsolutePath
 	PidPath  fs.AbsolutePath
