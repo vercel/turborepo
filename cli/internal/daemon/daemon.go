@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/nightlyone/lockfile"
@@ -202,6 +203,11 @@ func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watc
 	signalWatcher.AddOnClose(func() {
 		d.unlockPid(lockFile)
 	})
+	panicHandler := func(thePanic interface{}) error {
+		d.cancel()
+		d.logger.Error("Caught panic %v", thePanic)
+		return nil
+	}
 	defer d.unlockPid(lockFile)
 	// If we have the lock, assume that we are the owners of the socket file,
 	// whether it already exists or not. That means we are free to remove it.
@@ -215,7 +221,12 @@ func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watc
 		return err
 	}
 	// We don't need to explicitly close 'lis', the grpc server will handle that
-	s := grpc.NewServer(grpc.UnaryInterceptor(d.onRequest))
+	s := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			d.onRequest,
+			grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandler(panicHandler)),
+		),
+	)
 	signalWatcher.AddOnClose(s.GracefulStop)
 	go d.timeoutLoop()
 

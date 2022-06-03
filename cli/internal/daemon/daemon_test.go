@@ -15,6 +15,9 @@ import (
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/grpc_testing"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/fs"
 )
@@ -33,9 +36,6 @@ func TestDaemonDebounce(t *testing.T) {
 	pidPath := getPidFile(repoRoot)
 	err := pidPath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
-	// Write a garbage pid
-	// err = pidPath.WriteFile([]byte("99999999"), 0644)
-	// assert.NilError(t, err, "WriteFile")
 
 	d := &daemon{}
 	// the lockfile library handles removing pids from dead owners
@@ -75,10 +75,16 @@ func TestDaemonDebounce(t *testing.T) {
 }
 
 type testRPCServer struct {
+	grpc_testing.UnimplementedTestServiceServer
 	registered chan struct{}
 }
 
+func (ts *testRPCServer) EmptyCall(ctx context.Context, req *grpc_testing.Empty) (*grpc_testing.Empty, error) {
+	panic("intended to panic")
+}
+
 func (ts *testRPCServer) Register(grpcServer server.GRPCServer) {
+	grpc_testing.RegisterTestServiceServer(grpcServer, ts)
 	ts.registered <- struct{}{}
 }
 
@@ -213,5 +219,50 @@ func TestCaughtSignal(t *testing.T) {
 	_, ok := <-ctx.Done()
 	if ok {
 		t.Error("expected context to be done")
+	}
+}
+
+func TestCleanupOnPanic(t *testing.T) {
+	logger := hclog.Default()
+	logger.SetLevel(hclog.Debug)
+	repoRootRaw := fs.NewDir(t, "daemon-test")
+	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+
+	ts := newTestRPCServer()
+	watcher := signals.NewWatcher()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	d := &daemon{
+		logger:     logger,
+		repoRoot:   repoRoot,
+		timeout:    5 * time.Second,
+		reqCh:      make(chan struct{}),
+		timedOutCh: make(chan struct{}),
+		ctx:        ctx,
+		cancel:     cancel,
+	}
+	errCh := make(chan error)
+	go func() {
+		err := d.runTurboServer(ts, watcher)
+		errCh <- err
+	}()
+	<-ts.registered
+
+	creds := insecure.NewCredentials()
+	sockFile := getUnixSocket(repoRoot)
+	conn, err := grpc.Dial("unix://"+sockFile.ToString(), grpc.WithTransportCredentials(creds))
+	assert.NilError(t, err, "Dial")
+
+	client := grpc_testing.NewTestServiceClient(conn)
+	_, err = client.EmptyCall(ctx, &grpc_testing.Empty{})
+	if err == nil {
+		t.Error("nil error")
+	}
+	// wait for the server to finish
+	<-errCh
+
+	pidPath := getPidFile(repoRoot)
+	if pidPath.FileExists() {
+		t.Errorf("expected to clean up %v, but it still exists", pidPath)
 	}
 }
