@@ -40,8 +40,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -56,7 +58,9 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
 				scopeOpts: scope.Opts{
 					LegacyFilter: scope.LegacyFilter{
 						Entrypoints: []string{"foo", "blah"},
@@ -76,8 +80,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -93,8 +99,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -111,8 +119,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -128,7 +138,8 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{
-					SkipReads: true,
+					TaskOutputMode: util.FullTaskOutput,
+					SkipReads:      true,
 				},
 				scopeOpts: scope.Opts{},
 			},
@@ -146,8 +157,10 @@ func TestParseConfig(t *testing.T) {
 					Workers:        10,
 					SkipFilesystem: true,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -163,7 +176,8 @@ func TestParseConfig(t *testing.T) {
 					Workers: 10,
 				},
 				runcacheOpts: runcache.Opts{
-					SkipWrites: true,
+					TaskOutputMode: util.FullTaskOutput,
+					SkipWrites:     true,
 				},
 				scopeOpts: scope.Opts{},
 			},
@@ -182,8 +196,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -198,7 +214,9 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
 				scopeOpts: scope.Opts{
 					FilterPatterns: []string{"bar", "...[main]"},
 				},
@@ -217,8 +235,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCacheFolder,
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -234,8 +254,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCwd.Join("bar"),
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -251,8 +273,10 @@ func TestParseConfig(t *testing.T) {
 					Dir:     defaultCwd.Join("bar"),
 					Workers: 10,
 				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts:    scope.Opts{},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.FullTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},
@@ -264,6 +288,9 @@ func TestParseConfig(t *testing.T) {
 		TeamId: "my-team",
 		Cache: &config.CacheConfig{
 			Workers: 10,
+		},
+		TurboJSON: &fs.TurboJSON{
+			OutputLogs: util.FullTaskOutput,
 		},
 	}
 	for i, tc := range cases {
@@ -297,8 +324,10 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 			Dir:     cwd.Join("node_modules", ".cache", "turbo"),
 			Workers: 10,
 		},
-		runcacheOpts: runcache.Opts{},
-		scopeOpts:    scope.Opts{},
+		runcacheOpts: runcache.Opts{
+			TaskOutputMode: util.FullTaskOutput,
+		},
+		scopeOpts: scope.Opts{},
 	}
 
 	t.Run("accepts cwd argument", func(t *testing.T) {
@@ -308,6 +337,9 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 			TeamId: "my-team",
 			Cache: &config.CacheConfig{
 				Workers: 10,
+			},
+			TurboJSON: &fs.TurboJSON{
+				OutputLogs: util.FullTaskOutput,
 			},
 		}
 		flags := pflag.NewFlagSet("test-flags", pflag.ExitOnError)
