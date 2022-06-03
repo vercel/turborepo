@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func Test_ReadTurboJSON(t *testing.T) {
@@ -75,4 +76,36 @@ func Test_ReadTurboJSON(t *testing.T) {
 		assert.EqualValuesf(t, expectedTaskDefinition, actualTaskDefinition, "task definition mismatch for %v", taskName)
 	}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
+}
+
+func Test_ValidateTurboJson(t *testing.T) {
+	cases := []struct {
+		Name                string
+		ExpectedPass        *TurboJSON
+		ExpectedFail        *TurboJSON
+		ExpectedFailMessage string
+	}{
+		{
+			"outputLogs",
+			&TurboJSON{
+				OutputLogs: util.FullTaskOutput,
+			},
+			&TurboJSON{
+				OutputLogs: util.TaskOutputMode("test"),
+			},
+			"invalid \"outputLogs\" value: test",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			err := ValidateTurboJSON(tc.ExpectedPass)
+			if err != nil {
+				t.Errorf("unexpected failure: %v", err)
+			}
+
+			err = ValidateTurboJSON(tc.ExpectedFail)
+			assert.EqualError(t, err, tc.ExpectedFailMessage)
+		})
+	}
 }

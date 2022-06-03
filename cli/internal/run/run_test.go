@@ -184,6 +184,24 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 		},
 		{
+			"output-logs overrides config",
+			[]string{"foo", "--output-logs=none"},
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{
+					TaskOutputMode: util.NoTaskOutput,
+				},
+				scopeOpts: scope.Opts{},
+			},
+			[]string{"foo"},
+		},
+		{
 			"Empty passThroughArgs",
 			[]string{"foo", "--graph=g.png", "--"},
 			&Opts{
@@ -355,7 +373,6 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		}
 		assert.EqualValues(t, expected, opts)
 	})
-
 }
 
 func Test_dontSquashTasks(t *testing.T) {
