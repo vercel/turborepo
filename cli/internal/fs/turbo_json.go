@@ -14,6 +14,8 @@ import (
 type TurboJSON struct {
 	// Base Git branch
 	Base string `json:"baseBranch,omitempty"`
+	// Output logs format
+	OutputLogs util.TaskOutputMode `json:"outputLogs,omitempty"`
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
@@ -45,6 +47,11 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 		return nil, fmt.Errorf("turbo.json: %w", err)
 	}
 
+	err = ValidateTurboJSON(turboJSON)
+	if err != nil {
+		return nil, fmt.Errorf("turbo.json: %w", err)
+	}
+
 	if rootPackageJSON.LegacyTurboConfig != nil {
 		log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
 		rootPackageJSON.LegacyTurboConfig = nil
@@ -68,6 +75,15 @@ func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
 		return nil, err
 	}
 	return turboJSON, nil
+}
+
+// ValidateTurboJSON ensures that the parsed struct is valid
+func ValidateTurboJSON(turboJSON *TurboJSON) error {
+	if turboJSON.OutputLogs != "" && !util.IsValidTaskOutputMode(string(turboJSON.OutputLogs)) {
+		return fmt.Errorf("invalid \"outputLogs\" value: %v", turboJSON.OutputLogs)
+	}
+
+	return nil
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of turbo.json

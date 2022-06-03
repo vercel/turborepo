@@ -13,6 +13,14 @@ export interface Schema {
   baseBranch?: string;
 
   /**
+   * The style of output for task execution. Use "full" to display the entire output of
+   * the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to
+   * show the full output of cache misses and the computed hashes for cache hits. Use
+   * "none" to hide task output. This will default to "full".
+   */
+  outputLogs?: string;
+
+  /**
    * A list of globs and environment variables for implicit global hash dependencies.
    * Environment variables should be prefixed with $ (e.g. $GITHUB_TOKEN).
    *
