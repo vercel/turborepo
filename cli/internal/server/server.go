@@ -28,7 +28,7 @@ type Server struct {
 	globWatcher  *globwatcher.GlobWatcher
 	turboVersion string
 	started      time.Time
-	logFilePath  string
+	logFilePath  fs.AbsolutePath
 	repoRoot     fs.AbsolutePath
 	closerMu     sync.Mutex
 	closer       *closer
@@ -56,7 +56,7 @@ func (c *closer) close() {
 }
 
 // New returns a new instance of Server
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath string) (*Server, error) {
+func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath fs.AbsolutePath) (*Server, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -162,7 +162,7 @@ func (s *Server) Status(ctx context.Context, req *StatusRequest) (*StatusRespons
 	uptime := uint64(time.Since(s.started).Milliseconds())
 	return &StatusResponse{
 		DaemonStatus: &DaemonStatus{
-			LogFile:    s.logFilePath,
+			LogFile:    s.logFilePath.ToString(),
 			UptimeMsec: uptime,
 		},
 	}, nil

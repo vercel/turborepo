@@ -69,7 +69,7 @@ func (s *status) status() error {
 		}
 		s.output.Output(string(rendered))
 	} else {
-		uptime := time.Duration(int64(status.UptimeMsec * 1000))
+		uptime := time.Duration(int64(status.UptimeMsec * 1000 * 1000))
 		s.output.Output(fmt.Sprintf("Daemon log file: %v", status.LogFile))
 		s.output.Output(fmt.Sprintf("Daemon uptime: %v", uptime.String()))
 	}

@@ -75,6 +75,11 @@ func (ap AbsolutePath) Open() (*os.File, error) {
 	return os.Open(ap.asString())
 }
 
+// OpenFile implements os.OpenFile for an absolute path
+func (ap AbsolutePath) OpenFile(flags int, mode os.FileMode) (*os.File, error) {
+	return os.OpenFile(ap.asString(), flags, mode)
+}
+
 func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
 }

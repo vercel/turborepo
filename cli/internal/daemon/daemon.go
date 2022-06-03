@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -77,11 +76,21 @@ func getDaemonFileRoot(repoRoot fs.AbsolutePath) fs.AbsolutePath {
 	return tempDir.Join(hexHash)
 }
 
-func getLogFilePath(repoRoot fs.AbsolutePath) string {
+func getLogFilePath(repoRoot fs.AbsolutePath) (fs.AbsolutePath, error) {
 	hexHash := getRepoHash(repoRoot)
 	base := repoRoot.Base()
 	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
-	return filepath.Join("logs", logFilename)
+
+	logsDirRaw, err := xdg.DataFile("logs")
+	if err != nil {
+		return "", err
+	}
+	logsDir, err := fs.CheckedToAbsolutePath(logsDirRaw)
+	if err != nil {
+		return "", err
+	}
+
+	return logsDir.Join(logFilename), nil
 }
 
 func getUnixSocket(repoRoot fs.AbsolutePath) fs.AbsolutePath {
@@ -111,11 +120,11 @@ func getCmd(config *config.Config, output cli.Ui) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logFilePath, err := xdg.DataFile(getLogFilePath(config.Cwd))
+			logFilePath, err := getLogFilePath(config.Cwd)
 			if err != nil {
 				return err
 			}
-			logFile, err := os.OpenFile(logFilePath, _logFileFlags, 0644)
+			logFile, err := logFilePath.OpenFile(_logFileFlags, 0644)
 			if err != nil {
 				return err
 			}
@@ -152,6 +161,9 @@ func getCmd(config *config.Config, output cli.Ui) *cobra.Command {
 	}
 	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 2*time.Hour, "Set the idle timeout for turbod")
 	addStatusCmd(cmd, config, output)
+	addStartCmd(cmd, config, output)
+	addStopCmd(cmd, config, output)
+	addRestartCmd(cmd, config, output)
 	return cmd
 }
 
@@ -269,6 +281,10 @@ type Client = connector.Client
 func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (Client, error) {
 	sockPath := getUnixSocket(repoRoot)
 	pidPath := getPidFile(repoRoot)
+	logPath, err := getLogFilePath(repoRoot)
+	if err != nil {
+		return nil, err
+	}
 	bin, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -279,6 +295,7 @@ func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logge
 		Opts:         opts,
 		SockPath:     sockPath,
 		PidPath:      pidPath,
+		LogPath:      logPath,
 		Ctx:          ctx,
 		TurboVersion: turboVersion,
 	}

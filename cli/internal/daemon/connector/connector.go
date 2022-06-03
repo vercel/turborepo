@@ -58,6 +58,7 @@ type Connector struct {
 	Opts         Opts
 	SockPath     fs.AbsolutePath
 	PidPath      fs.AbsolutePath
+	LogPath      fs.AbsolutePath
 	Ctx          context.Context
 	TurboVersion string
 }
@@ -67,18 +68,20 @@ type Connector struct {
 type ConnectionError struct {
 	SockPath fs.AbsolutePath
 	PidPath  fs.AbsolutePath
+	LogPath  fs.AbsolutePath
 	cause    error
 }
 
 func (ce *ConnectionError) Error() string {
 	return fmt.Sprintf(`connection to turbo daemon process failed. Please ensure the following:
-	- the unix domain socket at %v has been removed
 	- the process identified by the pid at %v is not running, and remove %v
-	You can also run without the daemon process by passing --no-daemon`, ce.SockPath, ce.PidPath, ce.PidPath)
+	- check the logs at %v
+	- the unix domain socket at %v has been removed
+	You can also run without the daemon process by passing --no-daemon`, ce.PidPath, ce.PidPath, ce.LogPath, ce.SockPath)
 }
 
-// Cause allows a connection error to work with errors.As
-func (ce *ConnectionError) Cause() error {
+// Unwrap allows a connection error to work with standard library "errors" and compatible packages
+func (ce *ConnectionError) Unwrap() error {
 	return ce.cause
 }
 
@@ -90,6 +93,7 @@ func (c *Connector) wrapConnectionError(err error) error {
 	return &ConnectionError{
 		SockPath: c.SockPath,
 		PidPath:  c.PidPath,
+		LogPath:  c.LogPath,
 		cause:    err,
 	}
 }
