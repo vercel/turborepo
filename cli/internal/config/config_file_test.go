@@ -9,6 +9,51 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+func Test_UserConfigPath(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+
+	tests := []struct {
+		name string
+		fsys afero.Fs
+	}{
+		{
+			name: "get doesn't create a path",
+			fsys: fsys,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// XDG is not filesystem aware. Clean up first.
+			path, _ := createUserConfigPath(fsys)
+			err := os.Remove(path.Dir().ToString())
+
+			if err != nil {
+				t.Errorf("failed to clean up first: %v", err)
+			}
+
+			gotConfigPath, getErr := getUserConfigPath(tt.fsys)
+			if gotConfigPath == "" || getErr == nil {
+				gotConfigPath = path
+			}
+			gotConfigDir := gotConfigPath.Dir()
+			getCheck, _ := os.Stat(gotConfigDir.ToString())
+			if getCheck != nil {
+				t.Error("getUserConfigPath() had side effects.")
+			}
+
+			createConfigPath, createErr := createUserConfigPath(tt.fsys)
+			if createErr != nil {
+				t.Errorf("createUserConfigPath() errored: %v.", createErr)
+			}
+			createConfigDir := createConfigPath.Dir()
+			createCheck, _ := os.Stat(createConfigDir.ToString())
+			if createCheck == nil {
+				t.Error("createUserConfigPath() did not create the path.")
+			}
+		})
+	}
+}
+
 func TestReadRepoConfigWhenMissing(t *testing.T) {
 	fsys := afero.NewMemMapFs()
 	cwd, err := fs.GetCwd()
@@ -102,7 +147,7 @@ func TestReadUserConfigWhenMissing(t *testing.T) {
 }
 
 func TestWriteUserConfig(t *testing.T) {
-	fsys := afero.NewMemMapFs()
+	fsys := afero.NewOsFs()
 	initial := defaultUserConfig()
 	initial.Token = "my-token"
 	initial.ApiUrl = "https://api.vercel.com" // should be overridden

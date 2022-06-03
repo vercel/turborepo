@@ -63,7 +63,21 @@ func WriteRepoConfigFile(fsys afero.Fs, repoRoot fs.AbsolutePath, toWrite *Turbo
 	return writeConfigFile(fsys, path, toWrite)
 }
 
-func userConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
+func getUserConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
+	path, err := xdg.SearchConfigFile(filepath.Join("turborepo", "config.json"))
+	// Not finding an existing config file is not an error.
+	// We simply bail with no path, and no error.
+	if err != nil {
+		return "", nil
+	}
+	absPath, err := fs.CheckedToAbsolutePath(path)
+	if err != nil {
+		return "", err
+	}
+	return absPath, nil
+}
+
+func createUserConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
 	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return "", err
@@ -79,7 +93,7 @@ func userConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
 // configuration file. This is for values that are not shared with a team, such
 // as credentials.
 func WriteUserConfigFile(fsys afero.Fs, config *TurborepoConfig) error {
-	path, err := userConfigPath(fsys)
+	path, err := createUserConfigPath(fsys)
 	if err != nil {
 		return err
 	}
@@ -108,10 +122,19 @@ func readConfigFile(fsys afero.Fs, path fs.AbsolutePath, defaults func() *Turbor
 
 // ReadUserConfigFile reads a user config file
 func ReadUserConfigFile(fsys afero.Fs) (*TurborepoConfig, error) {
-	path, err := userConfigPath(fsys)
+	path, err := getUserConfigPath(fsys)
+
+	// Check the error first, that means we got a hit, but failed on path conversion.
 	if err != nil {
 		return nil, err
 	}
+
+	// Otherwise, we just didn't find anything, which isn't an error.
+	if path == "" {
+		return nil, nil
+	}
+
+	// Found something!
 	return readConfigFile(fsys, path, defaultUserConfig)
 }
 
@@ -123,9 +146,18 @@ func ReadRepoConfigFile(fsys afero.Fs, repoRoot fs.AbsolutePath) (*TurborepoConf
 
 // DeleteUserConfigFile deletes a user config file
 func DeleteUserConfigFile(fsys afero.Fs) error {
-	path, err := userConfigPath(fsys)
+	path, err := getUserConfigPath(fsys)
+
+	// Check the error first, that means we got a hit, but failed on path conversion.
 	if err != nil {
 		return err
 	}
+
+	// Otherwise, we just didn't find anything, which isn't an error.
+	if path == "" {
+		return nil
+	}
+
+	// Found a config file!
 	return fs.RemoveFile(fsys, path)
 }
