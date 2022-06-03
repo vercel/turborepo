@@ -16,7 +16,9 @@ export interface Schema {
    * The style of output for task execution. Use "full" to display the entire output of
    * the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to
    * show the full output of cache misses and the computed hashes for cache hits. Use
-   * "none" to hide task output. This will default to "full".
+   * "none" to hide task output.
+   *
+   * @default full
    */
   outputLogs?: string;
 

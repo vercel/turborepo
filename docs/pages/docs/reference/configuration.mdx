@@ -13,6 +13,12 @@ You can configure the behavior of `turbo` by adding a `turbo.json` file in your 
 
 Defaults to `origin/master`. The base branch or your git repository. Git is used by `turbo` in its [hashing algorithm](../core-concepts/caching#hashing-1) and [`--since` CLI flag](./command-line-reference#--since-1).
 
+## `outputLogs`
+
+`type: string`
+
+Defaults to `full`. The style of output for task execution. Use "full" to display the entire output of the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to show the full output of cache misses and the computed hashes for cache hits. Use "none" to hide task output.
+
 ## `globalDependencies`
 
 `type: string[]`
