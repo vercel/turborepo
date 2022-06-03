@@ -32,6 +32,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -47,10 +48,10 @@ import (
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Config    *config.Config
-	Ui        *cli.ColoredUi
-	Processes *process.Manager
-	Ctx       gocontext.Context
+	Config        *config.Config
+	Ui            *cli.ColoredUi
+	SignalWatcher *signals.Watcher
+	Ctx           gocontext.Context
 }
 
 // completeGraph represents the common state inferred from the filesystem and pipeline.
@@ -93,7 +94,7 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra.Command {
+func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
 	var opts *Opts
 	cmd := &cobra.Command{
 		Use:                   "turbo run <task> [...<task>] [<flags>] -- <args passed to tasks>",
@@ -108,7 +109,7 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 				return errors.New("at least one task must be specified")
 			}
 			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(config, ui, opts, processes)
+			run := configureRun(config, ui, opts, signalWatcher)
 			return run.run(tasks)
 		},
 	}
@@ -142,7 +143,7 @@ func optsFromFlags(flags *pflag.FlagSet, config *config.Config) *Opts {
 	return opts
 }
 
-func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *process.Manager) *run {
+func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatcher *signals.Watcher) *run {
 	if os.Getenv("TURBO_FORCE") == "true" {
 		opts.runcacheOpts.SkipReads = true
 	}
@@ -154,6 +155,8 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 	if !config.IsLoggedIn() {
 		opts.cacheOpts.SkipRemote = true
 	}
+	processes := process.NewManager(config.Logger.Named("processes"))
+	signalWatcher.AddOnClose(processes.Close)
 	ctx := gocontext.Background()
 	return &run{
 		opts:      opts,
@@ -166,19 +169,19 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.Ui, c.SignalWatcher)
 	return cmd.Short
 }
 
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.Ui, c.SignalWatcher)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Run executes tasks in the monorepo
 func (c *RunCommand) Run(args []string) int {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.Ui, c.SignalWatcher)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {

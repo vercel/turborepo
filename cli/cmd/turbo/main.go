@@ -13,15 +13,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon"
 	"github.com/vercel/turborepo/cli/internal/login"
-	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
 	"github.com/vercel/turborepo/cli/internal/run"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	uiPkg "github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
-	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 )
 
@@ -69,18 +68,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	var logger hclog.Logger
-	if cf != nil {
-		logger = cf.Logger
-	} else {
-		logger = hclog.Default()
-	}
-	processes := process.NewManager(logger.Named("processes"))
-	signalCh := watchSignals(func() { processes.Close() })
+	signalWatcher := signals.NewWatcher()
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
-			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes, Ctx: ctx},
+			return &run.RunCommand{Config: cf, Ui: ui, SignalWatcher: signalWatcher, Ctx: ctx},
 				nil
 		},
 		"prune": func() (cli.Command, error) {
@@ -102,7 +94,7 @@ func main() {
 			return &info.BinCommand{Config: cf, UI: ui}, nil
 		},
 		"daemon": func() (cli.Command, error) {
-			return &daemon.Command{Config: cf, UI: ui}, nil
+			return &daemon.Command{Config: cf, UI: ui, SignalWatcher: signalWatcher}, nil
 		},
 	}
 
@@ -184,8 +176,10 @@ func main() {
 	// or to receive a signal, in which case the signal handler above does the cleanup
 	select {
 	case <-doneCh:
-		processes.Close()
-	case <-signalCh:
+		// We finished whatever task we were running
+		signalWatcher.Close()
+	case <-signalWatcher.Done():
+		// We caught a signal, which already called the close handlers
 	}
 	os.Exit(exitCode)
 }

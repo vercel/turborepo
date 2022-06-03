@@ -14,6 +14,7 @@ import (
 	"github.com/nightlyone/lockfile"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/fs"
 )
@@ -73,9 +74,19 @@ func TestDaemonDebounce(t *testing.T) {
 	assert.NilError(t, err, "debounceServers")
 }
 
-type testRPCServer struct{}
+type testRPCServer struct {
+	registered chan struct{}
+}
 
-func (ts *testRPCServer) Register(grpcServer server.GRPCServer) {}
+func (ts *testRPCServer) Register(grpcServer server.GRPCServer) {
+	ts.registered <- struct{}{}
+}
+
+func newTestRPCServer() *testRPCServer {
+	return &testRPCServer{
+		registered: make(chan struct{}, 1),
+	}
+}
 
 func waitForFile(t *testing.T, filename turbofs.AbsolutePath, timeout time.Duration) {
 	deadline := time.After(timeout)
@@ -98,7 +109,8 @@ func TestDaemonLifecycle(t *testing.T) {
 	repoRootRaw := fs.NewDir(t, "daemon-test")
 	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
 
-	ts := &testRPCServer{}
+	ts := newTestRPCServer()
+	watcher := signals.NewWatcher()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	d := &daemon{
@@ -115,7 +127,7 @@ func TestDaemonLifecycle(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		serverErr = d.runTurboServer(ts)
+		serverErr = d.runTurboServer(ts, watcher)
 		wg.Done()
 	}()
 
@@ -140,7 +152,8 @@ func TestTimeout(t *testing.T) {
 	repoRootRaw := fs.NewDir(t, "daemon-test")
 	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
 
-	ts := &testRPCServer{}
+	ts := newTestRPCServer()
+	watcher := signals.NewWatcher()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	d := &daemon{
@@ -152,10 +165,51 @@ func TestTimeout(t *testing.T) {
 		ctx:        ctx,
 		cancel:     cancel,
 	}
-	err := d.runTurboServer(ts)
+	err := d.runTurboServer(ts, watcher)
 	if !errors.Is(err, errInactivityTimeout) {
 		t.Errorf("server error got %v, want %v", err, errInactivityTimeout)
 	}
+	_, ok := <-ctx.Done()
+	if ok {
+		t.Error("expected context to be done")
+	}
+}
+
+func TestCaughtSignal(t *testing.T) {
+	logger := hclog.Default()
+	logger.SetLevel(hclog.Debug)
+	repoRootRaw := fs.NewDir(t, "daemon-test")
+	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+
+	ts := newTestRPCServer()
+	watcher := signals.NewWatcher()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	d := &daemon{
+		logger:     logger,
+		repoRoot:   repoRoot,
+		timeout:    5 * time.Second,
+		reqCh:      make(chan struct{}),
+		timedOutCh: make(chan struct{}),
+		ctx:        ctx,
+		cancel:     cancel,
+	}
+	errCh := make(chan error)
+	go func() {
+		err := d.runTurboServer(ts, watcher)
+		errCh <- err
+	}()
+	<-ts.registered
+	// If we've registered with the turboserver, we've registered all of our
+	// signal handlers as well
+	watcher.Close()
+
+	pidPath := getPidFile(repoRoot)
+	if pidPath.FileExists() {
+		t.Errorf("expected to clean up %v, but it still exists", pidPath)
+	}
+	err := <-errCh
+	assert.NilError(t, err, "runTurboServer")
 	_, ok := <-ctx.Done()
 	if ok {
 		t.Error("expected context to be done")

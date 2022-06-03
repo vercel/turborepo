@@ -20,19 +20,21 @@ import (
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"google.golang.org/grpc"
 )
 
 // Command is the wrapper around the daemon command until we port fully to cobra
 type Command struct {
-	Config *config.Config
-	UI     cli.Ui
+	Config        *config.Config
+	UI            cli.Ui
+	SignalWatcher *signals.Watcher
 }
 
 // Run runs the daemon command
 func (c *Command) Run(args []string) int {
-	cmd := getCmd(c.Config, c.UI)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -43,13 +45,13 @@ func (c *Command) Run(args []string) int {
 
 // Help returns information about the `daemon` command
 func (c *Command) Help() string {
-	cmd := getCmd(c.Config, c.UI)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Synopsis of daemon command
 func (c *Command) Synopsis() string {
-	cmd := getCmd(c.Config, c.UI)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return cmd.Short
 }
 
@@ -112,7 +114,7 @@ func (d *daemon) logError(err error) {
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-func getCmd(config *config.Config, output cli.Ui) *cobra.Command {
+func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
 	var idleTimeout time.Duration
 	cmd := &cobra.Command{
 		Use:           "turbo daemon",
@@ -151,7 +153,7 @@ func getCmd(config *config.Config, output cli.Ui) *cobra.Command {
 				return err
 			}
 			defer func() { _ = turboServer.Close() }()
-			err = d.runTurboServer(turboServer)
+			err = d.runTurboServer(turboServer, signalWatcher)
 			if err != nil {
 				d.logError(err)
 				return err
@@ -187,7 +189,7 @@ type rpcServer interface {
 	Register(grpcServer server.GRPCServer)
 }
 
-func (d *daemon) runTurboServer(rpcServer rpcServer) error {
+func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watcher) error {
 	defer d.cancel()
 	pidPath := getPidFile(d.repoRoot)
 	if err := pidPath.EnsureDir(); err != nil {
@@ -197,6 +199,9 @@ func (d *daemon) runTurboServer(rpcServer rpcServer) error {
 	if err != nil {
 		return err
 	}
+	signalWatcher.AddOnClose(func() {
+		d.unlockPid(lockFile)
+	})
 	defer d.unlockPid(lockFile)
 	// If we have the lock, assume that we are the owners of the socket file,
 	// whether it already exists or not. That means we are free to remove it.
@@ -211,6 +216,7 @@ func (d *daemon) runTurboServer(rpcServer rpcServer) error {
 	}
 	// We don't need to explicitly close 'lis', the grpc server will handle that
 	s := grpc.NewServer(grpc.UnaryInterceptor(d.onRequest))
+	signalWatcher.AddOnClose(s.GracefulStop)
 	go d.timeoutLoop()
 
 	rpcServer.Register(s)
@@ -221,6 +227,7 @@ func (d *daemon) runTurboServer(rpcServer rpcServer) error {
 		}
 		close(errCh)
 	}(errCh)
+
 	var exitErr error
 	select {
 	case err, ok := <-errCh:
