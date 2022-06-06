@@ -14,8 +14,6 @@ import (
 type TurboJSON struct {
 	// Base Git branch
 	Base string `json:"baseBranch,omitempty"`
-	// Output logs format
-	OutputLogs util.TaskOutputMode `json:"outputLogs,omitempty"`
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
@@ -79,10 +77,11 @@ type RemoteCacheOptions struct {
 }
 
 type pipelineJSON struct {
-	Outputs   *[]string `json:"outputs"`
-	Cache     *bool     `json:"cache,omitempty"`
-	DependsOn []string  `json:"dependsOn,omitempty"`
-	Inputs    []string  `json:"inputs,omitempty"`
+	Outputs    *[]string           `json:"outputs"`
+	Cache      *bool               `json:"cache,omitempty"`
+	DependsOn  []string            `json:"dependsOn,omitempty"`
+	Inputs     []string            `json:"inputs,omitempty"`
+	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in turbo.json
@@ -123,6 +122,7 @@ type TaskDefinition struct {
 	TopologicalDependencies []string
 	TaskDependencies        []string
 	Inputs                  []string
+	OutputMode              util.TaskOutputMode
 }
 
 const (
@@ -138,6 +138,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &rawPipeline); err != nil {
 		return err
 	}
+
 	// We actually need a nil value to be able to unmarshal the json
 	// because we interpret the omission of outputs to be different
 	// from an empty array. We can't use omitempty because it will
@@ -165,5 +166,6 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 		}
 	}
 	c.Inputs = rawPipeline.Inputs
+	c.OutputMode = rawPipeline.OutputMode
 	return nil
 }

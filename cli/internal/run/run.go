@@ -531,10 +531,8 @@ func getDefaultOptions(config *config.Config) *Opts {
 			Dir:     cache.DefaultLocation(config.Cwd),
 			Workers: config.Cache.Workers,
 		},
-		runcacheOpts: runcache.Opts{
-			TaskOutputMode: config.TurboJSON.OutputLogs,
-		},
-		scopeOpts: scope.Opts{},
+		runcacheOpts: runcache.Opts{},
+		scopeOpts:    scope.Opts{},
 	}
 }
 

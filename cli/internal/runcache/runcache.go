@@ -25,10 +25,10 @@ type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile fs.AbsoluteP
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
-	SkipReads      bool
-	SkipWrites     bool
-	TaskOutputMode util.TaskOutputMode
-	LogReplayer    LogReplayer
+	SkipReads              bool
+	SkipWrites             bool
+	TaskOutputModeOverride string
+	LogReplayer            LogReplayer
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
@@ -59,19 +59,16 @@ type taskOutputModeValue struct {
 }
 
 func (l *taskOutputModeValue) String() string {
-	mode, err := util.ToTaskOutputModeString(l.opts.TaskOutputMode)
-	if err != nil {
-		panic(err)
-	}
-	return mode
+	return l.opts.TaskOutputModeOverride
 }
 
 func (l *taskOutputModeValue) Set(value string) error {
-	var err error
-	l.opts.TaskOutputMode, err = util.FromTaskOutputModeString(value)
+	// Validate the output mode before allowing it to be set
+	_, err := util.FromTaskOutputModeString(value)
 	if err != nil {
 		return fmt.Errorf("must be one of \"%v\"", l.Type())
 	}
+	l.opts.TaskOutputModeOverride = value
 	return nil
 }
 
@@ -93,23 +90,23 @@ var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
-	taskOutputMode util.TaskOutputMode
-	cache          cache.Cache
-	readsDisabled  bool
-	writesDisabled bool
-	repoRoot       fs.AbsolutePath
-	logReplayer    LogReplayer
+	taskOutputModeOverride string
+	cache                  cache.Cache
+	readsDisabled          bool
+	writesDisabled         bool
+	repoRoot               fs.AbsolutePath
+	logReplayer            LogReplayer
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
 func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 	rc := &RunCache{
-		taskOutputMode: opts.TaskOutputMode,
-		cache:          cache,
-		readsDisabled:  opts.SkipReads,
-		writesDisabled: opts.SkipWrites,
-		repoRoot:       repoRoot,
-		logReplayer:    opts.LogReplayer,
+		taskOutputModeOverride: opts.TaskOutputModeOverride,
+		cache:                  cache,
+		readsDisabled:          opts.SkipReads,
+		writesDisabled:         opts.SkipWrites,
+		repoRoot:               repoRoot,
+		logReplayer:            opts.LogReplayer,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -128,27 +125,41 @@ type TaskCache struct {
 	LogFileName       fs.AbsolutePath
 }
 
+// getTaskOutputMode returns the output mode for a given task with support for overriding it using the flag
+func (tc TaskCache) getTaskOutputMode() (util.TaskOutputMode, error) {
+	taskOutputMode := tc.pt.TaskDefinition.OutputMode
+
+	if tc.rc.taskOutputModeOverride != "" {
+		var err error
+		taskOutputMode, err = util.FromTaskOutputModeString(tc.rc.taskOutputModeOverride)
+		if err != nil {
+			return taskOutputMode, err
+		}
+	}
+
+	return taskOutputMode, nil
+}
+
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
 func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
-	if tc.cachingDisabled || tc.rc.readsDisabled {
-		if tc.rc.taskOutputMode != util.NoTaskOutput {
-			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
-		}
-		return false, nil
+	taskOutputMode, err := tc.getTaskOutputMode()
+	if err != nil {
+		return false, err
 	}
+
 	// TODO(gsoltis): check if we need to restore goes here
 	// That will be an opportunity to prune down the set of outputs as well
 	hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, tc.repoRelativeGlobs)
 	if err != nil {
 		return false, err
 	} else if !hit {
-		if tc.rc.taskOutputMode != util.NoTaskOutput {
+		if taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
 	}
-	switch tc.rc.taskOutputMode {
+	switch taskOutputMode {
 	// When only showing new task output, cached output should only show the computed hash
 	case util.NewTaskOutput:
 		fallthrough
@@ -208,11 +219,17 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 		_ = output.Close()
 		return nil, err
 	}
+
+	taskOutputMode, err := tc.getTaskOutputMode()
+	if err != nil {
+		return nil, err
+	}
+
 	fwc := &fileWriterCloser{
 		file:  output,
 		bufio: bufWriter,
 	}
-	if tc.rc.taskOutputMode == util.NoTaskOutput || tc.rc.taskOutputMode == util.HashTaskOutput {
+	if taskOutputMode == util.NoTaskOutput || taskOutputMode == util.HashTaskOutput {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
