@@ -12,46 +12,41 @@ import (
 func Test_UserConfigPath(t *testing.T) {
 	fsys := afero.NewMemMapFs()
 
-	tests := []struct {
-		name string
-		fsys afero.Fs
-	}{
-		{
-			name: "get doesn't create a path",
-			fsys: fsys,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// XDG is not filesystem aware. Clean up first.
-			path, _ := createUserConfigPath(fsys)
-			err := os.Remove(path.Dir().ToString())
+	t.Run("get doesn't create a path", func(t *testing.T) {
+		// XDG is not filesystem aware. Clean up first.
+		path, _ := createUserConfigPath(fsys)
+		err := os.Remove(path.Dir().ToString())
+		if err != nil {
+			t.Errorf("failed to clean up first: %v", err)
+		}
 
-			if err != nil {
-				t.Errorf("failed to clean up first: %v", err)
-			}
+		getConfigPath, getConfigPathErr := getUserConfigPath(fsys)
+		if getConfigPathErr != nil {
+			t.Errorf("failed to run getUserConfigPath: %v", getConfigPathErr)
+		}
 
-			gotConfigPath, getErr := getUserConfigPath(tt.fsys)
-			if gotConfigPath == "" || getErr == nil {
-				gotConfigPath = path
-			}
-			gotConfigDir := gotConfigPath.Dir()
-			getCheck, _ := os.Stat(gotConfigDir.ToString())
-			if getCheck != nil {
-				t.Error("getUserConfigPath() had side effects.")
-			}
+		// The main thing we want to do is make sure that we don't have side effects.
+		// We know where it would attempt to create a directory already.
+		if getConfigPath == "" {
+			getConfigPath = path
+		}
 
-			createConfigPath, createErr := createUserConfigPath(tt.fsys)
-			if createErr != nil {
-				t.Errorf("createUserConfigPath() errored: %v.", createErr)
-			}
-			createConfigDir := createConfigPath.Dir()
-			createCheck, _ := os.Stat(createConfigDir.ToString())
-			if createCheck == nil {
-				t.Error("createUserConfigPath() did not create the path.")
-			}
-		})
-	}
+		getConfigDir := getConfigPath.Dir()
+		getCheck, _ := os.Stat(getConfigDir.ToString())
+		if getCheck != nil {
+			t.Error("getUserConfigPath() had side effects.")
+		}
+
+		createConfigPath, createErr := createUserConfigPath(fsys)
+		if createErr != nil {
+			t.Errorf("createUserConfigPath() errored: %v.", createErr)
+		}
+		createConfigDir := createConfigPath.Dir()
+		createCheck, _ := os.Stat(createConfigDir.ToString())
+		if createCheck == nil {
+			t.Error("createUserConfigPath() did not create the path.")
+		}
+	})
 }
 
 func TestReadRepoConfigWhenMissing(t *testing.T) {
