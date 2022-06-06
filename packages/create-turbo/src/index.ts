@@ -6,6 +6,7 @@ import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
+import lt from "semver/functions/lt";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
@@ -31,6 +32,7 @@ const help = `
   Flags:
     --use-npm           Explicitly tell the CLI to bootstrap the app using npm
     --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
+    --use-yarn          Explicitly tell the CLI to bootstrap the app using yarn
     --no-install        Explicitly do not run the package manager's install command
     --help, -h          Show this help message
     --version, -v       Show the version of this script
@@ -61,6 +63,7 @@ async function run() {
       help: { type: "boolean", default: false, alias: "h" },
       useNpm: { type: "boolean", default: false },
       usePnpm: { type: "boolean", default: false },
+      useYarn: { type: "boolean", default: false },
       install: { type: "boolean", default: true },
       version: { type: "boolean", default: false, alias: "v" },
     },
@@ -102,6 +105,8 @@ async function run() {
     answers = { packageManager: "npm" };
   } else if (flags.usePnpm) {
     answers = { packageManager: "pnpm" };
+  } else if (flags.useYarn) {
+    answers = { packageManager: "yarn" };
   } else {
     answers = await inquirer.prompt<{
       packageManager: PackageManager;
@@ -172,11 +177,6 @@ async function run() {
       ...sharedPkg[pkgKey],
       ...projectPkg[pkgKey],
     };
-    for (let key in sharedPkg[pkgKey]) {
-      if (sharedPkg[pkgKey][key] === "*") {
-        sharedPkg[pkgKey][key] = `latest`;
-      }
-    }
   });
 
   sharedPkg.packageManager = `${
@@ -218,18 +218,28 @@ async function run() {
       },
     }).start();
 
-    // Using the official npm registry in the installation could be very slow,
-    // So we use the user customized registry from default instead.
-    const npmRegistry = await getNpmRegistry(answers.packageManager);
+    let supportsRegistryArg = false;
+    try {
+      // yarn >= v2 only support specifying a registry via config (no cli param)
+      supportsRegistryArg = lt(
+        getPackageManagerVersion(answers.packageManager),
+        "2.0.0"
+      );
+    } catch (err) {}
 
-    await execa(
-      `${answers.packageManager}`,
-      [`install`, `--registry=${npmRegistry}`],
-      {
-        stdio: "ignore",
-        cwd: projectDir,
-      }
-    );
+    const installArgs = ["install"];
+    if (supportsRegistryArg) {
+      // Using the official npm registry for installation could be very
+      // slow for users in different regions (like China), so use the
+      // user customized registry from the config instead
+      const npmRegistry = await getNpmRegistry(answers.packageManager);
+      installArgs.push(`--registry=${npmRegistry}`);
+    }
+
+    await execa(`${answers.packageManager}`, installArgs, {
+      stdio: "ignore",
+      cwd: projectDir,
+    });
     spinner.stop();
   } else {
     console.log();
