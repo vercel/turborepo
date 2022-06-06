@@ -35,14 +35,16 @@ type Opts struct {
 func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
 	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
+
+	defaultTaskOutputMode, _ := util.ToTaskOutputModeString(util.FullTaskOutput)
 	flags.AddFlag(&pflag.Flag{
 		Name: "output-logs",
-		Usage: `Set type of process output logging. Use \"full\" to show
-		all output. Use \"hash-only\" to show only turbo-computed
-		task hashes. Use \"new-only\" to show only new output with
-		only hashes for cached tasks. Use \"none\" to hide process
-		output.`,
-		DefValue: string(util.FullTaskOutput),
+		Usage: `Set type of process output logging. Use "full" to show
+all output. Use "hash-only" to show only turbo-computed
+task hashes. Use "new-only" to show only new output with
+only hashes for cached tasks. Use "none" to hide process
+output.`,
+		DefValue: defaultTaskOutputMode,
 		Value:    &taskOutputModeValue{opts: opts},
 	})
 	_ = flags.Bool("stream", true, "Unused")
@@ -57,14 +59,19 @@ type taskOutputModeValue struct {
 }
 
 func (l *taskOutputModeValue) String() string {
-	return string(l.opts.TaskOutputMode)
+	mode, err := util.ToTaskOutputModeString(l.opts.TaskOutputMode)
+	if err != nil {
+		panic(err)
+	}
+	return mode
 }
 
 func (l *taskOutputModeValue) Set(value string) error {
-	if !util.IsValidTaskOutputMode(value) {
+	var err error
+	l.opts.TaskOutputMode, err = util.FromTaskOutputModeString(value)
+	if err != nil {
 		return fmt.Errorf("must be one of \"%v\"", l.Type())
 	}
-	l.opts.TaskOutputMode = util.TaskOutputMode(value)
 	return nil
 }
 
@@ -72,7 +79,7 @@ func (l *taskOutputModeValue) Type() string {
 	var builder strings.Builder
 
 	first := true
-	for _, mode := range util.TaskOutputModes {
+	for _, mode := range util.TaskOutputModeStrings {
 		if !first {
 			builder.WriteString("|")
 		}
