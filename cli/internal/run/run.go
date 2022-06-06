@@ -49,7 +49,7 @@ import (
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
 	Config        *config.Config
-	Ui            *cli.ColoredUi
+	UI            *cli.ColoredUi
 	SignalWatcher *signals.Watcher
 	Ctx           gocontext.Context
 }
@@ -169,19 +169,19 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatche
 
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
-	cmd := getCmd(c.Config, c.Ui, c.SignalWatcher)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return cmd.Short
 }
 
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
-	cmd := getCmd(c.Config, c.Ui, c.SignalWatcher)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Run executes tasks in the monorepo
 func (c *RunCommand) Run(args []string) int {
-	cmd := getCmd(c.Config, c.Ui, c.SignalWatcher)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -565,7 +565,7 @@ func (c *RunCommand) logError(log hclog.Logger, prefix string, err error) {
 		prefix += ": "
 	}
 
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
+	c.UI.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
 // logError logs an error and outputs it to the UI.

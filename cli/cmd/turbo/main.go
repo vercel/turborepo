@@ -72,7 +72,7 @@ func main() {
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
-			return &run.RunCommand{Config: cf, Ui: ui, SignalWatcher: signalWatcher, Ctx: ctx},
+			return &run.RunCommand{Config: cf, UI: ui, SignalWatcher: signalWatcher, Ctx: ctx},
 				nil
 		},
 		"prune": func() (cli.Command, error) {
