@@ -181,8 +181,6 @@ func Test_gitHashObject(t *testing.T) {
 func Test_getTraversePath(t *testing.T) {
 	fixturePath := getFixture(1)
 
-	type args struct {
-	}
 	tests := []struct {
 		name     string
 		rootPath turbopath.AbsolutePathInterface

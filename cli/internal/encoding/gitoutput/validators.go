@@ -65,12 +65,12 @@ func checkObjectType(value []byte) error {
 	}
 
 	// Followed by a space.
-	if _allowedObjectType[index-1] != byte(space) {
+	if _allowedObjectType[index-1] != byte(_space) {
 		return ErrInvalidObjectType
 	}
 
 	// Preceded by a space.
-	if _allowedObjectType[index+typeLength] != byte(space) {
+	if _allowedObjectType[index+typeLength] != byte(_space) {
 		return ErrInvalidObjectType
 	}
 	return nil

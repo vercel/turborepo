@@ -9,36 +9,40 @@ import (
 	"io"
 )
 
-// These describe the structure of fields in the output of `git`` commands.
-var _lsTreeFields = []Field{ObjectMode, ObjectType, ObjectName, Path}
-var _lsFilesFields = []Field{ObjectMode, ObjectName, ObjectStage, Path}
-var _statusFields = []Field{StatusX, StatusY, Path}
+// These describe the structure of fields in the output of `git` commands.
+var (
+	_lsTreeFields  = []Field{ObjectMode, ObjectType, ObjectName, Path}
+	_lsFilesFields = []Field{ObjectMode, ObjectName, ObjectStage, Path}
+	_statusFields  = []Field{StatusX, StatusY, Path}
+)
 
 // Field is the type for fields available in outputs to `git`.
 // Used for naming and sensible call sites.
 type Field int
 
 const (
-	// ObjectMode is the mode field from `git`` outputs. e.g. 100644
-	ObjectMode Field = 1
-	// ObjectType is the set of allowed types from `git`` outputs: blob, tree, commit
-	ObjectType Field = 2
+	// ObjectMode is the mode field from `git` outputs. e.g. 100644
+	ObjectMode Field = iota + 1
+	// ObjectType is the set of allowed types from `git` outputs: blob, tree, commit
+	ObjectType
 	// ObjectName is the 40-character SHA hash
-	ObjectName Field = 3
+	ObjectName
 	// ObjectStage is a value 0-3.
-	ObjectStage Field = 4
+	ObjectStage
 	// StatusX is the first character of the two-character output from `git status`.
-	StatusX Field = 5
+	StatusX
 	// StatusY is the second character of the two-character output from `git status`.
-	StatusY Field = 6
+	StatusY
 	// Path is the file path under version control in `git`.
-	Path Field = 7
+	Path
 )
 
 // Separators that appear in the output of `git` commands.
-const space rune = ' '
-const tab rune = '\t'
-const nul rune = '\000'
+const (
+	_space = ' '
+	_tab   = '\t'
+	_nul   = '\000'
+)
 
 // A ParseError is returned for parsing errors.
 // Entries and columns are both 1-indexed.
@@ -223,11 +227,11 @@ func getSeparator(fieldNumber int, fieldCount int) rune {
 
 	switch remaining {
 	default:
-		return space
+		return _space
 	case 2:
-		return tab
+		return _tab
 	case 1:
-		return nul
+		return _nul
 	}
 }
 
