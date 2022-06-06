@@ -93,6 +93,7 @@ async function run() {
           ])
         ).dir
   );
+  const projectName = path.basename(projectDir);
 
   const isYarnInstalled = shouldUseYarn();
   const isPnpmInstalled = shouldUsePnpm();
@@ -161,25 +162,32 @@ async function run() {
   );
 
   // merge package.jsons
-  let appPkg = require(path.join(sharedTemplate, "package.json"));
+  let sharedPkg = require(path.join(sharedTemplate, "package.json"));
+  let projectPkg = require(path.join(projectDir, "package.json"));
 
-  // add current versions of remix deps
+  // add current versions of wildcard deps and merge
   ["dependencies", "devDependencies"].forEach((pkgKey) => {
-    for (let key in appPkg[pkgKey]) {
-      if (appPkg[pkgKey][key] === "*") {
-        appPkg[pkgKey][key] = `latest`;
+    // merge dependencies, giving priority to the project deps
+    sharedPkg[pkgKey] = {
+      ...sharedPkg[pkgKey],
+      ...projectPkg[pkgKey],
+    };
+    for (let key in sharedPkg[pkgKey]) {
+      if (sharedPkg[pkgKey][key] === "*") {
+        sharedPkg[pkgKey][key] = `latest`;
       }
     }
   });
 
-  appPkg.packageManager = `${answers.packageManager}@${getPackageManagerVersion(
+  sharedPkg.packageManager = `${
     answers.packageManager
-  )}`;
+  }@${getPackageManagerVersion(answers.packageManager)}`;
+  sharedPkg.name = projectName;
 
   // write package.json
   await fse.writeFile(
     path.join(projectDir, "package.json"),
-    JSON.stringify(appPkg, null, 2)
+    JSON.stringify(sharedPkg, null, 2)
   );
 
   if (flags.install) {
@@ -192,7 +200,9 @@ async function run() {
       ` - ${chalk.bold("packages/ui")}: Shared React component library`
     );
     console.log(
-      ` - ${chalk.bold("packages/config")}: Shared configuration (ESLint)`
+      ` - ${chalk.bold(
+        "packages/eslint-config-custom"
+      )}: Shared configuration (ESLint)`
     );
     console.log(
       ` - ${chalk.bold(

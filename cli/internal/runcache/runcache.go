@@ -10,6 +10,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
@@ -40,6 +41,73 @@ type Opts struct {
 	CacheMissLogsMode LogsMode
 	LogReplayer       LogReplayer
 }
+
+// AddFlags adds the flags relevant to the runcache package to the given FlagSet
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
+	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
+	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
+	flags.AddFlag(&pflag.Flag{
+		Name:     "output-logs",
+		Usage:    _outputModeHelp,
+		DefValue: "full",
+		Value:    &logsModeValue{opts: opts},
+	})
+	_ = flags.Bool("stream", true, "Unused")
+	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecesary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
+		// fail fast if we've misconfigured our flags
+		panic(err)
+	}
+}
+
+var _outputModeHelp = `Set type of process output logging. Use full to show
+all output. Use hash-only to show only turbo-computed
+task hashes. Use new-only to show only new output with
+only hashes for cached tasks. Use none to hide process
+output.`
+
+type logsModeValue struct {
+	opts *Opts
+}
+
+func (l *logsModeValue) String() string {
+	if l.opts.CacheHitLogsMode == FullLogs && l.opts.CacheMissLogsMode == FullLogs {
+		return "full"
+	} else if l.opts.CacheHitLogsMode == NoLogs && l.opts.CacheMissLogsMode == NoLogs {
+		return "none"
+	} else if l.opts.CacheHitLogsMode == HashLogs && l.opts.CacheMissLogsMode == HashLogs {
+		return "hash-only"
+	} else if l.opts.CacheHitLogsMode == HashLogs && l.opts.CacheMissLogsMode == FullLogs {
+		return "new-only"
+	} else {
+		panic(fmt.Sprintf("Invalid output logs mode. Hit %v, miss %v", l.opts.CacheHitLogsMode, l.opts.CacheMissLogsMode))
+	}
+}
+
+func (l *logsModeValue) Set(value string) error {
+	switch value {
+	case "full":
+		l.opts.CacheMissLogsMode = FullLogs
+		l.opts.CacheHitLogsMode = FullLogs
+	case "none":
+		l.opts.CacheMissLogsMode = NoLogs
+		l.opts.CacheHitLogsMode = NoLogs
+	case "hash-only":
+		l.opts.CacheMissLogsMode = HashLogs
+		l.opts.CacheHitLogsMode = HashLogs
+	case "new-only":
+		l.opts.CacheMissLogsMode = FullLogs
+		l.opts.CacheHitLogsMode = HashLogs
+	default:
+		return fmt.Errorf("unknown output-mode: %v", value)
+	}
+	return nil
+}
+
+func (l *logsModeValue) Type() string {
+	return "full|none|hash-only|new-only"
+}
+
+var _ pflag.Value = &logsModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
