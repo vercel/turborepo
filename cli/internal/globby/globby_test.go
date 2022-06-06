@@ -1,23 +1,23 @@
 package globby
 
 import (
+	"io/fs"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
 
-	"github.com/spf13/afero"
+	"testing/fstest"
 )
 
 // setup prepares the test file system contents and returns the file system.
-func setup(files []string) afero.IOFS {
-	fs := afero.NewIOFS(afero.NewMemMapFs())
-
+func setup(files []string) fs.FS {
+	fs := fstest.MapFS{}
 	for _, file := range files {
 		// We don't need the handle, we don't need the error.
 		// We'll know if it errors because the tests will not pass.
 		// nolint:errcheck
-		fs.Create(file)
+		fs[file[1:]] = &fstest.MapFile{Mode: 0666}
 	}
 
 	return fs

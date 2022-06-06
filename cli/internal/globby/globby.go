@@ -2,22 +2,26 @@ package globby
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"io/fs"
 	iofs "io/fs"
 
-	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-var _aferoOsFs = afero.NewOsFs()
-var _aferoIOFS = afero.NewIOFS(_aferoOsFs)
+func getRoot(path string) string {
+	return filepath.VolumeName(path) + string(os.PathSeparator)
+}
 
 // GlobFiles returns an array of files that match the specified set of glob patterns.
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
-	return globFilesFs(_aferoIOFS, basePath, includePatterns, excludePatterns)
+	fsys := os.DirFS(getRoot(basePath))
+
+	return globFilesFs(fsys, basePath, includePatterns, excludePatterns)
 }
 
 // checkRelativePath ensures that the the requested file path is a child of `from`.
@@ -36,10 +40,11 @@ func checkRelativePath(from string, to string) error {
 }
 
 // globFilesFs searches the specified file system to ensure to enumerate all files to include.
-func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
+func globFilesFs(fsys fs.FS, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
 	var processedIncludes []string
 	var processedExcludes []string
 	result := make(util.Set)
+	root := getRoot(basePath)
 
 	for _, includePattern := range includePatterns {
 		includePath := filepath.Join(basePath, includePattern)
@@ -49,8 +54,10 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 			return nil, err
 		}
 
+		iofsFriendlyPath, _ := filepath.Rel(root, includePath)
+
 		// Includes only operate on files.
-		processedIncludes = append(processedIncludes, includePath)
+		processedIncludes = append(processedIncludes, iofsFriendlyPath)
 	}
 
 	for _, excludePattern := range excludePatterns {
@@ -61,8 +68,10 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 			return nil, err
 		}
 
+		iofsFriendlyPath, _ := filepath.Rel(root, excludePath)
+
 		// Excludes operate on entire folders.
-		processedExcludes = append(processedExcludes, filepath.Join(excludePath, "**"))
+		processedExcludes = append(processedExcludes, filepath.Join(iofsFriendlyPath, "**"))
 	}
 
 	// We start from a naive includePattern
@@ -93,18 +102,13 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 	includePattern = filepath.ToSlash(includePattern)
 	excludePattern = filepath.ToSlash(excludePattern)
 
-	err := doublestar.GlobWalk(fs, includePattern, func(path string, dirEntry iofs.DirEntry) error {
-		// Unix root paths do not prepend the leading slash.
-		if basePath == "/" && !strings.HasPrefix(path, "/") {
-			path = filepath.Join(basePath, path)
-		}
-
+	err := doublestar.GlobWalk(fsys, includePattern, func(path string, dirEntry iofs.DirEntry) error {
 		if dirEntry.IsDir() {
 			return nil
 		}
 
 		if excludeCount == 0 {
-			result.Add(path)
+			result.Add(root + path)
 			return nil
 		}
 
@@ -114,7 +118,7 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 		}
 
 		if !isExcluded {
-			result.Add(path)
+			result.Add(root + path)
 		}
 
 		return nil

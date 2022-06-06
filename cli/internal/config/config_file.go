@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
@@ -40,12 +39,12 @@ func defaultRepoConfig() *TurborepoConfig {
 }
 
 // writeConfigFile writes config file at a path
-func writeConfigFile(fsys afero.Fs, path fs.AbsolutePath, config *TurborepoConfig) error {
+func writeConfigFile(path fs.AbsolutePath, config *TurborepoConfig) error {
 	jsonBytes, marshallError := json.Marshal(config)
 	if marshallError != nil {
 		return marshallError
 	}
-	writeFilErr := fs.WriteFile(fsys, path, jsonBytes, 0644)
+	writeFilErr := path.WriteFile(jsonBytes, 0644)
 	if writeFilErr != nil {
 		return writeFilErr
 	}
@@ -54,16 +53,16 @@ func writeConfigFile(fsys afero.Fs, path fs.AbsolutePath, config *TurborepoConfi
 
 // WriteRepoConfigFile is used to write the portion of the config file that is saved
 // within the repository itself.
-func WriteRepoConfigFile(fsys afero.Fs, repoRoot fs.AbsolutePath, toWrite *TurborepoConfig) error {
+func WriteRepoConfigFile(repoRoot fs.AbsolutePath, toWrite *TurborepoConfig) error {
 	path := repoRoot.Join(".turbo", "config.json")
-	err := fs.EnsureDirFS(fsys, path)
+	err := path.EnsureDir()
 	if err != nil {
 		return err
 	}
-	return writeConfigFile(fsys, path, toWrite)
+	return writeConfigFile(path, toWrite)
 }
 
-func getUserConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
+func getUserConfigPath() (fs.AbsolutePath, error) {
 	path, err := xdg.SearchConfigFile(filepath.Join("turborepo", "config.json"))
 	// Not finding an existing config file is not an error.
 	// We simply bail with no path, and no error.
@@ -77,7 +76,7 @@ func getUserConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
 	return absPath, nil
 }
 
-func createUserConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
+func createUserConfigPath() (fs.AbsolutePath, error) {
 	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
 	if err != nil {
 		return "", err
@@ -92,17 +91,17 @@ func createUserConfigPath(fsys afero.Fs) (fs.AbsolutePath, error) {
 // WriteUserConfigFile writes the given configuration to a user-specific
 // configuration file. This is for values that are not shared with a team, such
 // as credentials.
-func WriteUserConfigFile(fsys afero.Fs, config *TurborepoConfig) error {
-	path, err := createUserConfigPath(fsys)
+func WriteUserConfigFile(config *TurborepoConfig) error {
+	path, err := createUserConfigPath()
 	if err != nil {
 		return err
 	}
-	return writeConfigFile(fsys, path, config)
+	return writeConfigFile(path, config)
 }
 
 // readConfigFile reads a config file at a path
-func readConfigFile(fsys afero.Fs, path fs.AbsolutePath, defaults func() *TurborepoConfig) (*TurborepoConfig, error) {
-	b, err := fs.ReadFile(fsys, path)
+func readConfigFile(path fs.AbsolutePath, defaults func() *TurborepoConfig) (*TurborepoConfig, error) {
+	b, err := path.ReadFile()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -121,8 +120,8 @@ func readConfigFile(fsys afero.Fs, path fs.AbsolutePath, defaults func() *Turbor
 }
 
 // ReadUserConfigFile reads a user config file
-func ReadUserConfigFile(fsys afero.Fs) (*TurborepoConfig, error) {
-	path, err := getUserConfigPath(fsys)
+func ReadUserConfigFile() (*TurborepoConfig, error) {
+	path, err := getUserConfigPath()
 
 	// Check the error first, that means we got a hit, but failed on path conversion.
 	if err != nil {
@@ -135,18 +134,18 @@ func ReadUserConfigFile(fsys afero.Fs) (*TurborepoConfig, error) {
 	}
 
 	// Found something!
-	return readConfigFile(fsys, path, defaultUserConfig)
+	return readConfigFile(path, defaultUserConfig)
 }
 
 // ReadRepoConfigFile reads the user-specific configuration values
-func ReadRepoConfigFile(fsys afero.Fs, repoRoot fs.AbsolutePath) (*TurborepoConfig, error) {
+func ReadRepoConfigFile(repoRoot fs.AbsolutePath) (*TurborepoConfig, error) {
 	path := repoRoot.Join(".turbo", "config.json")
-	return readConfigFile(fsys, path, defaultRepoConfig)
+	return readConfigFile(path, defaultRepoConfig)
 }
 
 // DeleteUserConfigFile deletes a user config file
-func DeleteUserConfigFile(fsys afero.Fs) error {
-	path, err := getUserConfigPath(fsys)
+func DeleteUserConfigFile() error {
+	path, err := getUserConfigPath()
 
 	// Check the error first, that means we got a hit, but failed on path conversion.
 	if err != nil {
@@ -159,5 +158,5 @@ func DeleteUserConfigFile(fsys afero.Fs) error {
 	}
 
 	// Found a config file!
-	return fs.RemoveFile(fsys, path)
+	return os.Remove(path.ToString())
 }
