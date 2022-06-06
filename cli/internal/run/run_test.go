@@ -265,7 +265,6 @@ func TestParseConfig(t *testing.T) {
 		Cache: &config.CacheConfig{
 			Workers: 10,
 		},
-		TurboJSON: &fs.TurboJSON{},
 	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
@@ -310,7 +309,6 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 			Cache: &config.CacheConfig{
 				Workers: 10,
 			},
-			TurboJSON: &fs.TurboJSON{},
 		}
 		flags := pflag.NewFlagSet("test-flags", pflag.ExitOnError)
 		opts := optsFromFlags(flags, cf)
@@ -324,6 +322,7 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		}
 		assert.EqualValues(t, expected, opts)
 	})
+
 }
 
 func Test_dontSquashTasks(t *testing.T) {

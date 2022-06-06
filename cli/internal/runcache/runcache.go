@@ -148,6 +148,13 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 		return false, err
 	}
 
+	if tc.cachingDisabled || tc.rc.readsDisabled {
+		if taskOutputMode != util.NoTaskOutput {
+			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
+		}
+		return false, nil
+	}
+
 	// TODO(gsoltis): check if we need to restore goes here
 	// That will be an opportunity to prune down the set of outputs as well
 	hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, tc.repoRelativeGlobs)
