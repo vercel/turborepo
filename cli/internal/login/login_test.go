@@ -105,7 +105,7 @@ func (tr *testResult) getTestLogin() login {
 }
 
 func newTest(t *testing.T, redirectedURL string) *testResult {
-	fsys := afero.NewMemMapFs()
+	fsys := afero.NewOsFs()
 	stepCh := make(chan struct{}, 1)
 	cwd, err := fs.GetCwd()
 	if err != nil {

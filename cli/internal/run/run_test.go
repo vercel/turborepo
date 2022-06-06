@@ -317,7 +317,6 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 		// the `--cwd=` is parsed when setting up the global Config. This value is
 		// passed directly as an argument to the parser.
 		// We still need to ensure run accepts cwd flag and doesn't error.
-		//actual, err := parseRunArgs([]string{"foo", "--cwd=zop"}, cf, ui)
 		if err != nil {
 			t.Fatalf("invalid parse: %#v", err)
 		}
