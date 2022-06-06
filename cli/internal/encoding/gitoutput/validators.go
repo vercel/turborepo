@@ -125,9 +125,17 @@ func checkStatusX(value []byte) error {
 	return nil
 }
 
-// checkStatusX asserts that a byte slice is a valid possibility (" MTADRCU?!").
+// checkStatusY asserts that a byte slice is a valid possibility (" MTADRCU?!").
 func checkStatusY(value []byte) error {
-	return checkStatusX(value)
+	if len(value) != 1 {
+		return ErrInvalidObjectStatusY
+	}
+
+	index := bytes.Index(_allowedStatusChars, value)
+	if index == -1 {
+		return ErrInvalidObjectStatusY
+	}
+	return nil
 }
 
 // checkPath asserts that a byte slice is non-empty.

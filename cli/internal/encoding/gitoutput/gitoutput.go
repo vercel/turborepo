@@ -9,6 +9,7 @@ import (
 	"io"
 )
 
+// These describe the structure of fields in the output of `git`` commands.
 var _lsTreeFields = []Field{ObjectMode, ObjectType, ObjectName, Path}
 var _lsFilesFields = []Field{ObjectMode, ObjectName, ObjectStage, Path}
 var _statusFields = []Field{StatusX, StatusY, Path}
@@ -34,7 +35,7 @@ const (
 	Path Field = 7
 )
 
-// Separators that appear in the output of `git`
+// Separators that appear in the output of `git` commands.
 const space rune = ' '
 const tab rune = '\t'
 const nul rune = '\000'
@@ -47,10 +48,12 @@ type ParseError struct {
 	Err    error // The actual error
 }
 
+// Error creates a string for a parse error.
 func (e *ParseError) Error() string {
 	return fmt.Sprintf("parse error on entry %d, column %d: %v", e.Entry, e.Column, e.Err)
 }
 
+// Unwrap returns the raw error.
 func (e *ParseError) Unwrap() error { return e.Err }
 
 // These are the errors that can be returned in ParseError.Err.
@@ -201,6 +204,7 @@ func (r *Reader) readEntry() ([]byte, error) {
 	return entry, err
 }
 
+// getFieldLength returns the field length and the separator length for advancing.
 func getFieldLength(fieldType Field, fieldNumber int, fieldCount int, entry *[]byte) (int, int) {
 	switch fieldType {
 	case StatusX:
@@ -208,11 +212,12 @@ func getFieldLength(fieldType Field, fieldNumber int, fieldCount int, entry *[]b
 	case StatusY:
 		return 1, 1
 	default:
-		// TODO: Make sure it isn't past a different separator.
 		return bytes.IndexRune(*entry, getSeparator(fieldNumber, fieldCount)), 1
 	}
 }
 
+// getSeparator returns the separator between the current field and the next field.
+// Since fields separators are regular it doesn't hard code them.
 func getSeparator(fieldNumber int, fieldCount int) rune {
 	remaining := fieldCount - fieldNumber
 
@@ -247,7 +252,11 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 
 		fieldError := checkValid(fieldType, field)
 		if fieldError != nil {
-			return nil, fieldError
+			return nil, &ParseError{
+				Entry:  pos.entry,
+				Column: pos.col,
+				Err:    fieldError,
+			}
 		}
 
 		offset := length + advance

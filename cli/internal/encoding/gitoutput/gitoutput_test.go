@@ -1,11 +1,6 @@
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package gitoutput
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -46,11 +41,11 @@ var lsTreeTests = []readTest{
 	},
 	{
 		Name:  "weird file names",
-		Input: "§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§\t\000§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§\"\000§100644 §blob §5b999efa470b056e329b4c23a73904e0794bdc2f\t§.eslintrc.js\000§100644 §blob §f44f57fff95196c5f7139dfa0b96875f1e9650a9\t§.gitignore\000§100644 §blob §33dbaf21275ca2a5f460249d941cbc27d5da3121\t§README.md\000§040000 §tree §7360f2d292aec95907cebdcbb412a6bf2bd10f8a\t§apps\000§100644 §blob §9ec2879b24ce2c817296eebe2cb3846f8e4751ea\t§package.json\000§040000 §tree §5759aadaea2cde55468a61e7104eb0a9d86c1d30\t§packages\000§100644 §blob §33d0621ee2f4da4a2f6f6bdd51a42618d181e337\t§turbo.json\000",
+		Input: "§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§\t\000§100644 §blob §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t§\"\000§100644 §blob §5b999efa470b056e329b4c23a73904e0794bdc2f\t§\n\000§100644 §blob §f44f57fff95196c5f7139dfa0b96875f1e9650a9\t§.gitignore\000§100644 §blob §33dbaf21275ca2a5f460249d941cbc27d5da3121\t§README.md\000§040000 §tree §7360f2d292aec95907cebdcbb412a6bf2bd10f8a\t§apps\000§100644 §blob §9ec2879b24ce2c817296eebe2cb3846f8e4751ea\t§package.json\000§040000 §tree §5759aadaea2cde55468a61e7104eb0a9d86c1d30\t§packages\000§100644 §blob §33d0621ee2f4da4a2f6f6bdd51a42618d181e337\t§turbo.json\000",
 		Output: [][]string{
 			{"100644", "blob", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "\t"},
 			{"100644", "blob", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "\""},
-			{"100644", "blob", "5b999efa470b056e329b4c23a73904e0794bdc2f", ".eslintrc.js"},
+			{"100644", "blob", "5b999efa470b056e329b4c23a73904e0794bdc2f", "\n"},
 			{"100644", "blob", "f44f57fff95196c5f7139dfa0b96875f1e9650a9", ".gitignore"},
 			{"100644", "blob", "33dbaf21275ca2a5f460249d941cbc27d5da3121", "README.md"},
 			{"040000", "tree", "7360f2d292aec95907cebdcbb412a6bf2bd10f8a", "apps"},
@@ -59,6 +54,34 @@ var lsTreeTests = []readTest{
 			{"100644", "blob", "33d0621ee2f4da4a2f6f6bdd51a42618d181e337", "turbo.json"},
 		},
 		Reader: NewLSTreeReader,
+	},
+	{
+		Name:   "invalid object mode",
+		Input:  "∑888888 §blob §5b999efa470b056e329b4c23a73904e0794bdc2f\t§.eslintrc.js\000",
+		Output: [][]string{},
+		Reader: NewLSTreeReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectMode}},
+	},
+	{
+		Name:   "invalid object type",
+		Input:  "§100644 ∑bush §5b999efa470b056e329b4c23a73904e0794bdc2f\t§.eslintrc.js\000",
+		Output: [][]string{},
+		Reader: NewLSTreeReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectType}},
+	},
+	{
+		Name:   "invalid object name",
+		Input:  "§100644 §blob ∑Zb999efa470b056e329b4c23a73904e0794bdc2f\t§.eslintrc.js\000",
+		Output: [][]string{},
+		Reader: NewLSTreeReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectName}},
+	},
+	{
+		Name:   "invalid path",
+		Input:  "§100644 §blob §5b999efa470b056e329b4c23a73904e0794bdc2f\t∑\000",
+		Output: [][]string{},
+		Reader: NewLSTreeReader,
+		Errors: []error{&ParseError{Err: ErrInvalidPath}},
 	},
 }
 
@@ -69,6 +92,40 @@ var lsFilesTests = []readTest{
 		Output: [][]string{{"100644", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "0", "package.json"}},
 		Reader: NewLSFilesReader,
 	},
+	{
+		Name:   "no trailing nul",
+		Input:  "§100644 §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 §0\t§package.json",
+		Output: [][]string{{"100644", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "0", "package.json"}},
+		Reader: NewLSFilesReader,
+	},
+	{
+		Name:   "invalid object mode",
+		Input:  "∑888888 §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 §0\t§package.json",
+		Output: [][]string{},
+		Reader: NewLSFilesReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectMode}},
+	},
+	{
+		Name:   "invalid object name",
+		Input:  "§100644 ∑Z69de29bb2d1d6434b8b29ae775ad8c2e48c5391 §0\t§package.json",
+		Output: [][]string{},
+		Reader: NewLSFilesReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectName}},
+	},
+	{
+		Name:   "invalid object stage",
+		Input:  "§100644 §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 ∑4\t§package.json",
+		Output: [][]string{},
+		Reader: NewLSFilesReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectStage}},
+	},
+	{
+		Name:   "invalid path",
+		Input:  "§100644 §e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 §0\t∑",
+		Output: [][]string{},
+		Reader: NewLSFilesReader,
+		Errors: []error{&ParseError{Err: ErrInvalidPath}},
+	},
 }
 
 var statusTests = []readTest{
@@ -77,6 +134,33 @@ var statusTests = []readTest{
 		Input:  "§A§D §package.json\000",
 		Output: [][]string{{"A", "D", "package.json"}},
 		Reader: NewStatusReader,
+	},
+	{
+		Name:   "no trailing nul",
+		Input:  "§A§D §package.json",
+		Output: [][]string{{"A", "D", "package.json"}},
+		Reader: NewStatusReader,
+	},
+	{
+		Name:   "invalid status X",
+		Input:  "∑~§D §package.json\000",
+		Output: [][]string{},
+		Reader: NewStatusReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectStatusX}},
+	},
+	{
+		Name:   "invalid status Y",
+		Input:  "§D∑~ §package.json\000",
+		Output: [][]string{},
+		Reader: NewStatusReader,
+		Errors: []error{&ParseError{Err: ErrInvalidObjectStatusY}},
+	},
+	{
+		Name:   "invalid path",
+		Input:  "§A§D ∑\000",
+		Output: [][]string{},
+		Reader: NewStatusReader,
+		Errors: []error{&ParseError{Err: ErrInvalidPath}},
 	},
 }
 
@@ -127,8 +211,7 @@ func TestRead(t *testing.T) {
 				if !reflect.DeepEqual(err, wantErr) {
 					t.Fatalf("Read() error at record %d:\ngot %v (%#v)\nwant %v (%#v)", recNum, err, err, wantErr, wantErr)
 				}
-				// ErrUnknownField is explicitly non-fatal.
-				if err != nil && !errors.Is(err, ErrUnknownField) {
+				if err != nil {
 					if recNum < len(tt.Output) {
 						t.Fatalf("need more records; got %d want %d", recNum, len(tt.Output))
 					}
@@ -248,9 +331,9 @@ func (r *nTimes) Read(p []byte) (n int, err error) {
 // TODO: track other types.
 // benchmarkRead measures reading the provided ls-tree data.
 // initReader, if non-nil, modifies the Reader before it's used.
-func benchmarkRead(b *testing.B, initReader func(*Reader), rows string) {
+func benchmarkRead(b *testing.B, getReader func(reader io.Reader) *Reader, initReader func(*Reader), rows string) {
 	b.ReportAllocs()
-	r := NewLSTreeReader(&nTimes{s: rows, n: b.N})
+	r := getReader(&nTimes{s: rows, n: b.N})
 	if initReader != nil {
 		initReader(r)
 	}
@@ -266,11 +349,29 @@ func benchmarkRead(b *testing.B, initReader func(*Reader), rows string) {
 }
 
 const benchmarkLSTreeData = `100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391		\000100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	"\000100644 blob 5b999efa470b056e329b4c23a73904e0794bdc2f	.eslintrc.js\000100644 blob f44f57fff95196c5f7139dfa0b96875f1e9650a9	.gitignore\000100644 blob 33dbaf21275ca2a5f460249d941cbc27d5da3121	README.md\000040000 tree 7360f2d292aec95907cebdcbb412a6bf2bd10f8a	apps\000100644 blob 9ec2879b24ce2c817296eebe2cb3846f8e4751ea	package.json\000040000 tree 5759aadaea2cde55468a61e7104eb0a9d86c1d30	packages\000100644 blob 33d0621ee2f4da4a2f6f6bdd51a42618d181e337	turbo.json\000`
+const benchmarkLSFilesData = `100644 13e399637190f1edb7f034b4281ecfafb5dab9e2 0	Makefile\000100644 6c1c500409989499db51f1eff37b38b857547fdc 0	cmd/turbo/main.go\000100644 2d2b9a2c3ba82f6b806f58c7f7d5eb55fefa837e 0	cmd/turbo/main_utils.go\000100644 3329c8a7f6edee487caeeaf56c600f7c85fc69e7 0	cmd/turbo/signals.go\000100644 e81df7b6ed9a277c30dd35e3524d00e8b13cf584 0	cmd/turbo/version.go\000100644 8992ebf37df05fc5ff64c0f811a3259adff10d70 0	go.mod\000100644 3da872301c79986673d6a12914fbd48c924f5999 0	go.sum\000100644 d7b2d20a037aa9bf8b48eef451eb5f9ba5904237 0	internal/analytics/analytics.go\000`
+const benchmarkStatusData = ` M cli/internal/encoding/gitoutput/gitoutput.go\000 M cli/internal/encoding/gitoutput/gitoutput_test.go\000?? NOTICES.md\000 M cli/internal/encoding/gitoutput/gitoutput.go\000 M cli/internal/encoding/gitoutput/gitoutput_test.go\000?? NOTICES.md\000 M cli/internal/encoding/gitoutput/gitoutput.go\000 M cli/internal/encoding/gitoutput/gitoutput_test.go\000?? NOTICES.md\000 M cli/internal/encoding/gitoutput/gitoutput.go\000 M cli/internal/encoding/gitoutput/gitoutput_test.go\000?? NOTICES.md\000 M cli/internal/encoding/gitoutput/gitoutput.go\000 M cli/internal/encoding/gitoutput/gitoutput_test.go\000`
 
-func BenchmarkRead(b *testing.B) {
-	benchmarkRead(b, nil, benchmarkLSTreeData)
+func BenchmarkLSTreeRead(b *testing.B) {
+	benchmarkRead(b, NewLSTreeReader, nil, benchmarkLSTreeData)
 }
 
-func BenchmarkReadReuseRecord(b *testing.B) {
-	benchmarkRead(b, func(r *Reader) { r.ReuseRecord = true }, benchmarkLSTreeData)
+func BenchmarkLSTreeReadReuseRecord(b *testing.B) {
+	benchmarkRead(b, NewLSTreeReader, func(r *Reader) { r.ReuseRecord = true }, benchmarkLSTreeData)
+}
+
+func BenchmarkLSFilesRead(b *testing.B) {
+	benchmarkRead(b, NewLSFilesReader, nil, benchmarkLSFilesData)
+}
+
+func BenchmarkLSFilesReadReuseRecord(b *testing.B) {
+	benchmarkRead(b, NewLSFilesReader, func(r *Reader) { r.ReuseRecord = true }, benchmarkLSFilesData)
+}
+
+func BenchmarkStatusRead(b *testing.B) {
+	benchmarkRead(b, NewStatusReader, nil, benchmarkStatusData)
+}
+
+func BenchmarkStatusReadReuseRecord(b *testing.B) {
+	benchmarkRead(b, NewStatusReader, func(r *Reader) { r.ReuseRecord = true }, benchmarkStatusData)
 }
