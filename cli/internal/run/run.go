@@ -531,8 +531,7 @@ func getDefaultOptions(config *config.Config) *Opts {
 			Dir:     cache.DefaultLocation(config.Cwd),
 			Workers: config.Cache.Workers,
 		},
-		runcacheOpts: runcache.Opts{},
-		scopeOpts:    scope.Opts{},
+		scopeOpts: scope.Opts{},
 	}
 }
 
