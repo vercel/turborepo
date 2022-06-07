@@ -1,6 +1,7 @@
 package packagemanager
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -134,7 +135,6 @@ func TestGetPackageManager(t *testing.T) {
 			want:             "nodejs-berry",
 			wantErr:          false,
 		},
-		// TODO: Test discovery of the package manager from filesystem and command execution after adopting afero
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -205,41 +205,43 @@ func Test_GetWorkspaces(t *testing.T) {
 		wantErr  bool
 	}
 
+	cwd, _ := os.Getwd()
+
 	rootPath := map[string]string{
-		"nodejs-npm":   "../../../examples/basic",
-		"nodejs-berry": "../../../examples/basic",
-		"nodejs-yarn":  "../../../examples/basic",
-		"nodejs-pnpm":  "../../../examples/with-pnpm",
+		"nodejs-npm":   filepath.Join(cwd, "../../../examples/basic"),
+		"nodejs-berry": filepath.Join(cwd, "../../../examples/basic"),
+		"nodejs-yarn":  filepath.Join(cwd, "../../../examples/basic"),
+		"nodejs-pnpm":  filepath.Join(cwd, "../../../examples/with-pnpm"),
 	}
 
 	want := map[string][]string{
 		"nodejs-npm": {
-			"../../../examples/basic/apps/docs/package.json",
-			"../../../examples/basic/apps/web/package.json",
-			"../../../examples/basic/packages/eslint-config-custom/package.json",
-			"../../../examples/basic/packages/tsconfig/package.json",
-			"../../../examples/basic/packages/ui/package.json",
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
 		},
 		"nodejs-berry": {
-			"../../../examples/basic/apps/docs/package.json",
-			"../../../examples/basic/apps/web/package.json",
-			"../../../examples/basic/packages/eslint-config-custom/package.json",
-			"../../../examples/basic/packages/tsconfig/package.json",
-			"../../../examples/basic/packages/ui/package.json",
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
 		},
 		"nodejs-yarn": {
-			"../../../examples/basic/apps/docs/package.json",
-			"../../../examples/basic/apps/web/package.json",
-			"../../../examples/basic/packages/eslint-config-custom/package.json",
-			"../../../examples/basic/packages/tsconfig/package.json",
-			"../../../examples/basic/packages/ui/package.json",
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
 		},
 		"nodejs-pnpm": {
-			"../../../examples/with-pnpm/apps/docs/package.json",
-			"../../../examples/with-pnpm/apps/web/package.json",
-			"../../../examples/with-pnpm/packages/eslint-config-custom/package.json",
-			"../../../examples/with-pnpm/packages/tsconfig/package.json",
-			"../../../examples/with-pnpm/packages/ui/package.json",
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/ui/package.json")),
 		},
 	}
 

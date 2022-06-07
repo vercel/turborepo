@@ -66,7 +66,7 @@ func LogoutCmd(ch *LogoutCommand) *cobra.Command {
 		Use:   "logout",
 		Short: "Logout of your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := config.DeleteUserConfigFile(ch.Config.Fs); err != nil {
+			if err := config.DeleteUserConfigFile(); err != nil {
 				return ch.logError("could not logout. Something went wrong: %w", err)
 			}
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -32,7 +31,6 @@ type LinkCommand struct {
 type link struct {
 	ui                  cli.Ui
 	logger              hclog.Logger
-	fsys                afero.Fs
 	cwd                 fs.AbsolutePath
 	modifyGitIgnore     bool
 	apiURL              string
@@ -62,7 +60,6 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 			link := &link{
 				ui:                  ui,
 				logger:              config.Logger,
-				fsys:                config.Fs,
 				cwd:                 config.Cwd,
 				modifyGitIgnore:     !dontModifyGitIgnore,
 				apiURL:              config.ApiUrl,
@@ -223,7 +220,7 @@ func (l *link) run() error {
 	}
 
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	err = config.WriteRepoConfigFile(l.fsys, l.cwd, &config.TurborepoConfig{
+	err = config.WriteRepoConfigFile(l.cwd, &config.TurborepoConfig{
 		TeamId: teamID,
 		ApiUrl: l.apiURL,
 	})

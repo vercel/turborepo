@@ -21,7 +21,6 @@ import (
 	"github.com/fatih/color"
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
-	"github.com/spf13/afero"
 )
 
 func main() {
@@ -53,7 +52,6 @@ func main() {
 
 	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
-	fsys := afero.NewOsFs()
 
 	util.InitPrintf()
 
@@ -62,7 +60,7 @@ func main() {
 	c.ErrorWriter = os.Stderr
 	// Parse and validate cmd line flags and env vars
 	// Note that cf can be nil
-	cf, err := config.ParseAndValidate(c.Args, fsys, ui, turboVersion)
+	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion)
 	if err != nil {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)

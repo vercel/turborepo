@@ -206,10 +206,10 @@ Add or update `scripts` in your monorepo's root `package.json` file and have the
 ```jsonc filename="./package.json"
 {
   "scripts": {
-    "build": "turbo build",
-    "test": "turbo test",
-    "lint": "turbo lint",
-    "dev": "turbo dev"
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev"
   }
 }
 ```
