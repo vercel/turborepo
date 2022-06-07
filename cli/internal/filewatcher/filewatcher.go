@@ -2,7 +2,6 @@
 package filewatcher
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
 	"github.com/karrick/godirwalk"
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
@@ -92,7 +92,10 @@ func (fw *FileWatcher) watchRecursively(root fs.AbsolutePath) error {
 			return godirwalk.SkipThis
 		}
 		if info.IsDir() && (info&os.ModeSymlink == 0) {
-			return fw.Add(name)
+			fw.logger.Debug(fmt.Sprintf("started watching %v", name))
+			if err := fw.Add(name); err != nil {
+				return errors.Wrapf(err, "failed adding watch to %v", name)
+			}
 		}
 		return nil
 	})
@@ -114,15 +117,15 @@ func (fw *FileWatcher) onFileAdded(name string) error {
 			// We can race with a file being added and removed. Ignore it
 			return nil
 		}
-		return err
+		return errors.Wrapf(err, "error checking lstat of new file %v", name)
 	}
 	if info.IsDir() {
 		if err := fw.watchRecursively(fs.AbsolutePath(name)); err != nil {
-			return err
+			return errors.Wrapf(err, "failed recursive watch of %v", name)
 		}
 	} else {
 		if err := fw.Add(name); err != nil {
-			return err
+			return errors.Wrapf(err, "failed adding watch to %v", name)
 		}
 	}
 	return nil
