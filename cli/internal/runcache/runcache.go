@@ -36,7 +36,11 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
 	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
 
-	defaultTaskOutputMode, _ := util.ToTaskOutputModeString(util.FullTaskOutput)
+	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
+	if err != nil {
+		panic(err)
+	}
+
 	flags.AddFlag(&pflag.Flag{
 		Name: "output-logs",
 		Usage: `Set type of process output logging. Use "full" to show
