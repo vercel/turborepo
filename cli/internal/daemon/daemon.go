@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -84,7 +85,7 @@ func getLogFilePath(repoRoot fs.AbsolutePath) (fs.AbsolutePath, error) {
 	base := repoRoot.Base()
 	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
 
-	logsDirRaw, err := xdg.DataFile("logs")
+	logsDirRaw, err := xdg.DataFile(filepath.Join("turborepo", "logs"))
 	if err != nil {
 		return "", err
 	}
