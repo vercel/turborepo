@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/colorcache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/core"
@@ -593,7 +594,7 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts)
 	ec := &execContext{
-		colorCache:     NewColorCache(),
+		colorCache:     colorcache.NewColorCache(),
 		runState:       runState,
 		rs:             rs,
 		ui:             &cli.ConcurrentUi{Ui: r.ui},
@@ -736,7 +737,7 @@ func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 }
 
 type execContext struct {
-	colorCache     *ColorCache
+	colorCache     *colorcache.ColorCache
 	runState       *RunState
 	rs             *runSpec
 	ui             cli.Ui
@@ -796,7 +797,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(pt, hash)
+	taskCache := e.runCache.TaskCache(pt, hash, e.colorCache)
 	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))

@@ -12,6 +12,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/colorcache"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/nodes"
@@ -60,7 +61,7 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 		Value:    &logsModeValue{opts: opts},
 	})
 	_ = flags.Bool("stream", true, "Unused")
-	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecesary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
+	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
 		// fail fast if we've misconfigured our flags
 		panic(err)
 	}
@@ -148,6 +149,7 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 // and controls access to the task's outputs
 type TaskCache struct {
 	rc                *RunCache
+	colorCache        *colorcache.ColorCache
 	repoRelativeGlobs []string
 	hash              string
 	pt                *nodes.PackageTask
@@ -225,8 +227,10 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	pref := tc.colorCache.PrefixColor(tc.pt.PackageName)
+	actualPrefix := pref(tc.pt.OutputPrefix())
 	bufWriter := bufio.NewWriter(output)
-	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", tc.pt.OutputPrefix(), ui.Dim(tc.hash))); err != nil {
+	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", actualPrefix, ui.Dim(tc.hash))); err != nil {
 		// We've already errored, we don't care if there's a further error closing the file we just
 		// failed to write to.
 		_ = output.Close()
@@ -277,7 +281,7 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string, colorCache *colorcache.ColorCache) TaskCache {
 	logFileName := rc.repoRoot.Join(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
@@ -285,6 +289,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir, output)
 	}
 	return TaskCache{
+		colorCache:        colorCache,
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
 		hash:              hash,

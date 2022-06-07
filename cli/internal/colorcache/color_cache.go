@@ -1,4 +1,4 @@
-package run
+package colorcache
 
 import (
 	"sync"
