@@ -25,10 +25,10 @@ type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile fs.AbsoluteP
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
-	SkipReads              bool
-	SkipWrites             bool
-	TaskOutputModeOverride string
-	LogReplayer            LogReplayer
+	SkipReads      bool
+	SkipWrites     bool
+	TaskOutputMode util.TaskOutputMode
+	LogReplayer    LogReplayer
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
@@ -59,16 +59,19 @@ type taskOutputModeValue struct {
 }
 
 func (l *taskOutputModeValue) String() string {
-	return l.opts.TaskOutputModeOverride
+	taskOutputMode, err := util.ToTaskOutputModeString(l.opts.TaskOutputMode)
+	if err != nil {
+		panic(err)
+	}
+	return taskOutputMode
 }
 
 func (l *taskOutputModeValue) Set(value string) error {
-	// Validate the output mode before allowing it to be set
-	_, err := util.FromTaskOutputModeString(value)
+	outputMode, err := util.FromTaskOutputModeString(value)
 	if err != nil {
 		return fmt.Errorf("must be one of \"%v\"", l.Type())
 	}
-	l.opts.TaskOutputModeOverride = value
+	l.opts.TaskOutputMode = outputMode
 	return nil
 }
 
@@ -90,23 +93,23 @@ var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
-	taskOutputModeOverride string
-	cache                  cache.Cache
-	readsDisabled          bool
-	writesDisabled         bool
-	repoRoot               fs.AbsolutePath
-	logReplayer            LogReplayer
+	taskOutputMode util.TaskOutputMode
+	cache          cache.Cache
+	readsDisabled  bool
+	writesDisabled bool
+	repoRoot       fs.AbsolutePath
+	logReplayer    LogReplayer
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
 func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 	rc := &RunCache{
-		taskOutputModeOverride: opts.TaskOutputModeOverride,
-		cache:                  cache,
-		readsDisabled:          opts.SkipReads,
-		writesDisabled:         opts.SkipWrites,
-		repoRoot:               repoRoot,
-		logReplayer:            opts.LogReplayer,
+		taskOutputMode: opts.TaskOutputMode,
+		cache:          cache,
+		readsDisabled:  opts.SkipReads,
+		writesDisabled: opts.SkipWrites,
+		repoRoot:       repoRoot,
+		logReplayer:    opts.LogReplayer,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -121,35 +124,16 @@ type TaskCache struct {
 	repoRelativeGlobs []string
 	hash              string
 	pt                *nodes.PackageTask
+	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
 	LogFileName       fs.AbsolutePath
-}
-
-// getTaskOutputMode returns the output mode for a given task with support for overriding it using the flag
-func (tc TaskCache) getTaskOutputMode() (util.TaskOutputMode, error) {
-	taskOutputMode := tc.pt.TaskDefinition.OutputMode
-
-	if tc.rc.taskOutputModeOverride != "" {
-		var err error
-		taskOutputMode, err = util.FromTaskOutputModeString(tc.rc.taskOutputModeOverride)
-		if err != nil {
-			return taskOutputMode, err
-		}
-	}
-
-	return taskOutputMode, nil
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
 func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
-	taskOutputMode, err := tc.getTaskOutputMode()
-	if err != nil {
-		return false, err
-	}
-
 	if tc.cachingDisabled || tc.rc.readsDisabled {
-		if taskOutputMode != util.NoTaskOutput {
+		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
@@ -161,12 +145,12 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 	if err != nil {
 		return false, err
 	} else if !hit {
-		if taskOutputMode != util.NoTaskOutput {
+		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
 	}
-	switch taskOutputMode {
+	switch tc.taskOutputMode {
 	// When only showing new task output, cached output should only show the computed hash
 	case util.NewTaskOutput:
 		fallthrough
@@ -227,16 +211,11 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 		return nil, err
 	}
 
-	taskOutputMode, err := tc.getTaskOutputMode()
-	if err != nil {
-		return nil, err
-	}
-
 	fwc := &fileWriterCloser{
 		file:  output,
 		bufio: bufWriter,
 	}
-	if taskOutputMode == util.NoTaskOutput || taskOutputMode == util.HashTaskOutput {
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
@@ -277,18 +256,25 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
+func (rc *RunCache) TaskCache(flags *pflag.FlagSet, pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.Join(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
 	for index, output := range hashableOutputs {
 		repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir, output)
 	}
+
+	taskOutputMode := pt.TaskDefinition.OutputMode
+	if flags.Changed("output-logs") {
+		taskOutputMode = rc.taskOutputMode
+	}
+
 	return TaskCache{
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
 		hash:              hash,
 		pt:                pt,
+		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
 		LogFileName:       logFileName,
 	}

@@ -92,6 +92,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 
 func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra.Command {
 	var opts *Opts
+	var flags *pflag.FlagSet
 	cmd := &cobra.Command{
 		Use:                   "turbo run <task> [...<task>] [<flags>] -- <args passed to tasks>",
 		Short:                 "Run tasks across projects in your monorepo",
@@ -100,16 +101,17 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
+			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, flags)
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}
 			opts.runOpts.passThroughArgs = passThroughArgs
 			run := configureRun(config, ui, opts, processes)
-			return run.run(tasks)
+			return run.run(tasks, flags)
 		},
 	}
-	opts = optsFromFlags(cmd.Flags(), config)
+	flags = cmd.Flags()
+	opts = optsFromFlags(flags, config)
 	return cmd
 }
 
@@ -194,7 +196,7 @@ type run struct {
 	processes *process.Manager
 }
 
-func (r *run) run(targets []string) error {
+func (r *run) run(targets []string, flags *pflag.FlagSet) error {
 	startAt := time.Now()
 	ctx, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
 	if err != nil {
@@ -250,10 +252,10 @@ func (r *run) run(targets []string) error {
 		Opts:         r.opts,
 	}
 	packageManager := ctx.PackageManager
-	return r.runOperation(g, rs, packageManager, startAt)
+	return r.runOperation(flags, g, rs, packageManager, startAt)
 }
 
-func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
+func (r *run) runOperation(flags *pflag.FlagSet, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -341,7 +343,7 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 		sort.Strings(packagesInScope)
 		r.ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		r.ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		return r.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
+		return r.executeTasks(flags, g, rs, engine, packageManager, hashTracker, startAt)
 	}
 	return nil
 }
@@ -562,7 +564,7 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+func (r *run) executeTasks(flags *pflag.FlagSet, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	goctx := gocontext.Background()
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
@@ -608,7 +610,7 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	// run the thing
 	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
-		return ec.exec(pt, deps)
+		return ec.exec(flags, pt, deps)
 	}), core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
@@ -758,7 +760,7 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
+func (e *execContext) exec(flags *pflag.FlagSet, pt *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
 	targetLogger := e.logger.Named(pt.OutputPrefix())
@@ -796,7 +798,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(pt, hash)
+	taskCache := e.runCache.TaskCache(flags, pt, hash)
 	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
