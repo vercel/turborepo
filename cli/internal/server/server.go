@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	sync "sync"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
