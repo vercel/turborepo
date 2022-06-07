@@ -2,26 +2,22 @@ package globby
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"io/fs"
 	iofs "io/fs"
+
+	"github.com/vercel/turborepo/cli/internal/fs"
 
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-func getRoot(path string) string {
-	return filepath.VolumeName(path) + string(os.PathSeparator)
-}
-
 // GlobFiles returns an array of files that match the specified set of glob patterns.
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
-	fsys := os.DirFS(getRoot(basePath))
-
-	return globFilesFs(fsys, basePath, includePatterns, excludePatterns)
+	fsys := fs.CreateDirFSAtRoot(basePath)
+	fsysRoot := fs.GetDirFSRootPath(fsys)
+	return globFilesFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
 }
 
 // checkRelativePath ensures that the the requested file path is a child of `from`.
@@ -40,11 +36,10 @@ func checkRelativePath(from string, to string) error {
 }
 
 // globFilesFs searches the specified file system to ensure to enumerate all files to include.
-func globFilesFs(fsys fs.FS, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
+func globFilesFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
 	var processedIncludes []string
 	var processedExcludes []string
 	result := make(util.Set)
-	root := getRoot(basePath)
 
 	for _, includePattern := range includePatterns {
 		includePath := filepath.Join(basePath, includePattern)
@@ -54,10 +49,13 @@ func globFilesFs(fsys fs.FS, basePath string, includePatterns []string, excludeP
 			return nil, err
 		}
 
-		iofsFriendlyPath, _ := filepath.Rel(root, includePath)
+		// fs.FS paths may not include leading separators. Calculate the
+		// correct path for this relative to the filesystem root.
+		// This will not error as it follows the call to checkRelativePath.
+		iofsRelativePath, _ := fs.IofsRelativePath(fsysRoot, includePath)
 
 		// Includes only operate on files.
-		processedIncludes = append(processedIncludes, iofsFriendlyPath)
+		processedIncludes = append(processedIncludes, iofsRelativePath)
 	}
 
 	for _, excludePattern := range excludePatterns {
@@ -68,10 +66,13 @@ func globFilesFs(fsys fs.FS, basePath string, includePatterns []string, excludeP
 			return nil, err
 		}
 
-		iofsFriendlyPath, _ := filepath.Rel(root, excludePath)
+		// fs.FS paths may not include leading separators. Calculate the
+		// correct path for this relative to the filesystem root.
+		// This will not error as it follows the call to checkRelativePath.
+		iofsRelativePath, _ := fs.IofsRelativePath(fsysRoot, excludePath)
 
 		// Excludes operate on entire folders.
-		processedExcludes = append(processedExcludes, filepath.Join(iofsFriendlyPath, "**"))
+		processedExcludes = append(processedExcludes, filepath.Join(iofsRelativePath, "**"))
 	}
 
 	// We start from a naive includePattern
@@ -107,8 +108,20 @@ func globFilesFs(fsys fs.FS, basePath string, includePatterns []string, excludeP
 			return nil
 		}
 
+		// All files that are returned by doublestar.GlobWalk are relative to
+		// the fsys root. Go, however, has decided that `fs.FS` filesystems do
+		// not address the root of the file system using `/` and instead use
+		// paths without leading separators.
+		//
+		// We need to track where the `fsys` root is so that when we hand paths back
+		// we hand them back as the path addressable in the actual OS filesystem.
+		//
+		// As a consequence, when processing, we need to *restore* the original
+		// root to the file path after returning. This works because when we create
+		// the `os.dirFS` filesystem we do so at the root of the current volume.
 		if excludeCount == 0 {
-			result.Add(root + path)
+			// Reconstruct via string concatenation since the root is already pre-composed.
+			result.Add(fsysRoot + path)
 			return nil
 		}
 
@@ -118,7 +131,8 @@ func globFilesFs(fsys fs.FS, basePath string, includePatterns []string, excludeP
 		}
 
 		if !isExcluded {
-			result.Add(root + path)
+			// Reconstruct via string concatenation since the root is already pre-composed.
+			result.Add(fsysRoot + path)
 		}
 
 		return nil

@@ -10,7 +10,7 @@ import (
 func Test_UserConfigPath(t *testing.T) {
 	// XDG is not filesystem aware. Clean up first.
 	path, _ := createUserConfigPath()
-	err := os.Remove(path.Dir().ToString())
+	err := path.Dir().Remove()
 	if err != nil {
 		t.Errorf("failed to clean up first: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestReadUserConfigWhenMissing(t *testing.T) {
 	path, _ := getUserConfigPath()
 	if path.FileExists() {
 		// remove the file.
-		err := os.Remove(path.ToString())
+		err := path.Remove()
 		if err != nil {
 			t.Error("User config path unable to be removed.")
 		}

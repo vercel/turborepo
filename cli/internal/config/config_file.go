@@ -158,5 +158,5 @@ func DeleteUserConfigFile() error {
 	}
 
 	// Found a config file!
-	return os.Remove(path.ToString())
+	return path.Remove()
 }

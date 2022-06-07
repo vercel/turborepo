@@ -2,9 +2,11 @@ package fs
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/spf13/pflag"
 )
@@ -113,19 +115,40 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
 }
 
-// WriteFile writes the given bytes to the specified file
-func WriteFile(filename AbsolutePath, toWrite []byte, mode os.FileMode) error {
-	return os.WriteFile(filename.asString(), toWrite, mode)
+// Remove removes the file or (empty) directory at the given path
+func (ap AbsolutePath) Remove() error {
+	return os.Remove(ap.asString())
 }
 
-// ReadFile reads the contents of the specified file
-func ReadFile(filename AbsolutePath) ([]byte, error) {
-	return os.ReadFile(filename.asString())
+// GetVolumeRoot returns the root directory given an absolute path.
+func GetVolumeRoot(absolutePath string) string {
+	return filepath.VolumeName(absolutePath) + string(os.PathSeparator)
 }
 
-// RemoveFile removes the file at the given path
-func RemoveFile(filename AbsolutePath) error {
-	return os.Remove(filename.asString())
+// CreateDirFSAtRoot creates an `os.dirFS` instance at the root of the
+// volume containing the specified path.
+func CreateDirFSAtRoot(absolutePath string) iofs.FS {
+	return os.DirFS(GetVolumeRoot(absolutePath))
+}
+
+// GetDirFSRootPath returns the root path of a os.dirFS.
+func GetDirFSRootPath(fsys iofs.FS) string {
+	// We can't typecheck fsys to enforce using an `os.dirFS` because the
+	// type isn't exported from `os`. So instead, reflection. 🤷‍♂️
+
+	fsysType := reflect.TypeOf(fsys).Name()
+	if fsysType != "dirFS" {
+		// This is not a user error, fail fast
+		panic("GetDirFSRootPath must receive an os.dirFS")
+	}
+
+	// The underlying type is a string; this is the original path passed in.
+	return reflect.ValueOf(fsys).String()
+}
+
+// IofsRelativePath calculates a `os.dirFS`-friendly path from an absolute system path.
+func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
+	return filepath.Rel(fsysRoot, absolutePath)
 }
 
 type pathValue struct {
