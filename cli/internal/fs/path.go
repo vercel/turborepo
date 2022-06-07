@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 
+	"github.com/adrg/xdg"
 	"github.com/spf13/pflag"
 )
 
@@ -165,6 +166,11 @@ func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 // under the system's default temp directory location
 func GetTempDir(subDir string) AbsolutePath {
 	return AbsolutePath(os.TempDir()).Join(subDir)
+}
+
+func GetTurboDataDir() AbsolutePath {
+	dataHome := UnsafeToAbsolutePath(xdg.DataHome)
+	return dataHome.Join("turborepo")
 }
 
 type pathValue struct {

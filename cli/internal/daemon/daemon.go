@@ -8,10 +8,8 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/adrg/xdg"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
@@ -85,15 +83,7 @@ func getLogFilePath(repoRoot fs.AbsolutePath) (fs.AbsolutePath, error) {
 	base := repoRoot.Base()
 	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
 
-	logsDirRaw, err := xdg.DataFile(filepath.Join("turborepo", "logs"))
-	if err != nil {
-		return "", err
-	}
-	logsDir, err := fs.CheckedToAbsolutePath(logsDirRaw)
-	if err != nil {
-		return "", err
-	}
-
+	logsDir := fs.GetTurboDataDir().Join("logs")
 	return logsDir.Join(logFilename), nil
 }
 
@@ -126,6 +116,9 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logFilePath, err := getLogFilePath(config.Cwd)
 			if err != nil {
+				return err
+			}
+			if err := logFilePath.EnsureDir(); err != nil {
 				return err
 			}
 			logFile, err := logFilePath.OpenFile(_logFileFlags, 0644)
