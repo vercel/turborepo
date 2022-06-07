@@ -1,26 +1,27 @@
 package globby
 
 import (
+	"io/fs"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
 
-	"github.com/spf13/afero"
+	"testing/fstest"
 )
 
 // setup prepares the test file system contents and returns the file system.
-func setup(files []string) afero.IOFS {
-	fs := afero.NewIOFS(afero.NewMemMapFs())
-
+func setup(fsysRoot string, files []string) fs.FS {
+	fsys := fstest.MapFS{}
 	for _, file := range files {
-		// We don't need the handle, we don't need the error.
-		// We'll know if it errors because the tests will not pass.
-		// nolint:errcheck
-		fs.Create(file)
+		// We're populating a `fs.FS` filesytem which requires paths to have no
+		// leading slash. As a consequence we strip it during creation.
+		iofsRelativePath := file[1:]
+
+		fsys[iofsRelativePath] = &fstest.MapFile{Mode: 0666}
 	}
 
-	return fs
+	return fsys
 }
 
 func TestGlobFilesFs(t *testing.T) {
@@ -511,10 +512,11 @@ func TestGlobFilesFs(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		fs := setup(tt.files)
+		fsysRoot := "/"
+		fsys := setup(fsysRoot, tt.files)
 
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := globFilesFs(fs, tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
+			got, err := globFilesFs(fsys, fsysRoot, tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("globFilesFs() error = %v, wantErr %v", err, tt.wantErr)

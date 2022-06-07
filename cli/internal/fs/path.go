@@ -2,13 +2,12 @@ package fs
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"syscall"
+	"reflect"
 
-	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 	"github.com/spf13/pflag"
 )
 
@@ -116,38 +115,40 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
 }
 
-// EnsureDirFS ensures that the directory containing the given filename is created
-func EnsureDirFS(fs afero.Fs, filename AbsolutePath) error {
-	dir := filename.Dir()
-	err := fs.MkdirAll(dir.asString(), DirPermissions)
-	if errors.Is(err, syscall.ENOTDIR) {
-		err = fs.Remove(dir.asString())
-		if err != nil {
-			return errors.Wrapf(err, "removing existing file at %v before creating directories", dir)
-		}
-		err = fs.MkdirAll(dir.asString(), DirPermissions)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return errors.Wrapf(err, "creating directories at %v", dir)
+// Remove removes the file or (empty) directory at the given path
+func (ap AbsolutePath) Remove() error {
+	return os.Remove(ap.asString())
+}
+
+// GetVolumeRoot returns the root directory given an absolute path.
+func GetVolumeRoot(absolutePath string) string {
+	return filepath.VolumeName(absolutePath) + string(os.PathSeparator)
+}
+
+// CreateDirFSAtRoot creates an `os.dirFS` instance at the root of the
+// volume containing the specified path.
+func CreateDirFSAtRoot(absolutePath string) iofs.FS {
+	return os.DirFS(GetVolumeRoot(absolutePath))
+}
+
+// GetDirFSRootPath returns the root path of a os.dirFS.
+func GetDirFSRootPath(fsys iofs.FS) string {
+	// We can't typecheck fsys to enforce using an `os.dirFS` because the
+	// type isn't exported from `os`. So instead, reflection. 🤷‍♂️
+
+	fsysType := reflect.TypeOf(fsys).Name()
+	if fsysType != "dirFS" {
+		// This is not a user error, fail fast
+		panic("GetDirFSRootPath must receive an os.dirFS")
 	}
-	return nil
+
+	// The underlying type is a string; this is the original path passed in.
+	return reflect.ValueOf(fsys).String()
 }
 
-// WriteFile writes the given bytes to the specified file
-func WriteFile(fs afero.Fs, filename AbsolutePath, toWrite []byte, mode os.FileMode) error {
-	return afero.WriteFile(fs, filename.asString(), toWrite, mode)
-}
-
-// ReadFile reads the contents of the specified file
-func ReadFile(fs afero.Fs, filename AbsolutePath) ([]byte, error) {
-	return afero.ReadFile(fs, filename.asString())
-}
-
-// RemoveFile removes the file at the given path
-func RemoveFile(fs afero.Fs, filename AbsolutePath) error {
-	return fs.Remove(filename.asString())
+// IofsRelativePath calculates a `os.dirFS`-friendly path from an absolute system path.
+func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
+	return filepath.Rel(fsysRoot, absolutePath)
 }
 
 type pathValue struct {
