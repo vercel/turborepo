@@ -168,6 +168,8 @@ func GetTempDir(subDir string) AbsolutePath {
 	return AbsolutePath(os.TempDir()).Join(subDir)
 }
 
+// GetTurboDataDir returns a directory outside of the repo
+// where turbo can store data files related to turbo.
 func GetTurboDataDir() AbsolutePath {
 	dataHome := UnsafeToAbsolutePath(xdg.DataHome)
 	return dataHome.Join("turborepo")
