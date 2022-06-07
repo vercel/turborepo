@@ -209,7 +209,9 @@ func (r *run) run(targets []string) error {
 	if err != nil {
 		return err
 	}
-	if !r.opts.runOpts.noDaemon {
+	// This technically could be one flag, but we plan on removing
+	// the daemon opt-in flag at some point once it stabilizes
+	if r.opts.runOpts.daemonOptIn && !r.opts.runOpts.noDaemon {
 		turbodClient, err := daemon.GetClient(r.ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
 			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
@@ -429,10 +431,11 @@ type runOpts struct {
 	continueOnError bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
-	only       bool
-	dryRun     bool
-	dryRunJSON bool
-	noDaemon   bool
+	only        bool
+	dryRun      bool
+	dryRunJSON  bool
+	noDaemon    bool
+	daemonOptIn bool
 }
 
 var (
@@ -454,6 +457,10 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
 	flags.BoolVar(&opts.only, "only", false, "Run only the specified tasks, not their dependencies")
 	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
+	flags.BoolVar(&opts.daemonOptIn, "experimental-use-daemon", false, "Use the experimental turbo daemon")
+	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
+		panic(err)
+	}
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
 		panic(err)
