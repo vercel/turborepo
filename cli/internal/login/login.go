@@ -21,7 +21,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -67,7 +66,6 @@ func (c *LoginCommand) Run(args []string) int {
 			login := login{
 				ui:                  c.UI,
 				logger:              c.Config.Logger,
-				fsys:                c.Config.Fs,
 				repoRoot:            c.Config.Cwd,
 				openURL:             browser.OpenBrowser,
 				client:              c.Config.ApiClient,
@@ -121,7 +119,6 @@ type userClient interface {
 type login struct {
 	ui       *cli.ColoredUi
 	logger   hclog.Logger
-	fsys     afero.Fs
 	repoRoot fs.AbsolutePath
 	openURL  browserClient
 	client   userClient
@@ -172,7 +169,7 @@ func (l *login) run(c *config.Config) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	err = config.WriteUserConfigFile(l.fsys, &config.TurborepoConfig{Token: query.Get("token")})
+	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
 	if err != nil {
 		return err
 	}
@@ -244,7 +241,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	err = config.WriteUserConfigFile(l.fsys, &config.TurborepoConfig{Token: verifiedUser.Token})
+	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: verifiedUser.Token})
 	if err != nil {
 		return errors.Wrap(err, "failed to save auth token")
 	}
@@ -256,7 +253,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 		if err != nil {
 			return err
 		}
-		err = config.WriteRepoConfigFile(l.fsys, l.repoRoot, &config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
+		err = config.WriteRepoConfigFile(l.repoRoot, &config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
 		if err != nil {
 			return errors.Wrap(err, "failed to save teamId")
 		}
