@@ -73,7 +73,7 @@ func getRepoHash(repoRoot fs.AbsolutePath) string {
 }
 
 func getDaemonFileRoot(repoRoot fs.AbsolutePath) fs.AbsolutePath {
-	tempDir := fs.GetTempDir("turbod")
+	tempDir := fs.TempDir("turbod")
 	hexHash := getRepoHash(repoRoot)
 	return tempDir.Join(hexHash)
 }

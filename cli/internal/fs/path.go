@@ -162,9 +162,9 @@ func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 	return filepath.Rel(fsysRoot, absolutePath)
 }
 
-// GetTempDir returns the absolute path of a directory with the given name
+// TempDir returns the absolute path of a directory with the given name
 // under the system's default temp directory location
-func GetTempDir(subDir string) AbsolutePath {
+func TempDir(subDir string) AbsolutePath {
 	return AbsolutePath(os.TempDir()).Join(subDir)
 }
 
