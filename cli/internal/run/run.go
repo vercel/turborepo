@@ -455,7 +455,11 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.only, "only", false, "Run only the specified tasks, not their dependencies")
 	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
 	flags.BoolVar(&opts.daemonOptIn, "experimental-use-daemon", false, "Use the experimental turbo daemon")
+	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
 	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
+		panic(err)
+	}
+	if err := flags.MarkHidden("no-daemon"); err != nil {
 		panic(err)
 	}
 	if err := flags.MarkHidden("only"); err != nil {
