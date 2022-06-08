@@ -55,7 +55,7 @@ func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 	cmd := &cobra.Command{
 		Use:           "restart",
-		Short:         "Ensures that the turbo daemon is running",
+		Short:         "Restart the turbo daemon",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
