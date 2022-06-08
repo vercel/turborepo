@@ -894,6 +894,11 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
 	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
+	if (e.rs.Opts.runcacheOpts.CacheHitLogsMode == runcache.FullNoPrefix) ||
+		(e.rs.Opts.runcacheOpts.CacheMissLogsMode == runcache.FullNoPrefix) {
+		prettyTaskPrefix = colorPrefixer("")
+	}
+
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: prettyTaskPrefix,
