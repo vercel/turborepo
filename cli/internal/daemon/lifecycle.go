@@ -36,7 +36,7 @@ func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 	cmd := &cobra.Command{
 		Use:           "stop",
-		Short:         "Ensures that the turbo daemon is running",
+		Short:         "Stop the turbo daemon",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
