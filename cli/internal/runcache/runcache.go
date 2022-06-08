@@ -25,10 +25,10 @@ type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile fs.AbsoluteP
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
-	SkipReads      bool
-	SkipWrites     bool
-	TaskOutputMode util.TaskOutputMode
-	LogReplayer    LogReplayer
+	SkipReads              bool
+	SkipWrites             bool
+	TaskOutputModeOverride *util.TaskOutputMode
+	LogReplayer            LogReplayer
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
@@ -63,7 +63,7 @@ type taskOutputModeValue struct {
 }
 
 func (l *taskOutputModeValue) String() string {
-	taskOutputMode, err := util.ToTaskOutputModeString(l.opts.TaskOutputMode)
+	taskOutputMode, err := util.ToTaskOutputModeString(*l.opts.TaskOutputModeOverride)
 	if err != nil {
 		panic(err)
 	}
@@ -75,7 +75,7 @@ func (l *taskOutputModeValue) Set(value string) error {
 	if err != nil {
 		return fmt.Errorf("must be one of \"%v\"", l.Type())
 	}
-	l.opts.TaskOutputMode = outputMode
+	l.opts.TaskOutputModeOverride = &outputMode
 	return nil
 }
 
@@ -97,7 +97,7 @@ var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
-	taskOutputMode util.TaskOutputMode
+	taskOutputMode *util.TaskOutputMode
 	cache          cache.Cache
 	readsDisabled  bool
 	writesDisabled bool
@@ -108,7 +108,7 @@ type RunCache struct {
 // New returns a new instance of RunCache, wrapping the given cache
 func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 	rc := &RunCache{
-		taskOutputMode: opts.TaskOutputMode,
+		taskOutputMode: opts.TaskOutputModeOverride,
 		cache:          cache,
 		readsDisabled:  opts.SkipReads,
 		writesDisabled: opts.SkipWrites,
@@ -260,7 +260,7 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(flags *pflag.FlagSet, pt *nodes.PackageTask, hash string) TaskCache {
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.Join(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
@@ -269,8 +269,8 @@ func (rc *RunCache) TaskCache(flags *pflag.FlagSet, pt *nodes.PackageTask, hash 
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode
-	if flags.Changed("output-logs") {
-		taskOutputMode = rc.taskOutputMode
+	if rc.taskOutputMode != nil {
+		taskOutputMode = *rc.taskOutputMode
 	}
 
 	return TaskCache{
