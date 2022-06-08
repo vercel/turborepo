@@ -176,9 +176,8 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs
 	}
-	if len(changedOutputGlobs) == 0 {
-		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
-	} else {
+	hasChangedOutputs := len(changedOutputGlobs) > 0
+	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O
 		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
@@ -195,6 +194,8 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 			logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
 			terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
+	} else {
+		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
 	switch tc.rc.cacheHitLogsMode {
