@@ -202,6 +202,17 @@ type nopWriteCloser struct {
 
 func (nopWriteCloser) Close() error { return nil }
 
+// renamingCloser flushes, closes, and renames the given file
+// to the target log file in the TaskCache.
+//
+// Log files are hard-linked into the cache, so when re-running a task
+// we need to ensure we don't pollute a previous run. We do this by logging
+// to a temp file and then performing this rename to the actual log file.
+// Note that:
+// - renames will succeed even if the target already exists, as long as the target isn't a directory.
+//   - All of our targets are log files
+// - renames can fail if the rename is across filesystem boundaries.
+//   - Our renames are within the same directory.
 type renamingCloser struct {
 	io.Writer
 	file  *os.File
@@ -228,7 +239,7 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{os.Stdout}, nil
 	}
-	// Setup log file
+	// Setup the temp log file
 	if err := tc.tempLogFileName.EnsureDir(); err != nil {
 		return nil, err
 	}
