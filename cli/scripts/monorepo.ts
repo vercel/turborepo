@@ -307,7 +307,7 @@ fs.copyFileSync(
     options?: execa.SyncOptions<string>
   ) {
     const resolvedArgs = [...args];
-    if (process.env.TURBO_USE_DAEMON == "1" && command !== "prune") {
+    if (process.env.TURBO_USE_DAEMON == "1" && command === "run") {
       resolvedArgs.push("--experimental-use-daemon");
     }
     return execa.sync(turboPath, [command, ...resolvedArgs], {
