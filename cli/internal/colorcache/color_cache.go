@@ -21,7 +21,8 @@ type ColorCache struct {
 	Cache      map[interface{}]colorFn
 }
 
-func NewColorCache() *ColorCache {
+// New creates an instance of ColorCache with helpers for adding colors to task outputs
+func New() *ColorCache {
 	return &ColorCache{
 		TermColors: getTerminalPackageColors(),
 		index:      0,

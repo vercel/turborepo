@@ -591,10 +591,11 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 		}
 	}
 	defer turboCache.Shutdown()
+	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
-	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts)
+	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
-		colorCache:     colorcache.NewColorCache(),
+		colorCache:     colorCache,
 		runState:       runState,
 		rs:             rs,
 		ui:             &cli.ConcurrentUi{Ui: r.ui},
@@ -769,14 +770,14 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	tracer := e.runState.Run(pt.TaskID)
 
 	// Create a logger
-	pref := e.colorCache.PrefixColor(pt.PackageName)
-	actualPrefix := pref("%s: ", pt.OutputPrefix())
+	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
+	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
-		OutputPrefix: actualPrefix,
-		InfoPrefix:   actualPrefix,
-		ErrorPrefix:  actualPrefix,
-		WarnPrefix:   actualPrefix,
+		OutputPrefix: prettyTaskPrefix,
+		InfoPrefix:   prettyTaskPrefix,
+		ErrorPrefix:  prettyTaskPrefix,
+		WarnPrefix:   prettyTaskPrefix,
 	}
 
 	passThroughArgs := e.rs.ArgsForTask(pt.Task)
@@ -797,7 +798,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(pt, hash, e.colorCache)
+	taskCache := e.runCache.TaskCache(pt, hash)
 	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -820,16 +821,16 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	writer, err := taskCache.OutputWriter()
 	if err != nil {
 		tracer(TargetBuildFailed, err)
-		e.logError(targetLogger, actualPrefix, err)
+		e.logError(targetLogger, prettyTaskPrefix, err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
