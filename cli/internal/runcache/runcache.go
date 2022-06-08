@@ -97,23 +97,23 @@ var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
-	taskOutputMode *util.TaskOutputMode
-	cache          cache.Cache
-	readsDisabled  bool
-	writesDisabled bool
-	repoRoot       fs.AbsolutePath
-	logReplayer    LogReplayer
+	taskOutputModeOverride *util.TaskOutputMode
+	cache                  cache.Cache
+	readsDisabled          bool
+	writesDisabled         bool
+	repoRoot               fs.AbsolutePath
+	logReplayer            LogReplayer
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
 func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 	rc := &RunCache{
-		taskOutputMode: opts.TaskOutputModeOverride,
-		cache:          cache,
-		readsDisabled:  opts.SkipReads,
-		writesDisabled: opts.SkipWrites,
-		repoRoot:       repoRoot,
-		logReplayer:    opts.LogReplayer,
+		taskOutputModeOverride: opts.TaskOutputModeOverride,
+		cache:                  cache,
+		readsDisabled:          opts.SkipReads,
+		writesDisabled:         opts.SkipWrites,
+		repoRoot:               repoRoot,
+		logReplayer:            opts.LogReplayer,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -269,8 +269,8 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode
-	if rc.taskOutputMode != nil {
-		taskOutputMode = *rc.taskOutputMode
+	if rc.taskOutputModeOverride != nil {
+		taskOutputMode = *rc.taskOutputModeOverride
 	}
 
 	return TaskCache{
