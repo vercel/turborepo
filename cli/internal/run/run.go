@@ -51,7 +51,6 @@ type RunCommand struct {
 	Config        *config.Config
 	UI            *cli.ColoredUi
 	SignalWatcher *signals.Watcher
-	Ctx           gocontext.Context
 }
 
 // completeGraph represents the common state inferred from the filesystem and pipeline.
@@ -110,7 +109,8 @@ func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher) *c
 			}
 			opts.runOpts.passThroughArgs = passThroughArgs
 			run := configureRun(config, ui, opts, signalWatcher)
-			return run.run(tasks)
+			ctx := cmd.Context()
+			return run.run(ctx, tasks)
 		},
 	}
 	opts = optsFromFlags(cmd.Flags(), config)
@@ -157,13 +157,11 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatche
 	}
 	processes := process.NewManager(config.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
-	ctx := gocontext.Background()
 	return &run{
 		opts:      opts,
 		config:    config,
 		ui:        output,
 		processes: processes,
-		ctx:       ctx,
 	}
 }
 
@@ -200,30 +198,29 @@ type run struct {
 	config    *config.Config
 	ui        cli.Ui
 	processes *process.Manager
-	ctx       gocontext.Context
 }
 
-func (r *run) run(targets []string) error {
+func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	ctx, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
+	pkgDepGraph, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}
 	// This technically could be one flag, but we plan on removing
 	// the daemon opt-in flag at some point once it stabilizes
 	if r.opts.runOpts.daemonOptIn && !r.opts.runOpts.noDaemon {
-		turbodClient, err := daemon.GetClient(r.ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
+		turbodClient, err := daemon.GetClient(ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
 			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
 		} else {
 			defer func() { _ = turbodClient.Close() }()
 			r.config.Logger.Debug("running in daemon mode")
-			daemonClient := daemonclient.New(r.ctx, turbodClient)
+			daemonClient := daemonclient.New(ctx, turbodClient)
 			r.opts.runcacheOpts.OutputWatcher = daemonClient
 		}
 	}
 
-	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
+	if err := util.ValidateGraph(&pkgDepGraph.TopologicalGraph); err != nil {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
@@ -240,7 +237,7 @@ func (r *run) run(targets []string) error {
 			return errors.Wrap(err, "failed to create SCM")
 		}
 	}
-	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.config.Cwd.ToStringDuringMigration(), scmInstance, ctx, r.ui, r.config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.config.Cwd.ToStringDuringMigration(), scmInstance, pkgDepGraph, r.ui, r.config.Logger)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve packages to run")
 	}
@@ -255,27 +252,27 @@ func (r *run) run(targets []string) error {
 			}
 		}
 	}
-	r.config.Logger.Debug("global hash", "value", ctx.GlobalHash)
+	r.config.Logger.Debug("global hash", "value", pkgDepGraph.GlobalHash)
 	r.config.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
-		TopologicalGraph: ctx.TopologicalGraph,
+		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
-		PackageInfos:     ctx.PackageInfos,
-		GlobalHash:       ctx.GlobalHash,
-		RootNode:         ctx.RootNode,
+		PackageInfos:     pkgDepGraph.PackageInfos,
+		GlobalHash:       pkgDepGraph.GlobalHash,
+		RootNode:         pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
 		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
 		Opts:         r.opts,
 	}
-	packageManager := ctx.PackageManager
-	return r.runOperation(g, rs, packageManager, startAt)
+	packageManager := pkgDepGraph.PackageManager
+	return r.runOperation(ctx, g, rs, packageManager, startAt)
 }
 
-func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
+func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -363,7 +360,7 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 		sort.Strings(packagesInScope)
 		r.ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		r.ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		return r.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
+		return r.executeTasks(ctx, g, rs, engine, packageManager, hashTracker, startAt)
 	}
 	return nil
 }
@@ -591,14 +588,14 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
-func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
 		analyticsSink = r.config.ApiClient
 	} else {
 		analyticsSink = analytics.NullSink
 	}
-	analyticsClient := analytics.NewClient(r.ctx, analyticsSink, r.config.Logger.Named("analytics"))
+	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
