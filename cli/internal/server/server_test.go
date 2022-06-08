@@ -49,7 +49,7 @@ func TestDeleteRepoRoot(t *testing.T) {
 
 func TestShutdown(t *testing.T) {
 	logger := hclog.Default()
-	repoRootRaw := fs.NewDir(t, "server-test")
+	repoRootRaw := t.TempDir()
 	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
 
 	grpcServer := &mockGrpc{
