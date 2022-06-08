@@ -49,6 +49,8 @@ type status struct {
 func (s *status) status() error {
 	ctx := context.Background()
 	client, err := GetClient(ctx, s.repoRoot, s.logger, s.turboVersion, ClientOpts{
+		// If the daemon is not running, the status is that it's not running.
+		// We don't want to start it just to check the status.
 		DontStart: true,
 	})
 	if err != nil {
