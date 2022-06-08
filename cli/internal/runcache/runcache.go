@@ -12,6 +12,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/colorcache"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/nodes"
@@ -61,7 +62,7 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 		Value:    &logsModeValue{opts: opts},
 	})
 	_ = flags.Bool("stream", true, "Unused")
-	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecesary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
+	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
 		// fail fast if we've misconfigured our flags
 		panic(err)
 	}
@@ -127,10 +128,11 @@ type RunCache struct {
 	repoRoot          fs.AbsolutePath
 	logReplayer       LogReplayer
 	outputWatcher     OutputWatcher
+	colorCache        *colorcache.ColorCache
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
-func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
+func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
 	rc := &RunCache{
 		cacheHitLogsMode:  opts.CacheHitLogsMode,
 		cacheMissLogsMode: opts.CacheMissLogsMode,
@@ -140,6 +142,7 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts) *RunCache {
 		repoRoot:          repoRoot,
 		logReplayer:       opts.LogReplayer,
 		outputWatcher:     opts.OutputWatcher,
+		colorCache:        colorCache,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -248,8 +251,10 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
+	prettyTaskPrefix := colorPrefixer(tc.pt.OutputPrefix())
 	bufWriter := bufio.NewWriter(output)
-	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", tc.pt.OutputPrefix(), ui.Dim(tc.hash))); err != nil {
+	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))); err != nil {
 		// We've already errored, we don't care if there's a further error closing the file we just
 		// failed to write to.
 		_ = output.Close()
