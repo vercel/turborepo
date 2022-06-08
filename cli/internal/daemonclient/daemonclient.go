@@ -24,14 +24,14 @@ func New(ctx context.Context, client server.TurboClient) *DaemonClient {
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
 func (d *DaemonClient) GetChangedOutputs(hash string, repoRelativeOutputGlobs []string) ([]string, error) {
-	reply, err := d.client.GetChangedOutputs(d.ctx, &server.GetChangedOutputsRequest{
+	resp, err := d.client.GetChangedOutputs(d.ctx, &server.GetChangedOutputsRequest{
 		Hash:        hash,
 		OutputGlobs: repoRelativeOutputGlobs,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return reply.ChangedOutputGlobs, nil
+	return resp.ChangedOutputGlobs, nil
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
