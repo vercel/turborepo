@@ -113,7 +113,7 @@ func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder,
 	}
 
 	if useHTTPCache {
-		fmt.Println(ui.Dim("• Remote computation caching enabled (experimental)"))
+		fmt.Println(ui.Dim("• Remote computation caching enabled"))
 		implementation := newHTTPCache(opts, config, recorder)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
