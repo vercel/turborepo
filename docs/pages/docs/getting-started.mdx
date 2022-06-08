@@ -4,7 +4,6 @@ description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
 import Callout from "../../components/callout";
-import Beta from "../../components/beta";
 import { Tabs, Tab } from '../../components/Tabs'
 
 # Overview
@@ -236,7 +235,7 @@ Add or update `scripts` in your monorepo's root `package.json` file and have the
 
 Depending on your monorepo setup, some artifacts might already be caching properly. In the next sections, we'll show how `turbo` works, how `scope` works, and then how to get caching working after that.
 
-## Configure Remote Caching <Beta/>
+## Configure Remote Caching
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
 
