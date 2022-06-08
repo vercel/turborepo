@@ -11,7 +11,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
-	turbofs "github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/fs"
 )
 
 func testBin() string {
@@ -29,11 +28,11 @@ func testBin() string {
 	return "node"
 }
 
-func getUnixSocket(dir turbofs.AbsolutePath) turbofs.AbsolutePath {
+func getUnixSocket(dir fs.AbsolutePath) fs.AbsolutePath {
 	return dir.Join("turbod-test.sock")
 }
 
-func getPidFile(dir turbofs.AbsolutePath) turbofs.AbsolutePath {
+func getPidFile(dir fs.AbsolutePath) fs.AbsolutePath {
 	return dir.Join("turbod-test.pid")
 }
 
@@ -42,8 +41,8 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	// to our socket file, so we should see a series of connection
 	// failures, followed by ErrTooManyAttempts
 	logger := hclog.Default()
-	dir := fs.NewDir(t, "daemon-test")
-	dirPath := turbofs.UnsafeToAbsolutePath(dir.Path())
+	dir := t.TempDir()
+	dirPath := fs.UnsafeToAbsolutePath(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -67,8 +66,8 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 
 func TestKillDeadServerNoPid(t *testing.T) {
 	logger := hclog.Default()
-	dir := fs.NewDir(t, "daemon-test")
-	dirPath := turbofs.UnsafeToAbsolutePath(dir.Path())
+	dir := t.TempDir()
+	dirPath := fs.UnsafeToAbsolutePath(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -92,8 +91,8 @@ func TestKillDeadServerNoPid(t *testing.T) {
 
 func TestKillDeadServerNoProcess(t *testing.T) {
 	logger := hclog.Default()
-	dir := fs.NewDir(t, "daemon-test")
-	dirPath := turbofs.UnsafeToAbsolutePath(dir.Path())
+	dir := t.TempDir()
+	dirPath := fs.UnsafeToAbsolutePath(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -126,8 +125,8 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 
 func TestKillDeadServerWithProcess(t *testing.T) {
 	logger := hclog.Default()
-	dir := fs.NewDir(t, "daemon-test")
-	dirPath := turbofs.UnsafeToAbsolutePath(dir.Path())
+	dir := t.TempDir()
+	dirPath := fs.UnsafeToAbsolutePath(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -176,7 +175,7 @@ type mockServer struct {
 	server.UnimplementedTurboServer
 	helloErr     error
 	shutdownResp *server.ShutdownResponse
-	pidFile      turbofs.AbsolutePath
+	pidFile      fs.AbsolutePath
 }
 
 // Simulates server exiting by cleaning up the pid file
@@ -196,8 +195,8 @@ func (s *mockServer) Hello(ctx context.Context, req *server.HelloRequest) (*serv
 
 func TestKillLiveServer(t *testing.T) {
 	logger := hclog.Default()
-	dir := fs.NewDir(t, "daemon-test")
-	dirPath := turbofs.UnsafeToAbsolutePath(dir.Path())
+	dir := t.TempDir()
+	dirPath := fs.UnsafeToAbsolutePath(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 

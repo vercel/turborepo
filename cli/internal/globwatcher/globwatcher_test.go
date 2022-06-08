@@ -5,12 +5,11 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
-	turbofs "github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/fs"
 )
 
-func setup(t *testing.T, repoRoot turbofs.AbsolutePath) {
+func setup(t *testing.T, repoRoot fs.AbsolutePath) {
 	// Directory layout:
 	// <repoRoot>/
 	//   my-pkg/
@@ -51,8 +50,8 @@ func setup(t *testing.T, repoRoot turbofs.AbsolutePath) {
 func TestTrackOutputs(t *testing.T) {
 	logger := hclog.Default()
 
-	repoRootRaw := fs.NewDir(t, "globwatcher-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRootRaw := t.TempDir()
+	repoRoot := fs.UnsafeToAbsolutePath(repoRootRaw)
 
 	setup(t, repoRoot)
 
@@ -113,8 +112,7 @@ func TestTrackOutputs(t *testing.T) {
 func TestWatchSingleFile(t *testing.T) {
 	logger := hclog.Default()
 
-	repoRootRaw := fs.NewDir(t, "globwatcher-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 
 	setup(t, repoRoot)
 

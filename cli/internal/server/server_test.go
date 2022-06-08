@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/fs"
 
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 )
@@ -26,7 +25,7 @@ func (m *mockGrpc) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {}
 func TestDeleteRepoRoot(t *testing.T) {
 	logger := hclog.Default()
 	repoRootRaw := t.TempDir()
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw)
 
 	grpcServer := &mockGrpc{
 		stopped: make(chan struct{}),
@@ -50,7 +49,7 @@ func TestDeleteRepoRoot(t *testing.T) {
 func TestShutdown(t *testing.T) {
 	logger := hclog.Default()
 	repoRootRaw := t.TempDir()
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw)
 
 	grpcServer := &mockGrpc{
 		stopped: make(chan struct{}),

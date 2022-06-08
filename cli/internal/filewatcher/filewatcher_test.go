@@ -8,10 +8,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
-	turbofs "github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/fs"
 )
 
 type testClient struct {
@@ -84,8 +83,7 @@ func expectNoFilesystemEvent(t *testing.T, ch <-chan struct{}) {
 
 func TestFileWatching(t *testing.T) {
 	logger := hclog.Default()
-	repoRootRaw := fs.NewDir(t, "server-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 	err := repoRoot.Join(".git").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 	err = repoRoot.Join("node_modules", "some-dep").MkdirAll()

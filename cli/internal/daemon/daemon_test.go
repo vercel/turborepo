@@ -12,14 +12,13 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
-	turbofs "github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"github.com/vercel/turborepo/cli/internal/signals"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/grpc_testing"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/fs"
 )
 
 func testBin() string {
@@ -30,8 +29,7 @@ func testBin() string {
 }
 
 func TestDaemonDebounce(t *testing.T) {
-	repoRootRaw := fs.NewDir(t, "daemon-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 
 	pidPath := getPidFile(repoRoot)
 	err := pidPath.EnsureDir()
@@ -94,7 +92,7 @@ func newTestRPCServer() *testRPCServer {
 	}
 }
 
-func waitForFile(t *testing.T, filename turbofs.AbsolutePath, timeout time.Duration) {
+func waitForFile(t *testing.T, filename fs.AbsolutePath, timeout time.Duration) {
 	deadline := time.After(timeout)
 outer:
 	for !filename.FileExists() {
@@ -112,8 +110,7 @@ outer:
 func TestDaemonLifecycle(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRootRaw := fs.NewDir(t, "daemon-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -155,8 +152,7 @@ func TestDaemonLifecycle(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRootRaw := fs.NewDir(t, "daemon-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -184,8 +180,7 @@ func TestTimeout(t *testing.T) {
 func TestCaughtSignal(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRootRaw := fs.NewDir(t, "daemon-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -225,8 +220,7 @@ func TestCaughtSignal(t *testing.T) {
 func TestCleanupOnPanic(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRootRaw := fs.NewDir(t, "daemon-test")
-	repoRoot := turbofs.UnsafeToAbsolutePath(repoRootRaw.Path())
+	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
