@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func Test_ReadTurboJSON(t *testing.T) {
@@ -30,6 +31,7 @@ func Test_ReadTurboJSON(t *testing.T) {
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
 			ShouldCache:             true,
+			OutputMode:              util.NewTaskOutput,
 		},
 		"lint": {
 			Outputs:                 []string{},
@@ -37,6 +39,7 @@ func Test_ReadTurboJSON(t *testing.T) {
 			EnvVarDependencies:      []string{"MY_VAR"},
 			TaskDependencies:        []string{},
 			ShouldCache:             true,
+			OutputMode:              util.NewTaskOutput,
 		},
 		"dev": {
 			Outputs:                 defaultOutputs,
@@ -44,6 +47,7 @@ func Test_ReadTurboJSON(t *testing.T) {
 			TopologicalDependencies: []string{},
 			TaskDependencies:        []string{},
 			ShouldCache:             false,
+			OutputMode:              util.FullTaskOutput,
 		},
 		"publish": {
 			Outputs:                 []string{"dist/**"},
@@ -52,6 +56,7 @@ func Test_ReadTurboJSON(t *testing.T) {
 			TaskDependencies:        []string{"build", "admin#lint"},
 			ShouldCache:             false,
 			Inputs:                  []string{"build/**/*"},
+			OutputMode:              util.FullTaskOutput,
 		},
 	}
 

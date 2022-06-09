@@ -93,6 +93,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 
 func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra.Command {
 	var opts *Opts
+	var flags *pflag.FlagSet
 	cmd := &cobra.Command{
 		Use:                   "turbo run <task> [...<task>] [<flags>] -- <args passed to tasks>",
 		Short:                 "Run tasks across projects in your monorepo",
@@ -101,7 +102,7 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
+			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, flags)
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}
@@ -110,7 +111,8 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 			return run.run(tasks)
 		},
 	}
-	opts = optsFromFlags(cmd.Flags(), config)
+	flags = cmd.Flags()
+	opts = optsFromFlags(flags, config)
 	return cmd
 }
 
