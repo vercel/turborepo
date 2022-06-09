@@ -27,7 +27,7 @@ func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 				output:       output,
 				turboVersion: config.TurboVersion,
 			}
-			return l.start()
+			return l.ensureStarted()
 		},
 	}
 	root.AddCommand(cmd)
@@ -46,7 +46,7 @@ func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 				output:       output,
 				turboVersion: config.TurboVersion,
 			}
-			return l.stop()
+			return l.ensureStopped()
 		},
 	}
 	root.AddCommand(cmd)
@@ -65,10 +65,10 @@ func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 				output:       output,
 				turboVersion: config.TurboVersion,
 			}
-			if err := l.stop(); err != nil {
+			if err := l.ensureStopped(); err != nil {
 				return err
 			}
-			if err := l.start(); err != nil {
+			if err := l.ensureStarted(); err != nil {
 				return err
 			}
 			return nil
@@ -84,7 +84,7 @@ type lifecycle struct {
 	turboVersion string
 }
 
-func (l *lifecycle) start() error {
+func (l *lifecycle) ensureStarted() error {
 	ctx := context.Background()
 	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{})
 	if err != nil {
@@ -97,7 +97,7 @@ func (l *lifecycle) start() error {
 	return nil
 }
 
-func (l *lifecycle) stop() error {
+func (l *lifecycle) ensureStopped() error {
 	ctx := context.Background()
 	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{
 		DontStart: true,
