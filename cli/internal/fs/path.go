@@ -120,11 +120,6 @@ func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())
 }
 
-// RenameTo implements os.Rename for an absolute path
-func (ap AbsolutePath) RenameTo(target AbsolutePath) error {
-	return os.Rename(ap.asString(), target.asString())
-}
-
 // GetVolumeRoot returns the root directory given an absolute path.
 func GetVolumeRoot(absolutePath string) string {
 	return filepath.VolumeName(absolutePath) + string(os.PathSeparator)
