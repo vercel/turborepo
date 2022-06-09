@@ -65,6 +65,13 @@ func FileExists(filename string) bool {
 func CopyFile(from string, to string, mode os.FileMode) error {
 	fromFile, err := os.Open(from)
 	if err != nil {
+		fileInfos, err := os.Lstat(from)
+		isSymlink := err == nil && fileInfos.Mode()&os.ModeSymlink == os.ModeSymlink
+
+		if isSymlink {
+			// We have a broken symlink. Don't try to copy it.
+			return nil
+		}
 		return err
 	}
 	defer fromFile.Close()
