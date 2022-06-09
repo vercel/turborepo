@@ -133,8 +133,7 @@ type TaskCache struct {
 	pt                *nodes.PackageTask
 	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
-	targetLogFileName fs.AbsolutePath
-	tempLogFileName   fs.AbsolutePath
+	LogFileName       fs.AbsolutePath
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
@@ -165,11 +164,11 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 	case util.HashTaskOutput:
 		terminal.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
-		logger.Debug("log file", "path", tc.targetLogFileName)
-		if tc.targetLogFileName.FileExists() {
+		logger.Debug("log file", "path", tc.LogFileName)
+		if tc.LogFileName.FileExists() {
 			// The task label is baked into the log file, so we need to grab the underlying Ui
 			// instance in order to not duplicate it
-			tc.rc.logReplayer(logger, terminal.Ui, tc.targetLogFileName)
+			tc.rc.logReplayer(logger, terminal.Ui, tc.LogFileName)
 		}
 	default:
 		// NoLogs, do not output anything
@@ -184,35 +183,17 @@ type nopWriteCloser struct {
 
 func (nopWriteCloser) Close() error { return nil }
 
-// renamingCloser flushes, closes, and renames the given file
-// to the target log file in the TaskCache.
-//
-// Log files are hard-linked into the cache, so when re-running a task
-// we need to ensure we don't pollute a previous run. We do this by logging
-// to a temp file and then performing this rename to the actual log file.
-// Note that:
-// - renames will succeed even if the target already exists, as long as the target isn't a directory.
-//   - All of our targets are log files
-// - renames can fail if the rename is across filesystem boundaries.
-//   - Our renames are within the same directory.
-type renamingCloser struct {
+type fileWriterCloser struct {
 	io.Writer
 	file  *os.File
-	tc    *TaskCache
 	bufio *bufio.Writer
 }
 
-func (fwc *renamingCloser) Close() error {
+func (fwc *fileWriterCloser) Close() error {
 	if err := fwc.bufio.Flush(); err != nil {
 		return err
 	}
-	if err := fwc.file.Close(); err != nil {
-		return err
-	}
-	if err := fwc.tc.tempLogFileName.RenameTo(fwc.tc.targetLogFileName); err != nil {
-		return err
-	}
-	return nil
+	return fwc.file.Close()
 }
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
@@ -221,11 +202,11 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{os.Stdout}, nil
 	}
-	// Setup the temp log file
-	if err := tc.tempLogFileName.EnsureDir(); err != nil {
+	// Setup log file
+	if err := tc.LogFileName.EnsureDir(); err != nil {
 		return nil, err
 	}
-	output, err := tc.tempLogFileName.Create()
+	output, err := tc.LogFileName.Create()
 	if err != nil {
 		return nil, err
 	}
@@ -238,10 +219,9 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 		_ = output.Close()
 		return nil, err
 	}
-	fwc := &renamingCloser{
+	fwc := &fileWriterCloser{
 		file:  output,
 		bufio: bufWriter,
-		tc:    &tc,
 	}
 	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
 		// only write to log file, not to stdout
@@ -285,10 +265,7 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
 func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
-	repoRelativeLogFile := pt.RepoRelativeLogFile()
-	repoRelativeTempLogFile := repoRelativeLogFile + ".tmp"
-	logFileName := rc.repoRoot.Join(repoRelativeLogFile)
-	tempLogFileName := rc.repoRoot.Join(repoRelativeTempLogFile)
+	logFileName := rc.repoRoot.Join(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
 	for index, output := range hashableOutputs {
@@ -307,8 +284,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
-		targetLogFileName: logFileName,
-		tempLogFileName:   tempLogFileName,
+		LogFileName:       logFileName,
 	}
 }
 
