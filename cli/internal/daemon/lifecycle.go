@@ -100,6 +100,7 @@ func (l *lifecycle) ensureStarted() error {
 func (l *lifecycle) ensureStopped() error {
 	ctx := context.Background()
 	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{
+		// If the daemon is not running, don't start it, since we're trying to stop it
 		DontStart: true,
 	})
 	if err != nil {
