@@ -111,30 +111,25 @@ func TestPut(t *testing.T) {
 	dstAPath := filepath.Join(dstCachePath, src, "child", "a")
 	got, err := turbofs.SameFile(aPath, dstAPath)
 	assert.NilError(t, err, "SameFile")
-	if !got {
-		t.Errorf("SameFile(%v, %v) got false, want true", aPath, dstAPath)
+	if got {
+		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
 	}
 
 	dstBPath := filepath.Join(dstCachePath, src, "b")
 	got, err = turbofs.SameFile(bPath, dstBPath)
 	assert.NilError(t, err, "SameFile")
-	if !got {
-		t.Errorf("SameFile(%v, %v) got false, want true", bPath, dstBPath)
+	if got {
+		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
 	}
 
 	dstLinkPath := filepath.Join(dstCachePath, src, "child", "link")
-	target, err := os.Readlink(dstLinkPath)
-	assert.NilError(t, err, "Readlink")
-	if target != linkTarget {
-		t.Errorf("Readlink got %v, want %v", target, linkTarget)
-	}
+	target, err := os.Lstat(dstLinkPath)
+	assert.NilError(t, err, "Lstat")
+	assert.Check(t, target.Mode().IsRegular(), "the cached file is a regular file")
 
 	dstBrokenLinkPath := filepath.Join(dstCachePath, src, "child", "broken")
-	target, err = os.Readlink(dstBrokenLinkPath)
-	assert.NilError(t, err, "Readlink")
-	if target != "missing" {
-		t.Errorf("Readlink got %v, want missing", target)
-	}
+	_, err = os.Lstat(dstBrokenLinkPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestFetch(t *testing.T) {
@@ -214,23 +209,21 @@ func TestFetch(t *testing.T) {
 	dstAPath := filepath.Join(dstOutputPath, "child", "a")
 	got, err := turbofs.SameFile(aPath, dstAPath)
 	assert.NilError(t, err, "SameFile")
-	if !got {
-		t.Errorf("SameFile(%v, %v) got false, want true", aPath, dstAPath)
+	if got {
+		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
 	}
 
 	dstBPath := filepath.Join(dstOutputPath, "b")
 	got, err = turbofs.SameFile(bPath, dstBPath)
 	assert.NilError(t, err, "SameFile")
-	if !got {
-		t.Errorf("SameFile(%v, %v) got false, want true", bPath, dstBPath)
+	if got {
+		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
 	}
 
 	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
-	target, err := os.Readlink(dstLinkPath)
-	assert.NilError(t, err, "Readlink")
-	if target != linkTarget {
-		t.Errorf("Readlink got %v, want %v", target, linkTarget)
-	}
+	dstLstat, dstLstErr := os.Lstat(dstLinkPath)
+	assert.NilError(t, dstLstErr, "Lstat")
+	assert.Check(t, dstLstat.Mode().IsRegular(), "the cached file is a regular file")
 
 	// We currently don't restore broken symlinks. This is probably a bug
 	dstBrokenLinkPath := filepath.Join(dstOutputPath, "child", "broken")
