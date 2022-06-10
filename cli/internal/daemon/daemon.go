@@ -157,11 +157,15 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 		},
 	}
 	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 2*time.Hour, "Set the idle timeout for turbod")
+	addDaemonSubcommands(cmd, config, output)
+	return cmd
+}
+
+func addDaemonSubcommands(cmd *cobra.Command, config *config.Config, output cli.Ui) {
 	addStatusCmd(cmd, config, output)
 	addStartCmd(cmd, config, output)
 	addStopCmd(cmd, config, output)
 	addRestartCmd(cmd, config, output)
-	return cmd
 }
 
 var errInactivityTimeout = errors.New("turbod shut down from inactivity")
