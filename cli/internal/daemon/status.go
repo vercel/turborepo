@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
 	"github.com/vercel/turborepo/cli/internal/daemonclient"
-	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
@@ -24,76 +22,71 @@ func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			s := &status{
+			l := &lifecycle{
+				repoRoot:     config.Cwd,
 				logger:       config.Logger,
 				output:       output,
 				turboVersion: config.TurboVersion,
-				repoRoot:     config.Cwd,
-				outputJSON:   outputJSON,
 			}
-			return s.status()
+			if err := l.status(outputJSON); err != nil {
+				l.logError(err)
+				return err
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&outputJSON, "json", false, "Pass --json to report status in JSON format")
 	root.AddCommand(cmd)
 }
 
-type status struct {
-	logger       hclog.Logger
-	output       cli.Ui
-	turboVersion string
-	repoRoot     fs.AbsolutePath
-	outputJSON   bool
-}
-
-func (s *status) status() error {
+func (l *lifecycle) status(outputJSON bool) error {
 	ctx := context.Background()
-	client, err := GetClient(ctx, s.repoRoot, s.logger, s.turboVersion, ClientOpts{
+	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{
 		// If the daemon is not running, the status is that it's not running.
 		// We don't want to start it just to check the status.
 		DontStart: true,
 	})
 	if err != nil {
-		return s.reportError(err)
+		return l.reportStatusError(err, outputJSON)
 	}
 	turboClient := daemonclient.New(ctx, client)
 	status, err := turboClient.Status()
 	if err != nil {
-		return s.reportError(err)
+		return l.reportStatusError(err, outputJSON)
 	}
-	if s.outputJSON {
+	if outputJSON {
 		rendered, err := json.MarshalIndent(status, "", "  ")
 		if err != nil {
 			return err
 		}
-		s.output.Output(string(rendered))
+		l.output.Output(string(rendered))
 	} else {
 		uptime := time.Duration(int64(status.UptimeMs * 1000 * 1000))
-		s.output.Output(fmt.Sprintf("Daemon log file: %v", status.LogFile))
-		s.output.Output(fmt.Sprintf("Daemon uptime: %v", uptime.String()))
-		s.output.Output(fmt.Sprintf("Daemon pid file: %v", client.PidPath))
-		s.output.Output(fmt.Sprintf("Daemon socket file: %v", client.SockPath))
+		l.output.Output(fmt.Sprintf("Daemon log file: %v", status.LogFile))
+		l.output.Output(fmt.Sprintf("Daemon uptime: %v", uptime.String()))
+		l.output.Output(fmt.Sprintf("Daemon pid file: %v", client.PidPath))
+		l.output.Output(fmt.Sprintf("Daemon socket file: %v", client.SockPath))
 	}
 	return nil
 }
 
-func (s *status) reportError(err error) error {
+func (l *lifecycle) reportStatusError(err error, outputJSON bool) error {
 	var msg string
 	if errors.Is(err, connector.ErrDaemonNotRunning) {
 		msg = "the daemon is not running"
 	} else {
 		msg = err.Error()
 	}
-	if s.outputJSON {
+	if outputJSON {
 		rendered, err := json.MarshalIndent(map[string]string{
 			"error": msg,
 		}, "", "  ")
 		if err != nil {
 			return err
 		}
-		s.output.Output(string(rendered))
+		l.output.Output(string(rendered))
 	} else {
-		s.output.Output(fmt.Sprintf("Failed to contact daemon: %v", msg))
+		l.output.Output(fmt.Sprintf("Failed to contact daemon: %v", msg))
 	}
 	return nil
 }

@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
@@ -27,7 +26,11 @@ func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 				output:       output,
 				turboVersion: config.TurboVersion,
 			}
-			return l.ensureStarted()
+			if err := l.ensureStarted(); err != nil {
+				l.logError(err)
+				return err
+			}
+			return nil
 		},
 	}
 	root.AddCommand(cmd)
@@ -46,7 +49,11 @@ func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 				output:       output,
 				turboVersion: config.TurboVersion,
 			}
-			return l.ensureStopped()
+			if err := l.ensureStopped(); err != nil {
+				l.logError(err)
+				return err
+			}
+			return nil
 		},
 	}
 	root.AddCommand(cmd)
@@ -66,9 +73,11 @@ func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 				turboVersion: config.TurboVersion,
 			}
 			if err := l.ensureStopped(); err != nil {
+				l.logError(err)
 				return err
 			}
 			if err := l.ensureStarted(); err != nil {
+				l.logError(err)
 				return err
 			}
 			return nil
@@ -84,11 +93,16 @@ type lifecycle struct {
 	turboVersion string
 }
 
+// logError logs an error and outputs it to the UI.
+func (l *lifecycle) logError(err error) {
+	l.logger.Error("error", err)
+	l.output.Error(err.Error())
+}
+
 func (l *lifecycle) ensureStarted() error {
 	ctx := context.Background()
 	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{})
 	if err != nil {
-		l.output.Error(fmt.Sprintf("Failed to start turbo daemon: %v", err))
 		return err
 	}
 	// We don't really care if we fail to close the client, we're about to exit
@@ -108,13 +122,11 @@ func (l *lifecycle) ensureStopped() error {
 			l.output.Output("turbo daemon is not running")
 			return nil
 		}
-		l.output.Error(fmt.Sprintf("Failed to contact turbo daemon: %v", err))
 		return err
 	}
 	defer func() { _ = client.Close() }()
 	_, err = client.Shutdown(ctx, &server.ShutdownRequest{})
 	if err != nil {
-		l.output.Error(fmt.Sprintf("Failed to shut down turbo daemon: %v", err))
 		return err
 	}
 	l.output.Output("Successfully requested that turbo daemon shut down")
