@@ -5,7 +5,7 @@
   "scripts": {
     "clean": "make clean",
     "build": "cross-env CGO_ENABLED=0 go build ./cmd/turbo",
-    "test": "go test -race ./internal/...",
+    "test": "make compile-protos && go test -race ./internal/...",
     "e2e": "node -r esbuild-register scripts/e2e/e2e.ts",
     "watch": "watchlist e2e -- pnpm test",
     "publish": "make publish-all",

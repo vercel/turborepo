@@ -34,7 +34,7 @@ check-go-version:
 # you can run "TURBO_RACE= make test" to disable the race detector.
 TURBO_RACE ?= -race
 
-test-go:
+test-go: compile-protos
 	go test $(TURBO_RACE) ./internal/...
 
 vet-go:
