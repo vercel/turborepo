@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-option go_package = "github.com/vercel/turborepo/cli/internal/server";
+option go_package = "github.com/vercel/turborepo/cli/internal/turbodprotocol";
 
-package server;
+package turbodprotocol;
 
-service Turbo {
+service Turbod {
   rpc Hello (HelloRequest) returns (HelloResponse);
   rpc Shutdown (ShutdownRequest) returns (ShutdownResponse);
   rpc Status (StatusRequest) returns (StatusResponse);

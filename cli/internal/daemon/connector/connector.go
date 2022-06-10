@@ -11,7 +11,7 @@ import (
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/server"
+	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -40,7 +40,7 @@ type Opts struct {
 
 // Client represents a connection to the daemon process
 type Client struct {
-	server.TurboClient
+	turbodprotocol.TurbodClient
 	*grpc.ClientConn
 	SockPath fs.AbsolutePath
 	PidPath  fs.AbsolutePath
@@ -121,7 +121,7 @@ const (
 func (c *Connector) killLiveServer(client *Client, serverPid int) error {
 	defer func() { _ = client.Close() }()
 
-	_, err := client.Shutdown(c.Ctx, &server.ShutdownRequest{})
+	_, err := client.Shutdown(c.Ctx, &turbodprotocol.ShutdownRequest{})
 	if err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to shutdown running daemon. attempting to force it closed: %v", err))
 		return c.killDeadServer(serverPid)
@@ -260,18 +260,18 @@ func (c *Connector) getClientConn() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	tc := server.NewTurboClient(conn)
+	tc := turbodprotocol.NewTurbodClient(conn)
 	return &Client{
-		TurboClient: tc,
-		ClientConn:  conn,
-		SockPath:    c.SockPath,
-		PidPath:     c.PidPath,
-		LogPath:     c.LogPath,
+		TurbodClient: tc,
+		ClientConn:   conn,
+		SockPath:     c.SockPath,
+		PidPath:      c.PidPath,
+		LogPath:      c.LogPath,
 	}, nil
 }
 
-func (c *Connector) sendHello(client server.TurboClient) error {
-	_, err := client.Hello(c.Ctx, &server.HelloRequest{
+func (c *Connector) sendHello(client turbodprotocol.TurbodClient) error {
+	_, err := client.Hello(c.Ctx, &turbodprotocol.HelloRequest{
 		Version: c.TurboVersion,
 		// TODO: add session id
 	})

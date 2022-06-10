@@ -7,7 +7,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/server"
+	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 )
 
 // DaemonClient provides access to higher-level functionality from the daemon to a turbo run.
@@ -34,7 +34,7 @@ func New(ctx context.Context, client *connector.Client) *DaemonClient {
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
 func (d *DaemonClient) GetChangedOutputs(hash string, repoRelativeOutputGlobs []string) ([]string, error) {
-	resp, err := d.client.GetChangedOutputs(d.ctx, &server.GetChangedOutputsRequest{
+	resp, err := d.client.GetChangedOutputs(d.ctx, &turbodprotocol.GetChangedOutputsRequest{
 		Hash:        hash,
 		OutputGlobs: repoRelativeOutputGlobs,
 	})
@@ -46,7 +46,7 @@ func (d *DaemonClient) GetChangedOutputs(hash string, repoRelativeOutputGlobs []
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
 func (d *DaemonClient) NotifyOutputsWritten(hash string, repoRelativeOutputGlobs []string) error {
-	_, err := d.client.NotifyOutputsWritten(d.ctx, &server.NotifyOutputsWrittenRequest{
+	_, err := d.client.NotifyOutputsWritten(d.ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
 		Hash:        hash,
 		OutputGlobs: repoRelativeOutputGlobs,
 	})
@@ -55,7 +55,7 @@ func (d *DaemonClient) NotifyOutputsWritten(hash string, repoRelativeOutputGlobs
 
 // Status returns the DaemonStatus from the daemon
 func (d *DaemonClient) Status() (*Status, error) {
-	resp, err := d.client.Status(d.ctx, &server.StatusRequest{})
+	resp, err := d.client.Status(d.ctx, &turbodprotocol.StatusRequest{})
 	if err != nil {
 		return nil, err
 	}

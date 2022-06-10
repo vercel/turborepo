@@ -10,7 +10,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/server"
+	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 )
 
 func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
@@ -125,7 +125,7 @@ func (l *lifecycle) ensureStopped() error {
 		return err
 	}
 	defer func() { _ = client.Close() }()
-	_, err = client.Shutdown(ctx, &server.ShutdownRequest{})
+	_, err = client.Shutdown(ctx, &turbodprotocol.ShutdownRequest{})
 	if err != nil {
 		return err
 	}

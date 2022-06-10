@@ -10,6 +10,7 @@ import (
 	"gotest.tools/v3/assert"
 
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 )
 
 type mockGrpc struct {
@@ -60,7 +61,7 @@ func TestShutdown(t *testing.T) {
 	s.Register(grpcServer)
 
 	ctx := context.Background()
-	_, err = s.Shutdown(ctx, &ShutdownRequest{})
+	_, err = s.Shutdown(ctx, &turbodprotocol.ShutdownRequest{})
 	assert.NilError(t, err, "Shutdown")
 	// Ensure that graceful stop gets called
 	select {

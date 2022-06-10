@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/filewatcher"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globwatcher"
+	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -23,7 +24,7 @@ import (
 // and "the thing that holds our persistent data structures" to handle
 // changes in the underlying configuration.
 type Server struct {
-	UnimplementedTurboServer
+	turbodprotocol.UnimplementedTurbodServer
 	watcher      *filewatcher.FileWatcher
 	globWatcher  *globwatcher.GlobWatcher
 	turboVersion string
@@ -115,53 +116,53 @@ func (s *Server) Register(grpcServer GRPCServer) {
 		grpcServer: grpcServer,
 	}
 	s.closerMu.Unlock()
-	RegisterTurboServer(grpcServer, s)
+	turbodprotocol.RegisterTurbodServer(grpcServer, s)
 }
 
 // NotifyOutputsWritten implements the NotifyOutputsWritten rpc from turbo.proto
-func (s *Server) NotifyOutputsWritten(ctx context.Context, req *NotifyOutputsWrittenRequest) (*NotifyOutputsWrittenResponse, error) {
+func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.NotifyOutputsWrittenRequest) (*turbodprotocol.NotifyOutputsWrittenResponse, error) {
 	err := s.globWatcher.WatchGlobs(req.Hash, req.OutputGlobs)
 	if err != nil {
 		return nil, err
 	}
-	return &NotifyOutputsWrittenResponse{}, nil
+	return &turbodprotocol.NotifyOutputsWrittenResponse{}, nil
 }
 
 // GetChangedOutputs implements the GetChangedOutputs rpc from turbo.proto
-func (s *Server) GetChangedOutputs(ctx context.Context, req *GetChangedOutputsRequest) (*GetChangedOutputsResponse, error) {
+func (s *Server) GetChangedOutputs(ctx context.Context, req *turbodprotocol.GetChangedOutputsRequest) (*turbodprotocol.GetChangedOutputsResponse, error) {
 	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, req.OutputGlobs)
 	if err != nil {
 		return nil, err
 	}
-	return &GetChangedOutputsResponse{
+	return &turbodprotocol.GetChangedOutputsResponse{
 		ChangedOutputGlobs: changedGlobs,
 	}, nil
 }
 
 // Hello implements the Hello rpc from turbo.proto
-func (s *Server) Hello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
+func (s *Server) Hello(ctx context.Context, req *turbodprotocol.HelloRequest) (*turbodprotocol.HelloResponse, error) {
 	clientVersion := req.Version
 	if clientVersion != s.turboVersion {
 		err := status.Errorf(codes.FailedPrecondition, "version mismatch. Client %v Server %v", clientVersion, s.turboVersion)
 		return nil, err
 	}
-	return &HelloResponse{}, nil
+	return &turbodprotocol.HelloResponse{}, nil
 }
 
 // Shutdown implements the Shutdown rpc from turbo.proto
-func (s *Server) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownResponse, error) {
+func (s *Server) Shutdown(ctx context.Context, req *turbodprotocol.ShutdownRequest) (*turbodprotocol.ShutdownResponse, error) {
 	if s.tryClose() {
-		return &ShutdownResponse{}, nil
+		return &turbodprotocol.ShutdownResponse{}, nil
 	}
 	err := status.Error(codes.NotFound, "shutdown mechanism not found")
 	return nil, err
 }
 
 // Status implements the Status rpc from turbo.proto
-func (s *Server) Status(ctx context.Context, req *StatusRequest) (*StatusResponse, error) {
+func (s *Server) Status(ctx context.Context, req *turbodprotocol.StatusRequest) (*turbodprotocol.StatusResponse, error) {
 	uptime := uint64(time.Since(s.started).Milliseconds())
-	return &StatusResponse{
-		DaemonStatus: &DaemonStatus{
+	return &turbodprotocol.StatusResponse{
+		DaemonStatus: &turbodprotocol.DaemonStatus{
 			LogFile:    s.logFilePath.ToString(),
 			UptimeMsec: uptime,
 		},

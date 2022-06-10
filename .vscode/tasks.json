@@ -2,6 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "runOptions": { "runOn": "folderOpen" },
+      "label": "Compile protobufs",
+      "type": "shell",
+      "command": "cd ${workspaceRoot}/cli && make compile-protos"
+    },
+    {
       "type": "shell",
       "label": "prepare e2e",
       "dependsOn": ["make turbo", "make install"]
@@ -9,7 +15,7 @@
     {
       "type": "shell",
       "command": "cd ${cwd}/cli && make install",
-      "label": "make install",
+      "label": "make install"
     },
     {
       "type": "shell",

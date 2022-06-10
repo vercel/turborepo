@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/server"
+	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -172,21 +172,21 @@ func TestKillDeadServerWithProcess(t *testing.T) {
 }
 
 type mockServer struct {
-	server.UnimplementedTurboServer
+	turbodprotocol.UnimplementedTurbodServer
 	helloErr     error
-	shutdownResp *server.ShutdownResponse
+	shutdownResp *turbodprotocol.ShutdownResponse
 	pidFile      fs.AbsolutePath
 }
 
 // Simulates server exiting by cleaning up the pid file
-func (s *mockServer) Shutdown(ctx context.Context, req *server.ShutdownRequest) (*server.ShutdownResponse, error) {
+func (s *mockServer) Shutdown(ctx context.Context, req *turbodprotocol.ShutdownRequest) (*turbodprotocol.ShutdownResponse, error) {
 	if err := s.pidFile.Remove(); err != nil {
 		return nil, err
 	}
 	return s.shutdownResp, nil
 }
 
-func (s *mockServer) Hello(ctx context.Context, req *server.HelloRequest) (*server.HelloResponse, error) {
+func (s *mockServer) Hello(ctx context.Context, req *turbodprotocol.HelloRequest) (*turbodprotocol.HelloResponse, error) {
 	if req.Version == "" {
 		return nil, errors.New("missing version")
 	}
@@ -220,13 +220,13 @@ func TestKillLiveServer(t *testing.T) {
 
 	st := status.New(codes.FailedPrecondition, "version mismatch")
 	mock := &mockServer{
-		shutdownResp: &server.ShutdownResponse{},
+		shutdownResp: &turbodprotocol.ShutdownResponse{},
 		helloErr:     st.Err(),
 		pidFile:      pidPath,
 	}
 	lis := bufconn.Listen(1024 * 1024)
 	grpcServer := grpc.NewServer()
-	server.RegisterTurboServer(grpcServer, mock)
+	turbodprotocol.RegisterTurbodServer(grpcServer, mock)
 	go func(t *testing.T) {
 		if err := grpcServer.Serve(lis); err != nil {
 			t.Logf("server closed: %v", err)
@@ -237,10 +237,10 @@ func TestKillLiveServer(t *testing.T) {
 		return lis.Dial()
 	}), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NilError(t, err, "DialContext")
-	turboClient := server.NewTurboClient(conn)
+	turboClient := turbodprotocol.NewTurbodClient(conn)
 	client := &Client{
-		TurboClient: turboClient,
-		ClientConn:  conn,
+		TurbodClient: turboClient,
+		ClientConn:   conn,
 	}
 	err = c.sendHello(client)
 	if !errors.Is(err, errVersionMismatch) {
