@@ -2,8 +2,9 @@ package util
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseConcurrency(t *testing.T) {
@@ -44,7 +45,7 @@ func TestParseConcurrency(t *testing.T) {
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d) '%s' should be parsed at '%d'", i, tc.Input, tc.Expected), func(t *testing.T) {
-			if result, err := ParseConcurrency(tc.Input); err != nil {
+			if result, err := parseConcurrency(tc.Input); err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			} else {
 				assert.EqualValues(t, tc.Expected, result)
@@ -53,17 +54,17 @@ func TestParseConcurrency(t *testing.T) {
 	}
 
 	t.Run("throw on invalid string input", func(t *testing.T) {
-		_, err := ParseConcurrency("asdf")
+		_, err := parseConcurrency("asdf")
 		assert.Error(t, err)
 	})
 
 	t.Run("throw on invalid number input", func(t *testing.T) {
-		_, err := ParseConcurrency("-1")
+		_, err := parseConcurrency("-1")
 		assert.Error(t, err)
 	})
 
 	t.Run("throw on invalid percent input - negative", func(t *testing.T) {
-		_, err := ParseConcurrency("-1%")
+		_, err := parseConcurrency("-1%")
 		assert.Error(t, err)
 	})
 }

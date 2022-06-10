@@ -3,6 +3,7 @@ package run
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/pyr-sh/dag"
@@ -18,6 +19,7 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
+	cpus := runtime.NumCPU()
 	defaultCwd, err := fs.GetCwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
@@ -71,6 +73,22 @@ func TestParseConfig(t *testing.T) {
 			&Opts{
 				runOpts: runOpts{
 					concurrency: 12,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
+			},
+			[]string{"foo"},
+		},
+		{
+			"concurrency percent",
+			[]string{"foo", "--concurrency=100%"},
+			&Opts{
+				runOpts: runOpts{
+					concurrency: cpus,
 				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,

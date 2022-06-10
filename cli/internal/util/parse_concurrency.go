@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -13,7 +15,7 @@ var (
 	runtimeNumCPU = runtime.NumCPU
 )
 
-func ParseConcurrency(concurrencyRaw string) (int, error) {
+func parseConcurrency(concurrencyRaw string) (int, error) {
 	if strings.HasSuffix(concurrencyRaw, "%") {
 		if percent, err := strconv.ParseFloat(concurrencyRaw[:len(concurrencyRaw)-1], 64); err != nil {
 			return 0, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a number --concurrency=4 or percentage of CPU cores --concurrency=50%% : %w", err)
@@ -33,4 +35,29 @@ func ParseConcurrency(concurrencyRaw string) (int, error) {
 			return 0, fmt.Errorf("invalid value %v for --concurrency CLI flag. This should be a positive integer greater than or equal to 1", i)
 		}
 	}
+}
+
+type ConcurrencyValue struct {
+	Value *int
+	raw   string
+}
+
+var _ pflag.Value = &ConcurrencyValue{}
+
+func (cv *ConcurrencyValue) String() string {
+	return cv.raw
+}
+
+func (cv *ConcurrencyValue) Set(value string) error {
+	parsed, err := parseConcurrency(value)
+	if err != nil {
+		return err
+	}
+	cv.raw = value
+	*cv.Value = parsed
+	return nil
+}
+
+func (cv *ConcurrencyValue) Type() string {
+	return "number|percentage"
 }
