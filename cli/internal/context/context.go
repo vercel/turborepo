@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "Ba weep granna weep ninny bong"
+const _globalCacheKey = "Real G's move in silence like lasagna"
 
 // Context of the CLI
 type Context struct {
@@ -473,7 +473,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
-		globalCacheKey:       GLOBAL_CACHE_KEY,
+		globalCacheKey:       _globalCacheKey,
 		pipeline:             pipeline,
 	}
 	globalHash, err := fs.HashObject(globalHashable)

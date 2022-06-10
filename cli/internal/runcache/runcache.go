@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -17,49 +18,40 @@ import (
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
-
-// LogsMode defines the ways turbo can output logs during a run for cached and not cached tasks
-type LogsMode int
 
 // LogReplayer is a function that is responsible for replaying the contents of a given log file
 type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile fs.AbsolutePath)
 
-const (
-	// FullLogs - show all,
-	FullLogs LogsMode = iota
-	// HashLogs - only show task hash
-	HashLogs
-	// NoLogs - show nothing
-	NoLogs
-)
-
-const (
-	logsModeFull     = "full"
-	logsModeHashOnly = "hash-only"
-	logsModeNewOnly  = "new-only"
-	logsModeNone     = "none"
-)
-
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
-	SkipReads         bool
-	SkipWrites        bool
-	CacheHitLogsMode  LogsMode
-	CacheMissLogsMode LogsMode
-	LogReplayer       LogReplayer
-	OutputWatcher     OutputWatcher
+	SkipReads              bool
+	SkipWrites             bool
+	TaskOutputModeOverride *util.TaskOutputMode
+	LogReplayer            LogReplayer
+	OutputWatcher          OutputWatcher
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
 func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
 	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
+
+	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
+	if err != nil {
+		panic(err)
+	}
+
 	flags.AddFlag(&pflag.Flag{
-		Name:     "output-logs",
-		Usage:    _outputModeHelp,
-		DefValue: "full",
-		Value:    &logsModeValue{opts: opts},
+		Name: "output-logs",
+		Usage: `Set type of process output logging. Use "full" to show
+all output. Use "hash-only" to show only turbo-computed
+task hashes. Use "new-only" to show only new output with
+only hashes for cached tasks. Use "none" to hide process
+output.`,
+		DefValue: defaultTaskOutputMode,
+		Value:    &taskOutputModeValue{opts: opts},
 	})
 	_ = flags.Bool("stream", true, "Unused")
 	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
@@ -68,81 +60,66 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	}
 }
 
-var _outputModeHelp = `Set type of process output logging. Use full to show
-all output. Use hash-only to show only turbo-computed
-task hashes. Use new-only to show only new output with
-only hashes for cached tasks. Use none to hide process
-output.`
-
-type logsModeValue struct {
+type taskOutputModeValue struct {
 	opts *Opts
 }
 
-func (l *logsModeValue) String() string {
-	if l.opts.CacheHitLogsMode == FullLogs && l.opts.CacheMissLogsMode == FullLogs {
-		return logsModeFull
-	} else if l.opts.CacheHitLogsMode == NoLogs && l.opts.CacheMissLogsMode == NoLogs {
-		return logsModeNone
-	} else if l.opts.CacheHitLogsMode == HashLogs && l.opts.CacheMissLogsMode == HashLogs {
-		return logsModeHashOnly
-	} else if l.opts.CacheHitLogsMode == HashLogs && l.opts.CacheMissLogsMode == FullLogs {
-		return logsModeNewOnly
-	} else {
-		panic(fmt.Sprintf("Invalid output logs mode. Hit %v, miss %v", l.opts.CacheHitLogsMode, l.opts.CacheMissLogsMode))
+func (l *taskOutputModeValue) String() string {
+	taskOutputMode, err := util.ToTaskOutputModeString(*l.opts.TaskOutputModeOverride)
+	if err != nil {
+		panic(err)
 	}
+	return taskOutputMode
 }
 
-func (l *logsModeValue) Set(value string) error {
-	switch value {
-	case logsModeFull:
-		l.opts.CacheMissLogsMode = FullLogs
-		l.opts.CacheHitLogsMode = FullLogs
-	case logsModeNone:
-		l.opts.CacheMissLogsMode = NoLogs
-		l.opts.CacheHitLogsMode = NoLogs
-	case logsModeHashOnly:
-		l.opts.CacheMissLogsMode = HashLogs
-		l.opts.CacheHitLogsMode = HashLogs
-	case logsModeNewOnly:
-		l.opts.CacheMissLogsMode = FullLogs
-		l.opts.CacheHitLogsMode = HashLogs
-	default:
-		return fmt.Errorf("unknown output-mode: %v", value)
+func (l *taskOutputModeValue) Set(value string) error {
+	outputMode, err := util.FromTaskOutputModeString(value)
+	if err != nil {
+		return fmt.Errorf("must be one of \"%v\"", l.Type())
 	}
+	l.opts.TaskOutputModeOverride = &outputMode
 	return nil
 }
 
-func (l *logsModeValue) Type() string {
-	return "full|none|hash-only|new-only"
+func (l *taskOutputModeValue) Type() string {
+	var builder strings.Builder
+
+	first := true
+	for _, mode := range util.TaskOutputModeStrings {
+		if !first {
+			builder.WriteString("|")
+		}
+		first = false
+		builder.WriteString(string(mode))
+	}
+	return builder.String()
 }
 
-var _ pflag.Value = &logsModeValue{}
+var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
-	cacheHitLogsMode  LogsMode
-	cacheMissLogsMode LogsMode
-	cache             cache.Cache
-	readsDisabled     bool
-	writesDisabled    bool
-	repoRoot          fs.AbsolutePath
-	logReplayer       LogReplayer
-	outputWatcher     OutputWatcher
-	colorCache        *colorcache.ColorCache
+	taskOutputModeOverride *util.TaskOutputMode
+	cache                  cache.Cache
+	readsDisabled          bool
+	writesDisabled         bool
+	repoRoot               fs.AbsolutePath
+	logReplayer            LogReplayer
+	outputWatcher          OutputWatcher
+	colorCache             *colorcache.ColorCache
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
 func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
 	rc := &RunCache{
-		cacheHitLogsMode:  opts.CacheHitLogsMode,
-		cacheMissLogsMode: opts.CacheMissLogsMode,
-		cache:             cache,
-		readsDisabled:     opts.SkipReads,
-		writesDisabled:    opts.SkipWrites,
-		repoRoot:          repoRoot,
-		logReplayer:       opts.LogReplayer,
-		outputWatcher:     opts.OutputWatcher,
-		colorCache:        colorCache,
+		taskOutputModeOverride: opts.TaskOutputModeOverride,
+		cache:                  cache,
+		readsDisabled:          opts.SkipReads,
+		writesDisabled:         opts.SkipWrites,
+		repoRoot:               repoRoot,
+		logReplayer:            opts.LogReplayer,
+		outputWatcher:          opts.OutputWatcher,
+		colorCache:             colorCache,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -160,6 +137,7 @@ type TaskCache struct {
 	repoRelativeGlobs []string
 	hash              string
 	pt                *nodes.PackageTask
+	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
 	LogFileName       fs.AbsolutePath
 }
@@ -168,7 +146,7 @@ type TaskCache struct {
 // if successful.
 func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
-		if tc.rc.cacheHitLogsMode != NoLogs {
+		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
@@ -187,7 +165,7 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 		if err != nil {
 			return false, err
 		} else if !hit {
-			if tc.rc.cacheMissLogsMode != NoLogs {
+			if tc.taskOutputMode != util.NoTaskOutput {
 				terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			return false, nil
@@ -201,10 +179,13 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
-	switch tc.rc.cacheHitLogsMode {
-	case HashLogs:
+	switch tc.taskOutputMode {
+	// When only showing new task output, cached output should only show the computed hash
+	case util.NewTaskOutput:
+		fallthrough
+	case util.HashTaskOutput:
 		terminal.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
-	case FullLogs:
+	case util.FullTaskOutput:
 		logger.Debug("log file", "path", tc.LogFileName)
 		if tc.LogFileName.FileExists() {
 			// The task label is baked into the log file, so we need to grab the underlying Ui
@@ -264,7 +245,7 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 		file:  output,
 		bufio: bufWriter,
 	}
-	if tc.rc.cacheMissLogsMode == NoLogs || tc.rc.cacheMissLogsMode == HashLogs {
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
@@ -322,11 +303,18 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	for index, output := range hashableOutputs {
 		repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir, output)
 	}
+
+	taskOutputMode := pt.TaskDefinition.OutputMode
+	if rc.taskOutputModeOverride != nil {
+		taskOutputMode = *rc.taskOutputModeOverride
+	}
+
 	return TaskCache{
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
 		hash:              hash,
 		pt:                pt,
+		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
 		LogFileName:       logFileName,
 	}
