@@ -58,9 +58,8 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 		Opts:     Opts{},
 		SockPath: sockPath,
 		PidPath:  pidPath,
-		Ctx:      ctx,
 	}
-	_, err = c.connectInternal()
+	_, err = c.connectInternal(ctx)
 	assert.ErrorIs(t, err, ErrTooManyAttempts)
 }
 
@@ -75,14 +74,12 @@ func TestKillDeadServerNoPid(t *testing.T) {
 	pidPath := getPidFile(dirPath)
 	err = pidPath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
-	ctx := context.Background()
 	c := &Connector{
 		Logger:   logger,
 		Bin:      "nonexistent",
 		Opts:     Opts{},
 		SockPath: sockPath,
 		PidPath:  pidPath,
-		Ctx:      ctx,
 	}
 
 	err = c.killDeadServer(99999)
@@ -105,14 +102,12 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 	assert.NilError(t, err, "WriteFile")
 	err = pidPath.WriteFile([]byte("99999"), 0644)
 	assert.NilError(t, err, "WriteFile")
-	ctx := context.Background()
 	c := &Connector{
 		Logger:   logger,
 		Bin:      "nonexistent",
 		Opts:     Opts{},
 		SockPath: sockPath,
 		PidPath:  pidPath,
-		Ctx:      ctx,
 	}
 
 	err = c.killDeadServer(99999)
@@ -148,14 +143,12 @@ func TestKillDeadServerWithProcess(t *testing.T) {
 
 	err = pidPath.WriteFile([]byte(strconv.Itoa(pid)), 0644)
 	assert.NilError(t, err, "WriteFile")
-	ctx := context.Background()
 	c := &Connector{
 		Logger:   logger,
 		Bin:      "nonexistent",
 		Opts:     Opts{},
 		SockPath: sockPath,
 		PidPath:  pidPath,
-		Ctx:      ctx,
 	}
 
 	err = c.killDeadServer(pid)
@@ -214,7 +207,6 @@ func TestKillLiveServer(t *testing.T) {
 		Opts:         Opts{},
 		SockPath:     sockPath,
 		PidPath:      pidPath,
-		Ctx:          ctx,
 		TurboVersion: "some-version",
 	}
 
@@ -242,11 +234,11 @@ func TestKillLiveServer(t *testing.T) {
 		TurbodClient: turboClient,
 		ClientConn:   conn,
 	}
-	err = c.sendHello(client)
+	err = c.sendHello(ctx, client)
 	if !errors.Is(err, errVersionMismatch) {
 		t.Errorf("sendHello error got %v, want %v", err, errVersionMismatch)
 	}
-	err = c.killLiveServer(client, 99999)
+	err = c.killLiveServer(ctx, client, 99999)
 	assert.NilError(t, err, "killLiveServer")
 	// Expect the pid file and socket files to have been cleaned up
 	if pidPath.FileExists() {

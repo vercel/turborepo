@@ -218,7 +218,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		} else {
 			defer func() { _ = turbodClient.Close() }()
 			r.config.Logger.Debug("running in daemon mode")
-			daemonClient := daemonclient.New(ctx, turbodClient)
+			daemonClient := daemonclient.New(turbodClient)
 			r.opts.runcacheOpts.OutputWatcher = daemonClient
 		}
 	}
@@ -311,7 +311,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			return err
 		}
 	} else if rs.Opts.runOpts.dryRun {
-		tasksRun, err := r.executeDryRun(engine, g, hashTracker, rs)
+		tasksRun, err := r.executeDryRun(ctx, engine, g, hashTracker, rs)
 		if err != nil {
 			return err
 		}
@@ -639,9 +639,9 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
-		return ec.exec(pt, deps)
+		return ec.exec(ctx, pt, deps)
 	}), core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
@@ -686,9 +686,9 @@ type hashedTask struct {
 	Dependents   []string `json:"dependents"`
 }
 
-func (r *run) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(pt.Task)
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
 		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
@@ -791,7 +791,7 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
+func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
 	targetLogger := e.logger.Named(pt.OutputPrefix())
@@ -830,7 +830,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(pt, hash)
-	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
+	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
@@ -913,7 +913,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -980,8 +980,9 @@ func (r *run) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename fs.Ab
 	return nil
 }
 
-func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask) error) func(taskID string) error {
+func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, pt *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
+
 		name, task := util.GetPackageTaskFromId(taskID)
 		pkg, ok := g.PackageInfos[name]
 		if !ok {
@@ -999,7 +1000,7 @@ func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask
 			// override if we need to...
 			pipeline = altpipe
 		}
-		return visitor(&nodes.PackageTask{
+		return visitor(ctx, &nodes.PackageTask{
 			TaskID:         taskID,
 			Task:           task,
 			PackageName:    name,

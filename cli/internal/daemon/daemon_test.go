@@ -122,15 +122,13 @@ func TestDaemonLifecycle(t *testing.T) {
 		timeout:    10 * time.Second,
 		reqCh:      make(chan struct{}),
 		timedOutCh: make(chan struct{}),
-		ctx:        ctx,
-		cancel:     cancel,
 	}
 
 	var serverErr error
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		serverErr = d.runTurboServer(ts, watcher)
+		serverErr = d.runTurboServer(ctx, ts, watcher)
 		wg.Done()
 	}()
 
@@ -156,7 +154,7 @@ func TestTimeout(t *testing.T) {
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 
 	d := &daemon{
 		logger:     logger,
@@ -164,16 +162,10 @@ func TestTimeout(t *testing.T) {
 		timeout:    5 * time.Millisecond,
 		reqCh:      make(chan struct{}),
 		timedOutCh: make(chan struct{}),
-		ctx:        ctx,
-		cancel:     cancel,
 	}
-	err := d.runTurboServer(ts, watcher)
+	err := d.runTurboServer(ctx, ts, watcher)
 	if !errors.Is(err, errInactivityTimeout) {
 		t.Errorf("server error got %v, want %v", err, errInactivityTimeout)
-	}
-	_, ok := <-ctx.Done()
-	if ok {
-		t.Error("expected context to be done")
 	}
 }
 
@@ -184,7 +176,7 @@ func TestCaughtSignal(t *testing.T) {
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 
 	d := &daemon{
 		logger:     logger,
@@ -192,12 +184,10 @@ func TestCaughtSignal(t *testing.T) {
 		timeout:    5 * time.Second,
 		reqCh:      make(chan struct{}),
 		timedOutCh: make(chan struct{}),
-		ctx:        ctx,
-		cancel:     cancel,
 	}
 	errCh := make(chan error)
 	go func() {
-		err := d.runTurboServer(ts, watcher)
+		err := d.runTurboServer(ctx, ts, watcher)
 		errCh <- err
 	}()
 	<-ts.registered
@@ -211,10 +201,6 @@ func TestCaughtSignal(t *testing.T) {
 	}
 	err := <-errCh
 	assert.NilError(t, err, "runTurboServer")
-	_, ok := <-ctx.Done()
-	if ok {
-		t.Error("expected context to be done")
-	}
 }
 
 func TestCleanupOnPanic(t *testing.T) {
@@ -224,7 +210,7 @@ func TestCleanupOnPanic(t *testing.T) {
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
 
 	d := &daemon{
 		logger:     logger,
@@ -232,12 +218,10 @@ func TestCleanupOnPanic(t *testing.T) {
 		timeout:    5 * time.Second,
 		reqCh:      make(chan struct{}),
 		timedOutCh: make(chan struct{}),
-		ctx:        ctx,
-		cancel:     cancel,
 	}
 	errCh := make(chan error)
 	go func() {
-		err := d.runTurboServer(ts, watcher)
+		err := d.runTurboServer(ctx, ts, watcher)
 		errCh <- err
 	}()
 	<-ts.registered

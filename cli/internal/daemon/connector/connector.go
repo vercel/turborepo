@@ -56,7 +56,6 @@ type Connector struct {
 	SockPath     fs.AbsolutePath
 	PidPath      fs.AbsolutePath
 	LogPath      fs.AbsolutePath
-	Ctx          context.Context
 	TurboVersion string
 }
 
@@ -118,10 +117,10 @@ const (
 
 // killLiveServer tells a running server to shut down. This method is also responsible
 // for closing this connection
-func (c *Connector) killLiveServer(client *Client, serverPid int) error {
+func (c *Connector) killLiveServer(ctx context.Context, client *Client, serverPid int) error {
 	defer func() { _ = client.Close() }()
 
-	_, err := client.Shutdown(c.Ctx, &turbodprotocol.ShutdownRequest{})
+	_, err := client.Shutdown(ctx, &turbodprotocol.ShutdownRequest{})
 	if err != nil {
 		c.Logger.Error(fmt.Sprintf("failed to shutdown running daemon. attempting to force it closed: %v", err))
 		return c.killDeadServer(serverPid)
@@ -188,15 +187,15 @@ func (c *Connector) killDeadServer(pid int) error {
 // Connect attempts to create a connection to a turbo daemon.
 // Retries and daemon restarts are built in. If this fails,
 // it is unlikely to succeed after an automated retry.
-func (c *Connector) Connect() (*Client, error) {
-	client, err := c.connectInternal()
+func (c *Connector) Connect(ctx context.Context) (*Client, error) {
+	client, err := c.connectInternal(ctx)
 	if err != nil {
 		return nil, c.wrapConnectionError(err)
 	}
 	return client, nil
 }
 
-func (c *Connector) connectInternal() (*Client, error) {
+func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 	for i := 0; i < _maxAttempts; i++ {
 		lockFile, err := lockfile.New(c.PidPath.ToString())
 		if err != nil {
@@ -230,12 +229,12 @@ func (c *Connector) connectInternal() (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := c.sendHello(client); err == nil {
+		if err := c.sendHello(ctx, client); err == nil {
 			// We connected and negotiated a version, we're all set
 			return client, nil
 		} else if errors.Is(err, errVersionMismatch) {
 			// killLiveServer is responsible for closing the client
-			if err := c.killLiveServer(client, serverPid); err != nil {
+			if err := c.killLiveServer(ctx, client, serverPid); err != nil {
 				return nil, err
 			}
 		} else if errors.Is(err, errConnectionFailure) {
@@ -270,8 +269,8 @@ func (c *Connector) getClientConn() (*Client, error) {
 	}, nil
 }
 
-func (c *Connector) sendHello(client turbodprotocol.TurbodClient) error {
-	_, err := client.Hello(c.Ctx, &turbodprotocol.HelloRequest{
+func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodClient) error {
+	_, err := client.Hello(ctx, &turbodprotocol.HelloRequest{
 		Version: c.TurboVersion,
 		// TODO: add session id
 	})

@@ -13,7 +13,6 @@ import (
 // DaemonClient provides access to higher-level functionality from the daemon to a turbo run.
 type DaemonClient struct {
 	client *connector.Client
-	ctx    context.Context
 }
 
 // Status provides details about the daemon's status
@@ -25,16 +24,15 @@ type Status struct {
 }
 
 // New creates a new instance of a DaemonClient.
-func New(ctx context.Context, client *connector.Client) *DaemonClient {
+func New(client *connector.Client) *DaemonClient {
 	return &DaemonClient{
 		client: client,
-		ctx:    ctx,
 	}
 }
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
-func (d *DaemonClient) GetChangedOutputs(hash string, repoRelativeOutputGlobs []string) ([]string, error) {
-	resp, err := d.client.GetChangedOutputs(d.ctx, &turbodprotocol.GetChangedOutputsRequest{
+func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, error) {
+	resp, err := d.client.GetChangedOutputs(ctx, &turbodprotocol.GetChangedOutputsRequest{
 		Hash:        hash,
 		OutputGlobs: repoRelativeOutputGlobs,
 	})
@@ -45,8 +43,8 @@ func (d *DaemonClient) GetChangedOutputs(hash string, repoRelativeOutputGlobs []
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
-func (d *DaemonClient) NotifyOutputsWritten(hash string, repoRelativeOutputGlobs []string) error {
-	_, err := d.client.NotifyOutputsWritten(d.ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
+func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs []string) error {
+	_, err := d.client.NotifyOutputsWritten(ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
 		Hash:        hash,
 		OutputGlobs: repoRelativeOutputGlobs,
 	})
@@ -54,8 +52,8 @@ func (d *DaemonClient) NotifyOutputsWritten(hash string, repoRelativeOutputGlobs
 }
 
 // Status returns the DaemonStatus from the daemon
-func (d *DaemonClient) Status() (*Status, error) {
-	resp, err := d.client.Status(d.ctx, &turbodprotocol.StatusRequest{})
+func (d *DaemonClient) Status(ctx context.Context) (*Status, error) {
+	resp, err := d.client.Status(ctx, &turbodprotocol.StatusRequest{})
 	if err != nil {
 		return nil, err
 	}

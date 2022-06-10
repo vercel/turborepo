@@ -23,6 +23,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Command is the wrapper around the daemon command until we port fully to cobra
@@ -61,8 +63,8 @@ type daemon struct {
 	timeout    time.Duration
 	reqCh      chan struct{}
 	timedOutCh chan struct{}
-	ctx        context.Context
-	cancel     context.CancelFunc
+	//ctx        context.Context
+	//cancel     context.CancelFunc
 }
 
 func getRepoHash(repoRoot fs.AbsolutePath) string {
@@ -132,15 +134,13 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 				Color:  hclog.ColorOff,
 				Name:   "turbod",
 			})
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx := cmd.Context()
 			d := &daemon{
 				logger:     logger,
 				repoRoot:   config.Cwd,
 				timeout:    idleTimeout,
 				reqCh:      make(chan struct{}),
 				timedOutCh: make(chan struct{}),
-				ctx:        ctx,
-				cancel:     cancel,
 			}
 			turboServer, err := server.New(d.logger.Named("rpc server"), config.Cwd, config.TurboVersion, logFilePath)
 			if err != nil {
@@ -148,7 +148,7 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 				return err
 			}
 			defer func() { _ = turboServer.Close() }()
-			err = d.runTurboServer(turboServer, signalWatcher)
+			err = d.runTurboServer(ctx, turboServer, signalWatcher)
 			if err != nil {
 				d.logError(err)
 				return err
@@ -188,8 +188,9 @@ type rpcServer interface {
 	Register(grpcServer server.GRPCServer)
 }
 
-func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watcher) error {
-	defer d.cancel()
+func (d *daemon) runTurboServer(parentContext context.Context, rpcServer rpcServer, signalWatcher *signals.Watcher) error {
+	ctx, cancel := context.WithCancel(parentContext)
+	defer cancel()
 	pidPath := getPidFile(d.repoRoot)
 	if err := pidPath.EnsureDir(); err != nil {
 		return err
@@ -202,9 +203,9 @@ func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watc
 		d.unlockPid(lockFile)
 	})
 	panicHandler := func(thePanic interface{}) error {
-		d.cancel()
-		d.logger.Error("Caught panic %v", thePanic)
-		return nil
+		cancel()
+		d.logger.Error(fmt.Sprintf("Caught panic %v", thePanic))
+		return status.Error(codes.Internal, "server panicked")
 	}
 	defer d.unlockPid(lockFile)
 	// If we have the lock, assume that we are the owners of the socket file,
@@ -226,7 +227,7 @@ func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watc
 		),
 	)
 	signalWatcher.AddOnClose(s.GracefulStop)
-	go d.timeoutLoop()
+	go d.timeoutLoop(ctx)
 
 	rpcServer.Register(s)
 	errCh := make(chan error)
@@ -243,11 +244,11 @@ func (d *daemon) runTurboServer(rpcServer rpcServer, signalWatcher *signals.Watc
 		if ok {
 			exitErr = err
 		}
-		d.cancel()
+		cancel()
 	case <-d.timedOutCh:
 		exitErr = errInactivityTimeout
 		s.GracefulStop()
-	case <-d.ctx.Done():
+	case <-ctx.Done():
 		s.GracefulStop()
 	}
 	// Wait for the server to exit, if it hasn't already.
@@ -271,7 +272,7 @@ func (d *daemon) onRequest(ctx context.Context, req interface{}, info *grpc.Unar
 	return handler(ctx, req)
 }
 
-func (d *daemon) timeoutLoop() {
+func (d *daemon) timeoutLoop(ctx context.Context) {
 	timeoutCh := time.After(d.timeout)
 outer:
 	for {
@@ -281,7 +282,7 @@ outer:
 		case <-timeoutCh:
 			close(d.timedOutCh)
 			break outer
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			break outer
 		}
 	}
@@ -312,10 +313,9 @@ func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logge
 		SockPath:     sockPath,
 		PidPath:      pidPath,
 		LogPath:      logPath,
-		Ctx:          ctx,
 		TurboVersion: turboVersion,
 	}
-	client, err := c.Connect()
+	client, err := c.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}

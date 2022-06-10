@@ -49,8 +49,8 @@ func (l *lifecycle) status(outputJSON bool) error {
 	if err != nil {
 		return l.reportStatusError(err, outputJSON)
 	}
-	turboClient := daemonclient.New(ctx, client)
-	status, err := turboClient.Status()
+	turboClient := daemonclient.New(client)
+	status, err := turboClient.Status(ctx)
 	if err != nil {
 		return l.reportStatusError(err, outputJSON)
 	}
