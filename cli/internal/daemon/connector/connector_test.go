@@ -238,7 +238,7 @@ func TestKillLiveServer(t *testing.T) {
 	}), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NilError(t, err, "DialContext")
 	turboClient := server.NewTurboClient(conn)
-	client := &clientAndConn{
+	client := &Client{
 		TurboClient: turboClient,
 		ClientConn:  conn,
 	}

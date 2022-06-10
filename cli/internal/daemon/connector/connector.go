@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -40,14 +39,12 @@ type Opts struct {
 }
 
 // Client represents a connection to the daemon process
-type Client interface {
-	server.TurboClient
-	io.Closer
-}
-
-type clientAndConn struct {
+type Client struct {
 	server.TurboClient
 	*grpc.ClientConn
+	SockPath fs.AbsolutePath
+	PidPath  fs.AbsolutePath
+	LogPath  fs.AbsolutePath
 }
 
 // Connector instances are used to create a connection to turbo's daemon process
@@ -121,7 +118,7 @@ const (
 
 // killLiveServer tells a running server to shut down. This method is also responsible
 // for closing this connection
-func (c *Connector) killLiveServer(client *clientAndConn, serverPid int) error {
+func (c *Connector) killLiveServer(client *Client, serverPid int) error {
 	defer func() { _ = client.Close() }()
 
 	_, err := client.Shutdown(c.Ctx, &server.ShutdownRequest{})
@@ -191,7 +188,7 @@ func (c *Connector) killDeadServer(pid int) error {
 // Connect attempts to create a connection to a turbo daemon.
 // Retries and daemon restarts are built in. If this fails,
 // it is unlikely to succeed after an automated retry.
-func (c *Connector) Connect() (Client, error) {
+func (c *Connector) Connect() (*Client, error) {
 	client, err := c.connectInternal()
 	if err != nil {
 		return nil, c.wrapConnectionError(err)
@@ -199,7 +196,7 @@ func (c *Connector) Connect() (Client, error) {
 	return client, nil
 }
 
-func (c *Connector) connectInternal() (*clientAndConn, error) {
+func (c *Connector) connectInternal() (*Client, error) {
 	for i := 0; i < _maxAttempts; i++ {
 		lockFile, err := lockfile.New(c.PidPath.ToString())
 		if err != nil {
@@ -257,16 +254,19 @@ func (c *Connector) connectInternal() (*clientAndConn, error) {
 	return nil, ErrTooManyAttempts
 }
 
-func (c *Connector) getClientConn() (*clientAndConn, error) {
+func (c *Connector) getClientConn() (*Client, error) {
 	creds := insecure.NewCredentials()
 	conn, err := grpc.Dial(c.addr(), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, err
 	}
 	tc := server.NewTurboClient(conn)
-	return &clientAndConn{
+	return &Client{
 		TurboClient: tc,
 		ClientConn:  conn,
+		SockPath:    c.SockPath,
+		PidPath:     c.PidPath,
+		LogPath:     c.LogPath,
 	}, nil
 }
 

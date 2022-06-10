@@ -62,18 +62,17 @@ func (s *status) status() error {
 		return s.reportError(err)
 	}
 	if s.outputJSON {
-		rendered, err := json.MarshalIndent(map[string]interface{}{
-			"logFile":  status.LogFile,
-			"uptimeMs": status.UptimeMsec,
-		}, "", "  ")
+		rendered, err := json.MarshalIndent(status, "", "  ")
 		if err != nil {
 			return err
 		}
 		s.output.Output(string(rendered))
 	} else {
-		uptime := time.Duration(int64(status.UptimeMsec * 1000 * 1000))
+		uptime := time.Duration(int64(status.UptimeMs * 1000 * 1000))
 		s.output.Output(fmt.Sprintf("Daemon log file: %v", status.LogFile))
 		s.output.Output(fmt.Sprintf("Daemon uptime: %v", uptime.String()))
+		s.output.Output(fmt.Sprintf("Daemon pid file: %v", client.PidPath))
+		s.output.Output(fmt.Sprintf("Daemon socket file: %v", client.SockPath))
 	}
 	return nil
 }

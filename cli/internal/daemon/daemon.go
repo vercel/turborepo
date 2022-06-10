@@ -290,7 +290,7 @@ type ClientOpts = connector.Opts
 type Client = connector.Client
 
 // GetClient returns a client that can be used to interact with the daemon
-func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (Client, error) {
+func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (*Client, error) {
 	sockPath := getUnixSocket(repoRoot)
 	pidPath := getPidFile(repoRoot)
 	logPath, err := getLogFilePath(repoRoot)
