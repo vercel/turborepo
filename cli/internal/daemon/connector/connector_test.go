@@ -42,7 +42,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	// failures, followed by ErrTooManyAttempts
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.UnsafeToAbsolutePath(dir)
+	dirPath := fs.AbsolutePathFromUpstream(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -67,7 +67,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 func TestKillDeadServerNoPid(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.UnsafeToAbsolutePath(dir)
+	dirPath := fs.AbsolutePathFromUpstream(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -92,7 +92,7 @@ func TestKillDeadServerNoPid(t *testing.T) {
 func TestKillDeadServerNoProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.UnsafeToAbsolutePath(dir)
+	dirPath := fs.AbsolutePathFromUpstream(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -126,7 +126,7 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 func TestKillDeadServerWithProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.UnsafeToAbsolutePath(dir)
+	dirPath := fs.AbsolutePathFromUpstream(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
@@ -196,7 +196,7 @@ func (s *mockServer) Hello(ctx context.Context, req *turbodprotocol.HelloRequest
 func TestKillLiveServer(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.UnsafeToAbsolutePath(dir)
+	dirPath := fs.AbsolutePathFromUpstream(dir)
 	err := dirPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 

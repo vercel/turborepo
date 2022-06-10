@@ -36,6 +36,14 @@ func UnsafeToAbsolutePath(s string) AbsolutePath {
 	return AbsolutePath(s)
 }
 
+// AbsolutePathFromUpstream is used to mark return values from APIs that we
+// expect to give us absolute paths. No checking is performed.
+// Prefer to use this over a cast to maintain the search-ability of interfaces
+// into and out of the AbsolutePath type.
+func AbsolutePathFromUpstream(s string) AbsolutePath {
+	return AbsolutePath(s)
+}
+
 func GetCwd() (AbsolutePath, error) {
 	cwdRaw, err := os.Getwd()
 	if err != nil {
@@ -171,7 +179,7 @@ func TempDir(subDir string) AbsolutePath {
 // GetTurboDataDir returns a directory outside of the repo
 // where turbo can store data files related to turbo.
 func GetTurboDataDir() AbsolutePath {
-	dataHome := UnsafeToAbsolutePath(xdg.DataHome)
+	dataHome := AbsolutePathFromUpstream(xdg.DataHome)
 	return dataHome.Join("turborepo")
 }
 

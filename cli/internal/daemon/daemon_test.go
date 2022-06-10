@@ -29,7 +29,7 @@ func testBin() string {
 }
 
 func TestDaemonDebounce(t *testing.T) {
-	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	pidPath := getPidFile(repoRoot)
 	err := pidPath.EnsureDir()
@@ -110,7 +110,7 @@ outer:
 func TestDaemonLifecycle(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -152,7 +152,7 @@ func TestDaemonLifecycle(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -180,7 +180,7 @@ func TestTimeout(t *testing.T) {
 func TestCaughtSignal(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -220,7 +220,7 @@ func TestCaughtSignal(t *testing.T) {
 func TestCleanupOnPanic(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()

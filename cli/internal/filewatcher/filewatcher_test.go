@@ -83,7 +83,7 @@ func expectNoFilesystemEvent(t *testing.T, ch <-chan struct{}) {
 
 func TestFileWatching(t *testing.T) {
 	logger := hclog.Default()
-	repoRoot := fs.UnsafeToAbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	err := repoRoot.Join(".git").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 	err = repoRoot.Join("node_modules", "some-dep").MkdirAll()
