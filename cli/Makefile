@@ -17,7 +17,7 @@ compile-protos: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     internal/turbodprotocol/turbod.proto
-	touch compile-protos
+# touch compile-protos
 
 # These tests are for development
 test: test-go vet-go

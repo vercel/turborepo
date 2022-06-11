@@ -90,6 +90,17 @@ jobs:
           go-version: 1.18.0
         id: wingo
 
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+
       - uses: pnpm/action-setup@v2.1.0
         with:
           version: 6.32.11
@@ -150,6 +161,17 @@ jobs:
         with:
           go-version: 1.18.0
         id: go
+
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
       # - uses: pnpm/action-setup@v2.2.1
       #   with:
