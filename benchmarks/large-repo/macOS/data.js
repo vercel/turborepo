@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654908483554,
+  "lastUpdate": 1654994421791,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -836,6 +836,52 @@ window.BENCHMARK_DATA = {
             "value": 53251.8,
             "unit": "ms",
             "range": "16335"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]",
+            "email": "49699333+dependabot[bot]@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "2419e2fc98a04b698be98e54aae9536498fa15ec",
+          "message": "Bump lint-staged from 12.5.0 to 13.0.0 (#1318)\n\nBumps [lint-staged](https://github.com/okonet/lint-staged) from 12.5.0 to 13.0.0.\r\n- [Release notes](https://github.com/okonet/lint-staged/releases)\r\n- [Commits](https://github.com/okonet/lint-staged/compare/v12.5.0...v13.0.0)\r\n\r\n---\r\nupdated-dependencies:\r\n- dependency-name: lint-staged\r\n  dependency-type: direct:development\r\n  update-type: version-update:semver-major\r\n...\r\n\r\nSigned-off-by: dependabot[bot] <support@github.com>\r\n\r\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\r\nCo-authored-by: Thomas Knickman <tom.knickman@vercel.com>",
+          "timestamp": "2022-06-10T18:25:19Z",
+          "url": "https://github.com/vercel/turborepo/commit/2419e2fc98a04b698be98e54aae9536498fa15ec"
+        },
+        "date": 1654994420635,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 201101.8,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 6652.6,
+            "unit": "ms",
+            "range": "205"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 6721.2,
+            "unit": "ms",
+            "range": "154"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 43459.2,
+            "unit": "ms",
+            "range": "9150"
           }
         ]
       }
