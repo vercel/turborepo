@@ -27,12 +27,12 @@ jobs:
           go-version: 1.18.0
         id: go
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v2.2.2
         with:
-          version: 6.32.11
+          version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: 16
           cache: pnpm
@@ -41,7 +41,7 @@ jobs:
         run: pnpm install
 
       - name: Build & Unit Test
-        run: pnpm turbo -- run test --scope=cli --color
+        run: pnpm turbo run test --scope=cli --color
 
       - name: E2E Tests
         run: |
@@ -67,12 +67,12 @@ jobs:
           go-version: 1.18.0
         id: wingo
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v2.2.2
         with:
-          version: 6.32.11
+          version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: 16
           cache: pnpm
@@ -128,12 +128,12 @@ jobs:
           go-version: 1.18.0
         id: go
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v2.2.2
         with:
-          version: 6.32.11
+          version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: 16
           cache: pnpm
