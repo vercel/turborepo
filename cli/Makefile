@@ -38,7 +38,9 @@ clean-go:
 test-go: compile-protos $(GO_FILES) go.mod go.sum
 	go test $(TURBO_RACE) ./...
 
-lint-go: $(GO_FILES) go.mod go.sum
+# protos need to be compiled before linting, since linting needs to pick up
+# some types from the generated code
+lint-go: compile-protos $(GO_FILES) go.mod go.sum
 	golangci-lint run --new-from-rev=main
 
 fmt-go: $(GO_FILES) go.mod go.sum
