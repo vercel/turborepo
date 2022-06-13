@@ -36,6 +36,10 @@ func TestParseConcurrency(t *testing.T) {
 			"1%",
 			1,
 		},
+		{
+			"0644", // we parse in base 10
+			644,
+		},
 	}
 
 	// mock runtime.NumCPU() to 10
@@ -52,19 +56,24 @@ func TestParseConcurrency(t *testing.T) {
 			}
 		})
 	}
+}
 
-	t.Run("throw on invalid string input", func(t *testing.T) {
-		_, err := parseConcurrency("asdf")
-		assert.Error(t, err)
-	})
-
-	t.Run("throw on invalid number input", func(t *testing.T) {
-		_, err := parseConcurrency("-1")
-		assert.Error(t, err)
-	})
-
-	t.Run("throw on invalid percent input - negative", func(t *testing.T) {
-		_, err := parseConcurrency("-1%")
-		assert.Error(t, err)
-	})
+func TestInvalidPercents(t *testing.T) {
+	inputs := []string{
+		"asdf",
+		"-1",
+		"-l%",
+		"infinity%",
+		"-infinity%",
+		"nan%",
+		"0b01",
+		"0o644",
+		"0xFF",
+	}
+	for _, tc := range inputs {
+		t.Run(tc, func(t *testing.T) {
+			val, err := parseConcurrency(tc)
+			assert.Error(t, err, "input %v got %v", tc, val)
+		})
+	}
 }
