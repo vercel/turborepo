@@ -66,7 +66,11 @@ type taskOutputModeValue struct {
 }
 
 func (l *taskOutputModeValue) String() string {
-	taskOutputMode, err := util.ToTaskOutputModeString(*l.opts.TaskOutputModeOverride)
+	var outputMode util.TaskOutputMode
+	if l.opts.TaskOutputModeOverride != nil {
+		outputMode = *l.opts.TaskOutputModeOverride
+	}
+	taskOutputMode, err := util.ToTaskOutputModeString(outputMode)
 	if err != nil {
 		panic(err)
 	}

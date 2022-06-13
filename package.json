@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "format": "prettier --write",
-    "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
-    "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
     "docs": "./turbow.sh run dev --scope='docs' --no-cache",
     "build": "./turbow.sh run build --scope=docs",
     "turbo": "./turbow.sh",
@@ -21,7 +18,7 @@
       "prettier --write"
     ],
     "*.go": [
-      "sh -c \"cd cli && pnpm format\""
+      "pnpm --filter cli format"
     ]
   },
   "simple-git-hooks": {

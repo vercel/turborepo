@@ -38,20 +38,11 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
-      # Can re-enable when https://github.com/pnpm/action-setup/issues/44 is fixed
-      # - uses: pnpm/action-setup@v2.2.1
-      #   with:
-      #     version: 6.32.11
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 6.32.11
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-
-      - name: Install pnpm
-        run: npm install -g pnpm@6.32.11
-
-      - name: Setup Node.js environment, now with pnpm
         uses: actions/setup-node@v3
         with:
           node-version: 16
@@ -62,9 +53,6 @@ jobs:
 
       - name: Build & Unit Test
         run: pnpm turbo -- run test --scope=cli --color
-
-      - name: Lint
-        run: pnpm turbo -- run lint --scope=cli --color
 
       - name: E2E Tests
         run: |
@@ -101,7 +89,7 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
-      - uses: pnpm/action-setup@v2.1.0
+      - uses: pnpm/action-setup@v2
         with:
           version: 6.32.11
 
@@ -173,19 +161,11 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
-      # - uses: pnpm/action-setup@v2.2.1
-      #   with:
-      #     version: 6.32.11
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 6.32.11
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-
-      - name: Install pnpm
-        run: npm install -g pnpm@6.32.11
-
-      - name: Setup Node.js environment, now with pnpm
         uses: actions/setup-node@v3
         with:
           node-version: 16
