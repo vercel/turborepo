@@ -15,7 +15,7 @@ turbo: $(SRC_FILES) go.mod go.sum
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
 ewatch: scripts/...
-	nodemon --exec "make turbo && make e2e" -e .ts,.go
+	nodemon --exec "make e2e" -e .ts,.go
 
 check-go-version:
 	@go version | grep ' go1\.18\.0 ' || (echo 'Please install Go version 1.18.0' && false)
@@ -32,8 +32,8 @@ clean-go:
 test-go: $(GO_FILES) go.mod go.sum
 	go test $(TURBO_RACE) ./...
 
-vet-go: $(GO_FILES) go.mod go.sum
-	go vet ./...
+lint-go: $(GO_FILES) go.mod go.sum
+	golangci-lint run --new-from-rev=main
 
 fmt-go: $(GO_FILES) go.mod go.sum
 	go fmt ./...
@@ -156,7 +156,7 @@ platform-turbo-codemod:
 	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish: clean-demo
-	make -j3 bench/turbo test-go vet-go e2e
+	make -j3 bench/turbo test-go lint-go e2e
 
 
 publish-all: cmd/turbo/version.go
@@ -192,49 +192,49 @@ publish-all: cmd/turbo/version.go
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
 
-publish-windows-32: test-go vet-go platform-windows-32
+publish-windows-32: test-go lint-go platform-windows-32
 	cd npm/turbo-windows-32 && npm publish --tag $(TURBO_TAG)
 
-publish-windows-64: test-go vet-go platform-windows-64
+publish-windows-64: test-go lint-go platform-windows-64
 	cd npm/turbo-windows-64 && npm publish --tag $(TURBO_TAG)
 
-publish-windows-arm64: test-go vet-go platform-windows-arm64
+publish-windows-arm64: test-go lint-go platform-windows-arm64
 	cd npm/turbo-windows-arm64 && npm publish --tag $(TURBO_TAG)
 
-publish-darwin-64: test-go vet-go platform-darwin-64
+publish-darwin-64: test-go lint-go platform-darwin-64
 	cd npm/turbo-darwin-64 && npm publish --tag $(TURBO_TAG)
 
-publish-darwin-arm64: test-go vet-go platform-darwin-arm64
+publish-darwin-arm64: test-go lint-go platform-darwin-arm64
 	cd npm/turbo-darwin-arm64 && npm publish --tag $(TURBO_TAG)
 
-publish-freebsd-64: test-go vet-go platform-freebsd-64
+publish-freebsd-64: test-go lint-go platform-freebsd-64
 	cd npm/turbo-freebsd-64 && npm publish --tag $(TURBO_TAG)
 
-publish-freebsd-arm64: test-go vet-go platform-freebsd-arm64
+publish-freebsd-arm64: test-go lint-go platform-freebsd-arm64
 	cd npm/turbo-freebsd-arm64 && npm publish --tag $(TURBO_TAG)
 
-publish-linux-64: test-go vet-go platform-linux-64
+publish-linux-64: test-go lint-go platform-linux-64
 	cd npm/turbo-linux-64 && npm publish --tag $(TURBO_TAG)
 
-publish-linux-32: test-go vet-go platform-linux-32
+publish-linux-32: test-go lint-go platform-linux-32
 	cd npm/turbo-linux-32 && npm publish --tag $(TURBO_TAG)
 
-publish-linux-arm: test-go vet-go platform-linux-arm
+publish-linux-arm: test-go lint-go platform-linux-arm
 	cd npm/turbo-linux-arm && npm publish --tag $(TURBO_TAG)
 
-publish-linux-arm64: test-go vet-go platform-linux-arm64
+publish-linux-arm64: test-go lint-go platform-linux-arm64
 	cd npm/turbo-linux-arm64 && npm publish --tag $(TURBO_TAG)
 
-publish-android-arm64: test-go vet-go platform-android-arm64
+publish-android-arm64: test-go lint-go platform-android-arm64
 	cd npm/turbo-android-arm64 && npm publish --tag $(TURBO_TAG)
 
-publish-linux-mips64le: test-go vet-go platform-linux-mips64le
+publish-linux-mips64le: test-go lint-go platform-linux-mips64le
 	cd npm/turbo-linux-mips64le && npm publish --tag $(TURBO_TAG)
 
-publish-linux-ppc64le: test-go vet-go platform-linux-ppc64le
+publish-linux-ppc64le: test-go lint-go platform-linux-ppc64le
 	cd npm/turbo-linux-ppc64le && npm publish --tag $(TURBO_TAG)
 
-publish-neutral: test-go vet-go platform-neutral
+publish-neutral: test-go lint-go platform-neutral
 	cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
 
 publish-create-turbo: platform-create-turbo
