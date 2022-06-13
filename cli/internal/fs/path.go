@@ -35,6 +35,14 @@ func UnsafeToAbsolutePath(s string) AbsolutePath {
 	return AbsolutePath(s)
 }
 
+// AbsolutePathFromUpstream is used to mark return values from APIs that we
+// expect to give us absolute paths. No checking is performed.
+// Prefer to use this over a cast to maintain the search-ability of interfaces
+// into and out of the AbsolutePath type.
+func AbsolutePathFromUpstream(s string) AbsolutePath {
+	return AbsolutePath(s)
+}
+
 func GetCwd() (AbsolutePath, error) {
 	cwdRaw, err := os.Getwd()
 	if err != nil {
@@ -79,6 +87,12 @@ func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
 }
 
+// DirExists returns true if this path points to a directory
+func (ap AbsolutePath) DirExists() bool {
+	info, err := os.Lstat(ap.asString())
+	return err == nil && info.IsDir()
+}
+
 // ReadFile reads the contents of the specified file
 func (ap AbsolutePath) ReadFile() ([]byte, error) {
 	return ioutil.ReadFile(ap.asString())
@@ -118,6 +132,11 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 // Remove removes the file or (empty) directory at the given path
 func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())
+}
+
+// Rename implements os.Rename for absolute paths
+func (ap AbsolutePath) Rename(dest AbsolutePath) error {
+	return os.Rename(ap.asString(), dest.asString())
 }
 
 // GetVolumeRoot returns the root directory given an absolute path.
