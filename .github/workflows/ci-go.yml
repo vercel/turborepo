@@ -52,9 +52,6 @@ jobs:
       - name: Build & Unit Test
         run: pnpm turbo -- run test --scope=cli --color
 
-      - name: Lint
-        run: pnpm turbo -- run lint --scope=cli --color
-
       - name: E2E Tests
         run: |
           cd cli && make e2e
