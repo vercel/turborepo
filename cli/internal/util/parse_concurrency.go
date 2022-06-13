@@ -25,7 +25,7 @@ func parseConcurrency(concurrencyRaw string) (int, error) {
 			if percent > 0 && !math.IsInf(percent, _positiveInfinity) {
 				return int(math.Max(1, float64(runtimeNumCPU())*percent/100)), nil
 			} else {
-				return 0, fmt.Errorf("invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU cores, betteen 1%% and 100%% : %w", err)
+				return 0, fmt.Errorf("invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU cores, between 1%% and 100%% : %w", err)
 			}
 		}
 	} else if i, err := strconv.Atoi(concurrencyRaw); err != nil {
