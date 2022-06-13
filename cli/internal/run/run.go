@@ -430,7 +430,14 @@ but don't actually run them. Passing --dry=json or
 
 func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) {
 	flags.StringVar(&opts.dotGraph, "graph", "", "Generate a Dot graph of the task execution.")
-	flags.IntVar(&opts.concurrency, "concurrency", 10, "Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.")
+	flags.AddFlag(&pflag.Flag{
+		Name:     "concurrency",
+		Usage:    "Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.",
+		DefValue: "10",
+		Value: &util.ConcurrencyValue{
+			Value: &opts.concurrency,
+		},
+	})
 	flags.BoolVar(&opts.parallel, "parallel", false, "Execute all tasks in parallel.")
 	flags.StringVar(&opts.profile, "profile", "", _profileHelp)
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
