@@ -1,30 +1,55 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+func backupExistingConfig(t *testing.T) fs.AbsolutePath {
+	t.Helper()
+	path, err := createUserConfigPath()
+	if err != nil {
+		t.Fatalf("failed to get user config path: %v", err)
+	}
+	configDir := path.Dir()
+	if configDir.DirExists() {
+		backup := fs.AbsolutePathFromUpstream(t.TempDir()).Join("config_test")
+		if err := configDir.Rename(backup); err != nil {
+			t.Fatalf("failed to backup %v to %v: %v", configDir, backup, err)
+		}
+		t.Cleanup(func() {
+			// don't have a live testing instance here, use panic instead
+			if err := configDir.Remove(); err != nil {
+				panic(fmt.Sprintf("failed to remove test config dir %v: %v", configDir, err))
+			}
+			if err := backup.Rename(configDir); err != nil {
+				panic(fmt.Sprintf("failed to restore %v from %v", configDir, backup))
+			}
+		})
+	}
+	return path
+}
+
 func Test_UserConfigPath(t *testing.T) {
 	// XDG is not filesystem aware. Clean up first.
-	path, _ := createUserConfigPath()
-	err := path.Dir().Remove()
-	if err != nil {
-		t.Errorf("failed to clean up first: %v", err)
-	}
+	path := backupExistingConfig(t)
 
 	getConfigPath, getConfigPathErr := getUserConfigPath()
 	if getConfigPathErr != nil {
 		t.Errorf("failed to run getUserConfigPath: %v", getConfigPathErr)
 	}
+	// We just cleaned up the existing config, if it existed.
+	// We should not currenctly have one
+	if getConfigPath != "" {
+		t.Fatalf("expected to not find a config file, got %v", getConfigPath)
+	}
 
 	// The main thing we want to do is make sure that we don't have side effects.
 	// We know where it would attempt to create a directory already.
-	if getConfigPath == "" {
-		getConfigPath = path
-	}
+	getConfigPath = path
 
 	getConfigDir := getConfigPath.Dir()
 	getCheck, _ := os.Stat(getConfigDir.ToString())

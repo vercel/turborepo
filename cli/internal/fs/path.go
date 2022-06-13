@@ -93,6 +93,12 @@ func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
 }
 
+// DirExists returns true if this path points to a directory
+func (ap AbsolutePath) DirExists() bool {
+	info, err := os.Lstat(ap.asString())
+	return err == nil && info.IsDir()
+}
+
 // ReadFile reads the contents of the specified file
 func (ap AbsolutePath) ReadFile() ([]byte, error) {
 	return ioutil.ReadFile(ap.asString())
@@ -137,6 +143,11 @@ func (ap AbsolutePath) Remove() error {
 // Base implements filepath.Base for an absolute path
 func (ap AbsolutePath) Base() string {
 	return filepath.Base(ap.asString())
+}
+
+// Rename implements os.Rename for absolute paths
+func (ap AbsolutePath) Rename(dest AbsolutePath) error {
+	return os.Rename(ap.asString(), dest.asString())
 }
 
 // GetVolumeRoot returns the root directory given an absolute path.
