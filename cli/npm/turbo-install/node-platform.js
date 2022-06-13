@@ -18,7 +18,7 @@ const knownWindowsPackages = {
 };
 
 const knownUnixlikePackages = {
-  // "android arm64 LE": "turbo-android-arm64",
+  "android arm64 LE": "turbo-android-arm64",
   "darwin arm64 LE": "turbo-darwin-arm64",
   "darwin x64 LE": "turbo-darwin-64",
   "freebsd arm64 LE": "turbo-freebsd-arm64",
