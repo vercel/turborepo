@@ -817,7 +817,10 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	}
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.Task)
-	argsactual = append(argsactual, passThroughArgs...)
+	if len(passThroughArgs) > 0 {
+		argsactual = append(argsactual, "--")
+		argsactual = append(argsactual, passThroughArgs...)
+	}
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.Pkg.Dir
