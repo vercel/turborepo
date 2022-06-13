@@ -3,6 +3,7 @@ package run
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/pyr-sh/dag"
@@ -12,12 +13,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestParseConfig(t *testing.T) {
+	cpus := runtime.NumCPU()
 	defaultCwd, err := fs.GetCwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
@@ -71,6 +74,22 @@ func TestParseConfig(t *testing.T) {
 			&Opts{
 				runOpts: runOpts{
 					concurrency: 12,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
+			},
+			[]string{"foo"},
+		},
+		{
+			"concurrency percent",
+			[]string{"foo", "--concurrency=100%"},
+			&Opts{
+				runOpts: runOpts{
+					concurrency: cpus,
 				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
@@ -388,4 +407,27 @@ func Test_taskSelfRef(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected to failed to build task graph: %v", err)
 	}
+}
+
+func TestUsageText(t *testing.T) {
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	cf := &config.Config{
+		Cwd:    defaultCwd,
+		Token:  "some-token",
+		TeamId: "my-team",
+		Cache: &config.CacheConfig{
+			Workers: 10,
+		},
+	}
+	output := ui.Default()
+	cmd := &RunCommand{
+		Config: cf,
+		Ui:     output,
+	}
+	// just ensure it doesn't panic for now
+	usage := cmd.Help()
+	assert.NotEmpty(t, usage, "expected usage text")
 }
