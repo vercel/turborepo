@@ -287,7 +287,7 @@ async function run() {
   console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
-  console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
+  console.log(`speed boost, enable Remote Caching with Vercel by`);
   console.log(`entering the following command:`);
   console.log();
   console.log(

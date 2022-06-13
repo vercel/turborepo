@@ -119,7 +119,7 @@ func (l *link) run() error {
 	if err != nil {
 		return fmt.Errorf("could not find home directory.\n%w", err)
 	}
-	l.ui.Info(">>> Remote Caching (beta)")
+	l.ui.Info(">>> Remote Caching")
 	l.ui.Info("")
 	l.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
 	l.ui.Info("  all your team’s Vercel projects. It also can share outputs")

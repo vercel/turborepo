@@ -3,16 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "format": "prettier --write",
-    "deduplicate": "npx yarn-deduplicate -s fewer yarn.lock",
-    "deduplicate:check": "npx yarn-deduplicate -s fewer yarn.lock --list --fail",
     "docs": "./turbow.sh run dev --scope='docs' --no-cache",
     "build": "./turbow.sh run build --scope=docs",
     "turbo": "./turbow.sh",
     "run-example": "./scripts/run-example.sh"
   },
   "devDependencies": {
-    "lint-staged": "^12.3.2",
+    "lint-staged": "^13.0.1",
     "prettier": "^2.5.0",
     "simple-git-hooks": "^2.7.0"
   },
@@ -21,7 +18,7 @@
       "prettier --write"
     ],
     "*.go": [
-      "sh -c \"cd cli && pnpm format\""
+      "pnpm --filter cli format"
     ]
   },
   "simple-git-hooks": {

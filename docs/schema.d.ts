@@ -106,6 +106,16 @@ export interface Pipeline {
    * @default []
    */
   inputs?: string[];
+
+  /**
+   * The style of output for this task. Use "full" to display the entire output of
+   * the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to
+   * show the full output of cache misses and the computed hashes for cache hits. Use
+   * "none" to hide task output.
+   *
+   * @default full
+   */
+  outputMode?: string;
 }
 
 export interface RemoteCache {

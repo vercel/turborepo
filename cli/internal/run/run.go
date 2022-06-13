@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/colorcache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/core"
@@ -92,6 +93,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 
 func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra.Command {
 	var opts *Opts
+	var flags *pflag.FlagSet
 	cmd := &cobra.Command{
 		Use:                   "turbo run <task> [...<task>] [<flags>] -- <args passed to tasks>",
 		Short:                 "Run tasks across projects in your monorepo",
@@ -100,7 +102,7 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
+			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, flags)
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}
@@ -109,7 +111,8 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 			return run.run(tasks)
 		},
 	}
-	opts = optsFromFlags(cmd.Flags(), config)
+	flags = cmd.Flags()
+	opts = optsFromFlags(flags, config)
 	return cmd
 }
 
@@ -590,10 +593,11 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 		}
 	}
 	defer turboCache.Shutdown()
+	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
-	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts)
+	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
-		colorCache:     NewColorCache(),
+		colorCache:     colorCache,
 		runState:       runState,
 		rs:             rs,
 		ui:             &cli.ConcurrentUi{Ui: r.ui},
@@ -736,7 +740,7 @@ func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 }
 
 type execContext struct {
-	colorCache     *ColorCache
+	colorCache     *colorcache.ColorCache
 	runState       *RunState
 	rs             *runSpec
 	ui             cli.Ui
@@ -768,14 +772,14 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	tracer := e.runState.Run(pt.TaskID)
 
 	// Create a logger
-	pref := e.colorCache.PrefixColor(pt.PackageName)
-	actualPrefix := pref("%s: ", pt.OutputPrefix())
+	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
+	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
-		OutputPrefix: actualPrefix,
-		InfoPrefix:   actualPrefix,
-		ErrorPrefix:  actualPrefix,
-		WarnPrefix:   actualPrefix,
+		OutputPrefix: prettyTaskPrefix,
+		InfoPrefix:   prettyTaskPrefix,
+		ErrorPrefix:  prettyTaskPrefix,
+		WarnPrefix:   prettyTaskPrefix,
 	}
 
 	passThroughArgs := e.rs.ArgsForTask(pt.Task)
@@ -819,16 +823,16 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	writer, err := taskCache.OutputWriter()
 	if err != nil {
 		tracer(TargetBuildFailed, err)
-		e.logError(targetLogger, actualPrefix, err)
+		e.logError(targetLogger, prettyTaskPrefix, err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, actualPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
