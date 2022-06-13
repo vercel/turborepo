@@ -41,7 +41,7 @@ jobs:
         run: pnpm install
 
       - name: Build & Unit Test
-        run: pnpm turbo -- run test --scope=cli --color
+        run: pnpm turbo run test --scope=cli --color
 
       - name: E2E Tests
         run: |
