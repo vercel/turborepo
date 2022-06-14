@@ -191,6 +191,7 @@ func TestCaughtSignal(t *testing.T) {
 		errCh <- err
 	}()
 	<-ts.registered
+	// This can race with the call to grpc.Server.Serve
 	// If we've registered with the turboserver, we've registered all of our
 	// signal handlers as well
 	watcher.Close()
@@ -200,7 +201,12 @@ func TestCaughtSignal(t *testing.T) {
 		t.Errorf("expected to clean up %v, but it still exists", pidPath)
 	}
 	err := <-errCh
-	assert.NilError(t, err, "runTurboServer")
+	// We'll either get nil or ErrServerStopped, depending on whether
+	// or not we close the signal watcher before grpc.Server.Serve was
+	// called.
+	if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+		t.Errorf("runTurboServer got err %v, want nil or ErrServerStopped", err)
+	}
 }
 
 func TestCleanupOnPanic(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -63,8 +64,7 @@ type daemon struct {
 	timeout    time.Duration
 	reqCh      chan struct{}
 	timedOutCh chan struct{}
-	//ctx        context.Context
-	//cancel     context.CancelFunc
+	cleanup    sync.Once
 }
 
 func getRepoHash(repoRoot fs.AbsolutePath) string {
@@ -244,7 +244,6 @@ func (d *daemon) runTurboServer(parentContext context.Context, rpcServer rpcServ
 		if ok {
 			exitErr = err
 		}
-		cancel()
 	case <-d.timedOutCh:
 		exitErr = errInactivityTimeout
 		s.GracefulStop()
@@ -262,9 +261,11 @@ func (d *daemon) runTurboServer(parentContext context.Context, rpcServer rpcServ
 }
 
 func (d *daemon) unlockPid(lockFile lockfile.Lockfile) {
-	if err := lockFile.Unlock(); err != nil {
-		d.logError(errors.Wrapf(err, "failed unlocking pid file at %v", lockFile))
-	}
+	d.cleanup.Do(func() {
+		if err := lockFile.Unlock(); err != nil {
+			d.logError(errors.Wrapf(err, "failed unlocking pid file at %v", lockFile))
+		}
+	})
 }
 
 func (d *daemon) onRequest(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
