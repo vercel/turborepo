@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655080493749,
+  "lastUpdate": 1655166953024,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -928,6 +928,52 @@ window.BENCHMARK_DATA = {
             "value": 34532.2,
             "unit": "ms",
             "range": "10603"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1cba6a5fd19d4853b322cbad2cc3c925cc5d4753",
+          "message": "Use Go 1.17 mode for lint (#1404)",
+          "timestamp": "2022-06-13T22:18:06Z",
+          "url": "https://github.com/vercel/turborepo/commit/1cba6a5fd19d4853b322cbad2cc3c925cc5d4753"
+        },
+        "date": 1655166952190,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 143849.4,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 9593.2,
+            "unit": "ms",
+            "range": "1568"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 9326.8,
+            "unit": "ms",
+            "range": "145"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 36941,
+            "unit": "ms",
+            "range": "8722"
           }
         ]
       }
