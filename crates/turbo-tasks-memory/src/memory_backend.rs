@@ -128,7 +128,7 @@ impl Backend for MemoryBackend {
     ) -> bool {
         self.with_task(task, |task| {
             task.execution_result(result, turbo_tasks);
-            task.execution_completed(slot_mappings, self)
+            task.execution_completed(slot_mappings, self, turbo_tasks)
         })
     }
 
@@ -147,7 +147,7 @@ impl Backend for MemoryBackend {
     unsafe fn try_read_task_output_untracked(
         &self,
         task: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        _turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<RawVc, EventListener>> {
         self.try_get_output(task, |output| unsafe { output.read_untracked() })
     }
@@ -317,6 +317,7 @@ impl Backend for MemoryBackend {
 
 pub(crate) enum BackgroundJob {
     RemoveTasks(HashSet<TaskId>),
+    RemoveTask(TaskId),
     DeactivateTasks(Vec<TaskId>),
 }
 
@@ -329,6 +330,11 @@ impl BackgroundJob {
                         task.remove(backend, turbo_tasks);
                     });
                 }
+            }
+            BackgroundJob::RemoveTask(id) => {
+                backend.with_task(id, |task| {
+                    task.remove(backend, turbo_tasks);
+                });
             }
             BackgroundJob::DeactivateTasks(tasks) => {
                 Task::deactivate_tasks(tasks, backend, turbo_tasks);
