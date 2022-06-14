@@ -16,14 +16,14 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
       - uses: actions/setup-go@v3
         with:
           go-version: 1.17
           cache: true
           cache-dependency-path: cli/go.sum
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 2
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
