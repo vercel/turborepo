@@ -103,6 +103,12 @@ func (ap AbsolutePath) DirExists() bool {
 	return err == nil && info.IsDir()
 }
 
+// ContainsPath returns true if this absolute path is a parent of the
+// argument.
+func (ap AbsolutePath) ContainsPath(other AbsolutePath) (bool, error) {
+	return DirContainsPath(ap.asString(), other.asString())
+}
+
 // ReadFile reads the contents of the specified file
 func (ap AbsolutePath) ReadFile() ([]byte, error) {
 	return ioutil.ReadFile(ap.asString())

@@ -246,6 +246,11 @@ func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
 		}
 		files = append(files, hdr.Name)
 		filename := root.Join(hdr.Name)
+		if isChild, err := root.ContainsPath(filename); err != nil {
+			return nil, err
+		} else if !isChild {
+			return nil, fmt.Errorf("cannot untar file to %v", filename)
+		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := filename.MkdirAll(); err != nil {

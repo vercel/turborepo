@@ -129,6 +129,42 @@ func makeValidTar(t *testing.T) *bytes.Buffer {
 	return buf
 }
 
+func makeInvalidTar(t *testing.T) *bytes.Buffer {
+	// contains a single file that traverses out
+	// ../some-file
+
+	t.Helper()
+	buf := &bytes.Buffer{}
+	gzw := gzip.NewWriter(buf)
+	defer func() {
+		if err := gzw.Close(); err != nil {
+			t.Fatalf("failed to close gzip: %v", err)
+		}
+	}()
+	tw := tar.NewWriter(gzw)
+	defer func() {
+		if err := tw.Close(); err != nil {
+			t.Fatalf("failed to close tar: %v", err)
+		}
+	}()
+
+	// my-pkg/some-file
+	contents := []byte("some-file-contents")
+	h := &tar.Header{
+		Name:     "../some-file",
+		Mode:     int64(0644),
+		Typeflag: tar.TypeReg,
+		Size:     int64(len(contents)),
+	}
+	if err := tw.WriteHeader(h); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	if _, err := tw.Write(contents); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	return buf
+}
+
 func TestRestoreTar(t *testing.T) {
 	root := fs.AbsolutePathFromUpstream(t.TempDir())
 
@@ -165,6 +201,27 @@ func TestRestoreTar(t *testing.T) {
 	contents, err = someFile.ReadFile()
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, contents, []byte("some-file-contents"))
+}
+
+func TestRestoreInvalidTar(t *testing.T) {
+	root := fs.AbsolutePathFromUpstream(t.TempDir())
+	expectedContents := []byte("important-data")
+	someFile := root.Join("some-file")
+	err := someFile.WriteFile(expectedContents, 0644)
+	assert.NilError(t, err, "WriteFile")
+
+	tar := makeInvalidTar(t)
+	// use a child directory so that blindly untarring will squash the file
+	// that we just wrote above.
+	repoRoot := root.Join("repo")
+	_, err = restoreTar(repoRoot, tar)
+	if err == nil {
+		t.Error("expected error untarring invalid tar")
+	}
+
+	contents, err := someFile.ReadFile()
+	assert.NilError(t, err, "ReadFile")
+	assert.Equal(t, string(contents), string(expectedContents), "expected to not overwrite file")
 }
 
 // Note that testing Put will require mocking the filesystem and is not currently the most
