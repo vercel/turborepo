@@ -1,11 +1,16 @@
 package cache
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"net/http"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"gotest.tools/v3/assert"
 )
 
 type errorResp struct {
@@ -38,6 +43,128 @@ func TestRemoteCachingDisabled(t *testing.T) {
 	if cd.Status != util.CachingStatusDisabled {
 		t.Errorf("CacheDisabled.Status got %v, want %v", cd.Status, util.CachingStatusDisabled)
 	}
+}
+
+func makeValidTar(t *testing.T) *bytes.Buffer {
+	// <repoRoot>
+	//   my-pkg/
+	//     some-file
+	//     link-to-extra-file -> ../extra-file
+	//     broken-link -> ../../global-dep
+	//   extra-file
+
+	t.Helper()
+	buf := &bytes.Buffer{}
+	gzw := gzip.NewWriter(buf)
+	defer func() {
+		if err := gzw.Close(); err != nil {
+			t.Fatalf("failed to close gzip: %v", err)
+		}
+	}()
+	tw := tar.NewWriter(gzw)
+	defer func() {
+		if err := tw.Close(); err != nil {
+			t.Fatalf("failed to close tar: %v", err)
+		}
+	}()
+
+	// my-pkg
+	h := &tar.Header{
+		Name:     "my-pkg/",
+		Mode:     int64(0644),
+		Typeflag: tar.TypeDir,
+	}
+	if err := tw.WriteHeader(h); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	// my-pkg/some-file
+	contents := []byte("some-file-contents")
+	h = &tar.Header{
+		Name:     "my-pkg/some-file",
+		Mode:     int64(0644),
+		Typeflag: tar.TypeReg,
+		Size:     int64(len(contents)),
+	}
+	if err := tw.WriteHeader(h); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	if _, err := tw.Write(contents); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	// my-pkg/link-to-extra-file
+	h = &tar.Header{
+		Name:     "my-pkg/link-to-extra-file",
+		Mode:     int64(0644),
+		Typeflag: tar.TypeSymlink,
+		Linkname: "../extra-file",
+	}
+	if err := tw.WriteHeader(h); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	// my-pkg/broken-link
+	h = &tar.Header{
+		Name:     "my-pkg/broken-link",
+		Mode:     int64(0644),
+		Typeflag: tar.TypeSymlink,
+		Linkname: "../../global-dep",
+	}
+	if err := tw.WriteHeader(h); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	// extra-file
+	contents = []byte("extra-file-contents")
+	h = &tar.Header{
+		Name:     "extra-file",
+		Mode:     int64(0644),
+		Typeflag: tar.TypeReg,
+		Size:     int64(len(contents)),
+	}
+	if err := tw.WriteHeader(h); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	if _, err := tw.Write(contents); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	return buf
+}
+
+func TestRestoreTar(t *testing.T) {
+	root := fs.AbsolutePathFromUpstream(t.TempDir())
+
+	tar := makeValidTar(t)
+
+	expectedFiles := []string{
+		"extra-file",
+		"my-pkg/",
+		"my-pkg/some-file",
+		"my-pkg/link-to-extra-file",
+		"my-pkg/broken-link",
+	}
+	files, err := restoreTar(root, tar)
+	assert.NilError(t, err, "readTar")
+
+	expectedSet := util.SetFromStrings(expectedFiles)
+	gotSet := util.SetFromStrings(files)
+	extraFiles := gotSet.Difference(expectedSet)
+	if extraFiles.Len() > 0 {
+		t.Errorf("got extra files: %v", extraFiles.UnsafeListOfStrings())
+	}
+	missingFiles := expectedSet.Difference(gotSet)
+	if missingFiles.Len() > 0 {
+		t.Errorf("missing expected files: %v", missingFiles.UnsafeListOfStrings())
+	}
+
+	// Verify file contents
+	extraFile := root.Join("extra-file")
+	contents, err := extraFile.ReadFile()
+	assert.NilError(t, err, "ReadFile")
+	assert.DeepEqual(t, contents, []byte("extra-file-contents"))
+
+	someFile := root.Join("my-pkg", "some-file")
+	contents, err = someFile.ReadFile()
+	assert.NilError(t, err, "ReadFile")
+	assert.DeepEqual(t, contents, []byte("some-file-contents"))
 }
 
 // Note that testing Put will require mocking the filesystem and is not currently the most

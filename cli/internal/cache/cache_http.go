@@ -14,7 +14,6 @@ import (
 	log "log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -35,6 +34,7 @@ type httpCache struct {
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
+	repoRoot       fs.AbsolutePath
 }
 
 type limiter chan struct{}
@@ -188,13 +188,14 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		duration = intVar
 	}
 	artifactReader := resp.Body
+	defer func() { _ = artifactReader.Close() }()
 	if cache.signerVerifier.isEnabled() {
 		expectedTag := resp.Header.Get("x-artifact-tag")
 		if expectedTag == "" {
 			// If the verifier is enabled all incoming artifact downloads must have a signature
 			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
 		}
-		b, _ := ioutil.ReadAll(artifactReader)
+		b, err := ioutil.ReadAll(artifactReader)
 		if err != nil {
 			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
 		}
@@ -206,56 +207,68 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 			err = fmt.Errorf("artifact verification failed: artifact tag does not match expected tag %s", expectedTag)
 			return false, nil, 0, err
 		}
+		// We read the old artifactReader, we can close it.
+		// The defered call to artifactReader.Close will pick up the new value
+		_ = artifactReader.Close()
 		// The artifact has been verified and the body can be read and untarred
 		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
 	}
-	files := []string{}
-	missingLinks := []*tar.Header{}
-	gzr, err := gzip.NewReader(artifactReader)
+	files, err := restoreTar(cache.repoRoot, artifactReader)
 	if err != nil {
 		return false, nil, 0, err
 	}
-	defer gzr.Close()
+	return true, files, duration, nil
+}
+
+func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
+	files := []string{}
+	missingLinks := []*tar.Header{}
+	gzr, err := gzip.NewReader(reader)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = gzr.Close() }()
 	tr := tar.NewReader(gzr)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
 				for _, link := range missingLinks {
-					err := restoreSymlink(link, true)
+					err := restoreSymlink(root, link, true)
 					if err != nil {
-						return false, nil, 0, err
+						return nil, err
 					}
 				}
 
-				return true, files, duration, nil
+				return files, nil
 			}
-			return false, nil, 0, err
+			return nil, err
 		}
 		files = append(files, hdr.Name)
+		filename := root.Join(hdr.Name)
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(hdr.Name, fs.DirPermissions); err != nil {
-				return false, nil, 0, err
+			if err := filename.MkdirAll(); err != nil {
+				return nil, err
 			}
 		case tar.TypeReg:
-			if dir := path.Dir(hdr.Name); dir != "." {
-				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
-					return false, nil, 0, err
+			if dir := filename.Dir(); dir != "." {
+				if err := dir.MkdirAll(); err != nil {
+					return nil, err
 				}
 			}
-			if f, err := os.OpenFile(hdr.Name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
-				return false, nil, 0, err
+			if f, err := filename.OpenFile(os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
+				return nil, err
 			} else if _, err := io.Copy(f, tr); err != nil {
-				return false, nil, 0, err
+				return nil, err
 			} else if err := f.Close(); err != nil {
-				return false, nil, 0, err
+				return nil, err
 			}
 		case tar.TypeSymlink:
-			if err := restoreSymlink(hdr, false); errors.Is(err, errNonexistentLinkTarget) {
+			if err := restoreSymlink(root, hdr, false); errors.Is(err, errNonexistentLinkTarget) {
 				missingLinks = append(missingLinks, hdr)
 			} else if err != nil {
-				return false, nil, 0, err
+				return nil, err
 			}
 		default:
 			log.Printf("Unhandled file type %d for %s", hdr.Typeflag, hdr.Name)
@@ -265,16 +278,17 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 
 var errNonexistentLinkTarget = errors.New("the link target does not exist")
 
-func restoreSymlink(hdr *tar.Header, allowNonexistentTargets bool) error {
+func restoreSymlink(root fs.AbsolutePath, hdr *tar.Header, allowNonexistentTargets bool) error {
 	// Note that hdr.Linkname is really the link target
-	linkTarget := filepath.FromSlash(hdr.Linkname)
-	repoRelativeLinkFilename := filepath.FromSlash(hdr.Name)
-	err := fs.EnsureDir(repoRelativeLinkFilename)
-	if err != nil {
+	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
+	linkFilename := root.Join(hdr.Name)
+	if err := linkFilename.EnsureDir(); err != nil {
 		return err
 	}
-	repoRelativeLinkTarget := filepath.Join(filepath.Dir(repoRelativeLinkFilename), linkTarget)
-	if _, err := os.Lstat(repoRelativeLinkTarget); err != nil {
+
+	// TODO: check if this is an absolute path, or if we even care
+	linkTarget := linkFilename.Dir().Join(relativeLinkTarget)
+	if _, err := linkTarget.Lstat(); err != nil {
 		if os.IsNotExist(err) {
 			if !allowNonexistentTargets {
 				return errNonexistentLinkTarget
@@ -285,10 +299,10 @@ func restoreSymlink(hdr *tar.Header, allowNonexistentTargets bool) error {
 		}
 	}
 	// Ensure that the link we're about to create doesn't already exist
-	if err := os.Remove(repoRelativeLinkFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := linkFilename.Remove(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := os.Symlink(linkTarget, repoRelativeLinkFilename); err != nil {
+	if err := linkFilename.Symlink(relativeLinkTarget); err != nil {
 		return err
 	}
 	return nil
@@ -316,5 +330,6 @@ func newHTTPCache(opts Opts, config *config.Config, recorder analytics.Recorder)
 			teamId:  config.TeamId,
 			enabled: config.TurboJSON.RemoteCacheOptions.Signature,
 		},
+		repoRoot: config.Cwd,
 	}
 }
