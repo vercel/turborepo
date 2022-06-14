@@ -846,7 +846,10 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.Task)
-	argsactual = append(argsactual, passThroughArgs...)
+	if len(passThroughArgs) > 0 {
+		argsactual = append(argsactual, "--")
+		argsactual = append(argsactual, passThroughArgs...)
+	}
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.Pkg.Dir

@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "docs": "./turbow.sh run dev --scope='docs' --no-cache",
-    "build": "./turbow.sh run build --scope=docs",
-    "turbo": "./turbow.sh",
+    "turbo": "cd cli && make turbo && cd .. && node turbow.js",
+    "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
+    "build": "pnpm -- turbo run build --filter=docs",
     "run-example": "./scripts/run-example.sh"
   },
   "devDependencies": {
@@ -24,5 +24,5 @@
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
   },
-  "packageManager": "pnpm@6.32.11"
+  "packageManager": "pnpm@7.2.1"
 }

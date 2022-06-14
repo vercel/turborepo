@@ -248,9 +248,9 @@ Just a quick overview.
   `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#include-dependencies-of-matched-packages) instead.
 </Callout>
 
-Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
+Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
-This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
+This is useful when using `--filter` in CI as it guarantees that every dependency needed for the execution is actually executed.
 
 #### `--no-cache`
 

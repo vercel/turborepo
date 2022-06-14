@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Check out code
@@ -25,7 +25,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18.0
-        id: go
+          cache: true
+          cache-dependency-path: cli/go.sum
 
       - name: Set Up Protoc
         uses: arduino/setup-protoc@v1
@@ -38,12 +39,12 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v2.2.2
         with:
-          version: 6.32.11
+          version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: 16
           cache: pnpm
@@ -52,67 +53,10 @@ jobs:
         run: pnpm install
 
       - name: Build & Unit Test
-        run: pnpm turbo -- run test --scope=cli --color
+        run: pnpm -- turbo run test --filter=cli --color
 
       - name: E2E Tests
-        run: |
-          cd cli && make e2e
-
-  build-win:
-    name: build and test
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest]
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 2
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.18.0
-        id: wingo
-
-      - name: Set Up Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          version: "3.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Up Go and GRPC protobuf
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
-
-      - uses: pnpm/action-setup@v2
-        with:
-          version: 6.32.11
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: pnpm
-
-      - name: Compile Protos
-        run: cd cli && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative internal/turbodprotocol/turbod.proto
-
-      - name: go test
-        run: cd cli && go test ./cmd/... ./internal/...
-
-      - name: go vet
-        run: cd cli && go vet ./cmd/... ./internal/...
-
-      - name: Build
-        run: cd cli && go build ./cmd/turbo/...
-
-      - name: E2E Tests
-        run: cd cli && make e2e
+        run: pnpm -- turbo run e2e --filter=cli
 
   examples:
     name: run examples
@@ -151,7 +95,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18.0
-        id: go
+          cache: true
+          cache-dependency-path: cli/go.sum
 
       - name: Set Up Protoc
         uses: arduino/setup-protoc@v1
@@ -164,12 +109,12 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v2.2.2
         with:
-          version: 6.32.11
+          version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: 16
           cache: pnpm
@@ -181,4 +126,4 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: ./turbow.sh run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
