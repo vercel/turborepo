@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "docs": "./turbow.sh run dev --scope='docs' --no-cache",
-    "build": "./turbow.sh run build --scope=docs",
+    "docs": "./turbow.sh run dev --filter=docs --no-cache",
+    "build": "./turbow.sh run build --filter=docs",
     "turbo": "./turbow.sh",
     "run-example": "./scripts/run-example.sh"
   },

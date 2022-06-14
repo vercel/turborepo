@@ -25,6 +25,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
         id: go
 
       - uses: pnpm/action-setup@v2.2.2
@@ -41,11 +43,11 @@ jobs:
         run: pnpm install
 
       - name: Build & Unit Test
-        run: pnpm turbo run test --scope=cli --color
+        run: pnpm -- turbo run test --filter=cli --color
 
       - name: E2E Tests
         run: |
-          cd cli && make e2e
+          pnpm -- turbo run e2e --filter=cli
 
   build-win:
     name: build and test
@@ -65,6 +67,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
         id: wingo
 
       - uses: pnpm/action-setup@v2.2.2
@@ -79,9 +83,6 @@ jobs:
 
       - name: go test
         run: cd cli && go test ./cmd/... ./internal/...
-
-      - name: go vet
-        run: cd cli && go vet ./cmd/... ./internal/...
 
       - name: Build
         run: cd cli && go build ./cmd/turbo/...
@@ -126,6 +127,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
         id: go
 
       - uses: pnpm/action-setup@v2.2.2
