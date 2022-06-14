@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "docs": "cd cli && make turbo && cd .. && node turbow.js run dev --filter=docs --no-cache",
-    "build": "cd cli && make turbo && cd .. && node turbow.js run build --filter=docs",
     "turbo": "cd cli && make turbo && cd .. && node turbow.js",
+    "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
+    "build": "pnpm -- turbo run build --filter=docs",
     "run-example": "./scripts/run-example.sh"
   },
   "devDependencies": {
