@@ -152,7 +152,7 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
-func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+func (tc TaskCache) RestoreOutputs(terminal cli.Ui, logger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
@@ -296,6 +296,52 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 	}
 	return nil
+}
+
+func (tc TaskCache) NewTerminal(ui cli.Ui) cli.Ui {
+	prettyTaskPrefix := tc.ColoredPrefix()
+
+	return &cli.PrefixedUi{
+		Ui:           ui,
+		OutputPrefix: prettyTaskPrefix,
+		InfoPrefix:   prettyTaskPrefix,
+		ErrorPrefix:  prettyTaskPrefix,
+		WarnPrefix:   prettyTaskPrefix,
+	}
+}
+
+func (tc TaskCache) ColoredPrefix() string {
+	if tc.rc.stripPrefix {
+		return ""
+	}
+
+	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
+	return colorPrefixer(tc.pt.OutputPrefix())
+}
+
+func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
+	prefixedWriter := prefixedWriter{
+		prefix: tc.ColoredPrefix(),
+	}
+
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
+		// only write to log file, not to stdout
+		prefixedWriter.underlyingWriter = bufWriter
+	} else {
+		prefixedWriter.underlyingWriter = io.MultiWriter(os.Stdout, bufWriter)
+	}
+
+	return prefixedWriter
+}
+
+func (tc TaskCache) cacheHitMessage() string {
+	message := fmt.Sprintf("cache hit, replaying output %s\n", ui.Dim(tc.hash))
+	if tc.rc.stripPrefix {
+		prettyTaskPrefix := tc.ColoredPrefix()
+		message = fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))
+	}
+
+	return message
 }
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific

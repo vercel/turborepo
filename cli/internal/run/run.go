@@ -891,18 +891,6 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// Setup tracer
 	tracer := e.runState.Run(pt.TaskID)
 
-	// Create a logger
-	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
-
-	targetUi := &cli.PrefixedUi{
-		Ui:           e.ui,
-		OutputPrefix: prettyTaskPrefix,
-		InfoPrefix:   prettyTaskPrefix,
-		ErrorPrefix:  prettyTaskPrefix,
-		WarnPrefix:   prettyTaskPrefix,
-	}
-
 	passThroughArgs := e.rs.ArgsForTask(pt.Task)
 	hash, err := e.taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 	e.logger.Debug("task hash", "value", hash)
@@ -922,6 +910,10 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(pt, hash)
+	prettyTaskPrefix := taskCache.ColoredPrefix()
+	// Create a logger
+	targetUi := taskCache.NewTerminal(e.ui)
+
 	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
