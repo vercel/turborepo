@@ -22,8 +22,8 @@ func (p RepoRelativeSystemPath) ToUnixPath() UnixPathInterface {
 	return RepoRelativeUnixPath(filepath.ToSlash(p.ToString()))
 }
 
-// Rel calculates the relative path between a RelativeSystemPath and any other SystemPath.
-func (p RepoRelativeSystemPath) Rel(basePath SystemPathInterface) (RelativeSystemPath, error) {
+// RelativeTo calculates the relative path between a RelativeSystemPath and any other SystemPath.
+func (p RepoRelativeSystemPath) RelativeTo(basePath SystemPathInterface) (RelativeSystemPath, error) {
 	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
 	return RelativeSystemPath(processed), err
 }

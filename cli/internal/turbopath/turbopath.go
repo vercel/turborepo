@@ -123,7 +123,7 @@ type UnixPathInterface interface {
 	filePathStamp()
 	unixPathStamp()
 
-	Rel(UnixPathInterface) (RelativeUnixPath, error)
+	RelativeTo(UnixPathInterface) (RelativeUnixPath, error)
 	ToSystemPath() SystemPathInterface
 	ToUnixPath() UnixPathInterface
 	ToString() string
@@ -135,7 +135,7 @@ type SystemPathInterface interface {
 	filePathStamp()
 	systemPathStamp()
 
-	Rel(SystemPathInterface) (RelativeSystemPath, error)
+	RelativeTo(SystemPathInterface) (RelativeSystemPath, error)
 	ToSystemPath() SystemPathInterface
 	ToUnixPath() UnixPathInterface
 	ToString() string

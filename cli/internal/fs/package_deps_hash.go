@@ -41,12 +41,12 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 	// Update the checked in hashes with the current repo status
 	gitStatusOutput, err := gitStatus(rootPath.Join(p.PackagePath), p.InputPatterns)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get git hashes from git status")
+		return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
 	}
 
 	var filesToHash []turbopath.RelativeUnixPath
 	for filePath, status := range gitStatusOutput {
-		if status.x == "D" || status.y == "D" {
+		if status.isDelete() {
 			delete(result, filePath)
 		} else {
 			filesToHash = append(filesToHash, filePath)
@@ -74,7 +74,7 @@ func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath
 	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString())
 
 	for index, file := range files {
-		relativeSystemPath, err := file.Rel(convertedRootPath)
+		relativeSystemPath, err := file.RelativeTo(convertedRootPath)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +87,7 @@ func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath
 // It will always accept a system path. On Windows it *also* accepts Unix paths.
 //
 // Note: relative paths passed to `git hash-object` are processed as relative to the *repository* root.
-// For that reason we convert all paths to absolute paths relative to the rootPath prior to passing them
+// For that reason we convert all input paths and make them relative to the rootPath prior to passing them
 // to `git hash-object`.
 func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopath.RelativeUnixPath) (map[turbopath.RelativeUnixPath]string, error) {
 	fileCount := len(filesToHash)
@@ -116,6 +116,8 @@ func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopat
 		// Kick the processing off in a goroutine so while that is doing its thing we can go ahead
 		// and wire up the consumer of `stdout`.
 		go func() {
+			// It should be just `defer stdinPipe.Close()`
+			// This ceremony is because of https://github.com/kisielk/errcheck/issues/101
 			defer func() {
 				stdinPipeCloseError := stdinPipe.Close()
 				if stdinPipeCloseError != nil {
@@ -267,7 +269,7 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.Relativ
 		"--",       // and any additional argument you see is a path, promise.
 	)
 
-	// FIXME: Globbing is accomplished implicitly using shell expansion.
+	// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
 	cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
 	cmd.Dir = rootPath.ToString()            // Include files only from this directory.
 
@@ -289,6 +291,8 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.Relativ
 // This is used to convert repo-relative paths to cwd-relative paths.
 //
 // `git rev-parse --show-cdup` always returns Unix paths, even on Windows.
+//
+// TODO: memoize.
 func getTraversePath(rootPath turbopath.AbsolutePathInterface) (turbopath.RelativeUnixPath, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-cdup")
 	cmd.Dir = rootPath.ToString()
@@ -309,6 +313,10 @@ func getTraversePath(rootPath turbopath.AbsolutePathInterface) (turbopath.Relati
 type statusCode struct {
 	x string
 	y string
+}
+
+func (s statusCode) isDelete() bool {
+	return s.x == "D" || s.y == "D"
 }
 
 // gitStatus returns a map of paths to their `git` status code. This can be used to identify what should
@@ -355,7 +363,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Relative
 		if len(traversePath) > 0 {
 			fileFullPath := convertedRootPath.Join(traversePath).Join(pathFromStatus.ToRelativeUnixPath())
 
-			relativePath, err := fileFullPath.Rel(convertedRootPath)
+			relativePath, err := fileFullPath.RelativeTo(convertedRootPath)
 			if err != nil {
 				return nil, err
 			}

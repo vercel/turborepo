@@ -25,8 +25,8 @@ func (p AbsoluteUnixPath) ToUnixPath() UnixPathInterface {
 	return p
 }
 
-// Rel calculates the relative path between a AbsoluteUnixPath and any other UnixPath.
-func (p AbsoluteUnixPath) Rel(basePath UnixPathInterface) (RelativeUnixPath, error) {
+// RelativeTo calculates the relative path between a AbsoluteUnixPath and any other UnixPath.
+func (p AbsoluteUnixPath) RelativeTo(basePath UnixPathInterface) (RelativeUnixPath, error) {
 	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
 	return RelativeUnixPath(processed), err
 }
