@@ -808,8 +808,8 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(pt, hash, targetUi)
-	hit, err := taskCache.RestoreOutputs(targetLogger)
+	taskCache := e.runCache.TaskCache(pt, hash)
+	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
@@ -895,7 +895,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(targetLogger, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
