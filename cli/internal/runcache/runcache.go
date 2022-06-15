@@ -148,7 +148,6 @@ type TaskCache struct {
 	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
 	LogFileName       fs.AbsolutePath
-	terminal          cli.Ui
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
@@ -197,7 +196,7 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 	case util.FullTaskOutput:
 		logger.Debug("log file", "path", tc.LogFileName)
 		if tc.LogFileName.FileExists() {
-			tc.rc.logReplayer(logger, tc.terminal, tc.LogFileName)
+			tc.rc.logReplayer(logger, terminal, tc.LogFileName)
 		}
 	default:
 		// NoLogs, do not output anything
@@ -280,7 +279,7 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 		if err != nil {
 			logger.Error("error", err)
 			errorMessageColored := color.RedString("%v", fmt.Errorf("File path cannot be made relative: %w", err))
-			tc.terminal.Error(fmt.Sprintf("%s%s ", ui.ERROR_PREFIX, errorMessageColored))
+			terminal.Error(fmt.Sprintf("%s%s ", ui.ERROR_PREFIX, errorMessageColored))
 			continue
 		}
 		relativePaths[index] = relativePath
@@ -301,7 +300,7 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string, terminal cli.Ui) TaskCache {
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.Join(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
@@ -322,7 +321,6 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string, terminal cli.U
 		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
 		LogFileName:       logFileName,
-		terminal:          terminal,
 	}
 }
 
