@@ -14,11 +14,6 @@ import (
 type Logstreamer struct {
 	Logger *log.Logger
 	buf    *bytes.Buffer
-	// If prefix == stdout, colors green
-	// If prefix == stderr, colors red
-	// Else, prefix is taken as-is, and prepended to anything
-	// you throw at Write()
-	prefix string
 	// if true, saves output in memory
 	record  bool
 	persist string
@@ -29,11 +24,10 @@ type Logstreamer struct {
 	colorReset string
 }
 
-func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer {
+func NewLogstreamer(logger *log.Logger, record bool) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,
 		buf:        bytes.NewBuffer([]byte("")),
-		prefix:     prefix,
 		record:     record,
 		persist:    "",
 		colorOkay:  "",
@@ -55,19 +49,19 @@ func (l *Logstreamer) Write(p []byte) (n int, err error) {
 		return
 	}
 
-	err = l.OutputLines()
+	err = l.outputLines()
 	return
 }
 
 func (l *Logstreamer) Close() error {
-	if err := l.Flush(); err != nil {
+	if err := l.flush(); err != nil {
 		return err
 	}
 	l.buf = bytes.NewBuffer([]byte(""))
 	return nil
 }
 
-func (l *Logstreamer) Flush() error {
+func (l *Logstreamer) flush() error {
 	p := make([]byte, l.buf.Len())
 	if _, err := l.buf.Read(p); err != nil {
 		return err
@@ -77,7 +71,7 @@ func (l *Logstreamer) Flush() error {
 	return nil
 }
 
-func (l *Logstreamer) OutputLines() error {
+func (l *Logstreamer) outputLines() error {
 	for {
 		line, err := l.buf.ReadString('\n')
 
@@ -119,14 +113,6 @@ func (l *Logstreamer) out(str string) {
 
 	if l.record {
 		l.persist = l.persist + str
-	}
-
-	if l.prefix == "stdout" {
-		str = l.colorOkay + l.prefix + l.colorReset + " " + str
-	} else if l.prefix == "stderr" {
-		str = l.colorFail + l.prefix + l.colorReset + " " + str
-	} else {
-		str = l.prefix + str
 	}
 
 	l.Logger.Print(str)
