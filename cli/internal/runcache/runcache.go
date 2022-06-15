@@ -146,7 +146,7 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
-func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+func (tc TaskCache) RestoreOutputs(terminal cli.Ui, logger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
@@ -266,11 +266,30 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 	return tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths)
 }
 
-func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
-	prefixedWriter := prefixedWriter{}
+func (tc TaskCache) NewTerminal(ui cli.Ui) cli.Ui {
+	prettyTaskPrefix := tc.ColoredPrefix()
 
-	if !tc.rc.stripPrefix {
-		prefixedWriter.prefix = tc.coloredPrefix()
+	return &cli.PrefixedUi{
+		Ui:           ui,
+		OutputPrefix: prettyTaskPrefix,
+		InfoPrefix:   prettyTaskPrefix,
+		ErrorPrefix:  prettyTaskPrefix,
+		WarnPrefix:   prettyTaskPrefix,
+	}
+}
+
+func (tc TaskCache) ColoredPrefix() string {
+	if tc.rc.stripPrefix {
+		return ""
+	}
+
+	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
+	return colorPrefixer(tc.pt.OutputPrefix())
+}
+
+func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
+	prefixedWriter := prefixedWriter{
+		prefix: tc.ColoredPrefix(),
 	}
 
 	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
@@ -286,16 +305,11 @@ func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
 func (tc TaskCache) cacheHitMessage() string {
 	message := fmt.Sprintf("cache hit, replaying output %s\n", ui.Dim(tc.hash))
 	if tc.rc.stripPrefix {
-		prettyTaskPrefix := tc.coloredPrefix()
+		prettyTaskPrefix := tc.ColoredPrefix()
 		message = fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))
 	}
 
 	return message
-}
-
-func (tc TaskCache) coloredPrefix() string {
-	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	return colorPrefixer(tc.pt.OutputPrefix())
 }
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
