@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655166953024,
+  "lastUpdate": 1655253282255,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -974,6 +974,52 @@ window.BENCHMARK_DATA = {
             "value": 36941,
             "unit": "ms",
             "range": "8722"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Nathan Hammond",
+            "username": "nathanhammond",
+            "email": "nathan.hammond@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0a6d8f1ab17db486520999bd9957c59def2ada2f",
+          "message": "More CI Cleanup (#1408)\n\nThis makes our repo configuration more system-agnostic by pushing the platform-switching behavior farther to the roots.",
+          "timestamp": "2022-06-14T12:46:37Z",
+          "url": "https://github.com/vercel/turborepo/commit/0a6d8f1ab17db486520999bd9957c59def2ada2f"
+        },
+        "date": 1655253281701,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 147713.8,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 9768,
+            "unit": "ms",
+            "range": "1656"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 9492.8,
+            "unit": "ms",
+            "range": "250"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 35016.8,
+            "unit": "ms",
+            "range": "12920"
           }
         ]
       }
