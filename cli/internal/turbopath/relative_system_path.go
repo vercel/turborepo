@@ -41,5 +41,6 @@ func (p RelativeSystemPath) ToRelativeUnixPath() RelativeUnixPath {
 
 // Join appends relative path segments to this RelativeSystemPath.
 func (p RelativeSystemPath) Join(additional ...RelativeSystemPath) RelativeSystemPath {
-	return RelativeSystemPath(filepath.Join(p.ToString(), filepath.Join(toStringArray(additional)...)))
+	cast := relativeSystemPathArray(additional)
+	return RelativeSystemPath(filepath.Join(p.ToString(), filepath.Join(cast.toStringArray()...)))
 }

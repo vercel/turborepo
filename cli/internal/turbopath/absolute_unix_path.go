@@ -44,5 +44,6 @@ func (p AbsoluteUnixPath) ToAbsoluteSystemPath() AbsoluteSystemPath {
 
 // Join appends relative path segments to this AbsoluteUnixPath.
 func (p AbsoluteUnixPath) Join(additional ...RelativeUnixPath) AbsoluteUnixPath {
-	return AbsoluteUnixPath(path.Join(p.ToString(), path.Join(toStringArray(additional)...)))
+	cast := relativeUnixPathArray(additional)
+	return AbsoluteUnixPath(path.Join(p.ToString(), path.Join(cast.toStringArray()...)))
 }
