@@ -6,7 +6,6 @@ package taskhash
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -115,14 +114,15 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 	}
 
 	pathPrefix := rootPath.Join(pkg.Dir).ToString()
-	toTrim := filepath.FromSlash(pathPrefix + "/")
+	convertedPathPrefix := turbopath.AbsoluteSystemPath(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
-		rootMatch := ignore.MatchesPath(name)
-		otherMatch := ignorePkg.MatchesPath(name)
+		convertedName := turbopath.AbsoluteSystemPath(name)
+		rootMatch := ignore.MatchesPath(convertedName.ToString())
+		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
 		if !rootMatch && !otherMatch {
 			if !isDir {
 				if includePattern != "" {
-					val, err := doublestar.PathMatch(includePattern, name)
+					val, err := doublestar.PathMatch(includePattern, convertedName.ToString())
 					if err != nil {
 						return err
 					}
@@ -130,11 +130,16 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 						return nil
 					}
 				}
-				hash, err := fs.GitLikeHashFile(name)
+				hash, err := fs.GitLikeHashFile(convertedName.ToString())
 				if err != nil {
-					return fmt.Errorf("could not hash file %v. \n%w", name, err)
+					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
 				}
-				hashObject[turbopath.RelativeUnixPath(strings.TrimPrefix(name, toTrim))] = hash
+
+				relativePath, err := convertedName.RelativeTo(convertedPathPrefix)
+				if err != nil {
+					return fmt.Errorf("File path cannot be made relative: %w", err)
+				}
+				hashObject[relativePath.ToRelativeUnixPath()] = hash
 			}
 		}
 		return nil
