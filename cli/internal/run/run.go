@@ -894,10 +894,6 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
 	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
-	if (e.rs.Opts.runcacheOpts.CacheHitLogsMode == runcache.FullNoPrefix) ||
-		(e.rs.Opts.runcacheOpts.CacheMissLogsMode == runcache.FullNoPrefix) {
-		prettyTaskPrefix = colorPrefixer("")
-	}
 
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
@@ -925,8 +921,8 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(pt, hash)
-	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
+	taskCache := e.runCache.TaskCache(pt, hash, targetUi)
+	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
@@ -962,9 +958,9 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
@@ -1016,7 +1012,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
