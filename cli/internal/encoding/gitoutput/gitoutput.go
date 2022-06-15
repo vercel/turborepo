@@ -11,9 +11,9 @@ import (
 
 // These describe the structure of fields in the output of `git` commands.
 var (
-	_lsTreeFields  = []Field{ObjectMode, ObjectType, ObjectName, Path}
-	_lsFilesFields = []Field{ObjectMode, ObjectName, ObjectStage, Path}
-	_statusFields  = []Field{StatusX, StatusY, Path}
+	LsTreeFields  = []Field{ObjectMode, ObjectType, ObjectName, Path}
+	LsFilesFields = []Field{ObjectMode, ObjectName, ObjectStage, Path}
+	StatusFields  = []Field{StatusX, StatusY, Path}
 )
 
 // Field is the type for fields available in outputs to `git`.
@@ -36,6 +36,51 @@ const (
 	// Path is the file path under version control in `git`.
 	Path
 )
+
+// LsTreeEntry is the result from call `git ls-files`
+type LsTreeEntry []string
+
+// LsFilesEntry is the result from call `git ls-tree`
+type LsFilesEntry []string
+
+// StatusEntry is the result from call `git status`
+type StatusEntry []string
+
+func indexOf(element Field, data []Field) int {
+	for k, v := range data {
+		if element == v {
+			return k
+		}
+	}
+	return -1
+}
+
+// GetField returns the value of the specified field.
+func (e LsTreeEntry) GetField(field Field) string {
+	index := indexOf(field, LsTreeFields)
+	if index == -1 {
+		panic("Received an invalid field for LsTreeEntry.")
+	}
+	return e[index]
+}
+
+// GetField returns the value of the specified field.
+func (e LsFilesEntry) GetField(field Field) string {
+	index := indexOf(field, LsFilesFields)
+	if index == -1 {
+		panic("Received an invalid field for LsFilesEntry.")
+	}
+	return e[index]
+}
+
+// GetField returns the value of the specified field.
+func (e StatusEntry) GetField(field Field) string {
+	index := indexOf(field, StatusFields)
+	if index == -1 {
+		panic("Received an invalid field for StatusEntry.")
+	}
+	return e[index]
+}
 
 // Separators that appear in the output of `git` commands.
 const (
@@ -110,7 +155,7 @@ type Reader struct {
 func NewLSTreeReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
-		Fields: _lsTreeFields,
+		Fields: LsTreeFields,
 	}
 }
 
@@ -118,7 +163,7 @@ func NewLSTreeReader(reader io.Reader) *Reader {
 func NewLSFilesReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
-		Fields: _lsFilesFields,
+		Fields: LsFilesFields,
 	}
 }
 
@@ -126,7 +171,7 @@ func NewLSFilesReader(reader io.Reader) *Reader {
 func NewStatusReader(reader io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(reader),
-		Fields: _statusFields,
+		Fields: StatusFields,
 	}
 }
 

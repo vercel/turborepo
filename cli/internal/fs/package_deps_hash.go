@@ -252,7 +252,8 @@ func gitLsTree(rootPath AbsolutePath) (map[turbopath.RelativeUnixPath]string, er
 	output := make(map[turbopath.RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		output[turbopath.RelativeUnixPath(entry[3])] = entry[2]
+		lsTreeEntry := gitoutput.LsTreeEntry(entry)
+		output[turbopath.RelativeUnixPath(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
 	}
 
 	return output, nil
@@ -281,7 +282,8 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.Relativ
 	output := make(map[turbopath.RelativeUnixPath]string, len(entries))
 
 	for _, entry := range entries {
-		output[turbopath.RelativeUnixPath(entry[3])] = entry[1]
+		lsFilesEntry := gitoutput.LsFilesEntry(entry)
+		output[turbopath.RelativeUnixPath(lsFilesEntry.GetField(gitoutput.Path))] = lsFilesEntry.GetField(gitoutput.ObjectName)
 	}
 
 	return output, nil
@@ -357,7 +359,8 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Relative
 	}
 
 	for _, entry := range entries {
-		pathFromStatus := turbopath.RepoRelativeUnixPath(entry[2])
+		statusEntry := gitoutput.StatusEntry(entry)
+		pathFromStatus := turbopath.RepoRelativeUnixPath(statusEntry.GetField(gitoutput.Path))
 		var outputPath turbopath.RelativeUnixPath
 
 		if len(traversePath) > 0 {
@@ -373,7 +376,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Relative
 			outputPath = pathFromStatus.ToRelativeUnixPath()
 		}
 
-		output[outputPath] = statusCode{x: entry[0], y: entry[1]}
+		output[outputPath] = statusCode{x: statusEntry.GetField(gitoutput.StatusX), y: statusEntry.GetField(gitoutput.StatusY)}
 	}
 
 	return output, nil
