@@ -116,14 +116,7 @@ func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopat
 		// Kick the processing off in a goroutine so while that is doing its thing we can go ahead
 		// and wire up the consumer of `stdout`.
 		go func() {
-			// It should be just `defer stdinPipe.Close()`
-			// This ceremony is because of https://github.com/kisielk/errcheck/issues/101
-			defer func() {
-				stdinPipeCloseError := stdinPipe.Close()
-				if stdinPipeCloseError != nil {
-					return
-				}
-			}()
+			defer stdinPipe.Close()
 
 			// `git hash-object` understands all relative paths to be relative to the repository.
 			// This function needs to be relative to `rootPath`.

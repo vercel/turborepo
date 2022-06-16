@@ -21,6 +21,9 @@ linters-settings:
     max-func-lines: 3
 
 issues:
+  exclude:
+    # This is golangci-lint's EXC0001, but no way to use that collection as an exclude.
+    - .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
