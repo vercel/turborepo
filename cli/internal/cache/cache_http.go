@@ -220,6 +220,10 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 	return true, files, duration, nil
 }
 
+// restoreTar returns posix-style repo-relative paths of the files it
+// restored. In the future, these should likely be repo-relative system paths
+// so that they are suitable for being fed into cache.Put for other caches.
+// For now, I think this is working because windows also accepts /-delimited paths.
 func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
 	files := []string{}
 	missingLinks := []*tar.Header{}
@@ -244,6 +248,8 @@ func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
 			}
 			return nil, err
 		}
+		// hdr.Name is always a posix-style path
+		// TODO: files should eventually be repo-relative system paths
 		files = append(files, hdr.Name)
 		filename := root.Join(hdr.Name)
 		if isChild, err := root.ContainsPath(filename); err != nil {
