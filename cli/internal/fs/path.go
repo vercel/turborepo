@@ -102,7 +102,7 @@ func (ap AbsolutePath) Lstat() (os.FileInfo, error) {
 
 // DirExists returns true if this path points to a directory
 func (ap AbsolutePath) DirExists() bool {
-	info, err := os.Lstat(ap.asString())
+	info, err := ap.Lstat()
 	return err == nil && info.IsDir()
 }
 

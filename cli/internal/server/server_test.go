@@ -25,6 +25,7 @@ func (m *mockGrpc) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {}
 
 func TestDeleteRepoRoot(t *testing.T) {
 	logger := hclog.Default()
+	logger.SetLevel(hclog.Debug)
 	repoRootRaw := t.TempDir()
 	repoRoot := turbofs.AbsolutePathFromUpstream(repoRootRaw)
 

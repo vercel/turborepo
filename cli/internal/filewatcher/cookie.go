@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
@@ -88,13 +87,13 @@ func (cj *CookieJar) OnFileWatchError(err error) {
 
 // OnFileWatchEvent determines if the specified event is relevant
 // for cookie watching and notifies the appropriate cookie if so.
-func (cj *CookieJar) OnFileWatchEvent(ev fsnotify.Event) {
-	if ev.Op&fsnotify.Create != 0 {
-		isCookie, err := fs.DirContainsPath(cj.dir.ToStringDuringMigration(), ev.Name)
+func (cj *CookieJar) OnFileWatchEvent(ev Event) {
+	if ev.EventType == FileAdded {
+		isCookie, err := fs.DirContainsPath(cj.dir.ToStringDuringMigration(), ev.Path.ToStringDuringMigration())
 		if err != nil {
-			cj.OnFileWatchError(errors.Wrapf(err, "failed to determine if path is a cookie: %v", ev.Name))
+			cj.OnFileWatchError(errors.Wrapf(err, "failed to determine if path is a cookie: %v", ev.Path))
 		} else if isCookie {
-			cj.notifyCookie(fs.UnsafeToAbsolutePath(ev.Name), nil)
+			cj.notifyCookie(ev.Path, nil)
 		}
 	}
 }
