@@ -187,15 +187,16 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		}
 		duration = intVar
 	}
-	artifactReader := resp.Body
-	defer func() { _ = artifactReader.Close() }()
+	var tarReader io.Reader
+
+	defer func() { _ = resp.Body.Close() }()
 	if cache.signerVerifier.isEnabled() {
 		expectedTag := resp.Header.Get("x-artifact-tag")
 		if expectedTag == "" {
 			// If the verifier is enabled all incoming artifact downloads must have a signature
 			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
 		}
-		b, err := ioutil.ReadAll(artifactReader)
+		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
 		}
@@ -207,13 +208,12 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 			err = fmt.Errorf("artifact verification failed: artifact tag does not match expected tag %s", expectedTag)
 			return false, nil, 0, err
 		}
-		// We read the old artifactReader, we can close it.
-		// The defered call to artifactReader.Close will pick up the new value
-		_ = artifactReader.Close()
 		// The artifact has been verified and the body can be read and untarred
-		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
+		tarReader = bytes.NewReader(b)
+	} else {
+		tarReader = resp.Body
 	}
-	files, err := restoreTar(cache.repoRoot, artifactReader)
+	files, err := restoreTar(cache.repoRoot, tarReader)
 	if err != nil {
 		return false, nil, 0, err
 	}
