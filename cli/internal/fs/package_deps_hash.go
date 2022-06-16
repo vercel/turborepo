@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -303,6 +304,7 @@ func getTraversePath(rootPath turbopath.AbsolutePathInterface) (turbopath.Relati
 // Don't shell out if we already know where you are in the repository.
 // `memoize` is a good candidate for generics.
 func memoizeGetTraversePath() func(turbopath.AbsolutePathInterface) (turbopath.RelativeUnixPath, error) {
+	cacheMutex := sync.RWMutex{}
 	cachedResult := map[turbopath.AbsolutePathInterface]turbopath.RelativeUnixPath{}
 	cachedError := map[turbopath.AbsolutePathInterface]error{}
 
@@ -315,8 +317,10 @@ func memoizeGetTraversePath() func(turbopath.AbsolutePathInterface) (turbopath.R
 		}
 
 		invokedResult, invokedErr := getTraversePath(rootPath)
+		cacheMutex.Lock()
 		cachedResult[rootPath] = invokedResult
 		cachedError[rootPath] = invokedErr
+		cacheMutex.Unlock()
 
 		return invokedResult, invokedErr
 	}
