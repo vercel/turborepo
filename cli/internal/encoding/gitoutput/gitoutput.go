@@ -16,6 +16,26 @@ var (
 	StatusFields  = []Field{StatusX, StatusY, Path}
 )
 
+var _lsTreeFieldToIndex = map[Field]int{
+	ObjectMode: 0,
+	ObjectType: 1,
+	ObjectName: 2,
+	Path:       3,
+}
+
+var _lsFilesFieldToIndex = map[Field]int{
+	ObjectMode:  0,
+	ObjectName:  1,
+	ObjectStage: 2,
+	Path:        3,
+}
+
+var _statusFieldToIndex = map[Field]int{
+	StatusX: 0,
+	StatusY: 1,
+	Path:    2,
+}
+
 // Field is the type for fields available in outputs to `git`.
 // Used for naming and sensible call sites.
 type Field int
@@ -46,40 +66,31 @@ type LsFilesEntry []string
 // StatusEntry is the result from call `git status`
 type StatusEntry []string
 
-func indexOf(element Field, data []Field) int {
-	for k, v := range data {
-		if element == v {
-			return k
-		}
-	}
-	return -1
-}
-
 // GetField returns the value of the specified field.
 func (e LsTreeEntry) GetField(field Field) string {
-	index := indexOf(field, LsTreeFields)
-	if index == -1 {
+	value, exists := _lsTreeFieldToIndex[field]
+	if !exists {
 		panic("Received an invalid field for LsTreeEntry.")
 	}
-	return e[index]
+	return e[value]
 }
 
 // GetField returns the value of the specified field.
 func (e LsFilesEntry) GetField(field Field) string {
-	index := indexOf(field, LsFilesFields)
-	if index == -1 {
+	value, exists := _lsFilesFieldToIndex[field]
+	if !exists {
 		panic("Received an invalid field for LsFilesEntry.")
 	}
-	return e[index]
+	return e[value]
 }
 
 // GetField returns the value of the specified field.
 func (e StatusEntry) GetField(field Field) string {
-	index := indexOf(field, StatusFields)
-	if index == -1 {
+	value, exists := _statusFieldToIndex[field]
+	if !exists {
 		panic("Received an invalid field for StatusEntry.")
 	}
-	return e[index]
+	return e[value]
 }
 
 // Separators that appear in the output of `git` commands.
