@@ -293,8 +293,6 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.Relativ
 // This is used to convert repo-relative paths to cwd-relative paths.
 //
 // `git rev-parse --show-cdup` always returns Unix paths, even on Windows.
-//
-// TODO: memoize.
 func getTraversePath(rootPath turbopath.AbsolutePathInterface) (turbopath.RelativeUnixPath, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-cdup")
 	cmd.Dir = rootPath.ToString()
@@ -308,6 +306,30 @@ func getTraversePath(rootPath turbopath.AbsolutePathInterface) (turbopath.Relati
 
 	return turbopath.RelativeUnixPath(trimmedTraversePath), nil
 }
+
+// Don't shell out if we already know where you are in the repository.
+// `memoize` is a good candidate for generics.
+func memoizeGetTraversePath() func(turbopath.AbsolutePathInterface) (turbopath.RelativeUnixPath, error) {
+	cachedResult := map[turbopath.AbsolutePathInterface]turbopath.RelativeUnixPath{}
+	cachedError := map[turbopath.AbsolutePathInterface]error{}
+
+	return func(rootPath turbopath.AbsolutePathInterface) (turbopath.RelativeUnixPath, error) {
+		result, resultExists := cachedResult[rootPath]
+		err, errExists := cachedError[rootPath]
+
+		if resultExists && errExists {
+			return result, err
+		}
+
+		invokedResult, invokedErr := getTraversePath(rootPath)
+		cachedResult[rootPath] = invokedResult
+		cachedError[rootPath] = invokedErr
+
+		return invokedResult, invokedErr
+	}
+}
+
+var memoizedGetTraversePath = memoizeGetTraversePath()
 
 // statusCode represents the two-letter status code from `git status` with two "named" fields, x & y.
 // They have different meanings based upon the actual state of the working tree. Using x & y maps
@@ -353,7 +375,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Relative
 	output := make(map[turbopath.RelativeUnixPath]statusCode, len(entries))
 	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString()).ToAbsoluteUnixPath()
 
-	traversePath, err := getTraversePath(convertedRootPath)
+	traversePath, err := memoizedGetTraversePath(convertedRootPath)
 	if err != nil {
 		return nil, err
 	}

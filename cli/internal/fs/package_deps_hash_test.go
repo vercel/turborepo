@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"gotest.tools/v3/assert"
 )
 
 func getFixture(id int) turbopath.AbsoluteSystemPath {
@@ -212,4 +213,13 @@ func Test_getTraversePath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_memoizedGetTraversePath(t *testing.T) {
+	fixturePath := getFixture(1)
+
+	gotOne, _ := memoizedGetTraversePath(fixturePath)
+	gotTwo, _ := memoizedGetTraversePath(fixturePath)
+
+	assert.Check(t, gotOne == gotTwo, "The strings are identical.")
 }
