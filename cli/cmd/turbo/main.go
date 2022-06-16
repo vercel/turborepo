@@ -66,6 +66,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	if cf != nil {
+		err = config.CheckTurboVersionCompatibility(turboVersion, cf)
+		if err != nil {
+			ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
+			os.Exit(1)
+		}
+	}
+
 	var logger hclog.Logger
 	if cf != nil {
 		logger = cf.Logger
