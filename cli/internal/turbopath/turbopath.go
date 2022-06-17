@@ -2,16 +2,16 @@
 // different types of paths:
 // - AbsoluteSystemPath
 // - RelativeSystemPath
-// - RepoRelativeSystemPath
+// - AnchoredSystemPath
 // - AbsoluteUnixPath
 // - RelativeUnixPath
-// - RepoRelativeUnixPath
+// - AnchoredUnixPath
 //
 // There is a second portion which allows clustering particular
 // dimensions of these four types:
 // - AbsolutePathInterface
 // - RelativePathInterface
-// - RepoRelativePathInterface
+// - AnchoredPathInterface
 // - UnixPathInterface
 // - SystemPathInterface
 // - FilePathInterface
@@ -21,73 +21,24 @@
 // have the type system enforce correctness instead of relying upon
 // runtime code to accomplish the task.
 //
+// Absolute paths are, "absolute, including volume root." They are not
+// portable between System and Unix.
+//
+// Relative paths are simply arbitrary path segments using a particular
+// path delimiter. They are portable between System and Unix.
+//
+// Anchored paths are, "absolute, starting at a particular root."
+// They are not aware of *what* their anchor is. It could be a repository,
+// an `os.dirFS`, a package, `cwd`, or more. They are stored *without*
+// a preceding delimiter for compatibility with `io/fs`. They are portable
+// between System and Unix.
+//
+// In some future world everything in here can be optimized out at compile time.
+// Everything is either `string` or `[]string`
+//
 // Much of this is dreadfully repetitive because of intentional
 // limitations in the Go type system.
 package turbopath
-
-import "path/filepath"
-
-// AbsoluteUnixPathInterface specifies the members that mark an interface
-// for structurally typing so the Go compiler can understand it.
-type AbsoluteUnixPathInterface interface {
-	filePathStamp()
-	absolutePathStamp()
-	unixPathStamp()
-
-	ToString() string
-}
-
-// RelativeUnixPathInterface specifies the members that mark an interface
-// for structurally typing so the Go compiler can understand it.
-type RelativeUnixPathInterface interface {
-	filePathStamp()
-	relativePathStamp()
-	unixPathStamp()
-
-	ToString() string
-}
-
-// RepoRelativeUnixPathInterface specifies the members that mark an interface
-// for structurally typing so the Go compiler can understand it.
-type RepoRelativeUnixPathInterface interface {
-	filePathStamp()
-	relativePathStamp()
-	repoRelativeStamp()
-	unixPathStamp()
-
-	ToString() string
-}
-
-// AbsoluteSystemPathInterface specifies the members that mark an interface
-// for structurally typing so the Go compiler can understand it.
-type AbsoluteSystemPathInterface interface {
-	filePathStamp()
-	absolutePathStamp()
-	systemPathStamp()
-
-	ToString() string
-}
-
-// RelativeSystemPathInterface specifies the members that mark an interface
-// for structurally typing so the Go compiler can understand it.
-type RelativeSystemPathInterface interface {
-	filePathStamp()
-	relativePathStamp()
-	systemPathStamp()
-
-	ToString() string
-}
-
-// RepoRelativeSystemPathInterface specifies the members that mark an interface
-// for structurally typing so the Go compiler can understand it.
-type RepoRelativeSystemPathInterface interface {
-	filePathStamp()
-	relativePathStamp()
-	repoRelativeStamp()
-	systemPathStamp()
-
-	ToString() string
-}
 
 // AbsolutePathInterface specifies additional dimensions that a particular
 // object can have that are independent from each other.
@@ -104,16 +55,19 @@ type RelativePathInterface interface {
 	filePathStamp()
 	relativePathStamp()
 
+	ToSystemPath() RelativeSystemPath
+	ToUnixPath() RelativeUnixPath
 	ToString() string
 }
 
-// RepoRelativePathInterface specifies additional dimensions that a particular
+// AnchoredPathInterface specifies additional dimensions that a particular
 // object can have that are independent from each other.
-type RepoRelativePathInterface interface {
+type AnchoredPathInterface interface {
 	filePathStamp()
-	relativePathStamp()
-	repoRelativeStamp()
+	anchoredStamp()
 
+	ToSystemPath() AnchoredSystemPath
+	ToUnixPath() AnchoredUnixPath
 	ToString() string
 }
 
@@ -123,9 +77,6 @@ type UnixPathInterface interface {
 	filePathStamp()
 	unixPathStamp()
 
-	RelativeTo(UnixPathInterface) (RelativeUnixPath, error)
-	ToSystemPath() SystemPathInterface
-	ToUnixPath() UnixPathInterface
 	ToString() string
 }
 
@@ -135,9 +86,6 @@ type SystemPathInterface interface {
 	filePathStamp()
 	systemPathStamp()
 
-	RelativeTo(SystemPathInterface) (RelativeSystemPath, error)
-	ToSystemPath() SystemPathInterface
-	ToUnixPath() UnixPathInterface
 	ToString() string
 }
 
@@ -146,36 +94,29 @@ type SystemPathInterface interface {
 type FilePathInterface interface {
 	filePathStamp()
 
-	ToSystemPath() SystemPathInterface
-	ToUnixPath() UnixPathInterface
 	ToString() string
 }
 
-// StringToUnixPath parses a path string from an unknown source
-// and converts it into a Unix path. The only valid separator for
-// a result from this call is `/`
-func StringToUnixPath(path string) UnixPathInterface {
-	if filepath.IsAbs(path) {
-		return AbsoluteUnixPath(filepath.ToSlash(path))
-	}
-	return RelativeUnixPath(filepath.ToSlash(path))
-}
+// AbsoluteSystemPathArray is a type used to enable transform operations on arrays of paths.
+type AbsoluteSystemPathArray []AbsoluteSystemPath
 
-// StringToSystemPath parses a path string from an unknown source
-// and converts it into a system path. This means it could have
-// any valid separators (`\` or `/`).
-func StringToSystemPath(path string) SystemPathInterface {
-	if filepath.IsAbs(path) {
-		return AbsoluteSystemPath(filepath.FromSlash(path))
-	}
-	return RelativeSystemPath(filepath.FromSlash(path))
-}
+// AbsoluteUnixPathArray is a type used to enable transform operations on arrays of paths.
+type AbsoluteUnixPathArray []AbsoluteUnixPath
 
-// Implement toStringArray without using generics.
-type relativeSystemPathArray []RelativeSystemPath
-type relativeUnixPathArray []RelativeUnixPath
+// AnchoredSystemPathArray is a type used to enable transform operations on arrays of paths.
+type AnchoredSystemPathArray []AnchoredSystemPath
 
-func (source relativeSystemPathArray) toStringArray() []string {
+// AnchoredUnixPathArray is a type used to enable transform operations on arrays of paths.
+type AnchoredUnixPathArray []AnchoredUnixPath
+
+// RelativeSystemPathArray is a type used to enable transform operations on arrays of paths.
+type RelativeSystemPathArray []RelativeSystemPath
+
+// RelativeUnixPathArray is a type used to enable transform operations on arrays of paths.
+type RelativeUnixPathArray []RelativeUnixPath
+
+// ToStringArray enables ergonomic operations on arrays of AbsoluteSystemPath
+func (source AbsoluteSystemPathArray) ToStringArray() []string {
 	output := make([]string, len(source))
 	for index, path := range source {
 		output[index] = path.ToString()
@@ -183,10 +124,83 @@ func (source relativeSystemPathArray) toStringArray() []string {
 	return output
 }
 
-func (source relativeUnixPathArray) toStringArray() []string {
+// ToStringArray enables ergonomic operations on arrays of AbsoluteUnixPath
+func (source AbsoluteUnixPathArray) ToStringArray() []string {
 	output := make([]string, len(source))
 	for index, path := range source {
 		output[index] = path.ToString()
+	}
+	return output
+}
+
+// ToStringArray enables ergonomic operations on arrays of AnchoredSystemPath
+func (source AnchoredSystemPathArray) ToStringArray() []string {
+	output := make([]string, len(source))
+	for index, path := range source {
+		output[index] = path.ToString()
+	}
+	return output
+}
+
+// ToStringArray enables ergonomic operations on arrays of AnchoredUnixPath
+func (source AnchoredUnixPathArray) ToStringArray() []string {
+	output := make([]string, len(source))
+	for index, path := range source {
+		output[index] = path.ToString()
+	}
+	return output
+}
+
+// ToStringArray enables ergonomic operations on arrays of RelativeSystemPath
+func (source RelativeSystemPathArray) ToStringArray() []string {
+	output := make([]string, len(source))
+	for index, path := range source {
+		output[index] = path.ToString()
+	}
+	return output
+}
+
+// ToStringArray enables ergonomic operations on arrays of RelativeUnixPath
+func (source RelativeUnixPathArray) ToStringArray() []string {
+	output := make([]string, len(source))
+	for index, path := range source {
+		output[index] = path.ToString()
+	}
+	return output
+}
+
+// ToUnixPathArray enables ergonomic operations on arrays of AnchoredSystemPath
+func (source AnchoredSystemPathArray) ToUnixPathArray() []AnchoredUnixPath {
+	output := make([]AnchoredUnixPath, len(source))
+	for index, path := range source {
+		output[index] = path.ToUnixPath()
+	}
+	return output
+}
+
+// ToSystemPathArray enables ergonomic operations on arrays of AnchoredUnixPath
+func (source AnchoredUnixPathArray) ToSystemPathArray() []AnchoredSystemPath {
+	output := make([]AnchoredSystemPath, len(source))
+	for index, path := range source {
+		output[index] = path.ToSystemPath()
+	}
+	return output
+}
+
+// ToUnixPathArray enables ergonomic operations on arrays of RelativeSystemPath
+func (source RelativeSystemPathArray) ToUnixPathArray() []RelativeUnixPath {
+	output := make([]RelativeUnixPath, len(source))
+	for index, path := range source {
+		output[index] = path.ToUnixPath()
+	}
+	return output
+}
+
+// ToSystemPathArray enables ergonomic operations on arrays of RelativeUnixPath
+func (source RelativeUnixPathArray) ToSystemPathArray() []RelativeSystemPath {
+	output := make([]RelativeSystemPath, len(source))
+	for index, path := range source {
+		output[index] = path.ToSystemPath()
 	}
 	return output
 }

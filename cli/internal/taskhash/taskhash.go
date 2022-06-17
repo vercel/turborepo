@@ -94,8 +94,8 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) 
 	return hashOfFiles, nil
 }
 
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[turbopath.RelativeUnixPath]string, error) {
-	hashObject := make(map[turbopath.RelativeUnixPath]string)
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
 	ignore, err := safeCompileIgnoreFile(rootPath.Join(".gitignore").ToString())
@@ -139,7 +139,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 				if err != nil {
 					return fmt.Errorf("File path cannot be made relative: %w", err)
 				}
-				hashObject[relativePath.ToRelativeUnixPath()] = hash
+				hashObject[relativePath.ToUnixPath()] = hash
 			}
 		}
 		return nil

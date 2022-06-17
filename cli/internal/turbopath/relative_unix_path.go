@@ -9,27 +9,10 @@ import (
 type RelativeUnixPath string
 
 // For interface reasons, we need a way to distinguish between
-// Absolute/Repo/Relative/System/Unix/File paths so we stamp them.
+// Absolute/Anchored/Relative/System/Unix/File paths so we stamp them.
 func (RelativeUnixPath) relativePathStamp() {}
 func (RelativeUnixPath) unixPathStamp()     {}
 func (RelativeUnixPath) filePathStamp()     {}
-
-// ToSystemPath converts a RelativeUnixPath to a SystemPath.
-func (p RelativeUnixPath) ToSystemPath() SystemPathInterface {
-	return RelativeSystemPath(filepath.FromSlash(p.ToString()))
-}
-
-// ToUnixPath called on a RelativeUnixPath returns itself.
-// It exists to enable simpler code at call sites.
-func (p RelativeUnixPath) ToUnixPath() UnixPathInterface {
-	return p
-}
-
-// RelativeTo calculates the relative path between a RelativeUnixPath and any other UnixPath.
-func (p RelativeUnixPath) RelativeTo(basePath UnixPathInterface) (RelativeUnixPath, error) {
-	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
-	return RelativeUnixPath(processed), err
-}
 
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
@@ -37,13 +20,18 @@ func (p RelativeUnixPath) ToString() string {
 	return string(p)
 }
 
-// ToRelativeSystemPath converts from RelativeUnixPath to RelativeSystemPath.
-func (p RelativeUnixPath) ToRelativeSystemPath() RelativeSystemPath {
-	return p.ToSystemPath().(RelativeSystemPath)
+// ToSystemPath converts a RelativeUnixPath to a RelativeSystemPath.
+func (p RelativeUnixPath) ToSystemPath() RelativeSystemPath {
+	return RelativeSystemPath(filepath.FromSlash(p.ToString()))
+}
+
+// ToUnixPath converts a RelativeUnixPath to a RelativeSystemPath.
+func (p RelativeUnixPath) ToUnixPath() RelativeUnixPath {
+	return p
 }
 
 // Join appends relative path segments to this RelativeUnixPath.
 func (p RelativeUnixPath) Join(additional ...RelativeUnixPath) RelativeUnixPath {
-	cast := relativeUnixPathArray(additional)
-	return RelativeUnixPath(path.Join(p.ToString(), path.Join(cast.toStringArray()...)))
+	cast := RelativeUnixPathArray(additional)
+	return RelativeUnixPath(path.Join(p.ToString(), path.Join(cast.ToStringArray()...)))
 }

@@ -6,27 +6,10 @@ import "path/filepath"
 type AbsoluteSystemPath string
 
 // For interface reasons, we need a way to distinguish between
-// Absolute/Repo/Relative/System/Unix/File paths so we stamp them.
+// Absolute/Anchored/Relative/System/Unix/File paths so we stamp them.
 func (AbsoluteSystemPath) absolutePathStamp() {}
 func (AbsoluteSystemPath) systemPathStamp()   {}
 func (AbsoluteSystemPath) filePathStamp()     {}
-
-// ToSystemPath called on a AbsoluteSystemPath returns itself.
-// It exists to enable simpler code at call sites.
-func (p AbsoluteSystemPath) ToSystemPath() SystemPathInterface {
-	return p
-}
-
-// ToUnixPath converts a AbsoluteSystemPath to a UnixPath.
-func (p AbsoluteSystemPath) ToUnixPath() UnixPathInterface {
-	return AbsoluteUnixPath(filepath.ToSlash(p.ToString()))
-}
-
-// RelativeTo calculates the relative path between a AbsoluteSystemPath and any other SystemPath.
-func (p AbsoluteSystemPath) RelativeTo(basePath SystemPathInterface) (RelativeSystemPath, error) {
-	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
-	return RelativeSystemPath(processed), err
-}
 
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
@@ -34,13 +17,14 @@ func (p AbsoluteSystemPath) ToString() string {
 	return string(p)
 }
 
-// ToAbsoluteUnixPath converts from AbsoluteSystemPath to AbsoluteUnixPath.
-func (p AbsoluteSystemPath) ToAbsoluteUnixPath() AbsoluteUnixPath {
-	return p.ToUnixPath().(AbsoluteUnixPath)
+// RelativeTo calculates the relative path between two `AbsoluteSystemPath`s.
+func (p AbsoluteSystemPath) RelativeTo(basePath AbsoluteSystemPath) (AnchoredSystemPath, error) {
+	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
+	return AnchoredSystemPath(processed), err
 }
 
 // Join appends relative path segments to this AbsoluteSystemPath.
 func (p AbsoluteSystemPath) Join(additional ...RelativeSystemPath) AbsoluteSystemPath {
-	cast := relativeSystemPathArray(additional)
-	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(cast.toStringArray()...)))
+	cast := RelativeSystemPathArray(additional)
+	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(cast.ToStringArray()...)))
 }
