@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -85,7 +86,7 @@ func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath
 }
 
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
-// It will always accept a system path. On Windows it *also* accepts Unix paths.
+// `git hash-object` expects paths to use Unix separators, even on Windows.
 //
 // Note: paths of files to hash passed to `git hash-object` are processed as relative to the *repository* root.
 // For that reason we convert all input paths and make them relative to the rootPath prior to passing them
@@ -125,12 +126,14 @@ func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopat
 			for _, file := range filesToHash {
 				converted := file.RestoreAnchor(rootPath)
 
+				// `git hash-object` expects paths to use Unix separators, even on Windows.
 				// `git hash-object` expects paths to be one per line so we must escape newlines.
 				// In order to understand the escapes, the path must be quoted.
 				// In order to quote the path, the quotes in the path must be escaped.
 				// Other than that, we just write everything with full Unicode.
 				stringPath := converted.ToString()
-				escapedNewLines := strings.ReplaceAll(stringPath, "\n", "\\n")
+				toSlashed := filepath.ToSlash(stringPath)
+				escapedNewLines := strings.ReplaceAll(toSlashed, "\n", "\\n")
 				escapedQuotes := strings.ReplaceAll(escapedNewLines, "\"", "\\\"")
 				prepared := fmt.Sprintf("\"%s\"\n", escapedQuotes)
 				_, err := io.WriteString(stdinPipe, prepared)
