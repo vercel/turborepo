@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655340111432,
+  "lastUpdate": 1655426480073,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -1066,6 +1066,52 @@ window.BENCHMARK_DATA = {
             "value": 48295,
             "unit": "ms",
             "range": "15342"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "501b6a62e82d8825588a75ae5a07a4b011461390",
+          "message": "Add root boundary to untarring (#1409)\n\n* Add a test for untarring in the http cache\r\n\r\n* Disallow untarring files that cross the repo root boundary\r\n\r\n* Restructure resp.Body closing\r\n\r\n* Comments about tar headers being posix-style, and also our cache usage",
+          "timestamp": "2022-06-16T18:16:41Z",
+          "url": "https://github.com/vercel/turborepo/commit/501b6a62e82d8825588a75ae5a07a4b011461390"
+        },
+        "date": 1655426478859,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 219146,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 8269.6,
+            "unit": "ms",
+            "range": "2083"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 7939,
+            "unit": "ms",
+            "range": "1924"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 48385.2,
+            "unit": "ms",
+            "range": "10955"
           }
         ]
       }
