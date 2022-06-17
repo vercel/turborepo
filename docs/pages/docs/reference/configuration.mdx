@@ -53,7 +53,8 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": ["build"],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"],
+      "outputMode": "full"
     },
     "dev": {
       "cache": false
@@ -224,6 +225,30 @@ Specifying `[]` will cause the task to be rerun when any file changes.
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
+  }
+}
+```
+
+### `outputMode`
+
+`type: string`
+
+Defaults to `full`. The style of output for the task. Use "full" to display the entire output of the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to show the full output of cache misses and the computed hashes for cache hits. Use "none" to hide task output.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputMode": "new-only"
+    },
+    "test": {
+      "outputs": [],
+      "dependsOn": ["build"],
+    },
   }
 }
 ```

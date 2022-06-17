@@ -7,17 +7,17 @@ import (
 
 	iofs "io/fs"
 
-	"github.com/spf13/afero"
+	"github.com/vercel/turborepo/cli/internal/fs"
+
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-var _aferoOsFs = afero.NewOsFs()
-var _aferoIOFS = afero.NewIOFS(_aferoOsFs)
-
 // GlobFiles returns an array of files that match the specified set of glob patterns.
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
-	return globFilesFs(_aferoIOFS, basePath, includePatterns, excludePatterns)
+	fsys := fs.CreateDirFSAtRoot(basePath)
+	fsysRoot := fs.GetDirFSRootPath(fsys)
+	return globFilesFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
 }
 
 // checkRelativePath ensures that the the requested file path is a child of `from`.
@@ -36,7 +36,7 @@ func checkRelativePath(from string, to string) error {
 }
 
 // globFilesFs searches the specified file system to ensure to enumerate all files to include.
-func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
+func globFilesFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
 	var processedIncludes []string
 	var processedExcludes []string
 	result := make(util.Set)
@@ -49,8 +49,13 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 			return nil, err
 		}
 
+		// fs.FS paths may not include leading separators. Calculate the
+		// correct path for this relative to the filesystem root.
+		// This will not error as it follows the call to checkRelativePath.
+		iofsRelativePath, _ := fs.IofsRelativePath(fsysRoot, includePath)
+
 		// Includes only operate on files.
-		processedIncludes = append(processedIncludes, includePath)
+		processedIncludes = append(processedIncludes, iofsRelativePath)
 	}
 
 	for _, excludePattern := range excludePatterns {
@@ -61,8 +66,13 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 			return nil, err
 		}
 
+		// fs.FS paths may not include leading separators. Calculate the
+		// correct path for this relative to the filesystem root.
+		// This will not error as it follows the call to checkRelativePath.
+		iofsRelativePath, _ := fs.IofsRelativePath(fsysRoot, excludePath)
+
 		// Excludes operate on entire folders.
-		processedExcludes = append(processedExcludes, filepath.Join(excludePath, "**"))
+		processedExcludes = append(processedExcludes, filepath.Join(iofsRelativePath, "**"))
 	}
 
 	// We start from a naive includePattern
@@ -93,18 +103,25 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 	includePattern = filepath.ToSlash(includePattern)
 	excludePattern = filepath.ToSlash(excludePattern)
 
-	err := doublestar.GlobWalk(fs, includePattern, func(path string, dirEntry iofs.DirEntry) error {
-		// Unix root paths do not prepend the leading slash.
-		if basePath == "/" && !strings.HasPrefix(path, "/") {
-			path = filepath.Join(basePath, path)
-		}
-
+	err := doublestar.GlobWalk(fsys, includePattern, func(path string, dirEntry iofs.DirEntry) error {
 		if dirEntry.IsDir() {
 			return nil
 		}
 
+		// All files that are returned by doublestar.GlobWalk are relative to
+		// the fsys root. Go, however, has decided that `fs.FS` filesystems do
+		// not address the root of the file system using `/` and instead use
+		// paths without leading separators.
+		//
+		// We need to track where the `fsys` root is so that when we hand paths back
+		// we hand them back as the path addressable in the actual OS filesystem.
+		//
+		// As a consequence, when processing, we need to *restore* the original
+		// root to the file path after returning. This works because when we create
+		// the `os.dirFS` filesystem we do so at the root of the current volume.
 		if excludeCount == 0 {
-			result.Add(path)
+			// Reconstruct via string concatenation since the root is already pre-composed.
+			result.Add(fsysRoot + path)
 			return nil
 		}
 
@@ -114,7 +131,8 @@ func globFilesFs(fs afero.IOFS, basePath string, includePatterns []string, exclu
 		}
 
 		if !isExcluded {
-			result.Add(path)
+			// Reconstruct via string concatenation since the root is already pre-composed.
+			result.Add(fsysRoot + path)
 		}
 
 		return nil

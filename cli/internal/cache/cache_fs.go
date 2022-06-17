@@ -23,7 +23,7 @@ type fsCache struct {
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(opts Opts, recorder analytics.Recorder) (Cache, error) {
+func newFsCache(opts Opts, recorder analytics.Recorder) (*fsCache, error) {
 	if err := opts.Dir.MkdirAll(); err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	}
 
 	// Otherwise, copy it into position
-	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, fs.DirPermissions, true, true)
+	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, fs.DirPermissions, false, false)
 	if err != nil {
 		// TODO: what event to log here?
 		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
@@ -89,7 +89,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, file), fromInfo.Mode(), fs.DirPermissions, true, true); err != nil {
+					if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, file), fromInfo.Mode(), fs.DirPermissions, false, false); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}

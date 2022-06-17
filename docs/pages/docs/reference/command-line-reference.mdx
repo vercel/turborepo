@@ -248,9 +248,9 @@ Just a quick overview.
   `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#include-dependencies-of-matched-packages) instead.
 </Callout>
 
-Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution scope _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
+Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
-This is useful when using `--scope` in CI as it guarantees that every dependency needed for the execution scope is actually executed.
+This is useful when using `--filter` in CI as it guarantees that every dependency needed for the execution is actually executed.
 
 #### `--no-cache`
 
@@ -265,7 +265,7 @@ turbo run dev --parallel --no-cache
 
 `type: string`
 
-Default `full`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
 
 ```shell
 turbo run build --output-logs=full

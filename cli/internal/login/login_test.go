@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -59,7 +58,6 @@ var cf = &config.Config{
 }
 
 type testResult struct {
-	fsys                afero.Fs
 	repoRoot            fs.AbsolutePath
 	clientErr           error
 	clientTokenWritten  string
@@ -70,7 +68,7 @@ type testResult struct {
 }
 
 func (tr *testResult) userConfigWritten(t *testing.T) *config.TurborepoConfig {
-	config, err := config.ReadUserConfigFile(tr.fsys)
+	config, err := config.ReadUserConfigFile()
 	if err != nil {
 		t.Fatalf("failed reading user config: %v", err)
 	}
@@ -78,7 +76,7 @@ func (tr *testResult) userConfigWritten(t *testing.T) *config.TurborepoConfig {
 }
 
 func (tr *testResult) repoConfigWritten(t *testing.T) *config.TurborepoConfig {
-	config, err := config.ReadRepoConfigFile(tr.fsys, tr.repoRoot)
+	config, err := config.ReadRepoConfigFile(tr.repoRoot)
 	if err != nil {
 		t.Fatalf("failed reading repo config: %v", err)
 	}
@@ -94,7 +92,6 @@ func (tr *testResult) getTestLogin() login {
 	return login{
 		ui:       ui.Default(),
 		logger:   hclog.Default(),
-		fsys:     tr.fsys,
 		repoRoot: tr.repoRoot,
 		openURL:  urlOpener,
 		client:   &tr.client,
@@ -105,14 +102,12 @@ func (tr *testResult) getTestLogin() login {
 }
 
 func newTest(t *testing.T, redirectedURL string) *testResult {
-	fsys := afero.NewMemMapFs()
 	stepCh := make(chan struct{}, 1)
 	cwd, err := fs.GetCwd()
 	if err != nil {
 		t.Fatalf("getting cwd: %v", err)
 	}
 	tr := &testResult{
-		fsys:     fsys,
 		repoRoot: cwd,
 		stepCh:   stepCh,
 	}

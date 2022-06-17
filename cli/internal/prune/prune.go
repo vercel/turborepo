@@ -4,12 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -32,113 +31,133 @@ type PruneCommand struct {
 
 // Synopsis of run command
 func (c *PruneCommand) Synopsis() string {
-	return "Prepare a subset of your monorepo"
+	return getCmd(c.Config, c.Ui).Short
 }
 
 // Help returns information about the `run` command
 func (c *PruneCommand) Help() string {
-	helpText := `
-Usage: turbo prune --scope=<package name>
-
-  Prepare a subset of your monorepo.
-
-Options:
-  --help                 Show this screen.
-  --scope                Specify package to act as entry point
-                         for pruned monorepo (required).
-  --docker               Output pruned workspace into 'full'
-                         and 'json' directories optimized for
-                         Docker layer caching. (default false)
-`
-	return strings.TrimSpace(helpText)
+	cmd := getCmd(c.Config, c.Ui)
+	return util.HelpForCobraCmd(cmd)
 }
 
-type PruneOptions struct {
-	scope  string
-	cwd    string
-	docker bool
-}
-
-func parsePruneArgs(args []string, cwd fs.AbsolutePath) (*PruneOptions, error) {
-	var options = &PruneOptions{cwd: cwd.ToStringDuringMigration()}
-
-	if len(args) == 0 {
-		return nil, errors.Errorf("At least one target must be specified.")
+// Run implements cli.Command.Run
+func (c *PruneCommand) Run(args []string) int {
+	cmd := getCmd(c.Config, c.Ui)
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); err != nil {
+		return 1
 	}
+	return 0
+}
 
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "--") {
-			switch {
-			case strings.HasPrefix(arg, "--scope="):
-				options.scope = arg[len("--scope="):]
-			case strings.HasPrefix(arg, "--docker"):
-				options.docker = true
-			case strings.HasPrefix(arg, "--cwd="):
-			default:
-				return nil, errors.New(fmt.Sprintf("unknown flag: %v", arg))
+type opts struct {
+	scope     string
+	docker    bool
+	outputDir string
+}
+
+func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
+	flags.StringVar(&opts.scope, "scope", "", "Specify package to act as entry point for pruned monorepo (required).")
+	flags.BoolVar(&opts.docker, "docker", false, "Output pruned workspace into 'full' and 'json' directories optimized for Docker layer caching.")
+	flags.StringVar(&opts.outputDir, "out-dir", "out", "Set the root directory for files output by this command")
+	// No-op the cwd flag while the root level command is not yet cobra
+	_ = flags.String("cwd", "", "")
+	if err := flags.MarkHidden("cwd"); err != nil {
+		// Fail fast if we have misconfigured our flags
+		panic(err)
+	}
+}
+
+func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
+	opts := &opts{}
+	cmd := &cobra.Command{
+		Use:                   "turbo prune --scope=<package name> [<flags>]",
+		Short:                 "Prepare a subset of your monorepo.",
+		SilenceUsage:          true,
+		SilenceErrors:         true,
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			logger := config.Logger.Named("prune")
+			if len(args) > 0 {
+				err := errors.Errorf("unexpected arguments: %v", args)
+				logError(logger, ui, err)
+				return err
 			}
-		}
+			if opts.scope == "" {
+				err := errors.New("at least one target must be specified")
+				logError(logger, ui, err)
+				return err
+			}
+			p := &prune{
+				logger: logger,
+				ui:     ui,
+				config: config,
+			}
+			if err := p.prune(opts); err != nil {
+				logError(p.logger, p.ui, err)
+				return err
+			}
+			return nil
+		},
 	}
+	addPruneFlags(opts, cmd.Flags())
+	return cmd
+}
 
-	return options, nil
+func logError(logger hclog.Logger, ui cli.Ui, err error) {
+	logger.Error("error", err)
+	pref := color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
+	ui.Error(fmt.Sprintf("%s%s", pref, color.RedString(" %v", err)))
+}
+
+type prune struct {
+	logger hclog.Logger
+	ui     cli.Ui
+	config *config.Config
 }
 
 // Prune creates a smaller monorepo with only the required workspaces
-func (c *PruneCommand) Run(args []string) int {
-	pruneOptions, err := parsePruneArgs(args, c.Config.Cwd)
-	logger := log.New(os.Stdout, "", 0)
+func (p *prune) prune(opts *opts) error {
+	cacheDir := cache.DefaultLocation(p.config.Cwd)
+	ctx, err := context.New(context.WithGraph(p.config, cacheDir))
 	if err != nil {
-		c.logError(c.Config.Logger, "", err)
-		return 1
+		return errors.Wrap(err, "could not construct graph")
 	}
-	cacheDir := cache.DefaultLocation(c.Config.Cwd)
-	ctx, err := context.New(context.WithGraph(pruneOptions.cwd, c.Config, cacheDir))
-
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could not construct graph: %w", err))
-		return 1
-	}
-	c.Config.Logger.Trace("scope", "value", pruneOptions.scope)
-	target, scopeIsValid := ctx.PackageInfos[pruneOptions.scope]
+	p.logger.Trace("scope", "value", opts.scope)
+	target, scopeIsValid := ctx.PackageInfos[opts.scope]
 	if !scopeIsValid {
-		c.logError(c.Config.Logger, "", errors.Errorf("invalid scope: package not found"))
-		return 1
+		return errors.Errorf("invalid scope: package %v not found", opts.scope)
 	}
-	c.Config.Logger.Trace("target", "value", target.Name)
-	c.Config.Logger.Trace("directory", "value", target.Dir)
-	c.Config.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
-	c.Config.Logger.Trace("internal deps", "value", target.InternalDeps)
-	c.Config.Logger.Trace("docker", "value", pruneOptions.docker)
-	c.Config.Logger.Trace("out dir", "value", filepath.Join(pruneOptions.cwd, "out"))
+	outDir := p.config.Cwd.Join(opts.outputDir)
+	p.logger.Trace("target", "value", target.Name)
+	p.logger.Trace("directory", "value", target.Dir)
+	p.logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
+	p.logger.Trace("internal deps", "value", target.InternalDeps)
+	p.logger.Trace("docker", "value", opts.docker)
+	p.logger.Trace("out dir", "value", outDir.ToString())
 
 	if !util.IsYarn(ctx.PackageManager.Name) {
-		c.logError(c.Config.Logger, "", fmt.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name))
-		return 1
+		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
 	} else if ctx.PackageManager.Name == "nodejs-berry" {
-		isNMLinker, err := util.IsNMLinker(pruneOptions.cwd)
-		if err != nil {
-			c.logError(c.Config.Logger, "", fmt.Errorf("could not determine if yarn is using `nodeLinker: node-modules`: %w", err))
-			return 1
+		if isNMLinker, err := util.IsNMLinker(p.config.Cwd.ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
 		} else if !isNMLinker {
-			c.logError(c.Config.Logger, "", fmt.Errorf("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time"))
-			return 1
+			return errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
 		}
 	}
 
-	logger.Printf("Generating pruned monorepo for %v in %v", ui.Bold(pruneOptions.scope), ui.Bold(filepath.Join(pruneOptions.cwd, "out")))
+	p.ui.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
 
-	err = fs.EnsureDir(filepath.Join(pruneOptions.cwd, "out", "package.json"))
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could not create directory: %w", err))
-		return 1
+	packageJSONPath := outDir.Join("package.json")
+	if err := packageJSONPath.EnsureDir(); err != nil {
+		return errors.Wrap(err, "could not create output directory")
 	}
 	workspaces := []string{}
-	lockfile := c.Config.RootPackageJSON.SubLockfile
-	targets := []interface{}{pruneOptions.scope}
-	internalDeps, err := ctx.TopologicalGraph.Ancestors(pruneOptions.scope)
+	lockfile := p.config.RootPackageJSON.SubLockfile
+	targets := []interface{}{opts.scope}
+	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("could find traverse the dependency graph to find topological dependencies: %w", err))
-		return 1
+		return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
 	}
 	targets = append(targets, internalDeps.List()...)
 
@@ -147,34 +166,28 @@ func (c *PruneCommand) Run(args []string) int {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		if pruneOptions.docker {
-			targetDir := filepath.Join(pruneOptions.cwd, "out", "full", ctx.PackageInfos[internalDep].Dir)
-			jsonDir := filepath.Join(pruneOptions.cwd, "out", "json", ctx.PackageInfos[internalDep].PackageJSONPath)
-			if err := fs.EnsureDir(targetDir); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to create folder %v for %v: %w", targetDir, internalDep, err))
-				return 1
+		if opts.docker {
+			targetDir := outDir.Join("full", ctx.PackageInfos[internalDep].Dir)
+			jsonDir := outDir.Join("json", ctx.PackageInfos[internalDep].PackageJSONPath)
+			if err := targetDir.EnsureDir(); err != nil {
+				return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir, fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy %v into %v: %w", internalDep, targetDir, err))
-				return 1
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 			}
-			if err := fs.EnsureDir(jsonDir); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to create folder %v for %v: %w", jsonDir, internalDep, err))
-				return 1
+			if err := jsonDir.EnsureDir(); err != nil {
+				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir, fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy %v into %v: %w", internalDep, jsonDir, err))
-				return 1
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir.ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		} else {
-			targetDir := filepath.Join(pruneOptions.cwd, "out", ctx.PackageInfos[internalDep].Dir)
-			if err := fs.EnsureDir(targetDir); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to create folder %v for %v: %w", targetDir, internalDep, err))
-				return 1
+			targetDir := outDir.Join(ctx.PackageInfos[internalDep].Dir)
+			if err := targetDir.EnsureDir(); err != nil {
+				return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir, fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy %v into %v: %w", internalDep, targetDir, err))
-				return 1
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 			}
 		}
 
@@ -182,75 +195,63 @@ func (c *PruneCommand) Run(args []string) int {
 			lockfile[k] = v
 		}
 
-		logger.Printf(" - Added %v", ctx.PackageInfos[internalDep].Name)
+		p.ui.Output(fmt.Sprintf(" - Added %v", ctx.PackageInfos[internalDep].Name))
 	}
-	c.Config.Logger.Trace("new workspaces", "value", workspaces)
-	if pruneOptions.docker {
+	p.logger.Trace("new workspaces", "value", workspaces)
+	if opts.docker {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", "full", ".gitignore"), fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root .gitignore: %w", err))
-				return 1
+			if err := fs.CopyFile(".gitignore", outDir.Join("full", ".gitignore").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrap(err, "failed to copy root .gitignore")
 			}
 		}
 		// We only need to actually copy turbo.json into "full" folder since it isn't needed for installation in docker
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile("turbo.json", filepath.Join(pruneOptions.cwd, "out", "full", "turbo.json"), fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root turbo.json: %w", err))
-				return 1
+			if err := fs.CopyFile("turbo.json", outDir.Join("full", "turbo.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrap(err, "failed to copy root turbo.json")
 			}
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "full", "package.json"), fs.DirPermissions); err != nil {
-			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
-			return 1
+		if err := fs.CopyFile("package.json", outDir.Join("full", "package.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			return errors.Wrap(err, "failed to copy root package.json")
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "json", "package.json"), fs.DirPermissions); err != nil {
-			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
-			return 1
+		if err := fs.CopyFile("package.json", outDir.Join("json", "package.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	} else {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", filepath.Join(pruneOptions.cwd, "out", ".gitignore"), fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root .gitignore: %w", err))
-				return 1
+			if err := fs.CopyFile(".gitignore", outDir.Join(".gitignore").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrap(err, "failed to copy root .gitignore")
 			}
 		}
 
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile("turbo.json", filepath.Join(pruneOptions.cwd, "out", "turbo.json"), fs.DirPermissions); err != nil {
-				c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root turbo.json: %w", err))
-				return 1
+			if err := fs.CopyFile("turbo.json", outDir.Join("turbo.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+				return errors.Wrap(err, "failed to copy root turbo.json")
 			}
 		}
 
-		if err := fs.CopyFile("package.json", filepath.Join(pruneOptions.cwd, "out", "package.json"), fs.DirPermissions); err != nil {
-			c.logError(c.Config.Logger, "", fmt.Errorf("failed to copy root package.json: %w", err))
-			return 1
+		if err := fs.CopyFile("package.json", outDir.Join("package.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	}
 
 	var b bytes.Buffer
 	yamlEncoder := yaml.NewEncoder(&b)
-	yamlEncoder.SetIndent(2) // this is what you're looking for
-	yamlEncoder.Encode(lockfile)
-
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed to materialize sub-lockfile. This can happen if your lockfile contains merge conflicts or is somehow corrupted. Please report this if it occurs: %w", err))
-		return 1
+	yamlEncoder.SetIndent(2)
+	if err := yamlEncoder.Encode(lockfile); err != nil {
+		return errors.Wrap(err, "failed to materialize sub-lockfile. This can happen if your lockfile contains merge conflicts or is somehow corrupted. Please report this if it occurs")
 	}
-	err = ioutil.WriteFile(filepath.Join(pruneOptions.cwd, "out", "yarn.lock"), b.Bytes(), fs.DirPermissions)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed to write sub-lockfile: %w", err))
-		return 1
+	if err := outDir.Join("yarn.lock").WriteFile(b.Bytes(), fs.DirPermissions); err != nil {
+		return errors.Wrap(err, "failed to write sub-lockfile")
 	}
 
-	tmpGeneratedLockfile, err := os.Create(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"))
+	yarnTmpFilePath := outDir.Join("yarn-tmp.lock")
+	tmpGeneratedLockfile, err := yarnTmpFilePath.Create()
+	if err != nil {
+		return errors.Wrap(err, "failed create temporary lockfile")
+	}
 	tmpGeneratedLockfileWriter := bufio.NewWriter(tmpGeneratedLockfile)
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed create temporary lockfile: %w", err))
-		return 1
-	}
 
 	if ctx.PackageManager.Name == "nodejs-yarn" {
 		tmpGeneratedLockfileWriter.WriteString("# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n\n")
@@ -259,10 +260,10 @@ func (c *PruneCommand) Run(args []string) int {
 	}
 
 	// because of yarn being yarn, we need to inject lines in between each block of YAML to make it "valid" SYML
-	generatedLockfile, err := os.Open(filepath.Join(filepath.Join(pruneOptions.cwd, "out", "yarn.lock")))
+	lockFilePath := outDir.Join("yarn.lock")
+	generatedLockfile, err := lockFilePath.Open()
 	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed to massage lockfile: %w", err))
-		return 1
+		return errors.Wrap(err, "failed to massage lockfile")
 	}
 
 	scan := bufio.NewScanner(generatedLockfile)
@@ -277,28 +278,21 @@ func (c *PruneCommand) Run(args []string) int {
 		}
 	}
 	// Make sure to flush the log write before we start saving it.
-	tmpGeneratedLockfileWriter.Flush()
+	if err := tmpGeneratedLockfileWriter.Flush(); err != nil {
+		return errors.Wrap(err, "failed to flush to temporary lock file")
+	}
 
 	// Close the files before we rename them
-	tmpGeneratedLockfile.Close()
-	generatedLockfile.Close()
+	if err := tmpGeneratedLockfile.Close(); err != nil {
+		return errors.Wrap(err, "failed to close temporary lock file")
+	}
+	if err := generatedLockfile.Close(); err != nil {
+		return errors.Wrap(err, "failed to close existing lock file")
+	}
 
 	// Rename the file
-	err = os.Rename(filepath.Join(pruneOptions.cwd, "out", "yarn-tmp.lock"), filepath.Join(pruneOptions.cwd, "out", "yarn.lock"))
-	if err != nil {
-		c.logError(c.Config.Logger, "", fmt.Errorf("failed finalize lockfile: %w", err))
-		return 1
+	if err := os.Rename(yarnTmpFilePath.ToStringDuringMigration(), lockFilePath.ToStringDuringMigration()); err != nil {
+		return errors.Wrap(err, "failed finalize lockfile")
 	}
-	return 0
-}
-
-// logError logs an error and outputs it to the UI.
-func (c *PruneCommand) logError(log hclog.Logger, prefix string, err error) {
-	log.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-	pref := color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
-	c.Ui.Error(fmt.Sprintf("%s%s%s", pref, prefix, color.RedString(" %v", err)))
+	return nil
 }

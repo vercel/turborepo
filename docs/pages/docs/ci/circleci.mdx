@@ -59,10 +59,6 @@ Create a file called `.circleci/config.yml` in your repository with the followin
       test:
         docker:
           - image: cimg/node:lts
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # environment:
-        #  TURBO_TOKEN: $TURBO_TOKEN
-        #  TURBO_TEAM: $TURBO_TEAM
         steps:
           - checkout
           - node/install-packages
@@ -85,10 +81,6 @@ Create a file called `.circleci/config.yml` in your repository with the followin
       test:
         docker:
           - image: cimg/node:lts
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # environment:
-        #  TURBO_TOKEN: $TURBO_TOKEN
-        #  TURBO_TEAM: $TURBO_TEAM
         steps:
           - checkout
           - node/install-packages:
@@ -112,10 +104,6 @@ Create a file called `.circleci/config.yml` in your repository with the followin
       test:
         docker:
           - image: cimg/node:lts
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # environment:
-        #  TURBO_TOKEN: $TURBO_TOKEN
-        #  TURBO_TEAM: $TURBO_TEAM
         steps:
           - checkout
           - node/install-packages:
@@ -131,7 +119,7 @@ Create a file called `.circleci/config.yml` in your repository with the followin
 
 ## Remote Caching
 
-To use Remote Caching with CircleCI, add the following environment variables to your CircleCI workflow
+To use Remote Caching with CircleCI, add the following environment variables to your CircleCI project
 to make them available to your `turbo` commands.
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
@@ -151,21 +139,10 @@ Copy the value to a safe place. You'll need it in a moment.
 ![CircleCI Environment Variables](/images/docs/circleci-environment-variables.png)
 ![CircleCI Create Environment Variables](/images/docs/circleci-create-environment-variables.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL (or if you're on Hobby, your personal URL works as well). Do not include the `https://vercel.com/` part, only the slug.
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
+
+   If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
 
-4. At the top of your CircleCI workflow, provide the following environment variables to jobs that use `turbo`:
-
-```yaml highlight="6-8"
-# ...
-jobs:
-  test:
-    docker:
-      - image: cimg/node:lts
-    environment:
-      TURBO_TOKEN: $TURBO_TOKEN
-      TURBO_TEAM: $TURBO_TEAM
-    steps:
-      # ...
-```
+4. CircleCI automatically loads environment variables stored in project settings into the CI environment. No modifications are necessary for the CI file.
