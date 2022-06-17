@@ -41,11 +41,12 @@ func expectFilesystemEvent(t *testing.T, ch <-chan Event, expected Event) {
 	for {
 		select {
 		case ev := <-ch:
+			t.Logf("got event %v", ev)
 			if ev.Path == expected.Path && ev.EventType == expected.EventType {
 				return
 			}
 		case <-timeout:
-			t.Error("Timed out waiting for filesystem event")
+			t.Errorf("Timed out waiting for filesystem event at %v", expected.Path)
 			return
 		}
 	}
