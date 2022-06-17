@@ -5,12 +5,6 @@ import "path/filepath"
 // AbsoluteSystemPath is a root-relative path using system separators.
 type AbsoluteSystemPath string
 
-// For interface reasons, we need a way to distinguish between
-// Absolute/Anchored/Relative/System/Unix/File paths so we stamp them.
-func (AbsoluteSystemPath) absolutePathStamp() {}
-func (AbsoluteSystemPath) systemPathStamp()   {}
-func (AbsoluteSystemPath) filePathStamp()     {}
-
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
 func (p AbsoluteSystemPath) ToString() string {

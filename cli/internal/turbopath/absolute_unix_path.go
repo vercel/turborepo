@@ -8,12 +8,6 @@ import (
 // AbsoluteUnixPath is a root-relative path using Unix `/` separators.
 type AbsoluteUnixPath string
 
-// For interface reasons, we need a way to distinguish between
-// Absolute/Anchored/Relative/System/Unix/File paths so we stamp them.
-func (AbsoluteUnixPath) absolutePathStamp() {}
-func (AbsoluteUnixPath) unixPathStamp()     {}
-func (AbsoluteUnixPath) filePathStamp()     {}
-
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
 func (p AbsoluteUnixPath) ToString() string {

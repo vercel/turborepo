@@ -8,12 +8,6 @@ import (
 // AnchoredUnixPath is a path stemming from a specified root using Unix `/` separators.
 type AnchoredUnixPath string
 
-// For interface reasons, we need a way to distinguish between
-// Absolute/Anchored/Relative/System/Unix/File paths so we stamp them.
-func (AnchoredUnixPath) anchoredStamp() {}
-func (AnchoredUnixPath) unixPathStamp() {}
-func (AnchoredUnixPath) filePathStamp() {}
-
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
 func (p AnchoredUnixPath) ToString() string {

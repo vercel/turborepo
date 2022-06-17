@@ -5,12 +5,6 @@ import "path/filepath"
 // AnchoredSystemPath is a path stemming from a specified root using system separators.
 type AnchoredSystemPath string
 
-// For interface reasons, we need a way to distinguish between
-// Absolute/Anchored/Relative/System/Unix/File paths so we stamp them.
-func (AnchoredSystemPath) anchoredStamp()   {}
-func (AnchoredSystemPath) systemPathStamp() {}
-func (AnchoredSystemPath) filePathStamp()   {}
-
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
 func (p AnchoredSystemPath) ToString() string {
