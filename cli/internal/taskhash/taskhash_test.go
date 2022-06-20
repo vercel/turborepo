@@ -23,13 +23,13 @@ func Test_manuallyHashPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	repoRoot := fs.UnsafeToAbsolutePath(root)
-	pkgName := "libA"
+	repoRoot := turbopath.AbsoluteSystemPathFromUpstream(root)
+	pkgName := turbopath.RelativeSystemPath("libA")
 	type fileHash struct {
 		contents string
 		hash     string
 	}
-	files := map[string]fileHash{
+	files := map[turbopath.AnchoredUnixPath]fileHash{
 		"top-level-file":              {"top-level-file-contents", ""},
 		"other-dir/other-dir-file":    {"other-dir-file-contents", ""},
 		"ignoreme":                    {"anything", ""},
@@ -42,7 +42,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		"libA/pkgignorethisdir/file":  {"anything", ""},
 	}
 
-	rootIgnoreFile, err := os.Create(filepath.Join(root, ".gitignore"))
+	rootIgnoreFile, err := os.Create(repoRoot.Join(".gitignore").ToString())
 	if err != nil {
 		t.Fatalf("failed to create .gitignore: %v", err)
 	}
@@ -51,12 +51,12 @@ func Test_manuallyHashPackage(t *testing.T) {
 		t.Fatalf("failed to write contents to .gitignore: %v", err)
 	}
 	rootIgnoreFile.Close()
-	pkgIgnoreFilename := filepath.Join(root, pkgName, ".gitignore")
-	err = fs.EnsureDir(pkgIgnoreFilename)
+	pkgIgnoreFilename := repoRoot.Join(pkgName, ".gitignore")
+	err = fs.EnsureDir(pkgIgnoreFilename.ToString())
 	if err != nil {
 		t.Fatalf("failed to ensure directories for %v: %v", pkgIgnoreFilename, err)
 	}
-	pkgIgnoreFile, err := os.Create(pkgIgnoreFilename)
+	pkgIgnoreFile, err := os.Create(pkgIgnoreFilename.ToString())
 	if err != nil {
 		t.Fatalf("failed to create libA/.gitignore: %v", err)
 	}
@@ -66,12 +66,12 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 	pkgIgnoreFile.Close()
 	for path, spec := range files {
-		filename := filepath.Join(root, path)
-		err = fs.EnsureDir(filename)
+		filename := path.ToSystemPath().RestoreAnchor(repoRoot)
+		err = fs.EnsureDir(filename.ToString())
 		if err != nil {
 			t.Fatalf("failed to ensure directories for %v: %v", filename, err)
 		}
-		f, err := os.Create(filename)
+		f, err := os.Create(filename.ToString())
 		if err != nil {
 			t.Fatalf("failed to create file: %v: %v", filename, err)
 		}
@@ -82,12 +82,12 @@ func Test_manuallyHashPackage(t *testing.T) {
 		f.Close()
 	}
 	// now that we've created the repo, expect our .gitignore file too
-	files["libA/.gitignore"] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
+	files[turbopath.AnchoredUnixPath("libA/.gitignore")] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
 
 	pkg := &fs.PackageJSON{
-		Dir: pkgName,
+		Dir: pkgName.ToString(),
 	}
-	hashes, err := manuallyHashPackage(pkg, []string{}, repoRoot)
+	hashes, err := manuallyHashPackage(pkg, []string{}, fs.AbsolutePath(repoRoot.ToString()))
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -95,7 +95,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	prefixLen := len(prefix)
 	count := 0
 	for path, spec := range files {
-		if strings.HasPrefix(path, prefix) {
+		if strings.HasPrefix(path.ToString(), prefix.ToString()) {
 			got, ok := hashes[turbopath.AnchoredUnixPath(path[prefixLen:])]
 			if !ok {
 				if spec.hash != "" {
@@ -113,13 +113,13 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, repoRoot)
+	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, fs.AbsolutePath(repoRoot.ToString()))
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
 	for path, spec := range files {
-		if strings.HasPrefix(path, prefix) {
-			shouldInclude := strings.HasSuffix(path, "file")
+		if strings.HasPrefix(path.ToString(), prefix.ToString()) {
+			shouldInclude := strings.HasSuffix(path.ToString(), "file")
 			got, ok := justFileHashes[turbopath.AnchoredUnixPath(path[prefixLen:])]
 			if !ok && shouldInclude {
 				if spec.hash != "" {
