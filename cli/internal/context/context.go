@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const GLOBAL_CACHE_KEY = "Ba weep granna weep ninny bong"
+const _globalCacheKey = "Real G's move in silence like lasagna"
 
 // Context of the CLI
 type Context struct {
@@ -123,8 +123,9 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(rootpath string, config *config.Config, cacheDir fs.AbsolutePath) Option {
+func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
+		rootpath := config.Cwd.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
@@ -393,8 +394,12 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 			pairs = append(pairs, e)
 		}
 	}
-
 	return justNames, pairs
+}
+
+// Variables that we always include
+var _defaultEnvVars = []string{
+	"VERCEL_ANALYTICS_ID",
 }
 
 func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
@@ -404,6 +409,10 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}
 	// Calculate global file and env var dependencies
+	for _, builtinEnvVar := range _defaultEnvVars {
+		globalHashableEnvNames = append(globalHashableEnvNames, builtinEnvVar)
+		globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", builtinEnvVar, os.Getenv(builtinEnvVar)))
+	}
 	if len(externalGlobalDependencies) > 0 {
 		var globs []string
 		for _, v := range externalGlobalDependencies {
@@ -464,7 +473,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
-		globalCacheKey:       GLOBAL_CACHE_KEY,
+		globalCacheKey:       _globalCacheKey,
 		pipeline:             pipeline,
 	}
 	globalHash, err := fs.HashObject(globalHashable)

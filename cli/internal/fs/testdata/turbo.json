@@ -7,17 +7,20 @@
       "outputs": [
         "dist/**",
         ".next/**"
-      ]
+      ],
+      "outputMode": "new-only"
     },
     "lint": {
       "outputs": [],
       "dependsOn": [
         "$MY_VAR"
       ],
-      "cache": true
+      "cache": true,
+      "outputMode": "new-only"
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "outputMode": "full"
     },
     "publish": {
       "outputs": [

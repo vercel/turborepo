@@ -8,7 +8,7 @@ Dependencies
 Building
 
 - Building turbo CLI: In `cli` run `make turbo`
-- Using turbo to build turbo CLI: `./turbow.sh`
+- Using turbo to build turbo CLI: `./turbow.js`
 
 Smoke Testing via examples:
 

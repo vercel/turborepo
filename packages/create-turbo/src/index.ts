@@ -6,6 +6,7 @@ import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
+import lt from "semver/functions/lt";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
@@ -31,6 +32,7 @@ const help = `
   Flags:
     --use-npm           Explicitly tell the CLI to bootstrap the app using npm
     --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
+    --use-yarn          Explicitly tell the CLI to bootstrap the app using yarn
     --no-install        Explicitly do not run the package manager's install command
     --help, -h          Show this help message
     --version, -v       Show the version of this script
@@ -61,6 +63,7 @@ async function run() {
       help: { type: "boolean", default: false, alias: "h" },
       useNpm: { type: "boolean", default: false },
       usePnpm: { type: "boolean", default: false },
+      useYarn: { type: "boolean", default: false },
       install: { type: "boolean", default: true },
       version: { type: "boolean", default: false, alias: "v" },
     },
@@ -93,6 +96,7 @@ async function run() {
           ])
         ).dir
   );
+  const projectName = path.basename(projectDir);
 
   const isYarnInstalled = shouldUseYarn();
   const isPnpmInstalled = shouldUsePnpm();
@@ -101,6 +105,8 @@ async function run() {
     answers = { packageManager: "npm" };
   } else if (flags.usePnpm) {
     answers = { packageManager: "pnpm" };
+  } else if (flags.useYarn) {
+    answers = { packageManager: "yarn" };
   } else {
     answers = await inquirer.prompt<{
       packageManager: PackageManager;
@@ -161,25 +167,27 @@ async function run() {
   );
 
   // merge package.jsons
-  let appPkg = require(path.join(sharedTemplate, "package.json"));
+  let sharedPkg = require(path.join(sharedTemplate, "package.json"));
+  let projectPkg = require(path.join(projectDir, "package.json"));
 
-  // add current versions of remix deps
+  // add current versions of wildcard deps and merge
   ["dependencies", "devDependencies"].forEach((pkgKey) => {
-    for (let key in appPkg[pkgKey]) {
-      if (appPkg[pkgKey][key] === "*") {
-        appPkg[pkgKey][key] = `latest`;
-      }
-    }
+    // merge dependencies, giving priority to the project deps
+    sharedPkg[pkgKey] = {
+      ...sharedPkg[pkgKey],
+      ...projectPkg[pkgKey],
+    };
   });
 
-  appPkg.packageManager = `${answers.packageManager}@${getPackageManagerVersion(
+  sharedPkg.packageManager = `${
     answers.packageManager
-  )}`;
+  }@${getPackageManagerVersion(answers.packageManager)}`;
+  sharedPkg.name = projectName;
 
   // write package.json
   await fse.writeFile(
     path.join(projectDir, "package.json"),
-    JSON.stringify(appPkg, null, 2)
+    JSON.stringify(sharedPkg, null, 2)
   );
 
   if (flags.install) {
@@ -192,7 +200,9 @@ async function run() {
       ` - ${chalk.bold("packages/ui")}: Shared React component library`
     );
     console.log(
-      ` - ${chalk.bold("packages/config")}: Shared configuration (ESLint)`
+      ` - ${chalk.bold(
+        "packages/eslint-config-custom"
+      )}: Shared configuration (ESLint)`
     );
     console.log(
       ` - ${chalk.bold(
@@ -208,18 +218,28 @@ async function run() {
       },
     }).start();
 
-    // Using the official npm registry in the installation could be very slow,
-    // So we use the user customized registry from default instead.
-    const npmRegistry = await getNpmRegistry(answers.packageManager);
+    let supportsRegistryArg = false;
+    try {
+      // yarn >= v2 only support specifying a registry via config (no cli param)
+      supportsRegistryArg = lt(
+        getPackageManagerVersion(answers.packageManager),
+        "2.0.0"
+      );
+    } catch (err) {}
 
-    await execa(
-      `${answers.packageManager}`,
-      [`install`, `--registry=${npmRegistry}`],
-      {
-        stdio: "ignore",
-        cwd: projectDir,
-      }
-    );
+    const installArgs = ["install"];
+    if (supportsRegistryArg) {
+      // Using the official npm registry for installation could be very
+      // slow for users in different regions (like China), so use the
+      // user customized registry from the config instead
+      const npmRegistry = await getNpmRegistry(answers.packageManager);
+      installArgs.push(`--registry=${npmRegistry}`);
+    }
+
+    await execa(`${answers.packageManager}`, installArgs, {
+      stdio: "ignore",
+      cwd: projectDir,
+    });
     spinner.stop();
   } else {
     console.log();
@@ -267,7 +287,7 @@ async function run() {
   console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
-  console.log(`speed boost, enable Remote Caching (beta) with Vercel by`);
+  console.log(`speed boost, enable Remote Caching with Vercel by`);
   console.log(`entering the following command:`);
   console.log();
   console.log(

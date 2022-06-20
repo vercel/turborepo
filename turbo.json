@@ -31,6 +31,15 @@
       "outputs": [".next/**"],
       "dependsOn": ["^build", "docs#schema"]
     },
+    "cli#e2e": {
+      "outputs": [],
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts"
+      ]
+    },
     "//#run-example": {
       "outputs": [],
       "inputs": [
@@ -40,6 +49,8 @@
         "examples/**/*.js",
         "examples/**/*.yaml",
         "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
         "./scripts/run-example.sh"
       ],
       "dependsOn": []

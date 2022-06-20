@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
 
@@ -54,8 +53,6 @@ type Config struct {
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
 	Cwd fs.AbsolutePath
-	// The filesystem to use for any filesystem interactions
-	Fs afero.Fs
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -72,7 +69,7 @@ type CacheConfig struct {
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
-func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion string) (c *Config, err error) {
+func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
 
 	// Special check for ./turbo invocation without any args
 	// Return the help message
@@ -80,17 +77,10 @@ func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion stri
 		args = append(args, "--help")
 	}
 
-	// Pop the subcommand into 'cmd'
-	// flags.Parse does not work when the subcommand is included
 	cmd, inputFlags := args[0], args[1:]
-
-	// Special check for help commands
-	// command is ./turbo --help or --version
-	if len(inputFlags) == 0 && (cmd == "help" || cmd == "--help" || cmd == "-help" || cmd == "version" || cmd == "--version" || cmd == "-version") {
-		return nil, nil
-	}
-	// command is ./turbo $subcommand --help
-	if len(inputFlags) == 1 && (inputFlags[0] == "help" || inputFlags[0] == "--help" || inputFlags[0] == "-help") {
+	// Special check for version command
+	// command is ./turbo --version
+	if len(inputFlags) == 0 && (cmd == "version" || cmd == "--version" || cmd == "-version") {
 		return nil, nil
 	}
 
@@ -108,14 +98,14 @@ func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion stri
 	if err != nil {
 		return nil, err
 	}
-	userConfig, err := ReadUserConfigFile(fsys)
+	userConfig, err := ReadUserConfigFile()
 	if err != nil {
 		return nil, fmt.Errorf("reading user config file: %v", err)
 	}
 	if userConfig == nil {
 		userConfig = defaultUserConfig()
 	}
-	partialConfig, err := ReadRepoConfigFile(fsys, cwd)
+	partialConfig, err := ReadRepoConfigFile(cwd)
 	if err != nil {
 		return nil, fmt.Errorf("reading repo config file: %v", err)
 	}
@@ -222,7 +212,6 @@ func ParseAndValidate(args []string, fsys afero.Fs, ui cli.Ui, turboVersion stri
 		RootPackageJSON: rootPackageJSON,
 		TurboJSON:       turboJSON,
 		Cwd:             cwd,
-		Fs:              fsys,
 	}
 
 	c.ApiClient.SetToken(partialConfig.Token)

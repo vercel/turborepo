@@ -11,7 +11,7 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 Filtering packages allows you to target your tasks to only the packages you care about.
 Turborepo supports a `pnpm`-like `--filter` flag that allows you to select the packages
 that will act as "entry points" into your monorepo's package/task graph.
-You can filter packages by name, directory, include dependents/dependencies, and by changes
+You can filter your project by package name, package directory, whether packages include dependents/dependencies, and by changes
 in git history.
 
 `turbo` will run each task against each matched package, ensuring that any dependencies
@@ -34,7 +34,7 @@ Supports exact matches (`--filter=my-pkg`), and globs (`--filter=*my-pkg*`) are 
 Scoped packages (`@foo/bar`) can be abbreviated to just the package name (`bar`) as long as the package name
 is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
 
-The root package can be selected using the token `//`.
+The monorepo's root package can be selected using the token `//`.
 
 ```sh
 # Build 'my-pkg', letting turbo infer task dependencies from the pipeline defined in turbo.json

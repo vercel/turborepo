@@ -1,22 +1,77 @@
 package config
 
 import (
-	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
-	"github.com/spf13/afero"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
-func TestReadRepoConfigWhenMissing(t *testing.T) {
-	fsys := afero.NewMemMapFs()
-	cwd, err := fs.GetCwd()
+func backupExistingConfig(t *testing.T) fs.AbsolutePath {
+	t.Helper()
+	path, err := createUserConfigPath()
 	if err != nil {
-		t.Fatalf("getting cwd: %v", err)
+		t.Fatalf("failed to get user config path: %v", err)
+	}
+	configDir := path.Dir()
+	if configDir.DirExists() {
+		backup := fs.AbsolutePathFromUpstream(t.TempDir()).Join("config_test")
+		if err := configDir.Rename(backup); err != nil {
+			t.Fatalf("failed to backup %v to %v: %v", configDir, backup, err)
+		}
+		t.Cleanup(func() {
+			// don't have a live testing instance here, use panic instead
+			if err := configDir.Remove(); err != nil {
+				panic(fmt.Sprintf("failed to remove test config dir %v: %v", configDir, err))
+			}
+			if err := backup.Rename(configDir); err != nil {
+				panic(fmt.Sprintf("failed to restore %v from %v", configDir, backup))
+			}
+		})
+	}
+	return path
+}
+
+func Test_UserConfigPath(t *testing.T) {
+	// XDG is not filesystem aware. Clean up first.
+	path := backupExistingConfig(t)
+
+	getConfigPath, getConfigPathErr := getUserConfigPath()
+	if getConfigPathErr != nil {
+		t.Errorf("failed to run getUserConfigPath: %v", getConfigPathErr)
+	}
+	// We just cleaned up the existing config, if it existed.
+	// We should not currenctly have one
+	if getConfigPath != "" {
+		t.Fatalf("expected to not find a config file, got %v", getConfigPath)
 	}
 
-	config, err := ReadRepoConfigFile(fsys, cwd)
+	// The main thing we want to do is make sure that we don't have side effects.
+	// We know where it would attempt to create a directory already.
+	getConfigPath = path
+
+	getConfigDir := getConfigPath.Dir()
+	getCheck, _ := os.Stat(getConfigDir.ToString())
+	if getCheck != nil {
+		t.Error("getUserConfigPath() had side effects.")
+	}
+
+	createConfigPath, createErr := createUserConfigPath()
+	if createErr != nil {
+		t.Errorf("createUserConfigPath() errored: %v.", createErr)
+	}
+	createConfigDir := createConfigPath.Dir()
+	createCheck, _ := os.Stat(createConfigDir.ToString())
+	if createCheck == nil {
+		t.Error("createUserConfigPath() did not create the path.")
+	}
+}
+
+func TestReadRepoConfigWhenMissing(t *testing.T) {
+	testDir := fs.AbsolutePath(t.TempDir())
+
+	config, err := ReadRepoConfigFile(testDir)
 	if err != nil {
 		t.Errorf("got error reading non-existent config file: %v, want <nil>", err)
 	}
@@ -25,62 +80,47 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 	}
 }
 
-func writePartialInitialConfig(t *testing.T, fsys afero.Fs, repoRoot fs.AbsolutePath) *TurborepoConfig {
-	path := repoRoot.Join(".turbo", "config.json")
-	initial := &TurborepoConfig{
+func TestRepoConfigIncludesDefaults(t *testing.T) {
+	testDir := fs.AbsolutePath(t.TempDir())
+
+	customConfig := &TurborepoConfig{
 		TeamSlug: "my-team",
 	}
-	toWrite, err := json.Marshal(initial)
-	if err != nil {
-		t.Fatalf("marshal config: %v", err)
-	}
-	err = fs.WriteFile(fsys, path, toWrite, os.ModePerm)
-	if err != nil {
-		t.Fatalf("writing config file: %v", err)
-	}
-	return initial
-}
 
-func TestRepoConfigIncludesDefaults(t *testing.T) {
-	fsys := afero.NewMemMapFs()
-	cwd, err := fs.GetCwd()
-	if err != nil {
-		t.Fatalf("getting cwd: %v", err)
+	initialWriteErr := WriteRepoConfigFile(testDir, customConfig)
+	if initialWriteErr != nil {
+		t.Errorf("Failed to set up test: %v", initialWriteErr)
 	}
 
-	initial := writePartialInitialConfig(t, fsys, cwd)
-
-	config, err := ReadRepoConfigFile(fsys, cwd)
+	config, err := ReadRepoConfigFile(testDir)
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
+
 	defaultConfig := defaultRepoConfig()
 	if config.ApiUrl != defaultConfig.ApiUrl {
 		t.Errorf("api url got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
 	}
-	if config.TeamSlug != initial.TeamSlug {
-		t.Errorf("team slug got %v, want %v", config.TeamSlug, initial.TeamSlug)
+	if config.TeamSlug != customConfig.TeamSlug {
+		t.Errorf("team slug got %v, want %v", config.TeamSlug, customConfig.TeamSlug)
 	}
 }
 
 func TestWriteRepoConfig(t *testing.T) {
-	fsys := afero.NewMemMapFs()
-	cwd, err := fs.GetCwd()
-	if err != nil {
-		t.Fatalf("getting cwd: %v", err)
-	}
+	testDir := fs.AbsolutePath(t.TempDir())
 
 	initial := &TurborepoConfig{}
 	initial.TeamSlug = "my-team"
-	err = WriteRepoConfigFile(fsys, cwd, initial)
+	err := WriteRepoConfigFile(testDir, initial)
 	if err != nil {
 		t.Errorf("WriteRepoConfigFile got %v, want <nil>", err)
 	}
 
-	config, err := ReadRepoConfigFile(fsys, cwd)
+	config, err := ReadRepoConfigFile(testDir)
 	if err != nil {
 		t.Errorf("ReadRepoConfig err got %v, want <nil>", err)
 	}
+
 	if config.TeamSlug != initial.TeamSlug {
 		t.Errorf("TeamSlug got %v want %v", config.TeamSlug, initial.TeamSlug)
 	}
@@ -91,8 +131,18 @@ func TestWriteRepoConfig(t *testing.T) {
 }
 
 func TestReadUserConfigWhenMissing(t *testing.T) {
-	fsys := afero.NewMemMapFs()
-	config, err := ReadUserConfigFile(fsys)
+	// Make sure it actually doesn't exist first.
+	path, _ := getUserConfigPath()
+	if path.FileExists() {
+		// remove the file.
+		err := path.Remove()
+		if err != nil {
+			t.Error("User config path unable to be removed.")
+		}
+	}
+
+	// Proceed with the test.
+	config, err := ReadUserConfigFile()
 	if err != nil {
 		t.Errorf("ReadUserConfig err got %v, want <nil>", err)
 	}
@@ -102,34 +152,35 @@ func TestReadUserConfigWhenMissing(t *testing.T) {
 }
 
 func TestWriteUserConfig(t *testing.T) {
-	fsys := afero.NewMemMapFs()
 	initial := defaultUserConfig()
 	initial.Token = "my-token"
 	initial.ApiUrl = "https://api.vercel.com" // should be overridden
-	err := WriteUserConfigFile(fsys, initial)
+
+	err := WriteUserConfigFile(initial)
 	if err != nil {
 		t.Errorf("WriteUserConfigFile err got %v, want <nil>", err)
 	}
 
-	config, err := ReadUserConfigFile(fsys)
+	config, err := ReadUserConfigFile()
 	if err != nil {
 		t.Errorf("ReadUserConfig err got %v, want <nil>", err)
 	}
 	if config.Token != initial.Token {
 		t.Errorf("Token got %v want %v", config.Token, initial.Token)
 	}
+
 	// Verify that our legacy ApiUrl was upgraded
 	defaultConfig := defaultUserConfig()
 	if config.ApiUrl != defaultConfig.ApiUrl {
 		t.Errorf("ApiUrl got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
 	}
 
-	err = DeleteUserConfigFile(fsys)
+	err = DeleteUserConfigFile()
 	if err != nil {
 		t.Errorf("DeleteUserConfigFile err got %v, want <nil>", err)
 	}
 
-	missing, err := ReadUserConfigFile(fsys)
+	missing, err := ReadUserConfigFile()
 	if err != nil {
 		t.Errorf("ReadUserConfig err got %v, want <nil>", err)
 	}

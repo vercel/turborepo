@@ -2,13 +2,13 @@ package fs
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"syscall"
+	"reflect"
 
-	"github.com/pkg/errors"
-	"github.com/spf13/afero"
+	"github.com/spf13/pflag"
 )
 
 // AbsolutePath represents a platform-dependent absolute path on the filesystem,
@@ -32,6 +32,14 @@ func ResolveUnknownPath(root AbsolutePath, unknown string) AbsolutePath {
 }
 
 func UnsafeToAbsolutePath(s string) AbsolutePath {
+	return AbsolutePath(s)
+}
+
+// AbsolutePathFromUpstream is used to mark return values from APIs that we
+// expect to give us absolute paths. No checking is performed.
+// Prefer to use this over a cast to maintain the search-ability of interfaces
+// into and out of the AbsolutePath type.
+func AbsolutePathFromUpstream(s string) AbsolutePath {
 	return AbsolutePath(s)
 }
 
@@ -75,8 +83,30 @@ func (ap AbsolutePath) Open() (*os.File, error) {
 	return os.Open(ap.asString())
 }
 
+// OpenFile implements os.OpenFile for an absolute path
+func (ap AbsolutePath) OpenFile(flags int, mode os.FileMode) (*os.File, error) {
+	return os.OpenFile(ap.asString(), flags, mode)
+}
+
 func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
+}
+
+// Lstat implements os.Lstat for absolute path
+func (ap AbsolutePath) Lstat() (os.FileInfo, error) {
+	return os.Lstat(ap.asString())
+}
+
+// DirExists returns true if this path points to a directory
+func (ap AbsolutePath) DirExists() bool {
+	info, err := os.Lstat(ap.asString())
+	return err == nil && info.IsDir()
+}
+
+// ContainsPath returns true if this absolute path is a parent of the
+// argument.
+func (ap AbsolutePath) ContainsPath(other AbsolutePath) (bool, error) {
+	return DirContainsPath(ap.asString(), other.asString())
 }
 
 // ReadFile reads the contents of the specified file
@@ -99,6 +129,11 @@ func (ap AbsolutePath) Create() (*os.File, error) {
 	return os.Create(ap.asString())
 }
 
+// Ext implements filepath.Ext for an absolute path
+func (ap AbsolutePath) Ext() string {
+	return filepath.Ext(ap.asString())
+}
+
 // ToString returns the string representation of this absolute path. Used for
 // interfacing with APIs that require a string
 func (ap AbsolutePath) ToString() string {
@@ -110,36 +145,84 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
 }
 
-// EnsureDirFS ensures that the directory containing the given filename is created
-func EnsureDirFS(fs afero.Fs, filename AbsolutePath) error {
-	dir := filename.Dir()
-	err := fs.MkdirAll(dir.asString(), DirPermissions)
-	if errors.Is(err, syscall.ENOTDIR) {
-		err = fs.Remove(dir.asString())
-		if err != nil {
-			return errors.Wrapf(err, "removing existing file at %v before creating directories", dir)
-		}
-		err = fs.MkdirAll(dir.asString(), DirPermissions)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return errors.Wrapf(err, "creating directories at %v", dir)
+// Symlink implements os.Symlink(target, ap) for absolute path
+func (ap AbsolutePath) Symlink(target string) error {
+	return os.Symlink(target, ap.asString())
+}
+
+// Remove removes the file or (empty) directory at the given path
+func (ap AbsolutePath) Remove() error {
+	return os.Remove(ap.asString())
+}
+
+// Rename implements os.Rename for absolute paths
+func (ap AbsolutePath) Rename(dest AbsolutePath) error {
+	return os.Rename(ap.asString(), dest.asString())
+}
+
+// GetVolumeRoot returns the root directory given an absolute path.
+func GetVolumeRoot(absolutePath string) string {
+	return filepath.VolumeName(absolutePath) + string(os.PathSeparator)
+}
+
+// CreateDirFSAtRoot creates an `os.dirFS` instance at the root of the
+// volume containing the specified path.
+func CreateDirFSAtRoot(absolutePath string) iofs.FS {
+	return os.DirFS(GetVolumeRoot(absolutePath))
+}
+
+// GetDirFSRootPath returns the root path of a os.dirFS.
+func GetDirFSRootPath(fsys iofs.FS) string {
+	// We can't typecheck fsys to enforce using an `os.dirFS` because the
+	// type isn't exported from `os`. So instead, reflection. 🤷‍♂️
+
+	fsysType := reflect.TypeOf(fsys).Name()
+	if fsysType != "dirFS" {
+		// This is not a user error, fail fast
+		panic("GetDirFSRootPath must receive an os.dirFS")
 	}
+
+	// The underlying type is a string; this is the original path passed in.
+	return reflect.ValueOf(fsys).String()
+}
+
+// IofsRelativePath calculates a `os.dirFS`-friendly path from an absolute system path.
+func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
+	return filepath.Rel(fsysRoot, absolutePath)
+}
+
+type pathValue struct {
+	base     AbsolutePath
+	current  *AbsolutePath
+	defValue string
+}
+
+func (pv *pathValue) String() string {
+	if *pv.current == "" {
+		return ResolveUnknownPath(pv.base, pv.defValue).ToString()
+	}
+	return pv.current.ToString()
+}
+
+func (pv *pathValue) Set(value string) error {
+	*pv.current = ResolveUnknownPath(pv.base, value)
 	return nil
 }
 
-// WriteFile writes the given bytes to the specified file
-func WriteFile(fs afero.Fs, filename AbsolutePath, toWrite []byte, mode os.FileMode) error {
-	return afero.WriteFile(fs, filename.asString(), toWrite, mode)
+func (pv *pathValue) Type() string {
+	return "path"
 }
 
-// ReadFile reads the contents of the specified file
-func ReadFile(fs afero.Fs, filename AbsolutePath) ([]byte, error) {
-	return afero.ReadFile(fs, filename.asString())
-}
+var _ pflag.Value = &pathValue{}
 
-// RemoveFile removes the file at the given path
-func RemoveFile(fs afero.Fs, filename AbsolutePath) error {
-	return fs.Remove(filename.asString())
+// AbsolutePathVar adds a flag interpreted as an absolute path to the given FlagSet.
+// It currently requires a root because relative paths are interpreted relative to the
+// given root.
+func AbsolutePathVar(flags *pflag.FlagSet, target *AbsolutePath, name string, root AbsolutePath, usage string, defValue string) {
+	value := &pathValue{
+		base:     root,
+		current:  target,
+		defValue: defValue,
+	}
+	flags.Var(value, name, usage)
 }

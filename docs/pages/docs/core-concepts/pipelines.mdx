@@ -23,7 +23,7 @@ Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls
 
 ## Defining a `pipeline`
 
-To define your project's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the `turbo.json` configuration file at the root of your project. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your project.
+To define your monorepo's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the `turbo.json` configuration file at the root of your monorepo. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your monorepo.
 
 Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
 
@@ -222,12 +222,12 @@ This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"d
   [`outputs`](../reference/configuration#outputs) at the moment.**
 </Callout>
 
-### Running tasks defined in the root `package.json`
+### Running tasks defined in the monorepo's root `package.json` file
 
 `turbo` can run tasks that exist in the `package.json` file at the root of the monorepo.
 These must be added to the pipeline configuration using the form `"//#<task>": {...}`. This is
 true even for tasks that already have their own entry. For example, if you already have `"build": {...}`
-in your pipeline, but want to include the `build` script defined in the root `package.json` when running
+in your pipeline, but want to include the `build` script defined in the monorepo's root `package.json` file when running
 `turbo run build`, you must opt the root into it by also including `"//#build": {...}` in your configuration.
 Conversely, you _do not_ need to define a generic `"my-task": {...}` entry if all you need is `"//#my-task": {...}`.
 
@@ -263,9 +263,9 @@ A sample pipeline that defines the root task `format` and opts the root into `te
 }
 ```
 
-**A note on recursion**: Scripts defined in the root `package.json` often call `turbo` themselves.
+**A note on recursion**: Scripts defined in the monorepo's root `package.json` often call `turbo` themselves.
 For example, the `build` script might be `turbo run build`. In this situation, including `//#build` in
-`turbo run build` will cause infinite recursion. It is for this reason that tasks run from the root must
+`turbo run build` will cause infinite recursion. It is for this reason that tasks run from the monorepo's root must
 be explicitly opted into via including `//#<task>` in the pipeline configuration. `turbo` includes
 some best-effort checking to produce an error in the recursion situations, but it is up to you to to only
 opt in those tasks which don't themselves trigger a `turbo` run that would recurse.
