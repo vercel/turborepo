@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655598862622,
+  "lastUpdate": 1655685591365,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -1204,6 +1204,52 @@ window.BENCHMARK_DATA = {
             "value": 36663.6,
             "unit": "ms",
             "range": "10385"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jeff Astor",
+            "username": "Jastor11",
+            "email": "jeff@astor.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "6e12d11e3aca1f063b87bbcba5aff654fa9a7b23",
+          "message": "Friendly spellcheck in README.md (#1416)",
+          "timestamp": "2022-06-17T16:08:29Z",
+          "url": "https://github.com/vercel/turborepo/commit/6e12d11e3aca1f063b87bbcba5aff654fa9a7b23"
+        },
+        "date": 1655685589384,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 197257.4,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 10341.6,
+            "unit": "ms",
+            "range": "430"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 10353.6,
+            "unit": "ms",
+            "range": "561"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 49900.6,
+            "unit": "ms",
+            "range": "13106"
           }
         ]
       }
