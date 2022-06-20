@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/adrg/xdg v0.3.3
 	github.com/briandowns/spinner v1.16.0
-	github.com/deckarep/golang-set v1.7.1
+	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.13.0
 	github.com/gobwas/glob v0.2.3
 	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
