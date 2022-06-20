@@ -171,12 +171,10 @@ turbo run build --filter=./apps/* --filter=!./apps/admin
 
 #### `--graph`
 
-`type: string`
+This command will generate an svg, png, jpg, pdf, json, html, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
+The output file format defaults to jpg, but can be controlled by specifying the filename's extension.
 
-If [Graphviz](https://graphviz.org) is installed, this command will generate an svg, png, jpg, pdf, json, html, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
-The output file format can be controlled with the filename's extension if it is specified. If a filename is not specified, `graph-<timestamp>.jpg` is outputted.
-
-If Graphviz is not installed, this command prints the dot graph to `stdout`.
+If Graphviz is not installed, or no filename is provided, this command prints the dot graph to `stdout`.
 
 ```sh
 turbo run build --graph

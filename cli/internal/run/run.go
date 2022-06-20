@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/graphvisualizer"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
@@ -34,7 +35,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/browser"
 
 	"github.com/pyr-sh/dag"
 
@@ -287,9 +287,16 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 		}
 	}
 
-	if rs.Opts.runOpts.dotGraph != "" {
-		if err := r.generateDotGraph(engine.TaskGraph, r.config.Cwd.Join(rs.Opts.runOpts.dotGraph)); err != nil {
-			return err
+	if rs.Opts.runOpts.graphFile != "" || rs.Opts.runOpts.graphDot {
+		visualizer := graphvisualizer.New(r.config, r.ui, engine.TaskGraph)
+
+		if rs.Opts.runOpts.graphDot {
+			visualizer.RenderDotGraph()
+		} else {
+			err := visualizer.GenerateGraphFile(rs.Opts.runOpts.graphFile)
+			if err != nil {
+				return err
+			}
 		}
 	} else if rs.Opts.runOpts.dryRun {
 		tasksRun, err := r.executeDryRun(engine, g, hashTracker, rs)
@@ -412,9 +419,13 @@ type runOpts struct {
 	continueOnError bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
-	only       bool
+	only bool
+	// Dry run flags
 	dryRun     bool
 	dryRunJSON bool
+	// Graph flags
+	graphDot  bool
+	graphFile string
 }
 
 var (
@@ -426,22 +437,25 @@ or non-zero exit code. The default behavior is to bail`
 	_dryRunHelp = `List the packages in scope and the tasks that would be run,
 but don't actually run them. Passing --dry=json or
 --dry-run=json will render the output in JSON format.`
+	_graphHelp       = `Generate a graph of the task execution and output to a file when specified, otherwise stdout`
+	_concurrencyHelp = `Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.`
+	_parallelHelp    = `Execute all tasks in parallel.`
+	_onlyHelp        = `Run only the specified tasks, not their dependencies.`
 )
 
 func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) {
-	flags.StringVar(&opts.dotGraph, "graph", "", "Generate a Dot graph of the task execution.")
 	flags.AddFlag(&pflag.Flag{
 		Name:     "concurrency",
-		Usage:    "Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.",
+		Usage:    _concurrencyHelp,
 		DefValue: "10",
 		Value: &util.ConcurrencyValue{
 			Value: &opts.concurrency,
 		},
 	})
-	flags.BoolVar(&opts.parallel, "parallel", false, "Execute all tasks in parallel.")
+	flags.BoolVar(&opts.parallel, "parallel", false, _parallelHelp)
 	flags.StringVar(&opts.profile, "profile", "", _profileHelp)
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
-	flags.BoolVar(&opts.only, "only", false, "Run only the specified tasks, not their dependencies")
+	flags.BoolVar(&opts.only, "only", false, _onlyHelp)
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
 		panic(err)
@@ -453,6 +467,13 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 		DefValue:    "",
 		NoOptDefVal: _dryRunNoValue,
 		Value:       &dryRunValue{opts: opts},
+	})
+	flags.AddFlag(&pflag.Flag{
+		Name:        "graph",
+		Usage:       _graphHelp,
+		DefValue:    "",
+		NoOptDefVal: _graphNoValue,
+		Value:       &graphValue{opts: opts},
 	})
 }
 
@@ -484,6 +505,51 @@ func noopPersistentOptsDuringMigration(flags *pflag.FlagSet) {
 	}
 }
 
+const (
+	_graphText      = "graph"
+	_graphNoValue   = "bool|text"
+	_graphTextValue = "true"
+)
+
+// graphValue implements a flag that can be treated as a boolean (--graph)
+// or a string (--graph=output.svg).
+type graphValue struct {
+	opts *runOpts
+}
+
+var _ pflag.Value = &graphValue{}
+
+func (d *graphValue) String() string {
+	if d.opts.graphDot {
+		return _graphText
+	} else {
+		return d.opts.graphFile
+	}
+
+}
+
+func (d *graphValue) Set(value string) error {
+	if value == _graphNoValue {
+		// this case matches the NoOptDefValue, which is used when the flag
+		// is passed, but does not have a value (i.e. boolean flag)
+		d.opts.graphDot = true
+	} else if value == _graphTextValue {
+		// "true" is equivalent to just setting the boolean flag
+		d.opts.graphDot = true
+	} else {
+		d.opts.graphDot = false
+		d.opts.graphFile = value
+	}
+	return nil
+}
+
+// Type implements Value.Type, and in this case is used to
+// show the alias in the usage test.
+func (d *graphValue) Type() string {
+	return ""
+}
+
+// dry run custom flag
 const (
 	_dryRunText      = "dry run"
 	_dryRunJSONText  = "json"
@@ -565,11 +631,6 @@ func (r *run) logWarning(prefix string, err error) {
 	}
 
 	r.ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
-}
-
-func hasGraphViz() bool {
-	err := exec.Command("dot", "-v").Run()
-	return err == nil
 }
 
 func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
@@ -902,62 +963,6 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	// Clean up tracing
 	tracer(TargetBuilt, nil)
 	targetLogger.Debug("done", "status", "complete", "duration", duration)
-	return nil
-}
-
-func (r *run) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename fs.AbsolutePath) error {
-	graphString := string(taskGraph.Dot(&dag.DotOpts{
-		Verbose:    true,
-		DrawCycles: true,
-	}))
-	ext := outputFilename.Ext()
-	if ext == ".html" {
-		f, err := outputFilename.Create()
-		if err != nil {
-			return fmt.Errorf("error writing graph: %w", err)
-		}
-		defer f.Close()
-		f.WriteString(`<!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Graph</title>
-    </head>
-    <body>
-      <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
-      <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
-      <script>`)
-		f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
-		f.WriteString(`
-    </script>
-  </body>
-  </html>`)
-		r.ui.Output("")
-		r.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
-		if ui.IsTTY {
-			if err := browser.OpenBrowser(outputFilename.ToString()); err != nil {
-				r.ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprintf("failed to open browser. Please navigate to file://%v", filepath.ToSlash(outputFilename.ToString())))
-			}
-		}
-		return nil
-	}
-	hasDot := hasGraphViz()
-	if hasDot {
-		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename.ToString()}
-		cmd := exec.Command("dot", dotArgs...)
-		cmd.Stdin = strings.NewReader(graphString)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
-		} else {
-			r.ui.Output("")
-			r.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
-		}
-	} else {
-		r.ui.Output("")
-		r.ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
-		r.ui.Output("")
-		r.ui.Output(graphString)
-	}
 	return nil
 }
 
