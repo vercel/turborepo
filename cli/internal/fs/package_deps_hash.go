@@ -11,6 +11,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
@@ -118,7 +119,7 @@ func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopat
 		// Kick the processing off in a goroutine so while that is doing its thing we can go ahead
 		// and wire up the consumer of `stdout`.
 		go func() {
-			defer stdinPipe.Close()
+			defer util.CloseAndIgnoreError(stdinPipe)
 
 			// `git hash-object` understands all relative paths to be relative to the repository.
 			// This function's result needs to be relative to `rootPath`.
