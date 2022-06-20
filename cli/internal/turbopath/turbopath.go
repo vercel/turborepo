@@ -66,3 +66,54 @@ func (source AnchoredUnixPathArray) ToSystemPathArray() []AnchoredSystemPath {
 	}
 	return output
 }
+
+// The following methods exist to import a path string and cast it to the appropriate
+// type. They exist to communicate intent and make it explicit that this is an
+// intentional action, not a "helpful" insertion by the IDE.
+//
+// This is intended to map closely to the `unsafe` keyword, without the denotative
+// meaning of `unsafe` in English. These are "trust me, I've checkex it" places, and
+// intend to mark the places where we smuggle paths from outside the world of safe
+// path handling into the world where we carefully consider the path to ensure safety.
+
+// AbsoluteSystemPathFromUpstream takes a path string and casts it to an
+// AbsoluteSystemPath without checking. If the input to this function is
+// not an AbsoluteSystemPath it will result in downstream errors.
+func AbsoluteSystemPathFromUpstream(path string) AbsoluteSystemPath {
+	return AbsoluteSystemPath(path)
+}
+
+// AbsoluteUnixPathFromUpstream takes a path string and casts it to an
+// AbsoluteUnixPath without checking. If the input to this function is
+// not an AbsoluteUnixPath it will result in downstream errors.
+func AbsoluteUnixPathFromUpstream(path string) AbsoluteUnixPath {
+	return AbsoluteUnixPath(path)
+}
+
+// AnchoredSystemPathFromUpstream takes a path string and casts it to an
+// AnchoredSystemPath without checking. If the input to this function is
+// not an AnchoredSystemPath it will result in downstream errors.
+func AnchoredSystemPathFromUpstream(path string) AnchoredSystemPath {
+	return AnchoredSystemPath(path)
+}
+
+// AnchoredUnixPathFromUpstream takes a path string and casts it to an
+// AnchoredUnixPath without checking. If the input to this function is
+// not an AnchoredUnixPath it will result in downstream errors.
+func AnchoredUnixPathFromUpstream(path string) AnchoredUnixPath {
+	return AnchoredUnixPath(path)
+}
+
+// RelativeSystemPathFromUpstream takes a path string and casts it to an
+// RelativeSystemPath without checking. If the input to this function is
+// not an RelativeSystemPath it will result in downstream errors.
+func RelativeSystemPathFromUpstream(path string) RelativeSystemPath {
+	return RelativeSystemPath(path)
+}
+
+// RelativeUnixPathFromUpstream takes a path string and casts it to an
+// RelativeUnixPath without checking. If the input to this function is
+// not an RelativeUnixPath it will result in downstream errors.
+func RelativeUnixPathFromUpstream(path string) RelativeUnixPath {
+	return RelativeUnixPath(path)
+}

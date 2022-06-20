@@ -56,7 +56,7 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 		}
 	}
 
-	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString())
+	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 	hashes, err := gitHashObject(convertedRootPath, turbopath.AnchoredUnixPathArray(filesToHash).ToSystemPathArray())
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 // this map is suitable for cross-platform caching.
 func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	output := make([]turbopath.AnchoredSystemPath, len(files))
-	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString())
+	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
 	for index, file := range files {
 		anchoredSystemPath, err := file.RelativeTo(convertedRootPath)
@@ -251,7 +251,7 @@ func gitLsTree(rootPath AbsolutePath) (map[turbopath.AnchoredUnixPath]string, er
 
 	for _, entry := range entries {
 		lsTreeEntry := gitoutput.LsTreeEntry(entry)
-		output[turbopath.AnchoredUnixPath(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
+		output[turbopath.AnchoredUnixPathFromUpstream(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
 	}
 
 	return output, nil
@@ -281,7 +281,7 @@ func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.Anchore
 
 	for _, entry := range entries {
 		lsFilesEntry := gitoutput.LsFilesEntry(entry)
-		output[turbopath.AnchoredUnixPath(lsFilesEntry.GetField(gitoutput.Path))] = lsFilesEntry.GetField(gitoutput.ObjectName)
+		output[turbopath.AnchoredUnixPathFromUpstream(lsFilesEntry.GetField(gitoutput.Path))] = lsFilesEntry.GetField(gitoutput.ObjectName)
 	}
 
 	return output, nil
@@ -302,7 +302,7 @@ func getTraversePath(rootPath turbopath.AbsoluteSystemPath) (turbopath.RelativeU
 
 	trimmedTraversePath := strings.TrimSuffix(string(traversePath), "\n")
 
-	return turbopath.RelativeUnixPath(trimmedTraversePath), nil
+	return turbopath.RelativeUnixPathFromUpstream(trimmedTraversePath), nil
 }
 
 // Don't shell out if we already know where you are in the repository.
@@ -374,7 +374,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Anchored
 	}
 
 	output := make(map[turbopath.AnchoredUnixPath]statusCode, len(entries))
-	convertedRootPath := turbopath.AbsoluteSystemPath(rootPath.ToString())
+	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
 	traversePath, err := memoizedGetTraversePath(convertedRootPath)
 	if err != nil {
@@ -384,7 +384,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Anchored
 	for _, entry := range entries {
 		statusEntry := gitoutput.StatusEntry(entry)
 		// Anchored at repository.
-		pathFromStatus := turbopath.AnchoredUnixPath(statusEntry.GetField(gitoutput.Path))
+		pathFromStatus := turbopath.AnchoredUnixPathFromUpstream(statusEntry.GetField(gitoutput.Path))
 		var outputPath turbopath.AnchoredUnixPath
 
 		if len(traversePath) > 0 {

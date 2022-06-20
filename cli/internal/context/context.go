@@ -463,7 +463,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 	globalDepsArray := globalDeps.UnsafeListOfStrings()
 	globalDepsPaths := make([]turbopath.AbsoluteSystemPath, len(globalDepsArray))
 	for i, path := range globalDepsArray {
-		globalDepsPaths[i] = turbopath.AbsoluteSystemPath(path)
+		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
 	}
 
 	globalFileHashMap, err := fs.GetHashableDeps(fs.UnsafeToAbsolutePath(rootpath), globalDepsPaths)

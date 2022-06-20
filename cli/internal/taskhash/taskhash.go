@@ -114,9 +114,9 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 	}
 
 	pathPrefix := rootPath.Join(pkg.Dir).ToString()
-	convertedPathPrefix := turbopath.AbsoluteSystemPath(pathPrefix)
+	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
-		convertedName := turbopath.AbsoluteSystemPath(name)
+		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
 		rootMatch := ignore.MatchesPath(convertedName.ToString())
 		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
 		if !rootMatch && !otherMatch {
