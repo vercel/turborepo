@@ -522,10 +522,8 @@ var _ pflag.Value = &graphValue{}
 func (d *graphValue) String() string {
 	if d.opts.graphDot {
 		return _graphText
-	} else {
-		return d.opts.graphFile
 	}
-
+	return d.opts.graphFile
 }
 
 func (d *graphValue) Set(value string) error {

@@ -14,7 +14,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 )
 
-type graphVisualizer struct {
+// GraphVisualizer requirements
+type GraphVisualizer struct {
 	config    *config.Config
 	ui        cli.Ui
 	TaskGraph *dag.AcyclicGraph
@@ -27,8 +28,8 @@ func HasGraphViz() bool {
 }
 
 // New creates an instance of ColorCache with helpers for adding colors to task outputs
-func New(config *config.Config, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *graphVisualizer {
-	return &graphVisualizer{
+func New(config *config.Config, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
+	return &GraphVisualizer{
 		config:    config,
 		ui:        ui,
 		TaskGraph: TaskGraph,
@@ -36,7 +37,7 @@ func New(config *config.Config, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *graphVi
 }
 
 // Converts the TaskGraph dag into a string
-func (g *graphVisualizer) generateDotString() string {
+func (g *GraphVisualizer) generateDotString() string {
 	return string(g.TaskGraph.Dot(&dag.DotOpts{
 		Verbose:    true,
 		DrawCycles: true,
@@ -44,18 +45,18 @@ func (g *graphVisualizer) generateDotString() string {
 }
 
 // Outputs a warning when a file was requested, but graphviz is not available
-func (g *graphVisualizer) graphVizWarnUI() {
+func (g *GraphVisualizer) graphVizWarnUI() {
 	g.ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
 }
 
 // RenderDotGraph renders a dot graph string for the current TaskGraph
-func (g *graphVisualizer) RenderDotGraph() {
+func (g *GraphVisualizer) RenderDotGraph() {
 	g.ui.Output("")
 	g.ui.Output(g.generateDotString())
 }
 
 // GenerateGraphFile saves a visualization of the TaskGraph to a file (or renders a DotGraph as a fallback))
-func (g *graphVisualizer) GenerateGraphFile(outputName string) error {
+func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 	graphString := g.generateDotString()
 	outputFilename := g.config.Cwd.Join(outputName)
 	ext := outputFilename.Ext()
@@ -67,10 +68,10 @@ func (g *graphVisualizer) GenerateGraphFile(outputName string) error {
 	if ext == ".html" {
 		f, err := outputFilename.Create()
 		if err != nil {
-			return fmt.Errorf("error writing graph: %w", err)
+			return fmt.Errorf("error creating file: %w", err)
 		}
-		defer f.Close()
-		f.WriteString(`<!DOCTYPE html>
+		defer f.Close() //nolint errcheck
+		_, writeErr1 := f.WriteString(`<!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
@@ -80,11 +81,23 @@ func (g *graphVisualizer) GenerateGraphFile(outputName string) error {
       <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
       <script>`)
-		f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
-		f.WriteString(`
+		if writeErr1 != nil {
+			return fmt.Errorf("error writing graph contents: %w", writeErr1)
+		}
+
+		_, writeErr2 := f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
+		if writeErr2 != nil {
+			return fmt.Errorf("error creating file: %w", writeErr2)
+		}
+
+		_, writeErr3 := f.WriteString(`
     </script>
   </body>
   </html>`)
+		if writeErr3 != nil {
+			return fmt.Errorf("error creating file: %w", writeErr3)
+		}
+
 		g.ui.Output("")
 		g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		if ui.IsTTY {
@@ -101,10 +114,10 @@ func (g *graphVisualizer) GenerateGraphFile(outputName string) error {
 		cmd.Stdin = strings.NewReader(graphString)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
-		} else {
-			g.ui.Output("")
-			g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		}
+		g.ui.Output("")
+		g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
+
 	} else {
 		g.ui.Output("")
 		// User requested a file, but we're falling back to console here so warn about installing graphViz correctly
