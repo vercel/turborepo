@@ -12,10 +12,10 @@ import (
 )
 
 type cursor interface {
-	Up(n int)
-	Down(n int)
-	Hide()
-	Show()
+	Up(n int) error
+	Down(n int) error
+	Hide() error
+	Show() error
 }
 
 // fakeFileWriter is a terminal.FileWriter.
