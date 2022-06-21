@@ -13,7 +13,7 @@ type OutputWatcher interface {
 // NoOpOutputWatcher implements OutputWatcher, but always considers every glob to have changed
 type NoOpOutputWatcher struct{}
 
-var _ OutputWatcher = &NoOpOutputWatcher{}
+var _ OutputWatcher = (*NoOpOutputWatcher)(nil)
 
 // GetChangedOutputs implements OutputWatcher.GetChangedOutputs.
 // Since this is a no-op watcher, no tracking is done.
