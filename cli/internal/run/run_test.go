@@ -101,12 +101,31 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 		},
 		{
-			"graph",
+			"graph file",
 			[]string{"foo", "--graph=g.png"},
 			&Opts{
 				runOpts: runOpts{
 					concurrency: 10,
-					dotGraph:    "g.png",
+					graphFile:   "g.png",
+					graphDot:    false,
+				},
+				cacheOpts: cache.Opts{
+					Dir:     defaultCacheFolder,
+					Workers: 10,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
+			},
+			[]string{"foo"},
+		},
+		{
+			"graph default",
+			[]string{"foo", "--graph"},
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+					graphFile:   "",
+					graphDot:    true,
 				},
 				cacheOpts: cache.Opts{
 					Dir:     defaultCacheFolder,
@@ -123,7 +142,8 @@ func TestParseConfig(t *testing.T) {
 			&Opts{
 				runOpts: runOpts{
 					concurrency:     10,
-					dotGraph:        "g.png",
+					graphFile:       "g.png",
+					graphDot:        false,
 					passThroughArgs: []string{"--boop", "zoop"},
 				},
 				cacheOpts: cache.Opts{
@@ -194,7 +214,8 @@ func TestParseConfig(t *testing.T) {
 			&Opts{
 				runOpts: runOpts{
 					concurrency:     10,
-					dotGraph:        "g.png",
+					graphFile:       "g.png",
+					graphDot:        false,
 					passThroughArgs: []string{},
 				},
 				cacheOpts: cache.Opts{

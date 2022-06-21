@@ -93,10 +93,21 @@ func (ap AbsolutePath) FileExists() bool {
 	return FileExists(ap.asString())
 }
 
+// Lstat implements os.Lstat for absolute path
+func (ap AbsolutePath) Lstat() (os.FileInfo, error) {
+	return os.Lstat(ap.asString())
+}
+
 // DirExists returns true if this path points to a directory
 func (ap AbsolutePath) DirExists() bool {
 	info, err := os.Lstat(ap.asString())
 	return err == nil && info.IsDir()
+}
+
+// ContainsPath returns true if this absolute path is a parent of the
+// argument.
+func (ap AbsolutePath) ContainsPath(other AbsolutePath) (bool, error) {
+	return DirContainsPath(ap.asString(), other.asString())
 }
 
 // ReadFile reads the contents of the specified file
@@ -133,6 +144,11 @@ func (ap AbsolutePath) ToString() string {
 // RelativePathString returns the relative path from this AbsolutePath to another absolute path in string form as a string
 func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
+}
+
+// Symlink implements os.Symlink(target, ap) for absolute path
+func (ap AbsolutePath) Symlink(target string) error {
+	return os.Symlink(target, ap.asString())
 }
 
 // Remove removes the file or (empty) directory at the given path
