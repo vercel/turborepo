@@ -82,10 +82,6 @@ func (ce *ConnectionError) Unwrap() error {
 }
 
 func (c *Connector) wrapConnectionError(err error) error {
-	/*return errors.Wrapf(err, `connection to turbo daemon process failed. Please ensure the following:
-	- the unix domain socket at %v has been removed
-	- the process identified by the pid at %v is not running, and remove %v
-	You can also run without the daemon process by passing --no-daemon`, c.SockPath, c.PidPath, c.PidPath)*/
 	return &ConnectionError{
 		SockPath: c.SockPath,
 		PidPath:  c.PidPath,
