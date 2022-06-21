@@ -192,31 +192,26 @@ func (c *Connector) Connect(ctx context.Context) (*Client, error) {
 }
 
 func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
+	// for each attempt, we:
+	// 1. try to find or start a daemon process, getting its pid
+	// 2. wait for the unix domain socket file to appear
+	// 3. connect to the unix domain socket. Note that this connection is not validated
+	// 4. send a hello message. This validates the connection as a side effect of
+	//    negotiating versions, which currently requires exact match.
+	// In the event of a live, but incompatible server, we attempt to shut it down and start
+	// a new one. In the event of an unresponsive server, we attempt to kill the process
+	// identified by the pid file, with the hope that it will clean up after itself.
+	// Failures include details about where to find logs, the pid file, and the socket file.
 	for i := 0; i < _maxAttempts; i++ {
-		lockFile, err := lockfile.New(c.PidPath.ToString())
+		serverPid, err := c.getOrStartDaemon()
 		if err != nil {
-			// Should only happen if we didn't pass an absolute path
+			// If we fail to even start the daemon process, return immediately, we're unlikely
+			// to succeed without user intervention
 			return nil, err
 		}
-		var serverPid int
-		if daemonProcess, err := lockFile.GetOwner(); errors.Is(err, lockfile.ErrDeadOwner) {
-			// Report an error? We could technically race with another client trying to
-			// start a daemon here.
-			return nil, errors.Wrap(err, "pid file appears stale. If no daemon is running, please remove it")
-		} else if os.IsNotExist(err) {
-			if c.Opts.DontStart {
-				return nil, ErrDaemonNotRunning
-			}
-			// The pid file doesn't exist. Start a daemon
-			pid, err := c.startDaemon()
-			if err != nil {
-				return nil, err
-			}
-			serverPid = pid
-		} else {
-			serverPid = daemonProcess.Pid
-		}
 		if err := c.waitForSocket(); errors.Is(err, ErrFailedToStart) {
+			// If we didn't see the socket file, try again. It's possible that
+			// the daemon encountered an transitory error
 			continue
 		} else if err != nil {
 			return nil, err
@@ -229,7 +224,9 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 			// We connected and negotiated a version, we're all set
 			return client, nil
 		} else if errors.Is(err, errVersionMismatch) {
-			// killLiveServer is responsible for closing the client
+			// We now know we aren't going to return this client,
+			// but killLiveServer still needs it to send the Shutdown request.
+			// killLiveServer will close the client when it is done with it.
 			if err := c.killLiveServer(ctx, client, serverPid); err != nil {
 				return nil, err
 			}
@@ -239,6 +236,7 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 			if err := c.killDeadServer(serverPid); err != nil {
 				return nil, err
 			}
+			// if we successfully killed the dead server, loop around and try again
 		} else if err != nil {
 			// Some other error occurred, close the client and
 			// report the error to the user
@@ -252,6 +250,33 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 		}
 	}
 	return nil, ErrTooManyAttempts
+}
+
+// getOrStartDaemon returns the PID of the daemon process on success. It may start
+// the daemon if it doesn't find one running.
+func (c *Connector) getOrStartDaemon() (int, error) {
+	lockFile, err := lockfile.New(c.PidPath.ToString())
+	if err != nil {
+		// Should only happen if we didn't pass an absolute path
+		return 0, err
+	}
+	if daemonProcess, err := lockFile.GetOwner(); errors.Is(err, lockfile.ErrDeadOwner) {
+		// Report an error? We could technically race with another client trying to
+		// start a daemon here.
+		return 0, errors.Wrapf(err, "pid file appears stale. If no daemon is running, please remove it: %v", c.PidPath)
+	} else if os.IsNotExist(err) {
+		if c.Opts.DontStart {
+			return 0, ErrDaemonNotRunning
+		}
+		// The pid file doesn't exist. Start a daemon
+		pid, err := c.startDaemon()
+		if err != nil {
+			return 0, err
+		}
+		return pid, nil
+	} else {
+		return daemonProcess.Pid, nil
+	}
 }
 
 func (c *Connector) getClientConn() (*Client, error) {
