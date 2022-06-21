@@ -21,7 +21,7 @@ type GraphVisualizer struct {
 	TaskGraph *dag.AcyclicGraph
 }
 
-// HasGraphViz checks for the presence of https://graphviz.org/
+// hasGraphViz checks for the presence of https://graphviz.org/
 func hasGraphViz() bool {
 	err := exec.Command("dot", "-v").Run()
 	return err == nil
