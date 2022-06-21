@@ -17,7 +17,7 @@ import (
 	status "google.golang.org/grpc/status"
 )
 
-// Server implements the GRPC serverside of TurboServer
+// Server implements the GRPC serverside of TurbodServer
 // Note for the future: we don't yet make use of turbo.json
 // or the package graph in the server. Once we do, we may need a
 // layer of indirection between "the thing that responds to grpc requests"
