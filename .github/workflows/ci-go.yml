@@ -102,7 +102,7 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: 16
-          cache: pnpm
+          cache: ${{matrix.manager}}
 
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
