@@ -181,7 +181,6 @@ func (d *daemon) debounceServers(pidPath fs.AbsolutePath) (lockfile.Lockfile, er
 		return "", err
 	}
 	return lockFile, nil
-
 }
 
 type rpcServer interface {
