@@ -5,7 +5,10 @@
       "runOptions": { "runOn": "folderOpen" },
       "label": "Compile protobufs",
       "type": "shell",
-      "command": "cd ${workspaceRoot}/cli && make compile-protos"
+      "options": {
+        "cwd": "${workspaceRoot}/cli"
+      },
+      "command": "make compile-protos"
     },
     {
       "type": "shell",
