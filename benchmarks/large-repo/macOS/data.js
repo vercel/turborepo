@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655685804207,
+  "lastUpdate": 1655772022335,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -1250,6 +1250,52 @@ window.BENCHMARK_DATA = {
             "value": 64111.8,
             "unit": "ms",
             "range": "12417"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]",
+            "email": "49699333+dependabot[bot]@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0ed93d29a15fb39f81e398b1cff9c4454666deab",
+          "message": "Bump @react-aria/radio from 3.1.8 to 3.2.1 in /docs (#1421)\n\nBumps [@react-aria/radio](https://github.com/adobe/react-spectrum) from 3.1.8 to 3.2.1.\n<details>\n<summary>Commits</summary>\n<ul>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/1e9f5ad01acf1cad1099cdf2c96c604807d4f0cf\"><code>1e9f5ad</code></a> Publish</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/d5377632253f3d11122973ecaf6bdafb288ce930\"><code>d537763</code></a> Add DatePicker and Calendar to monopackages (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3234\">#3234</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/73ade29862f171cd6c37337ae76a880d6f598d32\"><code>73ade29</code></a> Fixing stuck FireFox ListView root drop indicator  (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3224\">#3224</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/4f3c81cd3bc14ea388564aa9d4572e963d010680\"><code>4f3c81c</code></a> Update TableView docs for checkbox/highlight + onAction behavior update (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3205\">#3205</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/922dbe8560618f9beecf5f183d39576536f93a29\"><code>922dbe8</code></a> CSF 3.0 Label and HelpText (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3152\">#3152</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/e5848f6deb058ea84f7ef1389ba53b16b1ed9a74\"><code>e5848f6</code></a> Work around Safari bug with ethiopic calendar (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3223\">#3223</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/df1783a7f62ea20183aaf14ce549e6c1f80046e5\"><code>df1783a</code></a> Fix FF date segment typing (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3222\">#3222</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/bcbe803b3591cb49a7cf45672e03bf122bc7cf5a\"><code>bcbe803</code></a> Fix entering dates with keyboard using VoiceOver on iOS (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3216\">#3216</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/b91e0f4841bda0912f18805b1bf5ba37a5732096\"><code>b91e0f4</code></a> Fix bugs with eras in DatePicker (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3215\">#3215</a>)</li>\n<li><a href=\"https://github.com/adobe/react-spectrum/commit/ce12e09a6b408b023717deab9e5a5602bb2c12fd\"><code>ce12e09</code></a> Shift focus when era is removed while focused in DatePicker (<a href=\"https://github-redirect.dependabot.com/adobe/react-spectrum/issues/3213\">#3213</a>)</li>\n<li>Additional commits viewable in <a href=\"https://github.com/adobe/react-spectrum/compare/@react-aria/radio@3.1.8...@react-aria/radio@3.2.1\">compare view</a></li>\n</ul>\n</details>\n<br />\n\n\n[![Dependabot compatibility score](https://dependabot-badges.githubapp.com/badges/compatibility_score?dependency-name=@react-aria/radio&package-manager=npm_and_yarn&previous-version=3.1.8&new-version=3.2.1)](https://docs.github.com/en/github/managing-security-vulnerabilities/about-dependabot-security-updates#about-compatibility-scores)\n\nDependabot will resolve any conflicts with this PR as long as you don't alter it yourself. You can also trigger a rebase manually by commenting `@dependabot rebase`.\n\n[//]: # (dependabot-automerge-start)\n[//]: # (dependabot-automerge-end)\n\n---\n\n<details>\n<summary>Dependabot commands and options</summary>\n<br />\n\nYou can trigger Dependabot actions by commenting on this PR:\n- `@dependabot rebase` will rebase this PR\n- `@dependabot recreate` will recreate this PR, overwriting any edits that have been made to it\n- `@dependabot merge` will merge this PR after your CI passes on it\n- `@dependabot squash and merge` will squash and merge this PR after your CI passes on it\n- `@dependabot cancel merge` will cancel a previously requested merge and block automerging\n- `@dependabot reopen` will reopen this PR if it is closed\n- `@dependabot close` will close this PR and stop Dependabot recreating it. You can achieve the same result by closing it manually\n- `@dependabot ignore this major version` will close this PR and stop Dependabot creating any more for this major version (unless you reopen the PR or upgrade to it yourself)\n- `@dependabot ignore this minor version` will close this PR and stop Dependabot creating any more for this minor version (unless you reopen the PR or upgrade to it yourself)\n- `@dependabot ignore this dependency` will close this PR and stop Dependabot creating any more for this dependency (unless you reopen the PR or upgrade to it yourself)\n\n\n</details>\n\nCo-authored-by: Thomas Knickman <2933988+tknickman@users.noreply.github.com>",
+          "timestamp": "2022-06-20T19:16:24Z",
+          "url": "https://github.com/vercel/turborepo/commit/0ed93d29a15fb39f81e398b1cff9c4454666deab"
+        },
+        "date": 1655772021395,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 204582.2,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 7828.2,
+            "unit": "ms",
+            "range": "371"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 7852.2,
+            "unit": "ms",
+            "range": "485"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 44528,
+            "unit": "ms",
+            "range": "10381"
           }
         ]
       }
