@@ -1,0 +1,33 @@
+name: Dependabot
+
+on:
+  pull_request:
+    types: ["opened"]
+
+jobs:
+  dependabot-add-lockfile:
+    if: ${{ startsWith(github.head_ref, 'dependabot/npm_and_yarn') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 7.2.1
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: pnpm
+
+      - name: Add lockfile to Dependabot PR.
+        shell: bash
+        run: |
+          pnpm install
+          git add pnpm-lock.yaml
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git commit -nm "Regenerate lockfile."
+          git push
