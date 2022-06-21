@@ -437,7 +437,8 @@ or non-zero exit code. The default behavior is to bail`
 	_dryRunHelp = `List the packages in scope and the tasks that would be run,
 but don't actually run them. Passing --dry=json or
 --dry-run=json will render the output in JSON format.`
-	_graphHelp       = `Generate a graph of the task execution and output to a file when specified, otherwise stdout`
+	_graphHelp = `Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html).
+Outputs dot graph to stdout when if no filename is provided`
 	_concurrencyHelp = `Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.`
 	_parallelHelp    = `Execute all tasks in parallel.`
 	_onlyHelp        = `Run only the specified tasks, not their dependencies.`
@@ -507,7 +508,7 @@ func noopPersistentOptsDuringMigration(flags *pflag.FlagSet) {
 
 const (
 	_graphText      = "graph"
-	_graphNoValue   = "bool|text"
+	_graphNoValue   = "<output filename>"
 	_graphTextValue = "true"
 )
 

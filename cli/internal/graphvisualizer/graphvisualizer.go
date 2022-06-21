@@ -22,7 +22,7 @@ type GraphVisualizer struct {
 }
 
 // HasGraphViz checks for the presence of https://graphviz.org/
-func HasGraphViz() bool {
+func hasGraphViz() bool {
 	err := exec.Command("dot", "-v").Run()
 	return err == nil
 }
@@ -107,7 +107,7 @@ func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 		}
 		return nil
 	}
-	hasDot := HasGraphViz()
+	hasDot := hasGraphViz()
 	if hasDot {
 		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename.ToString()}
 		cmd := exec.Command("dot", dotArgs...)
