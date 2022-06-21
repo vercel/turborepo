@@ -130,6 +130,8 @@ func (c *Connector) killLiveServer(ctx context.Context, client *Client, serverPi
 		}
 		owner, err := lockFile.GetOwner()
 		if os.IsNotExist(err) {
+			// If there is no pid more file, we can conclude that the daemon successfully
+			// exited and cleaned up after itself.
 			return nil
 		} else if err != nil {
 			return err
@@ -158,8 +160,8 @@ func (c *Connector) killDeadServer(pid int) error {
 	process, err := lockFile.GetOwner()
 	if err == nil {
 		// Check that this is the same process that we failed to connect to.
-		// Otherwise, loop around again and start with whatever new process has
-		// the pid file.
+		// Otherwise, connectInternal will loop around again and start with whatever
+		// new process has the pid file.
 		if process.Pid == pid {
 			// we have a process that we need to kill
 			// TODO(gsoltis): graceful kill? the process is already not responding to requests,
@@ -171,7 +173,8 @@ func (c *Connector) killDeadServer(pid int) error {
 		}
 		return nil
 	} else if errors.Is(err, os.ErrNotExist) {
-		// There's no pid file. Someone else killed it. Loop around and try again
+		// There's no pid file. Someone else killed it. Returning no error will cause the
+		// connectInternal to loop around and try the connection again.
 		return nil
 	} else if errors.Is(err, lockfile.ErrDeadOwner) {
 		// The daemon crashed. report an error to the user
