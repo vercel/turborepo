@@ -6,14 +6,14 @@ require (
 	github.com/AlecAivazis/survey/v2 v2.2.12
 	github.com/Masterminds/semver v1.5.0
 	github.com/adrg/xdg v0.3.3
-	github.com/briandowns/spinner v1.16.0
+	github.com/briandowns/spinner v1.18.1
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.13.0
 	github.com/gobwas/glob v0.2.3
 	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-gatedio v0.5.0
-	github.com/hashicorp/go-hclog v1.1.0
+	github.com/hashicorp/go-hclog v1.2.1
 	github.com/hashicorp/go-retryablehttp v0.6.8
 	github.com/karrick/godirwalk v1.16.1
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -56,7 +56,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
-	golang.org/x/sys v0.0.0-20211205182925-97ca703d548d // indirect
+	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6 // indirect
 	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
