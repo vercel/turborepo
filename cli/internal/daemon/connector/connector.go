@@ -261,8 +261,8 @@ func (c *Connector) getOrStartDaemon() (int, error) {
 		return 0, err
 	}
 	if daemonProcess, err := lockFile.GetOwner(); errors.Is(err, lockfile.ErrDeadOwner) {
-		// Report an error? We could technically race with another client trying to
-		// start a daemon here.
+		// If we've found a pid file but no corresponding process, there's nothing we can do.
+		// We defer to the user to clean up the pid file.
 		return 0, errors.Wrapf(err, "pid file appears stale. If no daemon is running, please remove it: %v", c.PidPath)
 	} else if os.IsNotExist(err) {
 		if c.Opts.DontStart {
