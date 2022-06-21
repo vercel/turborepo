@@ -176,9 +176,6 @@ func (c *Connector) killDeadServer(pid int) error {
 		// There's no pid file. Someone else killed it. Returning no error will cause the
 		// connectInternal to loop around and try the connection again.
 		return nil
-	} else if errors.Is(err, lockfile.ErrDeadOwner) {
-		// The daemon crashed. report an error to the user
-		return err
 	}
 	return err
 }
@@ -245,7 +242,12 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 		} else if err != nil {
 			// Some other error occurred, close the client and
 			// report the error to the user
-			_ = client.Close()
+			if closeErr := client.Close(); closeErr != nil {
+				// In the event that we fail to close the client, bundle that error along also.
+				// Keep the original error in the error chain, as it's more likely to be useful
+				// or needed for matching on later.
+				err = errors.Wrapf(err, "also failed to close client connection: %v", closeErr)
+			}
 			return nil, err
 		}
 	}
@@ -311,6 +313,9 @@ func (c *Connector) startDaemon() (int, error) {
 	}
 	c.Logger.Debug(fmt.Sprintf("starting turbod binary %v", c.Bin))
 	cmd := exec.Command(c.Bin, args...)
+	// For the daemon to have its own process group id so that any attempts
+	// to kill it and its process tree don't kill this client.
+	cmd.SysProcAttr = getSysProcAttrs()
 	err := cmd.Start()
 	if err != nil {
 		return 0, err
