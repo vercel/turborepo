@@ -27,7 +27,7 @@ To define your monorepo's task dependency graph, use the [`pipeline`](../referen
 
 Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
 
-Packages that do not have have this task defined in their `package.json`'s list of `scripts` will be ignored and skipped over during `turbo run`.
+Packages that do not have this task defined in their `package.json`'s list of `scripts` will be ignored and skipped over during `turbo run`.
 
 An example Pipeline configuration in `turbo.json`:
 
