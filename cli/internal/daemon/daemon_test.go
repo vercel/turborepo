@@ -28,17 +28,16 @@ func testBin() string {
 	return "node"
 }
 
-func TestDaemonDebounce(t *testing.T) {
+func TestPidFileLock(t *testing.T) {
+	logger := hclog.Default()
+	watcher := signals.NewWatcher()
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	pidPath := getPidFile(repoRoot)
-	err := pidPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
-
-	d := &daemon{}
+	//d := &daemon{}
 	// the lockfile library handles removing pids from dead owners
-	_, err = d.tryAcquirePidfileLock(pidPath)
-	assert.NilError(t, err, "debounceServers")
+	_, err := acquirePidLock(pidPath, watcher, logger)
+	assert.NilError(t, err, "acquirePidLock")
 
 	// Start up a node process and fake a pid file for it.
 	// Ensure that we can't start the daemon while the node process is live
@@ -60,7 +59,7 @@ func TestDaemonDebounce(t *testing.T) {
 	err = pidPath.WriteFile([]byte(strconv.Itoa(nodePid)), 0644)
 	assert.NilError(t, err, "WriteFile")
 
-	_, err = d.tryAcquirePidfileLock(pidPath)
+	_, err = acquirePidLock(pidPath, watcher, logger)
 	assert.ErrorIs(t, err, lockfile.ErrBusy)
 
 	// Stop the node process, but leave the pid file there
@@ -68,8 +67,8 @@ func TestDaemonDebounce(t *testing.T) {
 	err = stopNode()
 	assert.NilError(t, err, "stopNode")
 	// the lockfile library handles removing pids from dead owners
-	_, err = d.tryAcquirePidfileLock(pidPath)
-	assert.NilError(t, err, "debounceServers")
+	_, err = acquirePidLock(pidPath, watcher, logger)
+	assert.NilError(t, err, "acquirePidLock")
 }
 
 type testRPCServer struct {

@@ -64,7 +64,6 @@ type daemon struct {
 	timeout    time.Duration
 	reqCh      chan struct{}
 	timedOutCh chan struct{}
-	cleanup    sync.Once
 }
 
 func getRepoHash(repoRoot fs.AbsolutePath) string {
@@ -172,7 +171,7 @@ var errInactivityTimeout = errors.New("turbod shut down from inactivity")
 
 // tryAcquirePidfileLock attempts to ensure that only one daemon is running from the given pid file path
 // at a time. If this process fails to write its PID to the lockfile, it must exit.
-func (d *daemon) tryAcquirePidfileLock(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
+func tryAcquirePidfileLock(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
 	lockFile, err := lockfile.New(pidPath.ToString())
 	if err != nil {
 		// lockfile.New should only return an error if it wasn't given an absolute path.
@@ -190,26 +189,79 @@ type rpcServer interface {
 	Register(grpcServer server.GRPCServer)
 }
 
+// pidLock provides a wrapper around the pid lock file and metadata to manage
+// unlocking the pid lock.
+// TODO: consider moving into its own package?
+type pidLock struct {
+	logger   hclog.Logger
+	mu       sync.Mutex
+	lockFile lockfile.Lockfile
+	closed   bool
+}
+
+// Unlock attempts to unlock the pid lock, if it was acquired. It is idempotent, and safe to call
+// even if we didn't ever acquire the pid lock.
+func (p *pidLock) Unlock() {
+	// Since we register on the close handler before actually grabbing the pid lock,
+	// it's possible that we failed to grab it at all. It's also possible that we
+	// didn't catch any signals, and our defer ran normally at the end of runTurboServer.
+	// We handle those cases via a Mutex for synchronization, checking that p.lockFile is
+	// set to verify that we successfully acquired the lock, and the closed boolean to only
+	// attempt unlocking it once.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.lockFile != "" {
+		if !p.closed {
+			p.closed = true
+			if err := p.lockFile.Unlock(); err != nil {
+				p.logger.Error(errors.Wrapf(err, "failed unlocking pid file at %v", p.lockFile).Error())
+			}
+		}
+	}
+}
+
+func acquirePidLock(pidPath fs.AbsolutePath, signalWatcher *signals.Watcher, logger hclog.Logger) (*pidLock, error) {
+	if err := pidPath.EnsureDir(); err != nil {
+		return nil, err
+	}
+	p := &pidLock{
+		logger: logger,
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	// If we catch a signal, unlock the pid file. This also wires up
+	// the pidfile for unlock on program exit.
+	signalWatcher.AddOnClose(func() {
+		p.Unlock()
+	})
+	lockFile, err := tryAcquirePidfileLock(pidPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to lock the pid file at %v. Is another turbo daemon running?", p.lockFile)
+	}
+	p.lockFile = lockFile
+	return p, nil
+}
+
 func (d *daemon) runTurboServer(parentContext context.Context, rpcServer rpcServer, signalWatcher *signals.Watcher) error {
 	ctx, cancel := context.WithCancel(parentContext)
 	defer cancel()
 	pidPath := getPidFile(d.repoRoot)
-	if err := pidPath.EnsureDir(); err != nil {
-		return err
-	}
-	lockFile, err := d.tryAcquirePidfileLock(pidPath)
+	lock, err := acquirePidLock(pidPath, signalWatcher, d.logger)
 	if err != nil {
 		return err
 	}
-	signalWatcher.AddOnClose(func() {
-		d.unlockPid(lockFile)
-	})
+	// This handler runs in request goroutines. If a request causes a panic,
+	// this handler will get called after a call to recover(), meaning we are
+	// no longer panicking. We return a server error and cancel our context,
+	// which triggers a shutdown of the server.
 	panicHandler := func(thePanic interface{}) error {
 		cancel()
 		d.logger.Error(fmt.Sprintf("Caught panic %v", thePanic))
 		return status.Error(codes.Internal, "server panicked")
 	}
-	defer d.unlockPid(lockFile)
+	// When we're done serving, clean up the pid file.
+	// Also, if *this* goroutine panics, make sure we unlock the pid file.
+	defer lock.Unlock()
 	// If we have the lock, assume that we are the owners of the socket file,
 	// whether it already exists or not. That means we are free to remove it.
 	sockPath := getUnixSocket(d.repoRoot)
@@ -260,14 +312,6 @@ func (d *daemon) runTurboServer(parentContext context.Context, rpcServer rpcServ
 	for range errCh {
 	}
 	return exitErr
-}
-
-func (d *daemon) unlockPid(lockFile lockfile.Lockfile) {
-	d.cleanup.Do(func() {
-		if err := lockFile.Unlock(); err != nil {
-			d.logError(errors.Wrapf(err, "failed unlocking pid file at %v", lockFile))
-		}
-	})
 }
 
 func (d *daemon) onRequest(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
