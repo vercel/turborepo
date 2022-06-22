@@ -156,7 +156,7 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 			return nil
 		},
 	}
-	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 2*time.Hour, "Set the idle timeout for turbod")
+	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 4*time.Hour, "Set the idle timeout for turbod")
 	addDaemonSubcommands(cmd, config, output)
 	return cmd
 }
