@@ -13,12 +13,18 @@ import (
 
 // CopyOrLinkFile either copies or hardlinks a file based on the link argument.
 // Falls back to a copy if link fails and fallback is true.
-func CopyOrLinkFile(from, to string, fromMode, toMode os.FileMode, link, fallback bool) error {
+func CopyOrLinkFile(from StatedFile, to string, link bool, fallback bool) error {
+	statedFrom, err := StatFile(from)
+	if err != nil {
+		return err
+	}
+
+	info := *statedFrom.Info
 	if link {
-		if (fromMode & os.ModeSymlink) != 0 {
+		if (info.Mode() & os.ModeSymlink) != 0 {
 			// Don't try to hard-link to a symlink, that doesn't work reliably across all platforms.
 			// Instead recreate an equivalent symlink in the new location.
-			dest, err := os.Readlink(from)
+			dest, err := os.Readlink(statedFrom.Path)
 			if err != nil {
 				return err
 			}
@@ -28,43 +34,44 @@ func CopyOrLinkFile(from, to string, fromMode, toMode os.FileMode, link, fallbac
 			}
 			return os.Symlink(dest, to)
 		}
-		if err := os.Link(from, to); err == nil || !fallback {
+		if err := os.Link(statedFrom.Path, to); err == nil || !fallback {
 			return err
 		}
 	}
-	return CopyFile(from, to, toMode)
+	return CopyFile(statedFrom, to)
 }
 
 // RecursiveCopy copies either a single file or a directory.
 // 'mode' is the mode of the destination file.
-func RecursiveCopy(from string, to string, mode os.FileMode) error {
-	return RecursiveCopyOrLinkFile(from, to, mode, false, false)
+func RecursiveCopy(from string, to string) error {
+	return RecursiveCopyOrLinkFile(from, to, false, false)
 }
 
 // RecursiveCopyOrLinkFile recursively copies or links a file or directory.
-// 'mode' is the mode of the destination file.
 // If 'link' is true then we'll hardlink files instead of copying them.
 // If 'fallback' is true then we'll fall back to a copy if linking fails.
-func RecursiveCopyOrLinkFile(from string, to string, mode os.FileMode, link, fallback bool) error {
-	info, err := os.Lstat(from)
+func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) error {
+	statedFrom, err := StatFile(StatedFile{Path: from})
 	if err != nil {
 		return err
 	}
+
+	info := *statedFrom.Info
 	if info.IsDir() {
-		return WalkMode(from, func(name string, isDir bool, fileMode os.FileMode) error {
-			dest := filepath.Join(to, name[len(from):])
+		return WalkMode(statedFrom.Path, func(name string, isDir bool, fileMode os.FileMode) error {
+			dest := filepath.Join(to, name[len(statedFrom.Path):])
 			if isDir {
 				return os.MkdirAll(dest, DirPermissions)
 			}
-			if isSame, err := SameFile(from, name); err != nil {
+			if isSame, err := SameFile(statedFrom.Path, name); err != nil {
 				return err
 			} else if isSame {
 				return nil
 			}
-			return CopyOrLinkFile(name, dest, fileMode, mode, link, fallback)
+			return CopyOrLinkFile(StatedFile{Path: name}, dest, link, fallback)
 		})
 	}
-	return CopyOrLinkFile(from, to, info.Mode(), mode, link, fallback)
+	return CopyOrLinkFile(statedFrom, to, link, fallback)
 }
 
 // Walk implements an equivalent to filepath.Walk.
@@ -112,7 +119,7 @@ func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.Fi
 // file on disk, using the unique file identifiers from the underlying
 // operating system. For example, on Unix systems this checks whether the
 // two files are on the same device and have the same inode.
-func SameFile(a, b string) (bool, error) {
+func SameFile(a string, b string) (bool, error) {
 	if a == b {
 		return true, nil
 	}

@@ -172,13 +172,13 @@ func (p *prune) prune(opts *opts) error {
 			if err := targetDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 			}
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir.ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		} else {
@@ -186,7 +186,7 @@ func (p *prune) prune(opts *opts) error {
 			if err := targetDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 			}
 		}
@@ -200,38 +200,38 @@ func (p *prune) prune(opts *opts) error {
 	p.logger.Trace("new workspaces", "value", workspaces)
 	if opts.docker {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", outDir.Join("full", ".gitignore").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile(fs.StatedFile{Path: ".gitignore"}, outDir.Join("full", ".gitignore").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root .gitignore")
 			}
 		}
 		// We only need to actually copy turbo.json into "full" folder since it isn't needed for installation in docker
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile("turbo.json", outDir.Join("full", "turbo.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile(fs.StatedFile{Path: "turbo.json"}, outDir.Join("full", "turbo.json").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root turbo.json")
 			}
 		}
 
-		if err := fs.CopyFile("package.json", outDir.Join("full", "package.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+		if err := fs.CopyFile(fs.StatedFile{Path: "package.json"}, outDir.Join("full", "package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 
-		if err := fs.CopyFile("package.json", outDir.Join("json", "package.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+		if err := fs.CopyFile(fs.StatedFile{Path: "package.json"}, outDir.Join("json", "package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	} else {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(".gitignore", outDir.Join(".gitignore").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile(fs.StatedFile{Path: ".gitignore"}, outDir.Join(".gitignore").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root .gitignore")
 			}
 		}
 
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile("turbo.json", outDir.Join("turbo.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+			if err := fs.CopyFile(fs.StatedFile{Path: "turbo.json"}, outDir.Join("turbo.json").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root turbo.json")
 			}
 		}
 
-		if err := fs.CopyFile("package.json", outDir.Join("package.json").ToStringDuringMigration(), fs.DirPermissions); err != nil {
+		if err := fs.CopyFile(fs.StatedFile{Path: "package.json"}, outDir.Join("package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	}
