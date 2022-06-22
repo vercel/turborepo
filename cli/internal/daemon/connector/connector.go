@@ -90,6 +90,19 @@ func (c *Connector) wrapConnectionError(err error) error {
 	}
 }
 
+// lockFile returns a pointer to where a lockfile should be.
+// lockfile.New does not perform IO and the only error it produces
+// is in the case a non-absolute path was provided. We're guaranteeing an
+// AbsolutePath, so an error here is an indication of a bug and
+// we should crash.
+func (c *Connector) lockFile() lockfile.Lockfile {
+	lockFile, err := lockfile.New(c.PidPath.ToString())
+	if err != nil {
+		panic(err)
+	}
+	return lockFile
+}
+
 func (c *Connector) addr() string {
 	return fmt.Sprintf("unix://%v", c.SockPath.ToString())
 }
@@ -124,10 +137,7 @@ func (c *Connector) killLiveServer(ctx context.Context, client *Client, serverPi
 	// Wait for the server to gracefully exit
 	deadline := time.After(_shutdownDeadline)
 	for {
-		lockFile, err := lockfile.New(c.PidPath.ToString())
-		if err != nil {
-			return err
-		}
+		lockFile := c.lockFile()
 		owner, err := lockFile.GetOwner()
 		if os.IsNotExist(err) {
 			// If there is no pid more file, we can conclude that the daemon successfully
@@ -153,10 +163,7 @@ func (c *Connector) killDeadServer(pid int) error {
 	// in the case that you don't provide an absolute path.
 	// Given that we require an absolute path as input, this should
 	// hopefully never happen.
-	lockFile, err := lockfile.New(c.PidPath.ToString())
-	if err != nil {
-		return err
-	}
+	lockFile := c.lockFile()
 	process, err := lockFile.GetOwner()
 	if err == nil {
 		// Check that this is the same process that we failed to connect to.
@@ -255,11 +262,7 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 // getOrStartDaemon returns the PID of the daemon process on success. It may start
 // the daemon if it doesn't find one running.
 func (c *Connector) getOrStartDaemon() (int, error) {
-	lockFile, err := lockfile.New(c.PidPath.ToString())
-	if err != nil {
-		// Should only happen if we didn't pass an absolute path
-		return 0, err
-	}
+	lockFile := c.lockFile()
 	if daemonProcess, err := lockFile.GetOwner(); errors.Is(err, lockfile.ErrDeadOwner) {
 		// If we've found a pid file but no corresponding process, there's nothing we can do.
 		// We defer to the user to clean up the pid file.
@@ -323,6 +326,7 @@ func (c *Connector) waitForSocket() error {
 	for !c.SockPath.FileExists() {
 		select {
 		case <-time.After(_socketPollInterval):
+			// try polling for the socket again, we haven't hit our deadline yet
 		case <-deadline:
 			return ErrFailedToStart
 		}
