@@ -57,14 +57,14 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	//
 	// <src>/
 	//   foo
-	executableMode := os.FileMode(493)
+	readonlyMode := os.FileMode(0444)
 	src := fs.NewDir(t, "copy-or-link")
 	dst := fs.NewDir(t, "copy-or-link-dist")
 	srcFilePath := filepath.Join(src.Path(), "foo")
 	dstFilePath := filepath.Join(dst.Path(), "foo")
 	srcFile, err := os.Create(srcFilePath)
 	assert.NilError(t, err, "Create")
-	err = srcFile.Chmod(executableMode)
+	err = srcFile.Chmod(readonlyMode)
 	assert.NilError(t, err, "Chmod")
 	shouldLink := false
 	shouldFallback := false
@@ -77,7 +77,7 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	}
 	info, err := os.Lstat(dstFilePath)
 	assert.NilError(t, err, "Lstat")
-	assert.Equal(t, info.Mode(), executableMode, "expected dest to have matching permissions")
+	assert.Equal(t, info.Mode(), readonlyMode, "expected dest to have matching permissions")
 }
 
 func TestRecursiveCopyOrLinkFile(t *testing.T) {
