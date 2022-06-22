@@ -21,6 +21,10 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+// testBin returns a platform-appropriate executable to run node.
+// Node works here as an arbitrary process to start, since it's
+// required for turbo development. It will obviously not implement
+// our grpc service, use a mockServer instance where that's needed.
 func testBin() string {
 	if runtime.GOOS == "windows" {
 		return "node.exe"
@@ -83,15 +87,11 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
 	dirPath := fs.AbsolutePathFromUpstream(dir)
-	err := dirPath.MkdirAll()
-	assert.NilError(t, err, "MkdirAll")
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
-	err = sockPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
 	// Simulate the socket already existing, with no live daemon
-	err = sockPath.WriteFile([]byte("junk"), 0644)
+	err := sockPath.WriteFile([]byte("junk"), 0644)
 	assert.NilError(t, err, "WriteFile")
 	err = pidPath.WriteFile([]byte("99999"), 0644)
 	assert.NilError(t, err, "WriteFile")
@@ -115,15 +115,11 @@ func TestKillDeadServerWithProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
 	dirPath := fs.AbsolutePathFromUpstream(dir)
-	err := dirPath.MkdirAll()
-	assert.NilError(t, err, "MkdirAll")
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
-	err = sockPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
 	// Simulate the socket already existing, with no live daemon
-	err = sockPath.WriteFile([]byte("junk"), 0644)
+	err := sockPath.WriteFile([]byte("junk"), 0644)
 	assert.NilError(t, err, "WriteFile")
 	bin := testBin()
 	cmd := exec.Command(bin)
@@ -183,14 +179,10 @@ func TestKillLiveServer(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
 	dirPath := fs.AbsolutePathFromUpstream(dir)
-	err := dirPath.MkdirAll()
-	assert.NilError(t, err, "MkdirAll")
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
-	err = sockPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
-	err = pidPath.WriteFile([]byte("99999"), 0644)
+	err := pidPath.WriteFile([]byte("99999"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	ctx := context.Background()
