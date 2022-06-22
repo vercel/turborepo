@@ -10,15 +10,20 @@ GO_FLAGS += -trimpath
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
+GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: compile-protos $(SRC_FILES) go.mod
+turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
 
-compile-protos: internal/turbodprotocol/turbod.proto
+protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     internal/turbodprotocol/turbod.proto
-# touch compile-protos
+
+$(GENERATED_FILES): internal/turbodprotocol/turbod.proto
+	make protoc
+
+compile-protos: $(GENERATED_FILES)
 
 ewatch: scripts/...
 	nodemon --exec "make e2e" -e .ts,.go
@@ -35,12 +40,12 @@ TURBO_RACE ?= -race
 clean-go:
 	go clean -testcache ./...
 
-test-go: compile-protos $(GO_FILES) go.mod go.sum
+test-go:$(GENERATED_FILES) $(GO_FILES) go.mod go.sum
 	go test $(TURBO_RACE) ./...
 
 # protos need to be compiled before linting, since linting needs to pick up
 # some types from the generated code
-lint-go: compile-protos $(GO_FILES) go.mod go.sum
+lint-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum
 	golangci-lint run --new-from-rev=main
 
 fmt-go: $(GO_FILES) go.mod go.sum
@@ -57,7 +62,7 @@ cmd/turbo/version.go: version.txt
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
-platform-all: cmd/turbo/version.go
+platform-all: cmd/turbo/version.go $(GENERATED_FILES)
 	make -j4 \
 	  platform-windows-64 \
 		platform-windows-32 \
