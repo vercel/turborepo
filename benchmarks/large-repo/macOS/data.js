@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655772022335,
+  "lastUpdate": 1655858859298,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -1296,6 +1296,52 @@ window.BENCHMARK_DATA = {
             "value": 44528,
             "unit": "ms",
             "range": "10381"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Thomas Knickman",
+            "username": "tknickman",
+            "email": "tom.knickman@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "793dca02682a7618a680beaf5cb38e7df357b43f",
+          "message": "feat(cli): update the graph arg behavior (#1353)\n\nUpdates the behavior of the `--graph` CLI flag and fixes a few bugs. \n\n> This command will generate an svg, png, jpg, pdf, json, html, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.\nThe output file format defaults to jpg, but can be controlled by specifying the filename's extension.\n\n> If Graphviz is not installed, or no filename is provided, this command prints the dot graph to `stdout`\n\nThis PR also:\n1. Updates docs to reflect the current state of the `--graph` CLI flag\n1. Refactors the graph visualization code out of `run.go`\n1. Cleans up the file name of colors_cache (follow up from https://github.com/vercel/turborepo/pull/1346)\n\n\nFixes https://github.com/vercel/turborepo/issues/1286",
+          "timestamp": "2022-06-21T18:32:34Z",
+          "url": "https://github.com/vercel/turborepo/commit/793dca02682a7618a680beaf5cb38e7df357b43f"
+        },
+        "date": 1655858856850,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 232885.2,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 7925.2,
+            "unit": "ms",
+            "range": "751"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 7969.4,
+            "unit": "ms",
+            "range": "247"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 47221.8,
+            "unit": "ms",
+            "range": "10539"
           }
         ]
       }
