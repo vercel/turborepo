@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
@@ -116,16 +117,13 @@ func (c *Connector) addr() string {
 // an error to the user that includes the file location so that
 // they can resolve it.
 const (
-	_maxAttempts          = 3
-	_shutdownDeadline     = 1 * time.Second
-	_shutdownPollInterval = 50 * time.Millisecond
-	// keep a tighter loop for this one, it's in the normal startup path
-	_socketPollInterval = 10 * time.Millisecond
-	_socketPollTimeout  = 1 * time.Second
+	_maxAttempts       = 3
+	_shutdownTimeout   = 1 * time.Second
+	_socketPollTimeout = 1 * time.Second
 )
 
 // killLiveServer tells a running server to shut down. This method is also responsible
-// for closing this connection
+// for closing this client connection.
 func (c *Connector) killLiveServer(ctx context.Context, client *Client, serverPid int) error {
 	defer func() { _ = client.Close() }()
 
@@ -135,8 +133,7 @@ func (c *Connector) killLiveServer(ctx context.Context, client *Client, serverPi
 		return c.killDeadServer(serverPid)
 	}
 	// Wait for the server to gracefully exit
-	deadline := time.After(_shutdownDeadline)
-	for {
+	err = backoff.Retry(func() error {
 		lockFile := c.lockFile()
 		owner, err := lockFile.GetOwner()
 		if os.IsNotExist(err) {
@@ -144,18 +141,23 @@ func (c *Connector) killLiveServer(ctx context.Context, client *Client, serverPi
 			// exited and cleaned up after itself.
 			return nil
 		} else if err != nil {
-			return err
+			// some other error occurred getting the lockfile owner
+			return backoff.Permanent(err)
 		} else if owner.Pid == serverPid {
-			// We're still waiting for the server to shut down
-			select {
-			case <-deadline:
-				c.Logger.Error(fmt.Sprintf("daemon did not exit after %v, attempting to force it closed", _shutdownDeadline.String()))
-				return c.killDeadServer(serverPid)
-			case <-time.After(_shutdownPollInterval):
-				// loop around and check again
-			}
+			// // We're still waiting for the server to shut down
+			return errNeedsRetry
 		}
+		// if there's no error and the lockfile has a new pid, someone else must've started a new daemon.
+		// Consider the old one killed and move on.
+		return nil
+	}, backoffWithTimeout(_shutdownTimeout))
+	if errors.Is(err, errNeedsRetry) {
+		c.Logger.Error(fmt.Sprintf("daemon did not exit after %v, attempting to force it closed", _shutdownTimeout.String()))
+		return c.killDeadServer(serverPid)
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
 func (c *Connector) killDeadServer(pid int) error {
@@ -316,20 +318,37 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	}
 }
 
+var errNeedsRetry = errors.New("retry the operation")
+
+// backoffWithTimeout returns an exponential backoff, starting at 2ms and doubling until
+// the specific timeout has elapsed. Note that backoff instances are stateful, so we need
+// a new one each time we do a Retry.
+func backoffWithTimeout(timeout time.Duration) *backoff.ExponentialBackOff {
+	return &backoff.ExponentialBackOff{
+		Multiplier:      2,
+		InitialInterval: 2 * time.Millisecond,
+		MaxElapsedTime:  timeout,
+		Clock:           backoff.SystemClock,
+		Stop:            backoff.Stop,
+	}
+}
+
 // waitForSocket waits for the unix domain socket to appear
 func (c *Connector) waitForSocket() error {
 	// Note that we don't care if this is our daemon
 	// or not. We started a process, but someone else could beat
 	// use to listening. That's fine, we'll check the version
 	// later.
-	deadline := time.After(_socketPollTimeout)
-	for !c.SockPath.FileExists() {
-		select {
-		case <-time.After(_socketPollInterval):
-			// try polling for the socket again, we haven't hit our deadline yet
-		case <-deadline:
-			return ErrFailedToStart
+	err := backoff.Retry(func() error {
+		if !c.SockPath.FileExists() {
+			return errNeedsRetry
 		}
+		return nil
+	}, backoffWithTimeout(_socketPollTimeout))
+	if errors.Is(err, errNeedsRetry) {
+		return ErrFailedToStart
+	} else if err != nil {
+		return err
 	}
 	return nil
 }

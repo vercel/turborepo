@@ -43,13 +43,9 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
 	dirPath := fs.AbsolutePathFromUpstream(dir)
-	err := dirPath.MkdirAll()
-	assert.NilError(t, err, "MkdirAll")
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
-	err = pidPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
 	ctx := context.Background()
 	bin := testBin()
 	c := &Connector{
@@ -59,7 +55,8 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 		SockPath: sockPath,
 		PidPath:  pidPath,
 	}
-	_, err = c.connectInternal(ctx)
+	// Note that we expect ~3s here, for 3 attempts with a timeout of 1s
+	_, err := c.connectInternal(ctx)
 	assert.ErrorIs(t, err, ErrTooManyAttempts)
 }
 
@@ -67,13 +64,9 @@ func TestKillDeadServerNoPid(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
 	dirPath := fs.AbsolutePathFromUpstream(dir)
-	err := dirPath.MkdirAll()
-	assert.NilError(t, err, "MkdirAll")
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
-	err = pidPath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
 	c := &Connector{
 		Logger:   logger,
 		Bin:      "nonexistent",
@@ -82,7 +75,7 @@ func TestKillDeadServerNoPid(t *testing.T) {
 		PidPath:  pidPath,
 	}
 
-	err = c.killDeadServer(99999)
+	err := c.killDeadServer(99999)
 	assert.NilError(t, err, "killDeadServer")
 }
 
