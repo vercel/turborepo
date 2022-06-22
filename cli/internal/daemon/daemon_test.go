@@ -37,7 +37,7 @@ func TestDaemonDebounce(t *testing.T) {
 
 	d := &daemon{}
 	// the lockfile library handles removing pids from dead owners
-	_, err = d.debounceServers(pidPath)
+	_, err = d.tryAcquirePidfileLock(pidPath)
 	assert.NilError(t, err, "debounceServers")
 
 	// Start up a node process and fake a pid file for it.
@@ -60,7 +60,7 @@ func TestDaemonDebounce(t *testing.T) {
 	err = pidPath.WriteFile([]byte(strconv.Itoa(nodePid)), 0644)
 	assert.NilError(t, err, "WriteFile")
 
-	_, err = d.debounceServers(pidPath)
+	_, err = d.tryAcquirePidfileLock(pidPath)
 	assert.ErrorIs(t, err, lockfile.ErrBusy)
 
 	// Stop the node process, but leave the pid file there
@@ -68,7 +68,7 @@ func TestDaemonDebounce(t *testing.T) {
 	err = stopNode()
 	assert.NilError(t, err, "stopNode")
 	// the lockfile library handles removing pids from dead owners
-	_, err = d.debounceServers(pidPath)
+	_, err = d.tryAcquirePidfileLock(pidPath)
 	assert.NilError(t, err, "debounceServers")
 }
 

@@ -170,12 +170,15 @@ func addDaemonSubcommands(cmd *cobra.Command, config *config.Config, output cli.
 
 var errInactivityTimeout = errors.New("turbod shut down from inactivity")
 
-// debounceServers attempts to ensure that only one daemon is running from the given pid file path
-// at a time.
-func (d *daemon) debounceServers(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
+// tryAcquirePidfileLock attempts to ensure that only one daemon is running from the given pid file path
+// at a time. If this process fails to write its PID to the lockfile, it must exit.
+func (d *daemon) tryAcquirePidfileLock(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
 	lockFile, err := lockfile.New(pidPath.ToString())
 	if err != nil {
-		return "", err
+		// lockfile.New should only return an error if it wasn't given an absolute path.
+		// We are attempting to use the type system to enforce that we are passing an
+		// absolute path. An error here likely means a bug, and we should crash.
+		panic(err)
 	}
 	if err := lockFile.TryLock(); err != nil {
 		return "", err
@@ -194,7 +197,7 @@ func (d *daemon) runTurboServer(parentContext context.Context, rpcServer rpcServ
 	if err := pidPath.EnsureDir(); err != nil {
 		return err
 	}
-	lockFile, err := d.debounceServers(pidPath)
+	lockFile, err := d.tryAcquirePidfileLock(pidPath)
 	if err != nil {
 		return err
 	}
