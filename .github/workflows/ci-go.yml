@@ -109,10 +109,6 @@ jobs:
           cache: ${{matrix.manager}}
           cache-dependency-path: package.json
 
-      - name: Install dependencies
-        run: pnpm i -g left-pad
-        if: ${{matrix.manager}} == 'pnpm'
-
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
         env:
