@@ -1,24 +1,17 @@
 package fs
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
-)
-
-// Predefine []byte variables to avoid runtime allocations.
-var (
-	escapedSlash = []byte(`\\`)
-	regularSlash = []byte(`\`)
-	escapedTab   = []byte(`\t`)
-	regularTab   = []byte("\t")
+	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
@@ -31,354 +24,385 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(repoRoot AbsolutePath, p *PackageDepsOptions) (map[string]string, error) {
+func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
 	// Add all the checked in hashes.
-	// TODO(gsoltis): are these platform-dependent paths?
-	var result map[string]string
+	var result map[turbopath.AnchoredUnixPath]string
 	if len(p.InputPatterns) == 0 {
-		gitLsOutput, err := gitLsTree(p.PackagePath)
+		gitLsTreeOutput, err := gitLsTree(rootPath.Join(p.PackagePath))
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
-		result = parseGitLsTree(gitLsOutput)
+		result = gitLsTreeOutput
 	} else {
-		gitLsOutput, err := gitLsFiles(repoRoot.Join(p.PackagePath), p.InputPatterns)
+		gitLsFilesOutput, err := gitLsFiles(rootPath.Join(p.PackagePath), p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
-		parsedLines, err := parseGitLsFiles(gitLsOutput)
-		if err != nil {
-			return nil, err
-		}
-		result = parsedLines
+		result = gitLsFilesOutput
 	}
 
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(repoRoot.Join(p.PackagePath), p.InputPatterns)
+	gitStatusOutput, err := gitStatus(rootPath.Join(p.PackagePath), p.InputPatterns)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
 	}
-	currentlyChangedFiles := parseGitStatus(gitStatusOutput, p.PackagePath)
-	var filesToHash []string
-	for filename, changeType := range currentlyChangedFiles {
-		if changeType == "D" || (len(changeType) == 2 && string(changeType)[1] == []byte("D")[0]) {
-			delete(result, filename)
+
+	var filesToHash []turbopath.AnchoredUnixPath
+	for filePath, status := range gitStatusOutput {
+		if status.isDelete() {
+			delete(result, filePath)
 		} else {
-			filesToHash = append(filesToHash, filepath.Join(p.PackagePath, filename))
+			filesToHash = append(filesToHash, filePath)
 		}
 	}
-	normalized := make(map[string]string)
-	// These paths are platform-dependent, but already relative to the package root
-	for platformSpecificPath, hash := range result {
-		platformIndependentPath := filepath.ToSlash(platformSpecificPath)
-		normalized[platformIndependentPath] = hash
-	}
-	hashes, err := GetHashableDeps(filesToHash, p.PackagePath)
+
+	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
+	hashes, err := gitHashObject(convertedRootPath, turbopath.AnchoredUnixPathArray(filesToHash).ToSystemPathArray())
 	if err != nil {
 		return nil, err
 	}
-	for platformIndependentPath, hash := range hashes {
-		normalized[platformIndependentPath] = hash
+
+	// Zip up file paths and hashes together
+	for filePath, hash := range hashes {
+		result[filePath] = hash
 	}
-	return normalized, nil
+
+	return result, nil
 }
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(absolutePaths []string, relativeTo string) (map[string]string, error) {
-	fileHashes, err := gitHashForFiles(absolutePaths)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to hash files %v", strings.Join(absolutePaths, ", "))
-	}
-	result := make(map[string]string)
-	for filename, hash := range fileHashes {
-		// Normalize path as POSIX-style and relative to "relativeTo"
-		relativePath, err := filepath.Rel(relativeTo, filename)
+func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	output := make([]turbopath.AnchoredSystemPath, len(files))
+	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
+
+	for index, file := range files {
+		anchoredSystemPath, err := file.RelativeTo(convertedRootPath)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get relative path from %v to %v", relativeTo, relativePath)
+			return nil, err
 		}
-		key := filepath.ToSlash(relativePath)
-		result[key] = hash
+		output[index] = anchoredSystemPath
 	}
-	return result, nil
+	return gitHashObject(convertedRootPath, output)
 }
 
-// threadsafeBufferWriter is a wrapper around a byte buffer and a lock, allowing
-// multiple goroutines to write to the same buffer. No attempt is made to
-// lock around reading, which should only be done once no more writing will occur.
-type threadsafeBufferWriter struct {
-	mu     sync.Mutex
-	buffer bytes.Buffer
-}
+// gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
+// `git hash-object` expects paths to use Unix separators, even on Windows.
+//
+// Note: paths of files to hash passed to `git hash-object` are processed as relative to the *repository* root.
+// For that reason we convert all input paths and make them relative to the rootPath prior to passing them
+// to `git hash-object`.
+func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	fileCount := len(filesToHash)
+	output := make(map[turbopath.AnchoredUnixPath]string, fileCount)
 
-func (tsbw *threadsafeBufferWriter) Write(p []byte) (int, error) {
-	tsbw.mu.Lock()
-	defer tsbw.mu.Unlock()
-	return tsbw.buffer.Write(p)
-}
+	if fileCount > 0 {
+		cmd := exec.Command(
+			"git",           // Using `git` from $PATH,
+			"hash-object",   // hash a file,
+			"--stdin-paths", // using a list of newline-separated paths from stdin.
+		)
+		cmd.Dir = rootPath.ToString() // Start at this directory.
 
-var _ io.Writer = (*threadsafeBufferWriter)(nil)
+		// The functionality for gitHashObject is different enough that it isn't reasonable to
+		// generalize the behavior for `runGitCmd`. In fact, it doesn't even use the `gitoutput`
+		// encoding library, instead relying on its own separate `bufio.Scanner`.
 
-// gitHashForFiles a list of files returns a map of with their git hash values. It uses
-// git hash-object under the hood.
-// Note that filesToHash must have full paths.
-func gitHashForFiles(filesToHash []string) (map[string]string, error) {
-	changes := make(map[string]string)
-	if len(filesToHash) > 0 {
-		input := []string{"hash-object"}
-		input = append(input, filesToHash...)
-		cmd := exec.Command("git", input...)
-		// exec.Command writes to stdout and stderr from different goroutines,
-		// but only if they aren't the same io.Writer. Since we're passing different
-		// io.Writer instances that can optionally write to the same buffer, we need
-		// to do the locking ourselves.
-		var allout threadsafeBufferWriter
-		var stdout bytes.Buffer
-		// write stdout to both the stdout buffer, and the combined output buffer
-		// we don't expect to need stderr, but in the event that something goes wrong,
-		// we'd like to report the entirety of the output in the order it was output.
-		mw := io.MultiWriter(&allout, &stdout)
-		cmd.Stdout = mw
-		cmd.Stderr = &allout
-		err := cmd.Run()
-		if err != nil {
-			output := string(allout.buffer.Bytes())
-			return nil, fmt.Errorf("git hash-object exited with status: %w. Output:\n%v", err, output)
+		// We're going to send the list of files in via `stdin`, so we grab that pipe.
+		// This prevents a huge number of encoding issues and shell compatibility issues
+		// before they even start.
+		stdinPipe, stdinPipeError := cmd.StdinPipe()
+		if stdinPipeError != nil {
+			return nil, stdinPipeError
 		}
-		offByOne := strings.Split(string(stdout.Bytes()), "\n") // there is an extra ""
-		hashes := offByOne[:len(offByOne)-1]
-		if len(hashes) != len(filesToHash) {
-			output := string(allout.buffer.Bytes())
-			return nil, fmt.Errorf("passed %v file paths to Git to hash, but received %v hashes. Full output:\n%v", len(filesToHash), len(hashes), output)
+
+		// Kick the processing off in a goroutine so while that is doing its thing we can go ahead
+		// and wire up the consumer of `stdout`.
+		go func() {
+			defer util.CloseAndIgnoreError(stdinPipe)
+
+			// `git hash-object` understands all relative paths to be relative to the repository.
+			// This function's result needs to be relative to `rootPath`.
+			// We convert all files to absolute paths and assume that they will be inside of the repository.
+			for _, file := range filesToHash {
+				converted := file.RestoreAnchor(rootPath)
+
+				// `git hash-object` expects paths to use Unix separators, even on Windows.
+				// `git hash-object` expects paths to be one per line so we must escape newlines.
+				// In order to understand the escapes, the path must be quoted.
+				// In order to quote the path, the quotes in the path must be escaped.
+				// Other than that, we just write everything with full Unicode.
+				stringPath := converted.ToString()
+				toSlashed := filepath.ToSlash(stringPath)
+				escapedNewLines := strings.ReplaceAll(toSlashed, "\n", "\\n")
+				escapedQuotes := strings.ReplaceAll(escapedNewLines, "\"", "\\\"")
+				prepared := fmt.Sprintf("\"%s\"\n", escapedQuotes)
+				_, err := io.WriteString(stdinPipe, prepared)
+				if err != nil {
+					return
+				}
+			}
+		}()
+
+		// This gives us an io.ReadCloser so that we never have to read the entire input in
+		// at a single time. It is doing stream processing instead of string processing.
+		stdoutPipe, stdoutPipeError := cmd.StdoutPipe()
+		if stdoutPipeError != nil {
+			return nil, fmt.Errorf("failed to read `git hash-object`: %w", stdoutPipeError)
 		}
+
+		startError := cmd.Start()
+		if startError != nil {
+			return nil, fmt.Errorf("failed to read `git hash-object`: %w", startError)
+		}
+
+		// The output of `git hash-object` is a 40-character SHA per input, then a newline.
+		// We need to track the SHA that corresponds to the input file path.
+		index := 0
+		hashes := make([]string, len(filesToHash))
+		scanner := bufio.NewScanner(stdoutPipe)
+
+		// Read the output line-by-line (which is our separator) until exhausted.
+		for scanner.Scan() {
+			bytes := scanner.Bytes()
+
+			scanError := scanner.Err()
+			if scanError != nil {
+				return nil, fmt.Errorf("failed to read `git hash-object`: %w", scanError)
+			}
+
+			hashError := gitoutput.CheckObjectName(bytes)
+			if hashError != nil {
+				return nil, fmt.Errorf("failed to read `git hash-object`: %s", "invalid hash received")
+			}
+
+			// Worked, save it off.
+			hashes[index] = string(bytes)
+			index++
+		}
+
+		// Waits until stdout is closed before proceeding.
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			return nil, fmt.Errorf("failed to read `git hash-object`: %w", waitErr)
+		}
+
+		// Make sure we end up with a matching number of files and hashes.
+		hashCount := len(hashes)
+		if fileCount != hashCount {
+			return nil, fmt.Errorf("failed to read `git hash-object`: %d files %d hashes", fileCount, hashCount)
+		}
+
+		// The API of this method specifies that we return a `map[turbopath.AnchoredUnixPath]string`.
 		for i, hash := range hashes {
-			filepath := filesToHash[i]
-			changes[filepath] = hash
+			filePath := filesToHash[i]
+			output[filePath.ToUnixPath()] = hash
 		}
 	}
 
-	return changes, nil
+	return output, nil
 }
 
-// UnescapeChars reverses escaped characters.
-func UnescapeChars(in []byte) []byte {
-	if bytes.ContainsAny(in, "\\\t") {
-		return in
+// runGitCommand provides boilerplate command handling for `ls-tree`, `ls-files`, and `status`
+// Rather than doing string processing, it does stream processing of `stdout`.
+func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *gitoutput.Reader) ([][]string, error) {
+	stdoutPipe, pipeError := cmd.StdoutPipe()
+	if pipeError != nil {
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, pipeError)
 	}
 
-	out := bytes.Replace(in, escapedSlash, regularSlash, -1)
-	out = bytes.Replace(out, escapedTab, regularTab, -1)
-	return out
+	startError := cmd.Start()
+	if startError != nil {
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, startError)
+	}
+
+	reader := handler(stdoutPipe)
+	entries, readErr := reader.ReadAll()
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, readErr)
+	}
+
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, waitErr)
+	}
+
+	return entries, nil
 }
 
-// gitLsTree executes "git ls-tree" in a folder
-func gitLsTree(path string) (string, error) {
+// gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
+// that are present in the `git` index at a particular revision.
+func gitLsTree(rootPath AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+	cmd := exec.Command(
+		"git",     // Using `git` from $PATH,
+		"ls-tree", // list the contents of the git index,
+		"-r",      // recursively,
+		"-z",      // with each file path relative to the invocation directory and \000-terminated,
+		"HEAD",    // at this specified version.
+	)
+	cmd.Dir = rootPath.ToString() // Include files only from this directory.
 
-	cmd := exec.Command("git", "ls-tree", "HEAD", "-r")
-	cmd.Dir = path
-	out, err := cmd.CombinedOutput()
+	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
 	if err != nil {
-		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
+		return nil, err
 	}
-	return strings.TrimSpace(string(out)), nil
+
+	output := make(map[turbopath.AnchoredUnixPath]string, len(entries))
+
+	for _, entry := range entries {
+		lsTreeEntry := gitoutput.LsTreeEntry(entry)
+		output[turbopath.AnchoredUnixPathFromUpstream(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
+	}
+
+	return output, nil
 }
 
-func gitLsFiles(path AbsolutePath, patterns []string) (string, error) {
-	cmd := exec.Command("git", "ls-files", "-s", "--")
-	cmd.Args = append(cmd.Args, patterns...)
-	cmd.Dir = path.ToString()
-	out, err := cmd.CombinedOutput()
+// gitLsTree returns a map of paths to their SHA hashes starting from a list of patterns relative to a directory
+// that are present in the `git` index at a particular revision.
+func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	cmd := exec.Command(
+		"git",      // Using `git` from $PATH,
+		"ls-files", // tell me about git index information of some files,
+		"--stage",  // including information about the state of the object so that we can get the hashes,
+		"-z",       // with each file path relative to the invocation directory and \000-terminated,
+		"--",       // and any additional argument you see is a path, promise.
+	)
+
+	// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
+	cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
+	cmd.Dir = rootPath.ToString()            // Include files only from this directory.
+
+	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
 	if err != nil {
-		return "", fmt.Errorf("failed to read `git ls-tree`: %w", err)
+		return nil, err
 	}
-	return strings.TrimSpace(string(out)), nil
+
+	output := make(map[turbopath.AnchoredUnixPath]string, len(entries))
+
+	for _, entry := range entries {
+		lsFilesEntry := gitoutput.LsFilesEntry(entry)
+		output[turbopath.AnchoredUnixPathFromUpstream(lsFilesEntry.GetField(gitoutput.Path))] = lsFilesEntry.GetField(gitoutput.ObjectName)
+	}
+
+	return output, nil
 }
 
-// lsTreeRegex parses ls-tree output
-// A line is expected to look like:
-// 100644 blob 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8    src/typings/tsd.d.ts
-// 160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack
-var lsTreeRegex = regexp.MustCompile(`([0-9]{6})\s(blob|commit)\s([a-f0-9]{40})\s*(.*)`)
+// getTraversePath gets the distance of the current working directory to the repository root.
+// This is used to convert repo-relative paths to cwd-relative paths.
+//
+// `git rev-parse --show-cdup` always returns Unix paths, even on Windows.
+func getTraversePath(rootPath turbopath.AbsoluteSystemPath) (turbopath.RelativeUnixPath, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-cdup")
+	cmd.Dir = rootPath.ToString()
 
-func parseGitLsTree(output string) map[string]string {
-	changes := make(map[string]string)
-	if len(output) > 0 {
+	traversePath, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
 
-		outputLines := strings.Split(output, "\n")
-		for _, line := range outputLines {
-			if len(line) > 0 {
-				matches := lsTreeRegex.MatchString(line)
-				if matches {
-					// this looks like this
-					// [["160000 commit c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac  rushstack" "160000" "commit" "c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac" "rushstack"]]
-					match := lsTreeRegex.FindAllStringSubmatch(line, -1)
-					if len(match[0][3]) > 0 && len(match[0][4]) > 0 {
-						hash := match[0][3]
-						filename := parseGitFilename(match[0][4])
-						changes[filename] = hash
-					}
-					// @todo error
-				}
-			}
+	trimmedTraversePath := strings.TrimSuffix(string(traversePath), "\n")
+
+	return turbopath.RelativeUnixPathFromUpstream(trimmedTraversePath), nil
+}
+
+// Don't shell out if we already know where you are in the repository.
+// `memoize` is a good candidate for generics.
+func memoizeGetTraversePath() func(turbopath.AbsoluteSystemPath) (turbopath.RelativeUnixPath, error) {
+	cacheMutex := sync.RWMutex{}
+	cachedResult := map[turbopath.AbsoluteSystemPath]turbopath.RelativeUnixPath{}
+	cachedError := map[turbopath.AbsoluteSystemPath]error{}
+
+	return func(rootPath turbopath.AbsoluteSystemPath) (turbopath.RelativeUnixPath, error) {
+		result, resultExists := cachedResult[rootPath]
+		err, errExists := cachedError[rootPath]
+
+		if resultExists && errExists {
+			return result, err
 		}
+
+		invokedResult, invokedErr := getTraversePath(rootPath)
+		cacheMutex.Lock()
+		cachedResult[rootPath] = invokedResult
+		cachedError[rootPath] = invokedErr
+		cacheMutex.Unlock()
+
+		return invokedResult, invokedErr
 	}
-	return changes
 }
 
-// lsFilesRegex parses ls-files output
-// A line is expected to look like:
-// 100644 3451bccdc831cb43d7a70ed8e628dcf9c7f888c8 0   src/typings/tsd.d.ts
-// 160000 c5880bf5b0c6c1f2e2c43c95beeb8f0a808e8bac 0   rushstack
-var lsFilesRegex = regexp.MustCompile(`[0-9]{6}\s([a-f0-9]{40})\s[0-3]\s*(.+)`)
+var memoizedGetTraversePath = memoizeGetTraversePath()
 
-func parseGitLsFiles(output string) (map[string]string, error) {
-	changes := make(map[string]string)
-	if len(output) > 0 {
-
-		outputLines := strings.Split(output, "\n")
-
-		for _, line := range outputLines {
-			if len(line) > 0 {
-				match := lsFilesRegex.FindStringSubmatch(line)
-				// we found matches, and the slice has three parts:
-				// 0 - the whole string
-				// 1 - the hash
-				// 2 - the filename
-				if len(match) == 3 {
-					hash := match[1]
-					filename := parseGitFilename(match[2])
-					changes[filename] = hash
-				} else {
-					return nil, fmt.Errorf("failed to parse git ls-files output line %v", line)
-				}
-			}
-		}
-	}
-	return changes, nil
+// statusCode represents the two-letter status code from `git status` with two "named" fields, x & y.
+// They have different meanings based upon the actual state of the working tree. Using x & y maps
+// to upstream behavior.
+type statusCode struct {
+	x string
+	y string
 }
 
-// If there are no double-quotes around the string, then there are no escaped characters
-// to decode, so just return
-var dubQuoteRegex = regexp.MustCompile(`^".+"$`)
-
-// Couldn't figure out how to deal with special characters. Skipping for now.
-// @todo see https://github.com/microsoft/rushstack/blob/925ad8c9e22997c1edf5fe38c53fa618e8180f70/libraries/package-deps-hash/src/getPackageDeps.ts#L19
-func parseGitFilename(filename string) string {
-	if !dubQuoteRegex.MatchString(filename) {
-		return filename
-	}
-	// hack??/
-	return string(UnescapeChars([]byte(filename)))
-
-	// @todo special character support
-	// what we really need to do is to convert this into golang
-	// it seems that solution exists inside of "regexp" module
-	// either in "replaceAll" or in "doExecute"
-	// in the meantime, we do not support special characters in filenames or quotes
-	// // Need to hex encode '%' since we will be decoding the converted octal values from hex
-	// filename = filename.replace(/%/g, '%25');
-	// // Replace all instances of octal literals with percent-encoded hex (ex. '\347\275\221' -> '%E7%BD%91').
-	// // This is done because the octal literals represent UTF-8 bytes, and by converting them to percent-encoded
-	// // hex, we can use decodeURIComponent to get the Unicode chars.
-	// filename = filename.replace(/(?:\\(\d{1,3}))/g, (match, ...[octalValue, index, source]) => {
-	//   // We need to make sure that the backslash is intended to escape the octal value. To do this, walk
-	//   // backwards from the match to ensure that it's already escaped.
-	//   const trailingBackslashes: RegExpMatchArray | null = (source as string)
-	//     .slice(0, index as number)
-	//     .match(/\\*$/);
-	//   return trailingBackslashes && trailingBackslashes.length > 0 && trailingBackslashes[0].length % 2 === 0
-	//     ? `%${parseInt(octalValue, 8).toString(16)}`
-	//     : match;
-	// });
-
-	// // Finally, decode the filename and unescape the escaped UTF-8 chars
-	// return JSON.parse(decodeURIComponent(filename));
-
+func (s statusCode) isDelete() bool {
+	return s.x == "D" || s.y == "D"
 }
 
-// gitStatus executes "git status" in a folder
-func gitStatus(path AbsolutePath, inputPatterns []string) (string, error) {
-	// log.Printf("[TRACE] gitStatus start")
-	// defer log.Printf("[TRACE] gitStatus end")
-	cmd := exec.Command("git")
-	cmd.Args = append(cmd.Args, []string{"status", "-s", "-u"}...)
-	if len(inputPatterns) == 0 {
-		cmd.Args = append(cmd.Args, ".")
+// gitStatus returns a map of paths to their `git` status code. This can be used to identify what should
+// be done with files that do not currently match what is in the index.
+//
+// Note: `git status -z`'s relative path results are relative to the repository's location.
+// We need to calculate where the repository's location is in order to determine what the full path is
+// before we can return those paths relative to the calling directory, normalizing to the behavior of
+// `ls-files` and `ls-tree`.
+func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
+	cmd := exec.Command(
+		"git",               // Using `git` from $PATH,
+		"status",            // tell me about the status of the working tree,
+		"--untracked-files", // including information about untracked files,
+		"--no-renames",      // do not detect renames,
+		"-z",                // with each file path relative to the repository root and \000-terminated,
+		"--",                // and any additional argument you see is a path, promise.
+	)
+	if len(patterns) == 0 {
+		cmd.Args = append(cmd.Args, ".") // Operate in the current directory instead of the root of the working tree.
 	} else {
-		cmd.Args = append(cmd.Args, inputPatterns...)
+		// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
+		cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
 	}
-	cmd.Dir = path.ToString()
-	out, err := cmd.CombinedOutput()
+	cmd.Dir = rootPath.ToString() // Include files only from this directory.
+
+	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
 	if err != nil {
-		return "", fmt.Errorf("failed to read git status: %w", err)
+		return nil, err
 	}
-	// log.Printf("[TRACE] gitStatus result: %v", strings.TrimSpace(string(out)))
-	return strings.TrimSpace(string(out)), nil
-}
 
-var gitStatusRegex = regexp.MustCompile(`("(\\"|[^"])+")|(\S+\s*)`)
+	output := make(map[turbopath.AnchoredUnixPath]statusCode, len(entries))
+	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
-func parseGitStatus(output string, PackagePath string) map[string]string {
-	// log.Printf("[TRACE] parseGitStatus start")
-	// defer log.Printf("[TRACE] parseGitStatus end")
-	changes := make(map[string]string)
-
-	// Typically, output will look something like:
-	// M temp_modules/rush-package-deps-hash/package.json
-	// D package-deps-hash/src/index.ts
-
-	// If there was an issue with `git ls-tree`, or there are no current changes, processOutputBlocks[1]
-	// will be empty or undefined
-	if len(output) == 0 {
-		// log.Printf("[TRACE] parseGitStatus result: no git changes")
-		return changes
+	traversePath, err := memoizedGetTraversePath(convertedRootPath)
+	if err != nil {
+		return nil, err
 	}
-	// log.Printf("[TRACE] parseGitStatus result: found git changes")
 
-	// Note: The output of git hash-object uses \n newlines regardless of OS.
-	outputLines := strings.Split(output, "\n")
+	for _, entry := range entries {
+		statusEntry := gitoutput.StatusEntry(entry)
+		// Anchored at repository.
+		pathFromStatus := turbopath.AnchoredUnixPathFromUpstream(statusEntry.GetField(gitoutput.Path))
+		var outputPath turbopath.AnchoredUnixPath
 
-	for _, line := range outputLines {
-		if len(line) > 0 {
-			matches := gitStatusRegex.MatchString(line)
-			if matches {
-				// changeType is in the format of "XY" where "X" is the status of the file in the index and "Y" is the status of
-				// the file in the working tree. Some example statuses:
-				//   - 'D' == deletion
-				//   - 'M' == modification
-				//   - 'A' == addition
-				//   - '??' == untracked
-				//   - 'R' == rename
-				//   - 'RM' == rename with modifications
-				//   - '[MARC]D' == deleted in work tree
-				// Full list of examples: https://git-scm.com/docs/git-status#_short_format
+		if len(traversePath) > 0 {
+			repositoryPath := convertedRootPath.Join(traversePath.ToSystemPath())
+			fileFullPath := pathFromStatus.ToSystemPath().RestoreAnchor(repositoryPath)
 
-				// Lloks like this
-				//[["?? " "" "" "?? "] ["package_deps_hash_test.go" "" "" "package_deps_hash_test.go"]]
-				match := gitStatusRegex.FindAllStringSubmatch(line, -1)
-				if len(match[0]) > 1 {
-					changeType := match[0][0]
-					fileNameMatches := match[1][1:]
-					// log.Printf("match: %q", match)
-					// log.Printf("change: %v", strings.TrimRight(changeType, " "))
-
-					// We always care about the last filename in the filenames array. In the case of non-rename changes,
-					// the filenames array only contains one file, so we can join all segments that were split on spaces.
-					// In the case of rename changes, the last item in the array is the path to the file in the working tree,
-					// which is the only one that we care about. It is also surrounded by double-quotes if spaces are
-					// included, so no need to worry about joining different segments
-					lastFileName := strings.Join(fileNameMatches, "")
-					// looks like this
-					// [["R  " "" "" "R  "] ["turbo.config.js " "" "" "turbo.config.js "] ["-> " "" "" "-> "] ["turboooz.config.js" "" "" "turboooz.config.js"]]
-					if strings.HasPrefix(changeType, "R") {
-						lastFileName = strings.Join(match[len(match)-1][1:], "")
-					}
-					lastFileName = parseGitFilename(lastFileName)
-					// log.Printf(lastFileName)
-					changes[lastFileName] = strings.TrimRight(changeType, " ")
-				}
+			relativePath, err := fileFullPath.RelativeTo(convertedRootPath)
+			if err != nil {
+				return nil, err
 			}
+
+			outputPath = relativePath.ToUnixPath()
+		} else {
+			outputPath = pathFromStatus
 		}
+
+		output[outputPath] = statusCode{x: statusEntry.GetField(gitoutput.StatusX), y: statusEntry.GetField(gitoutput.StatusY)}
 	}
-	return changes
+
+	return output, nil
 }

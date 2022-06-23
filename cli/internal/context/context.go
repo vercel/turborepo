@@ -14,6 +14,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
@@ -459,12 +460,18 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 	}
 
 	// No prefix, global deps already have full paths
-	globalFileHashMap, err := fs.GetHashableDeps(globalDeps.UnsafeListOfStrings(), rootpath)
+	globalDepsArray := globalDeps.UnsafeListOfStrings()
+	globalDepsPaths := make([]turbopath.AbsoluteSystemPath, len(globalDepsArray))
+	for i, path := range globalDepsArray {
+		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
+	}
+
+	globalFileHashMap, err := fs.GetHashableDeps(fs.UnsafeToAbsolutePath(rootpath), globalDepsPaths)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}
 	globalHashable := struct {
-		globalFileHashMap    map[string]string
+		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 		rootExternalDepsHash string
 		hashedSortedEnvPairs []string
 		globalCacheKey       string
