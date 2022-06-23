@@ -33,10 +33,12 @@ jobs:
           version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: 16
           cache: pnpm
+        env:
+          FORCE_COLOR: 0
 
       - name: Install dependencies
         run: pnpm install
@@ -46,7 +48,6 @@ jobs:
 
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
-
 
   examples:
     name: run examples
@@ -93,10 +94,12 @@ jobs:
           version: 7.2.1
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: 16
           cache: pnpm
+        env:
+          FORCE_COLOR: 0
 
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
