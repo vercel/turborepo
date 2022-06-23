@@ -6,8 +6,7 @@
     "turbo": "cd cli && make turbo && cd .. && node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "build": "pnpm -- turbo run build --filter=docs",
-    "run-example": "./scripts/run-example.sh",
-    "postinstall": "patch-package"
+    "run-example": "./scripts/run-example.sh"
   },
   "devDependencies": {
     "lint-staged": "^13.0.1",
