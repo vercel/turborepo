@@ -21,6 +21,11 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+// testBin returns a platform-appropriate node binary.
+// We need some process to be running and findable by the
+// lockfile library, and we don't particularly care what it is.
+// Since node is required for turbo development, it makes a decent
+// candidate.
 func testBin() string {
 	if runtime.GOOS == "windows" {
 		return "node.exe"
@@ -190,9 +195,16 @@ func TestCaughtSignal(t *testing.T) {
 		errCh <- err
 	}()
 	<-ts.registered
-	// This can race with the call to grpc.Server.Serve
-	// If we've registered with the turboserver, we've registered all of our
-	// signal handlers as well
+	// grpc doesn't provide a signal to know when the server is serving.
+	// So while this call to Close can race with the call to grpc.Server.Serve, if we've
+	// registered with the turboserver, we've registered all of our
+	// signal handlers as well. We just may or may not be serving when Close()
+	// is called. It shouldn't matter for the purposes of this test:
+	// Either we are serving, and Serve will return with nil when GracefulStop is
+	// called, or we aren't serving yet, and the subsequent call to Serve will
+	// immediately return with grpc.ErrServerStopped. So, both nil and grpc.ErrServerStopped
+	// are acceptable outcomes for runTurboServer. Any other error, or a timeout, is a
+	// failure.
 	watcher.Close()
 
 	pidPath := getPidFile(repoRoot)
