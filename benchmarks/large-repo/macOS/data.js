@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655858859298,
+  "lastUpdate": 1655944737922,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -1342,6 +1342,52 @@ window.BENCHMARK_DATA = {
             "value": 47221.8,
             "unit": "ms",
             "range": "10539"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Ender Bonnet",
+            "username": "enBonnet",
+            "email": "13243693+enBonnet@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1943e2dadedf85c9cae4bb4eef21e846582e44d8",
+          "message": "Remove duplicate \"have\" (#1430)",
+          "timestamp": "2022-06-22T19:07:08Z",
+          "url": "https://github.com/vercel/turborepo/commit/1943e2dadedf85c9cae4bb4eef21e846582e44d8"
+        },
+        "date": 1655944736873,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 206729,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 6540.4,
+            "unit": "ms",
+            "range": "67"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 6658.4,
+            "unit": "ms",
+            "range": "190"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 44878.6,
+            "unit": "ms",
+            "range": "9194"
           }
         ]
       }
