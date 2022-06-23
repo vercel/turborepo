@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export const Avatar = ({ name, picture, twitterUsername }) => {
   return (
-    <div className="flex items-center md:justify-start flex-shrink-0  ">
+    <div className="flex items-center flex-shrink-0 md:justify-start">
       <div className="w-[32px] h-[32px]">
         <Image
           src={picture}
@@ -19,12 +19,12 @@ export const Avatar = ({ name, picture, twitterUsername }) => {
       </div>
       <dl className="ml-2 text-sm font-medium leading-4 text-left whitespace-no-wrap">
         <dt className="sr-only">Name</dt>
-        <dd className="text-gray-900 dark:text-white ">{name}</dd>
+        <dd className="text-gray-900 dark:text-white">{name}</dd>
         <dt className="sr-only">Twitter</dt>
         <dd>
           <a
             href={`https://twitter.com/${twitterUsername}`}
-            className="text-xs text-blue-500 no-underline betterhover:hover:text-blue-600 betterhover:hover:underline "
+            className="text-xs text-blue-500 no-underline betterhover:hover:text-blue-600 betterhover:hover:underline"
             target="_blank"
             rel="noopener noreferrer"
           >
