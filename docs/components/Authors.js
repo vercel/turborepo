@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-
+import cn from "classnames";
 const team = {
   jaredpalmer: {
     name: "Jared Palmer",
@@ -21,24 +21,35 @@ const team = {
     twitterUsername: "gsoltis",
     picture: "/images/people/gsoltis.jpeg",
   },
+  nathanhammond: {
+    name: "Nathan Hammond",
+    twitterUsername: "nathanhammond",
+    picture: "/images/people/nathanhammond.png",
+  },
+  tknickman: {
+    name: "Tom Knickman",
+    twitterUsername: "tknickman",
+    picture: "/images/people/tknickman.jpeg",
+  },
 };
 
 export function Authors({ authors }) {
   return (
-    <div
-      className="authors grid grid-cols-[repeat(var(--grid-cnt-small),minmax(0,1fr))] gap-4 py-8 border-b border-gray-400 md:grid-cols-[repeat(var(--grid-cnt),minmax(0,1fr))] border-opacity-20"
-      style={{
-        "--grid-cnt": authors.length,
-        "--grid-cnt-small": authors.length > 1 ? 2 : 1,
-      }}
-    >
-      {authors.map((username) =>
-        !!team[username] ? (
-          <Avatar key={username} {...team[username]} />
-        ) : (
-          console.warning("no author found for", username) || null
-        )
-      )}
+    <div className="w-full border-b border-gray-400 authors border-opacity-20">
+      <div
+        className={cn(
+          "flex flex-wrap justify-center py-8 mx-auto gap-7",
+          authors.length > 4 && "max-w-3xl"
+        )}
+      >
+        {authors.map((username) =>
+          !!team[username] ? (
+            <Avatar key={username} {...team[username]} />
+          ) : (
+            console.warning("no author found for", username) || null
+          )
+        )}
+      </div>
     </div>
   );
 }

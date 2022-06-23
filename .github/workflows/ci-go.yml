@@ -52,7 +52,6 @@ jobs:
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
 
-
   examples:
     name: run examples
     timeout-minutes: 15
