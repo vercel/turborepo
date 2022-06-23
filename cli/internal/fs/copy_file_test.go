@@ -23,7 +23,7 @@ func TestCopyOrLinkFile(t *testing.T) {
 	assert.NilError(t, err, "Stat")
 	shouldLink := true
 	shouldFallback := false
-	err = CopyOrLinkFile(LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath, shouldLink, shouldFallback)
+	err = CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath, shouldLink, shouldFallback)
 	assert.NilError(t, err, "CopyOrLinkFile")
 	sameFile, err := SameFile(srcFilePath, dstFilePath)
 	assert.NilError(t, err, "SameFile")
@@ -41,7 +41,7 @@ func TestCopyOrLinkFile(t *testing.T) {
 	err = os.Symlink("foo", srcLinkPath)
 	assert.NilError(t, err, "SymLink")
 	assert.NilError(t, err, "Lstat")
-	err = CopyOrLinkFile(LstatCachedFile{Path: AbsolutePath(srcLinkPath)}, dstLinkPath, shouldLink, shouldFallback)
+	err = CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(srcLinkPath)}, dstLinkPath, shouldLink, shouldFallback)
 	if err != nil {
 		t.Fatalf("CopyOrLinkFile %v", err)
 	}
@@ -68,7 +68,7 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	assert.NilError(t, err, "Chmod")
 	shouldLink := false
 	shouldFallback := false
-	err = CopyOrLinkFile(LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath, shouldLink, shouldFallback)
+	err = CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath, shouldLink, shouldFallback)
 	assert.NilError(t, err, "CopyOrLinkFile")
 	sameFile, err := SameFile(srcFilePath, dstFilePath)
 	assert.NilError(t, err, "SameFile")

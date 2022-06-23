@@ -41,7 +41,7 @@ func (file *LstatCachedFile) GetMode() (fs.FileMode, error) {
 	return *file.Mode, nil
 }
 
-// GetType returns, and caches the file type for the LstatCachedFile.Path
+// GetType returns, and caches the type bits of (FileMode & os.ModeType) for the LstatCachedFile.Path
 func (file *LstatCachedFile) GetType() (fs.FileMode, error) {
 	if file.Type != nil {
 		return *file.Type, nil

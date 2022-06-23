@@ -13,14 +13,13 @@ import (
 
 // CopyOrLinkFile either copies or hardlinks a file based on the link argument.
 // Falls back to a copy if link fails and fallback is true.
-func CopyOrLinkFile(from LstatCachedFile, to string, link bool, fallback bool) error {
-	fromInfo, err := from.GetInfo()
-	if err != nil {
-		return err
-	}
-
+func CopyOrLinkFile(from *LstatCachedFile, to string, link bool, fallback bool) error {
 	if link {
-		if (fromInfo.Mode() & os.ModeSymlink) != 0 {
+		fromMode, err := from.GetMode()
+		if err != nil {
+			return err
+		}
+		if (fromMode & os.ModeSymlink) != 0 {
 			// Don't try to hard-link to a symlink, that doesn't work reliably across all platforms.
 			// Instead recreate an equivalent symlink in the new location.
 			dest, err := os.Readlink(from.Path.ToString())
@@ -50,27 +49,27 @@ func RecursiveCopy(from string, to string) error {
 // If 'link' is true then we'll hardlink files instead of copying them.
 // If 'fallback' is true then we'll fall back to a copy if linking fails.
 func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) error {
-	statedFrom := LstatCachedFile{Path: AbsolutePath(from)}
+	statedFrom := LstatCachedFile{Path: UnsafeToAbsolutePath(from)}
 	fromInfo, err := statedFrom.GetInfo()
 	if err != nil {
 		return err
 	}
 
 	if fromInfo.IsDir() {
-		return WalkMode(statedFrom.Path.asString(), func(name string, isDir bool, fileMode os.FileMode) error {
-			dest := filepath.Join(to, name[len(statedFrom.Path.asString()):])
+		return WalkMode(statedFrom.Path.ToString(), func(name string, isDir bool, fileType os.FileMode) error {
+			dest := filepath.Join(to, name[len(statedFrom.Path.ToString()):])
 			if isDir {
 				return os.MkdirAll(dest, DirPermissions)
 			}
-			if isSame, err := SameFile(statedFrom.Path.asString(), name); err != nil {
+			if isSame, err := SameFile(statedFrom.Path.ToString(), name); err != nil {
 				return err
 			} else if isSame {
 				return nil
 			}
-			return CopyOrLinkFile(LstatCachedFile{Path: AbsolutePath(name), Mode: &fileMode}, dest, link, fallback)
+			return CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(name), Type: &fileType}, dest, link, fallback)
 		})
 	}
-	return CopyOrLinkFile(statedFrom, to, link, fallback)
+	return CopyOrLinkFile(&statedFrom, to, link, fallback)
 }
 
 // Walk implements an equivalent to filepath.Walk.
