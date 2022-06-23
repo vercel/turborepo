@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-
+import cn from "classnames";
 const team = {
   jaredpalmer: {
     name: "Jared Palmer",
@@ -35,14 +35,21 @@ const team = {
 
 export function Authors({ authors }) {
   return (
-    <div className="authors justify-center mx-auto flex flex-wrap gap-7  py-8 border-b border-gray-400  border-opacity-20">
-      {authors.map((username) =>
-        !!team[username] ? (
-          <Avatar key={username} {...team[username]} />
-        ) : (
-          console.warning("no author found for", username) || null
-        )
-      )}
+    <div className="w-full border-b border-gray-400 authors border-opacity-20">
+      <div
+        className={cn(
+          "flex flex-wrap justify-center py-8 mx-auto gap-7",
+          authors.length > 4 && "max-w-3xl"
+        )}
+      >
+        {authors.map((username) =>
+          !!team[username] ? (
+            <Avatar key={username} {...team[username]} />
+          ) : (
+            console.warning("no author found for", username) || null
+          )
+        )}
+      </div>
     </div>
   );
 }
