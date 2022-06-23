@@ -363,7 +363,7 @@ func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.Anchored
 	if len(patterns) == 0 {
 		cmd.Args = append(cmd.Args, ".") // Operate in the current directory instead of the root of the working tree.
 	} else {
-		// FIXME: Globbing is accomplished implicitly using shell expansion.
+		// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
 		cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
 	}
 	cmd.Dir = rootPath.ToString() // Include files only from this directory.
