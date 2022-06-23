@@ -98,6 +98,11 @@ jobs:
         with:
           version: 7.2.1
 
+      - name: Make sure pnpm always has a cache
+        shell: bash
+        run: |
+          mkdir -p `pnpm store path`
+
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
