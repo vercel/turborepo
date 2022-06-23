@@ -13,18 +13,17 @@ import (
 
 // CopyOrLinkFile either copies or hardlinks a file based on the link argument.
 // Falls back to a copy if link fails and fallback is true.
-func CopyOrLinkFile(from StatedFile, to string, link bool, fallback bool) error {
-	statedFrom, err := StatFile(from)
+func CopyOrLinkFile(from LstatCachedFile, to string, link bool, fallback bool) error {
+	fromInfo, err := from.GetInfo()
 	if err != nil {
 		return err
 	}
 
-	info := *statedFrom.Info
 	if link {
-		if (info.Mode() & os.ModeSymlink) != 0 {
+		if (fromInfo.Mode() & os.ModeSymlink) != 0 {
 			// Don't try to hard-link to a symlink, that doesn't work reliably across all platforms.
 			// Instead recreate an equivalent symlink in the new location.
-			dest, err := os.Readlink(statedFrom.Path)
+			dest, err := os.Readlink(from.Path.ToString())
 			if err != nil {
 				return err
 			}
@@ -34,11 +33,11 @@ func CopyOrLinkFile(from StatedFile, to string, link bool, fallback bool) error 
 			}
 			return os.Symlink(dest, to)
 		}
-		if err := os.Link(statedFrom.Path, to); err == nil || !fallback {
+		if err := os.Link(from.Path.ToString(), to); err == nil || !fallback {
 			return err
 		}
 	}
-	return CopyFile(statedFrom, to)
+	return CopyFile(from, to)
 }
 
 // RecursiveCopy copies either a single file or a directory.
@@ -51,24 +50,24 @@ func RecursiveCopy(from string, to string) error {
 // If 'link' is true then we'll hardlink files instead of copying them.
 // If 'fallback' is true then we'll fall back to a copy if linking fails.
 func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) error {
-	statedFrom, err := StatFile(StatedFile{Path: from})
+	statedFrom := LstatCachedFile{Path: AbsolutePath(from)}
+	fromInfo, err := statedFrom.GetInfo()
 	if err != nil {
 		return err
 	}
 
-	info := *statedFrom.Info
-	if info.IsDir() {
-		return WalkMode(statedFrom.Path, func(name string, isDir bool, fileMode os.FileMode) error {
-			dest := filepath.Join(to, name[len(statedFrom.Path):])
+	if fromInfo.IsDir() {
+		return WalkMode(statedFrom.Path.asString(), func(name string, isDir bool, fileMode os.FileMode) error {
+			dest := filepath.Join(to, name[len(statedFrom.Path.asString()):])
 			if isDir {
 				return os.MkdirAll(dest, DirPermissions)
 			}
-			if isSame, err := SameFile(statedFrom.Path, name); err != nil {
+			if isSame, err := SameFile(statedFrom.Path.asString(), name); err != nil {
 				return err
 			} else if isSame {
 				return nil
 			}
-			return CopyOrLinkFile(StatedFile{Path: name}, dest, link, fallback)
+			return CopyOrLinkFile(LstatCachedFile{Path: AbsolutePath(name), Mode: &fileMode}, dest, link, fallback)
 		})
 	}
 	return CopyOrLinkFile(statedFrom, to, link, fallback)

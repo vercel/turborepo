@@ -228,7 +228,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(fs.StatedFile{Path: outputPath}, name); err != nil {
+		if err := fs.CopyFile(fs.LstatCachedFile{Path: fs.AbsolutePath(outputPath)}, name); err != nil {
 			return err
 		}
 	}

@@ -1,9 +1,7 @@
 package fs
 
 import (
-	"errors"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,12 +13,6 @@ import (
 
 // DirPermissions are the default permission bits we apply to directories.
 const DirPermissions = os.ModeDir | 0775
-
-// StatedFile bundles a path with (a pointer to) its file info.
-type StatedFile struct {
-	Path string
-	Info *fs.FileInfo
-}
 
 // EnsureDir ensures that the directory of the given file has been created.
 func EnsureDir(filename string) error {
@@ -68,33 +60,16 @@ func FileExists(filename string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// StatFile adds FileInfo to the given StatedFile if it doesn't already exist
-func StatFile(file StatedFile) (StatedFile, error) {
-	if file.Path == "" {
-		return file, errors.New("empty file path")
-	}
-	if file.Info == nil {
-		// we don't have file info already, look it up
-		fileInfos, err := os.Lstat(file.Path)
-		if err != nil {
-			return file, err
-		}
-		file.Info = &fileInfos
-	}
-	return file, nil
-}
-
 // CopyFile copies a file from 'from' to 'to', with an attempt to perform a copy & rename
 // to avoid chaos if anything goes wrong partway.
-func CopyFile(from StatedFile, to string) error {
-	statedFrom, statErr := StatFile(from)
-	if statErr != nil {
-		return statErr
-	}
-	info := *statedFrom.Info
-	fromFile, err := os.Open(statedFrom.Path)
+func CopyFile(from LstatCachedFile, to string) error {
+	fromInfo, err := from.GetInfo()
 	if err != nil {
-		fileInfos, err := os.Lstat(from.Path)
+		return err
+	}
+	fromFile, err := os.Open(from.Path.ToString())
+	if err != nil {
+		fileInfos, err := os.Lstat(from.Path.ToString())
 		isSymlink := err == nil && fileInfos.Mode()&os.ModeSymlink == os.ModeSymlink
 
 		if isSymlink {
@@ -104,7 +79,7 @@ func CopyFile(from StatedFile, to string) error {
 		return err
 	}
 	defer fromFile.Close()
-	return writeFileFromStream(fromFile, to, info.Mode())
+	return writeFileFromStream(fromFile, to, fromInfo.Mode())
 }
 
 // writeFileFromStream writes data from a reader to the file named 'to', with an attempt to perform

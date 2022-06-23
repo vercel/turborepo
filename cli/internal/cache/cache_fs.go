@@ -89,7 +89,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyOrLinkFile(fs.StatedFile{Path: file, Info: &fromInfo}, filepath.Join(f.cacheDirectory, hash, file), false, false); err != nil {
+					if err := fs.CopyOrLinkFile(fs.LstatCachedFile{Path: fs.AbsolutePath(file), Info: fromInfo}, filepath.Join(f.cacheDirectory, hash, file), false, false); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}
