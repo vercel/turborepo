@@ -59,6 +59,8 @@ var (
 	_cookieTimeout = 500 * time.Millisecond
 )
 
+// AddRoot starts watching a new directory hierarchy. Events matching the provided excludePatterns
+// will not be forwarded.
 func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...string) error {
 	// We need to resolve the real path to the hierarchy that we are going to watch
 	realRoot, err := realpath.Realpath(someRoot.ToString())
