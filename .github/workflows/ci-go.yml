@@ -1,10 +1,14 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: ["main"]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, edited, synchronize]
 
 jobs:
   build:
@@ -12,6 +16,7 @@ jobs:
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
@@ -53,6 +58,7 @@ jobs:
     timeout-minutes: 15
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
@@ -92,11 +98,17 @@ jobs:
         with:
           version: 7.2.1
 
+      - name: Make sure pnpm always has a cache
+        shell: bash
+        run: |
+          mkdir -p `pnpm store path`
+
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
           node-version: 16
-          cache: pnpm
+          cache: ${{matrix.manager}}
+          cache-dependency-path: package.json
 
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
