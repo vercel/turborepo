@@ -878,7 +878,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.Task)
 	if len(passThroughArgs) > 0 {
-		if e.packageManager.Name != "pnpm" {
+		if e.packageManager.Name != "nodejs-pnpm" {
 			argsactual = append(argsactual, "--")
 		}
 		argsactual = append(argsactual, passThroughArgs...)
