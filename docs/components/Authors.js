@@ -24,7 +24,7 @@ const team = {
   nathanhammond: {
     name: "Nathan Hammond",
     twitterUsername: "nathanhammond",
-    picture: "/images/people/nathanhammond.jpeg",
+    picture: "/images/people/nathanhammond.png",
   },
   tknickman: {
     name: "Tom Knickman",
