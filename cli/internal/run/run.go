@@ -898,7 +898,6 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 
-	fmt.Printf("executing w/ args %v", argsactual)
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	cmd.Dir = pt.Pkg.Dir
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
