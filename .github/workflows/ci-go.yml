@@ -38,7 +38,7 @@ jobs:
           node-version: 16
           cache: pnpm
         env:
-          FORCE_COLOR: 0
+          FORCE_COLOR: 2
 
       - name: Install dependencies
         run: pnpm install
@@ -99,7 +99,7 @@ jobs:
           node-version: 16
           cache: pnpm
         env:
-          FORCE_COLOR: 0
+          FORCE_COLOR: 2
 
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
