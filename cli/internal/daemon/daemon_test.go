@@ -34,14 +34,11 @@ func testBin() string {
 }
 
 func TestPidFileLock(t *testing.T) {
-	logger := hclog.Default()
-	watcher := signals.NewWatcher()
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 
 	pidPath := getPidFile(repoRoot)
-	//d := &daemon{}
 	// the lockfile library handles removing pids from dead owners
-	_, err := acquirePidLock(pidPath, watcher, logger)
+	_, err := tryAcquirePidfileLock(pidPath)
 	assert.NilError(t, err, "acquirePidLock")
 
 	// Start up a node process and fake a pid file for it.
@@ -64,7 +61,7 @@ func TestPidFileLock(t *testing.T) {
 	err = pidPath.WriteFile([]byte(strconv.Itoa(nodePid)), 0644)
 	assert.NilError(t, err, "WriteFile")
 
-	_, err = acquirePidLock(pidPath, watcher, logger)
+	_, err = tryAcquirePidfileLock(pidPath)
 	assert.ErrorIs(t, err, lockfile.ErrBusy)
 
 	// Stop the node process, but leave the pid file there
@@ -72,7 +69,7 @@ func TestPidFileLock(t *testing.T) {
 	err = stopNode()
 	assert.NilError(t, err, "stopNode")
 	// the lockfile library handles removing pids from dead owners
-	_, err = acquirePidLock(pidPath, watcher, logger)
+	_, err = tryAcquirePidfileLock(pidPath)
 	assert.NilError(t, err, "acquirePidLock")
 }
 
@@ -97,6 +94,7 @@ func newTestRPCServer() *testRPCServer {
 }
 
 func waitForFile(t *testing.T, filename fs.AbsolutePath, timeout time.Duration) {
+	t.Helper()
 	deadline := time.After(timeout)
 outer:
 	for !filename.FileExists() {
@@ -137,7 +135,7 @@ func TestDaemonLifecycle(t *testing.T) {
 	}()
 
 	sockPath := getUnixSocket(repoRoot)
-	waitForFile(t, sockPath, 3*time.Second)
+	waitForFile(t, sockPath, 30*time.Second)
 	pidPath := getPidFile(repoRoot)
 	waitForFile(t, pidPath, 1*time.Second)
 	cancel()
@@ -207,11 +205,11 @@ func TestCaughtSignal(t *testing.T) {
 	// failure.
 	watcher.Close()
 
+	err := <-errCh
 	pidPath := getPidFile(repoRoot)
 	if pidPath.FileExists() {
 		t.Errorf("expected to clean up %v, but it still exists", pidPath)
 	}
-	err := <-errCh
 	// We'll either get nil or ErrServerStopped, depending on whether
 	// or not we close the signal watcher before grpc.Server.Serve was
 	// called.

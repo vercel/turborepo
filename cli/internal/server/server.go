@@ -49,6 +49,10 @@ type closer struct {
 }
 
 func (c *closer) close() {
+	// This can get triggered from a request handler (Shutdown). Since
+	// calling GracefulStop blocks until all request handlers complete,
+	// we need to run it in a goroutine to let the Shutdown handler complete
+	// and avoid deadlocking.
 	c.once.Do(func() {
 		go func() {
 			c.grpcServer.GracefulStop()
