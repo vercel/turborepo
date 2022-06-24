@@ -8,7 +8,7 @@
     "start": "next start",
     "build": "next build ",
     "lint": "next lint",
-    "schema": "ts-json-schema-generator -p ./schema.d.ts -o ./public/schema.json -t Schema --minify"
+    "schema": "ts-json-schema-generator -f tsconfig.json -p ./schema.d.ts -o ./public/schema.json -t Schema --minify"
   },
   "author": "Jared Palmer",
   "license": "MPL-2.0",
