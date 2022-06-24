@@ -50,12 +50,12 @@ func RecursiveCopy(from string, to string) error {
 // If 'fallback' is true then we'll fall back to a copy if linking fails.
 func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) error {
 	statedFrom := LstatCachedFile{Path: UnsafeToAbsolutePath(from)}
-	fromInfo, err := statedFrom.GetInfo()
+	fromType, err := statedFrom.GetType()
 	if err != nil {
 		return err
 	}
 
-	if fromInfo.IsDir() {
+	if fromType == os.ModeDir {
 		return WalkMode(statedFrom.Path.ToString(), func(name string, isDir bool, fileType os.FileMode) error {
 			dest := filepath.Join(to, name[len(statedFrom.Path.ToString()):])
 			if isDir {

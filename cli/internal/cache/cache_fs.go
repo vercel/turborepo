@@ -80,16 +80,17 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				fromInfo, err := os.Lstat(file)
+				statedFile := fs.LstatCachedFile{Path: fs.AbsolutePath(file)}
+				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
 				}
-				if !fromInfo.IsDir() {
+				if fromType != os.ModeDir {
 					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, file)); err != nil {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyOrLinkFile(&fs.LstatCachedFile{Path: fs.AbsolutePath(file), Info: fromInfo}, filepath.Join(f.cacheDirectory, hash, file), false, false); err != nil {
+					if err := fs.CopyOrLinkFile(&statedFile, filepath.Join(f.cacheDirectory, hash, file), false, false); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}

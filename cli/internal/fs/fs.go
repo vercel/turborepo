@@ -65,8 +65,8 @@ func FileExists(filename string) bool {
 func CopyFile(from *LstatCachedFile, to string) error {
 	fromFile, err := os.Open(from.Path.ToString())
 	if err != nil {
-		fromMode, err := from.GetMode()
-		isSymlink := err == nil && fromMode&os.ModeSymlink == os.ModeSymlink
+		fromType, err := from.GetType()
+		isSymlink := err == nil && fromType == os.ModeSymlink
 
 		if isSymlink {
 			// We have a broken symlink. Don't try to copy it.
