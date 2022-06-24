@@ -108,20 +108,6 @@ func TestPut(t *testing.T) {
 	// Verify that we got the files that we're expecting
 	dstCachePath := filepath.Join(dst, hash)
 
-	dstAPath := filepath.Join(dstCachePath, src, "child", "a")
-	got, err := turbofs.SameFile(aPath, dstAPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
-	}
-
-	dstBPath := filepath.Join(dstCachePath, src, "b")
-	got, err = turbofs.SameFile(bPath, dstBPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
-	}
-
 	dstLinkPath := filepath.Join(dstCachePath, src, "child", "link")
 	target, err := os.Lstat(dstLinkPath)
 	assert.NilError(t, err, "Lstat")
@@ -205,20 +191,6 @@ func TestFetch(t *testing.T) {
 		t.Errorf("len(files) got %v, want 0", len(files))
 	}
 	t.Logf("files %v", files)
-
-	dstAPath := filepath.Join(dstOutputPath, "child", "a")
-	got, err := turbofs.SameFile(aPath, dstAPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
-	}
-
-	dstBPath := filepath.Join(dstOutputPath, "b")
-	got, err = turbofs.SameFile(bPath, dstBPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
-	}
 
 	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
 	dstLstat, dstLstErr := os.Lstat(dstLinkPath)
