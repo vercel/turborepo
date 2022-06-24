@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -75,11 +76,12 @@ type RunState struct {
 	Attempted int
 
 	startedAt time.Time
+	config    *config.Config
 }
 
 // NewRunState creates a RunState instance for tracking events during the
 // course of a run.
-func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
+func NewRunState(startedAt time.Time, tracingProfile string, config *config.Config) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
@@ -91,6 +93,7 @@ func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 		state:     make(map[string]*BuildTargetState),
 
 		startedAt: startedAt,
+		config:    config,
 	}
 }
 
@@ -228,7 +231,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.UnsafeToAbsolutePath(outputPath)}, name); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(r.config.Cwd, outputPath)}, name); err != nil {
 			return err
 		}
 	}

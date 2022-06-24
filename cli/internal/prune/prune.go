@@ -200,38 +200,38 @@ func (p *prune) prune(opts *opts) error {
 	p.logger.Trace("new workspaces", "value", workspaces)
 	if opts.docker {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath(".gitignore")}, outDir.Join("full", ".gitignore").ToStringDuringMigration()); err != nil {
+			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, ".gitignore")}, outDir.Join("full", ".gitignore").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root .gitignore")
 			}
 		}
 		// We only need to actually copy turbo.json into "full" folder since it isn't needed for installation in docker
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath("turbo.json")}, outDir.Join("full", "turbo.json").ToStringDuringMigration()); err != nil {
+			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, "turbo.json")}, outDir.Join("full", "turbo.json").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root turbo.json")
 			}
 		}
 
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath("package.json")}, outDir.Join("full", "package.json").ToStringDuringMigration()); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, "package.json")}, outDir.Join("full", "package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath("package.json")}, outDir.Join("json", "package.json").ToStringDuringMigration()); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, "package.json")}, outDir.Join("json", "package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	} else {
 		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath(".gitignore")}, outDir.Join(".gitignore").ToStringDuringMigration()); err != nil {
+			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, ".gitignore")}, outDir.Join(".gitignore").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root .gitignore")
 			}
 		}
 
 		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath("turbo.json")}, outDir.Join("turbo.json").ToStringDuringMigration()); err != nil {
+			if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, "turbo.json")}, outDir.Join("turbo.json").ToStringDuringMigration()); err != nil {
 				return errors.Wrap(err, "failed to copy root turbo.json")
 			}
 		}
 
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.AbsolutePath("package.json")}, outDir.Join("package.json").ToStringDuringMigration()); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(p.config.Cwd, "package.json")}, outDir.Join("package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	}

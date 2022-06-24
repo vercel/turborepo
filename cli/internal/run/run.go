@@ -661,7 +661,7 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	}
 	defer turboCache.Shutdown()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	argSeparator := []string{"--"}
 	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {

@@ -105,7 +105,7 @@ func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder,
 	cacheImplementations := make([]Cache, 0, 2)
 
 	if useFsCache {
-		implementation, err := newFsCache(opts, recorder)
+		implementation, err := newFsCache(opts, recorder, config)
 		if err != nil {
 			return nil, err
 		}

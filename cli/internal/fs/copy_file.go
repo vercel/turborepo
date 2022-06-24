@@ -66,7 +66,7 @@ func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) e
 			} else if isSame {
 				return nil
 			}
-			return CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(name), fileType: &fileType}, dest, link, fallback)
+			return CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePathFromUpstream(name), fileType: &fileType}, dest, link, fallback)
 		})
 	}
 	return CopyOrLinkFile(&statedFrom, to, link, fallback)
