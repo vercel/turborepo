@@ -7,16 +7,16 @@ import (
 
 // LstatCachedFile maintains a cache of file info, mode and type for the given Path
 type LstatCachedFile struct {
-	Path AbsolutePath
-	Info fs.FileInfo
-	Mode *fs.FileMode
-	Type *fs.FileMode
+	Path     AbsolutePath
+	fileInfo fs.FileInfo
+	fileMode *fs.FileMode
+	fileType *fs.FileMode
 }
 
 // GetInfo returns, and caches the file info for the LstatCachedFile.Path
 func (file *LstatCachedFile) GetInfo() (fs.FileInfo, error) {
-	if file.Info != nil {
-		return file.Info, nil
+	if file.fileInfo != nil {
+		return file.fileInfo, nil
 	}
 
 	err := file.lstat()
@@ -24,13 +24,13 @@ func (file *LstatCachedFile) GetInfo() (fs.FileInfo, error) {
 		return nil, err
 	}
 
-	return file.Info, nil
+	return file.fileInfo, nil
 }
 
 // GetMode returns, and caches the file mode for the LstatCachedFile.Path
 func (file *LstatCachedFile) GetMode() (fs.FileMode, error) {
-	if file.Mode != nil {
-		return *file.Mode, nil
+	if file.fileMode != nil {
+		return *file.fileMode, nil
 	}
 
 	err := file.lstat()
@@ -38,13 +38,13 @@ func (file *LstatCachedFile) GetMode() (fs.FileMode, error) {
 		return 0, err
 	}
 
-	return *file.Mode, nil
+	return *file.fileMode, nil
 }
 
 // GetType returns, and caches the type bits of (FileMode & os.ModeType) for the LstatCachedFile.Path
 func (file *LstatCachedFile) GetType() (fs.FileMode, error) {
-	if file.Type != nil {
-		return *file.Type, nil
+	if file.fileType != nil {
+		return *file.fileType, nil
 	}
 
 	err := file.lstat()
@@ -52,7 +52,7 @@ func (file *LstatCachedFile) GetType() (fs.FileMode, error) {
 		return 0, err
 	}
 
-	return *file.Type, nil
+	return *file.fileType, nil
 }
 
 func (file *LstatCachedFile) lstat() error {
@@ -64,9 +64,9 @@ func (file *LstatCachedFile) lstat() error {
 	fileMode := fileInfo.Mode()
 	fileModeType := fileMode & os.ModeType
 
-	file.Info = fileInfo
-	file.Mode = &fileMode
-	file.Type = &fileModeType
+	file.fileInfo = fileInfo
+	file.fileMode = &fileMode
+	file.fileType = &fileModeType
 
 	return nil
 }
