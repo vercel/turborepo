@@ -3,6 +3,7 @@ package run
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -226,12 +227,20 @@ func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuf
 
 func (r *RunState) Close(Ui cli.Ui, filename string) error {
 	outputPath := chrometracing.Path()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
+	// so we have to account for that before converting to AbsolutePath
+	root := fs.AbsolutePathFromUpstream(cwd)
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
+	println("source: ", fs.ResolveUnknownPath(root, outputPath))
 	if filename != "" {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(r.config.Cwd, outputPath)}, name); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
 			return err
 		}
 	}

@@ -67,7 +67,8 @@ func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) e
 			} else if isSame {
 				return nil
 			}
-			return CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePathFromUpstream(name), fileType: &fileType}, dest, link, fallback)
+			// name is absolute, (originates from godirwalk)
+			return CopyOrLinkFile(&LstatCachedFile{Path: UnsafeToAbsolutePath(name), fileType: &fileType}, dest, link, fallback)
 		})
 	}
 	return CopyOrLinkFile(&statedFrom, to, link, fallback)
