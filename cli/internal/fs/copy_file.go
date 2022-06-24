@@ -22,7 +22,7 @@ func CopyOrLinkFile(from *LstatCachedFile, to string, link bool, fallback bool) 
 		if (fromMode & os.ModeSymlink) != 0 {
 			// Don't try to hard-link to a symlink, that doesn't work reliably across all platforms.
 			// Instead recreate an equivalent symlink in the new location.
-			dest, err := os.Readlink(from.Path.ToString())
+			dest, err := from.Path.Readlink()
 			if err != nil {
 				return err
 			}
@@ -32,7 +32,7 @@ func CopyOrLinkFile(from *LstatCachedFile, to string, link bool, fallback bool) 
 			}
 			return os.Symlink(dest, to)
 		}
-		if err := os.Link(from.Path.ToString(), to); err == nil || !fallback {
+		if err := from.Path.Link(to); err == nil || !fallback {
 			return err
 		}
 	}
@@ -49,6 +49,7 @@ func RecursiveCopy(from string, to string) error {
 // If 'link' is true then we'll hardlink files instead of copying them.
 // If 'fallback' is true then we'll fall back to a copy if linking fails.
 func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) error {
+	// Verified all callers are passing in absolute paths for from (and to)
 	statedFrom := LstatCachedFile{Path: UnsafeToAbsolutePath(from)}
 	fromType, err := statedFrom.GetType()
 	if err != nil {
@@ -56,12 +57,12 @@ func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) e
 	}
 
 	if fromType == os.ModeDir {
-		return WalkMode(statedFrom.Path.ToString(), func(name string, isDir bool, fileType os.FileMode) error {
+		return WalkMode(statedFrom.Path.ToStringDuringMigration(), func(name string, isDir bool, fileType os.FileMode) error {
 			dest := filepath.Join(to, name[len(statedFrom.Path.ToString()):])
 			if isDir {
 				return os.MkdirAll(dest, DirPermissions)
 			}
-			if isSame, err := SameFile(statedFrom.Path.ToString(), name); err != nil {
+			if isSame, err := SameFile(statedFrom.Path.ToStringDuringMigration(), name); err != nil {
 				return err
 			} else if isSame {
 				return nil
