@@ -4,9 +4,12 @@
   },
   "index": {
     "title": "Home",
+    "type": "page",
     "hidden": true,
     "theme": {
-      "layout": "raw"
+      "layout": "raw",
+      "sidebar": false,
+      "toc": true
     }
   },
   "docs": "Docs",
@@ -18,6 +21,7 @@
   },
   "enterprise": {
     "title": "Enterprise",
+    "type": "page",
     "href": "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=header-enterpriseLink",
     "newWindow": true
   },

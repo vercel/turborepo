@@ -2,16 +2,21 @@ import Image from "next/image";
 
 export const Avatar = ({ name, picture, twitterUsername }) => {
   return (
-    <div className="flex items-center justify-center">
-      <Image
-        src={picture}
-        height={32}
-        width={32}
-        layout="fixed"
-        priority={true}
-        className="w-full rounded-full"
-        alt={name}
-      />
+    <div className="flex items-center flex-shrink-0 md:justify-start">
+      <div className="w-[32px] h-[32px]">
+        <Image
+          src={picture}
+          height={32}
+          width={32}
+          layout="fixed"
+          async
+          loading="lazy"
+          importance="low"
+          title={name}
+          className="w-full rounded-full"
+          alt={name}
+        />
+      </div>
       <dl className="ml-2 text-sm font-medium leading-4 text-left whitespace-no-wrap">
         <dt className="sr-only">Name</dt>
         <dd className="text-gray-900 dark:text-white">{name}</dd>

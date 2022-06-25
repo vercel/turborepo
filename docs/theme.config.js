@@ -194,6 +194,10 @@ const theme = {
           content={`https://turborepo.org${router.asPath}`}
         />
         <meta
+          property="twitter:image"
+          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
+        />
+        <meta
           property="og:image"
           content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
         />

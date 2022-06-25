@@ -308,13 +308,15 @@ func getTraversePath(rootPath turbopath.AbsoluteSystemPath) (turbopath.RelativeU
 // Don't shell out if we already know where you are in the repository.
 // `memoize` is a good candidate for generics.
 func memoizeGetTraversePath() func(turbopath.AbsoluteSystemPath) (turbopath.RelativeUnixPath, error) {
-	cacheMutex := sync.RWMutex{}
+	cacheMutex := &sync.RWMutex{}
 	cachedResult := map[turbopath.AbsoluteSystemPath]turbopath.RelativeUnixPath{}
 	cachedError := map[turbopath.AbsoluteSystemPath]error{}
 
 	return func(rootPath turbopath.AbsoluteSystemPath) (turbopath.RelativeUnixPath, error) {
+		cacheMutex.RLock()
 		result, resultExists := cachedResult[rootPath]
 		err, errExists := cachedError[rootPath]
+		cacheMutex.RUnlock()
 
 		if resultExists && errExists {
 			return result, err
