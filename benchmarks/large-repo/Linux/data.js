@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656031110217,
+  "lastUpdate": 1656117606106,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -1434,6 +1434,52 @@ window.BENCHMARK_DATA = {
             "value": 48314.2,
             "unit": "ms",
             "range": "12778"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jared Palmer",
+            "username": "jaredpalmer",
+            "email": "jared@jaredpalmer.com"
+          },
+          "committer": {
+            "name": "Jared Palmer",
+            "username": "jaredpalmer",
+            "email": "jared@jaredpalmer.com"
+          },
+          "id": "9b04fc04b73100e57c316563e73bec7b172007b7",
+          "message": "Improve seo of config page",
+          "timestamp": "2022-06-24T12:44:27Z",
+          "url": "https://github.com/vercel/turborepo/commit/9b04fc04b73100e57c316563e73bec7b172007b7"
+        },
+        "date": 1656117604231,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 197501,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 10128.2,
+            "unit": "ms",
+            "range": "643"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 10217.8,
+            "unit": "ms",
+            "range": "119"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 50177.2,
+            "unit": "ms",
+            "range": "13718"
           }
         ]
       }
