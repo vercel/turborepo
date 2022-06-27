@@ -30,6 +30,7 @@ type Opts struct {
 	SkipWrites             bool
 	TaskOutputModeOverride *util.TaskOutputMode
 	LogReplayer            LogReplayer
+	StripPrefix            bool
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
@@ -52,6 +53,7 @@ output.`,
 		DefValue: defaultTaskOutputMode,
 		Value:    &taskOutputModeValue{opts: opts},
 	})
+	flags.BoolVar(&opts.StripPrefix, "raw", false, "Remove default prefix for all logs, as well as colors.")
 	_ = flags.Bool("stream", true, "Unused")
 	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
 		// fail fast if we've misconfigured our flags
@@ -109,6 +111,7 @@ type RunCache struct {
 	repoRoot               fs.AbsolutePath
 	logReplayer            LogReplayer
 	colorCache             *colorcache.ColorCache
+	stripPrefix            bool
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
@@ -121,6 +124,7 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *col
 		repoRoot:               repoRoot,
 		logReplayer:            opts.LogReplayer,
 		colorCache:             colorCache,
+		stripPrefix:            opts.StripPrefix,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -142,7 +146,7 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
-func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+func (tc TaskCache) RestoreOutputs(terminal cli.Ui, logger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
@@ -170,9 +174,7 @@ func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger
 	case util.FullTaskOutput:
 		logger.Debug("log file", "path", tc.LogFileName)
 		if tc.LogFileName.FileExists() {
-			// The task label is baked into the log file, so we need to grab the underlying Ui
-			// instance in order to not duplicate it
-			tc.rc.logReplayer(logger, terminal.Ui, tc.LogFileName)
+			tc.rc.logReplayer(logger, terminal, tc.LogFileName)
 		}
 	default:
 		// NoLogs, do not output anything
@@ -214,25 +216,22 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	prettyTaskPrefix := colorPrefixer(tc.pt.OutputPrefix())
 	bufWriter := bufio.NewWriter(output)
-	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))); err != nil {
+
+	cacheHitMessage := tc.cacheHitMessage()
+	if _, err := bufWriter.WriteString(cacheHitMessage); err != nil {
 		// We've already errored, we don't care if there's a further error closing the file we just
 		// failed to write to.
 		_ = output.Close()
 		return nil, err
 	}
+
 	fwc := &fileWriterCloser{
-		file:  output,
-		bufio: bufWriter,
+		file:   output,
+		bufio:  bufWriter,
+		Writer: tc.newPrefixWritter(bufWriter),
 	}
-	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
-		// only write to log file, not to stdout
-		fwc.Writer = bufWriter
-	} else {
-		fwc.Writer = io.MultiWriter(os.Stdout, bufWriter)
-	}
+
 	return fwc, nil
 }
 
@@ -257,13 +256,60 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
 		if err != nil {
 			logger.Error("error", err)
-			terminal.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
+			errorMessageColored := color.RedString("%v", fmt.Errorf("File path cannot be made relative: %w", err))
+			terminal.Error(fmt.Sprintf("%s%s ", ui.ERROR_PREFIX, errorMessageColored))
 			continue
 		}
 		relativePaths[index] = relativePath
 	}
 
 	return tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths)
+}
+
+func (tc TaskCache) NewTerminal(ui cli.Ui) cli.Ui {
+	prettyTaskPrefix := tc.ColoredPrefix()
+
+	return &cli.PrefixedUi{
+		Ui:           ui,
+		OutputPrefix: prettyTaskPrefix,
+		InfoPrefix:   prettyTaskPrefix,
+		ErrorPrefix:  prettyTaskPrefix,
+		WarnPrefix:   prettyTaskPrefix,
+	}
+}
+
+func (tc TaskCache) ColoredPrefix() string {
+	if tc.rc.stripPrefix {
+		return ""
+	}
+
+	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
+	return colorPrefixer(tc.pt.OutputPrefix())
+}
+
+func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
+	prefixedWriter := prefixedWriter{
+		prefix: tc.ColoredPrefix(),
+	}
+
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
+		// only write to log file, not to stdout
+		prefixedWriter.underlyingWriter = bufWriter
+	} else {
+		prefixedWriter.underlyingWriter = io.MultiWriter(os.Stdout, bufWriter)
+	}
+
+	return prefixedWriter
+}
+
+func (tc TaskCache) cacheHitMessage() string {
+	message := fmt.Sprintf("cache hit, replaying output %s\n", ui.Dim(tc.hash))
+	if tc.rc.stripPrefix {
+		prettyTaskPrefix := tc.ColoredPrefix()
+		message = fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))
+	}
+
+	return message
 }
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific

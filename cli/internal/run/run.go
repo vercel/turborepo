@@ -853,17 +853,6 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	// Setup tracer
 	tracer := e.runState.Run(pt.TaskID)
 
-	// Create a logger
-	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
-	targetUi := &cli.PrefixedUi{
-		Ui:           e.ui,
-		OutputPrefix: prettyTaskPrefix,
-		InfoPrefix:   prettyTaskPrefix,
-		ErrorPrefix:  prettyTaskPrefix,
-		WarnPrefix:   prettyTaskPrefix,
-	}
-
 	passThroughArgs := e.rs.ArgsForTask(pt.Task)
 	hash, err := e.taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
 	e.logger.Debug("task hash", "value", hash)
@@ -883,6 +872,10 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(pt, hash)
+	prettyTaskPrefix := taskCache.ColoredPrefix()
+	// Create a logger
+	targetUi := taskCache.NewTerminal(e.ui)
+
 	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -916,9 +909,9 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	}
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
