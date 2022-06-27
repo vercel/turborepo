@@ -77,7 +77,7 @@ export class Monorepo {
         pkg.packageManager = "yarn@3.1.1";
         break;
       case "pnpm":
-        pkg.packageManager = "pnpm@6.26.1";
+        pkg.packageManager = "pnpm@7.2.1";
         break;
       case "npm":
         pkg.packageManager = "npm@8.3.0";
@@ -94,7 +94,7 @@ export class Monorepo {
       this.commitFiles({
         "pnpm-workspace.yaml": `packages:
 - packages/*`,
-        "pnpm-lock.yaml": `lockfileVersion: 5.3
+        "pnpm-lock.yaml": `lockfileVersion: 5.4
 
 importers:
 
@@ -112,7 +112,6 @@ importers:
 
   packages/c:
     specifiers: {}
-
         `,
       });
       execa.sync("pnpm", ["install", "--recursive"], {
@@ -299,6 +298,17 @@ fs.copyFileSync(
     return execa.sync("git", ["commit", "-m", "foo"], {
       cwd: this.root,
     });
+  }
+
+  expectCleanGitStatus() {
+    const status = execa.sync("git", ["status", "-s"], {
+      cwd: this.root,
+    });
+    if (status.stdout !== "" || status.stderr !== "") {
+      throw new Error(
+        `Found git status: stdout ${status.stdout} / stderr ${status.stderr}`
+      );
+    }
   }
 
   turbo(
