@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
+	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
@@ -95,9 +96,21 @@ func TestPut(t *testing.T) {
 
 	dst := subdirForTest(t)
 	dr := &dummyRecorder{}
+
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	cf := &config.Config{
+		Cwd:    defaultCwd,
+		Token:  "some-token",
+		TeamId: "my-team",
+	}
+
 	cache := &fsCache{
 		cacheDirectory: dst,
 		recorder:       dr,
+		config:         cf,
 	}
 
 	hash := "the-hash"
@@ -187,9 +200,21 @@ func TestFetch(t *testing.T) {
 	assert.NilError(t, err, "WriteFile")
 
 	dr := &dummyRecorder{}
+
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	cf := &config.Config{
+		Cwd:    defaultCwd,
+		Token:  "some-token",
+		TeamId: "my-team",
+	}
+
 	cache := &fsCache{
 		cacheDirectory: cacheDir,
 		recorder:       dr,
+		config:         cf,
 	}
 
 	dstOutputPath := "some-package"
