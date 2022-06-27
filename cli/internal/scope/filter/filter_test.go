@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -375,10 +376,12 @@ func Test_SCM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	changedPackages := make(util.Set)
-	changedPackages.Add("package-1")
-	changedPackages.Add("package-2")
-	changedPackages.Add(util.RootPkgName)
+	head1Changed := make(util.Set)
+	head1Changed.Add("package-1")
+	head1Changed.Add("package-2")
+	head1Changed.Add(util.RootPkgName)
+	head2Changed := make(util.Set)
+	head2Changed.Add("package-3")
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("package-1")
@@ -408,8 +411,19 @@ func Test_SCM(t *testing.T) {
 		Graph:        graph,
 		PackageInfos: packageJSONs,
 		Cwd:          root,
-		PackagesChangedSince: func(since string) (util.Set, error) {
-			return changedPackages, nil
+		PackagesChangedSince: func(since string, toCommit string) (util.Set, error) {
+			if since == "HEAD~1" && toCommit == "HEAD" {
+				return head1Changed, nil
+			} else if since == "HEAD~2" && toCommit == "HEAD" {
+				union := head1Changed.Copy()
+				for val := range head2Changed {
+					union.Add(val)
+				}
+				return union, nil
+			} else if since == "HEAD~2" && toCommit == "HEAD~1" {
+				return head2Changed, nil
+			}
+			panic(fmt.Sprintf("unsupported commit range %v...%v", since, toCommit))
 		},
 	}
 
@@ -422,7 +436,7 @@ func Test_SCM(t *testing.T) {
 			"all changed packages",
 			[]*TargetSelector{
 				{
-					diff: "HEAD~1",
+					diffBase: "HEAD~1",
 				},
 			},
 			[]string{"package-1", "package-2", util.RootPkgName},
@@ -431,7 +445,7 @@ func Test_SCM(t *testing.T) {
 			"all changed packages with parent dir exact match",
 			[]*TargetSelector{
 				{
-					diff:      "HEAD~1",
+					diffBase:  "HEAD~1",
 					parentDir: root,
 				},
 			},
@@ -441,7 +455,7 @@ func Test_SCM(t *testing.T) {
 			"changed packages in directory",
 			[]*TargetSelector{
 				{
-					diff:      "HEAD~1",
+					diffBase:  "HEAD~1",
 					parentDir: filepath.Join(root, "package-2"),
 				},
 			},
@@ -451,7 +465,7 @@ func Test_SCM(t *testing.T) {
 			"changed packages matching pattern",
 			[]*TargetSelector{
 				{
-					diff:        "HEAD~1",
+					diffBase:    "HEAD~1",
 					namePattern: "package-2*",
 				},
 			},
@@ -461,7 +475,7 @@ func Test_SCM(t *testing.T) {
 			"changed packages matching pattern",
 			[]*TargetSelector{
 				{
-					diff:        "HEAD~1",
+					diffBase:    "HEAD~1",
 					namePattern: "package-2*",
 				},
 			},
@@ -475,12 +489,31 @@ func Test_SCM(t *testing.T) {
 			"changed package was requested scope, and we're matching dependencies",
 			[]*TargetSelector{
 				{
-					diff:              "HEAD~1",
+					diffBase:          "HEAD~1",
 					namePattern:       "package-1",
 					matchDependencies: true,
 				},
 			},
 			[]string{"package-1"},
+		},
+		{
+			"older commit",
+			[]*TargetSelector{
+				{
+					diffBase: "HEAD~2",
+				},
+			},
+			[]string{"package-1", "package-2", "package-3", util.RootPkgName},
+		},
+		{
+			"commit range",
+			[]*TargetSelector{
+				{
+					diffBase:         "HEAD~2",
+					diffHeadOverride: "HEAD~1",
+				},
+			},
+			[]string{"package-3"},
 		},
 	}
 

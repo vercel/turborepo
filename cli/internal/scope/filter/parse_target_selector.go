@@ -16,12 +16,22 @@ type TargetSelector struct {
 	followProdDepsOnly  bool
 	parentDir           string
 	namePattern         string
-	diff                string
+	diffBase            string
+	diffHeadOverride    string
 	raw                 string
 }
 
 func (ts *TargetSelector) IsValid() bool {
-	return ts.diff != "" || ts.parentDir != "" || ts.namePattern != ""
+	return ts.diffBase != "" || ts.parentDir != "" || ts.namePattern != ""
+}
+
+// DiffHead returns the git ref to use for upper bound of the comparison when finding changed
+// packages.
+func (ts *TargetSelector) DiffHead() string {
+	if ts.diffHeadOverride == "" {
+		return "HEAD"
+	}
+	return ts.diffHeadOverride
 }
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
@@ -57,35 +67,30 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 
 	matches := targetSelectorRegex.FindAllStringSubmatch(selector, -1)
 
-	diff := ""
-	parentDir := ""
-	namePattern := ""
-
 	if len(matches) == 0 {
 		if isSelectorByLocation(selector) {
 			return TargetSelector{
-				diff:                diff,
 				exclude:             exclude,
-				excludeSelf:         false,
 				includeDependencies: includeDependencies,
 				includeDependents:   includeDependents,
-				namePattern:         namePattern,
 				parentDir:           filepath.Join(prefix, selector),
 				raw:                 rawSelector,
 			}, nil
 		}
 		return TargetSelector{
-			diff:                diff,
 			exclude:             exclude,
 			excludeSelf:         excludeSelf,
 			includeDependencies: includeDependencies,
 			includeDependents:   includeDependents,
 			namePattern:         selector,
-			parentDir:           parentDir,
 			raw:                 rawSelector,
 		}, nil
 	}
 
+	diff := ""
+	diffHeadOverride := ""
+	parentDir := ""
+	namePattern := ""
 	preAddDepdencies := false
 	if len(matches) > 0 && len(matches[0]) > 0 {
 		if len(matches[0][1]) > 0 {
@@ -106,11 +111,17 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 			}
 			// strip []
 			diff = diff[1 : len(diff)-1]
+			refs := strings.Split(diff, "...")
+			if len(refs) == 2 {
+				diff = refs[0]
+				diffHeadOverride = refs[1]
+			}
 		}
 	}
 
 	return TargetSelector{
-		diff:                diff,
+		diffBase:            diff,
+		diffHeadOverride:    diffHeadOverride,
 		exclude:             exclude,
 		excludeSelf:         excludeSelf,
 		includeDependencies: includeDependencies,

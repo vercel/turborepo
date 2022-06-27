@@ -138,14 +138,14 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedSince {
 	// Note that "since" here is *not* o.LegacyFilter.Since. Each filter expression can have its own value for
 	// "since", apart from the value specified via --since.
-	return func(filterSince string) (util.Set, error) {
+	return func(filterSince string, toCommit string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
 		// global dependencies changing as well. A future optimization might be to
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
 		if filterSince != "" {
-			scmChangedFiles, err := scm.ChangedFiles(filterSince, true, cwd)
+			scmChangedFiles, err := scm.ChangedFiles(filterSince, toCommit, true, cwd)
 			if err != nil {
 				return nil, err
 			}
