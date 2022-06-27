@@ -239,7 +239,7 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := chrometracing.Flush(); err != nil {
+		if err := chrometracing.Close(); err != nil {
 			Ui.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
 		}
 		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {

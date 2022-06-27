@@ -3,6 +3,7 @@ import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import { Monorepo } from "../monorepo";
 import path from "path";
+import * as fs from "fs";
 
 const basicPipeline = {
   pipeline: {
@@ -168,7 +169,11 @@ function runSmokeTests<T>(
       options.cwd ? " from " + options.cwd : ""
     }`,
     async () => {
-      const results = repo.turbo("run", ["test", "--stream"], options);
+      const results = repo.turbo(
+        "run",
+        ["test", "--stream", "--profile=chrometracing"],
+        options
+      );
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
@@ -183,6 +188,10 @@ function runSmokeTests<T>(
         text = repo.readFileSync(cachedLogFilePath);
       }, `Could not read cached log file from cache ${cachedLogFilePath}`);
       assert.ok(text.includes("testing c"), "Contains correct output");
+
+      const tracingBuf = fs.readFileSync(path.join(repo.root, "chrometracing"));
+      // ensure it doesn't throw
+      JSON.parse(tracingBuf.toString("utf-8"));
     }
   );
 

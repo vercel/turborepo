@@ -228,12 +228,20 @@ func releaseTid(t uint64) {
 	}
 }
 
-// Flush should be called before your program terminates, and/or periodically
-// for long-running programs, to flush any pending chrome://tracing events out
-// to disk.
-func Flush() error {
-	if err := trace.file.Sync(); err != nil {
-		return fmt.Errorf("flushing trace file: %v", err)
+// Close overwrites the trailing (,\n) with (]\n) and closes the trace file.
+func Close() error {
+	trace.fileMu.Lock()
+	defer trace.fileMu.Unlock()
+	// Seek backwards two bytes (,\n)
+	if _, err := trace.file.Seek(-2, 1); err != nil {
+		return err
+	}
+	// Write 1 byte, ']', leaving the trailing '\n' in place
+	if _, err := trace.file.Write([]byte{']'}); err != nil {
+		return err
+	}
+	if err := trace.file.Close(); err != nil {
+		return err
 	}
 	return nil
 }
