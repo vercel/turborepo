@@ -17,10 +17,6 @@ type testClient struct {
 	notify       chan Event
 }
 
-type helper interface {
-	Helper()
-}
-
 func (c *testClient) OnFileWatchEvent(ev Event) {
 	if ev.EventType == FileAdded {
 		c.mu.Lock()
