@@ -17,6 +17,13 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+type watchAddMode int
+
+const (
+	dontSynthesizeEvents watchAddMode = iota
+	synthesizeEvents
+)
+
 type fsNotifyBackend struct {
 	watcher *fsnotify.Watcher
 	events  chan Event
@@ -65,7 +72,8 @@ func (f *fsNotifyBackend) onFileAdded(name fs.AbsolutePath) error {
 		return errors.Wrapf(err, "error checking lstat of new file %v", name)
 	}
 	if info.IsDir() {
-		if err := f.watchRecursively(name, []string{}); err != nil {
+		// If a directory has been added, we need to synthesize events for everything it contains
+		if err := f.watchRecursively(name, []string{}, synthesizeEvents); err != nil {
 			return errors.Wrapf(err, "failed recursive watch of %v", name)
 		}
 	} else {
@@ -76,7 +84,7 @@ func (f *fsNotifyBackend) onFileAdded(name fs.AbsolutePath) error {
 	return nil
 }
 
-func (f *fsNotifyBackend) watchRecursively(root fs.AbsolutePath, excludePatterns []string) error {
+func (f *fsNotifyBackend) watchRecursively(root fs.AbsolutePath, excludePatterns []string, addMode watchAddMode) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	err := fs.WalkMode(root.ToString(), func(name string, isDir bool, info os.FileMode) error {
@@ -94,6 +102,12 @@ func (f *fsNotifyBackend) watchRecursively(root fs.AbsolutePath, excludePatterns
 				return errors.Wrapf(err, "failed adding watch to %v", name)
 			}
 			f.logger.Debug(fmt.Sprintf("watching directory %v", name))
+		}
+		if addMode == synthesizeEvents {
+			f.events <- Event{
+				Path:      fs.AbsolutePathFromUpstream(name),
+				EventType: FileAdded,
+			}
 		}
 		return nil
 	})
@@ -172,7 +186,8 @@ func (f *fsNotifyBackend) Start() error {
 }
 
 func (f *fsNotifyBackend) AddRoot(root fs.AbsolutePath, excludePatterns ...string) error {
-	return f.watchRecursively(root, excludePatterns)
+	// We don't synthesize events for the initial watch
+	return f.watchRecursively(root, excludePatterns, dontSynthesizeEvents)
 }
 
 func GetPlatformSpecificWatcher(logger hclog.Logger) (*fsNotifyBackend, error) {
