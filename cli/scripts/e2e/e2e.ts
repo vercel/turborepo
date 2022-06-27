@@ -189,9 +189,13 @@ function runSmokeTests<T>(
       }, `Could not read cached log file from cache ${cachedLogFilePath}`);
       assert.ok(text.includes("testing c"), "Contains correct output");
 
-      const tracingBuf = fs.readFileSync(path.join(repo.root, "chrometracing"));
+      const root = options.cwd ? options.cwd : repo.root;
+      const tracingFile = path.join(root, "chrometracing");
+      const tracingBuf = fs.readFileSync(tracingFile);
       // ensure it doesn't throw
       JSON.parse(tracingBuf.toString("utf-8"));
+      // don't throw off hashes for later tests
+      fs.unlinkSync(tracingFile);
     }
   );
 
@@ -227,7 +231,6 @@ function runSmokeTests<T>(
       repo.commitFiles({
         [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
       });
-
       const sinceCommandOutputNoCache = getCommandOutputAsArray(
         repo.turbo(
           "run",

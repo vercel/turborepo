@@ -16,8 +16,6 @@
 // loaded into chrome://tracing.
 package chrometracing
 
-// TODO: use upstream when https://github.com/google/chrometracing/pull/8 is merged
-
 import (
 	"encoding/json"
 	"fmt"
@@ -226,22 +224,4 @@ func releaseTid(t uint64) {
 	if tids.next > int(t) {
 		tids.next = int(t)
 	}
-}
-
-// Close overwrites the trailing (,\n) with (]\n) and closes the trace file.
-func Close() error {
-	trace.fileMu.Lock()
-	defer trace.fileMu.Unlock()
-	// Seek backwards two bytes (,\n)
-	if _, err := trace.file.Seek(-2, 1); err != nil {
-		return err
-	}
-	// Write 1 byte, ']', leaving the trailing '\n' in place
-	if _, err := trace.file.Write([]byte{']'}); err != nil {
-		return err
-	}
-	if err := trace.file.Close(); err != nil {
-		return err
-	}
-	return nil
 }
