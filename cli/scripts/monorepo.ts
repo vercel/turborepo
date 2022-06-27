@@ -306,7 +306,11 @@ fs.copyFileSync(
     args?: readonly string[],
     options?: execa.SyncOptions<string>
   ) {
-    return execa.sync(turboPath, [command, ...(args || [])], {
+    const resolvedArgs = [...args];
+    if (process.env.TURBO_USE_DAEMON == "1" && command === "run") {
+      resolvedArgs.push("--experimental-use-daemon");
+    }
+    return execa.sync(turboPath, [command, ...resolvedArgs], {
       cwd: this.root,
       shell: true,
       ...options,
