@@ -63,7 +63,7 @@ func FileExists(filename string) bool {
 // CopyFile copies a file from 'from' to 'to', with an attempt to perform a copy & rename
 // to avoid chaos if anything goes wrong partway.
 func CopyFile(from *LstatCachedFile, to string) error {
-	fromFile, err := os.Open(from.Path.ToString())
+	fromFile, err := from.Path.Open()
 	if err != nil {
 		fromType, err := from.GetType()
 		isSymlink := err == nil && fromType == os.ModeSymlink

@@ -145,7 +145,7 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
 }
 
-// Symlink implements os.Symlink(target, ap) for absolute path
+// Symlink implements os.Symlink(target) for absolute path
 func (ap AbsolutePath) Symlink(target string) error {
 	return os.Symlink(target, ap.asString())
 }
@@ -155,7 +155,7 @@ func (ap AbsolutePath) Readlink() (string, error) {
 	return os.Readlink(ap.asString())
 }
 
-// Link implements os.Link(target, ap) for absolute path
+// Link implements os.Link(target) for absolute path
 func (ap AbsolutePath) Link(target string) error {
 	return os.Link(ap.asString(), target)
 }
