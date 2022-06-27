@@ -24,26 +24,38 @@ type FileWatchClient interface {
 	OnFileWatchClosed()
 }
 
+// FileEvent is an enum covering the kinds of things that can happen
+// to files that we might be interested in
 type FileEvent int
 
 const (
+	// FileAdded - this is a new file
 	FileAdded FileEvent = iota
+	// FileDeleted - this file has been removed
 	FileDeleted
+	// FileModified - this file has been changed in some way
 	FileModified
+	// FileRenamed - a file's name has changed
 	FileRenamed
+	// FileOther - some other backend-specific event has happen
 	FileOther
 )
 
 var (
+	// ErrFilewatchingClosed is returned when filewatching has been closed
 	ErrFilewatchingClosed = errors.New("Close() has already been called for filewatching")
-	ErrFailedToStart      = errors.New("filewatching failed to start")
+	// ErrFailedToStart is returned when filewatching fails to start up
+	ErrFailedToStart = errors.New("filewatching failed to start")
 )
 
+// Event is the backend-independent information about a file change
 type Event struct {
 	Path      fs.AbsolutePath
 	EventType FileEvent
 }
 
+// Backend is the interface that describes what an underlying filesystem watching backend
+// must provide.
 type Backend interface {
 	AddRoot(root fs.AbsolutePath, excludePatterns ...string) error
 	Events() <-chan Event
@@ -56,7 +68,7 @@ type Backend interface {
 // We currently ignore .git and top-level node_modules. We can revisit
 // if necessary.
 type FileWatcher struct {
-	watcher Backend
+	backend Backend
 
 	logger         hclog.Logger
 	repoRoot       fs.AbsolutePath
@@ -68,39 +80,44 @@ type FileWatcher struct {
 }
 
 // New returns a new FileWatcher instance
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath, watcher Backend) *FileWatcher {
+func New(logger hclog.Logger, repoRoot fs.AbsolutePath, backend Backend) *FileWatcher {
 	excludes := make([]string, len(_ignores))
 	for i, ignore := range _ignores {
 		excludes[i] = filepath.ToSlash(repoRoot.Join(ignore).ToString() + "/**")
 	}
 	excludePattern := "{" + strings.Join(excludes, ",") + "}"
 	return &FileWatcher{
-		watcher:        watcher,
+		backend:        backend,
 		logger:         logger,
 		repoRoot:       repoRoot,
 		excludePattern: excludePattern,
 	}
 }
 
+// Close shuts down filewatching
 func (fw *FileWatcher) Close() error {
-	return fw.watcher.Close()
+	return fw.backend.Close()
 }
 
 // Start recursively adds all directories from the repo root, redacts the excluded ones,
 // then fires off a goroutine to respond to filesystem events
 func (fw *FileWatcher) Start() error {
-	if err := fw.watcher.AddRoot(fw.repoRoot, fw.excludePattern); err != nil {
+	if err := fw.backend.AddRoot(fw.repoRoot, fw.excludePattern); err != nil {
 		return err
 	}
-	if err := fw.watcher.Start(); err != nil {
+	if err := fw.backend.Start(); err != nil {
 		return err
 	}
 	go fw.watch()
 	return nil
 }
 
+// AddRoot registers the root a filesystem hierarchy to be watched for changes. Events are *not*
+// fired for existing files when AddRoot is called, only for subsequent changes.
+// NOTE: if it appears helpful, we could change this behavior so that we provide a stream of initial
+// events.
 func (fw *FileWatcher) AddRoot(root fs.AbsolutePath, excludePatterns ...string) error {
-	return fw.watcher.AddRoot(root, excludePatterns...)
+	return fw.backend.AddRoot(root, excludePatterns...)
 }
 
 // watch is the main file-watching loop. Watching is not recursive,
@@ -109,7 +126,7 @@ func (fw *FileWatcher) watch() {
 outer:
 	for {
 		select {
-		case ev, ok := <-fw.watcher.Events():
+		case ev, ok := <-fw.backend.Events():
 			if !ok {
 				fw.logger.Info("Events channel closed. Exiting watch loop")
 				break outer
@@ -119,7 +136,7 @@ outer:
 				client.OnFileWatchEvent(ev)
 			}
 			fw.clientsMu.RUnlock()
-		case err, ok := <-fw.watcher.Errors():
+		case err, ok := <-fw.backend.Errors():
 			if !ok {
 				fw.logger.Info("Errors channel closed. Exiting watch loop")
 				break outer

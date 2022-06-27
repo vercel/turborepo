@@ -100,7 +100,7 @@ func TestFileWatching(t *testing.T) {
 	//     child/
 	//     sibling/
 
-	watcher, err := GetPlatformSpecificWatcher(logger)
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()

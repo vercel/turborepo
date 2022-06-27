@@ -17,6 +17,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+// watchAddMode is used to indicate whether watchRecursively should synthesize events
+// for existing files.
 type watchAddMode int
 
 const (
@@ -190,7 +192,9 @@ func (f *fsNotifyBackend) AddRoot(root fs.AbsolutePath, excludePatterns ...strin
 	return f.watchRecursively(root, excludePatterns, dontSynthesizeEvents)
 }
 
-func GetPlatformSpecificWatcher(logger hclog.Logger) (*fsNotifyBackend, error) {
+// getPlatformSpecificBackend returns a filewatching backend appropriate for the OS we are
+// running on.
+func GetPlatformSpecificBackend(logger hclog.Logger) (Backend, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err

@@ -68,7 +68,7 @@ func New(serverName string, logger hclog.Logger, repoRoot fs.AbsolutePath, turbo
 	if err != nil {
 		return nil, err
 	}
-	watcher, err := filewatcher.GetPlatformSpecificWatcher(logger)
+	watcher, err := filewatcher.GetPlatformSpecificBackend(logger)
 	if err != nil {
 		return nil, err
 	}

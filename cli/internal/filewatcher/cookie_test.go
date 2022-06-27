@@ -18,7 +18,7 @@ func TestWaitForCookie(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 5*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := GetPlatformSpecificWatcher(logger)
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
@@ -39,7 +39,7 @@ func TestWaitForCookieAfterClose(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 5*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := GetPlatformSpecificWatcher(logger)
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
@@ -62,7 +62,7 @@ func TestWaitForCookieTimeout(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 10*time.Millisecond)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := GetPlatformSpecificWatcher(logger)
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
@@ -83,7 +83,7 @@ func TestWaitForCookieWithError(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 10*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := GetPlatformSpecificWatcher(logger)
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()

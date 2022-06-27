@@ -187,7 +187,9 @@ func toFileEvent(flags fsevents.EventFlags) FileEvent {
 	return FileOther
 }
 
-func GetPlatformSpecificWatcher(logger hclog.Logger) (*fseventsBackend, error) {
+// GetPlatformSpecificBackend returns a filewatching backend appropriate for the OS we are
+// running on.
+func GetPlatformSpecificBackend(logger hclog.Logger) (Backend, error) {
 	return &fseventsBackend{
 		events: make(chan Event),
 		errors: make(chan error),
