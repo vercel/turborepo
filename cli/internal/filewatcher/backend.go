@@ -192,7 +192,7 @@ func (f *fsNotifyBackend) AddRoot(root fs.AbsolutePath, excludePatterns ...strin
 	return f.watchRecursively(root, excludePatterns, dontSynthesizeEvents)
 }
 
-// getPlatformSpecificBackend returns a filewatching backend appropriate for the OS we are
+// GetPlatformSpecificBackend returns a filewatching backend appropriate for the OS we are
 // running on.
 func GetPlatformSpecificBackend(logger hclog.Logger) (Backend, error) {
 	watcher, err := fsnotify.NewWatcher()
