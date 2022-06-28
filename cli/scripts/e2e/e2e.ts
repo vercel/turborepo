@@ -45,6 +45,7 @@ for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   repo.addPackage("b");
   repo.addPackage("c");
   repo.linkPackages();
+  repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient);
   const sub = new Monorepo("in-subdirectory");
   sub.init(npmClient, basicPipeline, "js");
