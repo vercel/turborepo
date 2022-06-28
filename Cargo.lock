@@ -456,6 +456,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb4a24b1aaf0fd0ce8b45161144d6f42cd91677fd5940fd431183eb023b3a2b8"
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2957,6 +2963,7 @@ dependencies = [
  "lazy_static",
  "mopa",
  "serde",
+ "thiserror",
  "tokio",
  "turbo-tasks-build",
  "turbo-tasks-macros",
@@ -2999,6 +3006,7 @@ name = "turbo-tasks-macros"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "convert_case",
  "pmutil",
  "proc-macro2",
  "quote",
