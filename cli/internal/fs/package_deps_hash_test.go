@@ -221,6 +221,7 @@ func TestGetPackageDeps(t *testing.T) {
 	// <root>/
 	//   my-pkg/
 	//     committed-file
+	//     deleted-file
 	//     uncommitted-file <- new file not added to git
 
 	repoRoot := AbsolutePathFromUpstream(t.TempDir())
@@ -229,6 +230,9 @@ func TestGetPackageDeps(t *testing.T) {
 	err := committedFilePath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
 	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+	deletedFilePath := myPkgDir.Join("deleted-file")
+	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
 	cmd := exec.Command("git", "init", ".")
 	cmd.Dir = repoRoot.ToString()
@@ -242,6 +246,8 @@ func TestGetPackageDeps(t *testing.T) {
 	cmd.Dir = repoRoot.ToString()
 	err = cmd.Run()
 	assert.NilError(t, err, "Run")
+	err = deletedFilePath.Remove()
+	assert.NilError(t, err, "Remove")
 	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
 	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
