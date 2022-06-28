@@ -242,10 +242,12 @@ func TestGetPackageDeps(t *testing.T) {
 	cmd.Dir = repoRoot.ToString()
 	err = cmd.Run()
 	assert.NilError(t, err, "Run")
-	cmd = exec.Command("git", "commit", "-m foo")
+	cmd = exec.Command("git", "commit", "-m", "foo")
 	cmd.Dir = repoRoot.ToString()
-	err = cmd.Run()
-	assert.NilError(t, err, "Run")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git commit failed: %v %v", err, string(out))
+	}
 	err = deletedFilePath.Remove()
 	assert.NilError(t, err, "Remove")
 	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
