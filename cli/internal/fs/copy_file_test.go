@@ -16,7 +16,7 @@ func TestCopyFile(t *testing.T) {
 
 	// The src file doesn't exist, will error.
 	err := CopyFile(from, destFilePath.ToString())
-	assert.ErrorContains(t, err, "no such file or directory", "Source file doesn't exist, should error.")
+	assert.ErrorType(t, err, &os.PathError{}, "Source file doesn't exist, should error.")
 
 	// Create the src file.
 	srcFile, err := srcFilePath.Create()
@@ -64,7 +64,7 @@ func TestCopyFile(t *testing.T) {
 
 	// Confirm that it didn't create anything.
 	_, err = symlinkDestPath.Lstat()
-	assert.ErrorContains(t, err, "no such file or directory", "Copying a broken symlink should mean the destination doesn't exist")
+	assert.ErrorType(t, err, &os.PathError{}, "Copying a broken symlink should mean the destination doesn't exist.")
 }
 
 func TestCopyOrLinkFile(t *testing.T) {
