@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -212,6 +213,78 @@ func Test_getTraversePath(t *testing.T) {
 				t.Errorf("getTraversePath() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func requireGitCmd(t *testing.T, repoRoot AbsolutePath, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoRoot.ToString()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git commit failed: %v %v", err, string(out))
+	}
+}
+
+func TestGetPackageDeps(t *testing.T) {
+	// Directory structure:
+	// <root>/
+	//   my-pkg/
+	//     committed-file
+	//     deleted-file
+	//     uncommitted-file <- new file not added to git
+
+	repoRoot := AbsolutePathFromUpstream(t.TempDir())
+	myPkgDir := repoRoot.Join("my-pkg")
+	committedFilePath := myPkgDir.Join("committed-file")
+	err := committedFilePath.EnsureDir()
+	assert.NilError(t, err, "EnsureDir")
+	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+	deletedFilePath := myPkgDir.Join("deleted-file")
+	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
+	assert.NilError(t, err, "WriteFile")
+	requireGitCmd(t, repoRoot, "init", ".")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
+	requireGitCmd(t, repoRoot, "add", ".")
+	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
+	err = deletedFilePath.Remove()
+	assert.NilError(t, err, "Remove")
+	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
+	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+
+	tests := []struct {
+		opts     *PackageDepsOptions
+		expected map[turbopath.AnchoredUnixPath]string
+	}{
+		{
+			opts: &PackageDepsOptions{
+				PackagePath: "my-pkg",
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"uncommitted-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+	}
+	for _, tt := range tests {
+		got, err := GetPackageDeps(repoRoot, tt.opts)
+		if err != nil {
+			t.Errorf("GetPackageDeps got error %v", err)
+			continue
+		}
+		assert.DeepEqual(t, got, tt.expected)
 	}
 }
 
