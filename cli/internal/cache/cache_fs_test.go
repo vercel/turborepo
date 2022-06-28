@@ -88,6 +88,8 @@ func TestPut(t *testing.T) {
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
 
 	files := []string{
+		filepath.Join(src, filepath.FromSlash("/")),            // src
+		filepath.Join(src, filepath.FromSlash("child/")),       // childDir
 		filepath.Join(src, filepath.FromSlash("child/a")),      // aPath,
 		filepath.Join(src, "b"),                                // bPath,
 		filepath.Join(src, filepath.FromSlash("child/link")),   // srcLinkPath,
