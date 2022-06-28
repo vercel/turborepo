@@ -216,6 +216,16 @@ func Test_getTraversePath(t *testing.T) {
 	}
 }
 
+func requireGitCmd(t *testing.T, repoRoot AbsolutePath, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoRoot.ToString()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git commit failed: %v %v", err, string(out))
+	}
+}
+
 func TestGetPackageDeps(t *testing.T) {
 	// Directory structure:
 	// <root>/
@@ -234,20 +244,11 @@ func TestGetPackageDeps(t *testing.T) {
 	deletedFilePath := myPkgDir.Join("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
-	cmd := exec.Command("git", "init", ".")
-	cmd.Dir = repoRoot.ToString()
-	err = cmd.Run()
-	assert.NilError(t, err, "Run")
-	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = repoRoot.ToString()
-	err = cmd.Run()
-	assert.NilError(t, err, "Run")
-	cmd = exec.Command("git", "commit", "-m", "foo", "--author=\"Test <test@example.com>\"")
-	cmd.Dir = repoRoot.ToString()
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git commit failed: %v %v", err, string(out))
-	}
+	requireGitCmd(t, repoRoot, "init", ".")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
+	requireGitCmd(t, repoRoot, "add", ".")
+	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
 	err = deletedFilePath.Remove()
 	assert.NilError(t, err, "Remove")
 	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
