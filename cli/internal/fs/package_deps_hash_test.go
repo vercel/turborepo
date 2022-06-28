@@ -242,7 +242,7 @@ func TestGetPackageDeps(t *testing.T) {
 	cmd.Dir = repoRoot.ToString()
 	err = cmd.Run()
 	assert.NilError(t, err, "Run")
-	cmd = exec.Command("git", "commit", "-m", "foo")
+	cmd = exec.Command("git", "commit", "-m", "foo", "--author=\"Test <test@example.com>\"")
 	cmd.Dir = repoRoot.ToString()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
