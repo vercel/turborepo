@@ -138,13 +138,18 @@ func TestPut(t *testing.T) {
 	}
 
 	dstLinkPath := filepath.Join(dstCachePath, src, "child", "link")
-	target, err := os.Lstat(dstLinkPath)
-	assert.NilError(t, err, "Lstat")
-	assert.Check(t, target.Mode().IsRegular(), "the cached file is a regular file")
+	target, err := os.Readlink(dstLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != linkTarget {
+		t.Errorf("Readlink got %v, want %v", target, linkTarget)
+	}
 
 	dstBrokenLinkPath := filepath.Join(dstCachePath, src, "child", "broken")
-	_, err = os.Lstat(dstBrokenLinkPath)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	target, err = os.Readlink(dstBrokenLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != "missing" {
+		t.Errorf("Readlink got %v, want missing", target)
+	}
 }
 
 func TestFetch(t *testing.T) {
@@ -248,9 +253,11 @@ func TestFetch(t *testing.T) {
 	}
 
 	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
-	dstLstat, dstLstErr := os.Lstat(dstLinkPath)
-	assert.NilError(t, dstLstErr, "Lstat")
-	assert.Check(t, dstLstat.Mode().IsRegular(), "the cached file is a regular file")
+	target, err := os.Readlink(dstLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != linkTarget {
+		t.Errorf("Readlink got %v, want %v", target, linkTarget)
+	}
 
 	// We currently don't restore broken symlinks. This is probably a bug
 	dstBrokenLinkPath := filepath.Join(dstOutputPath, "child", "broken")

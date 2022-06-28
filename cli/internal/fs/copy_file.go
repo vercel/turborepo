@@ -14,24 +14,23 @@ import (
 // CopyOrLinkFile either copies or hardlinks a file based on the link argument.
 // Falls back to a copy if link fails and fallback is true.
 func CopyOrLinkFile(from *LstatCachedFile, to string, link bool, fallback bool) error {
-	if link {
-		fromMode, err := from.GetMode()
+	fromMode, err := from.GetMode()
+	if err != nil {
+		return err
+	}
+	if (fromMode & os.ModeSymlink) != 0 {
+		// Create an equivalent symlink in the new location.
+		dest, err := from.Path.Readlink()
 		if err != nil {
 			return err
 		}
-		if (fromMode & os.ModeSymlink) != 0 {
-			// Don't try to hard-link to a symlink, that doesn't work reliably across all platforms.
-			// Instead recreate an equivalent symlink in the new location.
-			dest, err := from.Path.Readlink()
-			if err != nil {
-				return err
-			}
-			// Make sure the link we're about to create doesn't already exist
-			if err := os.Remove(to); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			return os.Symlink(dest, to)
+		// Make sure the link we're about to create doesn't already exist
+		if err := os.Remove(to); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
+		return os.Symlink(dest, to)
+	}
+	if link {
 		if err := from.Path.Link(to); err == nil || !fallback {
 			return err
 		}
