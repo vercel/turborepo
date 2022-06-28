@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bufio"
 	gocontext "context"
 	"encoding/json"
 	"fmt"
@@ -689,8 +690,30 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		}
 	}
 	defer turboCache.Shutdown()
+	concurrentUI := &cli.ConcurrentUi{Ui: r.ui}
+	logCh := make(chan string)
+	go func() {
+		for msg := range logCh {
+			concurrentUI.Output(msg)
+		}
+	}()
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
+	rs.Opts.runcacheOpts.LogReplayer = func(logger hclog.Logger, _ cli.Ui, logFileName fs.AbsolutePath) {
+		logger.Debug("start replaying logs")
+		f, err := logFileName.Open()
+		if err != nil {
+			concurrentUI.Warn(fmt.Sprintf("error reading logs: %v", err))
+			logger.Error(fmt.Sprintf("error reading logs: %v", err.Error()))
+		}
+		defer func() { _ = f.Close() }()
+		scan := bufio.NewScanner(f)
+		for scan.Scan() {
+			//output.Output(string(scan.Bytes())) //Writing to Stdout
+			logCh <- string(scan.Bytes())
+		}
+		logger.Debug("finish replaying logs")
+	}
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	argSeparator := []string{"--"}
 	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
@@ -709,7 +732,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		colorCache:     colorCache,
 		runState:       runState,
 		rs:             rs,
-		ui:             &cli.ConcurrentUi{Ui: r.ui},
+		ui:             concurrentUI,
 		turboCache:     turboCache,
 		runCache:       runCache,
 		logger:         r.config.Logger,
