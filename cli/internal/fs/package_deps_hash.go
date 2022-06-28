@@ -25,16 +25,17 @@ type PackageDepsOptions struct {
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
+	pkgPath := rootPath.Join(p.PackagePath)
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
 	if len(p.InputPatterns) == 0 {
-		gitLsTreeOutput, err := gitLsTree(rootPath.Join(p.PackagePath))
+		gitLsTreeOutput, err := gitLsTree(pkgPath)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
 		result = gitLsTreeOutput
 	} else {
-		gitLsFilesOutput, err := gitLsFiles(rootPath.Join(p.PackagePath), p.InputPatterns)
+		gitLsFilesOutput, err := gitLsFiles(pkgPath, p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -42,22 +43,22 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 	}
 
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(rootPath.Join(p.PackagePath), p.InputPatterns)
+	// The paths returned from this call are anchored at the package directory
+	gitStatusOutput, err := gitStatus(pkgPath, p.InputPatterns)
 	if err != nil {
 		return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
 	}
 
-	var filesToHash []turbopath.AnchoredUnixPath
+	var filesToHash []turbopath.AnchoredSystemPath
 	for filePath, status := range gitStatusOutput {
 		if status.isDelete() {
 			delete(result, filePath)
 		} else {
-			filesToHash = append(filesToHash, filePath)
+			filesToHash = append(filesToHash, filePath.ToSystemPath())
 		}
 	}
 
-	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
-	hashes, err := gitHashObject(convertedRootPath, turbopath.AnchoredUnixPathArray(filesToHash).ToSystemPathArray())
+	hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToString()), filesToHash)
 	if err != nil {
 		return nil, err
 	}
