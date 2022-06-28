@@ -9,6 +9,64 @@ import (
 	"gotest.tools/v3/fs"
 )
 
+func TestCopyFile(t *testing.T) {
+	srcFilePath := AbsolutePath(filepath.Join(t.TempDir(), "src"))
+	destFilePath := AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	from := &LstatCachedFile{Path: srcFilePath}
+
+	// The src file doesn't exist, will error.
+	err := CopyFile(from, destFilePath.ToString())
+	assert.ErrorContains(t, err, "no such file or directory", "Source file doesn't exist, should error.")
+
+	// Create the src file.
+	srcFile, err := srcFilePath.Create()
+	assert.NilError(t, err, "Create")
+	_, err = srcFile.WriteString("src")
+	assert.NilError(t, err, "WriteString")
+	assert.NilError(t, srcFile.Close(), "Close")
+
+	// Copy the src to the dest.
+	err = CopyFile(from, destFilePath.ToString())
+	assert.NilError(t, err, "src exists dest does not, should not error.")
+
+	// Now test for symlinks.
+	symlinkSrcPath := AbsolutePath(filepath.Join(t.TempDir(), "symlink"))
+	symlinkTargetPath := AbsolutePath(filepath.Join(t.TempDir(), "target"))
+	symlinkDestPath := AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	fromSymlink := &LstatCachedFile{Path: symlinkSrcPath}
+
+	// Create the symlink target.
+	symlinkTargetFile, err := symlinkTargetPath.Create()
+	assert.NilError(t, err, "Create")
+	_, err = symlinkTargetFile.WriteString("Target")
+	assert.NilError(t, err, "WriteString")
+	assert.NilError(t, symlinkTargetFile.Close(), "Close")
+
+	// Link things up.
+	err = symlinkSrcPath.Symlink(symlinkTargetPath.ToString())
+	assert.NilError(t, err, "Symlink")
+
+	// Run the test.
+	err = CopyFile(fromSymlink, symlinkDestPath.ToString())
+	assert.NilError(t, err, "Copying a valid symlink does not error.")
+
+	// Break the symlink.
+	err = symlinkTargetPath.Remove()
+	assert.NilError(t, err, "breaking the symlink")
+
+	// Remove the existing copy.
+	err = symlinkDestPath.Remove()
+	assert.NilError(t, err, "existing copy is removed")
+
+	// Try copying the now-broken symlink.
+	err = CopyFile(fromSymlink, symlinkDestPath.ToString())
+	assert.NilError(t, err, "Broken symlink, should not error.")
+
+	// Confirm that it didn't create anything.
+	_, err = symlinkDestPath.Lstat()
+	assert.ErrorContains(t, err, "no such file or directory", "Copying a broken symlink should mean the destination doesn't exist")
+}
+
 func TestCopyOrLinkFile(t *testing.T) {
 	// Directory layout:
 	//
