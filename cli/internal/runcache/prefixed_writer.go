@@ -1,7 +1,6 @@
 package runcache
 
 import (
-	"bytes"
 	"io"
 )
 
@@ -11,20 +10,23 @@ type prefixedWriter struct {
 }
 
 func (writer prefixedWriter) Write(payload []byte) (n int, err error) {
-	buf := bytes.NewBuffer([]byte{})
 	newLine := true
 	for _, data := range payload {
 		if newLine {
-			buf.WriteString(writer.prefix)
+			if n, err = writer.underlyingWriter.Write([]byte(writer.prefix)); err != nil {
+				return n, err
+			}
 			newLine = false
 		}
 
-		buf.WriteByte(data)
+		if n, err = writer.underlyingWriter.Write([]byte{data}); err != nil {
+			return n, err
+		}
 
 		if data == '\n' {
 			newLine = true
 		}
 	}
 
-	return writer.underlyingWriter.Write(buf.Bytes())
+	return n, err
 }
