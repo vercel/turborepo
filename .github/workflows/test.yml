@@ -14,9 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    name: test - ${{ matrix.os }}
+        os:
+          - name: ubuntu-latest
+            nextest: linux
+          - name: macos-latest
+            nextest: mac
+          - name: windows-latest
+            nextest: windows-tar
+    runs-on: ${{ matrix.os.name }}
+    name: test - ${{ matrix.os.name }}
 
     steps:
       - uses: actions/checkout@v3
@@ -24,12 +30,6 @@ jobs:
       - uses: Swatinem/rust-cache@v1
         with:
           key: test
-
-      - name: Run cargo build tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --tests
 
       - name: Setup node
         uses: actions/setup-node@v3
@@ -39,14 +39,22 @@ jobs:
             crates/turbopack/tests/node-file-trace/yarn.lock
           node-version: 16
 
-      - run: yarn install --frozen-lockfile
+      - name: install Node.js dependencies
+        run: |
+          yarn install --frozen-lockfile
         working-directory: crates/turbopack/tests/node-file-trace
+        if: matrix.os.name != 'windows-latest'
+
+      - name: install Node.js dependencies
+        run: |
+          yarn install --frozen-lockfile --ignore-scripts
+          yarn node-gyp install
+          yarn install --force
+        working-directory: crates/turbopack/tests/node-file-trace
+        if: matrix.os.name == 'windows-latest'
 
       - name: Install nextest
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-nextest
+        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1

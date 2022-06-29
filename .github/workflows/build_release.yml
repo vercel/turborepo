@@ -3,6 +3,7 @@ name: Build release
 on:
   push:
     branches: [main]
+  pull_request:
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,7 +28,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target=x86_64-unknown-linux-musl
+          args: --release -p node-file-trace --target=x86_64-unknown-linux-musl
 
       - uses: actions/upload-artifact@v3
         with:
