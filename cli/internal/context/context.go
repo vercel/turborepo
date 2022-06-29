@@ -125,13 +125,13 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.AbsolutePath) Option {
+func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, rootPackageJSON *fs.PackageJSON, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
 		rootpath := config.Cwd.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if packageManager, err := packagemanager.GetPackageManager(config.Cwd, config.RootPackageJSON); err != nil {
+		if packageManager, err := packagemanager.GetPackageManager(config.Cwd, rootPackageJSON); err != nil {
 			return err
 		} else {
 			c.PackageManager = packageManager
@@ -146,7 +146,7 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 			c.Lockfile = lockfile
 		}
 
-		if err := c.resolveWorkspaceRootDeps(config.RootPackageJSON); err != nil {
+		if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
 			// TODO(Gaspar) was this the intended return error?
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
@@ -155,7 +155,7 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 		// construction of the package-dependency graph
 		globalHash, err := calculateGlobalHash(
 			config.Cwd,
-			config.RootPackageJSON,
+			rootPackageJSON,
 			turboJSON.Pipeline,
 			turboJSON.GlobalDependencies,
 			c.PackageManager,
@@ -206,11 +206,11 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 		// Resolve dependencies for the root package. We override the vertexName in the graph
 		// for the root package, since it can have an arbitrary name. We need it to have our
 		// RootPkgName so that we can identify it as the root later on.
-		err = c.populateTopologicGraphForPackageJSON(config.RootPackageJSON, rootpath, util.RootPkgName)
+		err = c.populateTopologicGraphForPackageJSON(rootPackageJSON, rootpath, util.RootPkgName)
 		if err != nil {
 			return fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 		}
-		c.PackageInfos[util.RootPkgName] = config.RootPackageJSON
+		c.PackageInfos[util.RootPkgName] = rootPackageJSON
 
 		return nil
 	}

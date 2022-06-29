@@ -205,13 +205,18 @@ type run struct {
 
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, r.config.RootPackageJSON)
+	packageJSONPath := r.config.Cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
+	if err != nil {
+		return fmt.Errorf("failed to read package.json: %w", err)
+	}
+	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, rootPackageJSON)
 	if err != nil {
 		return err
 	}
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
-	pkgDepGraph, err := context.New(context.WithGraph(r.config, turboJSON, r.opts.cacheOpts.Dir))
+	pkgDepGraph, err := context.New(context.WithGraph(r.config, turboJSON, rootPackageJSON, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}
