@@ -81,14 +81,14 @@ build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 	cd $(ROOT_DIR)/../packages/create-turbo && npm run build
 	cd $(ROOT_DIR)/../packages/turbo-codemod && npm run build
 
-prepublish: clean-demo
+prepublish:
 	make -j3 bench/turbo test-go lint-go
 
-publish: build prepublish
-	# @test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-master branch `git rev-parse --abbrev-ref HEAD`" && false)
+publish: clean prepublish build
+	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@echo "Checking for unpushed commits..." && git fetch
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
-	rm -rf npm && git checkout npm
+
 	@echo Enter one-time password:
 	cd $(ROOT_DIR)/npm/turbo-android-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	cd $(ROOT_DIR)/npm/turbo-darwin-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
@@ -144,20 +144,7 @@ clean: clean-go clean-build clean-demo
 
 clean-build:
 	rm -f turbo
-	rm -f npm/turbo-android-arm64/bin/turbo
-	rm -f npm/turbo-darwin-64/bin/turbo
-	rm -f npm/turbo-darwin-arm64/bin/turbo
-	rm -f npm/turbo-freebsd-64/bin/turbo
-	rm -f npm/turbo-freebsd-arm64/bin/turbo
-	rm -f npm/turbo-linux-32/bin/turbo
-	rm -f npm/turbo-linux-64/bin/turbo
-	rm -f npm/turbo-linux-arm/bin/turbo
-	rm -f npm/turbo-linux-arm64/bin/turbo
-	rm -f npm/turbo-linux-mips64le/bin/turbo
-	rm -f npm/turbo-linux-ppc64le/bin/turbo
-	rm -f npm/turbo-windows-32/turbo.exe
-	rm -f npm/turbo-windows-64/turbo.exe
-	rm -f npm/turbo-windows-arm64/turbo.exe
+	rm -rf npm && git checkout npm
 
 clean-demo:
 	rm -rf node_modules
