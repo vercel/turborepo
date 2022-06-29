@@ -17,9 +17,9 @@ type SelectedPackages struct {
 	unusedFilters []*TargetSelector
 }
 
-// PackagesChangedSince is the signature of a function to provide the set of
+// PackagesChangedInRange is the signature of a function to provide the set of
 // packages that have changed in a particular range of git refs.
-type PackagesChangedSince = func(since string, toCommit string) (util.Set, error)
+type PackagesChangedInRange = func(fromRef string, toRef string) (util.Set, error)
 
 type Resolver struct {
 	Graph        *dag.AcyclicGraph
@@ -27,7 +27,7 @@ type Resolver struct {
 	// SCM                  scm.SCM
 	Cwd string
 	// HasGlobalChange      bool
-	PackagesChangedSince PackagesChangedSince
+	PackagesChangedInRange PackagesChangedInRange
 }
 
 // GetPackagesFromPatterns compiles filter patterns and applies them, returning
@@ -194,10 +194,10 @@ func (r *Resolver) filterGraphWithSelector(selector *TargetSelector) (util.Set, 
 func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, error) {
 	entryPackages := make(util.Set)
 	selectorWasUsed := false
-	if selector.diffBase != "" {
+	if selector.fromRef != "" {
 		// get changed packaged
 		selectorWasUsed = true
-		changedPkgs, err := r.PackagesChangedSince(selector.diffBase, selector.DiffHead())
+		changedPkgs, err := r.PackagesChangedInRange(selector.fromRef, selector.getToRef())
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +268,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 // match a selector
 func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Set, error) {
 	// foreach package that matches parentDir && namePattern, check if any dependency is in changed packages
-	changedPkgs, err := r.PackagesChangedSince(selector.diffBase, selector.DiffHead())
+	changedPkgs, err := r.PackagesChangedInRange(selector.fromRef, selector.getToRef())
 	if err != nil {
 		return nil, err
 	}

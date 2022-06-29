@@ -21,7 +21,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo",
 			args{"foo", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -35,7 +35,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo...",
 			args{"foo...", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -49,7 +49,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...foo",
 			args{"...foo", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -63,7 +63,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...foo...",
 			args{"...foo...", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -77,7 +77,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo^...",
 			args{"foo^...", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         true,
 				includeDependencies: true,
@@ -91,7 +91,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...^foo",
 			args{"...^foo", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         true,
 				includeDependencies: false,
@@ -105,7 +105,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"./foo",
 			args{"./foo", "./"},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -119,7 +119,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"../foo",
 			args{"../foo", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -133,7 +133,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...{./foo}",
 			args{"...{./foo}", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -147,7 +147,7 @@ func TestParseTargetSelector(t *testing.T) {
 			".",
 			args{".", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -161,7 +161,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"..",
 			args{"..", "."},
 			TargetSelector{
-				diffBase:            "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -175,7 +175,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"[master]",
 			args{"[master]", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -189,8 +189,8 @@ func TestParseTargetSelector(t *testing.T) {
 			"[from...to]",
 			args{"[from...to]", "."},
 			TargetSelector{
-				diffBase:         "from",
-				diffHeadOverride: "to",
+				fromRef:       "from",
+				toRefOverride: "to",
 			},
 			false,
 		},
@@ -198,7 +198,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"{foo}[master]",
 			args{"{foo}[master]", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -212,7 +212,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"pattern{foo}[master]",
 			args{"pattern{foo}[master]", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -226,7 +226,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"[master]...",
 			args{"[master]...", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -240,7 +240,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...[master]",
 			args{"...[master]", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -254,7 +254,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...[master]...",
 			args{"...[master]...", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -268,8 +268,8 @@ func TestParseTargetSelector(t *testing.T) {
 			"...[from...to]...",
 			args{"...[from...to]...", "."},
 			TargetSelector{
-				diffBase:            "from",
-				diffHeadOverride:    "to",
+				fromRef:             "from",
+				toRefOverride:       "to",
 				includeDependencies: true,
 				includeDependents:   true,
 			},
@@ -279,7 +279,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo...[master]",
 			args{"foo...[master]", "."},
 			TargetSelector{
-				diffBase:          "master",
+				fromRef:           "master",
 				namePattern:       "foo",
 				matchDependencies: true,
 			},
@@ -289,7 +289,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo...[master]...",
 			args{"foo...[master]...", "."},
 			TargetSelector{
-				diffBase:            "master",
+				fromRef:             "master",
 				namePattern:         "foo",
 				matchDependencies:   true,
 				includeDependencies: true,
@@ -300,7 +300,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"{foo}...[master]",
 			args{"{foo}...[master]", "."},
 			TargetSelector{
-				diffBase:          "master",
+				fromRef:           "master",
 				parentDir:         "foo",
 				matchDependencies: true,
 			},

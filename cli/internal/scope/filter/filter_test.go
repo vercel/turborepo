@@ -411,19 +411,19 @@ func Test_SCM(t *testing.T) {
 		Graph:        graph,
 		PackageInfos: packageJSONs,
 		Cwd:          root,
-		PackagesChangedSince: func(since string, toCommit string) (util.Set, error) {
-			if since == "HEAD~1" && toCommit == "HEAD" {
+		PackagesChangedInRange: func(fromRef string, toRef string) (util.Set, error) {
+			if fromRef == "HEAD~1" && toRef == "HEAD" {
 				return head1Changed, nil
-			} else if since == "HEAD~2" && toCommit == "HEAD" {
+			} else if fromRef == "HEAD~2" && toRef == "HEAD" {
 				union := head1Changed.Copy()
 				for val := range head2Changed {
 					union.Add(val)
 				}
 				return union, nil
-			} else if since == "HEAD~2" && toCommit == "HEAD~1" {
+			} else if fromRef == "HEAD~2" && toRef == "HEAD~1" {
 				return head2Changed, nil
 			}
-			panic(fmt.Sprintf("unsupported commit range %v...%v", since, toCommit))
+			panic(fmt.Sprintf("unsupported commit range %v...%v", fromRef, toRef))
 		},
 	}
 
@@ -436,7 +436,7 @@ func Test_SCM(t *testing.T) {
 			"all changed packages",
 			[]*TargetSelector{
 				{
-					diffBase: "HEAD~1",
+					fromRef: "HEAD~1",
 				},
 			},
 			[]string{"package-1", "package-2", util.RootPkgName},
@@ -445,7 +445,7 @@ func Test_SCM(t *testing.T) {
 			"all changed packages with parent dir exact match",
 			[]*TargetSelector{
 				{
-					diffBase:  "HEAD~1",
+					fromRef:   "HEAD~1",
 					parentDir: root,
 				},
 			},
@@ -455,7 +455,7 @@ func Test_SCM(t *testing.T) {
 			"changed packages in directory",
 			[]*TargetSelector{
 				{
-					diffBase:  "HEAD~1",
+					fromRef:   "HEAD~1",
 					parentDir: filepath.Join(root, "package-2"),
 				},
 			},
@@ -465,7 +465,7 @@ func Test_SCM(t *testing.T) {
 			"changed packages matching pattern",
 			[]*TargetSelector{
 				{
-					diffBase:    "HEAD~1",
+					fromRef:     "HEAD~1",
 					namePattern: "package-2*",
 				},
 			},
@@ -475,7 +475,7 @@ func Test_SCM(t *testing.T) {
 			"changed packages matching pattern",
 			[]*TargetSelector{
 				{
-					diffBase:    "HEAD~1",
+					fromRef:     "HEAD~1",
 					namePattern: "package-2*",
 				},
 			},
@@ -489,7 +489,7 @@ func Test_SCM(t *testing.T) {
 			"changed package was requested scope, and we're matching dependencies",
 			[]*TargetSelector{
 				{
-					diffBase:          "HEAD~1",
+					fromRef:           "HEAD~1",
 					namePattern:       "package-1",
 					matchDependencies: true,
 				},
@@ -500,7 +500,7 @@ func Test_SCM(t *testing.T) {
 			"older commit",
 			[]*TargetSelector{
 				{
-					diffBase: "HEAD~2",
+					fromRef: "HEAD~2",
 				},
 			},
 			[]string{"package-1", "package-2", "package-3", util.RootPkgName},
@@ -509,8 +509,8 @@ func Test_SCM(t *testing.T) {
 			"commit range",
 			[]*TargetSelector{
 				{
-					diffBase:         "HEAD~2",
-					diffHeadOverride: "HEAD~1",
+					fromRef:       "HEAD~2",
+					toRefOverride: "HEAD~1",
 				},
 			},
 			[]string{"package-3"},

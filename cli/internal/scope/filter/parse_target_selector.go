@@ -16,22 +16,22 @@ type TargetSelector struct {
 	followProdDepsOnly  bool
 	parentDir           string
 	namePattern         string
-	diffBase            string
-	diffHeadOverride    string
+	fromRef             string
+	toRefOverride       string
 	raw                 string
 }
 
 func (ts *TargetSelector) IsValid() bool {
-	return ts.diffBase != "" || ts.parentDir != "" || ts.namePattern != ""
+	return ts.fromRef != "" || ts.parentDir != "" || ts.namePattern != ""
 }
 
-// DiffHead returns the git ref to use for upper bound of the comparison when finding changed
+// getToRef returns the git ref to use for upper bound of the comparison when finding changed
 // packages.
-func (ts *TargetSelector) DiffHead() string {
-	if ts.diffHeadOverride == "" {
+func (ts *TargetSelector) getToRef() string {
+	if ts.toRefOverride == "" {
 		return "HEAD"
 	}
-	return ts.diffHeadOverride
+	return ts.toRefOverride
 }
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
@@ -87,8 +87,8 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 		}, nil
 	}
 
-	diff := ""
-	diffHeadOverride := ""
+	fromRef := ""
+	toRefOverride := ""
 	parentDir := ""
 	namePattern := ""
 	preAddDepdencies := false
@@ -101,27 +101,27 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 			parentDir = filepath.Join(prefix, parentDir[1:len(parentDir)-1])
 		}
 		if len(matches[0][3]) > 0 {
-			diff = matches[0][3]
-			if strings.HasPrefix(diff, "...") {
+			fromRef = matches[0][3]
+			if strings.HasPrefix(fromRef, "...") {
 				if parentDir == "" && namePattern == "" {
 					return TargetSelector{}, errCantMatchDependencies
 				}
 				preAddDepdencies = true
-				diff = diff[3:]
+				fromRef = fromRef[3:]
 			}
 			// strip []
-			diff = diff[1 : len(diff)-1]
-			refs := strings.Split(diff, "...")
+			fromRef = fromRef[1 : len(fromRef)-1]
+			refs := strings.Split(fromRef, "...")
 			if len(refs) == 2 {
-				diff = refs[0]
-				diffHeadOverride = refs[1]
+				fromRef = refs[0]
+				toRefOverride = refs[1]
 			}
 		}
 	}
 
 	return TargetSelector{
-		diffBase:            diff,
-		diffHeadOverride:    diffHeadOverride,
+		fromRef:             fromRef,
+		toRefOverride:       toRefOverride,
 		exclude:             exclude,
 		excludeSelf:         excludeSelf,
 		includeDependencies: includeDependencies,
