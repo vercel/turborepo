@@ -2,7 +2,6 @@ package packagemanager
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
@@ -15,8 +14,8 @@ var nodejsNpm = PackageManager{
 	Lockfile:   "package-lock.json",
 	PackageDir: "node_modules",
 
-	getWorkspaceGlobs: func(rootpath string) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
+	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
+		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json").ToStringDuringMigration())
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -26,7 +25,7 @@ var nodejsNpm = PackageManager{
 		return pkg.Workspaces, nil
 	},
 
-	getWorkspaceIgnores: func(pm PackageManager, rootpath string) ([]string, error) {
+	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
 		// Matches upstream values:
 		// function: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L73
 		// key code: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L90-L96
@@ -40,9 +39,9 @@ var nodejsNpm = PackageManager{
 		return manager == "npm", nil
 	},
 
-	detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
-		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
-		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
+	detect: func(projectDirectory fs.AbsolutePath, packageManager *PackageManager) (bool, error) {
+		specfileExists := projectDirectory.Join(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
 	},
