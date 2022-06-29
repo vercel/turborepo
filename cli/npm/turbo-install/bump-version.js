@@ -5,8 +5,8 @@ const fs = require("fs-extra");
 const {
   knownUnixlikePackages,
   knownWindowsPackages,
-} = require("../npm/turbo-install/node-platform");
-const file = path.join(__dirname, "../npm/turbo-install/package.json");
+} = require("./node-platform");
+const file = path.join("./package.json");
 
 const pkg = fs.readJSONSync(file);
 

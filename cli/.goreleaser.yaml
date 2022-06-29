@@ -7,7 +7,7 @@ builds:
   - id: turbo
     main: ./cmd/turbo
     no_unique_dist_dir: true
-    binary: turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if not (eq .Ext ".exe") }}/bin{{ end }}/turbo
+    binary: ../npm/turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if not (eq .Ext ".exe") }}/bin{{ end }}/turbo
     flags:
       - -trimpath
     ldflags:
@@ -34,7 +34,7 @@ builds:
   - id: turbo-cgo
     main: ./cmd/turbo
     no_unique_dist_dir: true
-    binary: turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if not (eq .Ext ".exe") }}/bin{{ end }}/turbo
+    binary: ../npm/turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if not (eq .Ext ".exe") }}/bin{{ end }}/turbo
     flags:
       - -trimpath
     ldflags:

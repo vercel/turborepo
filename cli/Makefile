@@ -19,7 +19,7 @@ GO_FLAGS += "-ldflags=-s -w"
 # Avoid embedding the build path in the executable for more reproducible builds
 GO_FLAGS += -trimpath
 
-MACOS_SDK = $(shell xcrun --sdk macosx --show-sdk-path)
+ROOT_DIR = $(shell pwd)
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
@@ -65,7 +65,7 @@ fmt-go: $(GO_FILES) go.mod go.sum
 	go fmt ./...
 
 install: | ./package.json
-	pnpm install --filter cli
+	pnpm install
 
 e2e: install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
@@ -75,130 +75,68 @@ cmd/turbo/version.go: version.txt
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
-platform-all: cmd/turbo/version.go $(GENERATED_FILES)
+build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 	goreleaser release --snapshot --rm-dist
-	./scripts/move.sh
-	make platform-neutral
-	make platform-create-turbo
+	cd $(ROOT_DIR)/npm/turbo-install && npm run build
+	cd $(ROOT_DIR)/../packages/create-turbo && npm run build
+	cd $(ROOT_DIR)/../packages/turbo-codemod && npm run build
 
-platform-neutral: install
-	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
-	node ./scripts/bump-version.js
+prepublish: clean-demo
+	make -j3 bench/turbo test-go lint-go
 
-platform-create-turbo:
-	cd ../packages/create-turbo && pnpm install --filter=create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
-
-platform-turbo-codemod:
-	cd ../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
-
-test-prepublish: clean-demo
-	make -j3 bench/turbo test-go lint-go e2e
-
-
-publish-all: cmd/turbo/version.go
+publish: build prepublish
 	# @test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-master branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@echo "Checking for unpushed commits..." && git fetch
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
-	rm -fr npm && git checkout npm
+	rm -rf npm && git checkout npm
 	@echo Enter one-time password:
-	make publish-android-arm64
-	make publish-darwin-64
-	make publish-darwin-arm64
-	make publish-freebsd-64
-	make publish-freebsd-arm64
-	make publish-linux-32
-	make publish-linux-64
-	make publish-linux-arm
-	make publish-linux-arm64
-	make publish-linux-mips64le
-	make publish-linux-ppc64le
-	make publish-windows-32
-	make publish-windows-64
-	make publish-windows-arm64
+	cd $(ROOT_DIR)/npm/turbo-android-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-darwin-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-darwin-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-freebsd-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-freebsd-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-linux-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-linux-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-linux-arm && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-linux-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-linux-mips64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-linux-ppc64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run	# Do these last to avoid race conditions
+	cd $(ROOT_DIR)/npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/npm/turbo-windows-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	# Do these last to avoid race conditions
-	make publish-neutral
-	make publish-create-turbo
-	make publish-turbo-codemod
+	cd $(ROOT_DIR)/npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin main "v$(TURBO_VERSION)"
 
-publish-windows-32: test-go lint-go platform-windows-32
-	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-windows-64: test-go lint-go platform-windows-64
-	cd npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-windows-arm64: test-go lint-go platform-windows-arm64
-	cd npm/turbo-windows-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-darwin-64: test-go lint-go platform-darwin-64
-	cd npm/turbo-darwin-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-darwin-arm64: test-go lint-go platform-darwin-arm64
-	cd npm/turbo-darwin-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-freebsd-64: test-go lint-go platform-freebsd-64
-	cd npm/turbo-freebsd-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-freebsd-arm64: test-go lint-go platform-freebsd-arm64
-	cd npm/turbo-freebsd-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-linux-64: test-go lint-go platform-linux-64
-	cd npm/turbo-linux-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-linux-32: test-go lint-go platform-linux-32
-	cd npm/turbo-linux-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-linux-arm: test-go lint-go platform-linux-arm
-	cd npm/turbo-linux-arm && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-linux-arm64: test-go lint-go platform-linux-arm64
-	cd npm/turbo-linux-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-android-arm64: test-go lint-go platform-android-arm64
-	cd npm/turbo-android-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-linux-mips64le: test-go lint-go platform-linux-mips64le
-	cd npm/turbo-linux-mips64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-linux-ppc64le: test-go lint-go platform-linux-ppc64le
-	cd npm/turbo-linux-ppc64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
-
-publish-neutral: test-go lint-go platform-neutral
-	cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
-
-publish-create-turbo: platform-create-turbo
-	cd ../packages/create-turbo && npm publish --tag $(TURBO_TAG)
-
-publish-turbo-codemod: platform-turbo-codemod
-	cd ../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
-
 demo/lage: install
-	node scripts/generate.mjs lage
+	node $(ROOT_DIR)/scripts/generate.mjs lage
 
 demo/lerna: install
-	node scripts/generate.mjs lerna
+	node $(ROOT_DIR)/scripts/generate.mjs lerna
 
 demo/nx: install
-	node scripts/generate.mjs nx
+	node $(ROOT_DIR)/scripts/generate.mjs nx
 
 demo/turbo: install
-	node scripts/generate.mjs turbo
+	node $(ROOT_DIR)/scripts/generate.mjs turbo
 
 demo: demo/lage demo/lerna demo/nx demo/turbo
 
 bench/lerna: demo/lerna
-	cd demo/lerna && node_modules/.bin/lerna run build
+	cd $(ROOT_DIR)/demo/lerna && node_modules/.bin/lerna run build
 
 bench/lage: demo/lage
-	cd demo/lage && node_modules/.bin/lage build
+	cd $(ROOT_DIR)/demo/lage && node_modules/.bin/lage build
 
 bench/nx: demo/nx
-	cd demo/nx && node_modules/.bin/nx run-many --target=build --all
+	cd $(ROOT_DIR)/demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo turbo
-	cd demo/turbo && ../../turbo run test
+	cd $(ROOT_DIR)/demo/turbo && $(ROOT_DIR)/turbo run test
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
