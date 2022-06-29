@@ -246,9 +246,10 @@ func TestNew(t *testing.T) {
 			wantErr: false,
 		},
 	}
+	var nilClient client
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.args.opts, tt.args.config, tt.args.recorder, tt.args.onCacheRemoved)
+			got, err := New(tt.args.opts, tt.args.config, nilClient, tt.args.recorder, tt.args.onCacheRemoved)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return

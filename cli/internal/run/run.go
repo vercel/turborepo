@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -38,8 +39,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
-
-	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -663,9 +662,10 @@ func (r *run) logWarning(prefix string, err error) {
 }
 
 func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
-		analyticsSink = r.config.ApiClient
+		analyticsSink = apiClient
 	} else {
 		analyticsSink = analytics.NullSink
 	}
@@ -673,7 +673,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache, err := cache.New(rs.Opts.cacheOpts, r.config, analyticsClient, func(_cache cache.Cache, err error) {
+	turboCache, err := cache.New(rs.Opts.cacheOpts, r.config, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.

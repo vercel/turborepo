@@ -329,10 +329,10 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, config *config.Config, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, client client, config *config.Config, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
-		client:         config.ApiClient,
+		client:         client,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{

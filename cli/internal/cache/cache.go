@@ -74,8 +74,8 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot fs.AbsolutePath) {
 }
 
 // New creates a new cache
-func New(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	c, err := newSyncCache(opts, config, recorder, onCacheRemoved)
+func New(opts Opts, config *config.Config, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+	c, err := newSyncCache(opts, config, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func New(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheR
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
@@ -105,7 +105,7 @@ func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder,
 	cacheImplementations := make([]Cache, 0, 2)
 
 	if useFsCache {
-		implementation, err := newFsCache(opts, recorder, config)
+		implementation, err := newFsCache(opts, recorder, config.Cwd)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +114,7 @@ func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder,
 
 	if useHTTPCache {
 		fmt.Println(ui.Dim("• Remote computation caching enabled"))
-		implementation := newHTTPCache(opts, config, recorder)
+		implementation := newHTTPCache(opts, client, config, recorder)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
 

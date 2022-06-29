@@ -32,6 +32,9 @@ func IsCI() bool {
 // Config is a struct that contains user inputs and our logger
 type Config struct {
 	Logger hclog.Logger
+	// TODO: Token through ApiUrl should maybe be grouped together
+	// in their own struct, as they will come from config files
+
 	// Bearer token
 	Token string
 	// vercel.com / remote cache team id
@@ -42,8 +45,6 @@ type Config struct {
 	ApiUrl string
 	// Login URL
 	LoginUrl string
-	// Backend retryable http client
-	ApiClient *client.ApiClient
 	// Turborepo CLI Version
 	TurboVersion string
 	Cache        *CacheConfig
@@ -53,6 +54,9 @@ type Config struct {
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
 	Cwd fs.AbsolutePath
+
+	UsePreflight      bool
+	MaxClientFailures uint64
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -194,8 +198,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Output: output,
 	})
 
-	maxRemoteFailCount := 3
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount), usePreflight)
+	maxRemoteFailCount := uint64(3)
 
 	c = &Config{
 		Logger:       logger,
@@ -204,7 +207,6 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		TeamId:       partialConfig.TeamId,
 		ApiUrl:       partialConfig.ApiUrl,
 		LoginUrl:     partialConfig.LoginUrl,
-		ApiClient:    apiClient,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
@@ -212,11 +214,27 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		RootPackageJSON: rootPackageJSON,
 		TurboJSON:       turboJSON,
 		Cwd:             cwd,
+
+		UsePreflight:      usePreflight,
+		MaxClientFailures: maxRemoteFailCount,
 	}
-
-	c.ApiClient.SetToken(partialConfig.Token)
-
 	return c, nil
+}
+
+// NewClient returns a new ApiClient instance using the values from
+// this Config instance.
+func (c *Config) NewClient() *client.ApiClient {
+	apiClient := client.NewClient(
+		c.ApiUrl,
+		c.Logger,
+		c.TurboVersion,
+		c.TeamId,
+		c.TeamSlug,
+		c.MaxClientFailures,
+		c.UsePreflight,
+	)
+	apiClient.SetToken(c.Token)
+	return apiClient
 }
 
 // Selects the current working directory from OS
