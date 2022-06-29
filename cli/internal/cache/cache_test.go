@@ -191,14 +191,11 @@ func TestNew(t *testing.T) {
 				opts: Opts{
 					SkipFilesystem: true,
 					SkipRemote:     false,
-				},
-				config: &config.Config{
-					TurboJSON: &fs.TurboJSON{
-						RemoteCacheOptions: fs.RemoteCacheOptions{
-							Signature: true,
-						},
+					RemoteCacheOpts: fs.RemoteCacheOptions{
+						Signature: true,
 					},
 				},
+				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
@@ -229,14 +226,11 @@ func TestNew(t *testing.T) {
 					Dir:            fs.AbsolutePath(cwd),
 					SkipFilesystem: false,
 					SkipRemote:     false,
-				},
-				config: &config.Config{
-					TurboJSON: &fs.TurboJSON{
-						RemoteCacheOptions: fs.RemoteCacheOptions{
-							Signature: true,
-						},
+					RemoteCacheOpts: fs.RemoteCacheOptions{
+						Signature: true,
 					},
 				},
+				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},

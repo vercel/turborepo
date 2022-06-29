@@ -339,7 +339,7 @@ func newHTTPCache(opts Opts, client client, config *config.Config, recorder anal
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
 			teamId:  config.TeamId,
-			enabled: config.TurboJSON.RemoteCacheOptions.Signature,
+			enabled: opts.RemoteCacheOpts.Signature,
 		},
 		repoRoot: config.Cwd,
 	}

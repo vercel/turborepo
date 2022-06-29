@@ -57,10 +57,11 @@ var ErrNoCachesEnabled = errors.New("no caches are enabled")
 // Opts holds configuration options for the cache
 // TODO(gsoltis): further refactor this into fs cache opts and http cache opts
 type Opts struct {
-	Dir            fs.AbsolutePath
-	SkipRemote     bool
-	SkipFilesystem bool
-	Workers        int
+	Dir             fs.AbsolutePath
+	SkipRemote      bool
+	SkipFilesystem  bool
+	Workers         int
+	RemoteCacheOpts fs.RemoteCacheOptions
 }
 
 var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only

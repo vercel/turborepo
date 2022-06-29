@@ -204,7 +204,13 @@ type run struct {
 
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	pkgDepGraph, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
+	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, r.config.RootPackageJSON)
+	if err != nil {
+		return err
+	}
+	// TODO: these values come from a config file, hopefully viper can help us merge these
+	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+	pkgDepGraph, err := context.New(context.WithGraph(r.config, turboJSON, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}
@@ -226,7 +232,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
-	pipeline := r.config.TurboJSON.Pipeline
+	pipeline := turboJSON.Pipeline
 	if err := validateTasks(pipeline, targets); err != nil {
 		return err
 	}
