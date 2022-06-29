@@ -55,6 +55,7 @@ jobs:
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1
