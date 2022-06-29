@@ -24,12 +24,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --features persistent_cache
 
       - name: Run cargo check tests
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --tests
+          args: --tests --features test_persistent_cache
 
       - name: Run cargo check examples
         uses: actions-rs/cargo@v1

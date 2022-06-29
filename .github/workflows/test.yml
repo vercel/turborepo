@@ -24,7 +24,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --tests
+          args: --tests --release
 
       - name: Setup node
         uses: actions/setup-node@v2

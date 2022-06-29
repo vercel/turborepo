@@ -1528,7 +1528,6 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
- "turbo-tasks-rocksdb",
  "turbopack",
  "turbopack-core",
  "turbopack-dev-server",
@@ -2068,6 +2067,17 @@ checksum = "d912f35156a3f99a66ee3e11ac2e0b3f34ac85a07e05263d05a7e2c8810d616f"
 dependencies = [
  "cfg-if 1.0.0",
  "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn",
+]
+
+[[package]]
+name = "rstest_reuse"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b29d3117bce27ea307d1fb7ce12c64ba11b3fd04311a42d32bc5f0072e6e3d4d"
+dependencies = [
  "quote",
  "rustc_version",
  "syn",
@@ -3071,6 +3081,7 @@ dependencies = [
  "rand",
  "regex",
  "rstest",
+ "rstest_reuse",
  "serde",
  "serde_regex",
  "swc_atoms",
@@ -3155,7 +3166,6 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
- "turbo-tasks-rocksdb",
  "turbo-tasks-testing",
  "turbopack-core",
  "url",
