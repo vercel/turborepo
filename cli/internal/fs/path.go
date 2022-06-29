@@ -158,11 +158,6 @@ func (ap AbsolutePath) Readlink() (string, error) {
 	return os.Readlink(ap.asString())
 }
 
-// Link implements os.Link(ap, target) for absolute path
-func (ap AbsolutePath) Link(target string) error {
-	return os.Link(ap.asString(), target)
-}
-
 // Remove removes the file or (empty) directory at the given path
 func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())

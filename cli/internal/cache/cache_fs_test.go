@@ -9,7 +9,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
 )
 
@@ -31,7 +30,7 @@ func subdirForTest(t *testing.T) string {
 	if tu, ok := tt.(testingUtil); ok {
 		tu.Helper()
 	}
-	cwd, err := turbofs.GetCwd()
+	cwd, err := fs.GetCwd()
 	assert.NilError(t, err, "cwd")
 	dir, err := os.MkdirTemp(cwd.ToString(), "turbo-test")
 	assert.NilError(t, err, "MkdirTemp")
@@ -127,18 +126,10 @@ func TestPut(t *testing.T) {
 	dstCachePath := filepath.Join(dst, hash)
 
 	dstAPath := filepath.Join(dstCachePath, src, "child", "a")
-	got, err := turbofs.SameFile(aPath, dstAPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
-	}
+	assertFileMatches(t, aPath, dstAPath)
 
 	dstBPath := filepath.Join(dstCachePath, src, "b")
-	got, err = turbofs.SameFile(bPath, dstBPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
-	}
+	assertFileMatches(t, bPath, dstBPath)
 
 	dstLinkPath := filepath.Join(dstCachePath, src, "child", "link")
 	target, err := os.Readlink(dstLinkPath)
@@ -161,6 +152,20 @@ func TestPut(t *testing.T) {
 	if circleLinkDest != expectedCircleLinkDest {
 		t.Errorf("Cache link got %v, want %v", circleLinkDest, expectedCircleLinkDest)
 	}
+}
+
+func assertFileMatches(t *testing.T, orig string, copy string) {
+	t.Helper()
+	origBytes, err := ioutil.ReadFile(orig)
+	assert.NilError(t, err, "ReadFile")
+	copyBytes, err := ioutil.ReadFile(copy)
+	assert.NilError(t, err, "ReadFile")
+	assert.DeepEqual(t, origBytes, copyBytes)
+	origStat, err := os.Lstat(orig)
+	assert.NilError(t, err, "Lstat")
+	copyStat, err := os.Lstat(copy)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, origStat.Mode(), copyStat.Mode())
 }
 
 func TestFetch(t *testing.T) {
@@ -253,18 +258,10 @@ func TestFetch(t *testing.T) {
 	t.Logf("files %v", files)
 
 	dstAPath := filepath.Join(dstOutputPath, "child", "a")
-	got, err := turbofs.SameFile(aPath, dstAPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
-	}
+	assertFileMatches(t, aPath, dstAPath)
 
 	dstBPath := filepath.Join(dstOutputPath, "b")
-	got, err = turbofs.SameFile(bPath, dstBPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
-	}
+	assertFileMatches(t, bPath, dstBPath)
 
 	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
 	target, err := os.Readlink(dstLinkPath)
