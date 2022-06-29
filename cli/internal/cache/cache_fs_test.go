@@ -86,6 +86,8 @@ func TestPut(t *testing.T) {
 
 	srcBrokenLinkPath := filepath.Join(childDir, "broken")
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
+	circlePath := filepath.Join(childDir, "circle")
+	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
 
 	files := []string{
 		filepath.Join(src, filepath.FromSlash("/")),            // src
@@ -94,6 +96,7 @@ func TestPut(t *testing.T) {
 		filepath.Join(src, "b"),                                // bPath,
 		filepath.Join(src, filepath.FromSlash("child/link")),   // srcLinkPath,
 		filepath.Join(src, filepath.FromSlash("child/broken")), // srcBrokenLinkPath,
+		filepath.Join(src, filepath.FromSlash("child/circle")), // circlePath
 	}
 
 	dst := subdirForTest(t)
@@ -150,6 +153,14 @@ func TestPut(t *testing.T) {
 	if target != "missing" {
 		t.Errorf("Readlink got %v, want missing", target)
 	}
+
+	dstCirclePath := filepath.Join(dstCachePath, src, "child", "circle")
+	circleLinkDest, err := os.Readlink(dstCirclePath)
+	assert.NilError(t, err, "Readlink")
+	expectedCircleLinkDest := filepath.FromSlash("../child")
+	if circleLinkDest != expectedCircleLinkDest {
+		t.Errorf("Cache link got %v, want %v", circleLinkDest, expectedCircleLinkDest)
+	}
 }
 
 func TestFetch(t *testing.T) {
@@ -165,6 +176,7 @@ func TestFetch(t *testing.T) {
 	//         a
 	//         link -> ../b
 	//         broken -> missing
+	//         circle -> ../child
 	//
 	// Ensure we end up with a matching directory under a
 	// "some-package" directory:
@@ -201,6 +213,8 @@ func TestFetch(t *testing.T) {
 
 	srcBrokenLinkPath := filepath.Join(childDir, "broken")
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
+	circlePath := filepath.Join(childDir, "circle")
+	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
 
 	metadataPath := filepath.Join(cacheDir, "the-hash-meta.json")
 	err = ioutil.WriteFile(metadataPath, []byte(`{"hash":"the-hash","duration":0}`), 0777)
@@ -263,4 +277,15 @@ func TestFetch(t *testing.T) {
 	dstBrokenLinkPath := filepath.Join(dstOutputPath, "child", "broken")
 	_, err = os.Readlink(dstBrokenLinkPath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
+
+	// Currently, on restore, we convert symlink-to-directory to empty-directory
+	// This is very likely not ideal behavior, but leaving this test here to verify
+	// that it is what we expect at this point in time.
+	dstCirclePath := filepath.Join(dstOutputPath, "child", "circle")
+	circleStat, err := os.Lstat(dstCirclePath)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, circleStat.IsDir(), true)
+	entries, err := os.ReadDir(dstCirclePath)
+	assert.NilError(t, err, "ReadDir")
+	assert.Equal(t, len(entries), 0)
 }
