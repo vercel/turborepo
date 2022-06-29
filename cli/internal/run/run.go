@@ -23,6 +23,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/core"
+	"github.com/vercel/turborepo/cli/internal/daemon"
+	"github.com/vercel/turborepo/cli/internal/daemonclient"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/graphvisualizer"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
@@ -32,6 +34,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -46,9 +49,9 @@ import (
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Config    *config.Config
-	Ui        *cli.ColoredUi
-	Processes *process.Manager
+	Config        *config.Config
+	UI            *cli.ColoredUi
+	SignalWatcher *signals.Watcher
 }
 
 // completeGraph represents the common state inferred from the filesystem and pipeline.
@@ -91,7 +94,7 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra.Command {
+func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
 	var opts *Opts
 	var flags *pflag.FlagSet
 	cmd := &cobra.Command{
@@ -107,8 +110,9 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 				return errors.New("at least one task must be specified")
 			}
 			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(config, ui, opts, processes)
-			return run.run(tasks)
+			run := configureRun(config, ui, opts, signalWatcher)
+			ctx := cmd.Context()
+			return run.run(ctx, tasks)
 		},
 	}
 	flags = cmd.Flags()
@@ -142,7 +146,7 @@ func optsFromFlags(flags *pflag.FlagSet, config *config.Config) *Opts {
 	return opts
 }
 
-func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *process.Manager) *run {
+func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatcher *signals.Watcher) *run {
 	if os.Getenv("TURBO_FORCE") == "true" {
 		opts.runcacheOpts.SkipReads = true
 	}
@@ -154,6 +158,8 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 	if !config.IsLoggedIn() {
 		opts.cacheOpts.SkipRemote = true
 	}
+	processes := process.NewManager(config.Logger.Named("processes"))
+	signalWatcher.AddOnClose(processes.Close)
 	return &run{
 		opts:      opts,
 		config:    config,
@@ -164,19 +170,19 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return cmd.Short
 }
 
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Run executes tasks in the monorepo
 func (c *RunCommand) Run(args []string) int {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -197,14 +203,27 @@ type run struct {
 	processes *process.Manager
 }
 
-func (r *run) run(targets []string) error {
+func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	ctx, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
+	pkgDepGraph, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}
+	// This technically could be one flag, but we plan on removing
+	// the daemon opt-in flag at some point once it stabilizes
+	if r.opts.runOpts.daemonOptIn && !r.opts.runOpts.noDaemon {
+		turbodClient, err := daemon.GetClient(ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
+		if err != nil {
+			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+		} else {
+			defer func() { _ = turbodClient.Close() }()
+			r.config.Logger.Debug("running in daemon mode")
+			daemonClient := daemonclient.New(turbodClient)
+			r.opts.runcacheOpts.OutputWatcher = daemonClient
+		}
+	}
 
-	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
+	if err := util.ValidateGraph(&pkgDepGraph.TopologicalGraph); err != nil {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
@@ -221,7 +240,7 @@ func (r *run) run(targets []string) error {
 			return errors.Wrap(err, "failed to create SCM")
 		}
 	}
-	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.config.Cwd.ToStringDuringMigration(), scmInstance, ctx, r.ui, r.config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.config.Cwd.ToStringDuringMigration(), scmInstance, pkgDepGraph, r.ui, r.config.Logger)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve packages to run")
 	}
@@ -236,27 +255,27 @@ func (r *run) run(targets []string) error {
 			}
 		}
 	}
-	r.config.Logger.Debug("global hash", "value", ctx.GlobalHash)
+	r.config.Logger.Debug("global hash", "value", pkgDepGraph.GlobalHash)
 	r.config.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
-		TopologicalGraph: ctx.TopologicalGraph,
+		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
-		PackageInfos:     ctx.PackageInfos,
-		GlobalHash:       ctx.GlobalHash,
-		RootNode:         ctx.RootNode,
+		PackageInfos:     pkgDepGraph.PackageInfos,
+		GlobalHash:       pkgDepGraph.GlobalHash,
+		RootNode:         pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
 		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
 		Opts:         r.opts,
 	}
-	packageManager := ctx.PackageManager
-	return r.runOperation(g, rs, packageManager, startAt)
+	packageManager := pkgDepGraph.PackageManager
+	return r.runOperation(ctx, g, rs, packageManager, startAt)
 }
 
-func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
+func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -299,7 +318,7 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 			}
 		}
 	} else if rs.Opts.runOpts.dryRun {
-		tasksRun, err := r.executeDryRun(engine, g, hashTracker, rs)
+		tasksRun, err := r.executeDryRun(ctx, engine, g, hashTracker, rs)
 		if err != nil {
 			return err
 		}
@@ -351,7 +370,7 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 		sort.Strings(packagesInScope)
 		r.ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		r.ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		return r.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
+		return r.executeTasks(ctx, g, rs, engine, packageManager, hashTracker, startAt)
 	}
 	return nil
 }
@@ -424,8 +443,10 @@ type runOpts struct {
 	dryRun     bool
 	dryRunJSON bool
 	// Graph flags
-	graphDot  bool
-	graphFile string
+	graphDot    bool
+	graphFile   string
+	noDaemon    bool
+	daemonOptIn bool
 }
 
 var (
@@ -457,6 +478,15 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.StringVar(&opts.profile, "profile", "", _profileHelp)
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
 	flags.BoolVar(&opts.only, "only", false, _onlyHelp)
+	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
+	flags.BoolVar(&opts.daemonOptIn, "experimental-use-daemon", false, "Use the experimental turbo daemon")
+	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
+	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
+		panic(err)
+	}
+	if err := flags.MarkHidden("no-daemon"); err != nil {
+		panic(err)
+	}
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
 		panic(err)
@@ -618,7 +648,7 @@ func (c *RunCommand) logError(log hclog.Logger, prefix string, err error) {
 		prefix += ": "
 	}
 
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
+	c.UI.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
 // logError logs an error and outputs it to the UI.
@@ -632,15 +662,14 @@ func (r *run) logWarning(prefix string, err error) {
 	r.ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 }
 
-func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
-	goctx := gocontext.Background()
+func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
 		analyticsSink = r.config.ApiClient
 	} else {
 		analyticsSink = analytics.NullSink
 	}
-	analyticsClient := analytics.NewClient(goctx, analyticsSink, r.config.Logger.Named("analytics"))
+	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
@@ -661,7 +690,7 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	}
 	defer turboCache.Shutdown()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	argSeparator := []string{"--"}
 	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
@@ -691,9 +720,9 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
-		return ec.exec(pt, deps)
+		return ec.exec(ctx, pt, deps)
 	}), core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
@@ -738,9 +767,9 @@ type hashedTask struct {
 	Dependents   []string `json:"dependents"`
 }
 
-func (r *run) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(pt.Task)
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
 		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
@@ -844,7 +873,7 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
+func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
 	targetLogger := e.logger.Named(pt.OutputPrefix())
@@ -883,7 +912,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(pt, hash)
-	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
+	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
@@ -970,7 +999,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -981,8 +1010,9 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	return nil
 }
 
-func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask) error) func(taskID string) error {
+func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, pt *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
+
 		name, task := util.GetPackageTaskFromId(taskID)
 		pkg, ok := g.PackageInfos[name]
 		if !ok {
@@ -1000,7 +1030,7 @@ func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask
 			// override if we need to...
 			pipeline = altpipe
 		}
-		return visitor(&nodes.PackageTask{
+		return visitor(ctx, &nodes.PackageTask{
 			TaskID:         taskID,
 			Task:           task,
 			PackageName:    name,

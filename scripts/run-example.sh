@@ -128,7 +128,7 @@ function run_yarn {
 }
 
 
-
+hasRun=0
 if [ -f "examples/$folder/package.json" ]; then
   cd "examples/$folder"
   echo "======================================================="
@@ -142,7 +142,11 @@ if [ -f "examples/$folder/package.json" ]; then
     run_pnpm
   elif [ "$pkgManager" == "yarn" ]; then
     run_yarn
+  else
+    echo "Unknown package manager ${folder}"
+    exit 2
   fi
+  hasRun=1
 
   cat package.json | jq 'del(.packageManager)' | sponge package.json
   if [ "$TURBO_TAG" == "canary" ]; then
@@ -154,8 +158,6 @@ if [ -f "examples/$folder/package.json" ]; then
   cd ../..
 fi
 
-
-
 if [ -f ".eslintrc.js.bak" ]; then
   mv .eslintrc.js.bak .eslintrc.js
 fi
@@ -164,4 +166,9 @@ if [[ ! -z $(git status -s) ]];then
   echo "Detected changes"
   git status
   exit 1
+fi
+
+if [ $hasRun -eq 0 ]; then
+  echo "Did not run any examples"
+  exit 2
 fi

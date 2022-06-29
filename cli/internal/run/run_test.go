@@ -446,7 +446,7 @@ func TestUsageText(t *testing.T) {
 	output := ui.Default()
 	cmd := &RunCommand{
 		Config: cf,
-		Ui:     output,
+		UI:     output,
 	}
 	// just ensure it doesn't panic for now
 	usage := cmd.Help()

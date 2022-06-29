@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 
+	"github.com/adrg/xdg"
 	"github.com/spf13/pflag"
 )
 
@@ -75,10 +76,12 @@ func (ap AbsolutePath) Dir() AbsolutePath {
 	return AbsolutePath(filepath.Dir(ap.asString()))
 }
 
-// MkdirAll is the AbsolutePath wrapper for os.MkdirAll
+// MkdirAll implements os.MkdirAll(ap, DirPermissions|0644)
 func (ap AbsolutePath) MkdirAll() error {
 	return os.MkdirAll(ap.asString(), DirPermissions|0644)
 }
+
+// Open implements os.Open(ap) for an absolute path
 func (ap AbsolutePath) Open() (*os.File, error) {
 	return os.Open(ap.asString())
 }
@@ -129,7 +132,7 @@ func (ap AbsolutePath) Create() (*os.File, error) {
 	return os.Create(ap.asString())
 }
 
-// Ext implements filepath.Ext for an absolute path
+// Ext implements filepath.Ext(ap) for an absolute path
 func (ap AbsolutePath) Ext() string {
 	return filepath.Ext(ap.asString())
 }
@@ -150,12 +153,27 @@ func (ap AbsolutePath) Symlink(target string) error {
 	return os.Symlink(target, ap.asString())
 }
 
+// Readlink implements os.Readlink(ap) for an absolute path
+func (ap AbsolutePath) Readlink() (string, error) {
+	return os.Readlink(ap.asString())
+}
+
+// Link implements os.Link(ap, target) for absolute path
+func (ap AbsolutePath) Link(target string) error {
+	return os.Link(ap.asString(), target)
+}
+
 // Remove removes the file or (empty) directory at the given path
 func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())
 }
 
-// Rename implements os.Rename for absolute paths
+// Base implements filepath.Base for an absolute path
+func (ap AbsolutePath) Base() string {
+	return filepath.Base(ap.asString())
+}
+
+// Rename implements os.Rename(ap, dest) for absolute paths
 func (ap AbsolutePath) Rename(dest AbsolutePath) error {
 	return os.Rename(ap.asString(), dest.asString())
 }
@@ -189,6 +207,19 @@ func GetDirFSRootPath(fsys iofs.FS) string {
 // IofsRelativePath calculates a `os.dirFS`-friendly path from an absolute system path.
 func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 	return filepath.Rel(fsysRoot, absolutePath)
+}
+
+// TempDir returns the absolute path of a directory with the given name
+// under the system's default temp directory location
+func TempDir(subDir string) AbsolutePath {
+	return AbsolutePath(os.TempDir()).Join(subDir)
+}
+
+// GetTurboDataDir returns a directory outside of the repo
+// where turbo can store data files related to turbo.
+func GetTurboDataDir() AbsolutePath {
+	dataHome := AbsolutePathFromUpstream(xdg.DataHome)
+	return dataHome.Join("turborepo")
 }
 
 type pathValue struct {
