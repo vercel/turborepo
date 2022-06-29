@@ -111,7 +111,7 @@ type RunCache struct {
 	repoRoot               fs.AbsolutePath
 	logReplayer            LogReplayer
 	colorCache             *colorcache.ColorCache
-	stripPrefix            bool
+	prefixStripped         bool
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
@@ -124,7 +124,7 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *col
 		repoRoot:               repoRoot,
 		logReplayer:            opts.LogReplayer,
 		colorCache:             colorCache,
-		stripPrefix:            opts.StripPrefix,
+		prefixStripped:         opts.StripPrefix,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
@@ -174,6 +174,8 @@ func (tc TaskCache) RestoreOutputs(terminal cli.Ui, logger hclog.Logger) (bool, 
 	case util.FullTaskOutput:
 		logger.Debug("log file", "path", tc.LogFileName)
 		if tc.LogFileName.FileExists() {
+			// The task label is baked into the log file, so we need to grab the underlying Ui
+			// instance in order to not duplicate it
 			tc.rc.logReplayer(logger, terminal, tc.LogFileName)
 		}
 	default:
@@ -229,7 +231,7 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	fwc := &fileWriterCloser{
 		file:   output,
 		bufio:  bufWriter,
-		Writer: tc.newPrefixWritter(bufWriter),
+		Writer: tc.newPrefixWriter(bufWriter),
 	}
 
 	return fwc, nil
@@ -266,6 +268,7 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 	return tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths)
 }
 
+// NewTerminal returns a new terminal with prefixed output
 func (tc TaskCache) NewTerminal(ui cli.Ui) cli.Ui {
 	prettyTaskPrefix := tc.ColoredPrefix()
 
@@ -278,16 +281,17 @@ func (tc TaskCache) NewTerminal(ui cli.Ui) cli.Ui {
 	}
 }
 
+// ColoredPrefix returns a colored prefix for the inner PackageTask following the configuration of RunCache
 func (tc TaskCache) ColoredPrefix() string {
-	if tc.rc.stripPrefix {
+	if tc.rc.prefixStripped {
 		return ""
 	}
 
 	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	return colorPrefixer(tc.pt.OutputPrefix())
+	return colorPrefixer("%s: ", tc.pt.OutputPrefix())
 }
 
-func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
+func (tc TaskCache) newPrefixWriter(bufWriter io.Writer) prefixedWriter {
 	prefixedWriter := prefixedWriter{
 		prefix: tc.ColoredPrefix(),
 	}
@@ -304,7 +308,7 @@ func (tc TaskCache) newPrefixWritter(bufWriter io.Writer) prefixedWriter {
 
 func (tc TaskCache) cacheHitMessage() string {
 	message := fmt.Sprintf("cache hit, replaying output %s\n", ui.Dim(tc.hash))
-	if tc.rc.stripPrefix {
+	if tc.rc.prefixStripped {
 		prettyTaskPrefix := tc.ColoredPrefix()
 		message = fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))
 	}
