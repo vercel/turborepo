@@ -130,7 +130,7 @@ func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if packageManager, err := packagemanager.GetPackageManager(rootpath, config.RootPackageJSON); err != nil {
+		if packageManager, err := packagemanager.GetPackageManager(config.Cwd, config.RootPackageJSON); err != nil {
 			return err
 		} else {
 			c.PackageManager = packageManager
@@ -150,7 +150,7 @@ func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
 
-		globalHash, err := calculateGlobalHash(rootpath, config.RootPackageJSON, config.TurboJSON.Pipeline, config.TurboJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
+		globalHash, err := calculateGlobalHash(config.Cwd, config.RootPackageJSON, config.TurboJSON.Pipeline, config.TurboJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
 		if err != nil {
 			return fmt.Errorf("failed to calculate global hash: %v", err)
 		}
@@ -158,7 +158,7 @@ func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
 		c.GlobalHash = globalHash
 
 		// Get the workspaces from the package manager.
-		workspaces, err := c.PackageManager.GetWorkspaces(rootpath)
+		workspaces, err := c.PackageManager.GetWorkspaces(config.Cwd)
 
 		if err != nil {
 			return fmt.Errorf("workspace configuration error: %w", err)
@@ -403,7 +403,7 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 
@@ -432,7 +432,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 				return "", err
 			}
 
-			f, err := globby.GlobFiles(rootpath, globs, ignores)
+			f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globs, ignores)
 			if err != nil {
 				return "", err
 			}
@@ -455,8 +455,8 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 
 	if !util.IsYarn(packageManager.Name) {
 		// If we are not in Yarn, add the specfile and lockfile to global deps
-		globalDeps.Add(filepath.Join(rootpath, packageManager.Specfile))
-		globalDeps.Add(filepath.Join(rootpath, packageManager.Lockfile))
+		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
+		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
 	}
 
 	// No prefix, global deps already have full paths
@@ -466,7 +466,7 @@ func calculateGlobalHash(rootpath string, rootPackageJSON *fs.PackageJSON, pipel
 		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
 	}
 
-	globalFileHashMap, err := fs.GetHashableDeps(fs.UnsafeToAbsolutePath(rootpath), globalDepsPaths)
+	globalFileHashMap, err := fs.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}

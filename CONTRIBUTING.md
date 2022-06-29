@@ -2,8 +2,8 @@
 
 Dependencies
 
-1.  On OSX: `brew install sponge`
-2.  Run `pnpm install` at root
+1.  On OSX: `brew install sponge jq protobuf`
+1.  Run `pnpm install` at root
 
 Building
 
@@ -17,7 +17,7 @@ Smoke Testing via examples:
 ## Debugging
 
 1.  Install `go get dlv-dap`
-2.  In VS Code Debugging tab, select `Basic Turbo Build` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example.
+1.  In VS Code Debugging tab, select `Basic Turbo Build` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example.
 
 ## Updating `turbo-install`
 

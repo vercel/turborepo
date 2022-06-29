@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"runtime"
 
@@ -87,7 +86,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
 				}
-				if fromType != os.ModeDir {
+				if !fromType.IsDir() {
 					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, file)); err != nil {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
