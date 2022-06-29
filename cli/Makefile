@@ -76,83 +76,10 @@ cmd/turbo/version.go: version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 platform-all: cmd/turbo/version.go $(GENERATED_FILES)
-	make -j4 \
-		platform-android-arm64 \
-		platform-darwin-64 \
-		platform-darwin-arm64 \
-		platform-freebsd-64 \
-		platform-freebsd-arm64 \
-		platform-linux-32 \
-		platform-linux-64 \
-		platform-linux-arm \
-		platform-linux-arm64 \
-		platform-linux-mips64le \
-		platform-linux-ppc64le \
-		platform-windows-32 \
-		platform-windows-arm64 \
-		platform-windows-64 \
-		platform-neutral \
-		platform-create-turbo
-
-
-platform-windows-32:
-	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(GO_FLAGS) -o npm/turbo-windows-32/turbo.exe ./cmd/turbo
-
-platform-windows-64:
-	cd npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(GO_FLAGS) -o npm/turbo-windows-64/turbo.exe ./cmd/turbo
-
-platform-windows-arm64:
-	cd npm/turbo-windows-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build $(GO_FLAGS) -o npm/turbo-windows-arm64/turbo.exe ./cmd/turbo
-
-platform-unixlike:
-	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
-	mkdir -p "$(NPMDIR)/bin"
-	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS) -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
-
-# To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
-# we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
-platform-darwin-cgo:
-	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
-	mkdir -p "$(NPMDIR)/bin"
-	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" SDKROOT=$(MACOS_SDK) go build $(GO_FLAGS) -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
-
-platform-android-arm64:
-	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
-
-platform-darwin-64:
-	make GOOS=darwin GOARCH=amd64 NPMDIR=npm/turbo-darwin-64 platform-darwin-cgo
-
-platform-darwin-arm64:
-	make GOOS=darwin GOARCH=arm64 NPMDIR=npm/turbo-darwin-arm64 platform-darwin-cgo
-
-platform-freebsd-64:
-	make GOOS=freebsd GOARCH=amd64 NPMDIR=npm/turbo-freebsd-64 platform-unixlike
-
-platform-freebsd-arm64:
-	make GOOS=freebsd GOARCH=arm64 NPMDIR=npm/turbo-freebsd-arm64 platform-unixlike
-
-platform-linux-64:
-	make GOOS=linux GOARCH=amd64 NPMDIR=npm/turbo-linux-64 platform-unixlike
-
-platform-linux-32:
-	make GOOS=linux GOARCH=386 NPMDIR=npm/turbo-linux-32 platform-unixlike
-
-platform-linux-arm:
-	make GOOS=linux GOARCH=arm NPMDIR=npm/turbo-linux-arm platform-unixlike
-
-platform-linux-arm64:
-	make GOOS=linux GOARCH=arm64 NPMDIR=npm/turbo-linux-arm64 platform-unixlike
-
-platform-linux-mips64le:
-	make GOOS=linux GOARCH=mips64le NPMDIR=npm/turbo-linux-mips64le platform-unixlike
-
-platform-linux-ppc64le:
-	make GOOS=linux GOARCH=ppc64le NPMDIR=npm/turbo-linux-ppc64le platform-unixlike
+	goreleaser release --snapshot --rm-dist
+	./scripts/move.sh
+	make platform-neutral
+	make platform-create-turbo
 
 platform-neutral: install
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
@@ -197,46 +124,46 @@ publish-all: cmd/turbo/version.go
 	git push origin main "v$(TURBO_VERSION)"
 
 publish-windows-32: test-go lint-go platform-windows-32
-	cd npm/turbo-windows-32 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-windows-64: test-go lint-go platform-windows-64
-	cd npm/turbo-windows-64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-windows-arm64: test-go lint-go platform-windows-arm64
-	cd npm/turbo-windows-arm64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-windows-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-darwin-64: test-go lint-go platform-darwin-64
-	cd npm/turbo-darwin-64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-darwin-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-darwin-arm64: test-go lint-go platform-darwin-arm64
-	cd npm/turbo-darwin-arm64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-darwin-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-freebsd-64: test-go lint-go platform-freebsd-64
-	cd npm/turbo-freebsd-64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-freebsd-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-freebsd-arm64: test-go lint-go platform-freebsd-arm64
-	cd npm/turbo-freebsd-arm64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-freebsd-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-linux-64: test-go lint-go platform-linux-64
-	cd npm/turbo-linux-64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-linux-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-linux-32: test-go lint-go platform-linux-32
-	cd npm/turbo-linux-32 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-linux-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-linux-arm: test-go lint-go platform-linux-arm
-	cd npm/turbo-linux-arm && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-linux-arm && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-linux-arm64: test-go lint-go platform-linux-arm64
-	cd npm/turbo-linux-arm64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-linux-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-android-arm64: test-go lint-go platform-android-arm64
-	cd npm/turbo-android-arm64 && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-android-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-linux-mips64le: test-go lint-go platform-linux-mips64le
-	cd npm/turbo-linux-mips64le && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-linux-mips64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-linux-ppc64le: test-go lint-go platform-linux-ppc64le
-	cd npm/turbo-linux-ppc64le && npm publish --tag $(TURBO_TAG)
+	cd npm/turbo-linux-ppc64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG)
 
 publish-neutral: test-go lint-go platform-neutral
 	cd npm/turbo-install && npm publish --tag $(TURBO_TAG)
