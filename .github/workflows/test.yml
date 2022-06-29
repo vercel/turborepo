@@ -72,3 +72,4 @@ jobs:
         with:
           command: test
           args: --benches
+        if: matrix.os.name == 'ubuntu-latest'
