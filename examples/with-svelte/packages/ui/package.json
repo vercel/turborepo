@@ -6,11 +6,12 @@
   "module": "index.ts",
   "svelte": "index.ts",
   "license": "MIT",
-  "devDependencies": {
-    "svelte": "^3.9.2"
+  "scripts": {
+    "lint": "prettier --check --ignore-path=../../.prettierignore . && eslint .",
+    "format": "prettier --write --ignore-path=../../.prettierignore ."
   },
-  "files": [
-    "index.ts",
-    "components"
-  ]
+  "devDependencies": {
+    "eslint-config-custom": "*",
+    "svelte": "^3.9.2"
+  }
 }
