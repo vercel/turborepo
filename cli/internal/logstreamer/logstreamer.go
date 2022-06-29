@@ -24,6 +24,7 @@ type Logstreamer struct {
 	colorReset string
 }
 
+// NewLogstreamer returns a new Logstreamer instance
 func NewLogstreamer(logger *log.Logger, record bool) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,

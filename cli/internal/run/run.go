@@ -912,11 +912,11 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	taskCache := e.runCache.TaskCache(pt, hash)
 	prettyTaskPrefix := taskCache.ColoredPrefix()
 	// Create a logger
-	targetUi := taskCache.NewTerminal(e.ui)
+	targetUI := taskCache.NewTerminal(e.ui)
 
-	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
+	hit, err := taskCache.RestoreOutputs(targetUI, targetLogger)
 	if err != nil {
-		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
+		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
 		return nil
@@ -991,10 +991,10 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		tracer(TargetBuildFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
 		if !e.rs.Opts.runOpts.continueOnError {
-			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			targetUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			e.processes.Close()
 		} else {
-			targetUi.Warn("command finished with error, but continuing...")
+			targetUI.Warn("command finished with error, but continuing...")
 		}
 		return err
 	}
@@ -1004,7 +1004,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(targetLogger, targetUI, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
