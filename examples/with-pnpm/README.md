@@ -1,10 +1,10 @@
 # Turborepo starter with pnpm
 
-This is an official starter turborepo.
+This is an official starter Turborepo.
 
 ## What's inside?
 
-This turborepo uses [pnpm](https://pnpm.io) as a packages manager. It includes the following packages/apps:
+This Turborepo uses [pnpm](https://pnpm.io) as a packages manager. It includes the following packages/apps:
 
 ### Apps and Packages
 
@@ -18,7 +18,7 @@ Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
 ### Utilities
 
-This turborepo has some additional tools already setup for you:
+This Turborepo has some additional tools already setup for you:
 
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
