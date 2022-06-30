@@ -266,7 +266,19 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			}
 		}
 	}
-	r.config.Logger.Debug("global hash", "value", pkgDepGraph.GlobalHash)
+	globalHash, err := calculateGlobalHash(
+		r.config.Cwd,
+		rootPackageJSON,
+		pipeline,
+		turboJSON.GlobalDependencies,
+		pkgDepGraph.PackageManager,
+		r.config.Logger,
+		os.Environ(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to calculate global hash: %v", err)
+	}
+	r.config.Logger.Debug("global hash", "value", globalHash)
 	r.config.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
@@ -274,7 +286,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
 		PackageInfos:     pkgDepGraph.PackageInfos,
-		GlobalHash:       pkgDepGraph.GlobalHash,
+		GlobalHash:       globalHash,
 		RootNode:         pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
