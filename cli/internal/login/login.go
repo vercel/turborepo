@@ -63,12 +63,13 @@ func (c *LoginCommand) Run(args []string) int {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			apiClient := c.Config.NewClient()
 			login := login{
 				ui:                  c.UI,
 				logger:              c.Config.Logger,
 				repoRoot:            c.Config.Cwd,
 				openURL:             browser.OpenBrowser,
-				client:              c.Config.ApiClient,
+				client:              apiClient,
 				promptEnableCaching: promptEnableCaching,
 			}
 			if ssoTeam != "" {

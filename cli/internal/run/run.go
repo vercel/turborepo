@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -23,7 +24,10 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/core"
+	"github.com/vercel/turborepo/cli/internal/daemon"
+	"github.com/vercel/turborepo/cli/internal/daemonclient"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/graphvisualizer"
 	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
@@ -31,12 +35,10 @@ import (
 	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/browser"
-
-	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -46,9 +48,9 @@ import (
 
 // RunCommand is a Command implementation that tells Turbo to run a task
 type RunCommand struct {
-	Config    *config.Config
-	Ui        *cli.ColoredUi
-	Processes *process.Manager
+	Config        *config.Config
+	UI            *cli.ColoredUi
+	SignalWatcher *signals.Watcher
 }
 
 // completeGraph represents the common state inferred from the filesystem and pipeline.
@@ -91,7 +93,7 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra.Command {
+func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
 	var opts *Opts
 	var flags *pflag.FlagSet
 	cmd := &cobra.Command{
@@ -107,8 +109,9 @@ func getCmd(config *config.Config, ui cli.Ui, processes *process.Manager) *cobra
 				return errors.New("at least one task must be specified")
 			}
 			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(config, ui, opts, processes)
-			return run.run(tasks)
+			run := configureRun(config, ui, opts, signalWatcher)
+			ctx := cmd.Context()
+			return run.run(ctx, tasks)
 		},
 	}
 	flags = cmd.Flags()
@@ -142,7 +145,7 @@ func optsFromFlags(flags *pflag.FlagSet, config *config.Config) *Opts {
 	return opts
 }
 
-func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *process.Manager) *run {
+func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatcher *signals.Watcher) *run {
 	if os.Getenv("TURBO_FORCE") == "true" {
 		opts.runcacheOpts.SkipReads = true
 	}
@@ -154,6 +157,8 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 	if !config.IsLoggedIn() {
 		opts.cacheOpts.SkipRemote = true
 	}
+	processes := process.NewManager(config.Logger.Named("processes"))
+	signalWatcher.AddOnClose(processes.Close)
 	return &run{
 		opts:      opts,
 		config:    config,
@@ -164,19 +169,19 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, processes *p
 
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return cmd.Short
 }
 
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Run executes tasks in the monorepo
 func (c *RunCommand) Run(args []string) int {
-	cmd := getCmd(c.Config, c.Ui, c.Processes)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -197,18 +202,37 @@ type run struct {
 	processes *process.Manager
 }
 
-func (r *run) run(targets []string) error {
+func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	ctx, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
+	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, r.config.RootPackageJSON)
 	if err != nil {
 		return err
 	}
+	// TODO: these values come from a config file, hopefully viper can help us merge these
+	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+	pkgDepGraph, err := context.New(context.WithGraph(r.config, turboJSON, r.opts.cacheOpts.Dir))
+	if err != nil {
+		return err
+	}
+	// This technically could be one flag, but we plan on removing
+	// the daemon opt-in flag at some point once it stabilizes
+	if r.opts.runOpts.daemonOptIn && !r.opts.runOpts.noDaemon {
+		turbodClient, err := daemon.GetClient(ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
+		if err != nil {
+			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+		} else {
+			defer func() { _ = turbodClient.Close() }()
+			r.config.Logger.Debug("running in daemon mode")
+			daemonClient := daemonclient.New(turbodClient)
+			r.opts.runcacheOpts.OutputWatcher = daemonClient
+		}
+	}
 
-	if err := util.ValidateGraph(&ctx.TopologicalGraph); err != nil {
+	if err := util.ValidateGraph(&pkgDepGraph.TopologicalGraph); err != nil {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
-	pipeline := r.config.TurboJSON.Pipeline
+	pipeline := turboJSON.Pipeline
 	if err := validateTasks(pipeline, targets); err != nil {
 		return err
 	}
@@ -221,7 +245,7 @@ func (r *run) run(targets []string) error {
 			return errors.Wrap(err, "failed to create SCM")
 		}
 	}
-	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.config.Cwd.ToStringDuringMigration(), scmInstance, ctx, r.ui, r.config.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.config.Cwd.ToStringDuringMigration(), scmInstance, pkgDepGraph, r.ui, r.config.Logger)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve packages to run")
 	}
@@ -236,27 +260,27 @@ func (r *run) run(targets []string) error {
 			}
 		}
 	}
-	r.config.Logger.Debug("global hash", "value", ctx.GlobalHash)
+	r.config.Logger.Debug("global hash", "value", pkgDepGraph.GlobalHash)
 	r.config.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
 	g := &completeGraph{
-		TopologicalGraph: ctx.TopologicalGraph,
+		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
-		PackageInfos:     ctx.PackageInfos,
-		GlobalHash:       ctx.GlobalHash,
-		RootNode:         ctx.RootNode,
+		PackageInfos:     pkgDepGraph.PackageInfos,
+		GlobalHash:       pkgDepGraph.GlobalHash,
+		RootNode:         pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
 		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
 		Opts:         r.opts,
 	}
-	packageManager := ctx.PackageManager
-	return r.runOperation(g, rs, packageManager, startAt)
+	packageManager := pkgDepGraph.PackageManager
+	return r.runOperation(ctx, g, rs, packageManager, startAt)
 }
 
-func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
+func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -287,12 +311,19 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 		}
 	}
 
-	if rs.Opts.runOpts.dotGraph != "" {
-		if err := r.generateDotGraph(engine.TaskGraph, r.config.Cwd.Join(rs.Opts.runOpts.dotGraph)); err != nil {
-			return err
+	if rs.Opts.runOpts.graphFile != "" || rs.Opts.runOpts.graphDot {
+		visualizer := graphvisualizer.New(r.config, r.ui, engine.TaskGraph)
+
+		if rs.Opts.runOpts.graphDot {
+			visualizer.RenderDotGraph()
+		} else {
+			err := visualizer.GenerateGraphFile(rs.Opts.runOpts.graphFile)
+			if err != nil {
+				return err
+			}
 		}
 	} else if rs.Opts.runOpts.dryRun {
-		tasksRun, err := r.executeDryRun(engine, g, hashTracker, rs)
+		tasksRun, err := r.executeDryRun(ctx, engine, g, hashTracker, rs)
 		if err != nil {
 			return err
 		}
@@ -344,7 +375,7 @@ func (r *run) runOperation(g *completeGraph, rs *runSpec, packageManager *packag
 		sort.Strings(packagesInScope)
 		r.ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		r.ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		return r.executeTasks(g, rs, engine, packageManager, hashTracker, startAt)
+		return r.executeTasks(ctx, g, rs, engine, packageManager, hashTracker, startAt)
 	}
 	return nil
 }
@@ -412,9 +443,15 @@ type runOpts struct {
 	continueOnError bool
 	passThroughArgs []string
 	// Restrict execution to only the listed task names. Default false
-	only       bool
+	only bool
+	// Dry run flags
 	dryRun     bool
 	dryRunJSON bool
+	// Graph flags
+	graphDot    bool
+	graphFile   string
+	noDaemon    bool
+	daemonOptIn bool
 }
 
 var (
@@ -426,22 +463,35 @@ or non-zero exit code. The default behavior is to bail`
 	_dryRunHelp = `List the packages in scope and the tasks that would be run,
 but don't actually run them. Passing --dry=json or
 --dry-run=json will render the output in JSON format.`
+	_graphHelp = `Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html).
+Outputs dot graph to stdout when if no filename is provided`
+	_concurrencyHelp = `Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.`
+	_parallelHelp    = `Execute all tasks in parallel.`
+	_onlyHelp        = `Run only the specified tasks, not their dependencies.`
 )
 
 func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) {
-	flags.StringVar(&opts.dotGraph, "graph", "", "Generate a Dot graph of the task execution.")
 	flags.AddFlag(&pflag.Flag{
 		Name:     "concurrency",
-		Usage:    "Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.",
+		Usage:    _concurrencyHelp,
 		DefValue: "10",
 		Value: &util.ConcurrencyValue{
 			Value: &opts.concurrency,
 		},
 	})
-	flags.BoolVar(&opts.parallel, "parallel", false, "Execute all tasks in parallel.")
+	flags.BoolVar(&opts.parallel, "parallel", false, _parallelHelp)
 	flags.StringVar(&opts.profile, "profile", "", _profileHelp)
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
-	flags.BoolVar(&opts.only, "only", false, "Run only the specified tasks, not their dependencies")
+	flags.BoolVar(&opts.only, "only", false, _onlyHelp)
+	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
+	flags.BoolVar(&opts.daemonOptIn, "experimental-use-daemon", false, "Use the experimental turbo daemon")
+	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
+	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
+		panic(err)
+	}
+	if err := flags.MarkHidden("no-daemon"); err != nil {
+		panic(err)
+	}
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
 		panic(err)
@@ -453,6 +503,13 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 		DefValue:    "",
 		NoOptDefVal: _dryRunNoValue,
 		Value:       &dryRunValue{opts: opts},
+	})
+	flags.AddFlag(&pflag.Flag{
+		Name:        "graph",
+		Usage:       _graphHelp,
+		DefValue:    "",
+		NoOptDefVal: _graphNoValue,
+		Value:       &graphValue{opts: opts},
 	})
 }
 
@@ -484,6 +541,49 @@ func noopPersistentOptsDuringMigration(flags *pflag.FlagSet) {
 	}
 }
 
+const (
+	_graphText      = "graph"
+	_graphNoValue   = "<output filename>"
+	_graphTextValue = "true"
+)
+
+// graphValue implements a flag that can be treated as a boolean (--graph)
+// or a string (--graph=output.svg).
+type graphValue struct {
+	opts *runOpts
+}
+
+var _ pflag.Value = &graphValue{}
+
+func (d *graphValue) String() string {
+	if d.opts.graphDot {
+		return _graphText
+	}
+	return d.opts.graphFile
+}
+
+func (d *graphValue) Set(value string) error {
+	if value == _graphNoValue {
+		// this case matches the NoOptDefValue, which is used when the flag
+		// is passed, but does not have a value (i.e. boolean flag)
+		d.opts.graphDot = true
+	} else if value == _graphTextValue {
+		// "true" is equivalent to just setting the boolean flag
+		d.opts.graphDot = true
+	} else {
+		d.opts.graphDot = false
+		d.opts.graphFile = value
+	}
+	return nil
+}
+
+// Type implements Value.Type, and in this case is used to
+// show the alias in the usage test.
+func (d *graphValue) Type() string {
+	return ""
+}
+
+// dry run custom flag
 const (
 	_dryRunText      = "dry run"
 	_dryRunJSONText  = "json"
@@ -553,7 +653,7 @@ func (c *RunCommand) logError(log hclog.Logger, prefix string, err error) {
 		prefix += ": "
 	}
 
-	c.Ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
+	c.UI.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
 // logError logs an error and outputs it to the UI.
@@ -567,24 +667,19 @@ func (r *run) logWarning(prefix string, err error) {
 	r.ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 }
 
-func hasGraphViz() bool {
-	err := exec.Command("dot", "-v").Run()
-	return err == nil
-}
-
-func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
-	goctx := gocontext.Background()
+func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
-		analyticsSink = r.config.ApiClient
+		analyticsSink = apiClient
 	} else {
 		analyticsSink = analytics.NullSink
 	}
-	analyticsClient := analytics.NewClient(goctx, analyticsSink, r.config.Logger.Named("analytics"))
+	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.config.Logger.Named("analytics"))
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache, err := cache.New(rs.Opts.cacheOpts, r.config, analyticsClient, func(_cache cache.Cache, err error) {
+	turboCache, err := cache.New(rs.Opts.cacheOpts, r.config, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
@@ -601,8 +696,21 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 	}
 	defer turboCache.Shutdown()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
+	argSeparator := []string{"--"}
+	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
+		return errors.Wrap(err, "determining pnpm version")
+	} else if is7PlusPnpm {
+		// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
+		// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
+		// potentially breaking scripts that aren't expecting it.
+		//
+		// We are allowed to use nil here because argSeparator already has a type, so it's a typed nil,
+		// vs if we tried to call "args = append(args, nil...)", which would not work. This could
+		// just as easily be []string{}, but the style guide says to prefer nil for empty slices.
+		argSeparator = nil
+	}
 	ec := &execContext{
 		colorCache:     colorCache,
 		runState:       runState,
@@ -614,12 +722,13 @@ func (r *run) executeTasks(g *completeGraph, rs *runSpec, engine *core.Scheduler
 		packageManager: packageManager,
 		processes:      r.processes,
 		taskHashes:     hashes,
+		argSeparator:   argSeparator,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
-		return ec.exec(pt, deps)
+		return ec.exec(ctx, pt, deps)
 	}), core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
@@ -664,9 +773,9 @@ type hashedTask struct {
 	Dependents   []string `json:"dependents"`
 }
 
-func (r *run) executeDryRun(engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
-	errs := engine.Execute(g.getPackageTaskVisitor(func(pt *nodes.PackageTask) error {
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(pt.Task)
 		deps := engine.TaskGraph.DownEdges(pt.TaskID)
 		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
@@ -757,6 +866,7 @@ type execContext struct {
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
 	taskHashes     *taskhash.Tracker
+	argSeparator   []string
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -769,7 +879,7 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
+func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
 	targetLogger := e.logger.Named(pt.OutputPrefix())
@@ -808,7 +918,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(pt, hash)
-	hit, err := taskCache.RestoreOutputs(targetUi, targetLogger)
+	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
@@ -818,7 +928,8 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	// Setup command execution
 	argsactual := append([]string{"run"}, pt.Task)
 	if len(passThroughArgs) > 0 {
-		argsactual = append(argsactual, "--")
+		// This will be either '--' or a typed nil
+		argsactual = append(argsactual, e.argSeparator...)
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 
@@ -894,7 +1005,7 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -905,64 +1016,9 @@ func (e *execContext) exec(pt *nodes.PackageTask, deps dag.Set) error {
 	return nil
 }
 
-func (r *run) generateDotGraph(taskGraph *dag.AcyclicGraph, outputFilename fs.AbsolutePath) error {
-	graphString := string(taskGraph.Dot(&dag.DotOpts{
-		Verbose:    true,
-		DrawCycles: true,
-	}))
-	ext := outputFilename.Ext()
-	if ext == ".html" {
-		f, err := outputFilename.Create()
-		if err != nil {
-			return fmt.Errorf("error writing graph: %w", err)
-		}
-		defer f.Close()
-		f.WriteString(`<!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Graph</title>
-    </head>
-    <body>
-      <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/viz.js"></script>
-      <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2-pre.1/full.render.js"></script>
-      <script>`)
-		f.WriteString("const s = `" + graphString + "`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => document.body.appendChild(el)).catch(e => console.error(e));")
-		f.WriteString(`
-    </script>
-  </body>
-  </html>`)
-		r.ui.Output("")
-		r.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
-		if ui.IsTTY {
-			if err := browser.OpenBrowser(outputFilename.ToString()); err != nil {
-				r.ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprintf("failed to open browser. Please navigate to file://%v", filepath.ToSlash(outputFilename.ToString())))
-			}
-		}
-		return nil
-	}
-	hasDot := hasGraphViz()
-	if hasDot {
-		dotArgs := []string{"-T" + ext[1:], "-o", outputFilename.ToString()}
-		cmd := exec.Command("dot", dotArgs...)
-		cmd.Stdin = strings.NewReader(graphString)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("could not generate task graphfile %v:  %w", outputFilename, err)
-		} else {
-			r.ui.Output("")
-			r.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
-		}
-	} else {
-		r.ui.Output("")
-		r.ui.Warn(color.New(color.FgYellow, color.Bold, color.ReverseVideo).Sprint(" WARNING ") + color.YellowString(" `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer."))
-		r.ui.Output("")
-		r.ui.Output(graphString)
-	}
-	return nil
-}
-
-func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask) error) func(taskID string) error {
+func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, pt *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
+
 		name, task := util.GetPackageTaskFromId(taskID)
 		pkg, ok := g.PackageInfos[name]
 		if !ok {
@@ -980,7 +1036,7 @@ func (g *completeGraph) getPackageTaskVisitor(visitor func(pt *nodes.PackageTask
 			// override if we need to...
 			pipeline = altpipe
 		}
-		return visitor(&nodes.PackageTask{
+		return visitor(ctx, &nodes.PackageTask{
 			TaskID:         taskID,
 			Task:           task,
 			PackageName:    name,

@@ -62,11 +62,11 @@ func FileExists(filename string) bool {
 
 // CopyFile copies a file from 'from' to 'to', with an attempt to perform a copy & rename
 // to avoid chaos if anything goes wrong partway.
-func CopyFile(from string, to string, mode os.FileMode) error {
-	fromFile, err := os.Open(from)
+func CopyFile(from *LstatCachedFile, to string) error {
+	fromFile, err := from.Path.Open()
 	if err != nil {
-		fileInfos, err := os.Lstat(from)
-		isSymlink := err == nil && fileInfos.Mode()&os.ModeSymlink == os.ModeSymlink
+		fromMode, err := from.GetMode()
+		isSymlink := err == nil && fromMode&os.ModeSymlink == os.ModeSymlink
 
 		if isSymlink {
 			// We have a broken symlink. Don't try to copy it.
@@ -74,8 +74,12 @@ func CopyFile(from string, to string, mode os.FileMode) error {
 		}
 		return err
 	}
+	fromMode, err := from.GetMode()
+	if err != nil {
+		return err
+	}
 	defer fromFile.Close()
-	return writeFileFromStream(fromFile, to, mode)
+	return writeFileFromStream(fromFile, to, fromMode)
 }
 
 // writeFileFromStream writes data from a reader to the file named 'to', with an attempt to perform
