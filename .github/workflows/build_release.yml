@@ -9,7 +9,19 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - name: macos-latest
+            target: x86_64-apple-darwin
+          - name: macos-latest
+            target: aarch64-apple-darwin
+          - name: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os.name }}
 
     steps:
       - uses: actions/checkout@v3
@@ -17,7 +29,7 @@ jobs:
       - name: Install target
         uses: actions-rs/toolchain@v1
         with:
-          target: x86_64-unknown-linux-musl
+          target: ${{ matrix.os.target }}
 
       - uses: Swatinem/rust-cache@v1
         with:
@@ -27,9 +39,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p node-file-trace --target=x86_64-unknown-linux-musl
+          args: --release -p node-file-trace --target ${{ matrix.os.target }}
 
       - uses: actions/upload-artifact@v3
         with:
-          name: node-file-trace
-          path: target/x86_64-unknown-linux-musl/release/node-file-trace
+          name: node-file-trace-${{ matrix.os.target }}
+          path: |
+            target/${{ matrix.os.target }}/release/node-file-trace
+            target/${{ matrix.os.target }}/release/node-file-trace.exe
