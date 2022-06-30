@@ -124,7 +124,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
+func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
 		rootpath := config.Cwd.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
@@ -150,7 +150,17 @@ func WithGraph(config *config.Config, cacheDir fs.AbsolutePath) Option {
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
 
-		globalHash, err := calculateGlobalHash(config.Cwd, config.RootPackageJSON, config.TurboJSON.Pipeline, config.TurboJSON.GlobalDependencies, c.PackageManager, config.Logger, os.Environ())
+		// TODO: it seems like calculating the global hash could be separate from
+		// construction of the package-dependency graph
+		globalHash, err := calculateGlobalHash(
+			config.Cwd,
+			config.RootPackageJSON,
+			turboJSON.Pipeline,
+			turboJSON.GlobalDependencies,
+			c.PackageManager,
+			config.Logger,
+			os.Environ(),
+		)
 		if err != nil {
 			return fmt.Errorf("failed to calculate global hash: %v", err)
 		}

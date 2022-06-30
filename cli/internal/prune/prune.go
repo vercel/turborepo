@@ -119,7 +119,11 @@ type prune struct {
 // Prune creates a smaller monorepo with only the required workspaces
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.config.Cwd)
-	ctx, err := context.New(context.WithGraph(p.config, cacheDir))
+	turboJSON, err := fs.ReadTurboConfig(p.config.Cwd, p.config.RootPackageJSON)
+	if err != nil {
+		return err
+	}
+	ctx, err := context.New(context.WithGraph(p.config, turboJSON, cacheDir))
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
