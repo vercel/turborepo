@@ -329,7 +329,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, config *config.Config, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, repoRoot fs.AbsolutePath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
@@ -341,6 +341,6 @@ func newHTTPCache(opts Opts, client client, config *config.Config, recorder anal
 			teamId:  config.TeamId,
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
-		repoRoot: config.Cwd,
+		repoRoot: repoRoot,
 	}
 }
