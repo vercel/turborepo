@@ -216,7 +216,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
-	pkgDepGraph, err := context.New(context.WithGraph(r.config, turboJSON, rootPackageJSON, r.opts.cacheOpts.Dir))
+	pkgDepGraph, err := context.New(context.WithGraph(r.config.Cwd, rootPackageJSON, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
@@ -117,13 +116,13 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, rootPackageJSON *fs.PackageJSON, cacheDir fs.AbsolutePath) Option {
+func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheDir fs.AbsolutePath) Option {
 	return func(c *Context) error {
-		rootpath := config.Cwd.ToStringDuringMigration()
+		rootpath := repoRoot.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if packageManager, err := packagemanager.GetPackageManager(config.Cwd, rootPackageJSON); err != nil {
+		if packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON); err != nil {
 			return err
 		} else {
 			c.PackageManager = packageManager
@@ -144,7 +143,7 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, rootPackageJSON *
 		}
 
 		// Get the workspaces from the package manager.
-		workspaces, err := c.PackageManager.GetWorkspaces(config.Cwd)
+		workspaces, err := c.PackageManager.GetWorkspaces(repoRoot)
 
 		if err != nil {
 			return fmt.Errorf("workspace configuration error: %w", err)
