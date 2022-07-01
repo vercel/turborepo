@@ -53,6 +53,9 @@ jobs:
           command: clippy
           # args: -- -D warnings
 
+      - name: Install cargo rustfmt
+        run: rustup component add rustfmt
+
       - name: Run cargo fmt check
         uses: actions-rs/cargo@v1
         with:
