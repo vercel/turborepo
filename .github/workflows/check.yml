@@ -52,3 +52,9 @@ jobs:
         with:
           command: clippy
           # args: -- -D warnings
+
+      - name: Run cargo fmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --check
