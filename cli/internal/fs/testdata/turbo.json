@@ -1,7 +1,10 @@
+// mocked test comment
 {
   "pipeline": {
     "build": {
+      // mocked test comment
       "dependsOn": [
+        // mocked test comment
         "^build"
       ],
       "outputs": [
@@ -9,7 +12,7 @@
         ".next/**"
       ],
       "outputMode": "new-only"
-    },
+    }, // mocked test comment
     "lint": {
       "outputs": [],
       "dependsOn": [
@@ -22,15 +25,19 @@
       "cache": false,
       "outputMode": "full"
     },
+    /* mocked test comment */
     "publish": {
       "outputs": [
         "dist/**"
       ],
       "inputs": [
+         /* 
+          mocked test comment 
+         */
         "build/**/*"
       ],
       "dependsOn": [
-        "^publish",
+         /* mocked test comment */"^publish",
         "build",
         "admin#lint"
       ],
