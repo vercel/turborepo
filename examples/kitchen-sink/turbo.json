@@ -1,10 +1,13 @@
 {
+  "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
       "outputs": [
         "dist/**",
         ".next/**",
-        "public/dist/**"
+        "build/**",
+        "api/**",
+        "public/build/**"
       ],
       "dependsOn": [
         "^build"
