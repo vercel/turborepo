@@ -138,7 +138,9 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
 	for _, arg := range args {
-		if len(arg) != 0 && arg[0] != '-' {
+		if arg == "--" {
+			break
+		} else if len(arg) != 0 && arg[0] != '-' {
 			continue
 		}
 		switch {
