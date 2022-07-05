@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/util"
+	"gotest.tools/v3/assert"
 
 	"github.com/pyr-sh/dag"
 )
@@ -168,7 +169,6 @@ libD#build
 
 func TestIncludeRootTasks(t *testing.T) {
 	graph := &dag.AcyclicGraph{}
-	graph.Add(util.RootPkgName)
 	graph.Add("app1")
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
@@ -222,6 +222,51 @@ libA#test
 	if actual != expected {
 		t.Errorf("task graph got:\n%v\nwant:\n%v", actual, expected)
 	}
+}
+
+func TestDependOnRootTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "//#root-task",
+		TopoDeps: make(util.Set),
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("//#root-task", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	assert.NilError(t, err, "Prepare")
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
+	for _, err := range errs {
+		assert.NilError(t, err, "Execute")
+	}
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	expected := fmt.Sprintf(`%v#root-task
+  ___ROOT___
+___ROOT___
+app1#build
+  libA#build
+libA#build
+  %v#root-task`, util.RootPkgName, util.RootPkgName)
+	assert.Equal(t, expected, actual)
 }
 
 func TestSchedulerTasksOnly(t *testing.T) {
