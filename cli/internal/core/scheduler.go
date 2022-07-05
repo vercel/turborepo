@@ -142,6 +142,9 @@ func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOn
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
 		pkg, taskName := util.GetPackageTaskFromId(taskId)
+		if pkg == util.RootPkgName && !p.rootEnabledTasks.Includes(taskName) {
+			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskId)
+		}
 		task, err := p.getTaskDefinition(pkg, taskName, taskId)
 		if err != nil {
 			return err

@@ -338,6 +338,38 @@ func TestDependOnMissingRootTask(t *testing.T) {
 	}
 }
 
+func TestDependOnUnenabledRootTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "foo",
+		TopoDeps: make(util.Set),
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("//#foo", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	if err == nil {
+		t.Error("expected an error depending on un-enabled root task")
+	}
+}
+
 func TestSchedulerTasksOnly(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")
