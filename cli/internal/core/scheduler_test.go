@@ -167,6 +167,48 @@ libD#build
 	}
 }
 
+func TestRunPackageTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+	p.AddTask(&Task{
+		Name:     "app1#special",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	// equivalent to "turbo run special", without an entry for
+	// "special" in turbo.json. Only "app1#special" is defined.
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1", "libA"},
+		TaskNames: []string{"special"},
+	})
+	assert.NilError(t, err, "Prepare")
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
+	for _, err := range errs {
+		assert.NilError(t, err, "Execute")
+	}
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	expected := strings.TrimSpace(`
+___ROOT___
+app1#special
+  libA#build
+libA#build
+  ___ROOT___`)
+	assert.Equal(t, expected, actual)
+}
+
 func TestIncludeRootTasks(t *testing.T) {
 	graph := &dag.AcyclicGraph{}
 	graph.Add("app1")
@@ -267,6 +309,33 @@ app1#build
 libA#build
   %v#root-task`, util.RootPkgName, util.RootPkgName)
 	assert.Equal(t, expected, actual)
+}
+
+func TestDependOnMissingRootTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("//#root-task", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	if err == nil {
+		t.Error("expected an error depending on non-existent root task")
+	}
 }
 
 func TestSchedulerTasksOnly(t *testing.T) {
