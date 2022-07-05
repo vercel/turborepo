@@ -2392,9 +2392,9 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "0.20.1"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "345cb0a3ca943351d3471aecf10df205f7d99c0932aea664edb1b5c15615ac8b"
+checksum = "b3832f3c4886200cac7a165e7ca5b465dc28b6b295eee86438c1e9e5d2f89f3c"
 dependencies = [
  "ahash",
  "ast_node",
@@ -2609,9 +2609,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_visit"
-version = "0.67.0"
+version = "0.67.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1e40517622d404e3f2fdb064d2982d46fee0e2ec097f3cf196fa4d128fb095b"
+checksum = "fa8abef878e395ffc2348cdc885e9a37eab3c082e9fa7a675e9ef17b614f297c"
 dependencies = [
  "num-bigint",
  "swc_atoms",
@@ -3295,6 +3295,7 @@ dependencies = [
  "swc_common",
  "swc_ecma_loader",
  "swc_ecma_transforms_base",
+ "swc_ecma_visit",
  "swc_ecmascript",
  "testing",
  "tokio",
