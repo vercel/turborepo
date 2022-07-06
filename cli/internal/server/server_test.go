@@ -32,7 +32,7 @@ func TestDeleteRepoRoot(t *testing.T) {
 		stopped: make(chan struct{}),
 	}
 
-	s, err := New(logger, repoRoot, "some-version", "/log/file/path")
+	s, err := New("testServer", logger, repoRoot, "some-version", "/log/file/path")
 	assert.NilError(t, err, "New")
 	s.Register(grpcServer)
 
@@ -56,7 +56,7 @@ func TestShutdown(t *testing.T) {
 		stopped: make(chan struct{}),
 	}
 
-	s, err := New(logger, repoRoot, "some-version", "/log/file/path")
+	s, err := New("testServer", logger, repoRoot, "some-version", "/log/file/path")
 	assert.NilError(t, err, "New")
 	s.Register(grpcServer)
 

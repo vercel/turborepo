@@ -47,6 +47,14 @@ func setup(t *testing.T, repoRoot fs.AbsolutePath) {
 	assert.NilError(t, err, "Close")
 }
 
+type noopCookieWaiter struct{}
+
+func (*noopCookieWaiter) WaitForCookie() error {
+	return nil
+}
+
+var _noopCookieWaiter = &noopCookieWaiter{}
+
 func TestTrackOutputs(t *testing.T) {
 	logger := hclog.Default()
 
@@ -55,7 +63,7 @@ func TestTrackOutputs(t *testing.T) {
 
 	setup(t, repoRoot)
 
-	globWatcher := New(logger, repoRoot)
+	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
 
 	globs := []string{
 		"my-pkg/dist/**",
@@ -117,7 +125,7 @@ func TestWatchSingleFile(t *testing.T) {
 	setup(t, repoRoot)
 
 	//watcher := newTestWatcher()
-	globWatcher := New(logger, repoRoot)
+	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
 	globs := []string{
 		"my-pkg/.next/next-file",
 	}
