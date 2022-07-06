@@ -3,17 +3,17 @@
   "display": "Next.js",
   "extends": "./base.json",
   "compilerOptions": {
-    "target": "es5",
-    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "module": "esnext",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
+    "declaration": false,
+    "declarationMap": false,
     "incremental": true,
     "jsx": "preserve",
-    "rootDir": "src"
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "rootDir": "src",
+    "target": "es5"
   },
   "include": ["src", "next-env.d.ts"],
   "exclude": ["node_modules"]
