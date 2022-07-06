@@ -168,6 +168,11 @@ func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())
 }
 
+// RemoveAll implements os.RemoveAll for absolute paths.
+func (ap AbsolutePath) RemoveAll() error {
+	return os.RemoveAll(ap.asString())
+}
+
 // Base implements filepath.Base for an absolute path
 func (ap AbsolutePath) Base() string {
 	return filepath.Base(ap.asString())

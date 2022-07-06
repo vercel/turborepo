@@ -140,7 +140,8 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 				reqCh:      make(chan struct{}),
 				timedOutCh: make(chan struct{}),
 			}
-			turboServer, err := server.New(d.logger.Named("rpc server"), config.Cwd, config.TurboVersion, logFilePath)
+			serverName := getRepoHash(config.Cwd)
+			turboServer, err := server.New(serverName, d.logger.Named("rpc server"), config.Cwd, config.TurboVersion, logFilePath)
 			if err != nil {
 				d.logError(err)
 				return err
