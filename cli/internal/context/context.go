@@ -195,7 +195,7 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 		for _, pkg := range c.PackageInfos {
 			pkg := pkg
 			populateGraphWaitGroup.Go(func() error {
-				return c.populateTopologicGraphForPackageJson(pkg, rootpath, pkg.Name)
+				return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name)
 			})
 		}
 
@@ -205,7 +205,7 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 		// Resolve dependencies for the root package. We override the vertexName in the graph
 		// for the root package, since it can have an arbitrary name. We need it to have our
 		// RootPkgName so that we can identify it as the root later on.
-		err = c.populateTopologicGraphForPackageJson(config.RootPackageJSON, rootpath, util.RootPkgName)
+		err = c.populateTopologicGraphForPackageJSON(config.RootPackageJSON, rootpath, util.RootPkgName)
 		if err != nil {
 			return fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 		}
@@ -252,11 +252,11 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	return nil
 }
 
-// populateTopologicGraphForPackageJson fills in the edges for the dependencies of the given package
+// populateTopologicGraphForPackageJSON fills in the edges for the dependencies of the given package
 // that are within the monorepo, as well as collecting and hashing the dependencies of the package
 // that are not within the monorepo. The vertexName is used to override the package name in the graph.
 // This can happen when adding the root package, which can have an arbitrary name.
-func (c *Context) populateTopologicGraphForPackageJson(pkg *fs.PackageJSON, rootpath string, vertexName string) error {
+func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, rootpath string, vertexName string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	depMap := make(map[string]string)
