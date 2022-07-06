@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/chrometracing"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
-	"github.com/google/chrometracing"
 	"github.com/mitchellh/cli"
 )
 
@@ -235,11 +235,13 @@ func (r *RunState) Close(Ui cli.Ui, filename string) error {
 	// so we have to account for that before converting to AbsolutePath
 	root := fs.AbsolutePathFromUpstream(cwd)
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
-	println("source: ", fs.ResolveUnknownPath(root, outputPath))
 	if filename != "" {
 		name = filename
 	}
 	if outputPath != "" {
+		if err := chrometracing.Close(); err != nil {
+			Ui.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
+		}
 		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
 			return err
 		}

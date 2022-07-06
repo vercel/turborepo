@@ -21,12 +21,12 @@ type git struct {
 }
 
 // ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.
-func (g *git) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
 	if relativeTo == "" {
 		relativeTo = g.repoRoot
 	}
 	relSuffix := []string{"--", relativeTo}
-	command := []string{"diff", "--name-only", "HEAD"}
+	command := []string{"diff", "--name-only", toCommit}
 
 	out, err := exec.Command("git", append(command, relSuffix...)...).CombinedOutput()
 	if err != nil {
@@ -37,7 +37,7 @@ func (g *git) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo 
 	if fromCommit != "" {
 		// Grab the diff from the merge-base to HEAD using ... syntax.  This ensures we have just
 		// the changes that have occurred on the current branch.
-		command = []string{"diff", "--name-only", fromCommit + "...HEAD"}
+		command = []string{"diff", "--name-only", fromCommit + "..." + toCommit}
 		out, err = exec.Command("git", append(command, relSuffix...)...).CombinedOutput()
 		if err != nil {
 			// Check if we can provide a better error message for non-existent commits.

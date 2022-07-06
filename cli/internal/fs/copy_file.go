@@ -56,7 +56,7 @@ func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) e
 		return err
 	}
 
-	if fromType == os.ModeDir {
+	if fromType.IsDir() {
 		return WalkMode(statedFrom.Path.ToStringDuringMigration(), func(name string, isDir bool, fileType os.FileMode) error {
 			dest := filepath.Join(to, name[len(statedFrom.Path.ToString()):])
 			if isDir {

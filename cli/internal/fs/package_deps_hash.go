@@ -25,16 +25,17 @@ type PackageDepsOptions struct {
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
+	pkgPath := rootPath.Join(p.PackagePath)
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
 	if len(p.InputPatterns) == 0 {
-		gitLsTreeOutput, err := gitLsTree(rootPath.Join(p.PackagePath))
+		gitLsTreeOutput, err := gitLsTree(pkgPath)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
 		result = gitLsTreeOutput
 	} else {
-		gitLsFilesOutput, err := gitLsFiles(rootPath.Join(p.PackagePath), p.InputPatterns)
+		gitLsFilesOutput, err := gitLsFiles(pkgPath, p.InputPatterns)
 		if err != nil {
 			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
 		}
@@ -42,22 +43,22 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 	}
 
 	// Update the checked in hashes with the current repo status
-	gitStatusOutput, err := gitStatus(rootPath.Join(p.PackagePath), p.InputPatterns)
+	// The paths returned from this call are anchored at the package directory
+	gitStatusOutput, err := gitStatus(pkgPath, p.InputPatterns)
 	if err != nil {
 		return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
 	}
 
-	var filesToHash []turbopath.AnchoredUnixPath
+	var filesToHash []turbopath.AnchoredSystemPath
 	for filePath, status := range gitStatusOutput {
 		if status.isDelete() {
 			delete(result, filePath)
 		} else {
-			filesToHash = append(filesToHash, filePath)
+			filesToHash = append(filesToHash, filePath.ToSystemPath())
 		}
 	}
 
-	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
-	hashes, err := gitHashObject(convertedRootPath, turbopath.AnchoredUnixPathArray(filesToHash).ToSystemPathArray())
+	hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToString()), filesToHash)
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +90,10 @@ func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
 // `git hash-object` expects paths to use Unix separators, even on Windows.
 //
-// Note: paths of files to hash passed to `git hash-object` are processed as relative to the *repository* root.
-// For that reason we convert all input paths and make them relative to the rootPath prior to passing them
+// Note: paths of files to hash passed to `git hash-object` are processed as relative to the given anchor.
+// For that reason we convert all input paths and make them relative to the anchor prior to passing them
 // to `git hash-object`.
-func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+func gitHashObject(anchor turbopath.AbsoluteSystemPath, filesToHash []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	fileCount := len(filesToHash)
 	output := make(map[turbopath.AnchoredUnixPath]string, fileCount)
 
@@ -102,7 +103,7 @@ func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopat
 			"hash-object",   // hash a file,
 			"--stdin-paths", // using a list of newline-separated paths from stdin.
 		)
-		cmd.Dir = rootPath.ToString() // Start at this directory.
+		cmd.Dir = anchor.ToString() // Start at this directory.
 
 		// The functionality for gitHashObject is different enough that it isn't reasonable to
 		// generalize the behavior for `runGitCmd`. In fact, it doesn't even use the `gitoutput`
@@ -125,7 +126,7 @@ func gitHashObject(rootPath turbopath.AbsoluteSystemPath, filesToHash []turbopat
 			// This function's result needs to be relative to `rootPath`.
 			// We convert all files to absolute paths and assume that they will be inside of the repository.
 			for _, file := range filesToHash {
-				converted := file.RestoreAnchor(rootPath)
+				converted := file.RestoreAnchor(anchor)
 
 				// `git hash-object` expects paths to use Unix separators, even on Windows.
 				// `git hash-object` expects paths to be one per line so we must escape newlines.

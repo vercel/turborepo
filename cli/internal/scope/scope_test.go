@@ -18,7 +18,7 @@ type mockSCM struct {
 	changed []string
 }
 
-func (m *mockSCM) ChangedFiles(_fromCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
+func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
 	return m.changed, nil
 }
 

@@ -111,10 +111,10 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
-		Graph:                &ctx.TopologicalGraph,
-		PackageInfos:         ctx.PackageInfos,
-		Cwd:                  cwd,
-		PackagesChangedSince: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos),
+		Graph:                  &ctx.TopologicalGraph,
+		PackageInfos:           ctx.PackageInfos,
+		Cwd:                    cwd,
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
@@ -135,17 +135,15 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 	return filteredPkgs, isAllPackages, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedSince {
-	// Note that "since" here is *not* o.LegacyFilter.Since. Each filter expression can have its own value for
-	// "since", apart from the value specified via --since.
-	return func(filterSince string) (util.Set, error) {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedInRange {
+	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
 		// global dependencies changing as well. A future optimization might be to
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
-		if filterSince != "" {
-			scmChangedFiles, err := scm.ChangedFiles(filterSince, true, cwd)
+		if fromRef != "" {
+			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, true, cwd)
 			if err != nil {
 				return nil, err
 			}

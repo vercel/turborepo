@@ -1,0 +1,17 @@
+{
+  "name": "ui",
+  "version": "0.0.0",
+  "description": "Styles and components for use in svelte websites",
+  "type": "module",
+  "module": "index.ts",
+  "svelte": "index.ts",
+  "license": "MIT",
+  "scripts": {
+    "lint": "prettier --check --ignore-path=../../.prettierignore . && eslint .",
+    "format": "prettier --write --ignore-path=../../.prettierignore ."
+  },
+  "devDependencies": {
+    "eslint-config-custom": "*",
+    "svelte": "^3.9.2"
+  }
+}

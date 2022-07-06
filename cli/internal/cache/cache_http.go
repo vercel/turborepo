@@ -329,18 +329,18 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, config *config.Config, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, repoRoot fs.AbsolutePath) *httpCache {
 	return &httpCache{
 		writable:       true,
-		client:         config.ApiClient,
+		client:         client,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
 			teamId:  config.TeamId,
-			enabled: config.TurboJSON.RemoteCacheOptions.Signature,
+			enabled: opts.RemoteCacheOpts.Signature,
 		},
-		repoRoot: config.Cwd,
+		repoRoot: repoRoot,
 	}
 }
