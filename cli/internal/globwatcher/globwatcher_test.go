@@ -53,7 +53,7 @@ func (*noopCookieWaiter) WaitForCookie() error {
 	return nil
 }
 
-var _noopCookieWaiter = &noopCookieWater{}
+var _noopCookieWaiter = &noopCookieWaiter{}
 
 func TestTrackOutputs(t *testing.T) {
 	logger := hclog.Default()
