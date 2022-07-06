@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -8,64 +9,66 @@ import (
 )
 
 func TestReadRepoConfigWhenMissing(t *testing.T) {
-	testDir := fs.AbsolutePath(t.TempDir())
+	testDir := fs.AbsolutePathFromUpstream(t.TempDir()).Join("config.json")
 
 	config, err := ReadRepoConfigFile(testDir)
 	if err != nil {
 		t.Errorf("got error reading non-existent config file: %v, want <nil>", err)
 	}
-	if config != nil {
-		t.Errorf("got config value %v, wanted <nil>", config)
+	if config == nil {
+		t.Error("got <nil>, wanted config value")
 	}
 }
 
 func TestRepoConfigIncludesDefaults(t *testing.T) {
-	testDir := fs.AbsolutePath(t.TempDir())
+	testConfigFile := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
 
-	customConfig := &TurborepoConfig{
-		TeamSlug: "my-team",
-	}
+	expectedTeam := "my-team"
 
-	initialWriteErr := WriteRepoConfigFile(testDir, customConfig)
-	if initialWriteErr != nil {
-		t.Errorf("Failed to set up test: %v", initialWriteErr)
-	}
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
 
-	config, err := ReadRepoConfigFile(testDir)
+	config, err := ReadRepoConfigFile(testConfigFile)
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
 
-	defaultConfig := defaultRepoConfig()
-	if config.ApiUrl != defaultConfig.ApiUrl {
-		t.Errorf("api url got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.APIURL != _defaultAPIURL {
+		t.Errorf("api url got %v, want %v", remoteConfig.APIURL, _defaultAPIURL)
 	}
-	if config.TeamSlug != customConfig.TeamSlug {
-		t.Errorf("team slug got %v, want %v", config.TeamSlug, customConfig.TeamSlug)
+	if remoteConfig.TeamSlug != expectedTeam {
+		t.Errorf("team slug got %v, want %v", remoteConfig.TeamSlug, expectedTeam)
 	}
 }
 
 func TestWriteRepoConfig(t *testing.T) {
-	testDir := fs.AbsolutePath(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	testConfigFile := repoRoot.Join(".turbo", "config.json")
 
-	initial := &TurborepoConfig{}
-	initial.TeamSlug = "my-team"
-	err := WriteRepoConfigFile(testDir, initial)
-	if err != nil {
-		t.Errorf("WriteRepoConfigFile got %v, want <nil>", err)
-	}
+	expectedTeam := "my-team"
 
-	config, err := ReadRepoConfigFile(testDir)
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
+
+	initial, err := ReadRepoConfigFile(testConfigFile)
+	assert.NilError(t, err, "GetRepoConfig")
+	// setting the teamID should clear the slug, since it may have been from an old team
+	expectedTeamID := "my-team-id"
+	err = initial.SetTeamID(expectedTeamID)
+	assert.NilError(t, err, "SetTeamID")
+
+	config, err := ReadRepoConfigFile(testConfigFile)
 	if err != nil {
 		t.Errorf("ReadRepoConfig err got %v, want <nil>", err)
 	}
 
-	if config.TeamSlug != initial.TeamSlug {
-		t.Errorf("TeamSlug got %v want %v", config.TeamSlug, initial.TeamSlug)
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.TeamSlug != "" {
+		t.Errorf("Expected TeamSlug to be cleared, got %v", remoteConfig.TeamSlug)
 	}
-	defaultConfig := defaultRepoConfig()
-	if config.ApiUrl != defaultConfig.ApiUrl {
-		t.Errorf("ApiUrl got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
+	if remoteConfig.TeamID != expectedTeamID {
+		t.Errorf("TeamID got %v, want %v", remoteConfig.TeamID, expectedTeamID)
 	}
 }
 

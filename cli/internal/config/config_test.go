@@ -12,18 +12,29 @@ import (
 )
 
 func TestEnvironmentToken(t *testing.T) {
-	expectedToken := "my-token"
-	err := os.Setenv("TURBO_TOKEN", expectedToken)
-	if err != nil {
-		t.Fatalf("setenv %v", err)
-	}
-
+	// Set up an empty config so we're just testing environment variables
+	userConfigPath := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
+	expectedPrefix := "my-token"
+	vars := []string{"TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"}
 	terminal := ui.Default()
-	cfg, err := ParseAndValidate([]string{"run", "build"}, terminal, "my-version")
-	if err != nil {
-		t.Fatalf("failed to parse config %v", err)
+	for _, v := range vars {
+		t.Run(v, func(t *testing.T) {
+			t.Cleanup(func() {
+				_ = os.Unsetenv(v)
+			})
+			expectedToken := expectedPrefix + v
+			err := os.Setenv(v, expectedToken)
+			if err != nil {
+				t.Fatalf("setenv %v", err)
+			}
+
+			cfg, err := ParseAndValidate([]string{"run", "build"}, terminal, "my-version", userConfigPath)
+			if err != nil {
+				t.Fatalf("failed to parse config %v", err)
+			}
+			assert.Equal(t, cfg.RemoteConfig.Token, expectedToken)
+		})
 	}
-	assert.Equal(t, cfg.Token, expectedToken)
 }
 
 func TestSelectCwd(t *testing.T) {

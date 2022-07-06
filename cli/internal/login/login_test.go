@@ -53,18 +53,31 @@ var logger = hclog.Default()
 
 func getConfig(t *testing.T) *config.Config {
 	t.Helper()
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
 	userConfig, err := config.ReadUserConfigFile(configPath)
 	if err != nil {
 		t.Fatalf("failed to load user config: %v", err)
 	}
+	t.Cleanup(func() {
+		_ = os.Unsetenv("TURBO_LOGIN")
+		_ = os.Unsetenv("TURBO_API")
+	})
+	_ = os.Setenv("TURBO_LOGIN", "login-url")
+	_ = os.Setenv("TURBO_API", "api-url")
+	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot))
+	if err != nil {
+		t.Fatalf("failed to load repo config: %v", err)
+	}
+	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
 	return &config.Config{
 		Logger:       logger,
 		TurboVersion: "test",
-		ApiUrl:       "api-url",
-		LoginUrl:     "login-url",
+		RepoConfig:   repoConfig,
+		LoginURL:     repoConfig.LoginURL(),
 		UserConfig:   userConfig,
-		Token:        userConfig.Token(),
+		RemoteConfig: remoteConfig,
+		Cwd:          repoRoot,
 	}
 }
 
@@ -77,8 +90,8 @@ type testResult struct {
 	shouldEnableCaching bool
 }
 
-func (tr *testResult) repoConfigWritten(t *testing.T) *config.TurborepoConfig {
-	config, err := config.ReadRepoConfigFile(tr.repoRoot)
+func (tr *testResult) repoConfigWritten(t *testing.T) *config.RepoConfig {
+	config, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(tr.repoRoot))
 	if err != nil {
 		t.Fatalf("failed reading repo config: %v", err)
 	}
@@ -103,14 +116,10 @@ func (tr *testResult) getTestLogin() login {
 	}
 }
 
-func newTest(t *testing.T, redirectedURL string) *testResult {
+func newTest(t *testing.T, repoRoot fs.AbsolutePath, redirectedURL string) *testResult {
 	stepCh := make(chan struct{}, 1)
-	cwd, err := fs.GetCwd()
-	if err != nil {
-		t.Fatalf("getting cwd: %v", err)
-	}
 	tr := &testResult{
-		repoRoot: cwd,
+		repoRoot: repoRoot,
 		stepCh:   stepCh,
 	}
 	tr.client.team = &client.Team{
@@ -137,9 +146,9 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 }
 
 func Test_run(t *testing.T) {
-	test := newTest(t, "http://127.0.0.1:9789/?token=my-token")
-	login := test.getTestLogin()
 	cf := getConfig(t)
+	test := newTest(t, cf.Cwd, "http://127.0.0.1:9789/?token=my-token")
+	login := test.getTestLogin()
 	err := login.run(cf)
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
@@ -165,9 +174,9 @@ func Test_sso(t *testing.T) {
 	redirectParams := make(url.Values)
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
-	test := newTest(t, "http://127.0.0.1:9789/?"+redirectParams.Encode())
-	login := test.getTestLogin()
 	cf := getConfig(t)
+	test := newTest(t, cf.Cwd, "http://127.0.0.1:9789/?"+redirectParams.Encode())
+	login := test.getTestLogin()
 	err := login.loginSSO(cf, "my-team")
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
@@ -192,9 +201,10 @@ func Test_sso(t *testing.T) {
 		t.Errorf("user config token got %v want %v", cf.UserConfig.Token(), expectedToken)
 	}
 	repoConfigWritten := test.repoConfigWritten(t)
+	remoteConfig := repoConfigWritten.GetRemoteConfig(expectedToken)
 	expectedTeamID := "sso-team-id"
-	if repoConfigWritten.TeamId != expectedTeamID {
-		t.Errorf("repo config team id got %v want %v", repoConfigWritten.TeamId, expectedTeamID)
+	if remoteConfig.TeamID != expectedTeamID {
+		t.Errorf("repo config team id got %v want %v", remoteConfig.TeamID, expectedTeamID)
 	}
 }
 
@@ -202,11 +212,11 @@ func Test_ssoCachingDisabledShouldEnable(t *testing.T) {
 	redirectParams := make(url.Values)
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
-	test := newTest(t, "http://127.0.0.1:9789/?"+redirectParams.Encode())
+	cf := getConfig(t)
+	test := newTest(t, cf.Cwd, "http://127.0.0.1:9789/?"+redirectParams.Encode())
 	test.shouldEnableCaching = true
 	test.client.cachingStatus = util.CachingStatusDisabled
 	login := test.getTestLogin()
-	cf := getConfig(t)
 	err := login.loginSSO(cf, "my-team")
 	// Handle URL Open
 	<-test.stepCh
@@ -219,11 +229,11 @@ func Test_ssoCachingDisabledDontEnable(t *testing.T) {
 	redirectParams := make(url.Values)
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
-	test := newTest(t, "http://127.0.0.1:9789/?"+redirectParams.Encode())
+	cf := getConfig(t)
+	test := newTest(t, cf.Cwd, "http://127.0.0.1:9789/?"+redirectParams.Encode())
 	test.shouldEnableCaching = false
 	test.client.cachingStatus = util.CachingStatusDisabled
 	login := test.getTestLogin()
-	cf := getConfig(t)
 	err := login.loginSSO(cf, "my-team")
 	if !errors.Is(err, errNeedCachingEnabled) {
 		t.Errorf("loginSSO got %v, want %v", err, errNeedCachingEnabled)

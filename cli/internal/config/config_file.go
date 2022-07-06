@@ -1,24 +1,59 @@
 package config
 
 import (
-	"encoding/json"
-	"errors"
 	"os"
 
 	"github.com/spf13/viper"
+	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
-// TurborepoConfig is a configuration object for the logged-in turborepo.com user
-type TurborepoConfig struct {
-	// Team id
-	TeamId string `json:"teamId,omitempty"`
-	// ApiUrl is the backend url (defaults to api.vercel.com)
-	ApiUrl string `json:"apiUrl,omitempty" envconfig:"api"`
-	// LoginUrl is the login url (defaults to vercel.com)
-	LoginUrl string `json:"loginUrl,omitempty" envconfig:"login"`
-	// Owner slug
-	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
+// RepoConfig is a configuration object for the logged-in turborepo.com user
+type RepoConfig struct {
+	repoViper *viper.Viper
+	path      fs.AbsolutePath
+}
+
+// LoginURL returns the configured URL for authenticating the user
+func (rc *RepoConfig) LoginURL() string {
+	return rc.repoViper.GetString("loginurl")
+}
+
+// SetTeamID sets the teamID and clears the slug, since it may have been from an old team
+func (rc *RepoConfig) SetTeamID(teamID string) error {
+	// Note that we can't use viper.Set to set a nil value, we have to merge it in
+	newVals := map[string]interface{}{
+		"teamid":   teamID,
+		"teamslug": nil,
+	}
+	if err := rc.repoViper.MergeConfigMap(newVals); err != nil {
+		return err
+	}
+	return rc.write()
+}
+
+// GetRemoteConfig produces the necessary values for an API client configuration
+func (rc *RepoConfig) GetRemoteConfig(token string) client.RemoteConfig {
+	return client.RemoteConfig{
+		Token:    token,
+		TeamID:   rc.repoViper.GetString("teamid"),
+		TeamSlug: rc.repoViper.GetString("teamslug"),
+		APIURL:   rc.repoViper.GetString("apiurl"),
+	}
+}
+
+// Internal call to save this config data to the user config file.
+func (rc *RepoConfig) write() error {
+	if err := rc.path.EnsureDir(); err != nil {
+		return err
+	}
+	return rc.repoViper.WriteConfig()
+}
+
+// Delete deletes the config file. This repo config shouldn't be used
+// afterwards, it needs to be re-initialized
+func (rc *RepoConfig) Delete() error {
+	return rc.path.Remove()
 }
 
 // UserConfig is a wrapper around the user-specific configuration values
@@ -36,7 +71,10 @@ func (uc *UserConfig) Token() string {
 // SetToken saves a Bearer token for this user, writing it to the
 // user config file, creating it if necessary
 func (uc *UserConfig) SetToken(token string) error {
-	uc.userViper.Set("token", token)
+	// Technically Set works here, due to how overrides work, but use merge for consistency
+	if err := uc.userViper.MergeConfigMap(map[string]interface{}{"token": token}); err != nil {
+		return err
+	}
 	return uc.write()
 }
 
@@ -54,58 +92,7 @@ func (uc *UserConfig) Delete() error {
 	return uc.path.Remove()
 }
 
-func defaultRepoConfig() *TurborepoConfig {
-	return &TurborepoConfig{
-		ApiUrl:   "https://vercel.com/api",
-		LoginUrl: "https://vercel.com",
-	}
-}
-
-// writeConfigFile writes config file at a path
-func writeConfigFile(path fs.AbsolutePath, config *TurborepoConfig) error {
-	jsonBytes, marshallError := json.Marshal(config)
-	if marshallError != nil {
-		return marshallError
-	}
-	writeFilErr := path.WriteFile(jsonBytes, 0644)
-	if writeFilErr != nil {
-		return writeFilErr
-	}
-	return nil
-}
-
-// WriteRepoConfigFile is used to write the portion of the config file that is saved
-// within the repository itself.
-func WriteRepoConfigFile(repoRoot fs.AbsolutePath, toWrite *TurborepoConfig) error {
-	path := repoRoot.Join(".turbo", "config.json")
-	err := path.EnsureDir()
-	if err != nil {
-		return err
-	}
-	return writeConfigFile(path, toWrite)
-}
-
-// readConfigFile reads a config file at a path
-func readConfigFile(path fs.AbsolutePath, defaults func() *TurborepoConfig) (*TurborepoConfig, error) {
-	b, err := path.ReadFile()
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	config := defaults()
-	jsonErr := json.Unmarshal(b, config)
-	if jsonErr != nil {
-		return nil, jsonErr
-	}
-	if config.ApiUrl == "https://api.vercel.com" {
-		config.ApiUrl = "https://vercel.com/api"
-	}
-	return config, nil
-}
-
-// ReadUserConfigFile is public for tests, it creates a UserConfig using the
+// ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
 func ReadUserConfigFile(path fs.AbsolutePath) (*UserConfig, error) {
@@ -123,17 +110,42 @@ func ReadUserConfigFile(path fs.AbsolutePath) (*UserConfig, error) {
 	}, nil
 }
 
-func getUserConfigPath() fs.AbsolutePath {
+// DefaultUserConfigPath returns the default platform-dependent place that
+// we store the user-specific configuration.
+func DefaultUserConfigPath() fs.AbsolutePath {
 	return fs.GetUserConfigDir().Join("config.json")
 }
 
-// GetUserConfig reads a user config file
-func GetUserConfig() (*UserConfig, error) {
-	return ReadUserConfigFile(getUserConfigPath())
+const (
+	_defaultAPIURL   = "https://vercel.com/api"
+	_defaultLoginURL = "https://vercel.com"
+)
+
+// ReadRepoConfigFile creates a RepoConfig using the
+// specified path as the repo config file. Note that the path or its
+// parents do not need to exist. On a write to this configuration, they
+// will be created.
+func ReadRepoConfigFile(path fs.AbsolutePath) (*RepoConfig, error) {
+	repoViper := viper.New()
+	repoViper.SetConfigFile(path.ToString())
+	repoViper.SetConfigType("json")
+	repoViper.SetEnvPrefix("turbo")
+	repoViper.MustBindEnv("apiurl", "TURBO_API")
+	repoViper.MustBindEnv("loginurl", "TURBO_LOGIN")
+	repoViper.MustBindEnv("teamslug", "TURBO_TEAM")
+	repoViper.MustBindEnv("teamid")
+	repoViper.SetDefault("apiurl", _defaultAPIURL)
+	repoViper.SetDefault("loginurl", _defaultLoginURL)
+	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return &RepoConfig{
+		repoViper: repoViper,
+		path:      path,
+	}, nil
 }
 
-// ReadRepoConfigFile reads the user-specific configuration values
-func ReadRepoConfigFile(repoRoot fs.AbsolutePath) (*TurborepoConfig, error) {
-	path := repoRoot.Join(".turbo", "config.json")
-	return readConfigFile(path, defaultRepoConfig)
+// GetRepoConfigPath reads the user-specific configuration values
+func GetRepoConfigPath(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+	return repoRoot.Join(".turbo", "config.json")
 }
