@@ -1,6 +1,6 @@
 import * as React from "react";
 import {
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
   GestureResponderEvent,
   Text,
@@ -8,14 +8,14 @@ import {
 
 export interface ButtonProps {
   text: string;
-  onClick?: ((event: GestureResponderEvent) => void) | null | undefined;
+  onClick?: (event: GestureResponderEvent) => void;
 }
 
 export function Button({ text, onClick }: ButtonProps) {
   return (
-    <Pressable style={styles.button} onPress={onClick}>
+    <TouchableOpacity style={styles.button} onPress={onClick}>
       <Text style={styles.text}>{text}</Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
