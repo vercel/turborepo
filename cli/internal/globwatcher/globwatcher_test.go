@@ -49,7 +49,7 @@ func setup(t *testing.T, repoRoot fs.AbsolutePath) {
 
 type noopCookieWaiter struct{}
 
-func (*noopCookieWater) WaitForCookie() error {
+func (*noopCookieWaiter) WaitForCookie() error {
 	return nil
 }
 
