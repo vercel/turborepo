@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +14,15 @@ func TestSelectCwd(t *testing.T) {
 	defaultCwd, err := fs.GetCwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
+	}
+
+	tempDir, err := os.MkdirTemp("", "turbo-test")
+	if err != nil {
+		t.Fatalf("MkdirTemp %v", err)
+	}
+	resolvedTempDir, err := filepath.EvalSymlinks(tempDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks %v", err)
 	}
 
 	cases := []struct {
@@ -26,13 +37,13 @@ func TestSelectCwd(t *testing.T) {
 		},
 		{
 			Name:      "choose command-line flag cwd",
-			InputArgs: []string{"foo", "--cwd=zop"},
-			Expected:  defaultCwd.Join("zop"),
+			InputArgs: []string{"foo", "--cwd=" + tempDir},
+			Expected:  fs.UnsafeToAbsolutePath(resolvedTempDir),
 		},
 		{
 			Name:      "ignore other flags not cwd",
-			InputArgs: []string{"foo", "--ignore-this-1", "--cwd=zop", "--ignore-this=2"},
-			Expected:  defaultCwd.Join("zop"),
+			InputArgs: []string{"foo", "--ignore-this-1", "--cwd=" + tempDir, "--ignore-this=2"},
+			Expected:  fs.UnsafeToAbsolutePath(resolvedTempDir),
 		},
 		{
 			Name:      "ignore args after pass through",

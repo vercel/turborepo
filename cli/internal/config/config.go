@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -33,6 +32,9 @@ func IsCI() bool {
 // Config is a struct that contains user inputs and our logger
 type Config struct {
 	Logger hclog.Logger
+	// TODO: Token through ApiUrl should maybe be grouped together
+	// in their own struct, as they will come from config files
+
 	// Bearer token
 	Token string
 	// vercel.com / remote cache team id
@@ -43,17 +45,16 @@ type Config struct {
 	ApiUrl string
 	// Login URL
 	LoginUrl string
-	// Backend retryable http client
-	ApiClient *client.ApiClient
 	// Turborepo CLI Version
 	TurboVersion string
 	Cache        *CacheConfig
-	// turbo.json or legacy turbo config from package.json
-	TurboConfigJSON *fs.TurboConfigJSON
 	// package.json at the root of the repo
 	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
 	Cwd fs.AbsolutePath
+
+	UsePreflight      bool
+	MaxClientFailures uint64
 }
 
 // IsLoggedIn returns true if we have a token and either a team id or team slug
@@ -65,8 +66,6 @@ func (c *Config) IsLoggedIn() bool {
 type CacheConfig struct {
 	// Number of async workers
 	Workers int
-	// Cache directory
-	Dir string
 }
 
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
@@ -80,17 +79,10 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		args = append(args, "--help")
 	}
 
-	// Pop the subcommand into 'cmd'
-	// flags.Parse does not work when the subcommand is included
 	cmd, inputFlags := args[0], args[1:]
-
-	// Special check for help commands
-	// command is ./turbo --help or --version
-	if len(inputFlags) == 0 && (cmd == "help" || cmd == "--help" || cmd == "-help" || cmd == "version" || cmd == "--version" || cmd == "-version") {
-		return nil, nil
-	}
-	// command is ./turbo $subcommand --help
-	if len(inputFlags) == 1 && (inputFlags[0] == "help" || inputFlags[0] == "--help" || inputFlags[0] == "-help") {
+	// Special check for version command
+	// command is ./turbo --version
+	if len(inputFlags) == 0 && (cmd == "version" || cmd == "--version" || cmd == "-version") {
 		return nil, nil
 	}
 
@@ -104,12 +96,20 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		return nil, fmt.Errorf("package.json: %w", err)
 	}
-	turboConfigJson, err := ReadTurboConfig(cwd, rootPackageJSON)
+	userConfig, err := ReadUserConfigFile()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading user config file: %v", err)
 	}
-	userConfig, _ := ReadUserConfigFile()
-	partialConfig, _ := ReadConfigFile(filepath.Join(".turbo", "config.json"))
+	if userConfig == nil {
+		userConfig = defaultUserConfig()
+	}
+	partialConfig, err := ReadRepoConfigFile(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("reading repo config file: %v", err)
+	}
+	if partialConfig == nil {
+		partialConfig = defaultRepoConfig()
+	}
 	partialConfig.Token = userConfig.Token
 
 	enverr := envconfig.Process("TURBO", partialConfig)
@@ -192,8 +192,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Output: output,
 	})
 
-	maxRemoteFailCount := 3
-	apiClient := client.NewClient(partialConfig.ApiUrl, logger, turboVersion, partialConfig.TeamId, partialConfig.TeamSlug, uint64(maxRemoteFailCount), usePreflight)
+	maxRemoteFailCount := uint64(3)
 
 	c = &Config{
 		Logger:       logger,
@@ -202,52 +201,41 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		TeamId:       partialConfig.TeamId,
 		ApiUrl:       partialConfig.ApiUrl,
 		LoginUrl:     partialConfig.LoginUrl,
-		ApiClient:    apiClient,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
-			Dir:     filepath.Join("node_modules", ".cache", "turbo"),
 		},
 		RootPackageJSON: rootPackageJSON,
-		TurboConfigJSON: turboConfigJson,
 		Cwd:             cwd,
+
+		UsePreflight:      usePreflight,
+		MaxClientFailures: maxRemoteFailCount,
 	}
-
-	c.ApiClient.SetToken(partialConfig.Token)
-
 	return c, nil
 }
 
-func ReadTurboConfig(rootPath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*fs.TurboConfigJSON, error) {
-	// If turbo.json exists, we use that
-	// If pkg.Turbo exists, we warn about running the migration
-	// Use pkg.Turbo if turbo.json doesn't exist
-	// If neither exists, it's a fatal error
-	turboJSONPath := rootPath.Join("turbo.json")
-
-	if !turboJSONPath.FileExists() {
-		if rootPackageJSON.LegacyTurboConfig == nil {
-			// TODO: suggestion on how to create one
-			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
-		} else {
-			log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
-			return rootPackageJSON.LegacyTurboConfig, nil
-		}
-	} else {
-		turbo, err := fs.ReadTurboConfigJSON(turboJSONPath)
-		if err != nil {
-			return nil, fmt.Errorf("turbo.json: %w", err)
-		}
-		if rootPackageJSON.LegacyTurboConfig != nil {
-			log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
-			rootPackageJSON.LegacyTurboConfig = nil
-		}
-		return turbo, nil
-	}
+// NewClient returns a new ApiClient instance using the values from
+// this Config instance.
+func (c *Config) NewClient() *client.ApiClient {
+	apiClient := client.NewClient(
+		c.ApiUrl,
+		c.Logger,
+		c.TurboVersion,
+		c.TeamId,
+		c.TeamSlug,
+		c.MaxClientFailures,
+		c.UsePreflight,
+	)
+	apiClient.SetToken(c.Token)
+	return apiClient
 }
 
 // Selects the current working directory from OS
 // and overrides with the `--cwd=` input argument
+// The various package managers we support resolve symlinks at this stage,
+// so we do as well. This means that relative references out of the monorepo
+// will be relative to the resolved path, not necessarily the path that the
+// user uses to access the monorepo.
 func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 	cwd, err := fs.GetCwd()
 	if err != nil {
@@ -259,7 +247,11 @@ func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
 		} else if strings.HasPrefix(arg, "--cwd=") {
 			if len(arg[len("--cwd="):]) > 0 {
 				cwdArgRaw := arg[len("--cwd="):]
-				cwdArg, err := fs.CheckedToAbsolutePath(cwdArgRaw)
+				resolved, err := filepath.EvalSymlinks(cwdArgRaw)
+				if err != nil {
+					return "", err
+				}
+				cwdArg, err := fs.CheckedToAbsolutePath(resolved)
 				if err != nil {
 					// the argument is a relative path. Join it with our actual cwd
 					return cwd.Join(cwdArgRaw), nil

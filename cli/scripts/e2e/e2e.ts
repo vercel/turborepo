@@ -3,6 +3,7 @@ import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import { Monorepo } from "../monorepo";
 import path from "path";
+import * as fs from "fs";
 
 const basicPipeline = {
   pipeline: {
@@ -17,6 +18,16 @@ const basicPipeline = {
     build: {
       dependsOn: ["^build"],
       outputs: ["dist/**"],
+    },
+    "//#build": {
+      dependsOn: [],
+      outputs: ["dist/**"],
+      inputs: ["rootbuild.js"],
+    },
+    "//#special": {
+      dependsOn: ["^build"],
+      outputs: ["dist/**"],
+      inputs: [],
     },
   },
   globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
@@ -35,6 +46,7 @@ for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   repo.addPackage("b");
   repo.addPackage("c");
   repo.linkPackages();
+  repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient);
   const sub = new Monorepo("in-subdirectory");
   sub.init(npmClient, basicPipeline, "js");
@@ -113,7 +125,7 @@ function runSmokeTests<T>(
       const dryRun: DryRun = JSON.parse(results.stdout);
       // expect to run all packages
       const expectTaskId = includesTaskId(dryRun);
-      for (const pkg of ["a", "b", "c"]) {
+      for (const pkg of ["a", "b", "c", "//"]) {
         assert.ok(
           dryRun.packages.includes(pkg),
           `Expected to include package ${pkg}`
@@ -125,7 +137,13 @@ function runSmokeTests<T>(
       }
 
       // actually run the build
-      repo.turbo("run", ["build"], options);
+      const buildOutput = getCommandOutputAsArray(
+        repo.turbo("run", ["build"], options)
+      );
+      assert.ok(
+        buildOutput.includes("//:build: building"),
+        "Missing root build"
+      );
 
       // assert that hashes are stable across multiple runs
       const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
@@ -151,7 +169,11 @@ function runSmokeTests<T>(
       options.cwd ? " from " + options.cwd : ""
     }`,
     async () => {
-      const results = repo.turbo("run", ["test", "--stream"], options);
+      const results = repo.turbo(
+        "run",
+        ["test", "--stream", "--profile=chrometracing"],
+        options
+      );
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
@@ -166,6 +188,14 @@ function runSmokeTests<T>(
         text = repo.readFileSync(cachedLogFilePath);
       }, `Could not read cached log file from cache ${cachedLogFilePath}`);
       assert.ok(text.includes("testing c"), "Contains correct output");
+
+      const root = options.cwd ? options.cwd : repo.root;
+      const tracingFile = path.join(root, "chrometracing");
+      const tracingBuf = fs.readFileSync(tracingFile);
+      // ensure it doesn't throw
+      JSON.parse(tracingBuf.toString("utf-8"));
+      // don't throw off hashes for later tests
+      fs.unlinkSync(tracingFile);
     }
   );
 
@@ -201,7 +231,6 @@ function runSmokeTests<T>(
       repo.commitFiles({
         [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
       });
-
       const sinceCommandOutputNoCache = getCommandOutputAsArray(
         repo.turbo(
           "run",
@@ -300,6 +329,11 @@ function runSmokeTests<T>(
       );
 
       // run a task without dependencies
+
+      // ensure that uncommitted irrelevant changes are also ignored
+      repo.modifyFiles({
+        [path.join("packages", "a", "README.md")]: "important text",
+      });
       const lintOutput = getCommandOutputAsArray(
         repo.turbo(
           "run",
@@ -427,6 +461,32 @@ function runSmokeTests<T>(
     }
   );
 
+  suite(
+    `${npmClient} runs root tasks${options.cwd ? " from " + options.cwd : ""}`,
+    async () => {
+      const result = getCommandOutputAsArray(
+        repo.turbo("run", ["special"], options)
+      );
+      assert.ok(result.includes("//:special: root task"));
+      const secondPass = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["special", "--filter=//", "--output-logs=hash-only"],
+          options
+        )
+      );
+      assert.ok(
+        secondPass.includes(
+          `//:special: cache hit, suppressing output ${getHashFromOutput(
+            secondPass,
+            "//#special"
+          )}`
+        ),
+        "Rerun of //:special should be cached"
+      );
+    }
+  );
+
   if (npmClient === "yarn") {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
@@ -500,7 +560,9 @@ function getLockfileForPackageManager(ws: PackageManager) {
 function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
-  return (results.stdout + results.stderr).split("\n");
+  return (results.stdout + results.stderr)
+    .split("\n")
+    .map((line) => line.replace("\r", ""));
 }
 
 function getHashFromOutput(lines: string[], taskId: string): string {

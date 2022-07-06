@@ -7,10 +7,12 @@ package packagemanager
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -35,13 +37,16 @@ type PackageManager struct {
 	PackageDir string
 
 	// Return the list of workspace glob
-	GetWorkspaceGlobs func(rootpath string) ([]string, error)
+	getWorkspaceGlobs func(rootpath fs.AbsolutePath) ([]string, error)
+
+	// Return the list of workspace ignore globs
+	getWorkspaceIgnores func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error)
 
 	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
 
 	// Detect if the project is using the Package Manager by inspecting the system.
-	Detect func(projectDirectory string, packageManager *PackageManager) (bool, error)
+	detect func(projectDirectory fs.AbsolutePath, packageManager *PackageManager) (bool, error)
 }
 
 var packageManagers = []PackageManager{
@@ -51,20 +56,23 @@ var packageManagers = []PackageManager{
 	nodejsPnpm,
 }
 
+var (
+	packageManagerPattern = `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
+	packageManagerRegex   = regexp.MustCompile(packageManagerPattern)
+)
+
 // ParsePackageManagerString takes a package manager version string parses it into consituent components
 func ParsePackageManagerString(packageManager string) (manager string, version string, err error) {
-	pattern := `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
-	re := regexp.MustCompile(pattern)
-	match := re.FindString(packageManager)
+	match := packageManagerRegex.FindString(packageManager)
 	if len(match) == 0 {
-		return "", "", fmt.Errorf("We could not parse packageManager field in package.json, expected: %s, received: %s", pattern, packageManager)
+		return "", "", fmt.Errorf("We could not parse packageManager field in package.json, expected: %s, received: %s", packageManagerPattern, packageManager)
 	}
 
 	return strings.Split(match, "@")[0], strings.Split(match, "@")[1], nil
 }
 
 // GetPackageManager attempts all methods for identifying the package manager in use.
-func GetPackageManager(projectDirectory string, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
+func GetPackageManager(projectDirectory fs.AbsolutePath, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
 	result, _ := readPackageManager(pkg)
 	if result != nil {
 		return result, nil
@@ -93,9 +101,9 @@ func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, er
 }
 
 // detectPackageManager attempts to detect the package manager by inspecting the project directory state.
-func detectPackageManager(projectDirectory string) (packageManager *PackageManager, err error) {
+func detectPackageManager(projectDirectory fs.AbsolutePath) (packageManager *PackageManager, err error) {
 	for _, packageManager := range packageManagers {
-		isResponsible, err := packageManager.Detect(projectDirectory, &packageManager)
+		isResponsible, err := packageManager.detect(projectDirectory, &packageManager)
 		if err != nil {
 			return nil, err
 		}
@@ -105,4 +113,34 @@ func detectPackageManager(projectDirectory string) (packageManager *PackageManag
 	}
 
 	return nil, errors.New(util.Sprintf("We did not detect an in-use package manager for your project. Please set the \"packageManager\" property in your root package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET} or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."))
+}
+
+// GetWorkspaces returns the list of package.json files for the current repository.
+func (pm PackageManager) GetWorkspaces(rootpath fs.AbsolutePath) ([]string, error) {
+	globs, err := pm.getWorkspaceGlobs(rootpath)
+	if err != nil {
+		return nil, err
+	}
+
+	justJsons := make([]string, len(globs))
+	for i, space := range globs {
+		justJsons[i] = filepath.Join(space, "package.json")
+	}
+
+	ignores, err := pm.getWorkspaceIgnores(pm, rootpath)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), justJsons, ignores)
+	if err != nil {
+		return nil, err
+	}
+
+	return f, nil
+}
+
+// GetWorkspaceIgnores returns an array of globs not to search for workspaces.
+func (pm PackageManager) GetWorkspaceIgnores(rootpath fs.AbsolutePath) ([]string, error) {
+	return pm.getWorkspaceIgnores(pm, rootpath)
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/scm"
@@ -15,39 +16,81 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util/filter"
 )
 
-type Opts struct {
+// LegacyFilter holds the options in use before the filter syntax. They have their own rules
+// for how they are compiled into filter expressions.
+type LegacyFilter struct {
+	// IncludeDependencies is whether to include pkg.dependencies in execution (defaults to false)
 	IncludeDependencies bool
-	IncludeDependents   bool
-	Patterns            []string
-	Since               string
-	Cwd                 string
-	IgnorePatterns      []string
-	GlobalDepPatterns   []string
-	FilterPatterns      []string
+	// SkipDependents is whether to skip dependent impacted consumers in execution (defaults to false)
+	SkipDependents bool
+	// Entrypoints is a list of package entrypoints
+	Entrypoints []string
+	// Since is the git ref used to calculate changed packages
+	Since string
+}
+
+var _sinceHelp = `Limit/Set scope to changed packages since a
+mergebase. This uses the git diff ${target_branch}...
+mechanism to identify which packages have changed.`
+
+func addLegacyFlags(opts *LegacyFilter, flags *pflag.FlagSet) {
+	flags.BoolVar(&opts.IncludeDependencies, "include-dependencies", false, "Include the dependencies of tasks in execution.")
+	flags.BoolVar(&opts.SkipDependents, "no-deps", false, "Exclude dependent task consumers from execution.")
+	flags.StringArrayVar(&opts.Entrypoints, "scope", nil, "Specify package(s) to act as entry points for task execution. Supports globs.")
+	flags.StringVar(&opts.Since, "since", "", _sinceHelp)
+}
+
+// Opts holds the options for how to select the entrypoint packages for a turbo run
+type Opts struct {
+	LegacyFilter LegacyFilter
+	// IgnorePatterns is the list of globs of file paths to ignore from execution scope calculation
+	IgnorePatterns []string
+	// GlobalDepPatterns is a list of globs to global files whose contents will be included in the global hash calculation
+	GlobalDepPatterns []string
+	// Patterns are the filter patterns supplied to --filter on the commandline
+	FilterPatterns []string
+}
+
+var (
+	_filterHelp = `Use the given selector to specify package(s) to act as
+entry points. The syntax mirrors pnpm's syntax, and
+additional documentation and examples can be found in
+turbo's documentation https://turborepo.org/docs/reference/command-line-reference#--filter
+--filter can be specified multiple times. Packages that
+match any filter will be included.`
+	_ignoreHelp    = `Files to ignore when calculating changed files (i.e. --since). Supports globs.`
+	_globalDepHelp = `Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory.`
+)
+
+// AddFlags adds the flags relevant to this package to the given FlagSet
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
+	flags.StringArrayVar(&opts.FilterPatterns, "filter", nil, _filterHelp)
+	flags.StringArrayVar(&opts.IgnorePatterns, "ignore", nil, _ignoreHelp)
+	flags.StringArrayVar(&opts.GlobalDepPatterns, "global-deps", nil, _globalDepHelp)
+	addLegacyFlags(&opts.LegacyFilter, flags)
 }
 
 // asFilterPatterns normalizes legacy selectors to filter syntax
-func (o *Opts) asFilterPatterns() []string {
-	patterns := make([]string, len(o.FilterPatterns))
-	copy(patterns, o.FilterPatterns)
+func (l *LegacyFilter) asFilterPatterns() []string {
+	var patterns []string
 	prefix := ""
-	if o.IncludeDependents {
+	if !l.SkipDependents {
 		prefix = "..."
 	}
 	suffix := ""
-	if o.IncludeDependencies {
+	if l.IncludeDependencies {
 		suffix = "..."
 	}
 	since := ""
-	if o.Since != "" {
-		since = fmt.Sprintf("[%v]", o.Since)
+	if l.Since != "" {
+		since = fmt.Sprintf("[%v]", l.Since)
 	}
-	if len(o.Patterns) > 0 {
+	if len(l.Entrypoints) > 0 {
 		// --scope implies our tweaked syntax to see if any dependency matches
 		if since != "" {
 			since = "..." + since
 		}
-		for _, pattern := range o.Patterns {
+		for _, pattern := range l.Entrypoints {
 			if strings.HasPrefix(pattern, "!") {
 				patterns = append(patterns, pattern)
 			} else {
@@ -63,38 +106,48 @@ func (o *Opts) asFilterPatterns() []string {
 	return patterns
 }
 
-func ResolvePackages(opts *Opts, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, error) {
+// ResolvePackages translates specified flags to a set of entry point packages for
+// the selected tasks. Returns the selected packages and whether or not the selected
+// packages represents a default "all packages".
+func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
-		Graph:                &ctx.TopologicalGraph,
-		PackageInfos:         ctx.PackageInfos,
-		Cwd:                  opts.Cwd,
-		PackagesChangedSince: opts.getPackageChangeFunc(scm, ctx.PackageInfos),
+		Graph:                  &ctx.TopologicalGraph,
+		PackageInfos:           ctx.PackageInfos,
+		Cwd:                    cwd,
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos),
 	}
-	filterPatterns := opts.asFilterPatterns()
+	filterPatterns := opts.FilterPatterns
+	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
+	filterPatterns = append(filterPatterns, legacyFilterPatterns...)
+	isAllPackages := len(filterPatterns) == 0
 	filteredPkgs, err := filterResolver.GetPackagesFromPatterns(filterPatterns)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	if len(filterPatterns) == 0 {
+	if isAllPackages {
 		// no filters specified, run every package
 		for _, f := range ctx.PackageNames {
 			filteredPkgs.Add(f)
 		}
 	}
 	filteredPkgs.Delete(ctx.RootNode)
-	return filteredPkgs, nil
+	return filteredPkgs, isAllPackages, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedSince {
-	return func(since string) (util.Set, error) {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedInRange {
+	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
 		// global dependencies changing as well. A future optimization might be to
 		// scope changed files more deeply if we know there are no global dependencies.
-		changedFiles := []string{}
-		if since != "" {
-			changedFiles = scm.ChangedFiles(since, true, o.Cwd)
+		var changedFiles []string
+		if fromRef != "" {
+			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, true, cwd)
+			if err != nil {
+				return nil, err
+			}
+			changedFiles = scmChangedFiles
 		}
 		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, changedFiles); err != nil {
 			return nil, err
@@ -148,20 +201,19 @@ func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
 
 func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
 	changedPackages := make(util.Set)
-	for k, pkgInfo := range packageInfos {
-		partialPath := pkgInfo.Dir
-		if someFileHasPrefix(partialPath, changedFiles) {
-			changedPackages.Add(k)
+	for _, changedFile := range changedFiles {
+		found := false
+		for pkgName, pkgInfo := range packageInfos {
+			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir) {
+				changedPackages.Add(pkgName)
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Consider the root package to have changed
+			changedPackages.Add(util.RootPkgName)
 		}
 	}
 	return changedPackages
-}
-
-func someFileHasPrefix(prefix string, files []string) bool {
-	for _, f := range files {
-		if strings.HasPrefix(f, prefix) {
-			return true
-		}
-	}
-	return false
 }

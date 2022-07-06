@@ -1,10 +1,14 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: ["main"]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, edited, synchronize]
 
 jobs:
   build:
@@ -12,24 +16,37 @@ jobs:
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
 
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
+      - name: Set up Go
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.17.6
-        id: go
+          go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
 
-      - uses: pnpm/action-setup@v2.0.1
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
         with:
-          version: 6.32.2
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7.2.1
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
@@ -41,75 +58,30 @@ jobs:
         run: pnpm install
 
       - name: Build & Unit Test
-        run: pnpm turbo -- run test --scope=cli --color
-
-      - name: Lint
-        run: pnpm turbo -- run lint --scope=cli --color
+        run: pnpm -- turbo run test --filter=cli --color
 
       - name: E2E Tests
-        run: |
-          cd cli && make e2e
-
-      - name: Benchmark and Smoke Tests
-        run: cd cli && make bench/turbo
-
-  build-win:
-    name: build and test
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest]
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17.6
-        id: wingo
-
-      - uses: pnpm/action-setup@v2.0.1
-        with:
-          version: 6.32.2
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-          cache: pnpm
-
-      - name: go test
-        run: cd cli && go test ./cmd/... ./internal/...
-
-      - name: go vet
-        run: cd cli && go vet ./cmd/... ./internal/...
-
-      - name: Build
-        run: cd cli && go build ./cmd/turbo/...
-
-      - name: E2E Tests
-        run: cd cli && make e2e
-
-      - name: Benchmark and Smoke Tests
-        run: cd cli && make bench/turbo
+        run: pnpm -- turbo run e2e --filter=cli
 
   examples:
     name: run examples
     timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        manager: [yarn, npm]
+        example: [basic, design-system, kitchen-sink]
+        include:
+          - os: ubuntu-latest
+            manager: pnpm
+            example: with-pnpm
+          - os: macos-latest
+            manager: pnpm
+            example: with-pnpm
 
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Install Sponge
         shell: bash
@@ -121,28 +93,49 @@ jobs:
           fi
 
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
 
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
+      - name: Set up Go 1
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.17.6
-        id: go
+          go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
 
-      - uses: pnpm/action-setup@v2.0.1
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
         with:
-          version: 6.32.2
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7.2.1
+
+      - name: Make sure pnpm always has a cache
+        shell: bash
+        run: |
+          mkdir -p `pnpm store path`
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
           node-version: 16
-          cache: pnpm
+          cache: ${{matrix.manager}}
+          cache-dependency-path: package.json
 
-      - name: Check examples
+      - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash
         env:
           FORCE_COLOR: true
-        run: ./scripts/run-examples.sh
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_REMOTE_ONLY: true
+        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"

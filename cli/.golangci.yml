@@ -4,15 +4,23 @@
 run:
   timeout: 5m
   modules-download-mode: readonly
+  go: 1.17
+  skip-files:
+    - internal/chrometracing/chrometracing.go # vendored upstream library
 
 linters:
   enable:
     - errcheck
     - goimports
-    - golint
     - govet
     - staticcheck
     - revive
+    - nakedret
+
+linters-settings:
+  nakedret:
+    # Aggressively disallow naked returns
+    max-func-lines: 3
 
 issues:
   exclude-use-default: false

@@ -1,126 +1,298 @@
 package fs
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"gotest.tools/v3/assert"
 )
 
-func Test_parseGitLsTree(t *testing.T) {
-	str := strings.TrimSpace(`
-	100644 blob 7d10c39d8d500db5d7dc2040016a4678a1297f2e    fs.go
-100644 blob 96b98aca484a5f2775aa8fde07cfe5396a17693e    hash.go
-100644 blob b9fde9650a6f1cd86eab69e8442a85d89b1e0455    hash_test.go
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/.test
-100644 blob c7c5d4814cf152aa7b7b65f338bcb05d9d70402c    test_data/test.txt
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder++/test.txt
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder1/a.txt
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder1/sub_sub_folder/b.txt
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder3/Zest.py
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder3/best.py
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder3/test.py
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder4/TEST_BUILD
-100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391    test_data/test_subfolder4/test.py
-100644 blob 8fd7339e6e8f7d203e61b7774fdef7692eb9c723    walk.go
-	`)
-	b1 := parseGitLsTree(str)
-	expected := map[string]string{
-		"fs.go":                               "7d10c39d8d500db5d7dc2040016a4678a1297f2e",
-		"hash.go":                             "96b98aca484a5f2775aa8fde07cfe5396a17693e",
-		"hash_test.go":                        "b9fde9650a6f1cd86eab69e8442a85d89b1e0455",
-		"test_data/.test":                     "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test.txt":                  "c7c5d4814cf152aa7b7b65f338bcb05d9d70402c",
-		"test_data/test_subfolder++/test.txt": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder1/a.txt":     "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder1/sub_sub_folder/b.txt": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder3/Zest.py":              "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder3/best.py":              "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder3/test.py":              "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder4/TEST_BUILD":           "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"test_data/test_subfolder4/test.py":              "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		"walk.go":                                        "8fd7339e6e8f7d203e61b7774fdef7692eb9c723",
-	}
-	assert.EqualValues(t, expected, b1)
-}
+func getFixture(id int) turbopath.AbsoluteSystemPath {
+	cwd, _ := os.Getwd()
+	root := turbopath.AbsoluteSystemPath(filepath.VolumeName(cwd) + string(os.PathSeparator))
+	checking := turbopath.AbsoluteSystemPath(cwd)
 
-// @todo special characters
-// func Test_parseGitFilename(t *testing.T) {
-// 	assert.EqualValues(t, `some/path/to/a/file name`, parseGitFilename(`some/path/to/a/file name`))
-// 	assert.EqualValues(t, `some/path/to/a/file name`, parseGitFilename(`some/path/to/a/file name`))
-// 	assert.EqualValues(t, `some/path/to/a/file?name`, parseGitFilename(`"some/path/to/a/file?name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file\\name`, parseGitFilename(`"some/path/to/a/file\\\\name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file"name`, parseGitFilename(`"some/path/to/a/file\\"name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file"name`, parseGitFilename(`"some/path/to/a/file\\"name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file网网name`, parseGitFilename(`"some/path/to/a/file\\347\\275\\221\\347\\275\\221name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file\\347\\网name`, parseGitFilename(`"some/path/to/a/file\\\\347\\\\\\347\\275\\221name"`))
-// 	assert.EqualValues(t, `some/path/to/a/file\\网网name`, parseGitFilename(`"some/path/to/a/file\\\\\\347\\275\\221\\347\\275\\221name"`))
-// }
+	for checking != root {
+		fixtureDirectory := checking.Join("fixtures")
+		_, err := os.Stat(fixtureDirectory.ToString())
+		if !errors.Is(err, os.ErrNotExist) {
+			// Found the fixture directory!
+			files, _ := os.ReadDir(fixtureDirectory.ToString())
 
-func Test_parseGitStatus(t *testing.T) {
-
-	want := map[string]string{
-		"turboooz.config.js":        "R",
-		"package_deps_hash.go":      "??",
-		"package_deps_hash_test.go": "??",
-	}
-	input := `
-R  turbo.config.js -> turboooz.config.js
-?? package_deps_hash.go
-?? package_deps_hash_test.go`
-	assert.EqualValues(t, want, parseGitStatus(input, ""))
-}
-func Test_getPackageDeps(t *testing.T) {
-
-	want := map[string]string{
-		"turboooz.config.js":        "R",
-		"package_deps_hash.go":      "??",
-		"package_deps_hash_test.go": "??",
-	}
-	input := `
-R  turbo.config.js -> turboooz.config.js
-?? package_deps_hash.go
-?? package_deps_hash_test.go`
-	assert.EqualValues(t, want, parseGitStatus(input, ""))
-}
-
-func Test_GetHashableDeps(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd %v", err)
-	}
-	cliDir, err := filepath.Abs(filepath.Join(cwd, "..", ".."))
-	if err != nil {
-		t.Fatalf("failed to get cli dir: %v", err)
-	}
-	if filepath.Base(cliDir) != "cli" {
-		t.Fatalf("did not find cli dir, found %v", cliDir)
-	}
-	turboPath := filepath.Join(cliDir, "..", "turbo.json")
-	makefilePath := filepath.Join(cliDir, "Makefile")
-	mainPath := filepath.Join(cliDir, "cmd", "turbo", "main.go")
-	hashes, err := GetHashableDeps([]string{turboPath, makefilePath, mainPath}, cliDir)
-	if err != nil {
-		t.Fatalf("failed to hash files: %v", err)
-	}
-	// Note that the paths here are platform independent, so hardcoded slashes should be fine
-	expected := []string{
-		"../turbo.json",
-		"Makefile",
-		"cmd/turbo/main.go",
-	}
-	for _, key := range expected {
-		if _, ok := hashes[key]; !ok {
-			t.Errorf("hashes missing %v", key)
+			// Grab the specified fixture.
+			for _, file := range files {
+				fileName := turbopath.RelativeSystemPath(file.Name())
+				if strings.Index(fileName.ToString(), fmt.Sprintf("%02d-", id)) == 0 {
+					return turbopath.AbsoluteSystemPath(fixtureDirectory.Join(fileName))
+				}
+			}
 		}
+		checking = checking.Join("..")
 	}
-	if len(hashes) != len(expected) {
-		keys := []string{}
-		for key := range hashes {
-			keys = append(keys, key)
+
+	panic("fixtures not found!")
+}
+
+func TestSpecialCharacters(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	fixturePath := getFixture(1)
+	newlinePath := turbopath.AnchoredSystemPath("new\nline")
+	quotePath := turbopath.AnchoredSystemPath("\"quote\"")
+	newline := newlinePath.RestoreAnchor(fixturePath)
+	quote := quotePath.RestoreAnchor(fixturePath)
+
+	// Setup
+	one := os.WriteFile(newline.ToString(), []byte{}, 0644)
+	two := os.WriteFile(quote.ToString(), []byte{}, 0644)
+
+	// Cleanup
+	defer func() {
+		one := os.Remove(newline.ToString())
+		two := os.Remove(quote.ToString())
+
+		if one != nil || two != nil {
+			return
 		}
-		t.Errorf("hashes mismatch. got %v want %v", strings.Join(keys, ", "), strings.Join(expected, ", "))
+	}()
+
+	// Setup error check
+	if one != nil || two != nil {
+		return
 	}
+
+	tests := []struct {
+		name        string
+		rootPath    turbopath.AbsoluteSystemPath
+		filesToHash []turbopath.AnchoredSystemPath
+		want        map[turbopath.AnchoredUnixPath]string
+		wantErr     bool
+	}{
+		{
+			name:     "Quotes",
+			rootPath: fixturePath,
+			filesToHash: []turbopath.AnchoredSystemPath{
+				turbopath.AnchoredSystemPath(quotePath),
+			},
+			want: map[turbopath.AnchoredUnixPath]string{
+				quotePath.ToUnixPath(): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			},
+		},
+		{
+			name:     "Newlines",
+			rootPath: fixturePath,
+			filesToHash: []turbopath.AnchoredSystemPath{
+				turbopath.AnchoredSystemPath(newlinePath),
+			},
+			want: map[turbopath.AnchoredUnixPath]string{
+				newlinePath.ToUnixPath(): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := gitHashObject(tt.rootPath, tt.filesToHash)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("gitHashObject() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("gitHashObject() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_gitHashObject(t *testing.T) {
+	fixturePath := getFixture(1)
+	traversePath, err := getTraversePath(fixturePath)
+	if err != nil {
+		return
+	}
+
+	tests := []struct {
+		name        string
+		rootPath    turbopath.AbsoluteSystemPath
+		filesToHash []turbopath.AnchoredSystemPath
+		want        map[turbopath.AnchoredUnixPath]string
+		wantErr     bool
+	}{
+		{
+			name:        "No paths",
+			rootPath:    fixturePath,
+			filesToHash: []turbopath.AnchoredSystemPath{},
+			want:        map[turbopath.AnchoredUnixPath]string{},
+		},
+		{
+			name:     "Absolute paths come back relative to rootPath",
+			rootPath: fixturePath.Join("child"),
+			filesToHash: []turbopath.AnchoredSystemPath{
+				turbopath.AnchoredSystemPath(filepath.Join("..", "root.json")),
+				turbopath.AnchoredSystemPath("child.json"),
+				turbopath.AnchoredSystemPath(filepath.Join("grandchild", "grandchild.json")),
+			},
+			want: map[turbopath.AnchoredUnixPath]string{
+				"../root.json":               "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+				"child.json":                 "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+				"grandchild/grandchild.json": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			},
+		},
+		{
+			name:     "Traverse outside of the repo",
+			rootPath: fixturePath.Join(traversePath.ToSystemPath(), ".."),
+			filesToHash: []turbopath.AnchoredSystemPath{
+				turbopath.AnchoredSystemPath("null.json"),
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:     "Nonexistent file",
+			rootPath: fixturePath,
+			filesToHash: []turbopath.AnchoredSystemPath{
+				turbopath.AnchoredSystemPath("nonexistent.json"),
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := gitHashObject(tt.rootPath, tt.filesToHash)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("gitHashObject() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("gitHashObject() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getTraversePath(t *testing.T) {
+	fixturePath := getFixture(1)
+
+	tests := []struct {
+		name     string
+		rootPath turbopath.AbsoluteSystemPath
+		want     turbopath.RelativeUnixPath
+		wantErr  bool
+	}{
+		{
+			name:     "From fixture location",
+			rootPath: fixturePath,
+			want:     turbopath.RelativeUnixPath("../../"),
+			wantErr:  false,
+		},
+		{
+			name:     "Traverse out of git repo",
+			rootPath: fixturePath.Join("..", "..", ".."),
+			want:     "",
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getTraversePath(tt.rootPath)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getTraversePath() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getTraversePath() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func requireGitCmd(t *testing.T, repoRoot AbsolutePath, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoRoot.ToString()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git commit failed: %v %v", err, string(out))
+	}
+}
+
+func TestGetPackageDeps(t *testing.T) {
+	// Directory structure:
+	// <root>/
+	//   my-pkg/
+	//     committed-file
+	//     deleted-file
+	//     uncommitted-file <- new file not added to git
+
+	repoRoot := AbsolutePathFromUpstream(t.TempDir())
+	myPkgDir := repoRoot.Join("my-pkg")
+	committedFilePath := myPkgDir.Join("committed-file")
+	err := committedFilePath.EnsureDir()
+	assert.NilError(t, err, "EnsureDir")
+	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+	deletedFilePath := myPkgDir.Join("deleted-file")
+	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
+	assert.NilError(t, err, "WriteFile")
+	requireGitCmd(t, repoRoot, "init", ".")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
+	requireGitCmd(t, repoRoot, "add", ".")
+	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
+	err = deletedFilePath.Remove()
+	assert.NilError(t, err, "Remove")
+	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
+	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+
+	tests := []struct {
+		opts     *PackageDepsOptions
+		expected map[turbopath.AnchoredUnixPath]string
+	}{
+		{
+			opts: &PackageDepsOptions{
+				PackagePath: "my-pkg",
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"uncommitted-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+	}
+	for _, tt := range tests {
+		got, err := GetPackageDeps(repoRoot, tt.opts)
+		if err != nil {
+			t.Errorf("GetPackageDeps got error %v", err)
+			continue
+		}
+		assert.DeepEqual(t, got, tt.expected)
+	}
+}
+
+func Test_memoizedGetTraversePath(t *testing.T) {
+	fixturePath := getFixture(1)
+
+	gotOne, _ := memoizedGetTraversePath(fixturePath)
+	gotTwo, _ := memoizedGetTraversePath(fixturePath)
+
+	assert.Check(t, gotOne == gotTwo, "The strings are identical.")
 }

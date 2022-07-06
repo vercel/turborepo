@@ -2,8 +2,8 @@ package scope
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
@@ -18,14 +18,8 @@ type mockSCM struct {
 	changed []string
 }
 
-func (m *mockSCM) ChangedFiles(fromCommit string, includeUntracked bool, relativeTo string) []string {
-	changed := []string{}
-	for _, change := range m.changed {
-		if strings.HasPrefix(change, relativeTo) {
-			changed = append(changed, change)
-		}
-	}
-	return changed
+func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
+	return m.changed, nil
 }
 
 func TestResolvePackages(t *testing.T) {
@@ -87,6 +81,7 @@ func TestResolvePackages(t *testing.T) {
 		name                string
 		changed             []string
 		expected            []string
+		expectAllPackages   bool
 		scope               []string
 		since               string
 		ignore              string
@@ -179,9 +174,10 @@ func TestResolvePackages(t *testing.T) {
 		},
 		{
 			// no changes, no base to compare against, defaults to everything
-			name:     "no changes or scope specified, build everything",
-			since:    "",
-			expected: []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			name:              "no changes or scope specified, build everything",
+			since:             "",
+			expected:          []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			expectAllPackages: true,
 		},
 		{
 			// a dependent library changed, no deps beyond the scope are build
@@ -207,14 +203,16 @@ func TestResolvePackages(t *testing.T) {
 			scm := &mockSCM{
 				changed: tc.changed,
 			}
-			pkgs, err := ResolvePackages(&Opts{
-				Patterns:            tc.scope,
-				Since:               tc.since,
-				IgnorePatterns:      []string{tc.ignore},
-				GlobalDepPatterns:   tc.globalDeps,
-				IncludeDependencies: tc.includeDependencies,
-				IncludeDependents:   tc.includeDependents,
-			}, scm, &context.Context{
+			pkgs, isAllPackages, err := ResolvePackages(&Opts{
+				LegacyFilter: LegacyFilter{
+					Entrypoints:         tc.scope,
+					Since:               tc.since,
+					IncludeDependencies: tc.includeDependencies,
+					SkipDependents:      !tc.includeDependents,
+				},
+				IgnorePatterns:    []string{tc.ignore},
+				GlobalDepPatterns: tc.globalDeps,
+			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,
 				TopologicalGraph: graph,
@@ -228,6 +226,9 @@ func TestResolvePackages(t *testing.T) {
 			}
 			if !reflect.DeepEqual(pkgs, expected) {
 				t.Errorf("ResolvePackages got %v, want %v", pkgs, expected)
+			}
+			if isAllPackages != tc.expectAllPackages {
+				t.Errorf("isAllPackages got %v, want %v", isAllPackages, tc.expectAllPackages)
 			}
 		})
 	}

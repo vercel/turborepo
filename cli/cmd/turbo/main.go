@@ -7,18 +7,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/cmd/auth"
+	"github.com/vercel/turborepo/cli/internal/cmd/info"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/info"
+	"github.com/vercel/turborepo/cli/internal/daemon"
 	"github.com/vercel/turborepo/cli/internal/login"
-	"github.com/vercel/turborepo/cli/internal/process"
 	prune "github.com/vercel/turborepo/cli/internal/prune"
 	"github.com/vercel/turborepo/cli/internal/run"
+	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	uiPkg "github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/fatih/color"
-	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 )
 
@@ -49,7 +50,7 @@ func main() {
 	}
 	args = args[:argsEnd]
 
-	ui := ui.BuildColoredUi(colorMode);
+	ui := ui.BuildColoredUi(colorMode)
 	c := cli.NewCLI("turbo", turboVersion)
 
 	util.InitPrintf()
@@ -65,18 +66,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	var logger hclog.Logger
-	if cf != nil {
-		logger = cf.Logger
-	} else {
-		logger = hclog.Default()
-	}
-	processes := process.NewManager(logger.Named("processes"))
-	signalCh := watchSignals(func() { processes.Close() })
+	signalWatcher := signals.NewWatcher()
 	c.HiddenCommands = []string{"graph"}
 	c.Commands = map[string]cli.CommandFactory{
 		"run": func() (cli.Command, error) {
-			return &run.RunCommand{Config: cf, Ui: ui, Processes: processes},
+			return &run.RunCommand{Config: cf, UI: ui, SignalWatcher: signalWatcher},
 				nil
 		},
 		"prune": func() (cli.Command, error) {
@@ -86,16 +80,19 @@ func main() {
 			return &login.LinkCommand{Config: cf, Ui: ui}, nil
 		},
 		"unlink": func() (cli.Command, error) {
-			return &login.UnlinkCommand{Config: cf, Ui: ui}, nil
+			return &auth.UnlinkCommand{Config: cf, UI: ui}, nil
 		},
 		"login": func() (cli.Command, error) {
 			return &login.LoginCommand{Config: cf, UI: ui}, nil
 		},
 		"logout": func() (cli.Command, error) {
-			return &login.LogoutCommand{Config: cf, Ui: ui}, nil
+			return &auth.LogoutCommand{Config: cf, UI: ui}, nil
 		},
 		"bin": func() (cli.Command, error) {
-			return &info.BinCommand{Config: cf, Ui: ui}, nil
+			return &info.BinCommand{Config: cf, UI: ui}, nil
+		},
+		"daemon": func() (cli.Command, error) {
+			return &daemon.Command{Config: cf, UI: ui, SignalWatcher: signalWatcher}, nil
 		},
 	}
 
@@ -177,8 +174,10 @@ func main() {
 	// or to receive a signal, in which case the signal handler above does the cleanup
 	select {
 	case <-doneCh:
-		processes.Close()
-	case <-signalCh:
+		// We finished whatever task we were running
+		signalWatcher.Close()
+	case <-signalWatcher.Done():
+		// We caught a signal, which already called the close handlers
 	}
 	os.Exit(exitCode)
 }

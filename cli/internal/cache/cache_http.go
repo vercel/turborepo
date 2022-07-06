@@ -14,7 +14,6 @@ import (
 	log "log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -24,12 +23,18 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
+type client interface {
+	PutArtifact(hash string, body []byte, duration int, tag string) error
+	FetchArtifact(hash string) (*http.Response, error)
+}
+
 type httpCache struct {
 	writable       bool
-	config         *config.Config
+	client         client
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
+	repoRoot       fs.AbsolutePath
 }
 
 type limiter chan struct{}
@@ -56,7 +61,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 	r, w := io.Pipe()
 	go cache.write(w, hash, files)
 
-	// Read the entire aritfact tar into memory so we can easily compute the signature.
+	// Read the entire artifact tar into memory so we can easily compute the signature.
 	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
 	// additional overhead by doing the ioutil.ReadAll here instead.
 	artifactBody, err := ioutil.ReadAll(r)
@@ -70,7 +75,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 		}
 	}
-	return cache.config.ApiClient.PutArtifact(hash, artifactBody, duration, tag)
+	return cache.client.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
@@ -83,7 +88,7 @@ func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
 	for _, file := range files {
 		// log.Printf("caching file %v", file)
 		if err := cache.storeFile(tw, file); err != nil {
-			log.Printf("[ERROR] Error uploading artifacts to HTTP cache: %s", err)
+			log.Printf("[ERROR] Error uploading artifact %s to HTTP cache due to: %s", file, err)
 			// TODO(jaredpalmer): How can we cancel the request at this point?
 		}
 	}
@@ -125,8 +130,11 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = io.Copy(tw, f)
+	if errors.Is(err, tar.ErrWriteTooLong) {
+		log.Printf("Error writing %v to tar file, info: %v, mode: %v, is regular: %v", repoRelativePath, info, info.Mode(), info.Mode().IsRegular())
+	}
 	return err
 }
 
@@ -159,15 +167,19 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
-	resp, err := cache.config.ApiClient.FetchArtifact(hash, nil)
+	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
 	}
 	defer resp.Body.Close()
-	files := []string{}
-	missingLinks := []*tar.Header{}
-	duration := 0
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil, 0, nil // doesn't exist - not an error
+	} else if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return false, nil, 0, fmt.Errorf("%s", string(b))
+	}
 	// If present, extract the duration from the response.
+	duration := 0
 	if resp.Header.Get("x-artifact-duration") != "" {
 		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
 		if err != nil {
@@ -175,20 +187,16 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		}
 		duration = intVar
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return false, files, duration, nil // doesn't exist - not an error
-	} else if resp.StatusCode != http.StatusOK {
-		b, _ := ioutil.ReadAll(resp.Body)
-		return false, files, duration, fmt.Errorf("%s", string(b))
-	}
-	artifactReader := resp.Body
+	var tarReader io.Reader
+
+	defer func() { _ = resp.Body.Close() }()
 	if cache.signerVerifier.isEnabled() {
 		expectedTag := resp.Header.Get("x-artifact-tag")
 		if expectedTag == "" {
 			// If the verifier is enabled all incoming artifact downloads must have a signature
 			return false, nil, 0, errors.New("artifact verification failed: Downloaded artifact is missing required x-artifact-tag header")
 		}
-		b, _ := ioutil.ReadAll(artifactReader)
+		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
 		}
@@ -201,53 +209,77 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 			return false, nil, 0, err
 		}
 		// The artifact has been verified and the body can be read and untarred
-		artifactReader = ioutil.NopCloser(bytes.NewReader(b))
+		tarReader = bytes.NewReader(b)
+	} else {
+		tarReader = resp.Body
 	}
-	gzr, err := gzip.NewReader(artifactReader)
+	files, err := restoreTar(cache.repoRoot, tarReader)
 	if err != nil {
 		return false, nil, 0, err
 	}
-	defer gzr.Close()
+	return true, files, duration, nil
+}
+
+// restoreTar returns posix-style repo-relative paths of the files it
+// restored. In the future, these should likely be repo-relative system paths
+// so that they are suitable for being fed into cache.Put for other caches.
+// For now, I think this is working because windows also accepts /-delimited paths.
+func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
+	files := []string{}
+	missingLinks := []*tar.Header{}
+	gzr, err := gzip.NewReader(reader)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = gzr.Close() }()
 	tr := tar.NewReader(gzr)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
 				for _, link := range missingLinks {
-					err := restoreSymlink(link, true)
+					err := restoreSymlink(root, link, true)
 					if err != nil {
-						return false, nil, 0, err
+						return nil, err
 					}
 				}
 
-				return true, files, duration, nil
+				return files, nil
 			}
-			return false, nil, 0, err
+			return nil, err
 		}
+		// hdr.Name is always a posix-style path
+		// TODO: files should eventually be repo-relative system paths
 		files = append(files, hdr.Name)
+		filename := root.Join(hdr.Name)
+		if isChild, err := root.ContainsPath(filename); err != nil {
+			return nil, err
+		} else if !isChild {
+			return nil, fmt.Errorf("cannot untar file to %v", filename)
+		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(hdr.Name, fs.DirPermissions); err != nil {
-				return false, nil, 0, err
+			if err := filename.MkdirAll(); err != nil {
+				return nil, err
 			}
 		case tar.TypeReg:
-			if dir := path.Dir(hdr.Name); dir != "." {
-				if err := os.MkdirAll(dir, fs.DirPermissions); err != nil {
-					return false, nil, 0, err
+			if dir := filename.Dir(); dir != "." {
+				if err := dir.MkdirAll(); err != nil {
+					return nil, err
 				}
 			}
-			if f, err := os.OpenFile(hdr.Name, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
-				return false, nil, 0, err
+			if f, err := filename.OpenFile(os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
+				return nil, err
 			} else if _, err := io.Copy(f, tr); err != nil {
-				return false, nil, 0, err
+				return nil, err
 			} else if err := f.Close(); err != nil {
-				return false, nil, 0, err
+				return nil, err
 			}
 		case tar.TypeSymlink:
-			if err := restoreSymlink(hdr, false); errors.Is(err, errNonexistentLinkTarget) {
+			if err := restoreSymlink(root, hdr, false); errors.Is(err, errNonexistentLinkTarget) {
 				missingLinks = append(missingLinks, hdr)
 			} else if err != nil {
-				return false, nil, 0, err
+				return nil, err
 			}
 		default:
 			log.Printf("Unhandled file type %d for %s", hdr.Typeflag, hdr.Name)
@@ -257,16 +289,17 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 
 var errNonexistentLinkTarget = errors.New("the link target does not exist")
 
-func restoreSymlink(hdr *tar.Header, allowNonexistentTargets bool) error {
+func restoreSymlink(root fs.AbsolutePath, hdr *tar.Header, allowNonexistentTargets bool) error {
 	// Note that hdr.Linkname is really the link target
-	linkTarget := filepath.FromSlash(hdr.Linkname)
-	repoRelativeLinkFilename := filepath.FromSlash(hdr.Name)
-	err := fs.EnsureDir(repoRelativeLinkFilename)
-	if err != nil {
+	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
+	linkFilename := root.Join(hdr.Name)
+	if err := linkFilename.EnsureDir(); err != nil {
 		return err
 	}
-	repoRelativeLinkTarget := filepath.Join(filepath.Dir(repoRelativeLinkFilename), linkTarget)
-	if _, err := os.Lstat(repoRelativeLinkTarget); err != nil {
+
+	// TODO: check if this is an absolute path, or if we even care
+	linkTarget := linkFilename.Dir().Join(relativeLinkTarget)
+	if _, err := linkTarget.Lstat(); err != nil {
 		if os.IsNotExist(err) {
 			if !allowNonexistentTargets {
 				return errNonexistentLinkTarget
@@ -277,10 +310,10 @@ func restoreSymlink(hdr *tar.Header, allowNonexistentTargets bool) error {
 		}
 	}
 	// Ensure that the link we're about to create doesn't already exist
-	if err := os.Remove(repoRelativeLinkFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := linkFilename.Remove(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := os.Symlink(linkTarget, repoRelativeLinkFilename); err != nil {
+	if err := linkFilename.Symlink(relativeLinkTarget); err != nil {
 		return err
 	}
 	return nil
@@ -296,17 +329,18 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(config *config.Config, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, repoRoot fs.AbsolutePath) *httpCache {
 	return &httpCache{
 		writable:       true,
-		config:         config,
+		client:         client,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
 			teamId:  config.TeamId,
-			enabled: config.TurboConfigJSON.RemoteCacheOptions.Signature,
+			enabled: opts.RemoteCacheOpts.Signature,
 		},
+		repoRoot: repoRoot,
 	}
 }

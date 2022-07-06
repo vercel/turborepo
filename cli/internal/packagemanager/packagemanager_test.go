@@ -1,9 +1,14 @@
 package packagemanager
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"gotest.tools/v3/assert"
 )
 
 func TestParsePackageManagerString(t *testing.T) {
@@ -96,42 +101,43 @@ func TestParsePackageManagerString(t *testing.T) {
 }
 
 func TestGetPackageManager(t *testing.T) {
+	cwd, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
-		projectDirectory string
+		projectDirectory fs.AbsolutePath
 		pkg              *fs.PackageJSON
 		want             string
 		wantErr          bool
 	}{
 		{
 			name:             "finds npm from a package manager string",
-			projectDirectory: "",
+			projectDirectory: cwd,
 			pkg:              &fs.PackageJSON{PackageManager: "npm@1.2.3"},
 			want:             "nodejs-npm",
 			wantErr:          false,
 		},
 		{
 			name:             "finds pnpm from a package manager string",
-			projectDirectory: "",
+			projectDirectory: cwd,
 			pkg:              &fs.PackageJSON{PackageManager: "pnpm@1.2.3"},
 			want:             "nodejs-pnpm",
 			wantErr:          false,
 		},
 		{
 			name:             "finds yarn from a package manager string",
-			projectDirectory: "",
+			projectDirectory: cwd,
 			pkg:              &fs.PackageJSON{PackageManager: "yarn@1.2.3"},
 			want:             "nodejs-yarn",
 			wantErr:          false,
 		},
 		{
 			name:             "finds berry from a package manager string",
-			projectDirectory: "",
+			projectDirectory: cwd,
 			pkg:              &fs.PackageJSON{PackageManager: "yarn@2.3.4"},
 			want:             "nodejs-berry",
 			wantErr:          false,
 		},
-		// TODO: Test discovery of the package manager from filesystem and command execution after adopting afero
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -187,7 +193,139 @@ func Test_readPackageManager(t *testing.T) {
 				return
 			}
 			if gotPackageManager.Name != tt.want {
-				t.Errorf("GetPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
+				t.Errorf("readPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
+			}
+		})
+	}
+}
+
+func Test_GetWorkspaces(t *testing.T) {
+	type test struct {
+		name     string
+		pm       PackageManager
+		rootPath fs.AbsolutePath
+		want     []string
+		wantErr  bool
+	}
+
+	cwd, _ := os.Getwd()
+
+	repoRoot, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
+	rootPath := map[string]fs.AbsolutePath{
+		"nodejs-npm":   repoRoot.Join("../../../examples/basic"),
+		"nodejs-berry": repoRoot.Join("../../../examples/basic"),
+		"nodejs-yarn":  repoRoot.Join("../../../examples/basic"),
+		"nodejs-pnpm":  repoRoot.Join("../../../examples/with-pnpm"),
+	}
+
+	want := map[string][]string{
+		"nodejs-npm": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
+		},
+		"nodejs-berry": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
+		},
+		"nodejs-yarn": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
+		},
+		"nodejs-pnpm": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/ui/package.json")),
+		},
+	}
+
+	tests := make([]test, len(packageManagers))
+	for i, packageManager := range packageManagers {
+		tests[i] = test{
+			name:     packageManager.Name,
+			pm:       packageManager,
+			rootPath: rootPath[packageManager.Name],
+			want:     want[packageManager.Name],
+			wantErr:  false,
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotWorkspaces, err := tt.pm.GetWorkspaces(tt.rootPath)
+
+			gotToSlash := make([]string, len(gotWorkspaces))
+			for index, workspace := range gotWorkspaces {
+				gotToSlash[index] = filepath.ToSlash(workspace)
+			}
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetWorkspaces() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			sort.Strings(gotToSlash)
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("GetWorkspaces() = %v, want %v", gotToSlash, tt.want)
+			}
+		})
+	}
+}
+
+func Test_GetWorkspaceIgnores(t *testing.T) {
+	type test struct {
+		name     string
+		pm       PackageManager
+		rootPath fs.AbsolutePath
+		want     []string
+		wantErr  bool
+	}
+
+	cwd, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
+	want := map[string][]string{
+		"nodejs-npm":   {"**/node_modules/**"},
+		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
+		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
+		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**"},
+	}
+
+	tests := make([]test, len(packageManagers))
+	for i, packageManager := range packageManagers {
+		tests[i] = test{
+			name:     packageManager.Name,
+			pm:       packageManager,
+			rootPath: cwd.Join("../../../examples/basic"),
+			want:     want[packageManager.Name],
+			wantErr:  false,
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotWorkspaceIgnores, err := tt.pm.GetWorkspaceIgnores(tt.rootPath)
+
+			gotToSlash := make([]string, len(gotWorkspaceIgnores))
+			for index, ignore := range gotWorkspaceIgnores {
+				gotToSlash[index] = filepath.ToSlash(ignore)
+			}
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetWorkspaceIgnores() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("GetWorkspaceIgnores() = %v, want %v", gotToSlash, tt.want)
 			}
 		})
 	}

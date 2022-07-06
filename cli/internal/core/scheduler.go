@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 )
 
 const ROOT_NODE_NAME = "___ROOT___"
+
+var errNoTask = errors.New("the given task has not been registered")
 
 type Task struct {
 	Name string
@@ -27,17 +30,19 @@ type Scheduler struct {
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the scheduler
-	Tasks           map[string]*Task
-	PackageTaskDeps [][]string
+	Tasks            map[string]*Task
+	PackageTaskDeps  [][]string
+	rootEnabledTasks util.Set
 }
 
 // NewScheduler creates a new scheduler given a topologic graph of workspace package names
 func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
 	return &Scheduler{
-		Tasks:           make(map[string]*Task),
-		TopologicGraph:  topologicalGraph,
-		TaskGraph:       &dag.AcyclicGraph{},
-		PackageTaskDeps: [][]string{},
+		Tasks:            make(map[string]*Task),
+		TopologicGraph:   topologicalGraph,
+		TaskGraph:        &dag.AcyclicGraph{},
+		PackageTaskDeps:  [][]string{},
+		rootEnabledTasks: make(util.Set),
 	}
 }
 
@@ -93,18 +98,17 @@ func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
-func (p *Scheduler) getPackageAndTask(taskID string) (string, *Task, error) {
-	pkg, taskName := util.GetPackageTaskFromId(taskID)
+func (p *Scheduler) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	if task, ok := p.Tasks[taskID]; ok {
-		return pkg, task, nil
+		return task, nil
 	}
 	if task, ok := p.Tasks[taskName]; ok {
-		return pkg, task, nil
+		return task, nil
 	}
-	return "", nil, fmt.Errorf("cannot find task for %v", taskID)
+	return nil, errNoTask
 }
 
-func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
+func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -113,10 +117,23 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 	traversalQueue := []string{}
 
-	for _, pkg := range scope {
-		for _, target := range taskNames {
-			traversalQueue = append(traversalQueue, util.GetTaskId(pkg, target))
+	for _, pkg := range pkgs {
+		isRootPkg := pkg == util.RootPkgName
+		for _, taskName := range taskNames {
+			if !isRootPkg || p.rootEnabledTasks.Includes(taskName) {
+				taskID := util.GetTaskId(pkg, taskName)
+				if _, err := p.getTaskDefinition(pkg, taskName, taskID); err != nil {
+					// Initial, non-package tasks are not required to exist, as long as some
+					// package in the list packages defines it as a package-task. Dependencies
+					// *are* required to have a definition.
+					continue
+				}
+				traversalQueue = append(traversalQueue, taskID)
+			}
 		}
+	}
+	if len(traversalQueue) == 0 {
+		return fmt.Errorf("no tasks found to execute. Requested tasks %v in packages %v", strings.Join(taskNames, ", "), strings.Join(pkgs, ", "))
 	}
 
 	visited := make(util.Set)
@@ -124,7 +141,11 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 	for len(traversalQueue) > 0 {
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
-		pkg, task, err := p.getPackageAndTask(taskId)
+		pkg, taskName := util.GetPackageTaskFromId(taskId)
+		if pkg == util.RootPkgName && !p.rootEnabledTasks.Includes(taskName) {
+			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskId)
+		}
+		task, err := p.getTaskDefinition(pkg, taskName, taskId)
 		if err != nil {
 			return err
 		}
@@ -214,13 +235,21 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 }
 
 func (p *Scheduler) AddTask(task *Task) *Scheduler {
+	// If a root task is added, mark the task name as eligible for
+	// root execution. Otherwise, it will be skipped.
+	if util.IsPackageTask(task.Name) {
+		pkg, taskName := util.GetPackageTaskFromId(task.Name)
+		if pkg == util.RootPkgName {
+			p.rootEnabledTasks.Add(taskName)
+		}
+	}
 	p.Tasks[task.Name] = task
 	return p
 }
 
 func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
-	if fromPkg != ROOT_NODE_NAME && !p.TopologicGraph.HasVertex(fromPkg) {
+	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !p.TopologicGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
 	}
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})

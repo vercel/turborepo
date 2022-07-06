@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"golang.org/x/sync/errgroup"
 )
@@ -21,11 +19,19 @@ import (
 type fsCache struct {
 	cacheDirectory string
 	recorder       analytics.Recorder
+	repoRoot       fs.AbsolutePath
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(config *config.Config, recorder analytics.Recorder) Cache {
-	return &fsCache{cacheDirectory: config.Cache.Dir, recorder: recorder}
+func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot fs.AbsolutePath) (*fsCache, error) {
+	if err := opts.Dir.MkdirAll(); err != nil {
+		return nil, err
+	}
+	return &fsCache{
+		cacheDirectory: opts.Dir.ToStringDuringMigration(),
+		recorder:       recorder,
+		repoRoot:       repoRoot,
+	}, nil
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
@@ -39,7 +45,7 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	}
 
 	// Otherwise, copy it into position
-	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, fs.DirPermissions, true, true)
+	err := fs.RecursiveCopyOrLinkFile(cachedFolder, target, false, false)
 	if err != nil {
 		// TODO: what event to log here?
 		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
@@ -78,16 +84,17 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				fromInfo, err := os.Lstat(file)
+				statedFile := fs.LstatCachedFile{Path: f.repoRoot.Join(file)}
+				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
 				}
-				if !fromInfo.IsDir() {
+				if !fromType.IsDir() {
 					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, file)); err != nil {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyOrLinkFile(file, filepath.Join(f.cacheDirectory, hash, file), fromInfo.Mode(), fs.DirPermissions, true, true); err != nil {
+					if err := fs.CopyOrLinkFile(&statedFile, filepath.Join(f.cacheDirectory, hash, file), false, false); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}

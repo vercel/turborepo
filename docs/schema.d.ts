@@ -41,7 +41,7 @@ export interface Schema {
     /**
      * The name of a task that can be executed by turbo run. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the
-     * pipeline task configuration to that NPM script during execution. This allows you to
+     * pipeline task configuration to that npm script during execution. This allows you to
      * use pipeline to set conventions across your entire Turborepo.
      */
     [script: string]: Pipeline;
@@ -106,6 +106,16 @@ export interface Pipeline {
    * @default []
    */
   inputs?: string[];
+
+  /**
+   * The style of output for this task. Use "full" to display the entire output of
+   * the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to
+   * show the full output of cache misses and the computed hashes for cache hits. Use
+   * "none" to hide task output.
+   *
+   * @default full
+   */
+  outputMode?: string;
 }
 
 export interface RemoteCache {

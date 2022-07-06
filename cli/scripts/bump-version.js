@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-const shelljs = require("shelljs");
 const path = require("path");
 const fs = require("fs-extra");
 const {

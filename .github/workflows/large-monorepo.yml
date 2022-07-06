@@ -15,19 +15,21 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
 
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
+      - name: Set up Go
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.17.6
+          go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
         id: go
 
-      - uses: pnpm/action-setup@v2.0.1
+      - uses: pnpm/action-setup@v2.1.0
         with:
-          version: 6.32.2
+          version: 7.2.1
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
