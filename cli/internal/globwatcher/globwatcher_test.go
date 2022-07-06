@@ -47,7 +47,7 @@ func setup(t *testing.T, repoRoot fs.AbsolutePath) {
 	assert.NilError(t, err, "Close")
 }
 
-type noopCookieWater struct{}
+type noopCookieWaiter struct{}
 
 func (*noopCookieWater) WaitForCookie() error {
 	return nil
