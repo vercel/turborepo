@@ -57,7 +57,7 @@ will hide that async and error in the `XxxVc`.
 A combination of a function and it's arguments is called a Task (basically an
 invocation of a function).
 
-It's also possible to store data in a Task via `XxxVc::slot(value: Xxx)`.
+It's also possible to store data in a Task via `XxxVc::cell(value: Xxx)`.
 This returns an `XxxVc`.
 
 When `#[turbo_tasks::value(shared)]` is
@@ -105,6 +105,7 @@ without special linker logic.
 
 Most of that is automated via this build script.
 It's worth looking into the generated file:
+
 > `TODO` will be a hash of the crate + deps in the future.
 
 ```rust
@@ -141,9 +142,6 @@ The hash will allow invalidating the cache, but also being able to differentiate
 between versions when accessing a remote cache.
 
 [registry]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/registry.rs
-
 [new_with_any_serialization]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/value_type.rs#L138
-
 [any_as_serialize]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/value_type.rs#L89-L99
-
-[AnyDeserializeSeed]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/magic_any.rs#L174-L207
+[anydeserializeseed]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/magic_any.rs#L174-L207
