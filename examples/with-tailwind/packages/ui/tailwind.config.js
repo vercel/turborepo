@@ -1,6 +1,3 @@
-module.exports = {
-  content: [
-    // app content
-    `./**/*.{js,ts,jsx,tsx}`,
-  ],
-};
+const config = require("tailwind-config/tailwind.config.js");
+
+module.exports = config;

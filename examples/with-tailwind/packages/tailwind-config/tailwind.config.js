@@ -4,8 +4,6 @@ module.exports = {
   content: [
     // app content
     `./**/*.{js,ts,jsx,tsx}`,
-    // package content
-    `../../packages/**/*.{js,ts,jsx,tsx}`,
   ],
   theme: {
     extend: {
