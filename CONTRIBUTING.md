@@ -2,7 +2,7 @@
 
 Dependencies
 
-1.  On OSX: `brew install sponge jq protobuf`
+1.  On OSX: `brew install sponge jq protobuf protoc-gen-go protoc-gen-go-grpc golang`
 1.  Run `pnpm install` at root
 
 Building
