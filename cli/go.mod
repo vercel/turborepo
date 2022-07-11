@@ -11,7 +11,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/gobwas/glob v0.2.3
-	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
+	github.com/google/chrometracing 32f135b956e4
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-gatedio v0.5.0
