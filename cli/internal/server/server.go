@@ -60,14 +60,21 @@ func (c *closer) close() {
 	})
 }
 
+var _defaultCookieTimeout = 500 * time.Millisecond
+
 // New returns a new instance of Server
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath fs.AbsolutePath) (*Server, error) {
+func New(serverName string, logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath fs.AbsolutePath) (*Server, error) {
+	cookieDir := fs.GetTurboDataDir().Join("cookies", serverName)
+	cookieJar, err := filewatcher.NewCookieJar(cookieDir, _defaultCookieTimeout)
+	if err != nil {
+		return nil, err
+	}
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
 	fileWatcher := filewatcher.New(logger.Named("FileWatcher"), repoRoot, watcher)
-	globWatcher := globwatcher.New(logger.Named("GlobWatcher"), repoRoot)
+	globWatcher := globwatcher.New(logger.Named("GlobWatcher"), repoRoot, cookieJar)
 	server := &Server{
 		watcher:      fileWatcher,
 		globWatcher:  globWatcher,
@@ -76,10 +83,15 @@ func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, log
 		logFilePath:  logFilePath,
 		repoRoot:     repoRoot,
 	}
+	server.watcher.AddClient(cookieJar)
 	server.watcher.AddClient(globWatcher)
 	server.watcher.AddClient(server)
 	if err := server.watcher.Start(); err != nil {
 		return nil, errors.Wrapf(err, "watching %v", repoRoot)
+	}
+	if err := server.watcher.Add(cookieDir.ToStringDuringMigration()); err != nil {
+		_ = server.watcher.Close()
+		return nil, errors.Wrapf(err, "failed to watch cookie directory: %v", cookieDir)
 	}
 	return server, nil
 }

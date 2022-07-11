@@ -9,6 +9,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
+	"github.com/vercel/turborepo/cli/internal/filewatcher"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -20,8 +21,9 @@ var ErrClosed = errors.New("glob watching is closed")
 // it is no longer tracked until a new hash requests it. Once all globs for a particular hash
 // have changed, that hash is no longer tracked.
 type GlobWatcher struct {
-	logger   hclog.Logger
-	repoRoot fs.AbsolutePath
+	logger       hclog.Logger
+	repoRoot     fs.AbsolutePath
+	cookieWaiter filewatcher.CookieWaiter
 
 	mu         sync.RWMutex // protects field below
 	hashGlobs  map[string]util.Set
@@ -31,12 +33,13 @@ type GlobWatcher struct {
 }
 
 // New returns a new GlobWatcher instance
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath) *GlobWatcher {
+func New(logger hclog.Logger, repoRoot fs.AbsolutePath, cookieWaiter filewatcher.CookieWaiter) *GlobWatcher {
 	return &GlobWatcher{
-		logger:     logger,
-		repoRoot:   repoRoot,
-		hashGlobs:  make(map[string]util.Set),
-		globStatus: make(map[string]util.Set),
+		logger:       logger,
+		repoRoot:     repoRoot,
+		cookieWaiter: cookieWaiter,
+		hashGlobs:    make(map[string]util.Set),
+		globStatus:   make(map[string]util.Set),
 	}
 }
 
@@ -59,6 +62,14 @@ func (g *GlobWatcher) WatchGlobs(hash string, globs []string) error {
 	if g.isClosed() {
 		return ErrClosed
 	}
+	// Wait for a cookie here
+	// that will ensure that we have seen all filesystem writes
+	// *by the calling client*. Other tasks _could_ write to the
+	// same output directories, however we are relying on task
+	// execution dependencies to prevent that.
+	if err := g.cookieWaiter.WaitForCookie(); err != nil {
+		return err
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.hashGlobs[hash] = util.SetFromStrings(globs)
@@ -79,6 +90,14 @@ func (g *GlobWatcher) GetChangedGlobs(hash string, candidates []string) ([]strin
 	if g.isClosed() {
 		// If filewatching has crashed, return all candidates as changed.
 		return candidates, nil
+	}
+	// Wait for a cookie here
+	// that will ensure that we have seen all filesystem writes
+	// *by the calling client*. Other tasks _could_ write to the
+	// same output directories, however we are relying on task
+	// execution dependencies to prevent that.
+	if err := g.cookieWaiter.WaitForCookie(); err != nil {
+		return nil, err
 	}
 	// hashGlobs tracks all of the unchanged globs for a given hash
 	// If hashGlobs doesn't have our hash, either everything has changed,
