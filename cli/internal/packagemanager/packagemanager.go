@@ -7,6 +7,7 @@ package packagemanager
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -36,11 +37,17 @@ type PackageManager struct {
 	// The directory in which package assets are stored by the Package Manager.
 	PackageDir string
 
+	// The PackageManager version tracked in package.json
+	version string
+
 	// Return the list of workspace glob
 	getWorkspaceGlobs func(rootpath fs.AbsolutePath) ([]string, error)
 
 	// Return the list of workspace ignore globs
 	getWorkspaceIgnores func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error)
+
+	// Returns array of argument separators
+	GetCmdArgSeparator func(pm *PackageManager, rootpath fs.AbsolutePath) []string
 
 	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
@@ -61,7 +68,7 @@ var (
 	packageManagerRegex   = regexp.MustCompile(packageManagerPattern)
 )
 
-// ParsePackageManagerString takes a package manager version string parses it into consituent components
+// ParsePackageManagerString takes a package manager version string parses it into constituent components
 func ParsePackageManagerString(packageManager string) (manager string, version string, err error) {
 	match := packageManagerRegex.FindString(packageManager)
 	if len(match) == 0 {
@@ -92,6 +99,7 @@ func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, er
 		for _, packageManager := range packageManagers {
 			isResponsible, err := packageManager.Matches(manager, version)
 			if isResponsible && (err == nil) {
+				packageManager.version = version
 				return &packageManager, nil
 			}
 		}
@@ -143,4 +151,35 @@ func (pm PackageManager) GetWorkspaces(rootpath fs.AbsolutePath) ([]string, erro
 // GetWorkspaceIgnores returns an array of globs not to search for workspaces.
 func (pm PackageManager) GetWorkspaceIgnores(rootpath fs.AbsolutePath) ([]string, error) {
 	return pm.getWorkspaceIgnores(pm, rootpath)
+}
+
+// GetPackageManagerVersionFromCmd returns the version printed to stdio
+// from running `<pkgExe> --version`. This style works for all supported
+// package managers.
+func GetPackageManagerVersionFromCmd(pm *PackageManager, projectDirectory string) (string, error) {
+	cmd := exec.Command(pm.Command, "--version")
+	cmd.Dir = projectDirectory
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("could not detect %s version: %v", pm.Name, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// GetPackageManagerVersionFromCmdPanic returns the version printed to stdio
+// from running `<pkgExe> --version`
+func GetPackageManagerVersionFromCmdPanic(pm *PackageManager, projectDirectory string) string {
+	version, err := GetPackageManagerVersionFromCmd(pm, projectDirectory)
+	if err != nil {
+		panic(fmt.Sprintf("could not detect %s version: %+v", pm.Name, err))
+	}
+	return version
+}
+
+// GetVersion returns the package manager version
+func GetVersion(pm *PackageManager, projectDirectory string) string {
+	if pm.version != "" {
+		return pm.version
+	}
+	return GetPackageManagerVersionFromCmdPanic(pm, projectDirectory)
 }

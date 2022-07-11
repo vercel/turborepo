@@ -698,23 +698,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
-	argSeparator := []string{"--"}
-	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
-		return errors.Wrap(err, "determining pnpm version")
-	} else if is7PlusPnpm {
-		// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
-		// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
-		// potentially breaking scripts that aren't expecting it.
-		//
-		// We are allowed to use nil here because argSeparator already has a type, so it's a typed nil,
-		// vs if we tried to call "args = append(args, nil...)", which would not work. This could
-		// just as easily be []string{}, but the style guide says to prefer nil for empty slices.
-		argSeparator = nil
-	} else if is1PlusYarn, err := util.Is1PlusYarn(packageManager.Name); err != nil {
-		return errors.Wrap(err, "determining yarn version")
-	} else if is1PlusYarn {
-		argSeparator = nil
-	}
+	argSeparator := packageManager.GetCmdArgSeparator(packageManager, r.config.Cwd)
 	ec := &execContext{
 		colorCache:     colorCache,
 		runState:       runState,

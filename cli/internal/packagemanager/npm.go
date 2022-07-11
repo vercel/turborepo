@@ -25,6 +25,10 @@ var nodejsNpm = PackageManager{
 		return pkg.Workspaces, nil
 	},
 
+	GetCmdArgSeparator: func(pm *PackageManager, _ fs.AbsolutePath) []string {
+		return []string{"--"}
+	},
+
 	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
 		// Matches upstream values:
 		// function: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L73

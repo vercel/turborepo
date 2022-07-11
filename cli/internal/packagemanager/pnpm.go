@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,6 +39,19 @@ var nodejsPnpm = PackageManager{
 		}
 
 		return pnpmWorkspaces.Packages, nil
+	},
+
+	GetCmdArgSeparator: func(pm *PackageManager, rootpath fs.AbsolutePath) []string {
+		version := pm.version
+		if version == "" {
+			version = GetPackageManagerVersionFromCmdPanic(pm, rootpath.ToString())
+		}
+		semverVersion := semver.MustParse(version)
+		argSeparatorSemVer := util.MustCompileSemverConstraint("<7.0.0")
+		if argSeparatorSemVer.Check(semverVersion) {
+			return []string{"--"}
+		}
+		return []string{}
 	},
 
 	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
