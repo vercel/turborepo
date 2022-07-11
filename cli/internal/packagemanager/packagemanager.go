@@ -175,11 +175,3 @@ func GetPackageManagerVersionFromCmdPanic(pm *PackageManager, projectDirectory s
 	}
 	return version
 }
-
-// GetVersion returns the package manager version
-func GetVersion(pm *PackageManager, projectDirectory string) string {
-	if pm.version != "" {
-		return pm.version
-	}
-	return GetPackageManagerVersionFromCmdPanic(pm, projectDirectory)
-}
