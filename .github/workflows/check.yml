@@ -87,7 +87,7 @@ jobs:
           expected_clippy_warnings=$(cat expected-clippy-warnings)
           if [[ "$count" -gt "$expected_clippy_warnings" ]]; then
             echo "Clippy reported $count warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
-            echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified, or fix ."
+            echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
             exit 1
           fi
 
