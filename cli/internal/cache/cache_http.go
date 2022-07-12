@@ -198,11 +198,11 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 		}
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+			return false, nil, 0, fmt.Errorf("artifact verification failed: %w", err)
 		}
 		isValid, err := cache.signerVerifier.validate(hash, b, expectedTag)
 		if err != nil {
-			return false, nil, 0, fmt.Errorf("artifact verifcation failed: %w", err)
+			return false, nil, 0, fmt.Errorf("artifact verification failed: %w", err)
 		}
 		if !isValid {
 			err = fmt.Errorf("artifact verification failed: artifact tag does not match expected tag %s", expectedTag)
