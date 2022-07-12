@@ -14,7 +14,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:seed": "esno src/seed.ts",
+    "db:seed": "tsx src/seed.ts",
     "dev": "tsup --watch",
     "format": "prisma format",
     "generate": "prisma generate",
@@ -29,11 +29,11 @@
   "devDependencies": {
     "config": "*",
     "eslint": "^8.12.0",
-    "esno": "^0.14.1",
     "prisma": "^3.10.0",
     "rimraf": "^3.0.2",
     "tsconfig": "*",
     "tsup": "^5.11.13",
+    "tsx": "^3.7.1",
     "typescript": "^4.5.5"
   }
 }
