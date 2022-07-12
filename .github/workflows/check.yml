@@ -53,9 +53,16 @@ jobs:
           command: clippy
           # args: -- -D warnings
 
-      - name: Check the number of Clippy warnings is ever decreasing
+      - name: Cache 
+        id: expected-clippy-warnings
+        uses: actions/cache@v3
+        with:
+          path: expected-clippy-warnings
+          key: expected-clippy-warnings
+
+      - name: Update expected Clippy warnings
+        if: github.ref == 'refs/heads/main'
         run: |
-          expected_clippy_warnings=$(cat expected-clippy-warnings)
           count="0"
           clippy_output="$(cargo clippy 2>&1)"
 
@@ -64,14 +71,23 @@ jobs:
             count=$((count + warnings))
           done
 
-          if [[ "$count" -lt "$expected_clippy_warnings" ]]; then
-            echo "Clippy reported $count warnings, which is lower than the previous number of $expected_clippy_warnings warnings."
-            echo "Please update the \`expected-clippy-warnings\` file to reflect the new number of warnings:"
-            echo "  echo $count > expected-clippy-warnings && git add expected-clippy-warnings"
-            exit 1
-          elif [[ "$count" -gt "$expected_clippy_warnings" ]]; then
-            echo "Clippy reported $count warnings, which is higher than the expected number of $expected_clippy_warnings warnings."
-            echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
+          echo $count > expected-clippy-warnings
+
+      - name: Check the number of Clippy warnings is ever decreasing
+        if: github.ref != 'refs/heads/main' && steps.expected-clippy-warnings.outputs.cache-hit == 'true'
+        run: |
+          count="0"
+          clippy_output="$(cargo clippy 2>&1)"
+
+          # Clippy will be invoked and report on each crate individually. We need to sum manually.
+          for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings$/\1/p'); do
+            count=$((count + warnings))
+          done
+
+          expected_clippy_warnings=$(cat expected-clippy-warnings)
+          if [[ "$count" -gt "$expected_clippy_warnings" ]]; then
+            echo "Clippy reported $count warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
+            echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified, or fix ."
             exit 1
           fi
 
