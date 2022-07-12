@@ -25,15 +25,11 @@ This turborepo has some additional tools already setup for you:
 - [Prisma](https://prisma.io/) for database ORM
 - [Docker Compose](https://docs.docker.com/compose/) for local database
 
-## Setup
-
-This repository is used in the `npx create-turbo@latest` command, and selected when choosing which package manager you wish to use with your monorepo (Yarn).
-
 ### Database
 
 We use [Prisma](https://prisma.io/) to manage & access our database. As such you will need a database for this project, either locally or hosted in the cloud.
 
-To make this process eaasier, we offer a [`docker-compose.yml`](https://docs.docker.com/compose/) file to deploy a MySQL server locally with a new database named `turborepo` (To change this update the `MYSQL_DATABASE` environment variable in the `docker-compose.yml` file):
+To make this process easier, we offer a [`docker-compose.yml`](https://docs.docker.com/compose/) file to deploy a MySQL server locally with a new database named `turborepo` (To change this update the `MYSQL_DATABASE` environment variable in the `docker-compose.yml` file):
 
 ```bash
 cd my-turborepo
@@ -54,7 +50,29 @@ Once deployed & up & running, you will need to create & deploy migrations to you
 npx prisma migrate dev
 ```
 
-For further more information on migrations & how to use Prisma Migrate, we recommend rad through the [Prisma Documentation](https://www.prisma.io/docs/concepts/components/prisma-migrate).
+If you need to push any existing migrations to the database, you can use either the Prisma db push or the Prisma migrate deploy command(s):
+
+```bash
+yarn run db:push
+
+# OR
+
+yarn run db:migrate:deploy
+```
+
+There is slight difference between the two commands & [Prisma offers a breakdown on which command is best to use](https://www.prisma.io/docs/concepts/components/prisma-migrate/db-push#choosing-db-push-or-prisma-migrate).
+
+An optional additional step is to seed some initial or fake data to your database using [Prisma's seeding functionality](https://www.prisma.io/docs/guides/database/seed-database).
+
+To do this update check the seed script located in `packages/database/src/seed.ts` & add or update any users you wish to seed to the database.
+
+Once edited run the following command to run tell Prisma to run the seed script defined in the Prisma configuration:
+
+```bash
+yarn run db:seed
+```
+
+For further more information on migrations, seeding & more, we recommend reading through the [Prisma Documentation](https://www.prisma.io/docs/).
 
 ### Build
 
@@ -72,25 +90,6 @@ To develop all apps and packages, run the following command:
 ```bash
 cd my-turborepo
 yarn run dev
-```
-
-### Remote Caching
-
-Turborepo can use a technique known as [Remote Caching (Beta)](https://turborepo.org/docs/features/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching (Beta) you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
-
-```bash
-cd my-turborepo
-npx turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your turborepo:
-
-```bash
-npx turbo link
 ```
 
 ## Useful Links
