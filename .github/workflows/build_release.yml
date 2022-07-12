@@ -3,6 +3,8 @@ name: Build release
 on:
   push:
     branches: [main]
+    tags:
+      - node-file-trace*
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,3 +49,49 @@ jobs:
           path: |
             target/${{ matrix.os.target }}/release/node-file-trace
             target/${{ matrix.os.target }}/release/node-file-trace.exe
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/node-file-trace')
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          check-latest: true
+
+      - name: Set release name
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
+      - name: Install target
+        uses: actions-rs/toolchain@v1
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: ls -R artifacts
+        shell: bash
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: debug
+
+      - name: Write NPM_TOKEN
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish
+        uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin publish npm node-file-trace
