@@ -75,7 +75,7 @@ jobs:
       - name: Update expected Clippy warnings on main
         if: github.ref == 'refs/heads/main'
         run: |
-          mv clippy-warnings > expected-clippy-warnings
+          mv clippy-warnings expected-clippy-warnings
 
       - name: Check the number of Clippy warnings is ever decreasing
         if: github.ref != 'refs/heads/main' && steps.expected-clippy-warnings.outputs.cache-hit == 'true'
