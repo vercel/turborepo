@@ -53,6 +53,41 @@ jobs:
           command: clippy
           # args: -- -D warnings
 
+      - name: Count clippy warnings
+        run: |
+          count="0"
+          clippy_output="$(cargo clippy 2>&1)"
+
+          # Clippy will be invoked and report on each crate individually. We need to sum manually.
+          for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings$/\1/p'); do
+            count=$((count + warnings))
+          done
+
+          echo $count > clippy-warnings
+
+      - name: Cache 
+        id: expected-clippy-warnings
+        uses: actions/cache@v3
+        with:
+          path: expected-clippy-warnings
+          key: expected-clippy-warnings
+
+      - name: Update expected Clippy warnings on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mv clippy-warnings > expected-clippy-warnings
+
+      - name: Check the number of Clippy warnings is ever decreasing
+        if: github.ref != 'refs/heads/main' && steps.expected-clippy-warnings.outputs.cache-hit == 'true'
+        run: |
+          clippy_warnings=$(cat clippy-warnings)
+          expected_clippy_warnings=$(cat expected-clippy-warnings)
+          if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
+            echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
+            echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
+            exit 1
+          fi
+
       - name: Install cargo rustfmt
         run: rustup component add rustfmt
 
