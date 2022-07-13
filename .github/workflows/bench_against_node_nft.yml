@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench_vs_node_nft:
+    runs-on: ubuntu-latest
+    name: Bench against Node.js nft
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: test
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          cache: 'yarn'
+          cache-dependency-path: |
+            crates/turbopack/tests/node-file-trace/yarn.lock
+          node-version: 16
+
+      - name: install Node.js dependencies
+        run: |
+          yarn install --frozen-lockfile
+        working-directory: crates/turbopack/tests/node-file-trace
+
+      - name: Install nextest
+        run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Run benchmark
+        uses: actions-rs/cargo@v1
+        with:
+          command: nextest
+          args: run -j 1 --no-fail-fast -r bench_against_node_nft
+        env:
+          RUSTFLAGS: '--cfg bench_against_node_nft'
