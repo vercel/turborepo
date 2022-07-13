@@ -3,3 +3,6 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
+
+[alias]
+xtask = "run --package xtask --"

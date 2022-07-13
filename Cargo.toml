@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "crates/turbo-malloc",
   "crates/turbo-tasks",
   "crates/turbo-tasks-memory",
   "crates/turbo-tasks-macros",
@@ -16,5 +17,8 @@ members = [
   "crates/turbopack-dev-server",
   "crates/node-file-trace",
   "crates/next-dev",
-  "crates/publish",
+  "crates/xtask",
 ]
+
+[profile.release]
+lto = true
