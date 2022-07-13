@@ -93,5 +93,5 @@ jobs:
       - name: Publish
         uses: actions-rs/cargo@v1
         with:
-          command: run
-          args: --bin publish npm node-file-trace
+          command: xtask
+          args: npm node-file-trace

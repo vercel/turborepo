@@ -43,3 +43,9 @@ jobs:
           args: run -j 1 --no-fail-fast -r bench_against_node_nft
         env:
           RUSTFLAGS: '--cfg bench_against_node_nft'
+
+      - name: Show benchmark result
+        uses: actions-rs/cargo@v1
+        with:
+          command: xtask
+          args: nft-bench-result
