@@ -1454,6 +1454,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
 
 [[package]]
+name = "md4"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93a5f5240a3fa1cb324a28cb42b1934750a093d7ad200ba052deecf4aff7104b"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3435,6 +3444,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
+ "turbopack-static",
  "url",
 ]
 
@@ -3528,6 +3538,21 @@ dependencies = [
  "turbo-tasks-testing",
  "turbopack-core",
  "url",
+]
+
+[[package]]
+name = "turbopack-static"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "md4",
+ "serde",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack-core",
+ "turbopack-ecmascript",
 ]
 
 [[package]]
