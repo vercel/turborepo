@@ -30,14 +30,14 @@ type FileEvent int
 
 const (
 	// FileAdded - this is a new file
-	FileAdded FileEvent = iota
+	FileAdded FileEvent = iota + 1
 	// FileDeleted - this file has been removed
 	FileDeleted
 	// FileModified - this file has been changed in some way
 	FileModified
 	// FileRenamed - a file's name has changed
 	FileRenamed
-	// FileOther - some other backend-specific event has happen
+	// FileOther - some other backend-specific event has happened
 	FileOther
 )
 

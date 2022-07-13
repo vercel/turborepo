@@ -101,10 +101,10 @@ func TestFileWatching(t *testing.T) {
 	//     sibling/
 
 	watcher, err := GetPlatformSpecificBackend(logger)
-	assert.NilError(t, err, "NewWatcher")
+	assert.NilError(t, err, "GetPlatformSpecificBackend")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
-	assert.NilError(t, err, "watchRecursively")
+	assert.NilError(t, err, "fw.Start")
 
 	// Add a client
 	ch := make(chan Event, 1)
@@ -119,8 +119,6 @@ func TestFileWatching(t *testing.T) {
 		repoRoot.Join("parent", "sibling"),
 	}
 	expectWatching(t, c, expectedWatching)
-	// watching := fw.WatchList()
-	// assertSameSet(t, watching, expectedWatching)
 
 	fooPath := repoRoot.Join("parent", "child", "foo")
 	err = fooPath.WriteFile([]byte("hello"), 0644)
