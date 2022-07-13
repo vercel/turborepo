@@ -1,6 +1,6 @@
 # Turborepo Docker starter
 
-This is an official starter Turborepo.
+This is an official Docker starter Turborepo.
 
 ## What's inside?
 
