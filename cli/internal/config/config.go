@@ -118,11 +118,13 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	}
 
 	if partialConfig.Token == "" && IsCI() {
-		if os.Getenv("VERCEL_ARTIFACTS_TOKEN") != "" {
-			partialConfig.Token = os.Getenv("VERCEL_ARTIFACTS_TOKEN")
+		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
+		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
+		if vercelArtifactsToken != "" {
+			partialConfig.Token = vercelArtifactsToken
 		}
-		if os.Getenv("VERCEL_ARTIFACTS_OWNER") != "" {
-			partialConfig.TeamId = os.Getenv("VERCEL_ARTIFACTS_OWNER")
+		if vercelArtifactsOwner != "" {
+			partialConfig.TeamId = vercelArtifactsOwner
 		}
 	}
 
