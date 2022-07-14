@@ -72,29 +72,33 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 	if err != nil {
 		return err
 	}
-	//events := make(chan []fsevents.Event)
+
+	// Optimistically set up and start a stream, assuming the watch is still valid.
 	s := &fsevents.EventStream{
 		Paths:   []string{root.ToString()},
 		Latency: _eventLatency,
 		Device:  dev,
 		Flags:   fsevents.FileEvents | fsevents.WatchRoot,
 	}
-	s.Start() // called with the lock so it doesn't race with a call to Close()
+	s.Start()
 	events := s.Events
-	f.logger.Debug(fmt.Sprintf("watching root %v, excluding %v", root, excludePatterns))
+
 	// fsevents delivers events for all existing files first, so use a cookie to detect when we're ready for new events
 	if err := waitForCookie(root, events, _cookieTimeout); err != nil {
 		s.Stop()
 		return err
 	}
+
+	// Now try to persist the stream.
 	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.closed {
 		s.Stop()
-		f.mu.Unlock()
 		return ErrFilewatchingClosed
 	}
 	f.streams = append(f.streams, s)
-	f.mu.Unlock()
+	f.logger.Debug(fmt.Sprintf("watching root %v, excluding %v", root, excludePatterns))
+
 	go func() {
 		for evs := range events {
 			for _, ev := range evs {
@@ -127,6 +131,7 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 			}
 		}
 	}()
+
 	return nil
 }
 
