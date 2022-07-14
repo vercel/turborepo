@@ -2,6 +2,17 @@
 TURBO_VERSION = $(shell head -n 1 version.txt)
 TURBO_TAG = $(shell cat version.txt | sed -n '2 p')
 
+ifeq ($(OS),Windows_NT)
+	UNAME := Windows
+else
+	UNAME := $(shell uname -s)
+endif
+
+USE_CGO = 0
+ifeq ($(UNAME), Darwin)
+	USE_CGO = 1
+endif
+
 # Strip debug info
 GO_FLAGS += "-ldflags=-s -w"
 
@@ -15,7 +26,7 @@ SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
 turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=0 go build $(GO_FLAGS) ./cmd/turbo
+	CGO_ENABLED=$(USE_CGO) go build $(GO_FLAGS) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
