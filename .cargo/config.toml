@@ -1,3 +1,6 @@
+[env]
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
+
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
 
