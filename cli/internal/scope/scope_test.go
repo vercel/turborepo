@@ -197,6 +197,12 @@ func TestResolvePackages(t *testing.T) {
 			includeDependents: true,
 			since:             "dummy",
 		},
+		{
+			name:     "substring package name, build both",
+			changed:  []string{"app/a/src/index.ts", "app/a-service/src/index.ts"},
+			expected: []string{"a", "a-service"},
+			since:    "dummy",
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("test #%v %v", i, tc.name), func(t *testing.T) {
