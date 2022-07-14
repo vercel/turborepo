@@ -44,6 +44,16 @@ jobs:
           command: check
           args: --benches
 
+  clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+            key: check
+
       - name: Install cargo clippy
         run: rustup component add clippy
 
@@ -87,6 +97,12 @@ jobs:
             echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
             exit 1
           fi
+
+  fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
 
       - name: Install cargo rustfmt
         run: rustup component add rustfmt
