@@ -5,7 +5,7 @@ package filewatcher
 
 import (
 	"fmt"
-	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,18 +103,26 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 		for evs := range events {
 			for _, ev := range evs {
 				isExcluded := false
-				eventPath := "/" + ev.Path
-				// Typically this will be false, but in the case of an event
-				// at the root of the stream, it will have the leading '/'
-				if ev.Path[0] == '/' {
+
+				// 1. Ensure that we have a `/`-prefixed path from the event.
+				var eventPath string
+				if !strings.HasPrefix("/", ev.Path) {
+					eventPath = "/" + ev.Path
+				} else {
 					eventPath = ev.Path
 				}
-				// we're getting events from the real path, but we need to translate
-				// back to the path we were provided, since that's what the caller will
+
+				// 2. We're getting events from the real path, but we need to translate
+				// back to the path we were provided since that's what the caller will
 				// expect in terms of event paths.
-				eventPath = someRoot.ToString() + eventPath[len(realRoot):]
+				watchRootRelativePath := eventPath[len(realRoot):]
+				processedEventPath := someRoot.Join(watchRootRelativePath)
+
+				// 3. Compare the event to all exclude patterns, short-circuit if we know
+				// we are not watching this file.
+				processedPathString := processedEventPath.ToString() // loop invariant
 				for _, pattern := range excludePatterns {
-					matches, err := doublestar.Match(pattern, filepath.ToSlash(eventPath))
+					matches, err := doublestar.Match(pattern, processedPathString)
 					if err != nil {
 						f.errors <- err
 					} else if matches {
@@ -122,9 +130,11 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 						break
 					}
 				}
+
+				// 4. Report the file events we care about.
 				if !isExcluded {
 					f.events <- Event{
-						Path:      fs.AbsolutePathFromUpstream(eventPath),
+						Path:      processedEventPath,
 						EventType: toFileEvent(ev.Flags),
 					}
 				}
