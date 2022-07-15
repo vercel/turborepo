@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -199,12 +200,39 @@ func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
 	return filteredChanges, nil
 }
 
+func fileInPackage(changedFile string, packagePath string) bool {
+	// This whole method is basically this regex: /^.*\/?$/
+	// The regex is more-expensive, so we don't do it.
+
+	// If it has the prefix, it might be in the package.
+	if strings.HasPrefix(changedFile, packagePath) {
+		// Now we need to see if the prefix stopped at a reasonable boundary.
+		prefixLen := len(packagePath)
+		changedFileLen := len(changedFile)
+
+		// Same path.
+		if prefixLen == changedFileLen {
+			return true
+		}
+
+		// We know changedFile is longer than packagePath.
+		// We can safely directly index into it.
+		// Look ahead one byte and see if it's the separator.
+		if changedFile[prefixLen] == os.PathSeparator {
+			return true
+		}
+	}
+
+	// If it does not have the prefix, it's definitely not in the package.
+	return false
+}
+
 func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
 	changedPackages := make(util.Set)
 	for _, changedFile := range changedFiles {
 		found := false
 		for pkgName, pkgInfo := range packageInfos {
-			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir) {
+			if pkgName != util.RootPkgName && fileInPackage(changedFile, pkgInfo.Dir) {
 				changedPackages.Add(pkgName)
 				found = true
 				break
