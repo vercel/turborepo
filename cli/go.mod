@@ -9,6 +9,7 @@ require (
 	github.com/briandowns/spinner v1.18.1
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.13.0
+	github.com/fsnotify/fsevents v0.1.1
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/gobwas/glob v0.2.3
 	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
@@ -62,6 +63,7 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
+	github.com/yookoala/realpath v1.0.0 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d // indirect
 	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6 // indirect
