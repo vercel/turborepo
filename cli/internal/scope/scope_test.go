@@ -111,14 +111,6 @@ func TestResolvePackages(t *testing.T) {
 			since:    "dummy",
 		},
 		{
-			// make sure multiple apps with the same prefix are handled separately.
-			// prevents this issue: https://github.com/vercel/turborepo/issues/1528
-			name:     "Two apps with an overlapping prefix changed",
-			changed:  []string{"app/app2/src/index.js", "app/app2-a/src/index.js"},
-			expected: []string{"app2", "app2-a"},
-			since:    "dummy",
-		},
-		{
 			name:     "An ignored package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
 			expected: []string{},
@@ -214,9 +206,11 @@ func TestResolvePackages(t *testing.T) {
 			since:             "dummy",
 		},
 		{
-			name:     "substring package name, build both",
-			changed:  []string{"app/a/src/index.ts", "app/a-service/src/index.ts"},
-			expected: []string{"a", "a-service"},
+			// make sure multiple apps with the same prefix are handled separately.
+			// prevents this issue: https://github.com/vercel/turborepo/issues/1528
+			name:     "Two apps with an overlapping prefix changed",
+			changed:  []string{"app/app2/src/index.js", "app/app2-a/src/index.js"},
+			expected: []string{"app2", "app2-a"},
 			since:    "dummy",
 		},
 	}
