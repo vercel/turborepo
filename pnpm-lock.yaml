@@ -76,7 +76,7 @@ importers:
       tailwindcss: 3.1.6
       ts-json-schema-generator: 0.98.0
       typescript: 4.7.4
-      webpack: 5.65.0
+      webpack: 5.73.0
     dependencies:
       '@heroicons/react': 1.0.6_react@17.0.2
       '@react-aria/focus': 3.2.2_react@17.0.2
@@ -107,7 +107,7 @@ importers:
       tailwindcss: 3.1.6
       ts-json-schema-generator: 0.98.0
       typescript: 4.7.4
-      webpack: 5.65.0
+      webpack: 5.73.0
 
   packages/create-turbo:
     specifiers:
@@ -1730,6 +1730,7 @@ packages:
 
   /@types/estree/0.0.50:
     resolution: {integrity: sha512-C6N5s2ZFtuZRj54k2/zyRhNDjJwwcViAM3Nbm8zjBpbqAdZ00mr0CFxvSKeO8Y/e03WVFLpQMdHYVfUd6SB+Hw==}
+    dev: false
 
   /@types/estree/0.0.51:
     resolution: {integrity: sha512-CuPgU6f3eT/XgKKPqKd/gLZV1Xmvf1a2R5POBOGQa6uv82xpls89HU5zKeVoyR8XzHd1RGNOlQlvUe3CFkjWNQ==}
@@ -3248,8 +3249,8 @@ packages:
       once: 1.4.0
     dev: true
 
-  /enhanced-resolve/5.9.1:
-    resolution: {integrity: sha512-jdyZMwCQ5Oj4c5+BTnkxPgDZO/BJzh/ADDmKebayyzNwjVX1AFCeGkOfxNx0mHi2+8BKC5VxUYiw3TIvoT7vhw==}
+  /enhanced-resolve/5.10.0:
+    resolution: {integrity: sha512-T0yTFjdpldGY8PmuXXR0PyQ1ufZpEGiHVrp7zHKB7jdR4qlmZHhONVM5AQOAWXuF/w3dnHbEQVrNptJgt7F+cQ==}
     engines: {node: '>=10.13.0'}
     dependencies:
       graceful-fs: 4.2.9
@@ -5812,10 +5813,6 @@ packages:
     resolution: {integrity: sha512-OYu7XEzjkCQ3C5Ps3QIZsQfNpqoJyZZA99wd9aWd05NCtC5pWOkShK2mkL6HXQR6/Cy2lbNdPlZBpuQHXE63gA==}
     engines: {node: '>=4'}
     hasBin: true
-
-  /json-parse-better-errors/1.0.2:
-    resolution: {integrity: sha512-mrqyZKfX5EhL7hvqcV6WG1yYjnjeuYDzDhhcAAUrq8Po85NBQBJP+ZDUT75qZQ98IkUoBqdkExkukOU7Ts2wrw==}
-    dev: true
 
   /json-parse-even-better-errors/2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
@@ -8540,7 +8537,7 @@ packages:
       supports-hyperlinks: 2.2.0
     dev: true
 
-  /terser-webpack-plugin/5.3.1_webpack@5.65.0:
+  /terser-webpack-plugin/5.3.1_webpack@5.73.0:
     resolution: {integrity: sha512-GvlZdT6wPQKbDNW/GDQzZFg/j4vKU96yl2q6mcUkzKOgW4gwf1Z8cZToUCrz31XHlPWH8MVb1r2tFtdDtTGJ7g==}
     engines: {node: '>= 10.13.0'}
     peerDependencies:
@@ -8561,7 +8558,7 @@ packages:
       serialize-javascript: 6.0.0
       source-map: 0.6.1
       terser: 5.12.0
-      webpack: 5.65.0
+      webpack: 5.73.0
     dev: true
 
   /terser/5.12.0:
@@ -9192,8 +9189,8 @@ packages:
     engines: {node: '>=10.13.0'}
     dev: true
 
-  /webpack/5.65.0:
-    resolution: {integrity: sha512-Q5or2o6EKs7+oKmJo7LaqZaMOlDWQse9Tm5l1WAfU/ujLGN5Pb0SqGeVkN/4bpPmEqEP5RnVhiqsOtWtUVwGRw==}
+  /webpack/5.73.0:
+    resolution: {integrity: sha512-svjudQRPPa0YiOYa2lM/Gacw0r6PvxptHj4FuEKQ2kX05ZLkjbVc5MnPs6its5j7IZljnIqSVo/OsY2X0IpHGA==}
     engines: {node: '>=10.13.0'}
     hasBin: true
     peerDependencies:
@@ -9203,27 +9200,27 @@ packages:
         optional: true
     dependencies:
       '@types/eslint-scope': 3.7.3
-      '@types/estree': 0.0.50
+      '@types/estree': 0.0.51
       '@webassemblyjs/ast': 1.11.1
       '@webassemblyjs/wasm-edit': 1.11.1
       '@webassemblyjs/wasm-parser': 1.11.1
       acorn: 8.7.0
       acorn-import-assertions: 1.8.0_acorn@8.7.0
-      browserslist: 4.19.3
+      browserslist: 4.21.1
       chrome-trace-event: 1.0.3
-      enhanced-resolve: 5.9.1
+      enhanced-resolve: 5.10.0
       es-module-lexer: 0.9.3
       eslint-scope: 5.1.1
       events: 3.3.0
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.9
-      json-parse-better-errors: 1.0.2
+      json-parse-even-better-errors: 2.3.1
       loader-runner: 4.2.0
       mime-types: 2.1.34
       neo-async: 2.6.2
       schema-utils: 3.1.1
       tapable: 2.2.1
-      terser-webpack-plugin: 5.3.1_webpack@5.65.0
+      terser-webpack-plugin: 5.3.1_webpack@5.73.0
       watchpack: 2.3.1
       webpack-sources: 3.2.3
     transitivePeerDependencies:
