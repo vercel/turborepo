@@ -56,28 +56,28 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	packagesInfos := map[interface{}]*fs.PackageJSON{
 		"app0": {
-			Dir: "app/app0",
+			Dir: filepath.FromSlash("app/app0"),
 		},
 		"app1": {
-			Dir: "app/app1",
+			Dir: filepath.FromSlash("app/app1"),
 		},
 		"app2": {
-			Dir: "app/app2",
+			Dir: filepath.FromSlash("app/app2"),
 		},
 		"app2-a": {
-			Dir: "app/app2-a",
+			Dir: filepath.FromSlash("app/app2-a"),
 		},
 		"libA": {
-			Dir: "libs/libA",
+			Dir: filepath.FromSlash("libs/libA"),
 		},
 		"libB": {
-			Dir: "libs/libB",
+			Dir: filepath.FromSlash("libs/libB"),
 		},
 		"libC": {
-			Dir: "libs/libC",
+			Dir: filepath.FromSlash("libs/libC"),
 		},
 		"libD": {
-			Dir: "libs/libD",
+			Dir: filepath.FromSlash("libs/libD"),
 		},
 	}
 	packageNames := []string{}
@@ -216,8 +216,13 @@ func TestResolvePackages(t *testing.T) {
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("test #%v %v", i, tc.name), func(t *testing.T) {
+			// Convert test data to system separators.
+			systemSeparatorChanged := make([]string, len(tc.changed))
+			for index, path := range tc.changed {
+				systemSeparatorChanged[index] = filepath.FromSlash(path)
+			}
 			scm := &mockSCM{
-				changed: tc.changed,
+				changed: systemSeparatorChanged,
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
 				LegacyFilter: LegacyFilter{
