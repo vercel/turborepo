@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -217,7 +218,7 @@ func fileInPackage(changedFile string, packagePath string) bool {
 		// We know changedFile is longer than packagePath.
 		// We can safely directly index into it.
 		// Look ahead one byte and see if it's the separator.
-		if changedFile[prefixLen] == '/' {
+		if changedFile[prefixLen] == os.PathSeparator {
 			return true
 		}
 	}
