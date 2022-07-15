@@ -3,6 +3,7 @@ package scope
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -175,8 +176,8 @@ func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
 	}
 
 	if globalDepsGlob != nil {
-		for _, f := range changedFiles {
-			if globalDepsGlob.Match(f) {
+		for _, file := range changedFiles {
+			if globalDepsGlob.Match(filepath.ToSlash(file)) {
 				return true, nil
 			}
 		}
@@ -185,6 +186,8 @@ func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
 }
 
 func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
+	// changedFiles is an array of repo-relative system paths.
+	// opts.IgnorePatterns is an array of unix-separator glob paths.
 	ignoreGlob, err := filter.Compile(opts.IgnorePatterns)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid ignore globs")
@@ -193,7 +196,7 @@ func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
 	for _, file := range changedFiles {
 		// If we don't have anything to ignore, or if this file doesn't match the ignore pattern,
 		// keep it as a changed file.
-		if ignoreGlob == nil || !ignoreGlob.Match(file) {
+		if ignoreGlob == nil || !ignoreGlob.Match(filepath.ToSlash(file)) {
 			filteredChanges = append(filteredChanges, file)
 		}
 	}
