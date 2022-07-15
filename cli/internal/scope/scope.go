@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -199,12 +200,25 @@ func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
 	return filteredChanges, nil
 }
 
+func fileIncludesDir(changedFile string, dir string) bool {
+	const separator = string(os.PathSeparator)
+	filePath := strings.Split(changedFile, separator)
+	dirPath := strings.Split(dir, separator)
+
+	for i, pathSegment := range dirPath {
+		if pathSegment != filePath[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
 	changedPackages := make(util.Set)
 	for _, changedFile := range changedFiles {
 		found := false
 		for pkgName, pkgInfo := range packageInfos {
-			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir) {
+			if pkgName != util.RootPkgName && fileIncludesDir(changedFile, pkgInfo.Dir) {
 				changedPackages.Add(pkgName)
 				found = true
 				break

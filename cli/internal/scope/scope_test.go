@@ -33,12 +33,16 @@ func TestResolvePackages(t *testing.T) {
 	//                > libB -> libD
 	//              /
 	//       app2 <
-	//              \ libC
+	//              \
+	//                > libC
+	//              /
+	//     app2-a <
 	//
 	graph := dag.AcyclicGraph{}
 	graph.Add("app0")
 	graph.Add("app1")
 	graph.Add("app2")
+	graph.Add("app2-a")
 	graph.Add("libA")
 	graph.Add("libB")
 	graph.Add("libC")
@@ -49,6 +53,7 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
+	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	packagesInfos := map[interface{}]*fs.PackageJSON{
 		"app0": {
 			Dir: "app/app0",
@@ -58,6 +63,9 @@ func TestResolvePackages(t *testing.T) {
 		},
 		"app2": {
 			Dir: "app/app2",
+		},
+		"app2-a": {
+			Dir: "app/app2-a",
 		},
 		"libA": {
 			Dir: "libs/libA",
@@ -100,6 +108,14 @@ func TestResolvePackages(t *testing.T) {
 			name:     "One package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
 			expected: []string{"libB"},
+			since:    "dummy",
+		},
+		{
+			// make sure multiple apps with the same prefix are handled separately.
+			// prevents this issue: https://github.com/vercel/turborepo/issues/1528
+			name:     "Two apps with an overlapping prefix changed",
+			changed:  []string{"app/app2/src/index.js", "app/app2-a/src/index.js"},
+			expected: []string{"app2", "app2-a"},
 			since:    "dummy",
 		},
 		{
@@ -153,7 +169,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:       "global dependency changed, even though it was ignored, forcing a build of everything",
 			changed:    []string{"libs/libB/src/index.ts"},
-			expected:   []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			expected:   []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:      "dummy",
 			ignore:     "libs/libB/**/*.ts",
 			globalDeps: []string{"libs/**/*.ts"},
@@ -176,7 +192,7 @@ func TestResolvePackages(t *testing.T) {
 			// no changes, no base to compare against, defaults to everything
 			name:              "no changes or scope specified, build everything",
 			since:             "",
-			expected:          []string{"app0", "app1", "app2", "libA", "libB", "libC", "libD"},
+			expected:          []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			expectAllPackages: true,
 		},
 		{
