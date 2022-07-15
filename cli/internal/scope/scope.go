@@ -204,8 +204,7 @@ func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.
 	for _, changedFile := range changedFiles {
 		found := false
 		for pkgName, pkgInfo := range packageInfos {
-			// Add trailing slash to avoid package substring conflicts: (e.g. react, react-dom)
-			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir+"/") {
+			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir) {
 				changedPackages.Add(pkgName)
 				found = true
 				break
