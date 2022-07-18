@@ -1,6 +1,4 @@
-import { Avatar } from "./Avatar";
-import cn from "classnames";
-const team = {
+const TURBO_TEAM = {
   jaredpalmer: {
     name: "Jared Palmer",
     twitterUsername: "jaredpalmer",
@@ -33,23 +31,7 @@ const team = {
   },
 };
 
-export function Authors({ authors }) {
-  return (
-    <div className="w-full border-b border-gray-400 authors border-opacity-20">
-      <div
-        className={cn(
-          "flex flex-wrap justify-center py-8 mx-auto gap-7",
-          authors.length > 4 && "max-w-3xl"
-        )}
-      >
-        {authors.map((username) =>
-          !!team[username] ? (
-            <Avatar key={username} {...team[username]} />
-          ) : (
-            console.warning("no author found for", username) || null
-          )
-        )}
-      </div>
-    </div>
-  );
-}
+export type Author = keyof typeof TURBO_TEAM;
+export type AuthorDetails = typeof TURBO_TEAM[Author];
+
+export default TURBO_TEAM;

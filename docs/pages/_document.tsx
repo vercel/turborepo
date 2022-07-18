@@ -1,10 +1,15 @@
-/* eslint-disable @next/next/google-font-display */
-
 import Document, { Html, Head, Main, NextScript } from "next/document";
-
-// We use display=block to remove the jank
+import type { DocumentInitialProps, DocumentContext } from "next/document";
 
 class MyDocument extends Document {
+  static async getInitialProps(
+    ctx: DocumentContext
+  ): Promise<DocumentInitialProps> {
+    const initialProps = await Document.getInitialProps(ctx);
+
+    return initialProps;
+  }
+
   render() {
     return (
       <Html>

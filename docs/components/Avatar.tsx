@@ -1,6 +1,7 @@
 import Image from "next/image";
+import type { AuthorDetails } from "../content/team";
 
-export const Avatar = ({ name, picture, twitterUsername }) => {
+export const Avatar = ({ name, picture, twitterUsername }: AuthorDetails) => {
   return (
     <div className="flex items-center flex-shrink-0 md:justify-start">
       <div className="w-[32px] h-[32px]">
@@ -9,9 +10,7 @@ export const Avatar = ({ name, picture, twitterUsername }) => {
           height={32}
           width={32}
           layout="fixed"
-          async
           loading="lazy"
-          importance="low"
           title={name}
           className="w-full rounded-full"
           alt={name}
@@ -28,8 +27,7 @@ export const Avatar = ({ name, picture, twitterUsername }) => {
             target="_blank"
             rel="noopener noreferrer"
           >
-            @{/* */}
-            {twitterUsername}
+            {`@${twitterUsername}`}
           </a>
         </dd>
       </dl>
