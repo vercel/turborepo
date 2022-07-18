@@ -54,7 +54,7 @@ will hide that async and error in the `XxxVc`.
 
 ### Tasks
 
-A combination of a function and it's arguments is called a Task (basically an
+A combination of a function and its arguments is called a Task (basically an
 invocation of a function).
 
 It's also possible to store data in a Task via `XxxVc::cell(value: Xxx)`.
@@ -76,7 +76,7 @@ ValueType.
 There is some rust generic magic happening
 e.g. [`fn any_as_serialize(...)`][any_as_serialize] which casts an `Any` to a
 `Serialize` for a concrete type.
-In background rust instantiates the `Serialize` logic for it based on serde.
+In the background rust instantiates the `Serialize` logic for it based on serde.
 
 Deserialize is mostly the same idea, but a bit more involved in serde. It
 looks like this: [AnyDeserializeSeed][]
@@ -97,7 +97,7 @@ A similar problem exists with these `#[turbo_tasks::function]`. We need a global
 map from identifier to the method.
 
 Usually you would use something like [ctor](https://crates.io/crates/ctor) for
-that, to hide all this manual register calls, but that won't work in WebAssembly
+that, to hide all these manual register calls, but that won't work in WebAssembly
 or when dynamically loading libraries or plugins.
 
 That's why we went the more manual approach with register methods that work
