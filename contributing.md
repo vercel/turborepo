@@ -1,3 +1,7 @@
+`turbo-tooling` uses [Cargo workspaces][workspaces] monorepo. You'll find
+several workspaces inside the `creates/` directory. In order to run a particular
+create, you can use the `cargo run -p [CRATE_NAME]` command.
+
 ## Testing
 
 Install `cargo-nextest` (https://nexte.st/)
@@ -20,3 +24,5 @@ You can also create a little demo app and run
 ```shell
 cargo run -p node-file-trace -- print demo/index.js
 ```
+
+[workspaces]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
