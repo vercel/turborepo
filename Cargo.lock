@@ -2682,19 +2682,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "swc_css"
-version = "0.112.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7aceef4f9c688af4594665e86a3afc36b3105398f68611b270d7d9c78e83084"
-dependencies = [
- "swc_css_ast",
- "swc_css_codegen",
- "swc_css_parser",
- "swc_css_utils",
- "swc_css_visit",
-]
-
-[[package]]
 name = "swc_css_ast"
 version = "0.99.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3686,7 +3673,11 @@ dependencies = [
  "serde",
  "swc_atoms",
  "swc_common",
- "swc_css",
+ "swc_css_ast",
+ "swc_css_codegen",
+ "swc_css_parser",
+ "swc_css_utils",
+ "swc_css_visit",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
