@@ -9,6 +9,6 @@
 // be slower because node has to boot up just to shell out to the actual exe,
 // but Windows is somewhat of a second-class platform to npm so it's the best
 // I can do I think.
-const turbo_exe = require.resolve("turbo-windows-arm64/turbo.exe");
+const turbo_exe = require.resolve("turbo-windows-arm64/bin/turbo.exe");
 const child_process = require("child_process");
 child_process.spawnSync(turbo_exe, process.argv.slice(2), { stdio: "inherit" });

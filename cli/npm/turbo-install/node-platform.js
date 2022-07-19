@@ -28,11 +28,7 @@ const knownUnixlikePackages = {
   "linux ia32 LE": "turbo-linux-32",
   "linux mips64el LE": "turbo-linux-mips64le",
   "linux ppc64 LE": "turbo-linux-ppc64le",
-  // "linux s390x BE": "turbo-linux-s390x",
   "linux x64 LE": "turbo-linux-64",
-  // "netbsd x64 LE": "turbo-netbsd-64",
-  // "openbsd x64 LE": "turbo-openbsd-64",
-  // "sunos x64 LE": "turbo-sunos-64",
 };
 
 function pkgAndSubpathForCurrentPlatform() {
@@ -42,7 +38,7 @@ function pkgAndSubpathForCurrentPlatform() {
 
   if (platformKey in knownWindowsPackages) {
     pkg = knownWindowsPackages[platformKey];
-    subpath = "turbo.exe";
+    subpath = "bin/turbo.exe";
   } else if (platformKey in knownUnixlikePackages) {
     pkg = knownUnixlikePackages[platformKey];
     subpath = "bin/turbo";

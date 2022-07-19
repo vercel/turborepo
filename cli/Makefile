@@ -1,4 +1,3 @@
-
 TURBO_VERSION = $(shell head -n 1 version.txt)
 TURBO_TAG = $(shell cat version.txt | sed -n '2 p')
 
