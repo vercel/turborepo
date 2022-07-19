@@ -24,13 +24,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --features persistent_cache
+          # args: --features persistent_cache
 
       - name: Run cargo check tests
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --tests --features test_persistent_cache
+          # args: --tests --features test_persistent_cache
+          args: --tests
 
       - name: Run cargo check examples
         uses: actions-rs/cargo@v1
@@ -52,7 +53,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
         with:
-            key: check
+          key: check
 
       - name: Install cargo clippy
         run: rustup component add clippy
@@ -75,7 +76,7 @@ jobs:
 
           echo $count > clippy-warnings
 
-      - name: Cache 
+      - name: Cache
         id: expected-clippy-warnings
         uses: actions/cache@v3
         with:
