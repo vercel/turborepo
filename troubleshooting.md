@@ -14,17 +14,32 @@ See https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified
 
 ## Cannot `yarn install` because of oniguruma
 
-Oh boy, the classic python vs python3 blunder! And MacOS isn't providing either
-by default anymore!  We need to setup your python environment, much like we
-would setup your node env:
+Oniguruma doesn't yet provide a prebuild binary for arm64 MacOS. And, MacOS
+isn't providing a python2 environment by default anymore!  We need to setup your
+python environment, much like we would setup your node env:
 
 ```shell
 brew install pyenv
+eval "$(pyenv init --path)"
 pyenv install 2.7.18
 pyenv local 2.7.18
-eval "$(pyenv init --path)"
 ```
 
 Now try `yarn install` again.
 
-See https://stackoverflow.com/a/67274521.
+See the `canvas` tip below, and https://stackoverflow.com/a/67274521.
+
+## Cannot `yarn install` because of canvas
+
+Canvas also doesn't provide an arm64 prebuilt binary. To manually compile,
+you'll need to install the following packages:
+
+If running `yarn` fails on macOS, you might need to install the following packages: `python`, `pkg-config`, `pixman`, `cairo`, `pango`. If you're running Zsh and Homebrew, you can run the following commands before running `yarn`.
+
+```shell
+brew install pkg-config pixman cairo pango
+```
+
+Now try `yarn install` again.
+
+See the `oniguruma` tip above, and https://github.com/Automattic/node-canvas/blob/master/Readme.md#compiling.
