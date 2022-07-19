@@ -30,8 +30,8 @@ turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    internal/turbodprotocol/turbod.proto
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		internal/turbodprotocol/turbod.proto
 
 $(GENERATED_FILES): internal/turbodprotocol/turbod.proto
 	make protoc
@@ -90,7 +90,7 @@ platform-all: cmd/turbo/version.go $(GENERATED_FILES)
 		platform-linux-ppc64le \
 		platform-windows-32 \
 		platform-windows-arm64 \
-	  platform-windows-64 \
+		platform-windows-64 \
 		platform-neutral \
 		platform-create-turbo
 
@@ -111,7 +111,7 @@ platform-unixlike:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS) -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
 # To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
 # we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
@@ -119,7 +119,7 @@ platform-darwin-cgo:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" SDKROOT=$(MACOS_SDK) go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" SDKROOT=$(MACOS_SDK) go build $(GO_FLAGS) -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
