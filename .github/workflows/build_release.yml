@@ -95,9 +95,7 @@ jobs:
           key: debug
 
       - name: Write NPM_TOKEN
-        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc
 
       - name: Publish
         uses: actions-rs/cargo@v1
