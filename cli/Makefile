@@ -30,8 +30,8 @@ turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    internal/turbodprotocol/turbod.proto
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		internal/turbodprotocol/turbod.proto
 
 $(GENERATED_FILES): internal/turbodprotocol/turbod.proto
 	make protoc
@@ -53,7 +53,7 @@ TURBO_RACE ?= -race
 clean-go:
 	go clean -testcache ./...
 
-test-go:$(GENERATED_FILES) $(GO_FILES) go.mod go.sum
+test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum
 	go test $(TURBO_RACE) ./...
 
 # protos need to be compiled before linting, since linting needs to pick up
@@ -77,24 +77,20 @@ cmd/turbo/version.go: version.txt
 
 platform-all: cmd/turbo/version.go $(GENERATED_FILES)
 	make -j4 \
-	  platform-windows-64 \
-		platform-windows-32 \
-		platform-windows-arm64 \
 		platform-android-arm64 \
 		platform-darwin-64 \
 		platform-darwin-arm64 \
 		platform-freebsd-64 \
 		platform-freebsd-arm64 \
-		platform-netbsd \
-		platform-openbsd \
-		platform-linux-64 \
 		platform-linux-32 \
+		platform-linux-64 \
 		platform-linux-arm \
 		platform-linux-arm64 \
 		platform-linux-mips64le \
 		platform-linux-ppc64le \
-		platform-linux-s390x \
-		platform-sunos \
+		platform-windows-32 \
+		platform-windows-arm64 \
+		platform-windows-64 \
 		platform-neutral \
 		platform-create-turbo
 
@@ -115,7 +111,7 @@ platform-unixlike:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+	CGO_ENABLED=0 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS) -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
 # To fix https://github.com/vercel/turborepo/issues/941 (DNS issue),
 # we compile the darwin-arm64 binary with CGO_ENABLED=1 on an macOS M1 (darwin-arm64)
@@ -123,7 +119,7 @@ platform-darwin-cgo:
 	test -n "$(GOOS)" && test -n "$(GOARCH)" && test -n "$(NPMDIR)"
 	mkdir -p "$(NPMDIR)/bin"
 	cd "$(NPMDIR)" && npm version "$(TURBO_VERSION)" --allow-same-version
-	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" SDKROOT=$(MACOS_SDK) go build $(GO_FLAGS)  -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
+	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" SDKROOT=$(MACOS_SDK) go build $(GO_FLAGS) -o "$(NPMDIR)/bin/turbo" ./cmd/turbo
 
 platform-android-arm64:
 	make GOOS=android GOARCH=arm64 NPMDIR=npm/turbo-android-arm64 platform-unixlike
@@ -139,12 +135,6 @@ platform-freebsd-64:
 
 platform-freebsd-arm64:
 	make GOOS=freebsd GOARCH=arm64 NPMDIR=npm/turbo-freebsd-arm64 platform-unixlike
-
-platform-netbsd:
-	make GOOS=netbsd GOARCH=amd64 NPMDIR=npm/turbo-netbsd-64 platform-unixlike
-
-platform-openbsd:
-	make GOOS=openbsd GOARCH=amd64 NPMDIR=npm/turbo-openbsd-64 platform-unixlike
 
 platform-linux-64:
 	make GOOS=linux GOARCH=amd64 NPMDIR=npm/turbo-linux-64 platform-unixlike
@@ -164,22 +154,15 @@ platform-linux-mips64le:
 platform-linux-ppc64le:
 	make GOOS=linux GOARCH=ppc64le NPMDIR=npm/turbo-linux-ppc64le platform-unixlike
 
-platform-linux-s390x:
-	make GOOS=linux GOARCH=s390x NPMDIR=npm/turbo-linux-s390x platform-unixlike
-
-platform-sunos:
-	# make GOOS=illumos GOARCH=amd64 NPMDIR=npm/turbo-sunos-64 platform-unixlike
-	@echo skipping illumos, not supported for now
-
 platform-neutral: install
 	cd npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version
 	node ./scripts/bump-version.js
 
 platform-create-turbo:
-	cd ../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+	cd ../packages/create-turbo && pnpm install --filter=create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 platform-turbo-codemod:
-	cd ../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
+	cd ../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm run build
 
 test-prepublish: clean-demo
 	make -j3 bench/turbo test-go lint-go e2e
@@ -191,26 +174,21 @@ publish-all: cmd/turbo/version.go
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 	rm -fr npm && git checkout npm
 	@echo Enter one-time password:
+	make publish-android-arm64
+	make publish-darwin-64
+	make publish-darwin-arm64
+	make publish-freebsd-64
+	make publish-freebsd-arm64
+	make publish-linux-32
+	make publish-linux-64
+	make publish-linux-arm
+	make publish-linux-arm64
+	make publish-linux-mips64le
+	make publish-linux-ppc64le
 	make publish-windows-32
 	make publish-windows-64
 	make publish-windows-arm64
-	make publish-freebsd-64
-	make publish-freebsd-arm64
-	@echo Enter one-time password:
-	make -j4 \
-		publish-darwin-64 \
-		publish-darwin-arm64 \
-		publish-linux-64 \
-		publish-linux-32
-	@echo Enter one-time password:
-	make -j4 \
-		publish-linux-arm \
-		publish-linux-arm64 \
-		publish-android-arm64 \
-		publish-linux-mips64le \
-		publish-linux-ppc64le
 	# Do these last to avoid race conditions
-	@echo Confirm release:
 	make publish-neutral
 	make publish-create-turbo
 	make publish-turbo-codemod
@@ -312,10 +290,6 @@ clean-build:
 	rm -f npm/turbo-linux-arm64/bin/turbo
 	rm -f npm/turbo-linux-mips64le/bin/turbo
 	rm -f npm/turbo-linux-ppc64le/bin/turbo
-	rm -f npm/turbo-linux-s390x/bin/turbo
-	rm -f npm/turbo-netbsd-64/bin/turbo
-	rm -f npm/turbo-openbsd-64/bin/turbo
-	rm -f npm/turbo-sunos-64/bin/turbo
 	rm -f npm/turbo-windows-32/turbo.exe
 	rm -f npm/turbo-windows-64/turbo.exe
 	rm -f npm/turbo-windows-arm64/turbo.exe
