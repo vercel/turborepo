@@ -3,11 +3,39 @@ before:
   hooks:
     - go mod tidy
     - make compile-protos
+    # Each package.json needs to be updated.
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-android-arm64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-darwin-64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-darwin-arm64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-freebsd-64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-freebsd-arm64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-linux-32
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-linux-64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-linux-arm
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-linux-arm64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-linux-mips64le
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-linux-ppc64le
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-windows-32
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-windows-64
+    - cmd: npm version "{{ .Version }}" --allow-same-version
+      dir: npm/turbo-windows-arm64
 builds:
   - id: turbo
     main: ./cmd/turbo
-    no_unique_dist_dir: true
-    binary: ../npm/turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if not (eq .Ext ".exe") }}/bin{{ end }}/turbo
+    binary: bin/turbo
     flags:
       - -trimpath
     ldflags:
@@ -25,16 +53,12 @@ builds:
       - linux_arm64
       - linux_mips64le
       - linux_ppc64le
-      - linux_s390x
-      - netbsd_amd64
-      - openbsd_amd64
       - windows_386
       - windows_amd64
       - windows_arm64
   - id: turbo-cgo
     main: ./cmd/turbo
-    no_unique_dist_dir: true
-    binary: ../npm/turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if not (eq .Ext ".exe") }}/bin{{ end }}/turbo
+    binary: bin/turbo
     flags:
       - -trimpath
     ldflags:
@@ -50,18 +74,33 @@ checksum:
 snapshot:
   name_template: "{{ incpatch .Version }}"
 archives:
-  - id: default
-    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
+  - id: github
+    name_template: 'github/{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
     wrap_in_directory: true
     format: tar.gz
+    replacements:
+      amd64: 64
+      386: 32
     format_overrides:
       - goos: windows
         format: zip
     files:
       - LICENSE
       - README.md
-      - src: dist/turbo-{{.Os}}-{{ if (eq .Arch "amd64") }}64{{ end }}{{ if not (eq .Arch "amd64") }}{{ if (eq .Arch "386") }}32{{ end }}{{ if not (eq .Arch "386") }}{{ .Arch }}{{ end }}{{ end }}{{ if (eq .Os "windows") }}/turbo.exe{{ end }}{{ if not (eq .Os "windows") }}/bin/turbo{{ end }}
-        dst: .
+  - id: npm
+    name_template: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}'
+    wrap_in_directory: false
+    format: tar.gz
+    replacements:
+      amd64: 64
+      386: 32
+    files:
+      - LICENSE
+      - src: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json'
+        dst: '/'
+        strip_parent: true
+      - src: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*'
+        dst: '/bin/'
         strip_parent: true
 changelog:
   sort: asc
@@ -69,3 +108,16 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+release:
+  github:
+    owner: vercel
+    name: turborepo
+  ids:
+    - github
+  prerelease: auto
+  disable: true
+publishers:
+  - name: npm
+    ids:
+     - npm
+    cmd: 'npm publish{{ if .Prerelease }} --tag canary{{ end }} {{ abs .ArtifactPath }} --dry-run'
