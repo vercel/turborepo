@@ -6,8 +6,8 @@ echo "=> Running examples..."
 # echo "=> Building turbo from source..."
 # cd cli && CGO_ENABLED=0 go build ./cmd/turbo/... && cd ..;
 export TURBO_BINARY_PATH=$(pwd)/cli/turbo
-export TURBO_VERSION=$(head -n 1 $(pwd)/cli/version.txt)
-export TURBO_TAG=$(cat $(pwd)/cli/version.txt | sed -n '2 p')
+export TURBO_VERSION=$(head -n 1 $(pwd)/version.txt)
+export TURBO_TAG=$(cat $(pwd)/version.txt | sed -n '2 p')
 export folder=$1
 export pkgManager=$2
 echo "=> Binary path: TURBO_BINARY_PATH=$TURBO_BINARY_PATH"

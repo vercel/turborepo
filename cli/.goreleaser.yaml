@@ -1,41 +1,15 @@
 project_name: turbo
 before:
   hooks:
-    - go mod tidy
     - make compile-protos
-    # Each package.json needs to be updated.
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js android arm64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js darwin 64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js darwin arm64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js freebsd 64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js freebsd arm64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux 32 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux 64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux arm {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux arm64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux mips64le {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux ppc64le {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js windows 32 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js windows 64 {{ .Version }}
-      dir: ./dist
-    - cmd: ../scripts/npm-native-packages/npm-native-packages.js windows arm64 {{ .Version }}
-      dir: ./dist
+    - go mod tidy
 builds:
   - id: turbo
     main: ./cmd/turbo
     binary: bin/turbo
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
     flags:
       - -trimpath
     ldflags:
@@ -59,6 +33,9 @@ builds:
   - id: turbo-cgo
     main: ./cmd/turbo
     binary: bin/turbo
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
     flags:
       - -trimpath
     ldflags:
@@ -75,12 +52,12 @@ snapshot:
   name_template: "{{ incpatch .Version }}"
 archives:
   - id: github
-    name_template: 'github/{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
+    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
     wrap_in_directory: true
-    format: tar.gz
     replacements:
       amd64: 64
       386: 32
+    format: tar.gz
     format_overrides:
       - goos: windows
         format: zip
@@ -90,16 +67,16 @@ archives:
   - id: npm
     name_template: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}'
     wrap_in_directory: false
-    format: tar.gz
     replacements:
       amd64: 64
       386: 32
+    format: tar.gz
     files:
       - LICENSE
-      - src: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json'
+      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/*'
         dst: '/'
         strip_parent: true
-      - src: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*'
+      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*'
         dst: '/bin/'
         strip_parent: true
 changelog:
