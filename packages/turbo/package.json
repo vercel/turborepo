@@ -7,7 +7,7 @@
   "homepage": "https://turborepo.org",
   "license": "MPL-2.0",
   "scripts": {
-    "build": "node bump-version.js",
+    "postversion": "node bump-version.js",
     "postinstall": "node install.js"
   },
   "bin": {
