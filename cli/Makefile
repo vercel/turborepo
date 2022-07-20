@@ -1,5 +1,5 @@
-TURBO_VERSION = $(shell head -n 1 version.txt)
-TURBO_TAG = $(shell cat version.txt | sed -n '2 p')
+TURBO_VERSION = $(shell head -n 1 ../version.txt)
+TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
@@ -69,14 +69,14 @@ install: | ./package.json
 e2e: install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
-cmd/turbo/version.go: version.txt
+cmd/turbo/version.go: ../version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 	goreleaser release --snapshot --rm-dist
-	cd $(ROOT_DIR)/npm/turbo-install && npm run build
+	cd $(ROOT_DIR)/../packages/turbo-install && npm run build
 	cd $(ROOT_DIR)/../packages/create-turbo && npm run build
 	cd $(ROOT_DIR)/../packages/turbo-codemod && npm run build
 
@@ -87,24 +87,9 @@ publish: clean prepublish build
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@echo "Checking for unpushed commits..." && git fetch
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
-
-	@echo Enter one-time password:
-	cd $(ROOT_DIR)/npm/turbo-android-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-darwin-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-darwin-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-freebsd-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-freebsd-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-linux-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-linux-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-linux-arm && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-linux-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-linux-mips64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-linux-ppc64le && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run	# Do these last to avoid race conditions
-	cd $(ROOT_DIR)/npm/turbo-windows-32 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-windows-64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/npm/turbo-windows-arm64 && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	goreleaser release --rm-dist
 	# Do these last to avoid race conditions
-	cd $(ROOT_DIR)/npm/turbo-install && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(ROOT_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	cd $(ROOT_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	cd $(ROOT_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	git commit -am "publish $(TURBO_VERSION) to registry"
@@ -143,7 +128,6 @@ clean: clean-go clean-build clean-demo
 
 clean-build:
 	rm -f turbo
-	rm -rf npm && git checkout npm
 
 clean-demo:
 	rm -rf node_modules
