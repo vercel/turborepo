@@ -18,7 +18,7 @@ GO_FLAGS += "-ldflags=-s -w"
 # Avoid embedding the build path in the executable for more reproducible builds
 GO_FLAGS += -trimpath
 
-ROOT_DIR = $(shell pwd)
+CLI_DIR = $(shell pwd)
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
@@ -76,9 +76,10 @@ cmd/turbo/version.go: ../version.txt
 
 build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 	goreleaser release --snapshot --rm-dist
-	cd $(ROOT_DIR)/../packages/turbo-install && npm run build
-	cd $(ROOT_DIR)/../packages/create-turbo && npm run build
-	cd $(ROOT_DIR)/../packages/turbo-codemod && npm run build
+	cd $(CLI_DIR)/../packages/turbo && npm run build
+	cd $(CLI_DIR)/../packages/turbo-ignore && npm run build
+	cd $(CLI_DIR)/../packages/create-turbo && npm run build
+	cd $(CLI_DIR)/../packages/turbo-codemod && npm run build
 
 prepublish:
 	make -j3 bench/turbo test-go lint-go
@@ -87,40 +88,49 @@ publish: clean prepublish build
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@echo "Checking for unpushed commits..." && git fetch
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
-	goreleaser release --rm-dist
-	# Do these last to avoid race conditions
-	cd $(ROOT_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(ROOT_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+
+	# Prepare the packages.
+	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
+
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
+
+	goreleaser release --rm-dist
+
+	# Publish the packages separately to avoid race conditions.
+	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
 	git push origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
-	node $(ROOT_DIR)/scripts/generate.mjs lage
+	node $(CLI_DIR)/scripts/generate.mjs lage
 
 demo/lerna: install
-	node $(ROOT_DIR)/scripts/generate.mjs lerna
+	node $(CLI_DIR)/scripts/generate.mjs lerna
 
 demo/nx: install
-	node $(ROOT_DIR)/scripts/generate.mjs nx
+	node $(CLI_DIR)/scripts/generate.mjs nx
 
 demo/turbo: install
-	node $(ROOT_DIR)/scripts/generate.mjs turbo
+	node $(CLI_DIR)/scripts/generate.mjs turbo
 
 demo: demo/lage demo/lerna demo/nx demo/turbo
 
 bench/lerna: demo/lerna
-	cd $(ROOT_DIR)/demo/lerna && node_modules/.bin/lerna run build
+	cd $(CLI_DIR)/demo/lerna && node_modules/.bin/lerna run build
 
 bench/lage: demo/lage
-	cd $(ROOT_DIR)/demo/lage && node_modules/.bin/lage build
+	cd $(CLI_DIR)/demo/lage && node_modules/.bin/lage build
 
 bench/nx: demo/nx
-	cd $(ROOT_DIR)/demo/nx && node_modules/.bin/nx run-many --target=build --all
+	cd $(CLI_DIR)/demo/nx && node_modules/.bin/nx run-many --target=build --all
 
 bench/turbo: demo/turbo turbo
-	cd $(ROOT_DIR)/demo/turbo && $(ROOT_DIR)/turbo run test
+	cd $(CLI_DIR)/demo/turbo && $(CLI_DIR)/turbo run test
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 

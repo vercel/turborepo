@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
-const path = require("path");
-const fs = require("fs-extra");
+const fs = require("fs");
 const {
   knownUnixlikePackages,
   knownWindowsPackages,
 } = require("./node-platform");
-const file = path.join("./package.json");
 
-const pkg = fs.readJSONSync(file);
+const pkg = require("./package.json");
+const file = require.resolve("./package.json");
 
 pkg.optionalDependencies = Object.fromEntries(
   Object.values({
