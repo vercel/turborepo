@@ -97,4 +97,4 @@ publishers:
   - name: npm
     ids:
      - npm
-    cmd: 'npm publish{{ if .Prerelease }} --tag canary{{ end }} {{ abs .ArtifactPath }} --dry-run'
+    cmd: 'npm publish{{ if .Prerelease }} --tag canary{{ end }} {{ abs .ArtifactPath }}'
