@@ -75,7 +75,7 @@ cmd/turbo/version.go: ../version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
-	goreleaser release --snapshot --rm-dist
+	goreleaser build
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
