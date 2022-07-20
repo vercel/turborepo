@@ -92,7 +92,7 @@ publish: clean prepublish build
 	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
 
-	git commit -am "publish $(TURBO_VERSION) to registry"
+	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 
 	# Publishes the native npm modules.
