@@ -15,3 +15,21 @@ body {
     fixed 0 0 / 20px 20px radial-gradient(#313131 1px, transparent 0),
     fixed 10px 10px / 20px 20px radial-gradient(#313131 1px, transparent 0);
 }
+
+@keyframes slidein {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+.wrapper {
+  position: relative;
+  white-space: nowrap;
+  display: inline-block;
+  animation: slidein 60s linear infinite;
+  filter: grayscale(100%);
+}

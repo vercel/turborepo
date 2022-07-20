@@ -20,6 +20,7 @@ import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
 import Features from "../Features";
+import { ClientsMarquee } from "../clients/ClientsMarquee";
 
 export default function Home() {
   const onClick = () => {
@@ -69,57 +70,12 @@ export default function Home() {
       </div>
 
       <div className="py-16">
-        <div className="max-w-5xl mx-auto ">
+        <div className="mx-auto ">
           <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
 
-          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-6 "
-                src="/images/logos/vercel.svg"
-                alt="Vercel"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="h-8" src="/images/logos/aws.svg" alt="AWS" />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-7"
-                src="/images/logos/paypal.svg"
-                alt="PayPal"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-6"
-                src="/images/logos/shopify.svg"
-                alt="Shopify"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-6"
-                src="/images/logos/twilio.svg"
-                alt="Twilio"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="w-auto h-7"
-                src="/images/logos/washingtonpost.svg"
-                alt="The Washington Post"
-              />
-            </div>
-          </div>
+          <ClientsMarquee />
         </div>
       </div>
 
