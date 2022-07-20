@@ -76,7 +76,6 @@ cmd/turbo/version.go: ../version.txt
 
 build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 	goreleaser release --snapshot --rm-dist
-	cd $(CLI_DIR)/../packages/turbo && npm run build
 	cd $(CLI_DIR)/../packages/turbo-ignore && npm run build
 	cd $(CLI_DIR)/../packages/create-turbo && npm run build
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm run build
@@ -98,12 +97,14 @@ publish: clean prepublish build
 	git commit -am "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 
+	# Publishes the native npm modules.
 	goreleaser release --rm-dist
 
-	# Publish the packages separately to avoid race conditions.
+	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG) --dry-run
 	git push origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
