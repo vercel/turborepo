@@ -105,7 +105,7 @@ publish: clean prepublish build
 	cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG) --dry-run
 	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG) --dry-run
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG) --dry-run
-	git push origin main "v$(TURBO_VERSION)"
+	# git push origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
