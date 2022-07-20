@@ -64,7 +64,7 @@ fmt-go: $(GO_FILES) go.mod go.sum
 	go fmt ./...
 
 install: | ./package.json
-	pnpm install
+	pnpm install --filter=cli
 
 e2e: install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
@@ -76,9 +76,9 @@ cmd/turbo/version.go: ../version.txt
 
 build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 	goreleaser release --snapshot --rm-dist
-	cd $(CLI_DIR)/../packages/turbo-ignore && npm run build
-	cd $(CLI_DIR)/../packages/create-turbo && npm run build
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm run build
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
 
 prepublish:
 	make -j3 bench/turbo test-go lint-go
