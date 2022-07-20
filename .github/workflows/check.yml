@@ -53,7 +53,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
         with:
-          key: check
+          key: clippy
 
       - name: Install cargo clippy
         run: rustup component add clippy
