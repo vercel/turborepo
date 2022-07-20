@@ -4,34 +4,34 @@ before:
     - go mod tidy
     - make compile-protos
     # Each package.json needs to be updated.
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-android-arm64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-darwin-64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-darwin-arm64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-freebsd-64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-freebsd-arm64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-linux-32
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-linux-64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-linux-arm
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-linux-arm64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-linux-mips64le
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-linux-ppc64le
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-windows-32
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-windows-64
-    - cmd: npm version "{{ .Version }}" --allow-same-version
-      dir: npm/turbo-windows-arm64
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js android arm64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js darwin 64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js darwin arm64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js freebsd 64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js freebsd arm64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux 32 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux 64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux arm {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux arm64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux mips64le {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js linux ppc64le {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js windows 32 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js windows 64 {{ .Version }}
+      dir: ./dist
+    - cmd: ../scripts/npm-native-packages/npm-native-packages.js windows arm64 {{ .Version }}
+      dir: ./dist
 builds:
   - id: turbo
     main: ./cmd/turbo
