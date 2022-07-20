@@ -83,7 +83,7 @@ prepublish:
 	make -j3 bench/turbo test-go lint-go
 
 publish: clean prepublish build
-	# @test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
+	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
 	# Prepare the packages.
@@ -99,10 +99,10 @@ publish: clean prepublish build
 	goreleaser release --rm-dist
 
 	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG) --dry-run
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG) --dry-run
+	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG)
+	cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG)
+	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG)
+	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
 	# git push origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
