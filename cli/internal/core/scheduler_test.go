@@ -209,6 +209,24 @@ libA#build
 	assert.Equal(t, expected, actual)
 }
 
+func TestRunWithNoTasksFound(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app")
+	graph.Add("lib")
+	graph.Connect(dag.BasicEdge("app", "lib"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app", "lib"},
+		TaskNames: []string{"build"},
+	})
+	// should not fail because we have no tasks in the scheduler
+	assert.NilError(t, err, "Prepare")
+}
+
 func TestIncludeRootTasks(t *testing.T) {
 	graph := &dag.AcyclicGraph{}
 	graph.Add("app1")
