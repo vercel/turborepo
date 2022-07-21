@@ -10,7 +10,8 @@ console.log(
 );
 const root = getRoot();
 const scope = getScope();
-const command = `npx turbo run build --filter=${scope}...[HEAD^] --dry=json`;
+const comparison = getComparison();
+const command = `npx turbo run build --filter=${scope}...[${comparison}] --dry=json`;
 console.log(`≫ Analyzing results of \`${command}\`...`);
 exec(
   command,
@@ -98,4 +99,19 @@ function getRoot() {
     }
   }
   return root;
+}
+
+function getComparison() {
+  if (process.env.VERCEL === "1") {
+    if (process.env.VERCEL_GIT_PREVIOUS_SHA) {
+      console.log("≫ Found previously deployed version for project");
+      return process.env.VERCEL_GIT_PREVIOUS_SHA;
+    } else {
+      console.log(`≫ Proceeding with first deploy of project...`);
+      process.exit(1);
+    }
+  }
+
+  // default to previous commit
+  return "HEAD^";
 }
