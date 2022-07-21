@@ -1,0 +1,73 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: 'SemVer Increment'
+        required: true
+        default: 'prerelease'
+        type: choice
+        options:
+        - prelease
+        - prepatch
+        - preminor
+        - premajor
+        - patch
+        - minor
+        - major
+      identifier:
+        description: 'npm Tag'
+        required: true
+        default: 'canary'
+        type: choice
+        options:
+        - canary
+        - latest
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.0
+          cache: true
+          cache-dependency-path: cli/go.sum
+
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7.2.1
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --filter=turbo-monorepo
+
+      - name: Version
+        run: ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+
+      - name: Release
+        run: cd cli && make publish
+        # env:
+        #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
