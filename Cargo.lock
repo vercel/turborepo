@@ -322,9 +322,9 @@ checksum = "c1db59621ec70f09c5e9b597b220c7a2b43611f4710dc03ceb8748637775692c"
 
 [[package]]
 name = "cargo-lock"
-version = "7.1.0"
+version = "8.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c408da54db4c50d4693f7e649c299bc9de9c23ead86249e5368830bb32a734b"
+checksum = "3c4c54d47a4532db3494ef7332c257ab57b02750daae3250d49e01ee55201ce8"
 dependencies = [
  "semver 1.0.12",
  "serde",
@@ -4129,6 +4129,7 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "cargo-lock",
  "clap 3.2.10",
  "owo-colors",
  "semver 1.0.12",
