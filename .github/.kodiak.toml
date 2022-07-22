@@ -3,7 +3,7 @@ version = 1
 
 [merge]
 automerge_label = "pr: automerge"
-require_automerge_label = false
+require_automerge_label = true
 blocking_labels = ["pr: fixship", "pr: on hold", "pr: work in progress"]
 method = "squash"
 delete_branch_on_merge = true
