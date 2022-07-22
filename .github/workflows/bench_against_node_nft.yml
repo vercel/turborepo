@@ -36,9 +36,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: nextest
-          args: run -j 1 --no-fail-fast -r bench_against_node_nft
-        env:
-          RUSTFLAGS: '--cfg bench_against_node_nft'
+          args: run -j 1 --no-fail-fast -r -p turbopack --features bench_against_node_nft bench_against_node_nft
 
       - name: Show benchmark result
         uses: actions-rs/cargo@v1
