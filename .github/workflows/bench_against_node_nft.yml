@@ -22,15 +22,11 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v3
         with:
-          cache: "yarn"
-          cache-dependency-path: |
-            crates/turbopack/tests/node-file-trace/yarn.lock
+          cache: 'yarn'
           node-version: 16
 
       - name: install Node.js dependencies
-        run: |
-          yarn install --frozen-lockfile
-        working-directory: crates/turbopack/tests/node-file-trace
+        run: yarn install
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -42,7 +38,7 @@ jobs:
           command: nextest
           args: run -j 1 --no-fail-fast -r bench_against_node_nft
         env:
-          RUSTFLAGS: "--cfg bench_against_node_nft"
+          RUSTFLAGS: '--cfg bench_against_node_nft'
 
       - name: Show benchmark result
         uses: actions-rs/cargo@v1

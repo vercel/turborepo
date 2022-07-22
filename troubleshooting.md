@@ -15,7 +15,7 @@ See https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified
 ## Cannot `yarn install` because of oniguruma
 
 Oniguruma doesn't yet provide a prebuild binary for arm64 MacOS. And, MacOS
-isn't providing a python2 environment by default anymore!  We need to setup your
+isn't providing a python2 environment by default anymore! We need to setup your
 python environment, much like we would setup your node env:
 
 ```shell

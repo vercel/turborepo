@@ -39,22 +39,18 @@ jobs:
         uses: actions/setup-node@v3
         with:
           cache: 'yarn'
-          cache-dependency-path: |
-            crates/turbopack/tests/node-file-trace/yarn.lock
           node-version: 16
 
       - name: install Node.js dependencies
         run: |
-          yarn install --frozen-lockfile
-        working-directory: crates/turbopack/tests/node-file-trace
+          yarn install
         if: matrix.os.name != 'windows-latest'
 
       - name: install Node.js dependencies
         run: |
-          yarn install --frozen-lockfile --ignore-scripts
+          yarn install --mode=skip-build
           yarn node-gyp install
-          yarn install --force
-        working-directory: crates/turbopack/tests/node-file-trace
+          yarn install
         if: matrix.os.name == 'windows-latest'
 
       - name: Install nextest
