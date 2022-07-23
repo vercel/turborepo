@@ -24,13 +24,31 @@
       "args": ["daemon"]
     },
     {
+      "name": "Benchmark Server",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/benchmark/large-monorepo",
+      "args": ["daemon"]
+    },
+    {
+      "name": "Benchmark Client",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/benchmark/large-monorepo",
+      "args": ["run", "build", "-vvv", "--experimental-use-daemon"]
+    },
+    {
       "name": "Client",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["run", "build", "-vvv"]
+      "args": ["run", "build", "-vvv", "--experimental-use-daemon"]
     },
     {
       "name": "turbo --version",

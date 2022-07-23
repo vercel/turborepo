@@ -132,9 +132,6 @@ func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOn
 			}
 		}
 	}
-	if len(traversalQueue) == 0 {
-		return fmt.Errorf("no tasks found to execute. Requested tasks %v in packages %v", strings.Join(taskNames, ", "), strings.Join(pkgs, ", "))
-	}
 
 	visited := make(util.Set)
 

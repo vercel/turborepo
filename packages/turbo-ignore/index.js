@@ -20,7 +20,8 @@ exec(
   (error, stdout, stderr) => {
     if (error) {
       console.error(`exec error: ${error}`);
-      return;
+      console.error(`≫ Proceeding with build to be safe...`);
+      process.exit(1);
     }
 
     try {
