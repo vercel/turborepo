@@ -47,6 +47,7 @@ func mustCompileSemverConstraint(text string) *semver.Constraints {
 }
 
 var _pnpmPre7Constraint = mustCompileSemverConstraint(">=7.0.0")
+var _yarn1PlusConstraint = mustCompileSemverConstraint(">=1.0.0")
 
 // Is7PlusPnpm returns true if the given backend is both nodejs-pnpm *AND*
 // is version >=7.0.0
@@ -62,6 +63,23 @@ func Is7PlusPnpm(backedName string) (bool, error) {
 			return false, errors.Wrapf(err, "parsing semver for %v", versionRaw)
 		}
 		return _pnpmPre7Constraint.Check(version), nil
+	}
+	return false, nil
+}
+
+// Is1PlusYarn returns whether the active yarn installation is >=1
+func Is1PlusYarn(backedName string) (bool, error) {
+	if IsYarn(backedName) {
+		out, err := exec.Command("yarn", "--version").CombinedOutput()
+		if err != nil {
+			return false, err
+		}
+		versionRaw := strings.TrimSpace(string(out))
+		version, err := semver.NewVersion(versionRaw)
+		if err != nil {
+			return false, errors.Wrapf(err, "parsing semver for %v", versionRaw)
+		}
+		return _yarn1PlusConstraint.Check(version), nil
 	}
 	return false, nil
 }

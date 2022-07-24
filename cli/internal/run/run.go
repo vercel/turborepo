@@ -710,6 +710,10 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		// vs if we tried to call "args = append(args, nil...)", which would not work. This could
 		// just as easily be []string{}, but the style guide says to prefer nil for empty slices.
 		argSeparator = nil
+	} else if is1PlusYarn, err := util.Is1PlusYarn(packageManager.Name); err != nil {
+		return errors.Wrap(err, "determining yarn version")
+	} else if is1PlusYarn {
+		argSeparator = nil
 	}
 	ec := &execContext{
 		colorCache:     colorCache,
