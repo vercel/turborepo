@@ -2,12 +2,11 @@ package packagemanager
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 var nodejsYarn = PackageManager{
@@ -27,6 +26,19 @@ var nodejsYarn = PackageManager{
 			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
 		}
 		return pkg.Workspaces, nil
+	},
+
+	GetCmdArgSeparator: func(pm *PackageManager, rootpath fs.AbsolutePath) []string {
+		version := pm.version
+		if version == "" {
+			version = GetPackageManagerVersionFromCmdPanic(pm, rootpath.ToString())
+		}
+		semverVersion := semver.MustParse(version)
+		argSeparatorSemVer := util.MustCompileSemverConstraint("<1.0.0")
+		if argSeparatorSemVer.Check(semverVersion) {
+			return []string{"--"}
+		}
+		return []string{}
 	},
 
 	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
@@ -79,13 +91,11 @@ var nodejsYarn = PackageManager{
 			return false, nil
 		}
 
-		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = projectDirectory.ToString()
-		out, err := cmd.Output()
+		version, err := GetPackageManagerVersionFromCmd(packageManager, string(projectDirectory))
 		if err != nil {
 			return false, fmt.Errorf("could not detect yarn version: %w", err)
 		}
 
-		return packageManager.Matches(packageManager.Slug, strings.TrimSpace(string(out)))
+		return packageManager.Matches(packageManager.Slug, version)
 	},
 }

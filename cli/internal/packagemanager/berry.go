@@ -2,7 +2,6 @@ package packagemanager
 
 import (
 	"fmt"
-	"os/exec"
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -26,6 +25,10 @@ var nodejsBerry = PackageManager{
 			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
 		}
 		return pkg.Workspaces, nil
+	},
+
+	GetCmdArgSeparator: func(pm *PackageManager, _ fs.AbsolutePath) []string {
+		return []string{}
 	},
 
 	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
@@ -68,15 +71,13 @@ var nodejsBerry = PackageManager{
 			return false, nil
 		}
 
-		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = projectDirectory.ToString()
-		out, err := cmd.Output()
+		version, err := GetPackageManagerVersionFromCmd(packageManager, projectDirectory.ToString())
 		if err != nil {
 			return false, fmt.Errorf("could not detect yarn version: %w", err)
 		}
 
 		// See if we're a match when we compare these two things.
-		matches, _ := packageManager.Matches(packageManager.Slug, string(out))
+		matches, _ := packageManager.Matches(packageManager.Slug, version)
 
 		// Short-circuit, definitely not Berry because version number says we're Yarn.
 		if !matches {

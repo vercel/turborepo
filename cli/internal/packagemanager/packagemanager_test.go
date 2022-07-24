@@ -153,6 +153,67 @@ func TestGetPackageManager(t *testing.T) {
 	}
 }
 
+func TestGetCmdArgSeparator(t *testing.T) {
+	cwd, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
+	tests := []struct {
+		name             string
+		projectDirectory fs.AbsolutePath
+		pkg              *fs.PackageJSON
+		want             []string
+	}{
+		{
+			name:             "npm uses -- arg separator",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "npm@1.2.3"},
+			want:             []string{"--"},
+		},
+		{
+			name:             "pnpm < pnpm@7 uses -- arg separator",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "pnpm@6.32.5"},
+			want:             []string{"--"},
+		},
+		{
+			name:             "pnpm >= pnpm@7 uses no arg separator",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "pnpm@7.0.0"},
+			want:             []string{},
+		},
+		{
+			name:             "yarn < yarn@1 uses -- arg separator",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "yarn@0.1.2"},
+			want:             []string{"--"},
+		},
+		{
+			name:             "yarn >= yarn@1 uses no arg separator",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "yarn@1.22.3"},
+			want:             []string{},
+		},
+		{
+			name:             "yarn (berry) >= yarn@2 uses no arg separator",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "yarn@2.0.0"},
+			want:             []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packageManager, err := GetPackageManager(tt.projectDirectory, tt.pkg)
+			if err != nil {
+				t.Errorf("GetPackageManager() error = %v", err)
+				return
+			}
+			actual := packageManager.GetCmdArgSeparator(packageManager, tt.projectDirectory)
+			if !reflect.DeepEqual(tt.want, actual) {
+				t.Errorf("expected %v, got %v", tt.want, actual)
+			}
+		})
+	}
+}
+
 func Test_readPackageManager(t *testing.T) {
 	tests := []struct {
 		name    string
