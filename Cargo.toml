@@ -21,3 +21,11 @@ members = [
 
 [profile.release]
 lto = true
+
+
+[profile.dev.package.turbo-tasks-macros]
+opt-level = 3
+
+# Set the settings for build scripts and proc-macros.
+[profile.dev.build-override]
+opt-level = 3
