@@ -5,7 +5,6 @@ package taskhash
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/util/env"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -258,12 +258,8 @@ func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Se
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
+	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
 	outputs := pt.HashableOutputs()
-	hashableEnvPairs := []string{}
-	for _, envVar := range pt.TaskDefinition.EnvVarDependencies {
-		hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", envVar, os.Getenv(envVar)))
-	}
-	sort.Strings(hashableEnvPairs)
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
 		return "", err
