@@ -417,6 +417,7 @@ func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
 // Variables that we always include
 var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
+  "VERCEL_ENV",
 }
 
 func calculateGlobalHash(rootpath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
