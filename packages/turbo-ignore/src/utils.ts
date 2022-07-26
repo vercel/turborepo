@@ -62,7 +62,7 @@ export function getScopeFromPath({ cwd }: { cwd: string }): Scope {
 }
 
 export function getTurboRoot(): string | null {
-  // Turbo root can be determined by the presence of turbo.json
+  // Turborepo root can be determined by the presence of turbo.json
   let root = searchUp({ target: "turbo.json", cwd: process.cwd() });
 
   if (!root) {
