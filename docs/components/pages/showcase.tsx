@@ -7,7 +7,6 @@ import { Container } from "../Container";
 
 export default function Showcase() {
   const { theme } = useTheme();
-  // console.log(stuff);
   const showcase = users.map((user) => (
     <a
       href={user.infoLink}
