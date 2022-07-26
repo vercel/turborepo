@@ -125,7 +125,7 @@ export const users = [
   {
     caption: "Volvo",
     image: "/images/logos/volvo.svg",
-    infoLink: "https://volvo.com",
+    infoLink: "https://www.volvo.com",
     pinned: true,
     style: {
       height: 50,
