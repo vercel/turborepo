@@ -4,24 +4,45 @@ export const users = [
     image: "/images/logos/vercel.svg",
     infoLink: "https://vercel.com",
     pinned: true,
+    style: {
+      width: 150,
+    },
   },
   {
     caption: "AWS",
     image: "/images/logos/aws.svg",
     infoLink: "https://aws.amazon.com",
     pinned: true,
+    style: {
+      width: 75,
+    },
   },
   {
     caption: "Netflix",
     image: "/images/logos/netflix.svg",
     infoLink: "https://netflix.com",
     pinned: true,
+    style: {
+      width: 110,
+    },
   },
   {
     caption: "Microsoft",
     image: "/images/logos/microsoft.svg",
     infoLink: "https://microsoft.com",
     pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "Alibaba",
+    image: "/images/logos/alibaba.svg",
+    infoLink: "https://alibaba.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "Disney",
@@ -46,18 +67,27 @@ export const users = [
     image: "/images/logos/shopify.svg",
     infoLink: "https://shopify.com",
     pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "SAP",
     image: "/images/logos/sap.svg",
     infoLink: "https://sap.com",
     pinned: true,
+    style: {
+      width: 75,
+    },
   },
   {
-    caption: "Citadel",
-    image: "/images/logos/citadel.svg",
-    infoLink: "https://citadel.com",
+    caption: "Ant Group",
+    image: "/images/logos/ant.svg",
+    infoLink: "https://antgroup.com",
     pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "Twilio",
@@ -66,34 +96,68 @@ export const users = [
     pinned: true,
   },
   {
+    caption: "Segment",
+    image: "/images/logos/segment.svg",
+    infoLink: "https://segment.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
     caption: "Line",
     image: "/images/logos/line.svg",
     infoLink: "https://line.me",
     pinned: true,
+    style: {
+      width: 75,
+    },
+  },
+  {
+    caption: "ESPN",
+    image: "/images/logos/espn.svg",
+    infoLink: "https://espn.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "Volvo",
     image: "/images/logos/volvo.svg",
     infoLink: "https://volvo.com",
     pinned: true,
+    style: {
+      height: 50,
+      width: 50,
+    },
   },
   {
     caption: "Hearst",
     image: "/images/logos/hearst.svg",
     infoLink: "https://hearst.com",
     pinned: true,
+    style: {
+      width: 150,
+    },
   },
   {
     caption: "The Washington Post",
     image: "/images/logos/washingtonpost.svg",
     infoLink: "https://washingtonpost.com",
     pinned: true,
+    style: {
+      width: 175,
+    },
   },
   {
     caption: "Wayfair",
     image: "/images/logos/wayfair.svg",
     infoLink: "https://wayfair.com",
     pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "Hulu",
@@ -106,12 +170,19 @@ export const users = [
     image: "/images/logos/crowdstrike.svg",
     infoLink: "https://crowdstrike.com",
     pinned: true,
+    style: {
+      width: 150,
+      marginTop: 20,
+    },
   },
   {
     caption: "Binance",
     image: "/images/logos/binance.svg",
     infoLink: "https://binance.com",
     pinned: true,
+    style: {
+      width: 150,
+    },
   },
   {
     caption: "Plex",
@@ -124,11 +195,144 @@ export const users = [
     image: "/images/logos/groupon.svg",
     infoLink: "https://groupon.com",
     pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "GoodRx",
     image: "/images/logos/goodrx.svg",
     infoLink: "https://goodrx.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "Tripadvisor",
+    image: "/images/logos/tripadvisor.svg",
+    infoLink: "https://tripadvisor.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "RapidAPI",
+    image: "/images/logos/rapidapi.svg",
+    infoLink: "https://rapidapi.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "Miro",
+    image: "/images/logos/miro.svg",
+    infoLink: "https://miro.com",
+    pinned: true,
+  },
+  {
+    caption: "Lattice",
+    image: "/images/logos/lattice.svg",
+    infoLink: "https://lattice.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "Watershed",
+    image: "/images/logos/watershed.svg",
+    infoLink: "https://watershed.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+
+  {
+    caption: "Stedi",
+    image: "/images/logos/stedi.svg",
+    infoLink: "https://stedi.com",
+    pinned: true,
+    style: {
+      width: 75,
+    },
+  },
+  {
+    caption: "Framer",
+    image: "/images/logos/framer.svg",
+    infoLink: "https://framer.com",
+    pinned: true,
+  },
+  {
+    caption: "Contentful",
+    image: "/images/logos/contentful.svg",
+    infoLink: "https://contentful.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "Cal.com",
+    image: "/images/logos/calcom.svg",
+    infoLink: "https://cal.com",
+    pinned: true,
+  },
+  {
+    caption: "Codesandbox",
+    image: "/images/logos/codesandbox.svg",
+    infoLink: "https://codesandbox.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "WooCommerce",
+    image: "/images/logos/woocommerce.svg",
+    infoLink: "https://woocommerce.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "Expo",
+    image: "/images/logos/expo.svg",
+    infoLink: "https://expo.io",
+    pinned: true,
+  },
+  {
+    caption: "TeeSpring",
+    image: "/images/logos/teespring.svg",
+    infoLink: "https://spri.ng",
+    pinned: true,
+  },
+  {
+    caption: "Endear",
+    image: "/images/logos/endear.svg",
+    infoLink: "https://endearhq.com",
+    pinned: true,
+  },
+  {
+    caption: "Makeswift",
+    image: "/images/logos/makeswift.svg",
+    infoLink: "https://makeswift.com",
+    pinned: true,
+  },
+  {
+    caption: "Fandom",
+    image: "/images/logos/fandom.svg",
+    infoLink: "https://fandom.com",
+    pinned: true,
+  },
+  {
+    caption: "Waggel",
+    image: "/images/logos/waggel.svg",
+    infoLink: "https://waggel.com",
     pinned: true,
   },
 ];

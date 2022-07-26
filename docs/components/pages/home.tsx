@@ -20,13 +20,20 @@ import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
 import Features from "../Features";
-import { ClientsMarquee } from "../clients/ClientsMarquee";
+import { Marquee } from "../clients/Marquee";
+import { usePrefersReducedMotion } from "../usePrefersReducedMotion";
+import { Client } from "../clients/Client";
+import { users } from "../clients/users";
+import { useTheme } from "next-themes";
+const pinnedLogos = users.filter((p) => p.pinned);
 
 export default function Home() {
   const onClick = () => {
     copy("npx create-turbo@latest");
     toast.success("Copied to clipboard");
   };
+  const { theme } = useTheme();
+  const prefersReducedMotion = usePrefersReducedMotion();
   return (
     <>
       <Head>
@@ -71,11 +78,37 @@ export default function Home() {
 
       <div className="py-16">
         <div className="mx-auto ">
-          <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
+          <p className="pb-8 text-sm font-semibold tracking-wide text-center text-gray-400 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
 
-          <ClientsMarquee />
+          {prefersReducedMotion ? (
+            <div className="container grid grid-cols-4 gap-12 mx-auto sm:grid-cols-5 md:grid-cols-8">
+              {pinnedLogos.slice(0, 8).map(({ caption, image, style }) => (
+                <Client
+                  className="mx-auto text-center align-middle "
+                  key={caption}
+                  style={style}
+                  name={caption}
+                  theme={theme}
+                  image={image}
+                />
+              ))}
+            </div>
+          ) : (
+            <Marquee>
+              {pinnedLogos.map(({ caption, infoLink, image, style }) => (
+                <Client
+                  className="mx-8 align-middle opacity-75"
+                  key={caption}
+                  style={style}
+                  theme={theme}
+                  name={caption}
+                  image={image}
+                />
+              ))}
+            </Marquee>
+          )}
         </div>
       </div>
 
