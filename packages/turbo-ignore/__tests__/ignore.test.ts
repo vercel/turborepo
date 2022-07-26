@@ -1,29 +1,49 @@
-import { getComparison } from "../utils";
+import { getComparison, getScopeFromArgs } from "../src/utils";
 
 describe("turbo-ignore", () => {
   describe("getComparison()", () => {
-    it("should return HEAD comparison when not running in vercel CI", async () => {
-      expect(getComparison()).toBe("HEAD^");
+    it("uses headRelative comparison when not running Vercel CI", async () => {
+      expect(getComparison()).toMatchInlineSnapshot(`
+        Object {
+          "ref": "HEAD^",
+          "type": "headRelative",
+        }
+      `);
     });
-    it("should allow build running in vercel CI with no VERCEL_GIT_PREVIOUS_SHA", async () => {
-      const mockExit = jest
-        .spyOn(process, "exit")
-        .mockImplementation((code): never => {
-          if (code === 1) {
-            throw new Error("building");
-          }
-          throw new Error("ignored");
-        });
+    it("returns null when running in Vercel CI with no VERCEL_GIT_PREVIOUS_SHA", async () => {
       process.env.VERCEL = "1";
-      expect(getComparison).toThrowError("building");
-      mockExit.mockRestore();
+      expect(getComparison()).toBeNull();
     });
 
-    it("should return VERCEL_GIT_PREVIOUS_SHA when present and running in vercel CI", async () => {
-      const SHA = "mygitsha";
+    it("used previousDeploy when running in Vercel CI with VERCEL_GIT_PREVIOUS_SHA", async () => {
       process.env.VERCEL = "1";
-      process.env.VERCEL_GIT_PREVIOUS_SHA = SHA;
-      expect(getComparison()).toBe(SHA);
+      process.env.VERCEL_GIT_PREVIOUS_SHA = "mygitsha";
+      expect(getComparison()).toMatchInlineSnapshot(`
+        Object {
+          "ref": "mygitsha",
+          "type": "previousDeploy",
+        }
+      `);
+    });
+  });
+
+  describe("getScopeFromArgs()", () => {
+    it("should return null scope and empty context when no args are provided", async () => {
+      const { scope, context } = getScopeFromArgs({ args: [] });
+      expect(scope).toBeNull();
+      expect(context).toEqual({});
+    });
+
+    it("should return argument scope and empty context with scope", async () => {
+      const { scope, context } = getScopeFromArgs({ args: ["./"] });
+      expect(scope).toEqual("./");
+      expect(context).toEqual({});
+    });
+
+    it("used the correct argument when multiple are provided", async () => {
+      const { scope, context } = getScopeFromArgs({ args: ["./", "../../"] });
+      expect(scope).toEqual("./");
+      expect(context).toEqual({});
     });
   });
 });
