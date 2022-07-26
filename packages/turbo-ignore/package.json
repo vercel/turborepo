@@ -14,11 +14,11 @@
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "bin": {
-    "turbo-ignore": "dist/index.js"
-  },
+  "main": "index.js",
+  "bin": "index.js",
   "scripts": {
-    "build": "tsup src/index.ts --format cjs",
+    "build": "tsup src/index.ts --format=cjs && cp ./package.json ./dist/package.json",
+    "release": "pnpm build && cd dist && pnpm publish",
     "test": "jest",
     "lint": "eslint src/**/*.ts"
   },

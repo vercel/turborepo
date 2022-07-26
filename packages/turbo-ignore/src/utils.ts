@@ -2,10 +2,15 @@ import fs from "fs";
 import path from "path";
 import { findRootSync } from "@manypkg/find-root";
 
-type Scope = {
+interface Scope {
   scope: string | null;
   context: { path?: string };
-};
+}
+
+interface Comparison {
+  ref: string;
+  type: "previousDeploy" | "headRelative";
+}
 
 export function searchUp({
   target,
@@ -69,10 +74,7 @@ export function getTurboRoot(): string | null {
   return root;
 }
 
-export function getComparison(): null | {
-  ref: string;
-  type: "previousDeploy" | "headRelative";
-} {
+export function getComparison(): Comparison | null {
   if (process.env.VERCEL === "1") {
     if (process.env.VERCEL_GIT_PREVIOUS_SHA) {
       // use the commit SHA of the last successful deployment for this project / branch
