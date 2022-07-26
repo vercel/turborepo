@@ -44,7 +44,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
         with:
-          key: release
+          key: release-${{ matrix.os.target }}
 
       - name: Run cargo build
         uses: actions-rs/cargo@v1

@@ -75,13 +75,16 @@ jobs:
           done
 
           echo $count > clippy-warnings
+          echo $count clippy warnings
 
       - name: Cache
         id: expected-clippy-warnings
         uses: actions/cache@v3
         with:
           path: expected-clippy-warnings
-          key: expected-clippy-warnings
+          key: expected-clippy-warnings-${{ github.sha }}
+          restore-keys: |
+            expected-clippy-warnings
 
       - name: Update expected Clippy warnings on main
         if: github.ref == 'refs/heads/main'
@@ -89,14 +92,16 @@ jobs:
           mv clippy-warnings expected-clippy-warnings
 
       - name: Check the number of Clippy warnings is ever decreasing
-        if: github.ref != 'refs/heads/main' && steps.expected-clippy-warnings.outputs.cache-hit == 'true'
+        if: github.ref != 'refs/heads/main'
         run: |
-          clippy_warnings=$(cat clippy-warnings)
-          expected_clippy_warnings=$(cat expected-clippy-warnings)
-          if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
-            echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
-            echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
-            exit 1
+          if [[ -f "expected-clippy-warnings" ]]; then
+            clippy_warnings=$(cat clippy-warnings)
+            expected_clippy_warnings=$(cat expected-clippy-warnings)
+            if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
+              echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
+              echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
+              exit 1
+            fi
           fi
 
   fmt:
