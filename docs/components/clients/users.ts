@@ -332,7 +332,7 @@ export const users = [
   {
     caption: "Waggel",
     image: "/images/logos/waggel.svg",
-    infoLink: "https://waggel.com",
+    infoLink: "https://waggel.co.uk",
     pinned: true,
   },
 ];
