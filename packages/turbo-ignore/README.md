@@ -1,4 +1,4 @@
-# Turbo Ignore
+# `turbo-ignore`
 
 To get started, use the following command as your [Ignored Build Step](https://vercel.com/docs/concepts/projects/overview#ignored-build-step):
 
