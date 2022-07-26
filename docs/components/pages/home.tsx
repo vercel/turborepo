@@ -20,12 +20,20 @@ import paularmstrong from "../../images/paularmstrong.jpeg";
 import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
 import Features from "../Features";
+import { Marquee } from "../clients/Marquee";
+import { usePrefersReducedMotion } from "../usePrefersReducedMotion";
+import { Client } from "../clients/Client";
+import { users } from "../clients/users";
+import { useTheme } from "next-themes";
+const pinnedLogos = users.filter((p) => p.pinned);
 
 export default function Home() {
   const onClick = () => {
     copy("npx create-turbo@latest");
     toast.success("Copied to clipboard");
   };
+  const { theme } = useTheme();
+  const prefersReducedMotion = usePrefersReducedMotion();
   return (
     <>
       <Head>
@@ -69,57 +77,38 @@ export default function Home() {
       </div>
 
       <div className="py-16">
-        <div className="max-w-5xl mx-auto ">
-          <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
+        <div className="mx-auto ">
+          <p className="pb-8 text-sm font-semibold tracking-wide text-center text-gray-400 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
 
-          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-6 "
-                src="/images/logos/vercel.svg"
-                alt="Vercel"
-              />
+          {prefersReducedMotion ? (
+            <div className="container grid grid-cols-4 gap-12 mx-auto sm:grid-cols-5 md:grid-cols-8">
+              {pinnedLogos.slice(0, 8).map(({ caption, image, style }) => (
+                <Client
+                  className="mx-auto text-center align-middle "
+                  key={caption}
+                  style={style}
+                  name={caption}
+                  theme={theme}
+                  image={image}
+                />
+              ))}
             </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="h-8" src="/images/logos/aws.svg" alt="AWS" />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-7"
-                src="/images/logos/paypal.svg"
-                alt="PayPal"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-6"
-                src="/images/logos/shopify.svg"
-                alt="Shopify"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="h-6"
-                src="/images/logos/twilio.svg"
-                alt="Twilio"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="w-auto h-7"
-                src="/images/logos/washingtonpost.svg"
-                alt="The Washington Post"
-              />
-            </div>
-          </div>
+          ) : (
+            <Marquee>
+              {pinnedLogos.map(({ caption, infoLink, image, style }) => (
+                <Client
+                  className="mx-8 align-middle opacity-75"
+                  key={caption}
+                  style={style}
+                  theme={theme}
+                  name={caption}
+                  image={image}
+                />
+              ))}
+            </Marquee>
+          )}
         </div>
       </div>
 
