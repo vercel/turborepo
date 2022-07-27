@@ -103,6 +103,10 @@ publish: clean prepublish build
 	# cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG)
 	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG)
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
+
+	pnpm install --filter=turbo --ignore-scripts
+	git commit -anm "Update lockfile"
+
 	git push origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
