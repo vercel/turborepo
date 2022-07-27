@@ -182,6 +182,14 @@ function applyManualBinaryPathOverride(overridePath) {
 }
 
 function maybeOptimizePackage(binPath) {
+  // Everything else that this installation does is fine, but the optimization
+  // step rewrites existing files. We need to make sure that this does not
+  // happen during development. We determine that by looking for a file in
+  // the package that is not published in the `npm` registry.
+  if (fs.existsSync(path.join(__dirname, ".dev-mode"))) {
+    return;
+  }
+
   // This package contains a "bin/turbo" JavaScript file that finds and runs
   // the appropriate binary executable. However, this means that running the
   // "turbo" command runs another instance of "node" which is way slower than
