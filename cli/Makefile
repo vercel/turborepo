@@ -75,7 +75,7 @@ cmd/turbo/version.go: ../version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
+	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
 
@@ -88,7 +88,7 @@ publish: clean prepublish build
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
+	# cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
 
@@ -100,7 +100,7 @@ publish: clean prepublish build
 
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG)
-	cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG)
+	# cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG)
 	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG)
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
 	git push origin main "v$(TURBO_VERSION)"
