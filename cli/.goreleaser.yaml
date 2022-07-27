@@ -65,8 +65,8 @@ archives:
       - LICENSE
       - README.md
   - id: npm
-    name_template: 'npm/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}'
-    wrap_in_directory: false
+    name_template: '{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}'
+    wrap_in_directory: true
     replacements:
       amd64: 64
       386: 32
