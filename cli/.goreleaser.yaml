@@ -74,10 +74,10 @@ archives:
     files:
       - LICENSE
       - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json'
-        dst: './'
+        dst: 'workaround/..'
         strip_parent: true
       - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/README.md'
-        dst: './'
+        dst: 'workaround/..'
         strip_parent: true
       - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*'
         dst: 'bin/'
