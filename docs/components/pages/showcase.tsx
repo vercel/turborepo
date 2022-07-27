@@ -1,13 +1,13 @@
 /* eslint-disable react/no-unescaped-entities */
 import { useTheme } from "next-themes";
 import Head from "next/head";
-import Image from "next/image";
+import Image from "next/future/image";
 import { users } from "../clients/users";
 import { Container } from "../Container";
 
 export default function Showcase() {
   const { theme } = useTheme();
-  const showcase = users.map((user) => (
+  const showcase = users.map((user, index) => (
     <a
       href={user.infoLink}
       key={user.infoLink}
@@ -23,8 +23,8 @@ export default function Showcase() {
         alt={user.caption}
         width={user.style?.width ?? 100}
         height={user.style?.height ?? 75}
-        loading="lazy"
-        className="inline"
+        priority={index < 24}
+        className="inline w-auto"
       />
     </a>
   ));
