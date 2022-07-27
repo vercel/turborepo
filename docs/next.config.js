@@ -7,8 +7,9 @@ const withNextra = require("nextra")({
 
 module.exports = withNextra({
   reactStrictMode: true,
-  experiments: {
-    esmExternals: true,
+  experimental: {
+    legacyBrowsers: false,
+    images: { allowFutureImage: true },
   },
   async redirects() {
     return [
