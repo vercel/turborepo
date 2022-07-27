@@ -22,32 +22,43 @@ var envVarPrefixes = []string{
 	"VUE_APP_",
 }
 
+func getEnvMap() map[string]string {
+	envMap := make(map[string]string)
+	for _, envVar := range os.Environ() {
+		if i := strings.Index(envVar, "="); i >= 0 {
+			parts := strings.SplitN(envVar, "=", 2)
+			envMap[parts[0]] = strings.Join(parts[1:], "")
+		}
+	}
+	return envMap
+}
+
 // getEnvPairsFromKeys returns a slice of key=value pairs for all env var keys specified in envKeys
-func getEnvPairsFromKeys(envKeys []string, allEnvVars []string) []string {
+func getEnvPairsFromKeys(envKeys []string, allEnvVars map[string]string) []string {
 	hashableConfigEnvPairs := []string{}
 	for _, envVar := range envKeys {
-		hashableConfigEnvPairs = append(hashableConfigEnvPairs, fmt.Sprintf("%v=%v", envVar, os.Getenv(envVar)))
+		hashableConfigEnvPairs = append(hashableConfigEnvPairs, fmt.Sprintf("%v=%v", envVar, allEnvVars[envVar]))
 	}
 
 	return hashableConfigEnvPairs
 }
 
 // getFrameworkEnvPairs returns a slice of all key=value pairs that match the given prefix
-func getFrameworkEnvPairs(prefix string, allEnvVars []string) []string {
+func getEnvVarsFromPrefix(prefix string, allEnvVars map[string]string) []string {
 	hashableFrameworkEnvPairs := []string{}
-	for _, pair := range allEnvVars {
-		if strings.HasPrefix(pair, prefix) {
-			hashableFrameworkEnvPairs = append(hashableFrameworkEnvPairs, pair)
+	for k, v := range allEnvVars {
+		if strings.HasPrefix(k, prefix) {
+			hashableFrameworkEnvPairs = append(hashableFrameworkEnvPairs, fmt.Sprintf("%v=%v", k, v))
 		}
 	}
 	return hashableFrameworkEnvPairs
 }
 
 // getEnvPairsFromPrefixes returns a slice containing key=value pairs for all frameworks
-func getEnvPairsFromPrefixes(prefixes []string, allEnvVars []string) []string {
+func getEnvPairsFromPrefixes(prefixes []string, allEnvVars map[string]string) []string {
 	allHashableFrameworkEnvPairs := []string{}
 	for _, frameworkEnvPrefix := range envVarPrefixes {
-		hashableFrameworkEnvPairs := getFrameworkEnvPairs(frameworkEnvPrefix, allEnvVars)
+		hashableFrameworkEnvPairs := getEnvVarsFromPrefix(frameworkEnvPrefix, allEnvVars)
 		allHashableFrameworkEnvPairs = append(allHashableFrameworkEnvPairs, hashableFrameworkEnvPairs...)
 
 	}
@@ -56,12 +67,20 @@ func getEnvPairsFromPrefixes(prefixes []string, allEnvVars []string) []string {
 
 // GetHashableEnvPairs returns all sorted key=value env var pairs for both frameworks and from envKeys
 func GetHashableEnvPairs(envKeys []string) []string {
-	allEnvVars := os.Environ()
+	allEnvVars := getEnvMap()
 	hashableEnvFromKeys := getEnvPairsFromKeys(envKeys, allEnvVars)
 	hashableEnvFromPrefixes := getEnvPairsFromPrefixes(envVarPrefixes, allEnvVars)
 
 	// convert to set to eliminate duplicates, then cast back to slice to sort for stable hashing
-	allHashableEnvPairs := util.SetFromStrings(append(hashableEnvFromKeys, hashableEnvFromPrefixes...)).UnsafeListOfStrings()
+	uniqueHashableEnvPairs := make(util.Set, len(hashableEnvFromKeys)+len(hashableEnvFromPrefixes))
+	for _, pair := range hashableEnvFromKeys {
+		uniqueHashableEnvPairs.Add(pair)
+	}
+	for _, pair := range hashableEnvFromPrefixes {
+		uniqueHashableEnvPairs.Add(pair)
+	}
+
+	allHashableEnvPairs := uniqueHashableEnvPairs.UnsafeListOfStrings()
 	sort.Strings(allHashableEnvPairs)
 	return allHashableEnvPairs
 }

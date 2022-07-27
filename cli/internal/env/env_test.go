@@ -108,6 +108,14 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			want: []string{"NEXT_PUBLIC_EMOJI=😋"},
 		},
 		{
+			env:  []string{"zero=0", "null=null", "nil=nil"},
+			name: "parses corner case env values",
+			args: args{
+				envKeys: []string{"zero", "null", "nil"},
+			},
+			want: []string{"nil=nil", "null=null", "zero=0"},
+		},
+		{
 			env: []string{"GATSBY_custom=GATSBY",
 				"NEXT_PUBLIC_custom=NEXT_PUBLIC",
 				"NUXT_ENV_custom=NUXT_ENV",
