@@ -19,12 +19,12 @@ Smoke Testing via examples:
 1.  Install `go get dlv-dap`
 1.  In VS Code Debugging tab, select `Basic Turbo Build` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example.
 
-## Updating `turbo-install`
+## Updating `turbo`
 
-You might need to update `cli/npm/turbo-install` in order to support a new platform. When you do that you will need to link the module in order to be able to continue working. As an example, with `npm link`:
+You might need to update `packages/turbo` in order to support a new platform. When you do that you will need to link the module in order to be able to continue working. As an example, with `npm link`:
 
 ```sh
-cd ~/repos/vercel/turborepo/cli/npm/turbo-install
+cd ~/repos/vercel/turborepo/packages/turbo
 npm link
 
 # Run your build, e.g. `go build ./cmd/turbo` if you're on the platform you're adding.
