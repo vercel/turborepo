@@ -12,6 +12,7 @@ import (
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
+	"github.com/vercel/turborepo/cli/internal/env"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -257,7 +258,7 @@ func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Se
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
-	hashableEnvPairs := util.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
+	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
 	outputs := pt.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {

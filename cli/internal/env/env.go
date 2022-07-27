@@ -1,10 +1,12 @@
-package util
+package env
 
 import (
 	"fmt"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // Prefixes for common framework variables that we always include
@@ -59,7 +61,7 @@ func GetHashableEnvPairs(envKeys []string) []string {
 	hashableEnvFromPrefixes := getEnvPairsFromPrefixes(envVarPrefixes, allEnvVars)
 
 	// convert to set to eliminate duplicates, then cast back to slice to sort for stable hashing
-	allHashableEnvPairs := SetFromStrings(append(hashableEnvFromKeys, hashableEnvFromPrefixes...)).UnsafeListOfStrings()
+	allHashableEnvPairs := util.SetFromStrings(append(hashableEnvFromKeys, hashableEnvFromPrefixes...)).UnsafeListOfStrings()
 	sort.Strings(allHashableEnvPairs)
 	return allHashableEnvPairs
 }
