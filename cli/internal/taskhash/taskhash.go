@@ -16,7 +16,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/env"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -258,7 +257,7 @@ func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Se
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
-	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
+	hashableEnvPairs := util.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
 	outputs := pt.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
