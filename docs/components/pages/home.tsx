@@ -82,7 +82,21 @@ export default function Home() {
             Trusted by teams from around the world
           </p>
 
-          {prefersReducedMotion ? (
+          {!prefersReducedMotion ? (
+            <Marquee>
+              {pinnedLogos.map(({ caption, infoLink, image, style }, index) => (
+                <Client
+                  className="mx-8 align-middle opacity-75"
+                  key={caption}
+                  style={style}
+                  theme={theme}
+                  name={caption}
+                  image={image}
+                  priority={index < 9}
+                />
+              ))}
+            </Marquee>
+          ) : (
             <div className="container grid grid-cols-4 gap-12 mx-auto sm:grid-cols-5 md:grid-cols-8">
               {pinnedLogos.slice(0, 8).map(({ caption, image, style }) => (
                 <Client
@@ -92,22 +106,10 @@ export default function Home() {
                   name={caption}
                   theme={theme}
                   image={image}
+                  priority={true}
                 />
               ))}
             </div>
-          ) : (
-            <Marquee>
-              {pinnedLogos.map(({ caption, infoLink, image, style }) => (
-                <Client
-                  className="mx-8 align-middle opacity-75"
-                  key={caption}
-                  style={style}
-                  theme={theme}
-                  name={caption}
-                  image={image}
-                />
-              ))}
-            </Marquee>
           )}
         </div>
       </div>
