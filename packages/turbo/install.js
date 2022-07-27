@@ -165,22 +165,6 @@ function removeRecursive(dir) {
   fs.rmSync(dir);
 }
 
-function applyManualBinaryPathOverride(overridePath) {
-  // Patch the CLI use case (the "turbo" command)
-  const pathString = JSON.stringify(overridePath);
-  fs.writeFileSync(
-    toPath,
-    `#!/usr/bin/env node\n` +
-      `require('child_process').execFileSync(${pathString}, process.argv.slice(2), { stdio: 'inherit' });\n`
-  );
-
-  // Not needed for turbo
-  // // Patch the JS API use case (the "require('turbo')" workflow)
-  // const libMain = path.join(__dirname, "lib", "main.js");
-  // const code = fs.readFileSync(libMain, "utf8");
-  // fs.writeFileSync(libMain, `var TURBO_BINARY_PATH = ${pathString};\n${code}`);
-}
-
 function maybeOptimizePackage(binPath) {
   // Everything else that this installation does is fine, but the optimization
   // step rewrites existing files. We need to make sure that this does not
@@ -262,7 +246,6 @@ async function checkAndPreparePackage() {
   // path without modifying the code itself. Do not remove this because
   // external code relies on this (in addition to turbo's own test suite).
   if (TURBO_BINARY_PATH) {
-    applyManualBinaryPathOverride(TURBO_BINARY_PATH);
     return;
   }
 
