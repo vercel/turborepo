@@ -73,11 +73,14 @@ archives:
     format: tar.gz
     files:
       - LICENSE
-      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/*'
-        dst: '/'
+      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json'
+        dst: './'
+        strip_parent: true
+      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/README.md'
+        dst: './'
         strip_parent: true
       - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*'
-        dst: '/bin/'
+        dst: 'bin/'
         strip_parent: true
 changelog:
   sort: asc
