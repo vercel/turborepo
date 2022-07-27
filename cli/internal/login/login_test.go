@@ -5,15 +5,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
+	"gotest.tools/v3/assert"
 )
 
 type dummyClient struct {
@@ -47,6 +50,22 @@ func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.Ve
 		Token:  "actual-sso-token",
 		TeamID: "sso-team-id",
 	}, nil
+}
+
+type dummyUI struct {
+	infoString string
+}
+
+func (d *dummyUI) Ask(string) (string, error)       { return "", nil }
+func (d *dummyUI) AskSecret(string) (string, error) { return "", nil }
+func (d *dummyUI) Output(arg string)                {}
+func (d *dummyUI) Info(arg string) {
+	d.infoString = d.infoString + arg
+}
+func (d *dummyUI) Error(arg string) {}
+func (d *dummyUI) Warn(arg string)  {}
+func (d *dummyUI) GetInfoString() string {
+	return d.infoString
 }
 
 var logger = hclog.Default()
@@ -137,6 +156,10 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 func Test_run(t *testing.T) {
 	test := newTest(t, "http://127.0.0.1:9789/?token=my-token")
 	login := test.getTestLogin()
+	stubbedUI := &dummyUI{}
+	login.ui = &cli.ColoredUi{
+		Ui: stubbedUI,
+	}
 	err := login.run(cf)
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
@@ -146,6 +169,8 @@ func Test_run(t *testing.T) {
 	}
 
 	expectedURL := "login-url/turborepo/token?redirect_uri=http://127.0.0.1:9789"
+	assert.Assert(t, strings.Contains(stubbedUI.GetInfoString(), expectedURL), "The fully-qualified URL should be logged.")
+
 	if test.openedURL != expectedURL {
 		t.Errorf("openedURL got %v, want %v", test.openedURL, expectedURL)
 	}

@@ -146,7 +146,11 @@ func (l *login) run(c *config.Config) error {
 	l.logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginUrl, redirectURL)
-	l.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
+
+	// It is possible that opening works but the browser is inaccessible.
+	// This is most-likely to occur in headless environments.
+	// Make sure that we print the full URL to enable a user to login.
+	l.ui.Info(util.Sprintf(">>> Opening browser to %v", loginURL))
 
 	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
