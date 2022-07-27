@@ -102,7 +102,7 @@ func (ap AbsolutePath) Lstat() (os.FileInfo, error) {
 
 // DirExists returns true if this path points to a directory
 func (ap AbsolutePath) DirExists() bool {
-	info, err := os.Lstat(ap.asString())
+	info, err := ap.Lstat()
 	return err == nil && info.IsDir()
 }
 
@@ -166,6 +166,11 @@ func (ap AbsolutePath) Link(target string) error {
 // Remove removes the file or (empty) directory at the given path
 func (ap AbsolutePath) Remove() error {
 	return os.Remove(ap.asString())
+}
+
+// RemoveAll implements os.RemoveAll for absolute paths.
+func (ap AbsolutePath) RemoveAll() error {
+	return os.RemoveAll(ap.asString())
 }
 
 // Base implements filepath.Base for an absolute path

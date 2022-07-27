@@ -25,6 +25,7 @@ func (m *mockGrpc) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {}
 
 func TestDeleteRepoRoot(t *testing.T) {
 	logger := hclog.Default()
+	logger.SetLevel(hclog.Debug)
 	repoRootRaw := t.TempDir()
 	repoRoot := turbofs.AbsolutePathFromUpstream(repoRootRaw)
 
@@ -32,7 +33,7 @@ func TestDeleteRepoRoot(t *testing.T) {
 		stopped: make(chan struct{}),
 	}
 
-	s, err := New(logger, repoRoot, "some-version", "/log/file/path")
+	s, err := New("testServer", logger, repoRoot, "some-version", "/log/file/path")
 	assert.NilError(t, err, "New")
 	s.Register(grpcServer)
 
@@ -56,7 +57,7 @@ func TestShutdown(t *testing.T) {
 		stopped: make(chan struct{}),
 	}
 
-	s, err := New(logger, repoRoot, "some-version", "/log/file/path")
+	s, err := New("testServer", logger, repoRoot, "some-version", "/log/file/path")
 	assert.NilError(t, err, "New")
 	s.Register(grpcServer)
 

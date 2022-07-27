@@ -3,7 +3,7 @@ title: CLI Reference
 description: Turborepo is a high-performance build system for JavaScript and TypeScript codebases.
 ---
 
-import Callout from '../../../components/callout'
+import Callout from '../../../components/Callout'
 
 # Command-Line Reference
 
@@ -448,6 +448,10 @@ turbo run build -vvv
 ## `turbo prune --scope=<target>`
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target package.
+
+<Callout>
+  This command is not yet implemented for `npm` or `pnpm`.
+</Callout>
 
 This command will generate folder called `out` with the following inside of it:
 

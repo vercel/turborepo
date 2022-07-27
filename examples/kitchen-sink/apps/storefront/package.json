@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "start": "next start ",
+    "clean": "rm -rf .next",
     "dev": "next dev -p 3002",
     "lint": "TIMING=1 next lint",
-    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf .next"
+    "start": "next start "
   },
   "dependencies": {
     "logger": "*",
@@ -21,8 +21,6 @@
     "@types/node": "^17.0.12",
     "@types/react": "^17.0.13",
     "@types/react-dom": "^17.0.8",
-    "scripts": "*",
-    "jest": "^26.6.3",
     "eslint-config-custom": "*",
     "tsconfig": "*",
     "typescript": "^4.5.3"
