@@ -13,7 +13,7 @@ import Callout from '../../components/Callout'
 
 <div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Thursday, July 28th, 2022</div>
 
-<Authors authors={[ 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev' ]} />
+<Authors authors={[ 'anthonyshewdev', 'gsoltis', 'nathanhammond', 'tknickman' ]} />
 Turborepo 1.4 lays the foundation for the future of Turborepo. We have a long list of things we want to bring you – but all of them require the existence of *one thing*.
 
 ## Our journey towards instant builds
@@ -99,19 +99,23 @@ Unsupervised processes are wasteful and the majority of the code that was added 
 
 ## New examples
 
-Over the past month we’ve invested a lot of time in [creating new examples for how to integrate Turborepo into your workflow](https://github.com/vercel/turborepo/tree/main/examples), featuring:
+Over the past month we’ve invested a lot of time in creating new examples for how to integrate Turborepo into your workflow, featuring:
 
-- Svelte
-- Docker
-- Create React App
-- React Native
-- Prisma
-- Remix
-- … and more!
+- [Svelte](https://github.com/vercel/turborepo/tree/main/examples/with-svelte)
+- [Docker](https://github.com/vercel/turborepo/tree/main/examples/with-docker)
+- [Create React App](https://github.com/vercel/turborepo/tree/main/examples/with-create-react-app)
+- [React Native](https://github.com/vercel/turborepo/tree/main/examples/with-react-native-web)
+- [Prisma](https://github.com/vercel/turborepo/tree/main/examples/with-prisma)
+- [Tailwind](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind)
+- … [and more!](https://github.com/vercel/turborepo/tree/main/examples)
 
 ## Automatic environment variable inclusion
 
-One of the easiest mistakes to make when setting up Turborepo is accidentally omitting an important environment variable resulting in reusing a cache somewhere you didn't expect. Turborepo now has your back and will detect commonly used environment variables to help you avoid this problem. We've included support for the following tools and frameworks: Astro, Blitz, Create React App, Gatsby, Next.js, Nuxt, RedwoodJS, Sanity, Solid, SvelteKit, Vite, Vue.js.
+One of the easiest mistakes to make when setting up Turborepo is accidentally omitting an important environment variable resulting in reusing a cache somewhere you didn't expect. Turborepo now has your back and will detect commonly used environment variables to help you avoid this problem. We already include support for the following tools and frameworks: Astro, Blitz, Create React App, Gatsby, Next.js, Nuxt, RedwoodJS, Sanity, Solid, SvelteKit, Vite, and Vue.js.
+
+`turbo` searches through system environment variables at runtime and prefix matches variable names that we know are associated to these frameworks, for example `NEXT_PUBLIC_`. [The list of environment variables we inspect are located here.](https://github.com/vercel/turborepo/blob/222d2c1a1b846b309c33a20924922baf51d10431/cli/internal/env/env.go#L13-L23)
+
+[You can learn more about about configuring environment variables with Turborepo in our documentation.](https://turborepo.org/docs/core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
 
 ## Other bug fixes and improvements
 
