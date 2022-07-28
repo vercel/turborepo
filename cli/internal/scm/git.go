@@ -43,8 +43,11 @@ func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked 
 			// Check if we can provide a better error message for non-existent commits.
 			// If we error on the check or can't find it, fall back to whatever error git
 			// reported.
-			if exists, err := commitExists(fromCommit); err == nil && !exists {
-				return nil, fmt.Errorf("commit %v does not exist", fromCommit)
+			if fromExists, err := commitExists(fromCommit); err == nil && !fromExists {
+				return nil, fmt.Errorf("from commit %v does not exist", fromCommit)
+			}
+			if toExists, err := commitExists(toCommit); err == nil && !toExists {
+				return nil, fmt.Errorf("to commit %v does not exist", toCommit)
 			}
 			return nil, errors.Wrapf(err, "git comparing with %v", fromCommit)
 		}
