@@ -37,7 +37,7 @@ const basicPipeline = {
 process.env.TURBO_TOKEN = "";
 
 let suites = [];
-for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
@@ -111,7 +111,7 @@ const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "berry" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm6" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {
@@ -539,13 +539,15 @@ function runSmokeTests<T>(
   }
 }
 
-type PackageManager = "yarn" | "pnpm" | "npm" | "berry";
+type PackageManager = "yarn" | "pnpm6" | "pnpm" | "npm" | "berry";
 
 // getLockfileForPackageManager returns the name of the lockfile for the given package manager
 function getLockfileForPackageManager(ws: PackageManager) {
   switch (ws) {
     case "yarn":
       return "yarn.lock";
+    case "pnpm6":
+      return "pnpm-lock.yaml";
     case "pnpm":
       return "pnpm-lock.yaml";
     case "npm":
