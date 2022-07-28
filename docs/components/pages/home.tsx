@@ -21,10 +21,10 @@ import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
 import Features from "../Features";
 import { Marquee } from "../clients/Marquee";
-import { usePrefersReducedMotion } from "../usePrefersReducedMotion";
 import { Client } from "../clients/Client";
 import { users } from "../clients/users";
 import { useTheme } from "next-themes";
+
 const pinnedLogos = users.filter((p) => p.pinned);
 
 export default function Home() {
@@ -33,7 +33,6 @@ export default function Home() {
     toast.success("Copied to clipboard");
   };
   const { theme } = useTheme();
-  const prefersReducedMotion = usePrefersReducedMotion();
   return (
     <>
       <Head>
@@ -81,36 +80,19 @@ export default function Home() {
           <p className="pb-8 text-sm font-semibold tracking-wide text-center text-gray-400 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
-
-          {!prefersReducedMotion ? (
-            <Marquee>
-              {pinnedLogos.map(({ caption, infoLink, image, style }, index) => (
-                <Client
-                  className="mx-8 align-middle opacity-75"
-                  key={caption}
-                  style={style}
-                  theme={theme}
-                  name={caption}
-                  image={image}
-                  priority={index < 9}
-                />
-              ))}
-            </Marquee>
-          ) : (
-            <div className="container grid grid-cols-4 gap-12 mx-auto sm:grid-cols-5 md:grid-cols-8">
-              {pinnedLogos.slice(0, 8).map(({ caption, image, style }) => (
-                <Client
-                  className="mx-auto text-center align-middle "
-                  key={caption}
-                  style={style}
-                  name={caption}
-                  theme={theme}
-                  image={image}
-                  priority={true}
-                />
-              ))}
-            </div>
-          )}
+          <Marquee>
+            {pinnedLogos.map(({ caption, infoLink, image, style }, index) => (
+              <Client
+                className="mx-8 align-middle opacity-75"
+                key={caption}
+                style={style}
+                theme={theme}
+                name={caption}
+                image={image}
+                priority={index < 9}
+              />
+            ))}
+          </Marquee>
         </div>
       </div>
 
