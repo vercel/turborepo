@@ -1,10 +1,14 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: ["main"]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, edited, synchronize]
 
 jobs:
   build:
@@ -12,6 +16,7 @@ jobs:
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
@@ -27,6 +32,17 @@ jobs:
           go-version: 1.18.0
           cache: true
           cache-dependency-path: cli/go.sum
+
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
       - uses: pnpm/action-setup@v2.2.2
         with:
@@ -47,12 +63,12 @@ jobs:
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
 
-
   examples:
     name: run examples
     timeout-minutes: 15
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
@@ -88,15 +104,32 @@ jobs:
           cache: true
           cache-dependency-path: cli/go.sum
 
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+
       - uses: pnpm/action-setup@v2.2.2
         with:
           version: 7.2.1
+
+      - name: Make sure pnpm always has a cache
+        shell: bash
+        run: |
+          mkdir -p `pnpm store path`
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
           node-version: 16
-          cache: pnpm
+          cache: ${{matrix.manager}}
+          cache-dependency-path: package.json
 
       - name: Check ${{matrix.example}} example with ${{ matrix.manager }}
         shell: bash

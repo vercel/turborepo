@@ -5,8 +5,6 @@ package taskhash
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -14,8 +12,10 @@ import (
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
+	"github.com/vercel/turborepo/cli/internal/env"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/nodes"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -94,8 +94,8 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) 
 	return hashOfFiles, nil
 }
 
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[string]string, error) {
-	hashObject := make(map[string]string)
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
 	ignore, err := safeCompileIgnoreFile(rootPath.Join(".gitignore").ToString())
@@ -114,14 +114,15 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 	}
 
 	pathPrefix := rootPath.Join(pkg.Dir).ToString()
-	toTrim := filepath.FromSlash(pathPrefix + "/")
+	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
-		rootMatch := ignore.MatchesPath(name)
-		otherMatch := ignorePkg.MatchesPath(name)
+		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
+		rootMatch := ignore.MatchesPath(convertedName.ToString())
+		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
 		if !rootMatch && !otherMatch {
 			if !isDir {
 				if includePattern != "" {
-					val, err := doublestar.PathMatch(includePattern, name)
+					val, err := doublestar.PathMatch(includePattern, convertedName.ToString())
 					if err != nil {
 						return err
 					}
@@ -129,11 +130,16 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 						return nil
 					}
 				}
-				hash, err := fs.GitLikeHashFile(name)
+				hash, err := fs.GitLikeHashFile(convertedName.ToString())
 				if err != nil {
-					return fmt.Errorf("could not hash file %v. \n%w", name, err)
+					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
 				}
-				hashObject[strings.TrimPrefix(name, toTrim)] = hash
+
+				relativePath, err := convertedName.RelativeTo(convertedPathPrefix)
+				if err != nil {
+					return fmt.Errorf("File path cannot be made relative: %w", err)
+				}
+				hashObject[relativePath.ToUnixPath()] = hash
 			}
 		}
 		return nil
@@ -252,12 +258,8 @@ func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Se
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
+	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
 	outputs := pt.HashableOutputs()
-	hashableEnvPairs := []string{}
-	for _, envVar := range pt.TaskDefinition.EnvVarDependencies {
-		hashableEnvPairs = append(hashableEnvPairs, fmt.Sprintf("%v=%v", envVar, os.Getenv(envVar)))
-	}
-	sort.Strings(hashableEnvPairs)
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
 		return "", err

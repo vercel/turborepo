@@ -2,6 +2,7 @@ package runcache
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +31,7 @@ type Opts struct {
 	SkipWrites             bool
 	TaskOutputModeOverride *util.TaskOutputMode
 	LogReplayer            LogReplayer
+	OutputWatcher          OutputWatcher
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
@@ -108,6 +110,7 @@ type RunCache struct {
 	writesDisabled         bool
 	repoRoot               fs.AbsolutePath
 	logReplayer            LogReplayer
+	outputWatcher          OutputWatcher
 	colorCache             *colorcache.ColorCache
 }
 
@@ -120,10 +123,14 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *col
 		writesDisabled:         opts.SkipWrites,
 		repoRoot:               repoRoot,
 		logReplayer:            opts.LogReplayer,
+		outputWatcher:          opts.OutputWatcher,
 		colorCache:             colorCache,
 	}
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
+	}
+	if rc.outputWatcher == nil {
+		rc.outputWatcher = &NoOpOutputWatcher{}
 	}
 	return rc
 }
@@ -142,25 +149,41 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
-func (tc TaskCache) RestoreOutputs(terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
 	}
-
-	// TODO(gsoltis): check if we need to restore goes here
-	// That will be an opportunity to prune down the set of outputs as well
-	hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, tc.repoRelativeGlobs)
+	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs)
 	if err != nil {
-		return false, err
-	} else if !hit {
-		if tc.taskOutputMode != util.NoTaskOutput {
-			terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
-		}
-		return false, nil
+		logger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
+		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
+		changedOutputGlobs = tc.repoRelativeGlobs
 	}
+	hasChangedOutputs := len(changedOutputGlobs) > 0
+	if hasChangedOutputs {
+		// Note that we currently don't use the output globs when restoring, but we could in the
+		// future to avoid doing unnecessary file I/O
+		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
+		if err != nil {
+			return false, err
+		} else if !hit {
+			if tc.taskOutputMode != util.NoTaskOutput {
+				terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
+			}
+			return false, nil
+		}
+		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
+			// Don't fail the whole operation just because we failed to watch the outputs
+			logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
+			terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+		}
+	} else {
+		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+	}
+
 	switch tc.taskOutputMode {
 	// When only showing new task output, cached output should only show the computed hash
 	case util.NewTaskOutput:
@@ -239,7 +262,7 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 var _emptyIgnore []string
 
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
-func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration int) error {
+func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nil
 	}
@@ -263,7 +286,17 @@ func (tc TaskCache) SaveOutputs(logger hclog.Logger, terminal cli.Ui, duration i
 		relativePaths[index] = relativePath
 	}
 
-	return tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths)
+	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths); err != nil {
+		return err
+	}
+	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
+	if err != nil {
+		// Don't fail the cache write because we also failed to record it, we will just do
+		// extra I/O in the future restoring files that haven't changed from cache
+		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
+		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+	}
+	return nil
 }
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific

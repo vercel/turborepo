@@ -57,13 +57,14 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			apiClient := config.NewClient()
 			link := &link{
 				ui:                  ui,
 				logger:              config.Logger,
 				cwd:                 config.Cwd,
 				modifyGitIgnore:     !dontModifyGitIgnore,
 				apiURL:              config.ApiUrl,
-				apiClient:           config.ApiClient,
+				apiClient:           apiClient,
 				promptSetup:         promptSetup,
 				promptTeam:          promptTeam,
 				promptEnableCaching: promptEnableCaching,

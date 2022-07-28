@@ -3,15 +3,19 @@ module github.com/vercel/turborepo/cli
 go 1.18
 
 require (
-	github.com/AlecAivazis/survey/v2 v2.2.12
+	github.com/AlecAivazis/survey/v2 v2.3.5
 	github.com/Masterminds/semver v1.5.0
 	github.com/adrg/xdg v0.3.3
 	github.com/briandowns/spinner v1.18.1
+	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.13.0
+	github.com/fsnotify/fsevents v0.1.1
+	github.com/fsnotify/fsnotify v1.5.4
 	github.com/gobwas/glob v0.2.3
 	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
 	github.com/google/uuid v1.3.0
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-gatedio v0.5.0
 	github.com/hashicorp/go-hclog v1.2.1
 	github.com/hashicorp/go-retryablehttp v0.6.8
@@ -21,14 +25,18 @@ require (
 	github.com/mitchellh/cli v1.1.2
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mitchellh/mapstructure v1.4.3
+	github.com/nightlyone/lockfile v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/pyr-sh/dag v1.0.0
 	github.com/sabhiram/go-gitignore v0.0.0-20201211210132-54b8a0bf510f
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.2
+	github.com/yookoala/realpath v1.0.0
 	github.com/yosuke-furukawa/json5 v0.1.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	google.golang.org/grpc v1.46.0
+	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.2.0
 )
@@ -39,6 +47,7 @@ require (
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -56,8 +65,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
+	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d // indirect
 	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6 // indirect
-	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
+	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
 	golang.org/x/text v0.3.7 // indirect
+	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 )

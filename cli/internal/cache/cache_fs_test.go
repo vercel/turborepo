@@ -87,6 +87,8 @@ func TestPut(t *testing.T) {
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
 
 	files := []string{
+		filepath.Join(src, filepath.FromSlash("/")),            // src
+		filepath.Join(src, filepath.FromSlash("child/")),       // childDir
 		filepath.Join(src, filepath.FromSlash("child/a")),      // aPath,
 		filepath.Join(src, "b"),                                // bPath,
 		filepath.Join(src, filepath.FromSlash("child/link")),   // srcLinkPath,
@@ -95,9 +97,16 @@ func TestPut(t *testing.T) {
 
 	dst := subdirForTest(t)
 	dr := &dummyRecorder{}
+
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+
 	cache := &fsCache{
 		cacheDirectory: dst,
 		recorder:       dr,
+		repoRoot:       defaultCwd,
 	}
 
 	hash := "the-hash"
@@ -187,9 +196,16 @@ func TestFetch(t *testing.T) {
 	assert.NilError(t, err, "WriteFile")
 
 	dr := &dummyRecorder{}
+
+	defaultCwd, err := fs.GetCwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+
 	cache := &fsCache{
 		cacheDirectory: cacheDir,
 		recorder:       dr,
+		repoRoot:       defaultCwd,
 	}
 
 	dstOutputPath := "some-package"

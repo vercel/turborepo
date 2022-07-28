@@ -6,15 +6,13 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "clean": "turbo run clean",
     "dev": "turbo run dev --no-cache --parallel --continue",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "postinstall": "patch-package"
+    "lint": "turbo run lint",
+    "test": "turbo run test"
   },
   "devDependencies": {
-    "patch-package": "^6.4.7",
     "prettier": "^2.5.1",
     "turbo": "latest"
   }

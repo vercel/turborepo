@@ -3,7 +3,7 @@ title: Filtering Packages
 description: Only build the packages you care about
 ---
 
-import Callout from "../../../components/callout";
+import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Filtering Packages
@@ -88,7 +88,8 @@ turbo run build --filter=...{./libs/*}
 
 Use the set of files changed since a specified commit to calculate packages. Enclose references in
 `[]`. For example, `--filter=[HEAD^1]` will select all packages that have changed in the most recent
-commit.
+commit. If you need to check a specific range of commits, rather than comparing to `HEAD`, you can set
+both ends of the comparison via `[<from commit>...<to commit>]`.
 
 You can use [`--ignore`](/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which packages have changed.
 
@@ -105,6 +106,8 @@ turbo run build --filter=...[origin/my-feature]
 turbo run build --filter=@foo/bar...[HEAD^1]
 # Test each package in the '@scope' scope that is in the 'packages' directory, if it has changed in the last commit
 turbo run test --filter=@scope/*{./packages/*}[HEAD^1]
+# Test each package that changed between 'main' and 'my-feature'
+turbo run test --filter=[main...my-feature]
 ```
 
 ### Excluding packages

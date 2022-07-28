@@ -9,6 +9,64 @@ import (
 	"gotest.tools/v3/fs"
 )
 
+func TestCopyFile(t *testing.T) {
+	srcFilePath := AbsolutePath(filepath.Join(t.TempDir(), "src"))
+	destFilePath := AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	from := &LstatCachedFile{Path: srcFilePath}
+
+	// The src file doesn't exist, will error.
+	err := CopyFile(from, destFilePath.ToString())
+	assert.ErrorType(t, err, &os.PathError{}, "Source file doesn't exist, should error.")
+
+	// Create the src file.
+	srcFile, err := srcFilePath.Create()
+	assert.NilError(t, err, "Create")
+	_, err = srcFile.WriteString("src")
+	assert.NilError(t, err, "WriteString")
+	assert.NilError(t, srcFile.Close(), "Close")
+
+	// Copy the src to the dest.
+	err = CopyFile(from, destFilePath.ToString())
+	assert.NilError(t, err, "src exists dest does not, should not error.")
+
+	// Now test for symlinks.
+	symlinkSrcPath := AbsolutePath(filepath.Join(t.TempDir(), "symlink"))
+	symlinkTargetPath := AbsolutePath(filepath.Join(t.TempDir(), "target"))
+	symlinkDestPath := AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	fromSymlink := &LstatCachedFile{Path: symlinkSrcPath}
+
+	// Create the symlink target.
+	symlinkTargetFile, err := symlinkTargetPath.Create()
+	assert.NilError(t, err, "Create")
+	_, err = symlinkTargetFile.WriteString("Target")
+	assert.NilError(t, err, "WriteString")
+	assert.NilError(t, symlinkTargetFile.Close(), "Close")
+
+	// Link things up.
+	err = symlinkSrcPath.Symlink(symlinkTargetPath.ToString())
+	assert.NilError(t, err, "Symlink")
+
+	// Run the test.
+	err = CopyFile(fromSymlink, symlinkDestPath.ToString())
+	assert.NilError(t, err, "Copying a valid symlink does not error.")
+
+	// Break the symlink.
+	err = symlinkTargetPath.Remove()
+	assert.NilError(t, err, "breaking the symlink")
+
+	// Remove the existing copy.
+	err = symlinkDestPath.Remove()
+	assert.NilError(t, err, "existing copy is removed")
+
+	// Try copying the now-broken symlink.
+	err = CopyFile(fromSymlink, symlinkDestPath.ToString())
+	assert.NilError(t, err, "Broken symlink, should not error.")
+
+	// Confirm that it didn't create anything.
+	_, err = symlinkDestPath.Lstat()
+	assert.ErrorType(t, err, &os.PathError{}, "Copying a broken symlink should mean the destination doesn't exist.")
+}
+
 func TestCopyOrLinkFile(t *testing.T) {
 	// Directory layout:
 	//
@@ -18,13 +76,12 @@ func TestCopyOrLinkFile(t *testing.T) {
 	dst := fs.NewDir(t, "copy-or-link-dist")
 	srcFilePath := filepath.Join(src.Path(), "foo")
 	dstFilePath := filepath.Join(dst.Path(), "foo")
-	srcFile, err := os.Create(srcFilePath)
+	_, err := os.Create(srcFilePath)
 	assert.NilError(t, err, "Create")
-	stat, err := srcFile.Stat()
 	assert.NilError(t, err, "Stat")
 	shouldLink := true
 	shouldFallback := false
-	err = CopyOrLinkFile(srcFilePath, dstFilePath, stat.Mode(), stat.Mode(), shouldLink, shouldFallback)
+	err = CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath, shouldLink, shouldFallback)
 	assert.NilError(t, err, "CopyOrLinkFile")
 	sameFile, err := SameFile(srcFilePath, dstFilePath)
 	assert.NilError(t, err, "SameFile")
@@ -41,9 +98,8 @@ func TestCopyOrLinkFile(t *testing.T) {
 	dstLinkPath := filepath.Join(dst.Path(), "foo-ptr")
 	err = os.Symlink("foo", srcLinkPath)
 	assert.NilError(t, err, "SymLink")
-	stat, err = os.Lstat(srcLinkPath)
 	assert.NilError(t, err, "Lstat")
-	err = CopyOrLinkFile(srcLinkPath, dstLinkPath, stat.Mode(), stat.Mode(), shouldLink, shouldFallback)
+	err = CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(srcLinkPath)}, dstLinkPath, shouldLink, shouldFallback)
 	if err != nil {
 		t.Fatalf("CopyOrLinkFile %v", err)
 	}
@@ -52,6 +108,34 @@ func TestCopyOrLinkFile(t *testing.T) {
 	if linkDst != "foo" {
 		t.Errorf("Readlink(dstLinkPath) got %v, want foo", linkDst)
 	}
+}
+
+func TestCopyOrLinkFileWithPerms(t *testing.T) {
+	// Directory layout:
+	//
+	// <src>/
+	//   foo
+	readonlyMode := os.FileMode(0444)
+	src := fs.NewDir(t, "copy-or-link")
+	dst := fs.NewDir(t, "copy-or-link-dist")
+	srcFilePath := filepath.Join(src.Path(), "foo")
+	dstFilePath := filepath.Join(dst.Path(), "foo")
+	srcFile, err := os.Create(srcFilePath)
+	assert.NilError(t, err, "Create")
+	err = srcFile.Chmod(readonlyMode)
+	assert.NilError(t, err, "Chmod")
+	shouldLink := false
+	shouldFallback := false
+	err = CopyOrLinkFile(&LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath, shouldLink, shouldFallback)
+	assert.NilError(t, err, "CopyOrLinkFile")
+	sameFile, err := SameFile(srcFilePath, dstFilePath)
+	assert.NilError(t, err, "SameFile")
+	if sameFile {
+		t.Errorf("SameFile(%v, %v) got true, want false", srcFilePath, dstFilePath)
+	}
+	info, err := os.Lstat(dstFilePath)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, info.Mode(), readonlyMode, "expected dest to have matching permissions")
 }
 
 func TestRecursiveCopyOrLinkFile(t *testing.T) {
@@ -90,8 +174,7 @@ func TestRecursiveCopyOrLinkFile(t *testing.T) {
 
 	shouldLink := true
 	shouldFallback := false
-	mode := os.ModeDir // TODO(gsoltis): this mode argument seems out of place
-	err = RecursiveCopyOrLinkFile(src.Path(), dst.Path(), mode, shouldLink, shouldFallback)
+	err = RecursiveCopyOrLinkFile(src.Path(), dst.Path(), shouldLink, shouldFallback)
 	assert.NilError(t, err, "RecursiveCopyOrLinkFile")
 
 	dstAPath := filepath.Join(dst.Path(), "child", "a")

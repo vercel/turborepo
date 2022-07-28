@@ -5,7 +5,9 @@
   "sideEffects": false,
   "scripts": {
     "build": "remix build",
-    "dev": "remix dev"
+    "dev": "remix dev",
+    "postinstall": "remix setup node",
+    "start": "remix-serve api/build"
   },
   "dependencies": {
     "@remix-run/node": "^1.5.1",

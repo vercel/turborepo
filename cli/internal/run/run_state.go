@@ -3,15 +3,17 @@ package run
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/vercel/turborepo/cli/internal/chrometracing"
+	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
-	"github.com/google/chrometracing"
 	"github.com/mitchellh/cli"
 )
 
@@ -75,11 +77,12 @@ type RunState struct {
 	Attempted int
 
 	startedAt time.Time
+	config    *config.Config
 }
 
 // NewRunState creates a RunState instance for tracking events during the
 // course of a run.
-func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
+func NewRunState(startedAt time.Time, tracingProfile string, config *config.Config) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
@@ -91,6 +94,7 @@ func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 		state:     make(map[string]*BuildTargetState),
 
 		startedAt: startedAt,
+		config:    config,
 	}
 }
 
@@ -223,12 +227,22 @@ func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuf
 
 func (r *RunState) Close(Ui cli.Ui, filename string) error {
 	outputPath := chrometracing.Path()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
+	// so we have to account for that before converting to AbsolutePath
+	root := fs.AbsolutePathFromUpstream(cwd)
 	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
 	if filename != "" {
 		name = filename
 	}
 	if outputPath != "" {
-		if err := fs.CopyFile(outputPath, name, fs.DirPermissions); err != nil {
+		if err := chrometracing.Close(); err != nil {
+			Ui.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
+		}
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
 			return err
 		}
 	}

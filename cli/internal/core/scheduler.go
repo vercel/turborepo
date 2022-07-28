@@ -98,18 +98,17 @@ func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
-func (p *Scheduler) getPackageAndTask(taskID string) (string, *Task, error) {
-	pkg, taskName := util.GetPackageTaskFromId(taskID)
+func (p *Scheduler) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	if task, ok := p.Tasks[taskID]; ok {
-		return pkg, task, nil
+		return task, nil
 	}
 	if task, ok := p.Tasks[taskName]; ok {
-		return pkg, task, nil
+		return task, nil
 	}
-	return "", nil, errNoTask
+	return nil, errNoTask
 }
 
-func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksOnly bool) error {
+func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -118,11 +117,18 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 
 	traversalQueue := []string{}
 
-	for _, pkg := range scope {
+	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
-		for _, target := range taskNames {
-			if !isRootPkg || p.rootEnabledTasks.Includes(target) {
-				traversalQueue = append(traversalQueue, util.GetTaskId(pkg, target))
+		for _, taskName := range taskNames {
+			if !isRootPkg || p.rootEnabledTasks.Includes(taskName) {
+				taskID := util.GetTaskId(pkg, taskName)
+				if _, err := p.getTaskDefinition(pkg, taskName, taskID); err != nil {
+					// Initial, non-package tasks are not required to exist, as long as some
+					// package in the list packages defines it as a package-task. Dependencies
+					// *are* required to have a definition.
+					continue
+				}
+				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
 	}
@@ -132,12 +138,12 @@ func (p *Scheduler) generateTaskGraph(scope []string, taskNames []string, tasksO
 	for len(traversalQueue) > 0 {
 		taskId := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
-		pkg, task, err := p.getPackageAndTask(taskId)
-		if errors.Is(err, errNoTask) {
-			// If there is no general definition for this task, it must be a
-			// package task, and so only that package needs to be traversed.
-			continue
-		} else if err != nil {
+		pkg, taskName := util.GetPackageTaskFromId(taskId)
+		if pkg == util.RootPkgName && !p.rootEnabledTasks.Includes(taskName) {
+			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskId)
+		}
+		task, err := p.getTaskDefinition(pkg, taskName, taskId)
+		if err != nil {
 			return err
 		}
 		if !visited.Includes(taskId) {
@@ -240,7 +246,7 @@ func (p *Scheduler) AddTask(task *Task) *Scheduler {
 
 func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
-	if fromPkg != ROOT_NODE_NAME && !p.TopologicGraph.HasVertex(fromPkg) {
+	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !p.TopologicGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
 	}
 	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
