@@ -9,6 +9,10 @@ env:
   CARGO_PROFILE_RELEASE_LTO: true
   RUST_BACKTRACE: 1
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{  github.event_name == 'pull_request' }}
+
 jobs:
   bench:
     runs-on: ubuntu-latest
