@@ -14,7 +14,15 @@ import Callout from '../../components/Callout'
 <div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Thursday, July 28th, 2022</div>
 
 <Authors authors={[ 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', ]} />
-Turborepo 1.4 lays the foundation for the future of Turborepo. We have a long list of things we want to bring you—but all of them require the existence of *one thing*.
+
+With Turborepo 1.4 we are bringing improved caching and flexibility which includes:
+
+- [**Restricted hash inputs:**](#pipeline-inputs) Specify the files in a package folder that impact caching with `inputs`.
+- [**Root script running and caching:**](#run-and-cache-scripts-from-the-root-of-your-monorepo) Run and cache `package.json` scripts from the root of the monorepo.
+- [**New CI/CD Recipes:**](#new-cicd-recipes) We added recipes for using Turborepo with popular CI providers.
+
+Update today by running `npm install turbo@latest`.
+Turborepo 1.4 lays the foundation for the future of Turborepo. We have a long list of things we want to bring you—but all of them require the existence of _one thing_.
 
 ## Our journey towards instant builds
 
@@ -23,8 +31,6 @@ Turborepo aims to make your builds as fast as possible while staying out of your
 But there's a problem: Turborepo handles many file operations—and those add up! For example, it takes .008 milliseconds to `touch` a file (which is a decent approximation of the minimum work to write a file (`fopen`, `fwrite`, `fclose`)). While that seems fast, once your build contains thousands of files those .008 milliseconds start to accumulate quickly.
 
 ![Timing of an execution of touch, demonstrating it taking .008ms to create a file.](/images/blog/turbo-1-4-0/time-dark.png)
-
-Say hello to the Turborepo Agent.
 
 ## The Turborepo Agent
 
