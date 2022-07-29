@@ -29,6 +29,10 @@ const basicPipeline = {
       outputs: ["dist/**"],
       inputs: [],
     },
+    "//#args": {
+      dependsOn: [],
+      outputs: [],
+    },
   },
   globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
 };
@@ -486,6 +490,43 @@ function runSmokeTests<T>(
         ),
         "Rerun of //:special should be cached"
       );
+    }
+  );
+
+  suite(
+    `${npmClient} passes through correct args ${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      const result = getCommandOutputAsArray(
+        repo.turbo(
+          "run",
+          ["args", "--filter=//", "--", "--script-arg=42"],
+          options
+        )
+      );
+      // Find the output logs of the test script
+      const start = result.findIndex((line) => line.includes("//:args: ["));
+      const end = result.findIndex((line) => line.includes("//:args: ]"));
+      assert.ok(
+        start != -1 && end != -1,
+        `Unable to find start or end of '//:arg' output in '${result}'`
+      );
+      const [node, ...args] = result.slice(start + 1, end).map((line) => {
+        const no_task_prefix = line.startsWith("//:args:")
+          ? line.substring("//:args:".length).trim()
+          : line;
+        return no_task_prefix.endsWith(",")
+          ? no_task_prefix.substring(0, no_task_prefix.length - 1)
+          : no_task_prefix;
+      });
+
+      assert.match(
+        node,
+        "node",
+        `Expected node binary path (${node}) to contain 'node'`
+      );
+      assert.equal(args, ["'--script-arg=42'"]);
     }
   );
 

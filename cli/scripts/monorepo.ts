@@ -192,6 +192,7 @@ importers:
           test: `${turboPath} run test`,
           lint: `${turboPath} run lint`,
           special: "echo root task",
+          args: 'node -e "console.log(process.argv)" --',
         },
       },
       "turbo.json": {
