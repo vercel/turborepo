@@ -17,9 +17,23 @@ func setEnvs(envVars []string) {
 	}
 }
 
+// Prefixes for common framework variables that we always include
+var _envVarPrefixes = []string{
+	"GATSBY_",
+	"NEXT_PUBLIC_",
+	"NUXT_ENV_",
+	"PUBLIC_",
+	"REACT_APP_",
+	"REDWOOD_ENV_",
+	"SANITY_STUDIO_",
+	"VITE_",
+	"VUE_APP_",
+}
+
 func TestGetHashableEnvPairs(t *testing.T) {
 	type args struct {
-		envKeys []string
+		envKeys     []string
+		envPrefixes []string
 	}
 	tests := []struct {
 		env  []string
@@ -31,7 +45,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers"},
 			name: "no framework env vars, no env values",
 			args: args{
-				envKeys: []string{"myval"},
+				envKeys:     []string{"myval"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"myval="},
 		},
@@ -39,7 +54,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers"},
 			name: "no framework env vars, one env value",
 			args: args{
-				envKeys: []string{"lowercase"},
+				envKeys:     []string{"lowercase"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"lowercase=stillcool"},
 		},
@@ -47,7 +63,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "lowercase=notcool"},
 			name: "no framework env vars, duplicate env value",
 			args: args{
-				envKeys: []string{"lowercase"},
+				envKeys:     []string{"lowercase"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"lowercase=notcool"},
 		},
@@ -55,7 +72,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers"},
 			name: "no framework env vars, multiple env values",
 			args: args{
-				envKeys: []string{"lowercase", "MY_TEST_VAR"},
+				envKeys:     []string{"lowercase", "MY_TEST_VAR"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"MY_TEST_VAR=cool", "lowercase=stillcool"},
 		},
@@ -63,7 +81,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers", "NEXT_PUBLIC_MY_COOL_VAR=cool"},
 			name: "one framework env var, multiple env values",
 			args: args{
-				envKeys: []string{"lowercase", "MY_TEST_VAR"},
+				envKeys:     []string{"lowercase", "MY_TEST_VAR"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"MY_TEST_VAR=cool", "NEXT_PUBLIC_MY_COOL_VAR=cool", "lowercase=stillcool"},
 		},
@@ -71,7 +90,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
 			name: "duplicate framework env var and env values",
 			args: args{
-				envKeys: []string{"NEXT_PUBLIC_MY_COOL_VAR"},
+				envKeys:     []string{"NEXT_PUBLIC_MY_COOL_VAR"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
 		},
@@ -79,7 +99,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"a=1", "b=2", "c=3", "PUBLIC_myvar=4"},
 			name: "sorts correctly",
 			args: args{
-				envKeys: []string{"a", "b", "c"},
+				envKeys:     []string{"a", "b", "c"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"PUBLIC_myvar=4", "a=1", "b=2", "c=3"},
 		},
@@ -87,7 +108,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"a=1=2", "NEXT_PUBLIC_VALUE_TEST=do=not=do=this"},
 			name: "parses env values correctly",
 			args: args{
-				envKeys: []string{"a"},
+				envKeys:     []string{"a"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"NEXT_PUBLIC_VALUE_TEST=do=not=do=this", "a=1=2"},
 		},
@@ -95,7 +117,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"a=1", "NEXT_PUBLIC_=weird"},
 			name: "parses prefix with no ending",
 			args: args{
-				envKeys: []string{"a"},
+				envKeys:     []string{"a"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"NEXT_PUBLIC_=weird", "a=1"},
 		},
@@ -103,7 +126,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"NEXT_PUBLIC_EMOJI=😋"},
 			name: "parses unicode env value",
 			args: args{
-				envKeys: []string{},
+				envKeys:     []string{},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"NEXT_PUBLIC_EMOJI=😋"},
 		},
@@ -111,7 +135,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			env:  []string{"zero=0", "null=null", "nil=nil"},
 			name: "parses corner case env values",
 			args: args{
-				envKeys: []string{"zero", "null", "nil"},
+				envKeys:     []string{"zero", "null", "nil"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"nil=nil", "null=null", "zero=0"},
 		},
@@ -127,7 +152,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				"VUE_APP_custom=VUE_APP"},
 			name: "all framework vars with no env keys",
 			args: args{
-				envKeys: []string{},
+				envKeys:     []string{},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"GATSBY_custom=GATSBY",
 				"NEXT_PUBLIC_custom=NEXT_PUBLIC",
@@ -155,7 +181,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				"VUE_APP_custom=VUE_APP"},
 			name: "all framework vars with env keys",
 			args: args{
-				envKeys: []string{"FINAL", "CUSTOM", "ANOTHER"},
+				envKeys:     []string{"FINAL", "CUSTOM", "ANOTHER"},
+				envPrefixes: _envVarPrefixes,
 			},
 			want: []string{"ANOTHER=neat", "CUSTOM=cool", "FINAL=great", "GATSBY_custom=GATSBY",
 				"NEXT_PUBLIC_custom=NEXT_PUBLIC",
@@ -173,7 +200,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			// set the env vars
 			setEnvs(tt.env)
 			// test
-			if got := GetHashableEnvPairs(tt.args.envKeys); !reflect.DeepEqual(got, tt.want) {
+			if got := GetHashableEnvPairs(tt.args.envKeys, tt.args.envPrefixes); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetHashableEnvPairs() = %v, want %v", got, tt.want)
 			}
 			// clean up the env for the next run
