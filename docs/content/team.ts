@@ -29,11 +29,6 @@ const TURBO_TEAM = {
     twitterUsername: "tknickman",
     picture: "/images/people/tknickman.jpeg",
   },
-  anthonyshewdev: {
-    name: "Anthony Shew",
-    twitterUsername: "anthonyshewdev",
-    picture: "/images/people/anthonyshewdev.png",
-  },
 };
 
 export type Author = keyof typeof TURBO_TEAM;
