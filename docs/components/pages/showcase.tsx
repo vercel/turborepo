@@ -11,30 +11,44 @@ export default function Showcase() {
   const showcase = users
     .filter((p) => p.pinned)
     .map((user, index) => (
-      <Image
+      <a
+        href={user.infoLink}
         key={`${user.infoLink}-${theme}-${index}-light`}
-        src={user.image.replace("/logos", "/logos/color")}
-        alt={user.caption}
-        width={user.style?.width ?? 100}
-        height={75}
-        style={{ width: "auto" }}
-        priority={true}
+        target="_blank"
+        rel="noopener noreferrer"
         className="flex justify-center item-center dark:hidden"
-      />
+      >
+        <Image
+          src={user.image.replace("/logos", "/logos/color")}
+          alt={user.caption}
+          width={user.style?.width ?? 100}
+          height={75}
+          priority={true}
+          className="inline w-auto"
+        />
+      </a>
     ));
+
   const showcaseLight = users
     .filter((p) => p.pinned)
     .map((user, index) => (
-      <Image
+      <a
+        href={user.infoLink}
         key={`${user.infoLink}-${theme}-${index}-dark`}
-        src={user.image.replace("/logos", "/logos/white")}
-        alt={user.caption}
-        width={user.style?.width ?? 100}
-        height={75}
-        style={{ width: "auto" }}
-        priority={true}
+        target="_blank"
+        rel="noopener noreferrer"
         className="justify-center hidden item-center dark:flex"
-      />
+      >
+        <Image
+          key={`${user.infoLink}-${theme}-${index}-dark`}
+          src={user.image.replace("/logos", "/logos/white")}
+          alt={user.caption}
+          width={user.style?.width ?? 100}
+          height={75}
+          priority={true}
+          className="inline w-auto"
+        />
+      </a>
     ));
   return (
     <>
