@@ -194,6 +194,42 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				"VITE_custom=VITE",
 				"VUE_APP_custom=VUE_APP"},
 		},
+		{
+			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
+			name: "No framework detected, has framework env vars",
+			args: args{
+				envKeys:     []string{},
+				envPrefixes: []string{},
+			},
+			want: []string{},
+		},
+		{
+			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
+			name: "Framework detected, has framework env vars",
+			args: args{
+				envKeys:     []string{},
+				envPrefixes: []string{"NEXT_PUBLIC_"},
+			},
+			want: []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
+		},
+		{
+			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool", "MANUAL=true"},
+			name: "Framework detected, has framework env vars, and manually specified key",
+			args: args{
+				envKeys:     []string{"MANUAL"},
+				envPrefixes: []string{"NEXT_PUBLIC_"},
+			},
+			want: []string{"MANUAL=true", "NEXT_PUBLIC_MY_COOL_VAR=cool"},
+		},
+		{
+			env:  []string{"MANUAL=true"},
+			name: "Framework not detected, has no framework env vars, and manually specified key",
+			args: args{
+				envKeys:     []string{"MANUAL"},
+				envPrefixes: []string{},
+			},
+			want: []string{"MANUAL=true"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
