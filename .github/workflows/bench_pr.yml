@@ -26,43 +26,9 @@ jobs:
         with:
           key: benchmark
 
-      - name: Run cargo build benches (main)
-        uses: actions-rs/cargo@v1
-        continue-on-error: true
+      - uses: boa-dev/criterion-compare-action@v3.2.2
         with:
-          command: build
-          args: --benches --release
-
-      - name: Run cargo bench (main)
-        uses: actions-rs/cargo@v1
-        continue-on-error: true
-        with:
-          command: bench
-          args: -- --save-baseline=main
-
-      - uses: actions/checkout@v3
-        with:
-          clean: false
-
-      - name: Run cargo build benches (PR)
-        uses: actions-rs/cargo@v1
-        continue-on-error: true
-        with:
-          command: build
-          args: --benches --release
-
-      - name: Run cargo bench (PR)
-        uses: actions-rs/cargo@v1
-        continue-on-error: true
-        with:
-          command: bench
-          args: -- --save-baseline=pr
-
-      - name: Show results
-        uses: actions-rs/cargo@v1
-        with:
-          command: bench
-          args: -- --load-baseline=pr --baseline=main
+          branchName: ${{ github.base_ref }}
 
       - name: Upload report
         if: always()
