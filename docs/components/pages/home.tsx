@@ -81,7 +81,7 @@ export default function Home() {
             Trusted by teams from around the world
           </p>
           <Marquee>
-            {pinnedLogos.map(({ caption, infoLink, image, style }, index) => (
+            {pinnedLogos.map(({ caption, image, style }) => (
               <Client
                 className="mx-8 align-middle opacity-75"
                 key={caption}
@@ -89,7 +89,7 @@ export default function Home() {
                 theme={theme}
                 name={caption}
                 image={image}
-                priority={index < 9}
+                priority={true}
               />
             ))}
           </Marquee>
