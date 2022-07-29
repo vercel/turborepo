@@ -150,6 +150,23 @@ Luckily, you can control `turbo`'s cache fingerprinting (a.k.a. hashing) behavio
   Pro Tip: In most monorepos, you don't often use environment variables in shared packages, but mostly only in applications. Thus, to get higher cache hit rates, you should likely only include environment variables in the app-specific tasks where they are used/inlined.
 </Callout>
 
+### Invisible Environment Variables
+
+Since Turborepo runs _before_ your tasks, it is possible for your tasks to create or mutate environment variables after `turbo` has already calculated the hash for a particular task. For example, consider this `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "NEXT_PUBLIC_GA_ID=UA-00000000-0 next build",
+    "test": "node -r dotenv/config test.js"
+  }
+}
+```
+
+`turbo`, having calculated a task hash prior to invoking the `build` script, will be unable to discover the `NEXT_PUBLIC_GA_ID=UA-00000000-0` environment variable and thus unable to partition the cache based upon that, or any environment variable configured by `dotenv`.
+
+Be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
+
 ## Force overwrite cache
 
 Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
