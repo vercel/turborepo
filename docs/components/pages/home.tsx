@@ -39,7 +39,7 @@ export default function Home() {
         src={user.image.replace("/logos", "/logos/color")}
         alt={user.caption}
         width={user.style?.width ?? 100}
-        height={user.style?.height ?? 75}
+        height={75}
         style={{ width: "auto" }}
         priority={true}
         className="inline w-auto mx-8 dark:hidden"
