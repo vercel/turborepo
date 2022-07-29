@@ -22,7 +22,7 @@ export default function Showcase() {
         )}
         alt={user.caption}
         width={user.style?.width ?? 100}
-        height={user.style?.height ?? 75}
+        height={75}
         priority={index < 24}
         className="inline w-auto"
       />
