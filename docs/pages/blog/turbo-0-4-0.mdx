@@ -109,9 +109,8 @@ RUN turbo run build --scope=frontend
 
 # Start the app
 FROM builder as runner
-WORKDIR /app/apps/frontend
 EXPOSE 3000
-RUN ['yarn', 'start']
+RUN ['yarn', '--cwd', 'apps/frontend', 'start']
 ```
 
 So what exactly is the output of the `turbo prune`? A folder called `out` with the following inside of it:
