@@ -1,10 +1,9 @@
 import { DuplicateIcon } from "@heroicons/react/outline";
 import copy from "copy-to-clipboard";
 import Head from "next/head";
-import Image from "next/image";
+import Image from "next/future/image";
 import Link from "next/link";
 import toast, { Toaster } from "react-hot-toast";
-
 import edelman from "../../images/edelman.jpeg";
 import elad from "../../images/elad.jpeg";
 import flavio from "../../images/flavio.jpeg";
@@ -21,18 +20,46 @@ import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
 import Features from "../Features";
 import { Marquee } from "../clients/Marquee";
-import { Client } from "../clients/Client";
 import { users } from "../clients/users";
 import { useTheme } from "next-themes";
-
-const pinnedLogos = users.filter((p) => p.pinned);
 
 export default function Home() {
   const onClick = () => {
     copy("npx create-turbo@latest");
     toast.success("Copied to clipboard");
   };
+
   const { theme } = useTheme();
+
+  const showcase = users
+    .filter((p) => p.pinned)
+    .map((user, index) => (
+      <Image
+        key={`${user.infoLink}-${theme}-${index}-light`}
+        src={user.image.replace("/logos", "/logos/color")}
+        alt={user.caption}
+        width={user.style?.width ?? 100}
+        height={user.style?.height ?? 75}
+        style={{ width: "auto" }}
+        priority={true}
+        className="inline w-auto mx-8 dark:hidden"
+      />
+    ));
+  const showcaseLight = users
+    .filter((p) => p.pinned)
+    .map((user, index) => (
+      <Image
+        key={`${user.infoLink}-${theme}-${index}-dark`}
+        src={user.image.replace("/logos", "/logos/white")}
+        alt={user.caption}
+        width={user.style?.width ?? 100}
+        height={user.style?.height ?? 75}
+        style={{ width: "auto" }}
+        priority={true}
+        className="hidden w-auto mx-8 dark:inline"
+      />
+    ));
+
   return (
     <>
       <Head>
@@ -81,17 +108,8 @@ export default function Home() {
             Trusted by teams from around the world
           </p>
           <Marquee>
-            {pinnedLogos.map(({ caption, image, style }) => (
-              <Client
-                className="mx-8 align-middle opacity-75"
-                key={caption}
-                style={style}
-                theme={theme}
-                name={caption}
-                image={image}
-                priority={true}
-              />
-            ))}
+            {showcase}
+            {showcaseLight}
           </Marquee>
         </div>
       </div>
