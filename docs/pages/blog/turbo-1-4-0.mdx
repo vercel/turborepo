@@ -18,26 +18,15 @@ import Callout from '../../components/Callout'
 Turborepo 1.4 lays the foundation for the future of Turborepo.
 
 - [**Automatic variable inclusion:**](#automatic-environment-variable-inclusion) We'll find popular framework environment variables for you. No need to add them yourself.
-- [**New starter examples:**](#new-getting-started-examples) We've added _even more_ starters that the community has requested.
 - [**Turborepo Agent:**](#the-turborepo-agent) A daemon to make your local building experience faster - while you're not even looking.
+- [**New examples:**](#new-examples) We've added _even more_ starters that the community has requested.
+
 
 Update today by running `npm install turbo@latest`.
 
 ## Automatic environment variable inclusion
 
 One of the easiest mistakes to make when setting up Turborepo is accidentally omitting an important environment variable resulting in reusing a cache somewhere you didn't expect. Turborepo now has your back and will detect commonly used environment variables to help you avoid this problem. We already include support for the following tools and frameworks: Astro, Blitz, Create React App, Gatsby, Next.js, Nuxt, RedwoodJS, Sanity, Solid, SvelteKit, Vite, and Vue.js.
-
-## New getting started examples
-
-Over the past month, we've invested a lot of time in creating new examples for how to integrate Turborepo into your workflow, featuring:
-
-- [Svelte](https://github.com/vercel/turborepo/tree/main/examples/with-svelte)
-- [Docker](https://github.com/vercel/turborepo/tree/main/examples/with-docker)
-- [Create React App](https://github.com/vercel/turborepo/tree/main/examples/with-create-react-app)
-- [React Native](https://github.com/vercel/turborepo/tree/main/examples/with-react-native-web)
-- [Prisma](https://github.com/vercel/turborepo/tree/main/examples/with-prisma)
-- [Tailwind](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind)
-- … [and more!](https://github.com/vercel/turborepo/tree/main/examples)
 
 ## Our journey towards instant builds
 
@@ -121,6 +110,18 @@ That interprocess communication uses gRPC and protobufs to give us versioning gu
 `turbo` searches through system environment variables at runtime and prefix matches variable names that we know are associated to these frameworks, for example `NEXT_PUBLIC_`. [The list of environment variables we inspect are located here.](https://github.com/vercel/turborepo/blob/222d2c1a1b846b309c33a20924922baf51d10431/cli/internal/env/env.go#L13-L23)
 
 [You can learn more about about configuring environment variables with Turborepo in our documentation.](https://turborepo.org/docs/core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+
+## New examples
+
+Over the past month, we've invested a lot of time in creating new examples for how to integrate Turborepo into your workflow, featuring:
+
+- [Svelte](https://github.com/vercel/turborepo/tree/main/examples/with-svelte)
+- [Docker](https://github.com/vercel/turborepo/tree/main/examples/with-docker)
+- [Create React App](https://github.com/vercel/turborepo/tree/main/examples/with-create-react-app)
+- [React Native](https://github.com/vercel/turborepo/tree/main/examples/with-react-native-web)
+- [Prisma](https://github.com/vercel/turborepo/tree/main/examples/with-prisma)
+- [Tailwind](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind)
+- … [and more!](https://github.com/vercel/turborepo/tree/main/examples)
 
 ## Other bug fixes and improvements
 
