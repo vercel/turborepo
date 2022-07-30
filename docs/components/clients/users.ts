@@ -138,7 +138,7 @@ export const users = [
     infoLink: "https://hearst.com",
     pinned: true,
     style: {
-      width: 150,
+      width: 175,
     },
   },
   {
