@@ -36,7 +36,7 @@ jobs:
 
       - name: Install musl tools
         run: |
-          wget https://musl.cc/x86_64-linux-musl-native.tgz -O musl.tgz
+          wget https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4011.2.1/x86_64-linux-musl-native.tgz -O musl.tgz
           tar -xvzf musl.tgz
           sudo mv x86_64-linux-musl-native /usr/x86_64-linux-musl
           sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-cc /usr/bin/musl-gcc
