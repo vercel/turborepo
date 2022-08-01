@@ -40,7 +40,7 @@ function dependencyPublished(dependency, version, identifier, iteration = 0) {
   }
 
   setTimeout(() => {
-    const command = `npm view ${dependency}@${identifier} version`;
+    const command = `curl https://registry.npmjs.org/${dependency} | jq -r '.["dist-tags"].${identifier}'`;
     console.log(`Attempt ${iteration}: ${command}`);
     exec(command, (error, stdout) => {
       if (error) {
