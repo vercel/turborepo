@@ -24,12 +24,11 @@ export function ThemedImageFigure(
     >
       <div
         className={cn(
-          "relative inline-block max-w-full overflow-hidden border-box",
+          "relative inline-block max-w-full overflow-hidden border-box text-[0px]",
           {
             "rounded-md": borderRadius,
           }
         )}
-        style={{ fontSize: 0 }}
       >
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <ThemedImage {...rest} />

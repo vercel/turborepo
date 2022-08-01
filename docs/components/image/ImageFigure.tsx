@@ -23,10 +23,7 @@ export function ImageFigure(props: ImageFigureProps): React.ReactNode {
 
   return (
     <figure className="block text-center" style={{ margin: `${margin}px 0` }}>
-      <div
-        className="relative inline-block w-full max-w-full overflow-hidden border-box"
-        style={{ fontSize: 0 }}
-      >
+      <div className="relative inline-block w-full max-w-full overflow-hidden border-box text-[0px]">
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image {...rest} />
       </div>
