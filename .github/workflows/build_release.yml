@@ -51,7 +51,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p node-file-trace --target ${{ matrix.os.target }}
+          args: --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
 
       - uses: actions/upload-artifact@v3
         with:
@@ -59,6 +59,8 @@ jobs:
           path: |
             target/${{ matrix.os.target }}/release/node-file-trace
             target/${{ matrix.os.target }}/release/node-file-trace.exe
+            target/${{ matrix.os.target }}/release/next-dev
+            target/${{ matrix.os.target }}/release/next-dev.exe
 
   publish:
     if: startsWith(github.ref, 'refs/tags/node-file-trace')
