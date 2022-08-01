@@ -250,7 +250,12 @@ export const users = [
       width: 150,
     },
   },
-
+  {
+    caption: "N26",
+    image: "/images/logos/n26.svg",
+    infoLink: "https://n26.com",
+    pinned: true,
+  },
   {
     caption: "Stedi",
     image: "/images/logos/stedi.svg",
@@ -334,11 +339,5 @@ export const users = [
     image: "/images/logos/waggel.svg",
     infoLink: "https://waggel.co.uk",
     pinned: true,
-  },
-  {
-    caption: "N26",
-    image: "/images/logos/n26.svg",
-    infoLink: "https://n26.com",
-    pinned: true,
-  },
+  }
 ];
