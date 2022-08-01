@@ -336,7 +336,9 @@ turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --
 
 #### `--serial`
 
-**Deprecated in v0.5.3:** Use [`--concurrency=1`](#--concurrency) instead.
+<Callout type="error">
+`serial` is deprecated in `0.5.3`.Please use [`--concurrency=1`](#--concurrency) instead.
+</Callout>
 
 Executes all tasks serially (i.e. one-at-a-time).
 
