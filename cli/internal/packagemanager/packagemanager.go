@@ -36,6 +36,10 @@ type PackageManager struct {
 	// The directory in which package assets are stored by the Package Manager.
 	PackageDir string
 
+	// The separator that the Package Manger uses to identify arguments that
+	// should be passed through to the underlying script.
+	ArgSeparator []string
+
 	// Return the list of workspace glob
 	getWorkspaceGlobs func(rootpath fs.AbsolutePath) ([]string, error)
 

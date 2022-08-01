@@ -15,12 +15,13 @@ type PnpmWorkspaces struct {
 }
 
 var nodejsPnpm = PackageManager{
-	Name:       "nodejs-pnpm",
-	Slug:       "pnpm",
-	Command:    "pnpm",
-	Specfile:   "package.json",
-	Lockfile:   "pnpm-lock.yaml",
-	PackageDir: "node_modules",
+	Name:         "nodejs-pnpm",
+	Slug:         "pnpm",
+	Command:      "pnpm",
+	Specfile:     "package.json",
+	Lockfile:     "pnpm-lock.yaml",
+	PackageDir:   "node_modules",
+	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
 		bytes, err := ioutil.ReadFile(rootpath.Join("pnpm-workspace.yaml").ToStringDuringMigration())

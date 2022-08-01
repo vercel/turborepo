@@ -698,7 +698,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
-	argSeparator := []string{"--"}
+	argSeparator := packageManager.ArgSeparator
 	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
 		return errors.Wrap(err, "determining pnpm version")
 	} else if is7PlusPnpm {
