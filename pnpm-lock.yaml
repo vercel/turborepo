@@ -165,7 +165,7 @@ importers:
   packages/turbo:
     specifiers:
       turbo-android-arm64: 1.4.1-canary.0
-      turbo-darwin-64: 1.4.0
+      turbo-darwin-64: 1.4.1-canary.0
       turbo-darwin-arm64: 1.4.1-canary.0
       turbo-freebsd-64: 1.4.1-canary.0
       turbo-freebsd-arm64: 1.4.1-canary.0
@@ -175,11 +175,12 @@ importers:
       turbo-linux-arm64: 1.4.1-canary.0
       turbo-linux-mips64le: 1.4.1-canary.0
       turbo-linux-ppc64le: 1.4.1-canary.0
-      turbo-windows-32: 1.4.0
+      turbo-windows-32: 1.4.1-canary.0
       turbo-windows-64: 1.4.1-canary.0
       turbo-windows-arm64: 1.4.1-canary.0
     optionalDependencies:
       turbo-android-arm64: 1.4.1-canary.0
+      turbo-darwin-64: 1.4.1-canary.0
       turbo-darwin-arm64: 1.4.1-canary.0
       turbo-freebsd-64: 1.4.1-canary.0
       turbo-freebsd-arm64: 1.4.1-canary.0
@@ -189,6 +190,7 @@ importers:
       turbo-linux-arm64: 1.4.1-canary.0
       turbo-linux-mips64le: 1.4.1-canary.0
       turbo-linux-ppc64le: 1.4.1-canary.0
+      turbo-windows-32: 1.4.1-canary.0
       turbo-windows-64: 1.4.1-canary.0
       turbo-windows-arm64: 1.4.1-canary.0
 
@@ -8077,6 +8079,14 @@ packages:
     dev: false
     optional: true
 
+  /turbo-darwin-64/1.4.1-canary.0:
+    resolution: {integrity: sha512-it7A7g5gPovni3eLHcBW5CsTFYu0mlg4jkaZiE7fMley8anVfnims0W114xMy37KH8k2OKwHqt1MusDhUfz+3w==}
+    cpu: [x64]
+    os: [darwin]
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /turbo-darwin-arm64/1.4.1-canary.0:
     resolution: {integrity: sha512-c+ESooYEK+2TjVomN4BM3wvMe71bqF4J725OtFcpcqtA28sTMrkHTUy1vZyS4yvzfaZ2uMUUzzD3Rb2TE9fFRw==}
     cpu: [arm64]
@@ -8145,6 +8155,14 @@ packages:
     resolution: {integrity: sha512-IDnBsphBKEn/HijByiUSVlMY/f+sD6vsJXwyEE0h9Xi4y+8JMl/TyDLsMAhGEVT3xt6DRfTWcnaIH6WPYeJLGg==}
     cpu: [ppc64]
     os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /turbo-windows-32/1.4.1-canary.0:
+    resolution: {integrity: sha512-OKLlzCabXOjBwHHkePpw932alZQ4Xk2/CmDeUBaVS99z+/oEkbzpt5p5juZsTqHUg3EuYlcTdehRIdHITExdlA==}
+    cpu: [ia32]
+    os: [win32]
     requiresBuild: true
     dev: false
     optional: true
