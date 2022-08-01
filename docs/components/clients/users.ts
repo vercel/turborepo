@@ -335,4 +335,10 @@ export const users = [
     infoLink: "https://waggel.co.uk",
     pinned: true,
   },
+  {
+    caption: "N26",
+    image: "/images/logos/n26.svg",
+    infoLink: "https://n26.com",
+    pinned: true,
+  },
 ];
