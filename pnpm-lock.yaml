@@ -170,12 +170,12 @@ importers:
       turbo-freebsd-64: 1.4.1-canary.1
       turbo-freebsd-arm64: 1.4.1-canary.1
       turbo-linux-32: 1.4.1-canary.1
-      turbo-linux-64: 1.4.1
+      turbo-linux-64: 1.4.1-canary.1
       turbo-linux-arm: 1.4.1-canary.1
       turbo-linux-arm64: 1.4.1-canary.1
       turbo-linux-mips64le: 1.4.1-canary.1
       turbo-linux-ppc64le: 1.4.1-canary.1
-      turbo-windows-32: 1.4.1
+      turbo-windows-32: 1.4.1-canary.1
       turbo-windows-64: 1.4.1-canary.1
       turbo-windows-arm64: 1.4.1-canary.1
     optionalDependencies:
@@ -185,10 +185,12 @@ importers:
       turbo-freebsd-64: 1.4.1-canary.1
       turbo-freebsd-arm64: 1.4.1-canary.1
       turbo-linux-32: 1.4.1-canary.1
+      turbo-linux-64: 1.4.1-canary.1
       turbo-linux-arm: 1.4.1-canary.1
       turbo-linux-arm64: 1.4.1-canary.1
       turbo-linux-mips64le: 1.4.1-canary.1
       turbo-linux-ppc64le: 1.4.1-canary.1
+      turbo-windows-32: 1.4.1-canary.1
       turbo-windows-64: 1.4.1-canary.1
       turbo-windows-arm64: 1.4.1-canary.1
 
@@ -8117,6 +8119,14 @@ packages:
     dev: false
     optional: true
 
+  /turbo-linux-64/1.4.1-canary.1:
+    resolution: {integrity: sha512-c0SKH8Bs41kY4NGJvkq9/StPUS7WnVMxg3+SrZiAD5uG3XuJPydNN8Vm9KogxpcKjXwmVNupT7+NCYEFvKf1bQ==}
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /turbo-linux-arm/1.4.1-canary.1:
     resolution: {integrity: sha512-T4D/DV7suDoxjIPA5mvgxBGgSEha4VwCGas36Mlj8EfxLfmTPf4BD1oYjtnsqq0NzfHWp8AwHRP6Im8pMzy7yA==}
     cpu: [arm]
@@ -8145,6 +8155,14 @@ packages:
     resolution: {integrity: sha512-7CbobdczXzEVtbjI2qE5FI2vs3axuGZRueJTkRy+4lJccEA9lE+wcSODooo+w8U8r5Sn4eA8Pf+G089RSV9tCQ==}
     cpu: [ppc64]
     os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /turbo-windows-32/1.4.1-canary.1:
+    resolution: {integrity: sha512-7e48lpINlZutN7OjPBODwuKUrvY+N0URXVYVW5K71Uo9F6qs02dhgG8Pk7kQnWxijOq4/kMF+eL5zabydaMIZw==}
+    cpu: [ia32]
+    os: [win32]
     requiresBuild: true
     dev: false
     optional: true
