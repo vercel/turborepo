@@ -166,7 +166,7 @@ importers:
     specifiers:
       turbo-android-arm64: 1.4.1
       turbo-darwin-64: 1.4.1
-      turbo-darwin-arm64: 1.4.1-canary.0
+      turbo-darwin-arm64: 1.4.1
       turbo-freebsd-64: 1.4.1
       turbo-freebsd-arm64: 1.4.1
       turbo-linux-32: 1.4.1
@@ -174,13 +174,14 @@ importers:
       turbo-linux-arm: 1.4.1
       turbo-linux-arm64: 1.4.1
       turbo-linux-mips64le: 1.4.1
-      turbo-linux-ppc64le: 1.4.1-canary.0
+      turbo-linux-ppc64le: 1.4.1
       turbo-windows-32: 1.4.1
-      turbo-windows-64: 1.4.1-canary.0
+      turbo-windows-64: 1.4.1
       turbo-windows-arm64: 1.4.1
     optionalDependencies:
       turbo-android-arm64: 1.4.1
       turbo-darwin-64: 1.4.1
+      turbo-darwin-arm64: 1.4.1
       turbo-freebsd-64: 1.4.1
       turbo-freebsd-arm64: 1.4.1
       turbo-linux-32: 1.4.1
@@ -188,7 +189,9 @@ importers:
       turbo-linux-arm: 1.4.1
       turbo-linux-arm64: 1.4.1
       turbo-linux-mips64le: 1.4.1
+      turbo-linux-ppc64le: 1.4.1
       turbo-windows-32: 1.4.1
+      turbo-windows-64: 1.4.1
       turbo-windows-arm64: 1.4.1
 
   packages/turbo-codemod:
@@ -8084,6 +8087,14 @@ packages:
     dev: false
     optional: true
 
+  /turbo-darwin-arm64/1.4.1:
+    resolution: {integrity: sha512-xwGNmaffswMcXedJ5RYHC73L8BFKTa85qpAtIiuZSOFwmCEYEsfj+gqfT5YVqnusIR3sJvI32ndxjn7OjFcRQw==}
+    cpu: [arm64]
+    os: [darwin]
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /turbo-freebsd-64/1.4.1:
     resolution: {integrity: sha512-xt+PFVXA2Zz4crP/3tlxOsCMIZ7ggv4MeG1VF8TOlXpuDk2zHuBWYSo1TSh7vT04s0tcEk298BnfNBMy9pPLIg==}
     cpu: [x64]
@@ -8140,9 +8151,25 @@ packages:
     dev: false
     optional: true
 
+  /turbo-linux-ppc64le/1.4.1:
+    resolution: {integrity: sha512-AxzrDS/QWVfgmfUsgIGU7jTvjRgRIzzuKGCKiwWVDVEatFISTu9MgGYsvA3WjkyNAqrUOz+fA2rUekpGNSAgCQ==}
+    cpu: [ppc64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /turbo-windows-32/1.4.1:
     resolution: {integrity: sha512-HiS3EdfeuenRaK3FOpoduTMxh+tBQpB3VsFWTmDW/VxnZxR2tRfyfz+Y7YfseYsviuFulGhzouqpbFnaGsKvrQ==}
     cpu: [ia32]
+    os: [win32]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /turbo-windows-64/1.4.1:
+    resolution: {integrity: sha512-bslXA9oBi8aGWW1O3A72GMNJ/lVA6oIALvsJrslsBziafUMCkLFuTk9tXdyL9hhPiRYD8kmq31kjHNDFcS3QaQ==}
+    cpu: [x64]
     os: [win32]
     requiresBuild: true
     dev: false
