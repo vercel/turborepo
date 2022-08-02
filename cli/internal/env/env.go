@@ -9,19 +9,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-// Prefixes for common framework variables that we always include
-var envVarPrefixes = []string{
-	"GATSBY_",
-	"NEXT_PUBLIC_",
-	"NUXT_ENV_",
-	"PUBLIC_",
-	"REACT_APP_",
-	"REDWOOD_ENV_",
-	"SANITY_STUDIO_",
-	"VITE_",
-	"VUE_APP_",
-}
-
 func getEnvMap() map[string]string {
 	envMap := make(map[string]string)
 	for _, envVar := range os.Environ() {
@@ -44,7 +31,7 @@ func getEnvPairsFromKeys(envKeys []string, allEnvVars map[string]string) []strin
 }
 
 // getFrameworkEnvPairs returns a slice of all key=value pairs that match the given prefix
-func getEnvVarsFromPrefix(prefix string, allEnvVars map[string]string) []string {
+func getEnvPairsFromPrefix(prefix string, allEnvVars map[string]string) []string {
 	hashableFrameworkEnvPairs := []string{}
 	for k, v := range allEnvVars {
 		if strings.HasPrefix(k, prefix) {
@@ -57,8 +44,8 @@ func getEnvVarsFromPrefix(prefix string, allEnvVars map[string]string) []string 
 // getEnvPairsFromPrefixes returns a slice containing key=value pairs for all frameworks
 func getEnvPairsFromPrefixes(prefixes []string, allEnvVars map[string]string) []string {
 	allHashableFrameworkEnvPairs := []string{}
-	for _, frameworkEnvPrefix := range envVarPrefixes {
-		hashableFrameworkEnvPairs := getEnvVarsFromPrefix(frameworkEnvPrefix, allEnvVars)
+	for _, frameworkEnvPrefix := range prefixes {
+		hashableFrameworkEnvPairs := getEnvPairsFromPrefix(frameworkEnvPrefix, allEnvVars)
 		allHashableFrameworkEnvPairs = append(allHashableFrameworkEnvPairs, hashableFrameworkEnvPairs...)
 
 	}
@@ -66,10 +53,10 @@ func getEnvPairsFromPrefixes(prefixes []string, allEnvVars map[string]string) []
 }
 
 // GetHashableEnvPairs returns all sorted key=value env var pairs for both frameworks and from envKeys
-func GetHashableEnvPairs(envKeys []string) []string {
+func GetHashableEnvPairs(envKeys []string, envPrefixes []string) []string {
 	allEnvVars := getEnvMap()
 	hashableEnvFromKeys := getEnvPairsFromKeys(envKeys, allEnvVars)
-	hashableEnvFromPrefixes := getEnvPairsFromPrefixes(envVarPrefixes, allEnvVars)
+	hashableEnvFromPrefixes := getEnvPairsFromPrefixes(envPrefixes, allEnvVars)
 
 	// convert to set to eliminate duplicates, then cast back to slice to sort for stable hashing
 	uniqueHashableEnvPairs := make(util.Set, len(hashableEnvFromKeys)+len(hashableEnvFromPrefixes))

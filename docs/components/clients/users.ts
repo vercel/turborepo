@@ -1,137 +1,137 @@
 export const users = [
-  // {
-  //   caption: "Vercel",
-  //   image: "/images/logos/vercel.svg",
-  //   infoLink: "https://vercel.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 150,
-  //   },
-  // },
-  // {
-  //   caption: "AWS",
-  //   image: "/images/logos/aws.svg",
-  //   infoLink: "https://aws.amazon.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 75,
-  //   },
-  // },
-  // {
-  //   caption: "Netflix",
-  //   image: "/images/logos/netflix.svg",
-  //   infoLink: "https://netflix.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 110,
-  //   },
-  // },
-  // {
-  //   caption: "Microsoft",
-  //   image: "/images/logos/microsoft.svg",
-  //   infoLink: "https://microsoft.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 125,
-  //   },
-  // },
-  // {
-  //   caption: "Alibaba",
-  //   image: "/images/logos/alibaba.svg",
-  //   infoLink: "https://alibaba.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 125,
-  //   },
-  // },
-  // {
-  //   caption: "Disney",
-  //   image: "/images/logos/disney.svg",
-  //   infoLink: "https://disney.com",
-  //   pinned: true,
-  // },
-  // {
-  //   caption: "PayPal",
-  //   image: "/images/logos/paypal.svg",
-  //   infoLink: "https://paypal.com",
-  //   pinned: true,
-  // },
-  // {
-  //   caption: "Adobe",
-  //   image: "/images/logos/adobe.svg",
-  //   infoLink: "https://adobe.com",
-  //   pinned: true,
-  // },
-  // {
-  //   caption: "Shopify",
-  //   image: "/images/logos/shopify.svg",
-  //   infoLink: "https://shopify.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 125,
-  //   },
-  // },
-  // {
-  //   caption: "SAP",
-  //   image: "/images/logos/sap.svg",
-  //   infoLink: "https://sap.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 75,
-  //   },
-  // },
-  // {
-  //   caption: "Ant Group",
-  //   image: "/images/logos/ant.svg",
-  //   infoLink: "https://antgroup.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 125,
-  //   },
-  // },
-  // {
-  //   caption: "Twilio",
-  //   image: "/images/logos/twilio.svg",
-  //   infoLink: "https://twilio.com",
-  //   pinned: true,
-  // },
-  // {
-  //   caption: "Segment",
-  //   image: "/images/logos/segment.svg",
-  //   infoLink: "https://segment.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 125,
-  //   },
-  // },
-  // {
-  //   caption: "Line",
-  //   image: "/images/logos/line.svg",
-  //   infoLink: "https://line.me",
-  //   pinned: true,
-  //   style: {
-  //     width: 75,
-  //   },
-  // },
-  // {
-  //   caption: "ESPN",
-  //   image: "/images/logos/espn.svg",
-  //   infoLink: "https://espn.com",
-  //   pinned: true,
-  //   style: {
-  //     width: 125,
-  //   },
-  // },
-  // {
-  //   caption: "Volvo",
-  //   image: "/images/logos/volvo.svg",
-  //   infoLink: "https://www.volvo.com",
-  //   pinned: true,
-  //   style: {
-  //     height: 50,
-  //     width: 50,
-  //   },
-  // },
+  {
+    caption: "Vercel",
+    image: "/images/logos/vercel.svg",
+    infoLink: "https://vercel.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "AWS",
+    image: "/images/logos/aws.svg",
+    infoLink: "https://aws.amazon.com",
+    pinned: true,
+    style: {
+      width: 75,
+    },
+  },
+  {
+    caption: "Netflix",
+    image: "/images/logos/netflix.svg",
+    infoLink: "https://netflix.com",
+    pinned: true,
+    style: {
+      width: 110,
+    },
+  },
+  {
+    caption: "Microsoft",
+    image: "/images/logos/microsoft.svg",
+    infoLink: "https://microsoft.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "Alibaba",
+    image: "/images/logos/alibaba.svg",
+    infoLink: "https://alibaba.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "Disney",
+    image: "/images/logos/disney.svg",
+    infoLink: "https://disney.com",
+    pinned: true,
+  },
+  {
+    caption: "PayPal",
+    image: "/images/logos/paypal.svg",
+    infoLink: "https://paypal.com",
+    pinned: true,
+  },
+  {
+    caption: "Adobe",
+    image: "/images/logos/adobe.svg",
+    infoLink: "https://adobe.com",
+    pinned: true,
+  },
+  {
+    caption: "Shopify",
+    image: "/images/logos/shopify.svg",
+    infoLink: "https://shopify.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "SAP",
+    image: "/images/logos/sap.svg",
+    infoLink: "https://sap.com",
+    pinned: true,
+    style: {
+      width: 75,
+    },
+  },
+  {
+    caption: "Ant Group",
+    image: "/images/logos/ant.svg",
+    infoLink: "https://antgroup.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "Twilio",
+    image: "/images/logos/twilio.svg",
+    infoLink: "https://twilio.com",
+    pinned: true,
+  },
+  {
+    caption: "Segment",
+    image: "/images/logos/segment.svg",
+    infoLink: "https://segment.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "Line",
+    image: "/images/logos/line.svg",
+    infoLink: "https://line.me",
+    pinned: true,
+    style: {
+      width: 75,
+    },
+  },
+  {
+    caption: "ESPN",
+    image: "/images/logos/espn.svg",
+    infoLink: "https://espn.com",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
+    caption: "Volvo",
+    image: "/images/logos/volvo.svg",
+    infoLink: "https://www.volvo.com",
+    pinned: true,
+    style: {
+      height: 50,
+      width: 50,
+    },
+  },
   {
     caption: "Hearst",
     image: "/images/logos/hearst.svg",

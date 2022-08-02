@@ -7,27 +7,49 @@ import { Container } from "../Container";
 
 export default function Showcase() {
   const { theme } = useTheme();
-  const showcase = users.map((user, index) => (
-    <a
-      href={user.infoLink}
-      key={user.infoLink}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center justify-center"
-    >
-      <Image
-        src={user.image.replace(
-          "/logos",
-          theme == "dark" ? "/logos/white" : "/logos/color"
-        )}
-        alt={user.caption}
-        width={user.style?.width ?? 100}
-        height={user.style?.height ?? 75}
-        priority={index < 24}
-        className="inline w-auto"
-      />
-    </a>
-  ));
+
+  const showcase = users
+    .filter((p) => p.pinned)
+    .map((user, index) => (
+      <a
+        href={user.infoLink}
+        key={`${user.infoLink}-${theme}-${index}-light`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex justify-center item-center dark:hidden"
+      >
+        <Image
+          src={user.image.replace("/logos", "/logos/color")}
+          alt={user.caption}
+          width={user.style?.width ?? 100}
+          height={75}
+          priority={true}
+          className="inline w-auto"
+        />
+      </a>
+    ));
+
+  const showcaseLight = users
+    .filter((p) => p.pinned)
+    .map((user, index) => (
+      <a
+        href={user.infoLink}
+        key={`${user.infoLink}-${theme}-${index}-dark`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="justify-center hidden item-center dark:flex"
+      >
+        <Image
+          key={`${user.infoLink}-${theme}-${index}-dark`}
+          src={user.image.replace("/logos", "/logos/white")}
+          alt={user.caption}
+          width={user.style?.width ?? 100}
+          height={75}
+          priority={true}
+          className="inline w-auto"
+        />
+      </a>
+    ));
   return (
     <>
       <Head>
@@ -52,6 +74,7 @@ export default function Showcase() {
 
           <div className="grid items-center grid-cols-3 gap-16 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 ">
             {showcase}
+            {showcaseLight}
           </div>
           <div className="max-w-xl pt-20 pb-24 mx-auto space-y-6 text-center">
             <div className="mt-2 text-2xl font-extrabold leading-8 tracking-tight text-gray-900 dark:text-white sm:text-4xl sm:leading-10">
