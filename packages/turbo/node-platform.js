@@ -12,23 +12,23 @@ const path = require("path");
 const TURBO_BINARY_PATH = process.env.TURBO_BINARY_PATH;
 
 const knownWindowsPackages = {
-  "win32 arm64 LE": "turbo-windows-arm64",
-  "win32 ia32 LE": "turbo-windows-32",
-  "win32 x64 LE": "turbo-windows-64",
+  "win32 arm64 LE": "turbo-yarn-berry-windows-arm64",
+  "win32 ia32 LE": "turbo-yarn-berry-windows-32",
+  "win32 x64 LE": "turbo-yarn-berry-windows-64",
 };
 
 const knownUnixlikePackages = {
-  "android arm64 LE": "turbo-android-arm64",
-  "darwin arm64 LE": "turbo-darwin-arm64",
-  "darwin x64 LE": "turbo-darwin-64",
-  "freebsd arm64 LE": "turbo-freebsd-arm64",
-  "freebsd x64 LE": "turbo-freebsd-64",
-  "linux arm LE": "turbo-linux-arm",
-  "linux arm64 LE": "turbo-linux-arm64",
-  "linux ia32 LE": "turbo-linux-32",
-  "linux mips64el LE": "turbo-linux-mips64le",
-  "linux ppc64 LE": "turbo-linux-ppc64le",
-  "linux x64 LE": "turbo-linux-64",
+  "android arm64 LE": "turbo-yarn-berry-android-arm64",
+  "darwin arm64 LE": "turbo-yarn-berry-darwin-arm64",
+  "darwin x64 LE": "turbo-yarn-berry-darwin-64",
+  "freebsd arm64 LE": "turbo-yarn-berry-freebsd-arm64",
+  "freebsd x64 LE": "turbo-yarn-berry-freebsd-64",
+  "linux arm LE": "turbo-yarn-berry-linux-arm",
+  "linux arm64 LE": "turbo-yarn-berry-linux-arm64",
+  "linux ia32 LE": "turbo-yarn-berry-linux-32",
+  "linux mips64el LE": "turbo-yarn-berry-linux-mips64le",
+  "linux ppc64 LE": "turbo-yarn-berry-linux-ppc64le",
+  "linux x64 LE": "turbo-yarn-berry-linux-64",
 };
 
 function pkgAndSubpathForCurrentPlatform() {
