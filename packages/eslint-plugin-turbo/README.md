@@ -1,0 +1,37 @@
+# eslint-plugin-turbo
+
+Ease configuration for turbo
+
+## Installation
+
+You'll first need to install [ESLint](https://eslint.org/):
+
+```sh
+npm i eslint --save-dev
+```
+
+Next, install `eslint-plugin-turbo`:
+
+```sh
+npm install eslint-plugin-turbo --save-dev
+```
+
+## Usage
+
+Add `turbo` to the plugins section of your `.eslintrc` configuration file. You can omit the `eslint-plugin-` prefix:
+
+```json
+{
+  "plugins": ["turbo"]
+}
+```
+
+Then configure the rules you want to use under the rules section.
+
+```json
+{
+  "rules": {
+    "turbo/rule-name": 2
+  }
+}
+```
