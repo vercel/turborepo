@@ -4140,6 +4140,7 @@ dependencies = [
  "serde",
  "syn",
  "toml",
+ "turbo-tasks-macros-shared",
 ]
 
 [[package]]
@@ -4172,6 +4173,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "turbo-tasks-macros-shared",
+]
+
+[[package]]
+name = "turbo-tasks-macros-shared"
+version = "0.1.0"
+dependencies = [
+ "syn",
 ]
 
 [[package]]
@@ -4188,6 +4197,16 @@ dependencies = [
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-test-utils",
+]
+
+[[package]]
+name = "turbo-tasks-test-utils"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "turbo-tasks",
+ "turbo-tasks-memory",
 ]
 
 [[package]]
