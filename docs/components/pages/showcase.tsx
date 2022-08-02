@@ -22,7 +22,7 @@ export default function Showcase() {
           src={user.image.replace("/logos", "/logos/color")}
           alt={user.caption}
           width={user.style?.width ?? 100}
-          height={75}
+          height={user.style?.height ?? 75}
           priority={true}
           className="inline w-auto"
         />
@@ -44,7 +44,7 @@ export default function Showcase() {
           src={user.image.replace("/logos", "/logos/white")}
           alt={user.caption}
           width={user.style?.width ?? 100}
-          height={75}
+          height={user.style?.height ?? 75}
           priority={true}
           className="inline w-auto"
         />
