@@ -118,9 +118,6 @@ export const users = [
     image: "/images/logos/espn.svg",
     infoLink: "https://espn.com",
     pinned: true,
-    style: {
-      width: 125,
-    },
   },
   {
     caption: "Volvo",
