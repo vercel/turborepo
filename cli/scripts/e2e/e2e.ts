@@ -506,27 +506,23 @@ function runSmokeTests<T>(
         )
       );
       // Find the output logs of the test script
-      const start = result.findIndex((line) => line.includes("//:args: ["));
-      const end = result.findIndex((line) => line.includes("//:args: ]"));
+      const needle = "//:args: Output:";
+      const script_output = result.find((line) => line.startsWith(needle));
+
       assert.ok(
-        start != -1 && end != -1,
-        `Unable to find start or end of '//:arg' output in '${result}'`
+        script_output != undefined && script_output.startsWith(needle),
+        `Unable to find '//:arg' output in '${result}'`
       );
-      const [node, ...args] = result.slice(start + 1, end).map((line) => {
-        const no_task_prefix = line.startsWith("//:args:")
-          ? line.substring("//:args:".length).trim()
-          : line;
-        return no_task_prefix.endsWith(",")
-          ? no_task_prefix.substring(0, no_task_prefix.length - 1)
-          : no_task_prefix;
-      });
+      const [node, ...args] = JSON.parse(
+        script_output.substring(needle.length)
+      );
 
       assert.match(
         node,
         "node",
         `Expected node binary path (${node}) to contain 'node'`
       );
-      assert.equal(args, ["'--script-arg=42'"]);
+      assert.equal(args, ["--script-arg=42"]);
     }
   );
 
