@@ -9,11 +9,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-// Prefixes for common system environment variables that we always exclude from prefix
-var blockedEnvVarList = []string{
-	"_VERCEL_",
-}
-
 func getEnvMap() map[string]string {
 	envMap := make(map[string]string)
 	for _, envVar := range os.Environ() {
@@ -36,25 +31,25 @@ func getEnvPairsFromKeys(envKeys []string, allEnvVars map[string]string) []strin
 }
 
 // getFrameworkEnvPairs returns a slice of all key=value pairs that match the given prefix
-func getEnvPairsFromPrefix(prefix string, allEnvVars map[string]string, blockedEnvVars []string) []string {
+func getEnvPairsFromPrefix(prefix string, allEnvVars map[string]string, blockVendorKey bool) []string {
 	hashableFrameworkEnvPairs := []string{}
 	for k, v := range allEnvVars {
+		// skip env vars contain the value of $TURBO_CI_VENDOR_ENV_KEY
+		if vendorKey, ok := allEnvVars["TURBO_CI_VENDOR_ENV_KEY"]; ok && blockVendorKey && strings.Contains(k, vendorKey) {
+			continue
+		}
 		if strings.HasPrefix(k, prefix) {
-			for _, blocked := range blockedEnvVars {
-				if !strings.Contains(k, blocked) {
-					hashableFrameworkEnvPairs = append(hashableFrameworkEnvPairs, fmt.Sprintf("%v=%v", k, v))
-				}
-			}
+			hashableFrameworkEnvPairs = append(hashableFrameworkEnvPairs, fmt.Sprintf("%v=%v", k, v))
 		}
 	}
 	return hashableFrameworkEnvPairs
 }
 
 // getEnvPairsFromPrefixes returns a slice containing key=value pairs for all frameworks
-func getEnvPairsFromPrefixes(prefixes []string, allEnvVars map[string]string, blockedEnvVars []string) []string {
+func getEnvPairsFromPrefixes(prefixes []string, allEnvVars map[string]string, blockVendorKey bool) []string {
 	allHashableFrameworkEnvPairs := []string{}
 	for _, frameworkEnvPrefix := range prefixes {
-		hashableFrameworkEnvPairs := getEnvPairsFromPrefix(frameworkEnvPrefix, allEnvVars, blockedEnvVars)
+		hashableFrameworkEnvPairs := getEnvPairsFromPrefix(frameworkEnvPrefix, allEnvVars, blockVendorKey)
 		allHashableFrameworkEnvPairs = append(allHashableFrameworkEnvPairs, hashableFrameworkEnvPairs...)
 
 	}
@@ -65,7 +60,7 @@ func getEnvPairsFromPrefixes(prefixes []string, allEnvVars map[string]string, bl
 func GetHashableEnvPairs(envKeys []string, envPrefixes []string) []string {
 	allEnvVars := getEnvMap()
 	hashableEnvFromKeys := getEnvPairsFromKeys(envKeys, allEnvVars)
-	hashableEnvFromPrefixes := getEnvPairsFromPrefixes(envPrefixes, allEnvVars, blockedEnvVarList)
+	hashableEnvFromPrefixes := getEnvPairsFromPrefixes(envPrefixes, allEnvVars, true)
 
 	// convert to set to eliminate duplicates, then cast back to slice to sort for stable hashing
 	uniqueHashableEnvPairs := make(util.Set, len(hashableEnvFromKeys)+len(hashableEnvFromPrefixes))

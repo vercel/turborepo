@@ -231,8 +231,35 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			want: []string{"MANUAL=true"},
 		},
 		{
-			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true"},
-			name: "blocked env var list excludes automatically added env vars",
+			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
+			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
+			args: args{
+				envKeys:     []string{"MANUAL"},
+				envPrefixes: []string{"NEXT_PUBLIC_"},
+			},
+			want: []string{"MANUAL=true"},
+		},
+		{
+			env:  []string{"TURBO_ENV=true", "MANUAL=true", "TURBOREPO=true", "TURBO_CI_VENDOR_ENV_KEY=TURBO_"},
+			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
+			args: args{
+				envKeys:     []string{},
+				envPrefixes: []string{"TURBO"},
+			},
+			want: []string{"TURBOREPO=true"},
+		},
+		{
+			env:  []string{"MY_TURBO_CI_VENDOR_ENV_KEY=true", "TURBO_CI_VENDOR_ENV_KEY=TURBO_CI_VENDOR_ENV_KEY"},
+			name: "$TURBO_CI_VENDOR_ENV_KEY should not exclude itself",
+			args: args{
+				envKeys:     []string{},
+				envPrefixes: []string{"MY_TURBO_"},
+			},
+			want: []string{},
+		},
+		{
+			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
+			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
 			args: args{
 				envKeys:     []string{"MANUAL", "MANUAL_VERCEL_ENV"},
 				envPrefixes: []string{"NEXT_PUBLIC_"},
@@ -240,8 +267,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			want: []string{"MANUAL=true", "MANUAL_VERCEL_ENV=true"},
 		},
 		{
-			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true"},
-			name: "blocked env var is allowed if manually included",
+			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
+			name: "blocked env var is allowed if manually specified",
 			args: args{
 				envKeys:     []string{"NEXT_PUBLIC_VERCEL_ENV", "MANUAL"},
 				envPrefixes: []string{"NEXT_PUBLIC_"},
