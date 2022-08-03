@@ -19,8 +19,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
+      - name: Fetch the base branch
+        run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
+
+      - name: Setup node
+        uses: actions/setup-node@v3
         with:
-          ref: main
+          cache: 'yarn'
+          node-version: 16
 
       - name: install node.js dependencies
         run: yarn install
@@ -29,9 +36,9 @@ jobs:
         with:
           key: benchmark
 
-      - uses: boa-dev/criterion-compare-action@v3.2.2
+      - uses: sokra/criterion-compare-action@significant
         with:
-          branchName: ${{ github.base_ref }}
+          branchName: base
 
       - name: Upload report
         if: always()
