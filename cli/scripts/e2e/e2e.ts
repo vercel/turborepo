@@ -43,7 +43,7 @@ process.env.TURBO_TOKEN = "";
 const COREPACK_BIN_DIR = setupCorepack();
 
 let suites = [];
-for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics", COREPACK_BIN_DIR);
   repo.init(npmClient, basicPipeline);
@@ -117,7 +117,7 @@ const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "berry" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm6" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {
@@ -602,9 +602,20 @@ function runSmokeTests<T>(
       }
     );
   }
+
+  if (["pnpm", "pnpm6"].includes(npmClient)) {
+    suite(`${npmClient} is correct version`, async () => {
+      const version = repo.packageManagerVersion();
+      assert.equal(
+        version,
+        npmClient === "pnpm6" ? "6.22.2" : "7.2.1",
+        `PATH: ${repo.pathWithNodeModules()}`
+      );
+    });
+  }
 }
 
-type PackageManager = "yarn" | "pnpm" | "npm" | "berry";
+type PackageManager = "yarn" | "pnpm6" | "pnpm" | "npm" | "berry";
 
 // getLockfileForPackageManager returns the name of the lockfile for the given package manager
 function getLockfileForPackageManager(ws: PackageManager) {
@@ -612,6 +623,8 @@ function getLockfileForPackageManager(ws: PackageManager) {
     case "yarn":
       return "yarn.lock";
     case "pnpm":
+      return "pnpm-lock.yaml";
+    case "pnpm6":
       return "pnpm-lock.yaml";
     case "npm":
       return "package-lock.json";
