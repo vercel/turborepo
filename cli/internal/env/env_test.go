@@ -230,6 +230,24 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			},
 			want: []string{"MANUAL=true"},
 		},
+		{
+			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true"},
+			name: "blocked env var list excludes automatically added env vars",
+			args: args{
+				envKeys:     []string{"MANUAL", "MANUAL_VERCEL_ENV"},
+				envPrefixes: []string{"NEXT_PUBLIC_"},
+			},
+			want: []string{"MANUAL=true", "MANUAL_VERCEL_ENV=true"},
+		},
+		{
+			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true"},
+			name: "blocked env var is allowed if manually included",
+			args: args{
+				envKeys:     []string{"NEXT_PUBLIC_VERCEL_ENV", "MANUAL"},
+				envPrefixes: []string{"NEXT_PUBLIC_"},
+			},
+			want: []string{"MANUAL=true", "NEXT_PUBLIC_VERCEL_ENV=true"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
