@@ -14,15 +14,17 @@ function findDependsOnEnvVars({
 }
 
 function getEnvVarDependencies({
+  cwd,
   turboConfig,
 }: {
+  cwd: string;
   turboConfig?: TurboConfig;
 }): Set<string> | null {
-  const turboJsonContent = turboConfig || findTurboConfig();
+  const turboJsonContent = turboConfig || findTurboConfig({ cwd });
   if (!turboJsonContent) {
     return null;
   }
-  const { globalDependencies, pipeline } = turboJsonContent;
+  const { globalDependencies, pipeline = {} } = turboJsonContent;
 
   const allEnvVars: Array<string> = findDependsOnEnvVars({
     dependencies: globalDependencies,

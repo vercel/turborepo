@@ -64,8 +64,8 @@ ruleTester.run(RULES.noUncachedEnvVars, rule, {
     },
     {
       code: `
-      var x = process.env.ENV_VAR_ONE;
-      var y = process.env.ENV_VAR_TWO;
+        var x = process.env.ENV_VAR_ONE;
+        var y = process.env.ENV_VAR_TWO;
       `,
       options: [
         {
@@ -76,13 +76,77 @@ ruleTester.run(RULES.noUncachedEnvVars, rule, {
     },
     {
       code: `
-      var x = process.env.ENV_VAR_ONE;
-      var y = process.env.ENV_VAR_TWO;
+        var x = process.env.ENV_VAR_ONE;
+        var y = process.env.ENV_VAR_TWO;
       `,
       options: [
         {
           turboConfig: getTestTurboConfig(),
           allowList: ["^ENV_VAR_O[A-Z]+$", "ENV_VAR_TWO"],
+        },
+      ],
+    },
+    {
+      code: `
+        var globalOrTask = process.env.TASK_ENV_KEY || process.env.GLOBAL_ENV_KEY;
+        var oneOrTwo = process.env.ENV_VAR_ONE || process.env.ENV_VAR_TWO;
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          allowList: ["^ENV_VAR_[A-Z]+$"],
+        },
+      ],
+    },
+    {
+      code: `
+        () => { return process.env.GLOBAL_ENV_KEY }
+        () => { return process.env.TASK_ENV_KEY }
+        () => { return process.env.ENV_VAR_ALLOWED }
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          allowList: ["^ENV_VAR_[A-Z]+$"],
+        },
+      ],
+    },
+    {
+      code: `
+        var foo = process?.env.GLOBAL_ENV_KEY
+        var foo = process?.env.TASK_ENV_KEY
+        var foo = process?.env.ENV_VAR_ALLOWED
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          allowList: ["^ENV_VAR_[A-Z]+$"],
+        },
+      ],
+    },
+    {
+      code: `
+        function test(arg1 = process.env.GLOBAL_ENV_KEY) {};
+        function test(arg1 = process.env.TASK_ENV_KEY) {};
+        function test(arg1 = process.env.ENV_VAR_ALLOWED) {};
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          allowList: ["^ENV_VAR_[A-Z]+$"],
+        },
+      ],
+    },
+    {
+      code: `
+        (arg1 = process.env.GLOBAL_ENV_KEY) => {}
+        (arg1 = process.env.TASK_ENV_KEY) => {}
+        (arg1 = process.env.ENV_VAR_ALLOWED) => {}
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
     },
@@ -128,6 +192,133 @@ ruleTester.run(RULES.noUncachedEnvVars, rule, {
         },
       ],
       errors: [{ message: "$KEY is not listed as a dependency in turbo.json" }],
+    },
+    {
+      code: `
+        var globalOrTask = process.env.TASK_ENV_KEY_NEW || process.env.GLOBAL_ENV_KEY_NEW;
+        var oneOrTwo = process.env.ENV_VAR_ONE || process.env.ENV_VAR_TWO;
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+        },
+      ],
+      errors: [
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        { message: "$ENV_VAR_ONE is not listed as a dependency in turbo.json" },
+        { message: "$ENV_VAR_TWO is not listed as a dependency in turbo.json" },
+      ],
+    },
+    {
+      code: `
+        () => { return process.env.GLOBAL_ENV_KEY_NEW }
+        () => { return process.env.TASK_ENV_KEY_NEW }
+        () => { return process.env.ENV_VAR_NOT_ALLOWED }
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+        },
+      ],
+      errors: [
+        {
+          message:
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        var foo = process?.env.GLOBAL_ENV_KEY_NEW
+        var foo = process?.env.TASK_ENV_KEY_NEW
+        var foo = process?.env.ENV_VAR_NOT_ALLOWED
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+        },
+      ],
+      errors: [
+        {
+          message:
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        function test(arg1 = process.env.GLOBAL_ENV_KEY_NEW) {};
+        function test(arg1 = process.env.TASK_ENV_KEY_NEW) {};
+        function test(arg1 = process.env.ENV_VAR_NOT_ALLOWED) {};
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+        },
+      ],
+      errors: [
+        {
+          message:
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        (arg1 = process.env.GLOBAL_ENV_KEY_NEW) => {}
+        (arg1 = process.env.TASK_ENV_KEY_NEW) => {}
+        (arg1 = process.env.ENV_VAR_NOT_ALLOWED) => {}
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+        },
+      ],
+      errors: [
+        {
+          message:
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+        },
+      ],
     },
   ],
 });

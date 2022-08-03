@@ -7,5 +7,5 @@ export interface Pipeline {
 export interface TurboConfig {
   baseBranch?: string;
   globalDependencies?: Array<string>;
-  pipeline: Record<string, Pipeline>;
+  pipeline?: Record<string, Pipeline>;
 }

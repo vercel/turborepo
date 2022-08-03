@@ -3,8 +3,8 @@ import { getTurboRoot } from "turbo-utils";
 
 import type { TurboConfig } from "../types";
 
-function findTurboConfig(): TurboConfig | null {
-  const turboRoot = getTurboRoot();
+function findTurboConfig({ cwd }: { cwd?: string }): TurboConfig | null {
+  const turboRoot = getTurboRoot(cwd);
   if (turboRoot) {
     try {
       const raw = fs.readFileSync(`${turboRoot}/turbo.json`, "utf8");

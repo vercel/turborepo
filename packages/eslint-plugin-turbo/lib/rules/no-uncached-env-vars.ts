@@ -38,17 +38,25 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   const { options } = context;
   const allowList: Array<string> = options?.[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
-  allowList.forEach((envVar) => {
+  allowList.forEach((allowed) => {
     try {
-      regexAllowList.push(new RegExp(envVar));
+      regexAllowList.push(new RegExp(allowed));
     } catch (err) {
-      console.error(`Unable to convert "${envVar}" to regex`);
+      // log the error, but just move on without this allowList entry
+      console.error(`Unable to convert "${allowed}" to regex`);
     }
   });
   const turboConfig = options?.[0]?.turboConfig;
-  const turboVars = getEnvVarDependencies({ turboConfig });
+  const turboVars = getEnvVarDependencies({
+    cwd: context.getCwd(),
+    turboConfig,
+  });
+
+  // if this returns null, something went wrong reading from the turbo config
+  // (this is different from finding a config with no env vars present, which would
+  // return an empty set) - so there is no point continuing if we have nothing to check against
   if (!turboVars) {
-    // bail early
+    // return of {} bails early from a rule check
     return {};
   }
 
@@ -75,7 +83,7 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
 
         // we're doing something with process.env
         if (objectName === "process" && propertyName === "env") {
-          // destructing from process.env
+          // destructuring from process.env
           if ("id" in node.parent && node.parent.id?.type === "ObjectPattern") {
             const values = node.parent.id.properties.values();
             Array.from(values).forEach((item) => {

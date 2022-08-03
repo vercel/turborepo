@@ -1,9 +1,9 @@
 import { findRootSync } from "@manypkg/find-root";
 import searchUp from "./searchUp";
 
-function getTurboRoot(): string | null {
+function getTurboRoot(cwd?: string): string | null {
   // Turborepo root can be determined by the presence of turbo.json
-  let root = searchUp({ target: "turbo.json", cwd: process.cwd() });
+  let root = searchUp({ target: "turbo.json", cwd: cwd || process.cwd() });
 
   if (!root) {
     root = findRootSync(process.cwd());

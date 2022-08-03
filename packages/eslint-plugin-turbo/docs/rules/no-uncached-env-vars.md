@@ -1,10 +1,10 @@
 # Ensure all environment variables are correctly included in cache keys (`no-uncached-env-vars`)
 
-Ensures that all usages of environment variables are correctly included in cache keys. This ensures build outputs remain correctly cacheable across environments.
+Ensures that all detectable usage of environment variables are correctly included in cache keys. This ensures build outputs remain correctly cacheable across environments.
 
 ## Rule Details
 
-This rule aims to prevent users from forgetting to include an environment variable in their `turbo.json` configuration
+This rule aims to prevent users from forgetting to include an environment variable in their `turbo.json` configuration.
 
 The following examples assume the following code:
 

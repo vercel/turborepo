@@ -1,16 +1,16 @@
-# eslint-plugin-turbo
+# `eslint-plugin-turbo`
 
-Ease configuration for turbo
+Ease configuration for Turborepo
 
 ## Installation
 
-You'll first need to install [ESLint](https://eslint.org/):
+1. You'll first need to install [ESLint](https://eslint.org/):
 
 ```sh
-npm i eslint --save-dev
+npm install eslint --save-dev
 ```
 
-Next, install `eslint-plugin-turbo`:
+2. Next, install `eslint-plugin-turbo`:
 
 ```sh
 npm install eslint-plugin-turbo --save-dev
@@ -31,7 +31,23 @@ Then configure the rules you want to use under the rules section.
 ```json
 {
   "rules": {
-    "turbo/rule-name": 2
+    "turbo/rule-name": "error"
+  }
+}
+```
+
+### Example
+
+```json
+{
+  "plugins": ["turbo"],
+  "rules": {
+    "turbo/no-uncached-env-vars": [
+      "error",
+      {
+        "allowList": ["^ENV_[A-Z]+$"]
+      }
+    ]
   }
 }
 ```
