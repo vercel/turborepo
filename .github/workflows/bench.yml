@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: install node.js dependencies
+        run: yarn install
+
       - uses: Swatinem/rust-cache@v1
         with:
           key: benchmark

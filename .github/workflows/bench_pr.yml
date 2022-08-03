@@ -22,6 +22,9 @@ jobs:
         with:
           ref: main
 
+      - name: install node.js dependencies
+        run: yarn install
+
       - uses: Swatinem/rust-cache@v1
         with:
           key: benchmark
