@@ -231,7 +231,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			want: []string{"MANUAL=true"},
 		},
 		{
-			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
+			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true", "TURBO_CI_VENDOR_ENV_KEY=NEXT_PUBLIC_VERCEL_"},
 			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
 			args: args{
 				envKeys:     []string{"MANUAL"},
@@ -249,22 +249,22 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			want: []string{"TURBOREPO=true"},
 		},
 		{
-			env:  []string{"MY_TURBO_CI_VENDOR_ENV_KEY=true", "TURBO_CI_VENDOR_ENV_KEY=TURBO_CI_VENDOR_ENV_KEY"},
+			env:  []string{"NEXT_PUBLIC_MY_VERCEL_URL=me.vercel.com", "TURBOREPO=true", "TURBO_CI_VENDOR_ENV_KEY=NEXT_PUBLIC_VERCEL_"},
+			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
+			args: args{
+				envKeys:     []string{"TURBOREPO"},
+				envPrefixes: []string{"NEXT_PUBLIC"},
+			},
+			want: []string{"NEXT_PUBLIC_MY_VERCEL_URL=me.vercel.com", "TURBOREPO=true"},
+		},
+		{
+			env:  []string{"TURBO_CI_VENDOR_ENV_KEY_VAL=true", "TURBO_CI_VENDOR_ENV_KEY=TURBO_CI_VENDOR_ENV_KEY"},
 			name: "$TURBO_CI_VENDOR_ENV_KEY should not exclude itself",
 			args: args{
 				envKeys:     []string{},
-				envPrefixes: []string{"MY_TURBO_"},
+				envPrefixes: []string{"TURBO_"},
 			},
 			want: []string{},
-		},
-		{
-			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
-			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
-			args: args{
-				envKeys:     []string{"MANUAL", "MANUAL_VERCEL_ENV"},
-				envPrefixes: []string{"NEXT_PUBLIC_"},
-			},
-			want: []string{"MANUAL=true", "MANUAL_VERCEL_ENV=true"},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
