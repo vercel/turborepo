@@ -58,6 +58,7 @@ var packageManagers = []PackageManager{
 	nodejsBerry,
 	nodejsNpm,
 	nodejsPnpm,
+	nodejsPnpm6,
 }
 
 var (
