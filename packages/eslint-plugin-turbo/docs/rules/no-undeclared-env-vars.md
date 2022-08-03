@@ -1,4 +1,4 @@
-# Ensure all environment variables are correctly included in cache keys (`no-uncached-env-vars`)
+# Ensure all environment variables are correctly included in cache keys (`no-undeclared-env-vars`)
 
 Ensures that all detectable usage of environment variables are correctly included in cache keys. This ensures build outputs remain correctly cacheable across environments.
 

@@ -42,7 +42,7 @@ Then configure the rules you want to use under the rules section.
 {
   "plugins": ["turbo"],
   "rules": {
-    "turbo/no-uncached-env-vars": [
+    "turbo/no-undeclared-env-vars": [
       "error",
       {
         "allowList": ["^ENV_[A-Z]+$"]

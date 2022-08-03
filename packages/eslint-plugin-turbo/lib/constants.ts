@@ -1,5 +1,5 @@
 const RULES = {
-  noUncachedEnvVars: `no-uncached-env-vars`,
+  noUndeclaredEnvVars: `no-undeclared-env-vars`,
 };
 
 export { RULES };

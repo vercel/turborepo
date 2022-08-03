@@ -1,5 +1,5 @@
 import { RULES } from "../../lib/constants";
-import rule from "../../lib/rules/no-uncached-env-vars";
+import rule from "../../lib/rules/no-undeclared-env-vars";
 import { RuleTester } from "eslint";
 
 const ruleTester = new RuleTester({
@@ -30,7 +30,7 @@ const getTestTurboConfig = () => {
   };
 };
 
-ruleTester.run(RULES.noUncachedEnvVars, rule, {
+ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
     {
       code: `

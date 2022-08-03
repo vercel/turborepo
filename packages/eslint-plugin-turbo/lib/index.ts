@@ -1,13 +1,13 @@
 import { RULES } from "./constants";
 
 // rules
-import noUncachedEnvVars from "./rules/no-uncached-env-vars";
+import noUndeclaredEnvVars from "./rules/no-undeclared-env-vars";
 
 // configs
 import recommended from "./configs/recommended";
 
 const rules = {
-  [RULES.noUncachedEnvVars]: noUncachedEnvVars,
+  [RULES.noUndeclaredEnvVars]: noUndeclaredEnvVars,
 };
 
 const configs = {
