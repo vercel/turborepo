@@ -31,7 +31,7 @@ Then configure the rules you want to use under the rules section.
 ```json
 {
   "rules": {
-    "turbo/rule-name": "error"
+    "turbo/no-undeclared-env-vars": "error"
   }
 }
 ```
