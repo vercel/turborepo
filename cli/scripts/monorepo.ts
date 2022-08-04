@@ -13,6 +13,7 @@ export class Monorepo {
   static tmpdir = os.tmpdir();
   static yarnCache = path.join(__dirname, "yarn-cache-");
   root: string;
+  corepackDir?: string;
   subdir?: string;
   name: string;
   npmClient: NPMClient;
@@ -21,9 +22,16 @@ export class Monorepo {
       ? path.join(this.root, this.subdir, "node_modules")
       : path.join(this.root, "node_modules");
   }
+  get binPath() {
+    const path_delimiter = process.platform == "win32" ? ";" : ":";
+    return this.corepackDir
+      ? `${this.corepackDir}${path_delimiter}${process.env.PATH}`
+      : process.env.PATH;
+  }
 
-  constructor(name) {
+  constructor(name: string, corepackDir?: string) {
     this.root = fs.mkdtempSync(path.join(__dirname, `turbo-monorepo-${name}-`));
+    this.corepackDir = corepackDir;
   }
 
   init(npmClient: NPMClient, turboConfig = {}, subdir?: string) {
@@ -116,12 +124,14 @@ importers:
       });
       execa.sync("pnpm", ["install", "--recursive"], {
         cwd,
+        env: { PATH: this.binPath },
       });
       return;
     }
     if (this.npmClient == "npm") {
       execa.sync("npm", ["install"], {
         cwd,
+        env: { PATH: this.binPath },
       });
       this.commitAll();
       return;
@@ -154,13 +164,11 @@ importers:
         this.commitFiles({ "yarn.lock": yarnYaml });
 
         if (this.npmClient == "berry") {
-          execa.sync("yarn", ["set", "version", "stable"], {
-            cwd,
-          });
           execa.sync("yarn", ["install"], {
             cwd,
             env: {
               YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
+              PATH: this.binPath,
             },
           });
           this.commitAll();
@@ -323,6 +331,7 @@ fs.copyFileSync(
     return execa.sync(turboPath, [command, ...resolvedArgs], {
       cwd: this.root,
       shell: true,
+      env: { PATH: this.binPath },
       ...options,
     });
   }
@@ -333,24 +342,28 @@ fs.copyFileSync(
         return execa.sync("yarn", [command, ...(args || [])], {
           cwd: this.root,
           shell: true,
+          env: { PATH: this.binPath },
           ...options,
         });
       case "berry":
         return execa.sync("yarn", [command, ...(args || [])], {
           cwd: this.root,
           shell: true,
+          env: { PATH: this.binPath },
           ...options,
         });
       case "pnpm":
         return execa.sync("pnpm", [command, ...(args || [])], {
           cwd: this.root,
           shell: true,
+          env: { PATH: this.binPath },
           ...options,
         });
       case "npm":
         return execa.sync("npm", ["run", command, ...(args || [])], {
           cwd: this.root,
           shell: true,
+          env: { PATH: this.binPath },
           ...options,
         });
       default:
