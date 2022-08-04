@@ -162,6 +162,12 @@ importers:
       tsup: 5.12.9_typescript@4.7.4
       typescript: 4.7.4
 
+  packages/eslint-config-turbo:
+    specifiers:
+      eslint-plugin-turbo: workspace:*
+    dependencies:
+      eslint-plugin-turbo: link:../eslint-plugin-turbo
+
   packages/eslint-plugin-turbo:
     specifiers:
       '@types/estree': ^1.0.0
