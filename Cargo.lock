@@ -1861,6 +1861,7 @@ dependencies = [
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbopack",
+ "turbopack-cli-utils",
  "turbopack-core",
 ]
 
@@ -4253,6 +4254,22 @@ dependencies = [
  "turbopack-ecmascript",
  "turbopack-static",
  "url",
+]
+
+[[package]]
+name = "turbopack-cli-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "owo-colors",
+ "serde",
+ "serde_json",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack-core",
 ]
 
 [[package]]
