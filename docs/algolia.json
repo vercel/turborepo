@@ -1,0 +1,41 @@
+{
+  "index_name": "turbo_docs_test",
+  "start_urls": [
+    {
+      "url": "https://turbo-site-fx2e0u81t.vercel.sh/docs",
+      "selectors_key": "docs"
+    },
+    {
+      "url": "https://turbo-site-fx2e0u81t.vercel.sh/blog",
+      "selectors_key": "blog"
+    }
+  ],
+  "selectors": {
+    "docs": {
+      "lvl0": {
+        "selector": "//*[contains(@class,'nextra-breadcrumb')]//*[contains(@class,'active')]/preceding::div[1]",
+        "type": "xpath",
+        "global": true,
+        "default_value": "Documentation"
+      },
+      "lvl1": "[data-aloglia] h1",
+      "lvl2": "[data-aloglia] h2",
+      "lvl3": "[data-aloglia] h3",
+      "lvl4": "[data-aloglia] h4",
+      "text": "[data-aloglia] p, [data-aloglia] li"
+    },
+    "guides": {
+      "lvl0": {
+        "selector": "//*[contains(@class,'nextra-breadcrumb')]//*[contains(@class,'active')]/preceding::div[1]",
+        "type": "xpath",
+        "global": true,
+        "default_value": "Guides"
+      },
+      "lvl1": "[data-aloglia] h1",
+      "lvl2": "[data-aloglia] h2",
+      "lvl3": "[data-aloglia] h3",
+      "lvl4": "[data-aloglia] h4",
+      "text": "[data-aloglia] p, [data-aloglia] li"
+    }
+  }
+}
