@@ -3,6 +3,7 @@ import "nextra-theme-docs/style.css";
 import "../custom.css";
 
 import { SSRProvider } from "@react-aria/ssr";
+import { SearchProvider } from "../components/Search";
 import type { AppProps } from "next/app";
 import type { ReactNode } from "react";
 
@@ -21,11 +22,15 @@ if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
 export default function Nextra({ Component, pageProps }: NextraAppProps) {
   const getLayout = Component.getLayout || ((page) => page);
 
-  return getLayout(
-    <>
-      <SSRProvider>
-        <Component {...pageProps} />
-      </SSRProvider>
-    </>
+  return (
+    <SearchProvider>
+      {getLayout(
+        <>
+          <SSRProvider>
+            <Component {...pageProps} />
+          </SSRProvider>
+        </>
+      )}
+    </SearchProvider>
   );
 }

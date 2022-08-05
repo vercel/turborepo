@@ -22,6 +22,7 @@ import Features from "../Features";
 import { Marquee } from "../clients/Marquee";
 import { users } from "../clients/users";
 import { useTheme } from "next-themes";
+import { SearchButton } from "../Search";
 
 export default function Home() {
   const onClick = () => {
@@ -90,7 +91,7 @@ export default function Home() {
               </a>
             </Link>
           </div>
-          <div className="relative mt-3 rounded-md sm:mt-0 sm:ml-3">
+          {/* <div className="relative mt-3 rounded-md sm:mt-0 sm:ml-3">
             <button
               onClick={onClick}
               className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black border border-transparent border-gray-200 rounded-md bg-opacity-5 dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 betterhover:hover:bg-gray-50 betterhover:dark:hover:bg-gray-900 md:py-3 md:text-base md:leading-6 md:px-10"
@@ -98,7 +99,39 @@ export default function Home() {
               npx create-turbo
               <DuplicateIcon className="w-6 h-6 ml-2 -mr-3 text-gray-400" />
             </button>
-          </div>
+          </div> */}
+          <SearchButton className="items-center hidden h-12 px-4 space-x-3 text-left bg-white rounded-lg shadow-sm sm:flex w-72 ring-1 ring-slate-900/10 hover:ring-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-400 dark:bg-slate-800 dark:ring-0 dark:text-slate-300 dark:highlight-white/5 dark:hover:bg-slate-700">
+            {({ actionKey }) => (
+              <>
+                <svg
+                  width="24"
+                  height="24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="flex-none text-slate-300 dark:text-slate-400"
+                  aria-hidden="true"
+                >
+                  <path d="m19 19-3.5-3.5" />
+                  <circle cx="11" cy="11" r="6" />
+                </svg>
+                <span className="flex-auto">Quick search...</span>
+                {actionKey && (
+                  <kbd className="font-sans font-semibold dark:text-slate-500">
+                    <abbr
+                      title={actionKey[1]}
+                      className="no-underline text-slate-300 dark:text-slate-500"
+                    >
+                      {actionKey[0]}
+                    </abbr>{" "}
+                    K
+                  </kbd>
+                )}
+              </>
+            )}
+          </SearchButton>
         </div>
       </div>
 
