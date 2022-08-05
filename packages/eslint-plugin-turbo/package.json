@@ -15,7 +15,7 @@
     "dist/**"
   ],
   "scripts": {
-    "prepare": "pnpm build",
+    "publish": "pnpm build && pnpm publish",
     "test": "jest",
     "build": "tsup"
   },
