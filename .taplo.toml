@@ -1,7 +1,6 @@
-exclude = ["**/node_modules/**", "**/target/**"]
+include = ["./*.toml", "crates/*/*.toml"]
 
 [[rule]]
-include = ["**/Cargo.toml"]
 keys = ["dependencies", "*-dependencies"]
 
 [rule.formatting]

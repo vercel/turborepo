@@ -128,7 +128,7 @@ jobs:
           node-version: 16
 
       - name: install Node.js dependencies
-        run: yarn install --mode=skip-build
+        run: yarn workspaces focus
 
       - name: Prettier
         run: yarn prettier -c .
