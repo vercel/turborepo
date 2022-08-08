@@ -88,9 +88,9 @@ publish: clean prepublish build
 
 	# Stop if versions are not updated.
 	cd $(CLI_DIR)/..
-	@test "" = "`git diff version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
+	@test "" != "`git diff -- version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 	cd $(CLI_DIR)
-	@test "" = "`git diff cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
+	@test "" != "`git diff -- cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
@@ -102,7 +102,7 @@ publish: clean prepublish build
 	git tag "v$(TURBO_VERSION)"
 
 	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout
+	git format-patch HEAD~1 --stdout | cat
 
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist
