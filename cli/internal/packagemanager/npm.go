@@ -7,12 +7,13 @@ import (
 )
 
 var nodejsNpm = PackageManager{
-	Name:       "nodejs-npm",
-	Slug:       "npm",
-	Command:    "npm",
-	Specfile:   "package.json",
-	Lockfile:   "package-lock.json",
-	PackageDir: "node_modules",
+	Name:         "nodejs-npm",
+	Slug:         "npm",
+	Command:      "npm",
+	Specfile:     "package.json",
+	Lockfile:     "package-lock.json",
+	PackageDir:   "node_modules",
+	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json").ToStringDuringMigration())

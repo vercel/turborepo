@@ -29,6 +29,10 @@ const basicPipeline = {
       outputs: ["dist/**"],
       inputs: [],
     },
+    "//#args": {
+      dependsOn: [],
+      outputs: [],
+    },
   },
   globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
 };
@@ -39,7 +43,7 @@ process.env.TURBO_TOKEN = "";
 const COREPACK_BIN_DIR = setupCorepack();
 
 let suites = [];
-for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics", COREPACK_BIN_DIR);
   repo.init(npmClient, basicPipeline);
@@ -113,7 +117,7 @@ const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "berry" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm6" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {
@@ -489,6 +493,65 @@ function runSmokeTests<T>(
     }
   );
 
+  suite(
+    `${npmClient} passes through correct args ${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
+        const result = getCommandOutputAsArray(
+          repo.turbo("run", inputArgs, options)
+        );
+        // Find the output logs of the test script
+        const needle = "//:args: Output:";
+        const script_output = result.find((line) => line.startsWith(needle));
+
+        assert.ok(
+          script_output != undefined && script_output.startsWith(needle),
+          `Unable to find '//:arg' output in '${result}'`
+        );
+        const [node, ...args] = JSON.parse(
+          script_output.substring(needle.length)
+        );
+
+        assert.match(
+          node,
+          "node",
+          `Expected node binary path (${node}) to contain 'node'`
+        );
+        assert.equal(args, passedArgs);
+      };
+
+      const tests = [
+        [["args", "--filter=//", "--", "--script-arg=42"], ["--script-arg=42"]],
+        [["args", "--filter=//", "--", "--filter=//"], ["--filter=//"]],
+        [["--filter=//", "args", "--", "--filter=//"], ["--filter=//"]],
+        [
+          ["args", "--", "--script-arg", "42"],
+          ["--script-arg", "42"],
+        ],
+        [["args"], []],
+        [["args", "--"], []],
+        [
+          ["args", "--", "--", "--"],
+          ["--", "--"],
+        ],
+        [
+          ["args", "--", "first", "--", "second"],
+          ["first", "--", "second"],
+        ],
+        [
+          ["args", "--", "-f", "--f", "---f", "----f"],
+          ["-f", "--f", "---f", "----f"],
+        ],
+      ];
+
+      for (const [input, expected] of tests) {
+        expectArgsPassed(input, expected);
+      }
+    }
+  );
+
   if (npmClient === "yarn") {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
@@ -541,7 +604,7 @@ function runSmokeTests<T>(
   }
 }
 
-type PackageManager = "yarn" | "pnpm" | "npm" | "berry";
+type PackageManager = "yarn" | "pnpm6" | "pnpm" | "npm" | "berry";
 
 // getLockfileForPackageManager returns the name of the lockfile for the given package manager
 function getLockfileForPackageManager(ws: PackageManager) {
@@ -549,6 +612,8 @@ function getLockfileForPackageManager(ws: PackageManager) {
     case "yarn":
       return "yarn.lock";
     case "pnpm":
+      return "pnpm-lock.yaml";
+    case "pnpm6":
       return "pnpm-lock.yaml";
     case "npm":
       return "package-lock.json";

@@ -698,19 +698,6 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
-	argSeparator := []string{"--"}
-	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
-		return errors.Wrap(err, "determining pnpm version")
-	} else if is7PlusPnpm {
-		// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
-		// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
-		// potentially breaking scripts that aren't expecting it.
-		//
-		// We are allowed to use nil here because argSeparator already has a type, so it's a typed nil,
-		// vs if we tried to call "args = append(args, nil...)", which would not work. This could
-		// just as easily be []string{}, but the style guide says to prefer nil for empty slices.
-		argSeparator = nil
-	}
 	ec := &execContext{
 		colorCache:     colorCache,
 		runState:       runState,
@@ -722,7 +709,6 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		packageManager: packageManager,
 		processes:      r.processes,
 		taskHashes:     hashes,
-		argSeparator:   argSeparator,
 	}
 
 	// run the thing
@@ -866,7 +852,6 @@ type execContext struct {
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
 	taskHashes     *taskhash.Tracker
-	argSeparator   []string
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -929,7 +914,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	argsactual := append([]string{"run"}, pt.Task)
 	if len(passThroughArgs) > 0 {
 		// This will be either '--' or a typed nil
-		argsactual = append(argsactual, e.argSeparator...)
+		argsactual = append(argsactual, e.packageManager.ArgSeparator...)
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 
