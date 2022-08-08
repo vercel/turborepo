@@ -66,7 +66,11 @@ fmt-go: $(GO_FILES) go.mod go.sum
 install: | ./package.json
 	pnpm install --filter=cli
 
-e2e: install turbo
+corepack:
+	npm install -g corepack@latest
+	corepack enable
+
+e2e: corepack install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt
