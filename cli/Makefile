@@ -87,10 +87,8 @@ publish: clean prepublish build
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
 	# Stop if versions are not updated.
-	cd $(CLI_DIR)/..
-	@test "" != "`git diff -- version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
-	cd $(CLI_DIR)
-	@test "" != "`git diff -- cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
+	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
+	@test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
