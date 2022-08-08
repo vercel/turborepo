@@ -77,7 +77,11 @@ describe("create-turbo cli", () => {
         case 3:
           // Which package manager do you want to use?
           // easy to change deployment targets.
-          expect(getPromptChoices(prompt)).toEqual(["npm", "pnpm", "yarn"]);
+          expect(getPromptChoices(prompt)).toEqual([
+            "npm",
+            "pnpm",
+            "- yarn (not installed)",
+          ]);
           cli.stdin.write(keys.enter);
           break;
         case 4:
@@ -134,6 +138,7 @@ describe("create-turbo cli", () => {
           Flags:
             --use-npm           Explicitly tell the CLI to bootstrap the app using npm
             --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
+            --use-yarn          Explicitly tell the CLI to bootstrap the app using yarn
             --no-install        Explicitly do not run the package manager's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
@@ -158,6 +163,7 @@ describe("create-turbo cli", () => {
           Flags:
             --use-npm           Explicitly tell the CLI to bootstrap the app using npm
             --use-pnpm          Explicitly tell the CLI to bootstrap the app using pnpm
+            --use-yarn          Explicitly tell the CLI to bootstrap the app using yarn
             --no-install        Explicitly do not run the package manager's install command
             --help, -h          Show this help message
             --version, -v       Show the version of this script
