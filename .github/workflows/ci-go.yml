@@ -77,6 +77,9 @@ jobs:
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
 
+      - name: Run JS tests
+        run: pnpm -- turbo run test --filter=create-turbo --color
+
   examples:
     name: run examples
     timeout-minutes: 15
