@@ -94,6 +94,7 @@ RUN turbo prune --scope=frontend --docker
 
 # Add pruned lockfile and package.json's of the pruned subworkspace
 FROM base AS installer
+WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/yarn.lock ./yarn.lock
 # Install only the deps needed to build the target
@@ -102,7 +103,7 @@ RUN yarn install
 # Copy source code of pruned subworkspace and build
 FROM base as builder
 WORKDIR /app
-COPY --from=pruner .git ./.git
+COPY --from=pruner /app/.git ./.git
 COPY --from=pruner /app/out/full/ .
 COPY --from=installer /app/ .
 RUN turbo run build --scope=frontend
