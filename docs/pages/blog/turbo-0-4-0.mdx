@@ -88,23 +88,24 @@ RUN npm i -g turbo
 
 # Prune the workspace for the `frontend` app
 FROM base as pruner
-COPY .git ./.git
+WORKDIR /app
 COPY . .
-RUN turbo prune --scope=frontend
+RUN turbo prune --scope=frontend --docker
 
 # Add pruned lockfile and package.json's of the pruned subworkspace
-FROM pruner AS installer
-COPY --from=builder /app/out/json/ .
-COPY --from=builder /app/out/yarn.lock ./yarn.lock
+FROM base AS installer
+WORKDIR /app
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/yarn.lock ./yarn.lock
 # Install only the deps needed to build the target
 RUN yarn install
 
 # Copy source code of pruned subworkspace and build
-FROM installer as builder
+FROM base as builder
 WORKDIR /app
-COPY --from=pruner .git ./.git
+COPY --from=pruner /app/.git ./.git
+COPY --from=pruner /app/out/full/ .
 COPY --from=installer /app/ .
-COPY --from=builder /app/out/full/ .
 RUN turbo run build --scope=frontend
 
 # Start the app
