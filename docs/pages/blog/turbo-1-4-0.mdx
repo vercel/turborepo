@@ -67,11 +67,11 @@ This improvement in hash specificity by framework is a significant step toward o
 
 We've also created a new ESLint plugin `eslint-plugin-turbo` to provide further in-editor assistance and conformance to help ensure your Turborepo cache can be correctly shared across every environment. While our new hashing algorithm should cover most situations with most frameworks, our new plugin will provide feedback for teams using other build time inlined environment variables that are not framework-prefixed which impact build outputs (i.e. caching) and teams using their own in-house framework which we don't infer automatically.
 
-To get started, simply extend from `eslint-config-turbo` in your root `[eslintrc](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats)` file:
+To get started, simply extend from `eslint-config-turbo` in your root [`eslintrc`](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats) file:
 
 ```jsx
 {
-	// Automatically flag env vars missing from turbo.json
+  // Automatically flag env vars missing from turbo.json
   "extends": ["next/core-web-vitals", "turbo"],
 }
 ```
@@ -80,11 +80,10 @@ Or, if you prefer more control over the rules - use `eslint-plugin-turbo` direct
 
 ```jsx
 {
-
   "extends": ["next/core-web-vitals"],
-	"plugins": ["turbo"]
+  "plugins": ["turbo"]
   "rules": {
-  	// Automatically flag env vars missing from turbo.json
+    // Automatically flag env vars missing from turbo.json
     "turbo/no-undeclared-env-vars": "error"
   }
 }
