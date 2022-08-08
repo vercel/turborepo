@@ -3,7 +3,7 @@ import { RULES } from "../constants";
 const config = {
   plugins: ["turbo"],
   rules: {
-    [RULES.noUndeclaredEnvVars]: "error",
+    [`turbo/${RULES.noUndeclaredEnvVars}`]: "error",
   },
 };
 
