@@ -55,7 +55,21 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        # corepack 0.10 has a race condition in it that can cause the inital
+        # package manger installs to fail.
+        # Once we update to a version of node that ships with corepack 0.12 or
+        # higher we can remove the second install command.
+        # Windows installs global packages to a directory that has lower priority than
+        # the default node install so we also need to edit $PATH
+        shell: bash
+        run: |
+          pnpm install;
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            npm install --force --global corepack@latest
+            npm config get prefix >> $GITHUB_PATH
+          else
+            npm install --global corepack@latest
+          fi
 
       - name: Build & Unit Test
         run: pnpm -- turbo run test --filter=cli --color

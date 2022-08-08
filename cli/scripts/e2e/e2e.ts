@@ -36,10 +36,12 @@ const basicPipeline = {
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
 
+const COREPACK_BIN_DIR = setupCorepack();
+
 let suites = [];
 for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
-  const repo = new Monorepo("basics");
+  const repo = new Monorepo("basics", COREPACK_BIN_DIR);
   repo.init(npmClient, basicPipeline);
   repo.install();
   repo.addPackage("a", ["b"]);
@@ -48,7 +50,7 @@ for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
   repo.linkPackages();
   repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient);
-  const sub = new Monorepo("in-subdirectory");
+  const sub = new Monorepo("in-subdirectory", COREPACK_BIN_DIR);
   sub.init(npmClient, basicPipeline, "js");
   sub.install();
   sub.addPackage("a", ["b"]);
@@ -589,4 +591,14 @@ function getCachedLogFilePathForTask(
   taskName: string
 ): string {
   return path.join(cacheDir, pathToPackage, ".turbo", `turbo-${taskName}.log`);
+}
+
+// Setup corepack and provide the dir to the binaries that corepack installs
+// It is important that this dir has a higher priority in $PATH than any other
+// dirs that may versions of package managers installed by other mechanisms
+// e.g. homebrew or pnpm
+function setupCorepack(): string {
+  execa.sync("corepack", ["enable"]);
+  const corepack_path = execa.sync("which", ["corepack"]).stdout;
+  return path.dirname(corepack_path);
 }
