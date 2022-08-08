@@ -602,17 +602,6 @@ function runSmokeTests<T>(
       }
     );
   }
-
-  if (["pnpm", "pnpm6"].includes(npmClient)) {
-    suite(`${npmClient} is correct version`, async () => {
-      const version = repo.packageManagerVersion();
-      assert.equal(
-        version,
-        npmClient === "pnpm6" ? "6.22.2" : "7.2.1",
-        `PATH: ${repo.pathWithNodeModules()}`
-      );
-    });
-  }
 }
 
 type PackageManager = "yarn" | "pnpm6" | "pnpm" | "npm" | "berry";

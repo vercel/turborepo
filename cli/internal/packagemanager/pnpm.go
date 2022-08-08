@@ -25,6 +25,9 @@ var nodejsPnpm = PackageManager{
 	// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
 	// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
 	// potentially breaking scripts that aren't expecting it.
+	// We are allowed to use nil here because ArgSeparator already has a type, so it's a typed nil,
+	// This could just as easily be []string{}, but the style guide says to prefer
+	// nil for empty slices.
 	ArgSeparator: nil,
 
 	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {

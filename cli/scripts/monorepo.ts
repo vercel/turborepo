@@ -62,13 +62,6 @@ export class Monorepo {
     if (!fs.existsSync(this.nodeModulesPath)) {
       fs.mkdirSync(this.nodeModulesPath, { recursive: true });
     }
-
-    if (this.npmClient === "pnpm6") {
-      fs.mkdirSync(path.join(this.binDir, "node_modules"), { recursive: true });
-      execa.sync("npm", ["install", "--no-save", "pnpm@6.22.2"], {
-        cwd: this.binDir,
-      });
-    }
   }
 
   /**
@@ -205,6 +198,8 @@ importers:
           lint: `${turboPath} run lint`,
           special: "echo root task",
           // We have a trailing '--' as node swallows the first '--'
+          // We prepend the output with Output to make finding the script output
+          // easier during testing.
           args: "node -e \"console.log('Output: ' + JSON.stringify(process.argv))\" --",
         },
       },
@@ -385,34 +380,6 @@ fs.copyFileSync(
       default:
         throw new Error("npm client not implemented yet");
     }
-  }
-
-  packageManagerVersion() {
-    let command;
-    switch (this.npmClient) {
-      case "yarn":
-      case "berry":
-        command = "yarn";
-        break;
-      case "pnpm6":
-      case "pnpm":
-        command = "pnpm";
-        break;
-      case "npm":
-        command = "npm";
-        break;
-      default:
-        throw new Error("npm client not implemented yet");
-    }
-
-    const version = execa.sync(command, ["-v"], {
-      cwd: this.root,
-      shell: true,
-      // We need to add the temporary dir that can hold the package manager
-      // binaries.
-      env: { PATH: this.pathWithNodeModules() },
-    }).stdout;
-    return version;
   }
 
   readFileSync(filepath) {
