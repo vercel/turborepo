@@ -71,10 +71,6 @@ jobs:
             npm install --global corepack@latest
           fi
 
-
-      - name: Debug CI @donotmerge
-        run: which -a corepack; echo $PATH; corepack -v
-
       - name: Build & Unit Test
         run: pnpm -- turbo run test --filter=cli --color
 
