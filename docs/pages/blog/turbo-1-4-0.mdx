@@ -25,7 +25,7 @@ Update today by running `npm install turbo@latest`.
 
 ## Automatic environment variable inclusion
 
-To help ensure correct caching across environments, Turborepo will now automatically infer and include public environment variables when calculating cache keys for apps built with Astro, Create React App, Gatsby, Next.js, Nuxt, SvelteKit, Vite, Vue, and more. You can safely remove these framework-specific public environment variables from `turbo.json` if you have manually declared them.
+To help ensure correct caching across environments, Turborepo will now automatically infer and include public environment variables when calculating cache keys for apps built with Astro, Create React App, Gatsby, Next.js, Nuxt, SvelteKit, Vite, Vue, and more. You can safely remove framework-specific public environment variables from `turbo.json` if you manually declared them.
 
 ```diff filename="turbo.json"
 {
