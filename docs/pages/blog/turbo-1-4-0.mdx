@@ -63,11 +63,11 @@ As of 1.4, when you run `turbo run build`, Turborepo will not consider any build
 
 This improvement in hash specificity by framework is a significant step toward optimal, safe, and correct caching.
 
-## `eslint-plugin-turbo`
+## `eslint-config-turbo`
 
-We've also created a new ESLint plugin `eslint-plugin-turbo` to provide further in-editor assistance and conformance to help ensure your Turborepo cache can be correctly shared across every environment. While our new hashing algorithm should cover most situations with most frameworks, our new plugin will provide feedback for teams using other build time inlined environment variables that are not framework-prefixed which impact build outputs (i.e. caching) and teams using their own in-house framework which we don't infer automatically.
+We've also created a new ESLint plugin for further in-editor assistance and conformance to help ensure your Turborepo cache can be correctly shared across every environment. While our new hashing algorithm should cover most situations with most frameworks, this ESLint config will provide feedback for teams using other build time inlined environment variables that are not framework-prefixed, but impact build outputs (i.e. caching), and teams using their own in-house framework that we cannot infer automatically.
 
-To get started, simply extend from `eslint-config-turbo` in your root [`eslintrc`](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats) file:
+To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats) file:
 
 ```jsx
 {
@@ -76,7 +76,7 @@ To get started, simply extend from `eslint-config-turbo` in your root [`eslintrc
 }
 ```
 
-Or, if you prefer more control over the rules - use `eslint-plugin-turbo` directly by first adding it to plugins and then configuring the desired rules:
+If you prefer more control over the rules - use can install and configure the `eslint-plugin-turbo` _plugin_ directly by first adding it to plugins and then configuring the desired rules:
 
 ```jsx
 {
@@ -92,6 +92,8 @@ Or, if you prefer more control over the rules - use `eslint-plugin-turbo` direct
 The plugin will warn you if you are using non-framework-related environment variables in your code that have not been declared in your `turbo.json`.
 
 As of 1.4.x, we now include `eslint-config-turbo` in all of our examples and in new projects generated via `npx create-turbo`.
+
+Learn more about ESLint configs and plugins in the [ESLint docs](https://eslint.org/docs/latest/).
 
 ## New framework and library examples
 
