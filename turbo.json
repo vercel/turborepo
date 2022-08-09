@@ -21,7 +21,8 @@
       "dependsOn": []
     },
     "schema": {
-      "outputs": ["public/schema.json"]
+      "outputs": ["public/schema.json"],
+      "dependsOn": ["build"]
     },
     "create-turbo#test": {
       "dependsOn": ["create-turbo#build"],
