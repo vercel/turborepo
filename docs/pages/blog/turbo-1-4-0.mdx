@@ -59,7 +59,7 @@ For example, consider a monorepo with a three workspaces: a Next.js project, a C
 }
 ```
 
-As of 1.4, when you run `turbo run build`, Turborepo will not consider any build time environment variables relevant when building the TypeScript packages. However, when building the Next.js app, Turborepo will infer that environment variables starting with `NEXT_PUBLIC_` could alter the output of the `.next` folder and should thus be included when calculating the hash. Similarly, when calculating the hash of the Create React App's `build` script, all build time environment variables starting with `REACT_APP_PUBLIC_` will be included.
+As of 1.4, when you run `turbo run build`, Turborepo will not consider any build time environment variables relevant when building the TypeScript package. However, when building the Next.js app, Turborepo will infer that environment variables starting with `NEXT_PUBLIC_` could alter the output of the `.next` folder and should thus be included when calculating the hash. Similarly, when calculating the hash of the Create React App's `build` script, all build time environment variables starting with `REACT_APP_PUBLIC_` will be included.
 
 This improvement in hash specificity by framework is a significant step toward optimal, safe, and correct caching.
 
