@@ -370,4 +370,10 @@ export const users = [
     infoLink: "https://waggel.co.uk",
     pinned: true,
   },
+  {
+    caption: "n8n",
+    image: "/images/logos/n8n.svg",
+    infoLink: "https://n8n.io",
+    pinned: true,
+  },
 ];
