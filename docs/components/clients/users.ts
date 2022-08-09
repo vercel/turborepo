@@ -105,6 +105,15 @@ export const users = [
     },
   },
   {
+    caption: "Twitch",
+    image: "/images/logos/twitch.svg",
+    infoLink: "https://twitch.tv",
+    pinned: true,
+    style: {
+      width: 125,
+    },
+  },
+  {
     caption: "Line",
     image: "/images/logos/line.svg",
     infoLink: "https://line.me",
@@ -119,7 +128,7 @@ export const users = [
     infoLink: "https://espn.com",
     pinned: true,
     style: {
-      width: 125,
+      widt: 75,
     },
   },
   {
@@ -128,8 +137,8 @@ export const users = [
     infoLink: "https://www.volvo.com",
     pinned: true,
     style: {
-      height: 50,
-      width: 50,
+      height: 75,
+      width: 75,
     },
   },
   {
@@ -250,7 +259,24 @@ export const users = [
       width: 150,
     },
   },
-
+  {
+    caption: "N26",
+    image: "/images/logos/n26.svg",
+    infoLink: "https://n26.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
+  {
+    caption: "Sourcegraph",
+    image: "/images/logos/sourcegraph.svg",
+    infoLink: "https://sourcegraph.com",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
   {
     caption: "Stedi",
     image: "/images/logos/stedi.svg",
@@ -265,6 +291,15 @@ export const users = [
     image: "/images/logos/framer.svg",
     infoLink: "https://framer.com",
     pinned: true,
+  },
+  {
+    caption: "Maze",
+    image: "/images/logos/maze.svg",
+    infoLink: "https://maze.co",
+    pinned: true,
+    style: {
+      width: 125,
+    },
   },
   {
     caption: "Contentful",

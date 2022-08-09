@@ -11,12 +11,13 @@ import (
 )
 
 var nodejsYarn = PackageManager{
-	Name:       "nodejs-yarn",
-	Slug:       "yarn",
-	Command:    "yarn",
-	Specfile:   "package.json",
-	Lockfile:   "yarn.lock",
-	PackageDir: "node_modules",
+	Name:         "nodejs-yarn",
+	Slug:         "yarn",
+	Command:      "yarn",
+	Specfile:     "package.json",
+	Lockfile:     "yarn.lock",
+	PackageDir:   "node_modules",
+	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json").ToStringDuringMigration())
