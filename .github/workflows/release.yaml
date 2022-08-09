@@ -21,7 +21,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - run: git fetch --prune --unshallow
       - name: Setup env
         uses: c-py/action-dotenv-to-setenv@v3
@@ -45,18 +45,18 @@ jobs:
           echo "::set-output name=cross_tags::$cross_tags"
           echo "::set-output name=cross_base_tags::$cross_base_tags"
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Install cosign
-        uses: sigstore/cosign-installer@v1.4.1
+        uses: sigstore/cosign-installer@v2.5.0
       - uses: actions/setup-go@v2
         with:
           go-version: "${{ env.GO_VERSION }}"
       - name: Install git-chglog
         run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@${{ env.GIT_CHGLOG_VERSION }}
       - name: Build and push base images
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -71,7 +71,7 @@ jobs:
             "COSIGN_SHA256=${{env.COSIGN_SHA256}}"
             "DEBIAN_FRONTEND=${{env.DEBIAN_FRONTEND}}"
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: .
           platforms: linux/amd64,linux/arm64
