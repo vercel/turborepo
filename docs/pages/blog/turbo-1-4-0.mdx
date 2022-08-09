@@ -25,7 +25,7 @@ Update today by running `npm install turbo@latest`.
 
 ## Automatic environment variable inclusion
 
-To help ensure correct caching across environments, Turborepo will now automatically infer and include public environment variables when calculating cache keys for apps built with Astro, Create React App, Gatsby, Next.js, Nuxt, SvelteKit, Vite, Vue, and more. You can safely remove framework-specific public environment variables from `turbo.json` if you manually declared them.
+To help ensure correct caching across environments Turborepo will now automatically infer and include public environment variables when calculating cache keys for apps built with Astro, Create React App, Gatsby, Next.js, Nuxt, SvelteKit, Vite, Vue, and more. You can safely remove framework-specific public environment variables from `turbo.json` if you manually declared them.
 
 ```diff filename="turbo.json"
 {
@@ -36,7 +36,7 @@ To help ensure correct caching across environments, Turborepo will now automatic
 -       // Include build time public inlined environment variables that
 -       // are different in development and production, so that
 -       // Turborepo does not use the same cached build
--       // accross environments
+-       // across environments
 -       "$NEXT_PUBLIC_EXAMPLE_ENV_VAR"
       ]
     }
@@ -44,9 +44,9 @@ To help ensure correct caching across environments, Turborepo will now automatic
 }
 ```
 
-Note that this automatic detection and inclusion only works if Turborepo successfully infers the framework your apps are built with. Additionally, environment variables will only be part of the cache key in the workspaces where that framework is used. In other words, environment variables inferred for Next.js apps, will only apply to the cache key for workspaces inferred as Next.js apps. Other workspaces in the monorepo will not be impacted.
+Note that this automatic detection and inclusion only works if Turborepo successfully infers the framework your apps are built with. Additionally, the environment variables will only be included in the cache key for tasks in workspaces where that framework is used. In other words, environment variables inferred for Next.js apps, will only be included in the cache key for workspaces detected as Next.js apps. Tasks in other workspaces in the monorepo will not be impacted.
 
-For example, consider a monorepo with three workspaces: a Next.js project, a Create React App project, and a Typescirpt package. Each has a `build` script, and both apps depend on the Typescript project. Let's say that this Turborepo has a standard `turbo.json` pipeline that builds them all in order:
+For example, consider a monorepo with three workspaces: a Next.js project, a Create React App project, and a TypeScript package. Each has a `build` script, and both apps depend on the TypeScript project. Let's say that this Turborepo has a standard `turbo.json` pipeline that builds them all in order:
 
 ```jsonc filename="turbo.json"
 {
@@ -66,11 +66,11 @@ This improvement in hash specificity by framework is a significant step toward o
 
 ## `eslint-config-turbo`
 
-We've also created a new ESLint plugin for further in-editor assistance and conformance to help ensure your Turborepo cache can be correctly shared across every environment. While our new hashing algorithm should cover most situations with most frameworks, this ESLint config will provide feedback for teams using other build time inlined environment variables that are not framework-prefixed, but impact build outputs (i.e. caching), and teams using their own in-house framework that we cannot infer automatically.
+We've also created a new ESLint config for further in-editor assistance to help ensure your Turborepo cache can be correctly shared across every environment. While our new hashing algorithm should cover most situations with most frameworks, this ESLint config will provide in-editor feedback for teams using other build time inlined environment variables that are not framework-prefixed but impact build outputs (i.e. caching), and teams using their own in-house frameworks that we cannot detect automatically.
 
 To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats) file:
 
-```jsx
+```jsonc
 {
   // Automatically flag env vars missing from turbo.json
   "extends": ["next/core-web-vitals", "turbo"],
@@ -79,10 +79,10 @@ To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](http
 
 If you prefer more control over the rules - use can install and configure the `eslint-plugin-turbo` _plugin_ directly by first adding it to plugins and then configuring the desired rules:
 
-```jsx
+```jsonc
 {
   "extends": ["next/core-web-vitals"],
-  "plugins": ["turbo"]
+  "plugins": ["turbo"],
   "rules": {
     // Automatically flag env vars missing from turbo.json
     "turbo/no-undeclared-env-vars": "error"
