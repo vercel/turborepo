@@ -46,7 +46,7 @@ To help ensure correct caching across environments, Turborepo will now automatic
 
 Note that this automatic detection and inclusion only works if Turborepo successfully infers the framework your apps are built with. Additionally, environment variables will only be part of the cache key in the workspaces where that framework is used. In other words, environment variables inferred for Next.js apps, will only apply to the cache key for workspaces inferred as Next.js apps. Other workspaces in the monorepo will not be impacted.
 
-For example, consider a monorepo with a three workspaces: a Next.js project, a Create React App project, both depending on a shared Typescript package and each with their own`build` script. Let's say that this Turborepo has a standard `turbo.json` pipeline that builds them all in order:
+For example, consider a monorepo with three workspaces: a Next.js project, a Create React App project, and a Typescirpt package. Each has a `build` script, and both apps depend on the Typescript project. Let's say that this Turborepo has a standard `turbo.json` pipeline that builds them all in order:
 
 ```jsonc filename="turbo.json"
 {
