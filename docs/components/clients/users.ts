@@ -370,4 +370,10 @@ export const users = [
     infoLink: "https://waggel.co.uk",
     pinned: true,
   },
+  {
+    caption: "Xata",
+    image: "/images/logos/xata.svg",
+    infoLink: "https://xata.io",
+    pinned: true,
+  },
 ];
