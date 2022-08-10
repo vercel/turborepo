@@ -45,6 +45,16 @@ jobs:
           cache: 'yarn'
           node-version: 16
 
+      - name: Start Redis
+        uses: supercharge/redis-github-action@1.4.0
+        with:
+          redis-version: 6
+        if: matrix.os.name == 'ubuntu-latest'
+
+      - name: Set Redis URL
+        run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
+        if: matrix.os.name == 'ubuntu-latest'
+
       - name: install Node.js dependencies
         run: |
           yarn install
