@@ -10,13 +10,16 @@ RUN turbo prune --scope=api --docker
 FROM node:alpine AS installer
 RUN apk update
 WORKDIR /app
+
+# First install dependencies (as they change less often)
+COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/yarn.lock ./yarn.lock
-COPY --from=builder /app/out/full/ .
-COPY .gitignore .gitignore
-COPY turbo.json turbo.json
-
 RUN yarn install
+
+# Build the project and its dependencies
+COPY --from=builder /app/out/full/ .
+COPY turbo.json turbo.json
 RUN yarn turbo run build --filter=api...
 
 FROM node:alpine AS runner
@@ -29,4 +32,3 @@ USER expressjs
 COPY --from=installer /app .
 
 CMD node apps/api/dist/index.js
-
