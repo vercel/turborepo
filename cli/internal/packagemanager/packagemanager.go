@@ -155,7 +155,7 @@ func (pm PackageManager) GetWorkspaceIgnores(rootpath fs.AbsolutePath) ([]string
 
 // CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
 func (pm PackageManager) CanPrune(projectDirectory fs.AbsolutePath) (bool, error) {
-	if canPrune := pm.canPrune; canPrune != nil {
+	if pm.canPrune != nil {
 		return pm.canPrune(projectDirectory)
 	}
 	return false, nil
