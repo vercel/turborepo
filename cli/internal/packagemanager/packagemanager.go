@@ -46,6 +46,9 @@ type PackageManager struct {
 	// Return the list of workspace ignore globs
 	getWorkspaceIgnores func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error)
 
+	// Detect if Turbo knows how to produce a pruned workspace for the project
+	canPrune func(cwd fs.AbsolutePath) (bool, error)
+
 	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
 
@@ -148,4 +151,12 @@ func (pm PackageManager) GetWorkspaces(rootpath fs.AbsolutePath) ([]string, erro
 // GetWorkspaceIgnores returns an array of globs not to search for workspaces.
 func (pm PackageManager) GetWorkspaceIgnores(rootpath fs.AbsolutePath) ([]string, error) {
 	return pm.getWorkspaceIgnores(pm, rootpath)
+}
+
+// CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
+func (pm PackageManager) CanPrune(projectDirectory fs.AbsolutePath) (bool, error) {
+	if canPrune := pm.canPrune; canPrune != nil {
+		return pm.canPrune(projectDirectory)
+	}
+	return false, nil
 }

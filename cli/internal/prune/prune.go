@@ -140,14 +140,12 @@ func (p *prune) prune(opts *opts) error {
 	p.logger.Trace("docker", "value", opts.docker)
 	p.logger.Trace("out dir", "value", outDir.ToString())
 
-	if !util.IsYarn(ctx.PackageManager.Name) {
+	canPrune, err := ctx.PackageManager.CanPrune(p.config.Cwd)
+	if err != nil {
+		return err
+	}
+	if !canPrune {
 		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
-	} else if ctx.PackageManager.Name == "nodejs-berry" {
-		if isNMLinker, err := util.IsNMLinker(p.config.Cwd.ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
-		} else if !isNMLinker {
-			return errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
-		}
 	}
 
 	p.ui.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
