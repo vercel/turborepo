@@ -2735,9 +2735,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.82"
+version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82c2c1fdcd807d1098552c5b9a36e425e42e9fbd7c6a37a8425f390f781f7fa7"
+checksum = "38dd04e3c8279e75b31ef29dbdceebfe5ad89f4d0937213c53f7d49d01b3d5a7"
 dependencies = [
  "itoa 1.0.2",
  "ryu",
@@ -4432,6 +4432,7 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbopack-hash",
  "url",
 ]
 
@@ -4464,10 +4465,10 @@ dependencies = [
  "futures",
  "hyper",
  "hyper-tungstenite",
- "json",
  "lazy_static",
  "mime_guess",
  "serde",
+ "serde_json",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -4513,6 +4514,7 @@ dependencies = [
  "turbo-tasks-memory",
  "turbo-tasks-testing",
  "turbopack-core",
+ "turbopack-hash",
  "url",
 ]
 
@@ -4522,6 +4524,7 @@ version = "0.1.0"
 dependencies = [
  "base16",
  "md4",
+ "twox-hash",
 ]
 
 [[package]]
@@ -4539,6 +4542,17 @@ dependencies = [
  "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-hash",
+]
+
+[[package]]
+name = "twox-hash"
+version = "1.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
+dependencies = [
+ "cfg-if 1.0.0",
+ "rand",
+ "static_assertions",
 ]
 
 [[package]]
