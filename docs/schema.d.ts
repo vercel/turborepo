@@ -8,7 +8,7 @@ export interface Schema {
    * The base branch or your git repository. Git is used by turbo in its hashing algorithm
    * and --since CLI flag.
    *
-   * @default origin/master
+   * @default origin/main
    */
   baseBranch?: string;
 
