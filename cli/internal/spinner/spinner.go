@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/mitchellh/cli"
-	"github.com/schollz/progressbar/v3"
+	progressbar "github.com/schollz/progressbar/v3"
 	"github.com/vercel/turborepo/cli/internal/ui"
 )
 
