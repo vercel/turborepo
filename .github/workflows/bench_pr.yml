@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   bench:
+    # for edited events it should only run on base changes
+    if: ${{ github.event.action != 'edited' || github.event.changes.base }}
     runs-on: ubuntu-latest
 
     steps:
