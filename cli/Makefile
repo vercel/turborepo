@@ -67,7 +67,7 @@ install: | ./package.json
 	pnpm install --filter=cli
 
 corepack:
-	npm install -g corepack@latest
+	which corepack || npm install -g corepack@latest
 	corepack enable
 
 e2e: corepack install turbo
