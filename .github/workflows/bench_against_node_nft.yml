@@ -14,7 +14,7 @@ env:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base) }}
 
 jobs:
   bench_vs_node_nft:
