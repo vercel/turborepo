@@ -12,8 +12,6 @@ import (
 
 // TurboJSON is the root turborepo configuration
 type TurboJSON struct {
-	// Base Git branch
-	Base string `json:"baseBranch,omitempty"`
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph

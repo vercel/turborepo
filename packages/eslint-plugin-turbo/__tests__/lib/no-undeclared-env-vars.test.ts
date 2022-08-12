@@ -9,7 +9,6 @@ const ruleTester = new RuleTester({
 const getTestTurboConfig = () => {
   return {
     $schema: "./docs/public/schema.json",
-    baseBranch: "origin/main",
     globalDependencies: ["$GLOBAL_ENV_KEY"],
     pipeline: {
       test: {
