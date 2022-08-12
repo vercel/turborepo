@@ -352,3 +352,53 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		})
 	}
 }
+
+func Test_CanPrune(t *testing.T) {
+	type test struct {
+		name     string
+		pm       PackageManager
+		rootPath fs.AbsolutePath
+		want     bool
+		wantErr  bool
+	}
+
+	type want struct {
+		want    bool
+		wantErr bool
+	}
+
+	cwd, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
+	wants := map[string]want{
+		"nodejs-npm":   {false, false},
+		"nodejs-berry": {false, true},
+		"nodejs-yarn":  {true, false},
+		"nodejs-pnpm":  {false, false},
+		"nodejs-pnpm6": {false, false},
+	}
+
+	tests := make([]test, len(packageManagers))
+	for i, packageManager := range packageManagers {
+		tests[i] = test{
+			name:     packageManager.Name,
+			pm:       packageManager,
+			rootPath: cwd.Join("../../../examples/basic"),
+			want:     wants[packageManager.Name].want,
+			wantErr:  wants[packageManager.Name].wantErr,
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			canPrune, err := tt.pm.CanPrune(tt.rootPath)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CanPrune() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if canPrune != tt.want {
+				t.Errorf("CanPrune() = %v, want %v", canPrune, tt.want)
+			}
+		})
+	}
+}
