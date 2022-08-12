@@ -52,6 +52,10 @@ var nodejsYarn = PackageManager{
 		return ignores, nil
 	},
 
+	canPrune: func(cwd fs.AbsolutePath) (bool, error) {
+		return true, nil
+	},
+
 	// Versions older than 2.0 are yarn, after that they become berry
 	Matches: func(manager string, version string) (bool, error) {
 		if manager != "yarn" {
