@@ -2,24 +2,25 @@
 resolver = "2"
 
 members = [
+  "crates/next-dev",
+  "crates/node-file-trace",
+  "crates/swc-ast-explorer",
   "crates/turbo-malloc",
-  "crates/turbo-tasks",
-  "crates/turbo-tasks-memory",
-  "crates/turbo-tasks-macros",
   "crates/turbo-tasks-build",
   "crates/turbo-tasks-fs",
+  "crates/turbo-tasks-macros",
+  "crates/turbo-tasks-memory",
   "crates/turbo-tasks-test-utils",
   "crates/turbo-tasks-testing",
-  "crates/turbopack",
-  "crates/turbopack-core",
-  "crates/turbopack-css",
-  "crates/turbopack-ecmascript",
-  "crates/turbopack-dev-server",
+  "crates/turbo-tasks",
   "crates/turbopack-cli-utils",
-  "crates/node-file-trace",
-  "crates/next-dev",
+  "crates/turbopack-core",
+  "crates/turbopack-create-test-app",
+  "crates/turbopack-css",
+  "crates/turbopack-dev-server",
+  "crates/turbopack-ecmascript",
+  "crates/turbopack",
   "crates/xtask",
-  "crates/swc-ast-explorer",
 ]
 
 [profile.release]
