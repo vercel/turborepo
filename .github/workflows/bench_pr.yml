@@ -2,6 +2,8 @@ name: Benchmark PR
 
 on:
   pull_request:
+    types: [synchronize, opened, reopened, edited]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -10,7 +12,7 @@ env:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{  github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   bench:

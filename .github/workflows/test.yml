@@ -4,17 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [synchronize, opened, reopened, edited]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{  github.event_name == 'pull_request' }}
+  group: test-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
+    # for edited events it should only run on base changes
+    if: ${{ github.event.action != 'edited' || github.event.changes.base }}
     strategy:
       fail-fast: false
       matrix:
