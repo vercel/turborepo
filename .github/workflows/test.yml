@@ -13,13 +13,13 @@ env:
 
 concurrency:
   # shared with quick-test
-  group: test-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base) }}
+  group: test-${{ github.head_ref || github.run_id }}-${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
 
 jobs:
   test:
     # for edited events it should only run on base changes
-    if: ${{ github.event.action != 'edited' || github.event.changes.base }}
+    if: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -34,12 +34,26 @@ jobs:
     name: test - ${{ matrix.os.name }}
 
     steps:
+      - name: Initialize github status
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Checkout...
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
       - name: Set git to use LF
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
         if: matrix.os.name == 'windows-latest'
       - uses: actions/checkout@v3
+
+      - name: Report progress
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Restoring cache...
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
+
       - uses: Swatinem/rust-cache@v1
         with:
           key: test
@@ -60,6 +74,13 @@ jobs:
         run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
         if: matrix.os.name == 'ubuntu-latest'
 
+      - name: Report progress
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Installing Node.js dependencies...
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
+
       - name: install Node.js dependencies
         run: |
           yarn install
@@ -71,6 +92,13 @@ jobs:
           yarn node-gyp install
           yarn install
         if: matrix.os.name == 'windows-latest'
+
+      - name: Report progress
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Testing...
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -88,3 +116,11 @@ jobs:
           command: test
           args: --benches
         if: matrix.os.name == 'ubuntu-latest'
+
+      - name: Report github status
+        if: always()
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          status: '${{ job.status }}'
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}

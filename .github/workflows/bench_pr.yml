@@ -11,16 +11,22 @@ env:
   RUST_BACKTRACE: 1
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base) }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
 
 jobs:
   bench:
     # for edited events it should only run on base changes
-    if: ${{ github.event.action != 'edited' || github.event.changes.base }}
+    if: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Initialize github status
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Benchmark PR / bench (pull_request)
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
+
       - uses: actions/checkout@v3
 
       - name: Fetch the base branch
@@ -49,3 +55,10 @@ jobs:
         with:
           name: benchmark report
           path: target/criterion/
+      - name: Report github status
+        if: always()
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Benchmark PR / bench (pull_request)
+          status: '${{ job.status }}'
+          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
