@@ -36,6 +36,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turborepo/cli/internal/spinner"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -667,27 +668,6 @@ func (r *run) logWarning(prefix string, err error) {
 	r.ui.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 }
 
-// waitForCacheShutdown shuts down the cache, and prints to the terminal if it takes longer
-// than 5 seconds to do so. It continues to update the terminal every 10 seconds afterwards.
-func waitForCacheShutdown(cache cache.Cache, terminal cli.Ui) {
-	doneCh := make(chan struct{})
-	go func() {
-		cache.Shutdown()
-		close(doneCh)
-	}()
-	timeout := 5 * time.Second
-	for {
-		select {
-		case <-time.After(timeout):
-			terminal.Info("...writing to cache...")
-			// if we had to wait 5 seconds, we might have to wait a while. Use a longer period here
-			timeout = 10 * time.Second
-		case <-doneCh:
-			return
-		}
-	}
-}
-
 func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
@@ -715,7 +695,9 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			return errors.Wrap(err, "failed to set up caching")
 		}
 	}
-	defer waitForCacheShutdown(turboCache, r.ui)
+	defer func() {
+		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
+	}()
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
