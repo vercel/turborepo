@@ -53,7 +53,7 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": ["build"],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"],
+      "inputs": ["src/*.tsx", "src/*.ts", "test/*.ts"],
       "outputMode": "full"
     },
     "dev": {
@@ -140,6 +140,11 @@ Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. T
 
 Passing an empty array can be used to tell `turbo` that a task is a side-effect and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its logs (and treat them like an artifact).
 
+Note: this uses [doublestar globbing](https://github.com/bmatcuk/doublestar#patterns). Use `**/` at the start to match in any folder,
+or `xxx/**/` as a prefix to match anything in a subfolder of the given folder, or put `/**` at the end to match any file in a folder or
+its subfolders. `*` matches any character except `/`. `**` must be a path component on its own, use in combination with `*` to match
+a partial component and descendants, e.g. `s*/**`.
+
 **Example**
 
 ```jsonc
@@ -208,6 +213,11 @@ changed. This can be helpful if you want to, for example, skip running tests unl
 
 Specifying `[]` will cause the task to be rerun when any file changes.
 
+Note that this uses git pathspec syntax to select files, which is quite different from the usual globbing syntax. For
+example, `*` matches `/` and there's no special meaning for `/**/` by default. See
+[Git Pathspecs And How To Use Them](https://css-tricks.com/git-pathspecs-and-how-to-use-them/) for details. This means,
+for example, that `src/*.ts` matches `src/a.ts`, `src/lib/b.ts`, and `src/a/b/c/d.ts`.
+
 **Example**
 
 ```jsonc
@@ -223,7 +233,7 @@ Specifying `[]` will cause the task to be rerun when any file changes.
       "outputs": [""],
       // A package's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+      "inputs": ["src/*.tsx", "src/*.ts", "test/*.ts"]
     }
   }
 }
