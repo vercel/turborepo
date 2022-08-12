@@ -109,12 +109,9 @@ The `turbo` package is a little shell that will install the proper `turbo-<os>-<
 
 In the root of your monorepo, create an empty file named `turbo.json`. This will hold the configuration for Turborepo.
 
-If your git repo's base branch is not `origin/main`, then you need to specify a `baseBranch` too. For example, `origin/development`.
-
 ```json filename="./turbo.json"
 {
-  "$schema": "https://turborepo.org/schema.json",
-  "baseBranch": "origin/development"
+  "$schema": "https://turborepo.org/schema.json"
 }
 ```
 
