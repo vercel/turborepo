@@ -5,14 +5,6 @@ export interface Schema {
   $schema?: string;
 
   /**
-   * The base branch or your git repository. Git is used by turbo in its hashing algorithm
-   * and --since CLI flag.
-   *
-   * @default origin/master
-   */
-  baseBranch?: string;
-
-  /**
    * A list of globs and environment variables for implicit global hash dependencies.
    * Environment variables should be prefixed with $ (e.g. $GITHUB_TOKEN).
    *
