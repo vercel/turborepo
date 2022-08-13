@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656290518106,
+  "lastUpdate": 1660350140676,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -1572,6 +1572,52 @@ window.BENCHMARK_DATA = {
             "value": 45107.4,
             "unit": "ms",
             "range": "9303"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Mehul Kar",
+            "username": "mehulkar",
+            "email": "mehul.kar@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "ca3b50a0e23857791255647aa763bc4db1d9818a",
+          "message": "Remove references to baseBranch (#1681)",
+          "timestamp": "2022-08-12T22:37:59Z",
+          "url": "https://github.com/vercel/turborepo/commit/ca3b50a0e23857791255647aa763bc4db1d9818a"
+        },
+        "date": 1660350139536,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 239762.2,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - no changes",
+            "value": 9729.8,
+            "unit": "ms",
+            "range": "1676"
+          },
+          {
+            "name": "Cached Build - source code change",
+            "value": 9177.8,
+            "unit": "ms",
+            "range": "1101"
+          },
+          {
+            "name": "Cached Build - dependency change",
+            "value": 72013.2,
+            "unit": "ms",
+            "range": "37567"
           }
         ]
       }
