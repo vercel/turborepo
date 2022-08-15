@@ -32,7 +32,7 @@ func getWriterAndColor(terminal cli.Ui, useColor bool) (io.Writer, bool) {
 }
 
 // WaitFor runs fn, and prints msg to the terminal if it takes longer
-// than initialDay to do complete. Depending on the terminal configuration, it may
+// than initialDelay to complete. Depending on the terminal configuration, it may
 // display a single instance of msg, or an infinite spinner, updated every 250ms.
 func WaitFor(ctx context.Context, fn func(), terminal cli.Ui, msg string, initialDelay time.Duration) error {
 	doneCh := make(chan struct{})
