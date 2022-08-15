@@ -295,6 +295,16 @@ func TestGetPackageDeps(t *testing.T) {
 				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"**/{uncommitted,committed}-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
 	}
 	for _, tt := range tests {
 		got, err := GetPackageDeps(repoRoot, tt.opts)
