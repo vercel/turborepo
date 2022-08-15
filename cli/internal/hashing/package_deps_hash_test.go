@@ -1,4 +1,4 @@
-package fs
+package hashing
 
 import (
 	"errors"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
@@ -216,7 +217,7 @@ func Test_getTraversePath(t *testing.T) {
 	}
 }
 
-func requireGitCmd(t *testing.T, repoRoot AbsolutePath, args ...string) {
+func requireGitCmd(t *testing.T, repoRoot fs.AbsolutePath, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoRoot.ToString()
@@ -234,7 +235,7 @@ func TestGetPackageDeps(t *testing.T) {
 	//     deleted-file
 	//     uncommitted-file <- new file not added to git
 
-	repoRoot := AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	myPkgDir := repoRoot.Join("my-pkg")
 	committedFilePath := myPkgDir.Join("committed-file")
 	err := committedFilePath.EnsureDir()

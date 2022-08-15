@@ -1,4 +1,4 @@
-package fs
+package hashing
 
 import (
 	"bufio"
@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -24,7 +25,7 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
+func GetPackageDeps(rootPath fs.AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
 	pkgPath := rootPath.Join(p.PackagePath)
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
@@ -73,7 +74,7 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+func GetHashableDeps(rootPath fs.AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	output := make([]turbopath.AnchoredSystemPath, len(files))
 	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
@@ -233,7 +234,7 @@ func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *g
 
 // gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
 // that are present in the `git` index at a particular revision.
-func gitLsTree(rootPath AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+func gitLsTree(rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
 	cmd := exec.Command(
 		"git",     // Using `git` from $PATH,
 		"ls-tree", // list the contents of the git index,
@@ -260,7 +261,7 @@ func gitLsTree(rootPath AbsolutePath) (map[turbopath.AnchoredUnixPath]string, er
 
 // gitLsTree returns a map of paths to their SHA hashes starting from a list of patterns relative to a directory
 // that are present in the `git` index at a particular revision.
-func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]string, error) {
+func gitLsFiles(rootPath fs.AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]string, error) {
 	cmd := exec.Command(
 		"git",      // Using `git` from $PATH,
 		"ls-files", // tell me about git index information of some files,
@@ -354,7 +355,7 @@ func (s statusCode) isDelete() bool {
 // We need to calculate where the repository's location is in order to determine what the full path is
 // before we can return those paths relative to the calling directory, normalizing to the behavior of
 // `ls-files` and `ls-tree`.
-func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
+func gitStatus(rootPath fs.AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
 	cmd := exec.Command(
 		"git",               // Using `git` from $PATH,
 		"status",            // tell me about the status of the working tree,
