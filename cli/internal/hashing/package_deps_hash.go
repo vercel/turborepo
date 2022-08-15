@@ -9,8 +9,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -36,11 +38,23 @@ func GetPackageDeps(rootPath fs.AbsolutePath, p *PackageDepsOptions) (map[turbop
 		}
 		result = gitLsTreeOutput
 	} else {
-		gitLsFilesOutput, err := gitLsFiles(pkgPath, p.InputPatterns)
+		absoluteFilesToHash, err := globby.GlobFiles(pkgPath.ToStringDuringMigration(), p.InputPatterns, nil)
 		if err != nil {
-			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
+			return nil, errors.Wrapf(err, "failed to resolve input globs %v", p.InputPatterns)
 		}
-		result = gitLsFilesOutput
+		filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
+		for i, rawPath := range absoluteFilesToHash {
+			relativePathString, err := pkgPath.RelativePathString(rawPath)
+			if err != nil {
+				return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
+			}
+			filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
+		}
+		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToStringDuringMigration()), filesToHash)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
+		}
+		result = hashes
 	}
 
 	// Update the checked in hashes with the current repo status
@@ -254,36 +268,6 @@ func gitLsTree(rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string,
 	for _, entry := range entries {
 		lsTreeEntry := gitoutput.LsTreeEntry(entry)
 		output[turbopath.AnchoredUnixPathFromUpstream(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
-	}
-
-	return output, nil
-}
-
-// gitLsTree returns a map of paths to their SHA hashes starting from a list of patterns relative to a directory
-// that are present in the `git` index at a particular revision.
-func gitLsFiles(rootPath fs.AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]string, error) {
-	cmd := exec.Command(
-		"git",      // Using `git` from $PATH,
-		"ls-files", // tell me about git index information of some files,
-		"--stage",  // including information about the state of the object so that we can get the hashes,
-		"-z",       // with each file path relative to the invocation directory and \000-terminated,
-		"--",       // and any additional argument you see is a path, promise.
-	)
-
-	// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
-	cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
-	cmd.Dir = rootPath.ToString()            // Include files only from this directory.
-
-	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
-	if err != nil {
-		return nil, err
-	}
-
-	output := make(map[turbopath.AnchoredUnixPath]string, len(entries))
-
-	for _, entry := range entries {
-		lsFilesEntry := gitoutput.LsFilesEntry(entry)
-		output[turbopath.AnchoredUnixPathFromUpstream(lsFilesEntry.GetField(gitoutput.Path))] = lsFilesEntry.GetField(gitoutput.ObjectName)
 	}
 
 	return output, nil
