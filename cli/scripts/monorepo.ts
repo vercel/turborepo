@@ -193,7 +193,6 @@ importers:
         },
       },
       "turbo.json": {
-        baseBranch: "origin/main",
         ...turboConfig,
       },
     });

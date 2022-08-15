@@ -5,6 +5,7 @@ import (
 	"os/exec"
 
 	"github.com/Masterminds/semver"
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -36,6 +37,15 @@ var nodejsBerry = PackageManager{
 			"**/.git",
 			"**/.yarn",
 		}, nil
+	},
+
+	canPrune: func(cwd fs.AbsolutePath) (bool, error) {
+		if isNMLinker, err := util.IsNMLinker(cwd.ToStringDuringMigration()); err != nil {
+			return false, errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
+		} else if !isNMLinker {
+			return false, errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
+		}
+		return true, nil
 	},
 
 	// Versions newer than 2.0 are berry, and before that we simply call them yarn.
