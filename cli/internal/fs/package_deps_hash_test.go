@@ -192,12 +192,12 @@ func Test_getTraversePath(t *testing.T) {
 		{
 			name:     "From fixture location",
 			rootPath: fixturePath,
-			want:     turbopath.RelativeUnixPath("../../"),
+			want:     turbopath.RelativeUnixPath("../../../"),
 			wantErr:  false,
 		},
 		{
 			name:     "Traverse out of git repo",
-			rootPath: fixturePath.Join("..", "..", ".."),
+			rootPath: fixturePath.Join("..", "..", "..", ".."),
 			want:     "",
 			wantErr:  true,
 		},

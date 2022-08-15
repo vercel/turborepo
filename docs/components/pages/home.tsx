@@ -1,18 +1,7 @@
-import {
-  ArrowsExpandIcon,
-  BeakerIcon,
-  ChartBarIcon,
-  ChartPieIcon,
-  ChipIcon,
-  CloudUploadIcon,
-  DuplicateIcon,
-  FingerPrintIcon,
-  LightningBoltIcon,
-  RefreshIcon,
-} from "@heroicons/react/outline";
+import { DuplicateIcon } from "@heroicons/react/outline";
 import copy from "copy-to-clipboard";
 import Head from "next/head";
-import Image from "next/image";
+import Image from "next/future/image";
 import Link from "next/link";
 import toast, { Toaster } from "react-hot-toast";
 import edelman from "../../images/edelman.jpeg";
@@ -26,61 +15,51 @@ import yangshunz from "../../images/yangshunz.jpeg";
 import nmoore from "../../images/nmoore.jpeg";
 import joshlarson from "../../images/joshlarson.jpeg";
 import paularmstrong from "../../images/paularmstrong.jpeg";
-import { Container } from "../Container";
-import { Footer } from "../Footer";
-const features = [
-  {
-    name: "Incremental builds",
-    description: `Building once is painful enough, Turborepo will remember what you've built and skip the stuff that's already been computed.`,
-    icon: RefreshIcon,
-  },
-  {
-    name: "Content-aware hashing",
-    description: `Turborepo looks at the contents of your files, not timestamps to figure out what needs to be built.`,
-    icon: FingerPrintIcon,
-  },
-  {
-    name: "Remote Caching",
-    description: `Share a remote build cache with your teammates and CI/CD for even faster builds.`,
-    icon: CloudUploadIcon,
-  },
-  {
-    name: "Parallel execution",
-    description: `Execute builds using every core at maximum parallelism without wasting idle CPUs.`,
-    icon: LightningBoltIcon,
-  },
-  {
-    name: "Zero runtime overhead",
-    description: `Turborepo won’t interfere with your runtime code or touch your sourcemaps. `,
-    icon: ChipIcon,
-  },
-  {
-    name: "Pruned subsets",
-    description: `Speed up PaaS deploys by generating a subset of your monorepo with only what's needed to build a specific target.`,
-    icon: ChartPieIcon,
-  },
-  {
-    name: "Task pipelines",
-    description: `Define the relationships between your tasks and then let Turborepo optimize what to build and when.`,
-    icon: ArrowsExpandIcon,
-  },
-  {
-    name: "Meets you where you’re at",
-    description: `Using Lerna? Keep your package publishing workflow and use Turborepo to turbocharge task running.`,
-    icon: BeakerIcon,
-  },
-  {
-    name: `Profile in your browser`,
-    description: `Generate build profiles and import them in Chrome or Edge to understand which tasks are taking the longest.`,
-    icon: ChartBarIcon,
-  },
-];
 
-function Page() {
+import { Container } from "../Container";
+import Tweet, { Mention } from "../Tweet";
+import Features from "../Features";
+import { Marquee } from "../clients/Marquee";
+import { users } from "../clients/users";
+import { useTheme } from "next-themes";
+
+export default function Home() {
   const onClick = () => {
     copy("npx create-turbo@latest");
     toast.success("Copied to clipboard");
   };
+
+  const { theme } = useTheme();
+
+  const showcase = users
+    .filter((p) => p.pinned)
+    .map((user, index) => (
+      <Image
+        key={`${user.infoLink}-${theme}-${index}-light`}
+        src={user.image.replace("/logos", "/logos/color")}
+        alt={user.caption}
+        width={user.style?.width ?? 100}
+        height={75}
+        style={{ width: "auto" }}
+        priority={true}
+        className="inline w-auto mx-8 dark:hidden"
+      />
+    ));
+  const showcaseLight = users
+    .filter((p) => p.pinned)
+    .map((user, index) => (
+      <Image
+        key={`${user.infoLink}-${theme}-${index}-dark`}
+        src={user.image.replace("/logos", "/logos/white")}
+        alt={user.caption}
+        width={user.style?.width ?? 100}
+        height={75}
+        style={{ width: "auto" }}
+        priority={true}
+        className="hidden w-auto mx-8 dark:inline"
+      />
+    ));
+
   return (
     <>
       <Head>
@@ -124,51 +103,14 @@ function Page() {
       </div>
 
       <div className="py-16">
-        <div className="max-w-5xl mx-auto ">
-          <p className="text-sm font-semibold tracking-wide text-center text-gray-400 text-opacity-50 uppercase dark:text-gray-500">
+        <div className="mx-auto ">
+          <p className="pb-8 text-sm font-semibold tracking-wide text-center text-gray-400 uppercase dark:text-gray-500">
             Trusted by teams from around the world
           </p>
-
-          <div className="grid grid-cols-2 gap-8 mt-6 md:grid-cols-6">
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img
-                className="h-6 "
-                src="/images/logos/vercel.svg"
-                alt="Vercel"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img className="h-8" src="/images/logos/aws.svg" alt="AWS" />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img
-                className="h-7"
-                src="/images/logos/paypal.svg"
-                alt="PayPal"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img
-                className="h-6"
-                src="/images/logos/shopify.svg"
-                alt="Shopify"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img
-                className="h-6"
-                src="/images/logos/twilio.svg"
-                alt="Twilio"
-              />
-            </div>
-            <div className="flex justify-center col-span-1 filter contrast-50 grayscale dark:opacity-50 md:col-span-2 lg:col-span-1">
-              <img
-                className="w-auto h-7"
-                src="/images/logos/washingtonpost.svg"
-                alt="The Washington Post"
-              />
-            </div>
-          </div>
+          <Marquee>
+            {showcase}
+            {showcaseLight}
+          </Marquee>
         </div>
       </div>
 
@@ -181,29 +123,7 @@ function Page() {
             Turborepo reimagines build system techniques used by Facebook and
             Google to remove maintenance burden and overhead.
           </p>
-          <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12">
-            {features.map((feature) => (
-              <div
-                className="p-10 bg-white shadow-lg rounded-xl dark:bg-opacity-5 "
-                key={feature.name}
-              >
-                <div>
-                  <feature.icon
-                    className="h-8 w-8 dark:text-white  rounded-full p-1.5 dark:bg-white dark:bg-opacity-10 bg-black bg-opacity-5 text-black"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="mt-4">
-                  <h3 className="text-lg font-medium dark:text-white">
-                    {feature.name}
-                  </h3>
-                  <p className="mt-2 text-base font-medium text-gray-500 dark:text-gray-400">
-                    {feature.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Features />
         </div>
       </div>
       <div className="">
@@ -297,55 +217,45 @@ function Page() {
               name="Jon Gold"
               date="Jun 28"
               avatar={jongold}
-              text={
-                <>
-                  . <Mention>@turborepo</Mention> is the coolest javascript
-                  thing i&apos;ve seen probably since an early prototype of
-                  Next.js
-                  <br />
-                  <br />
-                  javascript fatigue is over
-                </>
-              }
-            />
+            >
+              <Mention>@turborepo</Mention> is the coolest javascript thing
+              i&apos;ve seen probably since an early prototype of Next.js
+              <br />
+              <br />
+              javascript fatigue is over
+            </Tweet>
             <Tweet
               url="https://twitter.com/flavioukk/status/1405526268615958530"
               username="flavioukk"
               name="Flávio Carvalho"
               date="Jun 17"
               avatar={flavio}
-              text={
-                <>
-                  . <Mention>@turborepo</Mention> cache hit in CI is the most
-                  satisfying thing ever, why hasn&apos;t anyone thought of this
-                  before lol
-                </>
-              }
-            />
+            >
+              <Mention>@turborepo</Mention> cache hit in CI is the most
+              satisfying thing ever, why hasn&apos;t anyone thought of this
+              before lol
+            </Tweet>
             <Tweet
               url="https://twitter.com/shadcn/status/1470269932789125123"
               username="yangshunz"
               name="Yangshun Tay"
               date="Dec 12"
               avatar={yangshunz}
-              text={
-                <>
-                  Experimented with <Mention>@turborepo</Mention> on my
-                  Flow-based 4-package monorepo where each package contains
-                  lint, test and build commands:
-                  <br />
-                  <br />
-                  - lint, test, build all files in series: ~75s
-                  <br />
-                  - lerna --parallel: ~62s
-                  <br />
-                  - turbo: ~35s (791ms on cache hit)
-                  <br />
-                  <br />
-                  🤯 Impressive results! FULL TURBO!
-                </>
-              }
-            />
+            >
+              Experimented with <Mention>@turborepo</Mention> on my Flow-based
+              4-package monorepo where each package contains lint, test and
+              build commands:
+              <br />
+              <br />
+              - lint, test, build all files in series: ~75s
+              <br />
+              - lerna --parallel: ~62s
+              <br />
+              - turbo: ~35s (791ms on cache hit)
+              <br />
+              <br />
+              🤯 Impressive results! FULL TURBO!
+            </Tweet>
           </div>
 
           <div className="space-y-4">
@@ -355,13 +265,10 @@ function Page() {
               name="Paul Armstrong"
               date="Apr 26"
               avatar={paularmstrong}
-              text={
-                <>
-                  Just saw <Mention>@turborepo</Mention> in action and gotta
-                  say: it looks amazing!
-                </>
-              }
-            />
+            >
+              Just saw <Mention>@turborepo</Mention> in action and gotta say: it
+              looks amazing!
+            </Tweet>
 
             <Tweet
               url="https://twitter.com/edelman215/status/1410388867828654084"
@@ -369,47 +276,38 @@ function Page() {
               name="Michael Edelman"
               date="Jun 30"
               avatar={edelman}
-              text={
-                <>
-                  10 runtime-diverse apps, 7 IAC stacks, 6 custom JSII CDK
-                  constructs, 5 third-party client wrappers, 2 auto-generated
-                  internal api sdks, a handful of utility/misc packages under
-                  management, &amp; growing, in 1 monorepo--all in a day&apos;s
-                  work for <Mention>@turborepo</Mention>
-                  --no pain, all gain. 😻
-                </>
-              }
-            />
+            >
+              10 runtime-diverse apps, 7 IAC stacks, 6 custom JSII CDK
+              constructs, 5 third-party client wrappers, 2 auto-generated
+              internal api sdks, a handful of utility/misc packages under
+              management, &amp; growing, in 1 monorepo--all in a day&apos;s work
+              for <Mention>@turborepo</Mention>
+              --no pain, all gain. 😻
+            </Tweet>
             <Tweet
               url="https://twitter.com/shadcn/status/1470269932789125123"
               username="shadcn"
               name="shadcn"
               date="Dec 12"
               avatar={shadcn}
-              text={
-                <>
-                  Turborepo is really good at what it does: Ridiculously fast
-                  builds.
-                </>
-              }
-            />
+            >
+              Turborepo is really good at what it does: Ridiculously fast
+              builds.
+            </Tweet>
             <Tweet
               url="https://twitter.com/n_moore/status/1469344866194788355"
               username="n_moore"
               name="Nate Moore"
               date="Dec 10"
               avatar={nmoore}
-              text={
-                <>
-                  Finally! <Mention>@astrodotbuild</Mention> is now using
-                  <Mention>@turborepo</Mention>. ♥️⚡️
-                  <br />
-                  So glad it&apos;s open source now—congrats to{" "}
-                  <Mention>@jaredpalmer</Mention> and <Mention>@vercel</Mention>{" "}
-                  on the release!
-                </>
-              }
-            />
+            >
+              Finally! <Mention>@astrodotbuild</Mention> is now using
+              <Mention>@turborepo</Mention>. ♥️⚡️
+              <br />
+              So glad it&apos;s open source now—congrats to{" "}
+              <Mention>@jaredpalmer</Mention> and <Mention>@vercel</Mention> on
+              the release!
+            </Tweet>
           </div>
           <div className="space-y-4">
             <Tweet
@@ -418,29 +316,23 @@ function Page() {
               name="Miguel Oller"
               date="Mar 31"
               avatar={ollermi}
-              text={
-                <>
-                  It&apos;s been a joy to use <Mention>@turborepo</Mention>.{" "}
-                  <Mention>@jaredpalmer</Mention> is building something truly
-                  wonderful for the JS community
-                </>
-              }
-            />
+            >
+              It&apos;s been a joy to use <Mention>@turborepo</Mention>.{" "}
+              <Mention>@jaredpalmer</Mention> is building something truly
+              wonderful for the JS community
+            </Tweet>
             <Tweet
               url="https://twitter.com/elado/status/1377405777506279425"
               username="elado"
               name="Elad Ossadon"
               date="Mar 31"
               avatar={elad}
-              text={
-                <>
-                  If you build for web, leave everything and go see what{" "}
-                  <Mention>@jaredpalmer</Mention> is doing with{" "}
-                  <Mention>@turborepo</Mention>. One of the most exciting pieces
-                  of tech lately! The hype is real
-                </>
-              }
-            />
+            >
+              If you build for web, leave everything and go see what{" "}
+              <Mention>@jaredpalmer</Mention> is doing with{" "}
+              <Mention>@turborepo</Mention>. One of the most exciting pieces of
+              tech lately! The hype is real
+            </Tweet>
 
             <Tweet
               url="https://twitter.com/christianjuth/status/1469494057843847169"
@@ -448,31 +340,27 @@ function Page() {
               name="Christian 👨🏼‍💻"
               date="Dec 10"
               avatar={christian}
-              text={
-                <>
-                  Holy wow, I just rewrote my entire Lerna monorepo to use
-                  Turborepo and SWC, and it took me like maybe 20 minutes. This
-                  is insane. Literally, everything Vercel has
-                  backed/acquired/created makes development a little easier. But
-                  wow, it just blew my mind how easy this all is to use.
-                </>
-              }
-            />
+            >
+              Holy wow, I just rewrote my entire Lerna monorepo to use Turborepo
+              and SWC, and it took me like maybe 20 minutes. This is insane.
+              Literally, everything Vercel has backed/acquired/created makes
+              development a little easier. But wow, it just blew my mind how
+              easy this all is to use.
+            </Tweet>
             <Tweet
               url="https://twitter.com/jplhomer/status/1494080248845062154"
               username="jplhomer"
               name="Josh Larson"
               date="Feb 16"
               avatar={joshlarson}
-              text={
-                <>
-                  Living that <Mention>@turborepo</Mention> life{" "}
-                  <span role="img" aria-label="Smiling face with sunglasses">
-                    😎
-                  </span>
-                </>
-              }
-            />
+            >
+              <>
+                Living that <Mention>@turborepo</Mention> life{" "}
+                <span role="img" aria-label="Smiling face with sunglasses">
+                  😎
+                </span>
+              </>
+            </Tweet>
           </div>
         </div>
         <Container>
@@ -491,49 +379,3 @@ function Page() {
     </>
   );
 }
-
-function TweetLink({ href, children }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-block text-[#35ACDF]"
-    >
-      {children}
-    </a>
-  );
-}
-function Mention({ children }) {
-  return (
-    <TweetLink href={`https://twitter.com/${children.replace("@", "")}`}>
-      {children}
-    </TweetLink>
-  );
-}
-
-function Tweet({ url, username, name, text, avatar, date }) {
-  return (
-    <div className="flex p-4 bg-white rounded-md shadow-xl dark:bg-opacity-10">
-      <div className="flex-shrink-0 mr-4">
-        <Image
-          className="w-12 h-12 rounded-full"
-          width={42}
-          height={42}
-          src={avatar}
-          alt={`${name} twitter avatar`}
-        />
-      </div>
-      <div>
-        <div className="flex items-center space-x-1 text-sm">
-          <h4 className="font-medium dark:text-white">{name}</h4>
-          <div className="truncate dark:text-gray-400">@{username}</div>
-          <div className="dark:text-gray-500 md:hidden xl:block">• {date}</div>
-        </div>
-        <div className="mt-1 text-sm dark:text-gray-200">{text}</div>
-      </div>
-    </div>
-  );
-}
-
-export default Page;

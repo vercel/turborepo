@@ -3,16 +3,15 @@
   "extends": "./base.json",
   "Display": "Vite",
   "compilerOptions": {
-    "target": "ESNext",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "types": ["vite/client"],
     "allowJs": false,
-    "skipLibCheck": false,
     "esModuleInterop": false,
+    "jsx": "react",
+    "lib": ["dom", "dom.iterable", "esnext"],
     "module": "ESNext",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react"
+    "resolveJsonModule": true,
+    "skipLibCheck": false,
+    "target": "ESNext",
+    "types": ["vite/client"]
   }
 }

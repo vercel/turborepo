@@ -135,8 +135,6 @@ turbo-linux
       path.join(root, "turbo.json"),
       JSON.stringify(
         {
-          // This is required because our base branch is `main` and not `master`.
-          baseBranch: "origin/main",
           npmClient: "yarn",
           cacheStorageConfig: {
             provider: "local",

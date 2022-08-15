@@ -3,7 +3,7 @@ title: CLI Reference
 description: Turborepo is a high-performance build system for JavaScript and TypeScript codebases.
 ---
 
-import Callout from '../../../components/callout'
+import Callout from '../../../components/Callout'
 
 # Command-Line Reference
 
@@ -336,7 +336,9 @@ turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --
 
 #### `--serial`
 
-**Deprecated in v0.5.3:** Use [`--concurrency=1`](#--concurrency) instead.
+<Callout type="error">
+`serial` is deprecated in `0.5.3`.Please use [`--concurrency=1`](#--concurrency) instead.
+</Callout>
 
 Executes all tasks serially (i.e. one-at-a-time).
 
@@ -448,6 +450,10 @@ turbo run build -vvv
 ## `turbo prune --scope=<target>`
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target package.
+
+<Callout>
+  This command is not yet implemented for `npm` or `pnpm`.
+</Callout>
 
 This command will generate folder called `out` with the following inside of it:
 

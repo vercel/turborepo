@@ -1,0 +1,37 @@
+{
+  "name": "turbo",
+  "version": "1.4.3",
+  "description": "Turborepo is a high-performance build system for JavaScript and TypeScript codebases.",
+  "repository": "https://github.com/vercel/turborepo",
+  "bugs": "https://github.com/vercel/turborepo/issues",
+  "homepage": "https://turborepo.org",
+  "license": "MPL-2.0",
+  "scripts": {
+    "postversion": "node bump-version.js",
+    "postinstall": "node install.js"
+  },
+  "bin": {
+    "turbo": "./bin/turbo"
+  },
+  "files": [
+    "bin",
+    "node-platform.js",
+    "install.js"
+  ],
+  "optionalDependencies": {
+    "turbo-android-arm64": "1.4.3",
+    "turbo-darwin-64": "1.4.3",
+    "turbo-darwin-arm64": "1.4.3",
+    "turbo-freebsd-64": "1.4.3",
+    "turbo-freebsd-arm64": "1.4.3",
+    "turbo-linux-32": "1.4.3",
+    "turbo-linux-64": "1.4.3",
+    "turbo-linux-arm": "1.4.3",
+    "turbo-linux-arm64": "1.4.3",
+    "turbo-linux-mips64le": "1.4.3",
+    "turbo-linux-ppc64le": "1.4.3",
+    "turbo-windows-32": "1.4.3",
+    "turbo-windows-64": "1.4.3",
+    "turbo-windows-arm64": "1.4.3"
+  }
+}

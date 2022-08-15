@@ -2,6 +2,8 @@ package scope
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -174,8 +176,8 @@ func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
 	}
 
 	if globalDepsGlob != nil {
-		for _, f := range changedFiles {
-			if globalDepsGlob.Match(f) {
+		for _, file := range changedFiles {
+			if globalDepsGlob.Match(filepath.ToSlash(file)) {
 				return true, nil
 			}
 		}
@@ -184,6 +186,8 @@ func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
 }
 
 func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
+	// changedFiles is an array of repo-relative system paths.
+	// opts.IgnorePatterns is an array of unix-separator glob paths.
 	ignoreGlob, err := filter.Compile(opts.IgnorePatterns)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid ignore globs")
@@ -192,11 +196,38 @@ func filterIgnoredFiles(opts *Opts, changedFiles []string) ([]string, error) {
 	for _, file := range changedFiles {
 		// If we don't have anything to ignore, or if this file doesn't match the ignore pattern,
 		// keep it as a changed file.
-		if ignoreGlob == nil || !ignoreGlob.Match(file) {
+		if ignoreGlob == nil || !ignoreGlob.Match(filepath.ToSlash(file)) {
 			filteredChanges = append(filteredChanges, file)
 		}
 	}
 	return filteredChanges, nil
+}
+
+func fileInPackage(changedFile string, packagePath string) bool {
+	// This whole method is basically this regex: /^.*\/?$/
+	// The regex is more-expensive, so we don't do it.
+
+	// If it has the prefix, it might be in the package.
+	if strings.HasPrefix(changedFile, packagePath) {
+		// Now we need to see if the prefix stopped at a reasonable boundary.
+		prefixLen := len(packagePath)
+		changedFileLen := len(changedFile)
+
+		// Same path.
+		if prefixLen == changedFileLen {
+			return true
+		}
+
+		// We know changedFile is longer than packagePath.
+		// We can safely directly index into it.
+		// Look ahead one byte and see if it's the separator.
+		if changedFile[prefixLen] == os.PathSeparator {
+			return true
+		}
+	}
+
+	// If it does not have the prefix, it's definitely not in the package.
+	return false
 }
 
 func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
@@ -204,7 +235,7 @@ func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.
 	for _, changedFile := range changedFiles {
 		found := false
 		for pkgName, pkgInfo := range packageInfos {
-			if pkgName != util.RootPkgName && strings.HasPrefix(changedFile, pkgInfo.Dir) {
+			if pkgName != util.RootPkgName && fileInPackage(changedFile, pkgInfo.Dir) {
 				changedPackages.Add(pkgName)
 				found = true
 				break

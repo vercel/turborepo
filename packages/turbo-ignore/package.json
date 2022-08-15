@@ -1,19 +1,36 @@
 {
   "name": "turbo-ignore",
-  "version": "0.0.39",
+  "version": "0.1.0",
   "description": "",
-  "main": "index.js",
-  "bin": "index.js",
+  "homepage": "https://turborepo.org",
   "keywords": [],
   "author": "Jared Palmer",
   "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/turbo-ignore"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "main": "index.js",
+  "bin": "index.js",
   "scripts": {
-    "build": "tsup index.js --format=cjs && cp ./package.json ./dist/package.json",
-    "release": "pnpm build && cd dist && npm publish"
+    "build": "tsup src/index.ts --format=cjs && cp ./package.json ./dist/package.json",
+    "release": "pnpm build && cd dist && pnpm publish",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
   },
   "devDependencies": {
     "@manypkg/find-root": "^1.1.0",
+    "@types/jest": "^27.4.0",
     "esbuild": "^0.14.38",
-    "tsup": "^5.12.1"
+    "eslint": "^8.20.0",
+    "jest": "^27.4.3",
+    "ts-jest": "^27.1.1",
+    "tsup": "^5.12.1",
+    "turbo-utils": "workspace:*",
+    "typescript": "^4.7.4"
   }
 }
