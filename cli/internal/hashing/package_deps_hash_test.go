@@ -234,6 +234,8 @@ func TestGetPackageDeps(t *testing.T) {
 	//     committed-file
 	//     deleted-file
 	//     uncommitted-file <- new file not added to git
+	//     dir/
+	//       nested-file
 
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	myPkgDir := repoRoot.Join("my-pkg")
@@ -245,6 +247,9 @@ func TestGetPackageDeps(t *testing.T) {
 	deletedFilePath := myPkgDir.Join("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
+	nestedPath := myPkgDir.Join("dir", "nested-file")
+	assert.NilError(t, nestedPath.EnsureDir(), "EnsureDir")
+	assert.NilError(t, nestedPath.WriteFile([]byte("nested"), 0644), "WriteFile")
 	requireGitCmd(t, repoRoot, "init", ".")
 	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
 	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
@@ -267,6 +272,7 @@ func TestGetPackageDeps(t *testing.T) {
 			expected: map[turbopath.AnchoredUnixPath]string{
 				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
 		{
@@ -276,6 +282,17 @@ func TestGetPackageDeps(t *testing.T) {
 			},
 			expected: map[turbopath.AnchoredUnixPath]string{
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"**/*-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
 	}
