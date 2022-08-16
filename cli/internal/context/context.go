@@ -13,6 +13,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/hashing"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -482,7 +483,7 @@ func calculateGlobalHash(rootpath fs.AbsolutePath, rootPackageJSON *fs.PackageJS
 		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
 	}
 
-	globalFileHashMap, err := fs.GetHashableDeps(rootpath, globalDepsPaths)
+	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
 		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
 	}
