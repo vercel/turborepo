@@ -36,6 +36,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turborepo/cli/internal/spinner"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -694,7 +695,9 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			return errors.Wrap(err, "failed to set up caching")
 		}
 	}
-	defer turboCache.Shutdown()
+	defer func() {
+		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
+	}()
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
