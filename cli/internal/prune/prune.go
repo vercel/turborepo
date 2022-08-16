@@ -119,11 +119,12 @@ type prune struct {
 // Prune creates a smaller monorepo with only the required workspaces
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.config.Cwd)
-	turboJSON, err := fs.ReadTurboConfig(p.config.Cwd, p.config.RootPackageJSON)
+	rootPackageJSONPath := p.config.Cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath.ToStringDuringMigration())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	ctx, err := context.New(context.WithGraph(p.config, turboJSON, cacheDir))
+	ctx, err := context.New(context.WithGraph(p.config.Cwd, rootPackageJSON, cacheDir))
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
@@ -160,7 +161,7 @@ func (p *prune) prune(opts *opts) error {
 		return errors.Wrap(err, "could not create output directory")
 	}
 	workspaces := []string{}
-	lockfile := p.config.RootPackageJSON.SubLockfile
+	lockfile := rootPackageJSON.SubLockfile
 	targets := []interface{}{opts.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
 	if err != nil {
