@@ -222,7 +222,8 @@ This explicit configuration for `frontend#deploy` may seem like it conflicts wit
 1. Although this `<package>#<task>` syntax is a useful escape hatch, we generally recommend using it for deployment orchestration tasks such as health checks, rather than build-time dependencies, so that Turbo can optimize these tasks more efficiently
 1. Package-tasks do not inherit cache configuration. You must redeclare
    [`outputs`](../reference/configuration#outputs) at the moment.
-   </Callout>
+
+</Callout>
 
 ### Running tasks defined in the monorepo's root `package.json` file
 
