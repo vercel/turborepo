@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/chrometracing"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -77,12 +76,11 @@ type RunState struct {
 	Attempted int
 
 	startedAt time.Time
-	config    *config.Config
 }
 
 // NewRunState creates a RunState instance for tracking events during the
 // course of a run.
-func NewRunState(startedAt time.Time, tracingProfile string, config *config.Config) *RunState {
+func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
@@ -94,7 +92,6 @@ func NewRunState(startedAt time.Time, tracingProfile string, config *config.Conf
 		state:     make(map[string]*BuildTargetState),
 
 		startedAt: startedAt,
-		config:    config,
 	}
 }
 
