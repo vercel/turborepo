@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/segmentio/ksuid"
 	"github.com/vercel/turborepo/cli/internal/chrometracing"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/ui"
@@ -53,10 +54,11 @@ type BuildTargetState struct {
 }
 
 type RunState struct {
-	mu      sync.Mutex
-	state   map[string]*BuildTargetState
-	Success int
-	Failure int
+	sessionID ksuid.KSUID
+	mu        sync.Mutex
+	state     map[string]*BuildTargetState
+	Success   int
+	Failure   int
 	// Is the output streaming?
 	Cached    int
 	Attempted int
@@ -66,11 +68,12 @@ type RunState struct {
 
 // NewRunState creates a RunState instance for tracking events during the
 // course of a run.
-func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
+func NewRunState(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
 	return &RunState{
+		sessionID: sessionID,
 		Success:   0,
 		Failure:   0,
 		Cached:    0,

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pyr-sh/dag"
+	"github.com/segmentio/ksuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -158,9 +159,11 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatche
 	if !config.IsLoggedIn() {
 		opts.cacheOpts.SkipRemote = true
 	}
+	sessionID := ksuid.New()
 	processes := process.NewManager(config.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
+		sessionID: sessionID,
 		opts:      opts,
 		config:    config,
 		ui:        output,
@@ -197,6 +200,7 @@ func (c *RunCommand) Run(args []string) int {
 }
 
 type run struct {
+	sessionID ksuid.KSUID
 	opts      *Opts
 	config    *config.Config
 	ui        cli.Ui
@@ -223,7 +227,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// This technically could be one flag, but we plan on removing
 	// the daemon opt-in flag at some point once it stabilizes
 	if r.opts.runOpts.daemonOptIn && !r.opts.runOpts.noDaemon {
-		turbodClient, err := daemon.GetClient(ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, daemon.ClientOpts{})
+		turbodClient, err := daemon.GetClient(ctx, r.config.Cwd, r.config.Logger, r.config.TurboVersion, r.sessionID, daemon.ClientOpts{})
 		if err != nil {
 			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
 		} else {
@@ -716,7 +720,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.sessionID)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
 		colorCache:     colorCache,

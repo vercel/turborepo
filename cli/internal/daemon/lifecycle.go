@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
+	"github.com/segmentio/ksuid"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
@@ -20,7 +21,9 @@ func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			sessionID := ksuid.New()
 			l := &lifecycle{
+				sessionID:    sessionID,
 				repoRoot:     config.Cwd,
 				logger:       config.Logger,
 				output:       output,
@@ -43,7 +46,9 @@ func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			sessionID := ksuid.New()
 			l := &lifecycle{
+				sessionID:    sessionID,
 				repoRoot:     config.Cwd,
 				logger:       config.Logger,
 				output:       output,
@@ -66,7 +71,9 @@ func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			sessionID := ksuid.New()
 			l := &lifecycle{
+				sessionID:    sessionID,
 				repoRoot:     config.Cwd,
 				logger:       config.Logger,
 				output:       output,
@@ -87,6 +94,7 @@ func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 }
 
 type lifecycle struct {
+	sessionID    ksuid.KSUID
 	repoRoot     fs.AbsolutePath
 	logger       hclog.Logger
 	output       cli.Ui
@@ -101,7 +109,7 @@ func (l *lifecycle) logError(err error) {
 
 func (l *lifecycle) ensureStarted() error {
 	ctx := context.Background()
-	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{})
+	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, l.sessionID, ClientOpts{})
 	if err != nil {
 		return err
 	}
@@ -113,7 +121,7 @@ func (l *lifecycle) ensureStarted() error {
 
 func (l *lifecycle) ensureStopped() error {
 	ctx := context.Background()
-	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{
+	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, l.sessionID, ClientOpts{
 		// If the daemon is not running, don't start it, since we're trying to stop it
 		DontStart: true,
 	})

@@ -8,6 +8,7 @@ import (
 
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
+	"github.com/segmentio/ksuid"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
@@ -22,7 +23,9 @@ func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			sessionID := ksuid.New()
 			l := &lifecycle{
+				sessionID:    sessionID,
 				repoRoot:     config.Cwd,
 				logger:       config.Logger,
 				output:       output,
@@ -41,7 +44,7 @@ func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 
 func (l *lifecycle) status(outputJSON bool) error {
 	ctx := context.Background()
-	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, ClientOpts{
+	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, l.sessionID, ClientOpts{
 		// If the daemon is not running, the status is that it's not running.
 		// We don't want to start it just to check the status.
 		DontStart: true,

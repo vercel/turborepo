@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
+	"github.com/segmentio/ksuid"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 	"google.golang.org/grpc"
@@ -51,6 +52,7 @@ type Client struct {
 // Connector instances are used to create a connection to turbo's daemon process
 // The daemon will be started , or killed and restarted, if necessary
 type Connector struct {
+	SessionID    ksuid.KSUID
 	Logger       hclog.Logger
 	Bin          string
 	Opts         Opts
@@ -302,8 +304,8 @@ func (c *Connector) getClientConn() (*Client, error) {
 
 func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodClient) error {
 	_, err := client.Hello(ctx, &turbodprotocol.HelloRequest{
-		Version: c.TurboVersion,
-		// TODO: add session id
+		Version:   c.TurboVersion,
+		SessionId: c.SessionID.String(),
 	})
 	status := status.Convert(err)
 	switch status.Code() {

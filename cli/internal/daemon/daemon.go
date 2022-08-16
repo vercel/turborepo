@@ -15,6 +15,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
+	"github.com/segmentio/ksuid"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
@@ -307,7 +308,7 @@ type ClientOpts = connector.Opts
 type Client = connector.Client
 
 // GetClient returns a client that can be used to interact with the daemon
-func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (*Client, error) {
+func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, sessionID ksuid.KSUID, opts ClientOpts) (*Client, error) {
 	sockPath := getUnixSocket(repoRoot)
 	pidPath := getPidFile(repoRoot)
 	logPath, err := getLogFilePath(repoRoot)
@@ -319,6 +320,7 @@ func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logge
 		return nil, err
 	}
 	c := &connector.Connector{
+		SessionID:    sessionID,
 		Logger:       logger.Named("TurbodClient"),
 		Bin:          bin,
 		Opts:         opts,
