@@ -1,4 +1,4 @@
-import { getComparison } from "../src";
+import { getComparison } from "../src/getComparison";
 
 describe("turbo-ignore", () => {
   describe("getComparison()", () => {

@@ -21,7 +21,12 @@ const keys = {
 
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
 const testDir = path.join(__dirname, "../my-turborepo");
-const DEFAULT_JEST_TIMEOUT = 10000;
+
+// Increase default timeout for this test file
+// since we are spawning a process to call turbo CLI and that can take some time
+// This may be overriden in individual tests with a third param to the `it` block. E.g.:
+// it('', () => {}, <override ms>)
+jest.setTimeout(10_000);
 
 const EXPECTED_HELP_MESSAGE = `
 "
@@ -48,7 +53,6 @@ describe("create-turbo cli", () => {
     execSync("corepack disable", { stdio: "ignore" });
     cleanupTestDir();
 
-    jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true });
     }
@@ -62,7 +66,6 @@ describe("create-turbo cli", () => {
   });
 
   afterAll(() => {
-    jest.setTimeout(DEFAULT_JEST_TIMEOUT);
     execSync("corepack enable", { stdio: "ignore" });
 
     // clean up after the whole test suite just in case any excptions prevented beforeEach callback from running
@@ -112,7 +115,7 @@ describe("create-turbo cli", () => {
       expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
 
       expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
-    }, 10000);
+    });
 
     PACKAGE_MANAGERS.forEach((packageManager) => {
       it(`--use-${packageManager}: guides the user through the process`, async () => {
@@ -150,7 +153,74 @@ describe("create-turbo cli", () => {
         );
 
         expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
-      }, 10000);
+      });
+    });
+  });
+
+  describe("with installation", () => {
+    it("default", async () => {
+      const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {});
+
+      const messages = await runInteractiveCLI(cli);
+
+      expect(messages[0]).toEqual(
+        ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+      );
+
+      expect(getPromptChoices(messages[1])).toEqual(["npm", "pnpm", "yarn"]);
+
+      expect(messages[2]).toMatch(
+        /^>>> Creating a new turborepo with the following:/
+      );
+
+      expect(
+        messages.find((msg) =>
+          msg.match(
+            new RegExp(
+              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+            )
+          )
+        )
+      ).toBeTruthy();
+
+      expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
+
+      expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
+    }, 50_000);
+
+    PACKAGE_MANAGERS.forEach((packageManager) => {
+      it(`--use-${packageManager}`, async () => {
+        const cli = spawn(
+          "node",
+          [createTurbo, `--use-${packageManager}`, `./${DEFAULT_APP_NAME}`],
+          {}
+        );
+        const messages = await runInteractiveCLI(cli);
+
+        expect(messages[0]).toEqual(
+          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+        );
+
+        expect(messages[1]).toMatch(
+          /^>>> Creating a new turborepo with the following:/
+        );
+
+        expect(
+          messages.find((msg) =>
+            msg.match(
+              new RegExp(
+                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+              )
+            )
+          )
+        ).toBeTruthy();
+
+        expect(getGeneratedPackageJSON().packageManager).toMatch(
+          new RegExp(`^${packageManager}`)
+        );
+
+        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
+      }, 50_000);
     });
   });
 
