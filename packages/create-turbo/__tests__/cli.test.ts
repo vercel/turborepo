@@ -1,4 +1,4 @@
-import childProcess, { execSync } from "child_process";
+import childProcess, { execSync, spawn } from "child_process";
 import fs from "fs-extra";
 import path from "path";
 import util from "util";
@@ -8,9 +8,8 @@ import stripAnsi from "strip-ansi";
 const DEFAULT_APP_NAME = "my-turborepo";
 
 const execFile = util.promisify(childProcess.execFile);
-const spawn = childProcess.spawn;
 
-const PACKAGE_MANAGERS = ["npm", "yarn", "pnpm"];
+const PACKAGE_MANAGERS = ["npm", "pnpm", "yarn", "berry"];
 
 const keys = {
   up: "\x1B\x5B\x41",
@@ -84,6 +83,7 @@ describe("create-turbo cli", () => {
 
   describe("--no-install", () => {
     it("default: guides the user through the process", async () => {
+      configurePackageManager(PACKAGE_MANAGERS[0]);
       const cli = spawn("node", [createTurbo, "--no-install"], {});
 
       const messages = await runInteractiveCLI(cli);
@@ -119,6 +119,7 @@ describe("create-turbo cli", () => {
 
     PACKAGE_MANAGERS.forEach((packageManager) => {
       it(`--use-${packageManager}: guides the user through the process`, async () => {
+        configurePackageManager(packageManager);
         const cli = spawn(
           "node",
           [createTurbo, "--no-install", `--use-${packageManager}`],
@@ -159,6 +160,7 @@ describe("create-turbo cli", () => {
 
   describe("with installation", () => {
     it("default", async () => {
+      configurePackageManager(PACKAGE_MANAGERS[0]);
       const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {});
 
       const messages = await runInteractiveCLI(cli);
@@ -190,6 +192,7 @@ describe("create-turbo cli", () => {
 
     PACKAGE_MANAGERS.forEach((packageManager) => {
       it(`--use-${packageManager}`, async () => {
+        configurePackageManager(packageManager);
         const cli = spawn(
           "node",
           [createTurbo, `--use-${packageManager}`, `./${DEFAULT_APP_NAME}`],
@@ -331,4 +334,18 @@ function getGeneratedPackageJSON() {
   return JSON.parse(
     fs.readFileSync(path.join(testDir, "package.json")).toString()
   );
+}
+
+function configurePackageManager(packageManager: string) {
+  // If `corepack` plays nicer this can be uncommented to not rely on globals:
+  // execSync(`corepack prepare ${packageManager}@latest --activate`, { stdio: "ignore" });
+
+  switch (packageManager) {
+    case "yarn":
+      execSync("yarn set version classic", { stdio: "ignore" });
+      break;
+    case "berry":
+      execSync("yarn set version berry", { stdio: "ignore" });
+      break;
+  }
 }
