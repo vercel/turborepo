@@ -186,7 +186,7 @@ describe("create-turbo cli", () => {
       expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
 
       expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
-    }, 100_000);
+    }, 30_000);
 
     PACKAGE_MANAGERS.forEach((packageManager) => {
       it(`--use-${packageManager}`, async () => {
@@ -220,7 +220,7 @@ describe("create-turbo cli", () => {
         );
 
         expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
-      }, 100_000);
+      }, 30_000);
     });
   });
 
