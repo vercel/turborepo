@@ -19,10 +19,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [
-          ubuntu-latest,
-          macos-latest,
-          # windows-latest,
-        ]
+            ubuntu-latest,
+            macos-latest,
+            # windows-latest,
+          ]
 
     steps:
       - name: Check out code
@@ -79,3 +79,6 @@ jobs:
         # --filter and --color args are for turbo CLI
         # -- --runInBand is passed forward to jest (which is in packages/create-turbo package.json `test` script)
         run: pnpm -- turbo run test --filter=create-turbo --color -- --runInBand
+
+      - name: Run all other packages tests
+        run: pnpm -- turbo run test --filter=!create-turbo --filter=!cli --color
