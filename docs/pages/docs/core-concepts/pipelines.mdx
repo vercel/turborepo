@@ -192,24 +192,24 @@ The example below describes the `deploy` script of a `frontend` application that
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
-    // Explicit package-task to package-task dependency
-    "frontend#deploy": {
-      "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"],
-      "outputs": []
-    },
-
     // Standard configuration
     "build": {
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
       "outputs": [],
     },
     "deploy": {
       "dependsOn": ["test", "build"],
       "outputs": []
-    }
+    },
+
+    // Explicit package-task to package-task dependency
+    "frontend#deploy": {
+      "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"],
+      "outputs": []
+    },
   }
 }
 ```
