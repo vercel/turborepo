@@ -36,11 +36,18 @@ type PackageManager struct {
 	// The directory in which package assets are stored by the Package Manager.
 	PackageDir string
 
+	// The separator that the Package Manger uses to identify arguments that
+	// should be passed through to the underlying script.
+	ArgSeparator []string
+
 	// Return the list of workspace glob
 	getWorkspaceGlobs func(rootpath fs.AbsolutePath) ([]string, error)
 
 	// Return the list of workspace ignore globs
 	getWorkspaceIgnores func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error)
+
+	// Detect if Turbo knows how to produce a pruned workspace for the project
+	canPrune func(cwd fs.AbsolutePath) (bool, error)
 
 	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
@@ -54,6 +61,7 @@ var packageManagers = []PackageManager{
 	nodejsBerry,
 	nodejsNpm,
 	nodejsPnpm,
+	nodejsPnpm6,
 }
 
 var (
@@ -143,4 +151,12 @@ func (pm PackageManager) GetWorkspaces(rootpath fs.AbsolutePath) ([]string, erro
 // GetWorkspaceIgnores returns an array of globs not to search for workspaces.
 func (pm PackageManager) GetWorkspaceIgnores(rootpath fs.AbsolutePath) ([]string, error) {
 	return pm.getWorkspaceIgnores(pm, rootpath)
+}
+
+// CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
+func (pm PackageManager) CanPrune(projectDirectory fs.AbsolutePath) (bool, error) {
+	if pm.canPrune != nil {
+		return pm.canPrune(projectDirectory)
+	}
+	return false, nil
 }
