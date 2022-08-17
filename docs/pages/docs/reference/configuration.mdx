@@ -67,7 +67,7 @@ Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline tas
 
 Items in `dependsOn` without `^` prefix, express the relationships between tasks at the package level (e.g. "a package's `test` and `lint` commands depend on `build` being completed first").
 
-Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends the value of that environment variable.
+Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends on the value of that environment variable.
 
 **Example: Basics**
 
