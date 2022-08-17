@@ -346,12 +346,23 @@ function configurePackageManager(packageManager: PackageManager) {
   // If `corepack` plays nicer this can be uncommented to not rely on globals:
   // execSync(`corepack prepare ${packageManager.command}@latest --activate`, { stdio: "ignore" });
 
-  switch (packageManager) {
-    case PACKAGE_MANAGERS["yarn"]:
-      execSync("yarn set version", { stdio: "ignore" });
-      return;
-    case PACKAGE_MANAGERS["berry"]:
-      execSync("yarn set version berry", { stdio: "ignore" });
-      return;
+  try {
+    switch (packageManager) {
+      case PACKAGE_MANAGERS["yarn"]:
+        // Switch to classic.
+        execSync("yarn set version classic", { stdio: "ignore" });
+        // Ensure that it's the latest stable version.
+        execSync("yarn set version", { stdio: "ignore" });
+        return;
+      case PACKAGE_MANAGERS["berry"]:
+        // Switch to berry.
+        execSync("yarn set version berry", { stdio: "ignore" });
+        // Ensure that it's the latest stable version.
+        execSync("yarn set version stable", { stdio: "ignore" });
+        return;
+    }
+  } catch (e) {
+    // We only end up here if we try to set "classic" _from_ classic.
+    // The method shape in `yarn` does not match `berry`.
   }
 }
