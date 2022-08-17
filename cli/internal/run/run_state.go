@@ -1,6 +1,7 @@
 package run
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -39,7 +40,27 @@ const (
 	TargetBuilt
 	TargetCached
 	TargetBuildFailed
+	TargetNonexistent
 )
+
+func (rr RunResultStatus) String() string {
+	switch rr {
+	case TargetBuilding:
+		return "running"
+	case TargetBuildStopped:
+		return "stopped"
+	case TargetBuilt:
+		return "executed"
+	case TargetCached:
+		return "replayed"
+	case TargetBuildFailed:
+		return "failed"
+	case TargetNonexistent:
+		return "nonexistent"
+	default:
+		panic(fmt.Sprintf("unknown status: %v", int(rr)))
+	}
+}
 
 type BuildTargetState struct {
 	StartAt time.Time
@@ -139,9 +160,14 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
-func (r *RunState) Close(terminal cli.Ui, filename string) error {
+func (r *RunState) Close(terminal cli.Ui, filename string, summaryPath fs.AbsolutePath) error {
+	endedAt := time.Now()
 	if err := writeChrometracing(filename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
+	}
+
+	if err := r.writeSummary(summaryPath, endedAt); err != nil {
+		terminal.Error(fmt.Sprintf("Error writing run summary: %v", err))
 	}
 
 	maybeFullTurbo := ""
@@ -151,8 +177,40 @@ func (r *RunState) Close(terminal cli.Ui, filename string) error {
 	terminal.Output("") // Clear the line
 	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
 	terminal.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
-	terminal.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
+	terminal.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", endedAt.Sub(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 	terminal.Output("")
+	return nil
+}
+
+func (r *RunState) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) error {
+	if err := summaryPath.EnsureDir(); err != nil {
+		return err
+	}
+	summary := make(map[string]interface{})
+	summary["sessionId"] = r.sessionID.String()
+	summary["startedAt"] = r.startedAt.UnixMilli()
+	summary["endedAt"] = endedAt.UnixMilli()
+	summary["durationMs"] = endedAt.Sub(r.startedAt).Milliseconds()
+	tasks := make(map[string]interface{})
+	for task, targetState := range r.state {
+		taskSummary := make(map[string]interface{})
+		taskSummary["startedAt"] = targetState.StartAt.UnixMilli()
+		taskSummary["endedAt"] = targetState.StartAt.Add(targetState.Duration).UnixMilli()
+		taskSummary["durationMs"] = targetState.Duration.Milliseconds()
+		taskSummary["status"] = targetState.Status.String()
+		if targetState.Err != nil {
+			taskSummary["error"] = targetState.Err.Error()
+		}
+		tasks[task] = taskSummary
+	}
+	summary["tasks"] = tasks
+	bytes, err := json.MarshalIndent(summary, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := summaryPath.WriteFile(bytes, 0644); err != nil {
+		return err
+	}
 	return nil
 }
 

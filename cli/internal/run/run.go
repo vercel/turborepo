@@ -759,7 +759,8 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		r.ui.Error(err.Error())
 	}
 
-	if err := runState.Close(r.ui, rs.Opts.runOpts.profile); err != nil {
+	summaryPath := r.config.Cwd.Join(".turbo", "runs", r.sessionID.String()+".json")
+	if err := runState.Close(r.ui, rs.Opts.runOpts.profile, summaryPath); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
 	if exitCode != 0 {
@@ -921,6 +922,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	//
 	// bail if the script doesn't exist
 	if _, ok := pt.Command(); !ok {
+		tracer(TargetNonexistent, nil)
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
