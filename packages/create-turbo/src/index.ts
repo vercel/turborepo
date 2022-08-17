@@ -14,7 +14,7 @@ import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
-import { PackageManager } from "./types";
+import { PackageManager, PACKAGE_MANAGERS } from "./constants";
 import { getPackageManagerVersion } from "./getPackageManagerVersion";
 
 interface Answers {
@@ -102,11 +102,11 @@ async function run() {
   const isPnpmInstalled = shouldUsePnpm();
   let answers: Answers;
   if (flags.useNpm) {
-    answers = { packageManager: "npm" };
+    answers = { packageManager: PACKAGE_MANAGERS["npm"] };
   } else if (flags.usePnpm) {
-    answers = { packageManager: "pnpm" };
+    answers = { packageManager: PACKAGE_MANAGERS["pnpm"] };
   } else if (flags.useYarn) {
-    answers = { packageManager: "yarn" };
+    answers = { packageManager: PACKAGE_MANAGERS["yarn"] };
   } else {
     answers = await inquirer.prompt<{
       packageManager: PackageManager;
@@ -116,15 +116,15 @@ async function run() {
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
-          { name: "npm", value: "npm" },
+          { name: "npm", value: PACKAGE_MANAGERS["npm"] },
           {
             name: "pnpm",
-            value: "pnpm",
+            value: PACKAGE_MANAGERS["pnpm"],
             disabled: !isPnpmInstalled && "not installed",
           },
           {
             name: "yarn",
-            value: "yarn",
+            value: PACKAGE_MANAGERS["yarn"],
             disabled: !isYarnInstalled && "not installed",
           },
         ],
@@ -154,7 +154,7 @@ async function run() {
   let serverTemplate = path.resolve(
     __dirname,
     "../templates",
-    answers.packageManager
+    answers.packageManager.command
   );
   if (fse.existsSync(serverTemplate)) {
     await fse.copy(serverTemplate, projectDir, { overwrite: true });
@@ -180,7 +180,7 @@ async function run() {
   });
 
   sharedPkg.packageManager = `${
-    answers.packageManager
+    answers.packageManager.command
   }@${getPackageManagerVersion(answers.packageManager)}`;
   sharedPkg.name = projectName;
 
@@ -236,7 +236,7 @@ async function run() {
       installArgs.push(`--registry=${npmRegistry}`);
     }
 
-    await execa(`${answers.packageManager}`, installArgs, {
+    await execa(`${answers.packageManager.command}`, installArgs, {
       stdio: "ignore",
       cwd: projectDir,
     });
@@ -280,10 +280,10 @@ async function run() {
   }
 
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager} run build`));
+  console.log(chalk.cyan(`  ${answers.packageManager.command} run build`));
   console.log(`     Build all apps and packages`);
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager} run dev`));
+  console.log(chalk.cyan(`  ${answers.packageManager.command} run dev`));
   console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
@@ -308,7 +308,7 @@ async function run() {
 async function getNpmRegistry(pkgManager: PackageManager): Promise<string> {
   try {
     // npm/pnpm/yarn share the same CLI configuration commands
-    const { stdout: registry } = await execa(pkgManager, [
+    const { stdout: registry } = await execa(pkgManager.command, [
       "config",
       "get",
       "registry",
@@ -346,9 +346,7 @@ async function notifyUpdate(): Promise<void> {
 }
 
 function getNpxCommand(pkgManager: PackageManager): string {
-  if (pkgManager === "yarn") {
-    return "npx";
-  } else if (pkgManager === "pnpm") {
+  if (pkgManager.command === "pnpm") {
     return getNpxCommandOfPnpm();
   } else {
     return "npx";

@@ -1,16 +1,14 @@
-import childProcess, { execSync } from "child_process";
+import childProcess, { execSync, spawn } from "child_process";
 import fs from "fs-extra";
 import path from "path";
 import util from "util";
 import semver from "semver";
 import stripAnsi from "strip-ansi";
+import { PackageManager, PACKAGE_MANAGERS } from "../src/constants";
 
 const DEFAULT_APP_NAME = "my-turborepo";
 
 const execFile = util.promisify(childProcess.execFile);
-const spawn = childProcess.spawn;
-
-const PACKAGE_MANAGERS = ["npm", "yarn", "pnpm"];
 
 const keys = {
   up: "\x1B\x5B\x41",
@@ -21,7 +19,12 @@ const keys = {
 
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
 const testDir = path.join(__dirname, "../my-turborepo");
-const DEFAULT_JEST_TIMEOUT = 10000;
+
+// Increase default timeout for this test file
+// since we are spawning a process to call turbo CLI and that can take some time
+// This may be overriden in individual tests with a third param to the `it` block. E.g.:
+// it('', () => {}, <override ms>)
+jest.setTimeout(10_000);
 
 const EXPECTED_HELP_MESSAGE = `
 "
@@ -48,7 +51,6 @@ describe("create-turbo cli", () => {
     execSync("corepack disable", { stdio: "ignore" });
     cleanupTestDir();
 
-    jest.setTimeout(DEFAULT_JEST_TIMEOUT * 3);
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true });
     }
@@ -62,7 +64,6 @@ describe("create-turbo cli", () => {
   });
 
   afterAll(() => {
-    jest.setTimeout(DEFAULT_JEST_TIMEOUT);
     execSync("corepack enable", { stdio: "ignore" });
 
     // clean up after the whole test suite just in case any excptions prevented beforeEach callback from running
@@ -81,6 +82,7 @@ describe("create-turbo cli", () => {
 
   describe("--no-install", () => {
     it("default: guides the user through the process", async () => {
+      configurePackageManager(PACKAGE_MANAGERS["npm"]);
       const cli = spawn("node", [createTurbo, "--no-install"], {});
 
       const messages = await runInteractiveCLI(cli);
@@ -112,13 +114,14 @@ describe("create-turbo cli", () => {
       expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
 
       expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
-    }, 10000);
+    });
 
-    PACKAGE_MANAGERS.forEach((packageManager) => {
-      it(`--use-${packageManager}: guides the user through the process`, async () => {
+    Object.values(PACKAGE_MANAGERS).forEach((packageManager) => {
+      it(`--use-${packageManager.command}: guides the user through the process (${packageManager.name})`, async () => {
+        configurePackageManager(packageManager);
         const cli = spawn(
           "node",
-          [createTurbo, "--no-install", `--use-${packageManager}`],
+          [createTurbo, "--no-install", `--use-${packageManager.command}`],
           {}
         );
         const messages = await runInteractiveCLI(cli);
@@ -146,11 +149,84 @@ describe("create-turbo cli", () => {
         ).toBeTruthy();
 
         expect(getGeneratedPackageJSON().packageManager).toMatch(
-          new RegExp(`^${packageManager}`)
+          new RegExp(`^${packageManager.command}`)
         );
 
         expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
-      }, 10000);
+      });
+    });
+  });
+
+  describe("with installation", () => {
+    it("default", async () => {
+      configurePackageManager(PACKAGE_MANAGERS["npm"]);
+      const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {});
+
+      const messages = await runInteractiveCLI(cli);
+
+      expect(messages[0]).toEqual(
+        ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+      );
+
+      expect(getPromptChoices(messages[1])).toEqual(["npm", "pnpm", "yarn"]);
+
+      expect(messages[2]).toMatch(
+        /^>>> Creating a new turborepo with the following:/
+      );
+
+      expect(
+        messages.find((msg) =>
+          msg.match(
+            new RegExp(
+              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+            )
+          )
+        )
+      ).toBeTruthy();
+
+      expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
+
+      expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
+    }, 100_000);
+
+    Object.values(PACKAGE_MANAGERS).forEach((packageManager) => {
+      it(`--use-${packageManager.command} (${packageManager.name})`, async () => {
+        configurePackageManager(packageManager);
+        const cli = spawn(
+          "node",
+          [
+            createTurbo,
+            `--use-${packageManager.command}`,
+            `./${DEFAULT_APP_NAME}`,
+          ],
+          {}
+        );
+        const messages = await runInteractiveCLI(cli);
+
+        expect(messages[0]).toEqual(
+          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+        );
+
+        expect(messages[1]).toMatch(
+          /^>>> Creating a new turborepo with the following:/
+        );
+
+        expect(
+          messages.find((msg) =>
+            msg.match(
+              new RegExp(
+                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+              )
+            )
+          )
+        ).toBeTruthy();
+
+        expect(getGeneratedPackageJSON().packageManager).toMatch(
+          new RegExp(`^${packageManager.command}`)
+        );
+
+        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
+      }, 100_000);
     });
   });
 
@@ -255,10 +331,38 @@ function cleanupTestDir() {
   if (fs.existsSync(testDir)) {
     fs.rmSync(testDir, { recursive: true });
   }
+  fs.rmSync(path.join(__dirname, "../.yarn"), { recursive: true, force: true });
+  fs.rmSync(path.join(__dirname, "../.yarnrc"), { force: true });
+  fs.rmSync(path.join(__dirname, "../.yarnrc.yml"), { force: true });
 }
 
 function getGeneratedPackageJSON() {
   return JSON.parse(
     fs.readFileSync(path.join(testDir, "package.json")).toString()
   );
+}
+
+function configurePackageManager(packageManager: PackageManager) {
+  // If `corepack` plays nicer this can be uncommented to not rely on globals:
+  // execSync(`corepack prepare ${packageManager.command}@latest --activate`, { stdio: "ignore" });
+
+  try {
+    switch (packageManager) {
+      case PACKAGE_MANAGERS["yarn"]:
+        // Switch to classic.
+        execSync("yarn set version classic", { stdio: "ignore" });
+        // Ensure that it's the latest stable version.
+        execSync("yarn set version", { stdio: "ignore" });
+        return;
+      case PACKAGE_MANAGERS["berry"]:
+        // Switch to berry.
+        execSync("yarn set version berry", { stdio: "ignore" });
+        // Ensure that it's the latest stable version.
+        execSync("yarn set version stable", { stdio: "ignore" });
+        return;
+    }
+  } catch (e) {
+    // We only end up here if we try to set "classic" _from_ classic.
+    // The method shape in `yarn` does not match `berry`.
+  }
 }

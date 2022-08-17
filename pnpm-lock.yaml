@@ -167,12 +167,16 @@ importers:
 
   packages/eslint-config-turbo:
     specifiers:
+      '@types/eslint': ^8.4.5
       eslint-plugin-turbo: workspace:*
     dependencies:
       eslint-plugin-turbo: link:../eslint-plugin-turbo
+    devDependencies:
+      '@types/eslint': 8.4.5
 
   packages/eslint-plugin-turbo:
     specifiers:
+      '@types/eslint': ^8.4.5
       '@types/estree': ^1.0.0
       '@types/jest': ^27.4.0
       '@types/node': ^16.11.12
@@ -182,6 +186,7 @@ importers:
       turbo-utils: workspace:*
       typescript: ^4.7.4
     devDependencies:
+      '@types/eslint': 8.4.5
       '@types/estree': 1.0.0
       '@types/jest': 27.5.2
       '@types/node': 16.11.44
@@ -252,6 +257,7 @@ importers:
     specifiers:
       '@manypkg/find-root': ^1.1.0
       '@types/jest': ^27.4.0
+      '@types/node': ^16.11.12
       esbuild: ^0.14.38
       eslint: ^8.20.0
       jest: ^27.4.3
@@ -262,6 +268,7 @@ importers:
     devDependencies:
       '@manypkg/find-root': 1.1.0
       '@types/jest': 27.5.2
+      '@types/node': 16.11.44
       esbuild: 0.14.49
       eslint: 8.21.0
       jest: 27.5.1
@@ -1668,6 +1675,13 @@ packages:
     dependencies:
       '@types/ms': 0.7.31
     dev: false
+
+  /@types/eslint/8.4.5:
+    resolution: {integrity: sha512-dhsC09y1gpJWnK+Ff4SGvCuSnk9DaU0BJZSzOwa6GVSg65XtTugLBITDAAzRU5duGBoXBHpdR/9jHGxJjNflJQ==}
+    dependencies:
+      '@types/estree': 1.0.0
+      '@types/json-schema': 7.0.11
+    dev: true
 
   /@types/estree-jsx/0.0.1:
     resolution: {integrity: sha512-gcLAYiMfQklDCPjQegGn0TBAn9it05ISEsEhlKQUddIk7o2XDokOcTN7HBO8tznM0D9dGezvHEfRZBfZf6me0A==}
