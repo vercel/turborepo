@@ -35,21 +35,15 @@ To override the default cache output behavior, pass an array of globs to a [`pip
 
 If your task does not emit any files (e.g. unit tests with Jest), set `outputs` to an empty array (i.e. `[]`), and Turborepo will cache the logs for you.
 
+When you run `turbo run build test`, Turborepo will execute your build and test scripts,
+and cache their `output`s in `./node_modules/.cache/turbo`.
+
 <Callout type="info">
   Pro Tip for caching ESLint: You can get a cacheable pretty terminal output
   (even for non-errors) by setting `TIMING=1` variable before `eslint`. Learn
   more over in the [ESLint
   docs](https://eslint.org/docs/latest/developer-guide/working-with-rules#per-rule-performance).
 </Callout>
-
-With the pipeline configuration above and proper output folders, if you were to run:
-
-```shell
-# Run `build` npm script in all packages and apps and cache the output.
-turbo run build test
-```
-
-And open up your `node_modules/.cache/turbo`, you should see the cached artifacts.
 
 ## Turn off caching
 
