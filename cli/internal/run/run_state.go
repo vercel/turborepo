@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,10 +28,6 @@ type RunResult struct {
 	Status RunResultStatus
 	// Error, only populated for failure statuses
 	Err error
-	// Description of what's going on right now.
-	Description string
-	// Test results
-	// Tests TestSuite
 }
 
 // RunResultStatus represents the status of a target when we log a build result.
@@ -45,10 +40,6 @@ const (
 	TargetBuilt
 	TargetCached
 	TargetBuildFailed
-	TargetTesting
-	TargetTestStopped
-	TargetTested
-	TargetTestFailed
 )
 
 type BuildTargetState struct {
@@ -61,13 +52,10 @@ type BuildTargetState struct {
 	Status RunResultStatus
 	// Error, only populated for failure statuses
 	Err error
-	// Description of what's going on right now.
-	Description string
 }
 
 type RunState struct {
 	mu      sync.Mutex
-	Ordered []string
 	state   map[string]*BuildTargetState
 	Success int
 	Failure int
@@ -108,36 +96,32 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 		switch {
 		case outcome == TargetBuildFailed:
 			r.add(&RunResult{
-				Time:        time.Now(),
-				Duration:    time.Since(start),
-				Label:       label,
-				Status:      TargetBuildFailed,
-				Err:         fmt.Errorf("running %v failed: %w", label, err),
-				Description: fmt.Sprintf("running %v failed", label),
+				Time:     time.Now(),
+				Duration: time.Since(start),
+				Label:    label,
+				Status:   TargetBuildFailed,
+				Err:      fmt.Errorf("running %v failed: %w", label, err),
 			}, label, false)
 		case outcome == TargetCached:
 			r.add(&RunResult{
-				Time:        time.Now(),
-				Duration:    time.Since(start),
-				Label:       label,
-				Description: label + " cached",
-				Status:      TargetCached,
+				Time:     time.Now(),
+				Duration: time.Since(start),
+				Label:    label,
+				Status:   TargetCached,
 			}, label, false)
 		case outcome == TargetBuildStopped:
 			r.add(&RunResult{
-				Time:        time.Now(),
-				Duration:    time.Since(start),
-				Label:       label,
-				Description: label + " stopped",
-				Status:      TargetBuildStopped,
+				Time:     time.Now(),
+				Duration: time.Since(start),
+				Label:    label,
+				Status:   TargetBuildStopped,
 			}, label, false)
 		case outcome == TargetBuilt:
 			r.add(&RunResult{
-				Time:        time.Now(),
-				Duration:    time.Since(start),
-				Label:       label,
-				Description: label + " complete",
-				Status:      TargetBuilt,
+				Time:     time.Now(),
+				Duration: time.Since(start),
+				Label:    label,
+				Status:   TargetBuilt,
 			}, label, false)
 		default:
 			log.Fatalf("Invalid build outcome")
@@ -152,18 +136,15 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	if s, ok := r.state[result.Label]; ok {
 		s.Status = result.Status
 		s.Err = result.Err
-		s.Description = result.Description
 		s.Duration = result.Duration
 	} else {
 		r.state[result.Label] = &BuildTargetState{
-			StartAt:     result.Time,
-			Label:       result.Label,
-			Status:      result.Status,
-			Err:         result.Err,
-			Description: result.Description,
-			Duration:    result.Duration,
+			StartAt:  result.Time,
+			Label:    result.Label,
+			Status:   result.Status,
+			Err:      result.Err,
+			Duration: result.Duration,
 		}
-		r.Ordered = append(r.Ordered, result.Label)
 	}
 	switch {
 	case result.Status == TargetBuildFailed:
@@ -175,50 +156,6 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	case result.Status == TargetBuilt:
 		r.Success++
 		r.Attempted++
-	}
-}
-
-func (r *RunState) Render(ui cli.Ui, startAt time.Time, renderCount int, lineBuffer int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	idx := 0
-	buf := len(r.Ordered)
-	if buf > lineBuffer {
-		idx = buf - lineBuffer
-	}
-	tStr := fmt.Sprintf("%.2fs", time.Since(startAt).Seconds())
-	ui.Output(util.Sprintf("${BOLD}>>> TURBO${RESET}"))
-	ui.Output(util.Sprintf("${BOLD}>>> BUILDING%s(%s)${RESET}", strings.Repeat(".", 52-len(tStr)), tStr))
-
-	// In order to simplify the output, we want to fill in n < 10 with IDLE
-	// TODO: we might want to match this up with --concurrency flag
-	fillOrder := r.Ordered[idx:]
-	if len(r.Ordered[idx:]) <= lineBuffer {
-		for i := 0; i < lineBuffer-len(r.Ordered); i++ {
-			fillOrder = append(fillOrder, "IDLE")
-		}
-	}
-	for _, k := range fillOrder {
-		if item, ok := r.state[k]; ok {
-			t := fmt.Sprintf("%.2fs", time.Since(item.StartAt).Seconds())
-			d := fmt.Sprintf("%.2fs", item.Duration.Seconds())
-			fill := 60 - len(item.Label)
-			switch r.state[k].Status {
-			case TargetBuilding:
-				ui.Output(util.Sprintf("${WHITE}%s %s%s(%s)${RESET}", " • ", k, strings.Repeat(".", fill-len(t)), t))
-			case TargetCached:
-				d = item.Duration.Truncate(time.Millisecond * 100).String()
-				ui.Output(util.Sprintf("${GREY}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d))
-			case TargetBuilt:
-				ui.Output(util.Sprintf("${GREEN}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d))
-			case TargetBuildFailed:
-				ui.Output(util.Sprintf("${RED}%s %s%s(%s)${RESET}", " ˣ ", k, strings.Repeat(".", fill-len(d)), d))
-			default:
-				ui.Output(util.Sprintf("${GREY}%s %s%s(%s)${RESET}", " ✓ ", k, strings.Repeat(".", fill-len(d)), d))
-			}
-		} else {
-			ui.Output(util.Sprintf("${GREY}%s %s%s${RESET}", " - ", k, strings.Repeat(".", 62-len(k))))
-		}
 	}
 }
 
