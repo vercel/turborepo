@@ -2,8 +2,6 @@ package run
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -93,40 +91,17 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 	tracer := chrometracing.Event(label)
 	return func(outcome RunResultStatus, err error) {
 		defer tracer.Done()
-		switch {
-		case outcome == TargetBuildFailed:
-			r.add(&RunResult{
-				Time:     time.Now(),
-				Duration: time.Since(start),
-				Label:    label,
-				Status:   TargetBuildFailed,
-				Err:      fmt.Errorf("running %v failed: %w", label, err),
-			}, label, false)
-		case outcome == TargetCached:
-			r.add(&RunResult{
-				Time:     time.Now(),
-				Duration: time.Since(start),
-				Label:    label,
-				Status:   TargetCached,
-			}, label, false)
-		case outcome == TargetBuildStopped:
-			r.add(&RunResult{
-				Time:     time.Now(),
-				Duration: time.Since(start),
-				Label:    label,
-				Status:   TargetBuildStopped,
-			}, label, false)
-		case outcome == TargetBuilt:
-			r.add(&RunResult{
-				Time:     time.Now(),
-				Duration: time.Since(start),
-				Label:    label,
-				Status:   TargetBuilt,
-			}, label, false)
-		default:
-			log.Fatalf("Invalid build outcome")
+		now := time.Now()
+		result := &RunResult{
+			Time:     now,
+			Duration: now.Sub(start),
+			Label:    label,
+			Status:   outcome,
 		}
-
+		if err != nil {
+			result.Err = fmt.Errorf("running %v failed: %w", label, err)
+		}
+		r.add(result, label, false)
 	}
 }
 
@@ -159,36 +134,47 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 	}
 }
 
-func (r *RunState) Close(Ui cli.Ui, filename string) error {
-	outputPath := chrometracing.Path()
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
-	// so we have to account for that before converting to AbsolutePath
-	root := fs.AbsolutePathFromUpstream(cwd)
-	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
-	if filename != "" {
-		name = filename
-	}
-	if outputPath != "" {
-		if err := chrometracing.Close(); err != nil {
-			Ui.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
-		}
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
-			return err
-		}
+// Close finishes a trace of a turbo run. The tracing file will be written if applicable,
+// and run stats are written to the terminal
+func (r *RunState) Close(terminal cli.Ui, filename string) error {
+	if err := writeChrometracing(filename, terminal); err != nil {
+		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
 	maybeFullTurbo := ""
 	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
-	Ui.Output("") // Clear the line
-	Ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
-	Ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
-	Ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
-	Ui.Output("")
+	terminal.Output("") // Clear the line
+	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
+	terminal.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
+	terminal.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
+	terminal.Output("")
+	return nil
+}
+
+func writeChrometracing(filename string, terminal cli.Ui) error {
+	outputPath := chrometracing.Path()
+	if outputPath == "" {
+		// tracing wasn't enabled
+		return nil
+	}
+
+	name := fmt.Sprintf("turbo-%s.trace", time.Now().Format(time.RFC3339))
+	if filename != "" {
+		name = filename
+	}
+	if err := chrometracing.Close(); err != nil {
+		terminal.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
+	}
+	root, err := fs.GetCwd()
+	if err != nil {
+		return err
+	}
+	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
+	// so we have to account for that before converting to AbsolutePath
+	if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
+		return err
+	}
 	return nil
 }
