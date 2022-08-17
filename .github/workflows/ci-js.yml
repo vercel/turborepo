@@ -55,9 +55,6 @@ jobs:
         with:
           version: 7.2.1
 
-      - name: Setup Yarn
-        run: npm i -g yarn
-
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:

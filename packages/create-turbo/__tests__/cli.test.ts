@@ -18,7 +18,8 @@ const keys = {
 };
 
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
-const testDir = path.join(__dirname, "../my-turborepo");
+const cwd = path.join(__dirname, "../../../..");
+const testDir = path.join(cwd, DEFAULT_APP_NAME);
 
 // Increase default timeout for this test file
 // since we are spawning a process to call turbo CLI and that can take some time
@@ -48,7 +49,6 @@ const EXPECTED_HELP_MESSAGE = `
 
 describe("create-turbo cli", () => {
   beforeAll(() => {
-    execSync("corepack disable", { stdio: "ignore" });
     cleanupTestDir();
 
     if (fs.existsSync(testDir)) {
@@ -64,8 +64,6 @@ describe("create-turbo cli", () => {
   });
 
   afterAll(() => {
-    execSync("corepack enable", { stdio: "ignore" });
-
     // clean up after the whole test suite just in case any excptions prevented beforeEach callback from running
     cleanupTestDir();
   });
@@ -83,7 +81,7 @@ describe("create-turbo cli", () => {
   describe("--no-install", () => {
     it("default: guides the user through the process", async () => {
       configurePackageManager(PACKAGE_MANAGERS["npm"]);
-      const cli = spawn("node", [createTurbo, "--no-install"], {});
+      const cli = spawn("node", [createTurbo, "--no-install"], { cwd });
 
       const messages = await runInteractiveCLI(cli);
 
@@ -122,7 +120,7 @@ describe("create-turbo cli", () => {
         const cli = spawn(
           "node",
           [createTurbo, "--no-install", `--use-${packageManager.command}`],
-          {}
+          { cwd }
         );
         const messages = await runInteractiveCLI(cli);
 
@@ -160,7 +158,9 @@ describe("create-turbo cli", () => {
   describe("with installation", () => {
     it("default", async () => {
       configurePackageManager(PACKAGE_MANAGERS["npm"]);
-      const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {});
+      const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {
+        cwd,
+      });
 
       const messages = await runInteractiveCLI(cli);
 
@@ -199,7 +199,7 @@ describe("create-turbo cli", () => {
             `--use-${packageManager.command}`,
             `./${DEFAULT_APP_NAME}`,
           ],
-          {}
+          { cwd }
         );
         const messages = await runInteractiveCLI(cli);
 
@@ -331,9 +331,6 @@ function cleanupTestDir() {
   if (fs.existsSync(testDir)) {
     fs.rmSync(testDir, { recursive: true });
   }
-  fs.rmSync(path.join(__dirname, "../.yarn"), { recursive: true, force: true });
-  fs.rmSync(path.join(__dirname, "../.yarnrc"), { force: true });
-  fs.rmSync(path.join(__dirname, "../.yarnrc.yml"), { force: true });
 }
 
 function getGeneratedPackageJSON() {
@@ -343,26 +340,8 @@ function getGeneratedPackageJSON() {
 }
 
 function configurePackageManager(packageManager: PackageManager) {
-  // If `corepack` plays nicer this can be uncommented to not rely on globals:
-  // execSync(`corepack prepare ${packageManager.command}@latest --activate`, { stdio: "ignore" });
-
-  try {
-    switch (packageManager) {
-      case PACKAGE_MANAGERS["yarn"]:
-        // Switch to classic.
-        execSync("yarn set version classic", { stdio: "ignore" });
-        // Ensure that it's the latest stable version.
-        execSync("yarn set version", { stdio: "ignore" });
-        return;
-      case PACKAGE_MANAGERS["berry"]:
-        // Switch to berry.
-        execSync("yarn set version berry", { stdio: "ignore" });
-        // Ensure that it's the latest stable version.
-        execSync("yarn set version stable", { stdio: "ignore" });
-        return;
-    }
-  } catch (e) {
-    // We only end up here if we try to set "classic" _from_ classic.
-    // The method shape in `yarn` does not match `berry`.
-  }
+  execSync(
+    `corepack prepare ${packageManager.command}@${packageManager.version} --activate`,
+    { stdio: "ignore", cwd }
+  );
 }
