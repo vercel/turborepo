@@ -1,4 +1,4 @@
-package fs
+package hashing
 
 import (
 	"errors"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
@@ -216,7 +217,7 @@ func Test_getTraversePath(t *testing.T) {
 	}
 }
 
-func requireGitCmd(t *testing.T, repoRoot AbsolutePath, args ...string) {
+func requireGitCmd(t *testing.T, repoRoot fs.AbsolutePath, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoRoot.ToString()
@@ -233,8 +234,10 @@ func TestGetPackageDeps(t *testing.T) {
 	//     committed-file
 	//     deleted-file
 	//     uncommitted-file <- new file not added to git
+	//     dir/
+	//       nested-file
 
-	repoRoot := AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	myPkgDir := repoRoot.Join("my-pkg")
 	committedFilePath := myPkgDir.Join("committed-file")
 	err := committedFilePath.EnsureDir()
@@ -244,6 +247,9 @@ func TestGetPackageDeps(t *testing.T) {
 	deletedFilePath := myPkgDir.Join("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
+	nestedPath := myPkgDir.Join("dir", "nested-file")
+	assert.NilError(t, nestedPath.EnsureDir(), "EnsureDir")
+	assert.NilError(t, nestedPath.WriteFile([]byte("nested"), 0644), "WriteFile")
 	requireGitCmd(t, repoRoot, "init", ".")
 	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
 	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
@@ -266,6 +272,7 @@ func TestGetPackageDeps(t *testing.T) {
 			expected: map[turbopath.AnchoredUnixPath]string{
 				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
 		{
@@ -274,6 +281,27 @@ func TestGetPackageDeps(t *testing.T) {
 				InputPatterns: []string{"uncommitted-file"},
 			},
 			expected: map[turbopath.AnchoredUnixPath]string{
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"**/*-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
+			},
+		},
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"**/{uncommitted,committed}-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
 			},
 		},

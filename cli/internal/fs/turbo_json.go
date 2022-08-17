@@ -3,11 +3,12 @@ package fs
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/yosuke-furukawa/json5/encoding/json5"
+	"muzzammil.xyz/jsonc"
 )
 
 // TurboJSON is the root turborepo configuration
@@ -57,10 +58,12 @@ func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var turboJSON *TurboJSON
-	decoder := json5.NewDecoder(file)
-	err = decoder.Decode(&turboJSON)
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	err = jsonc.Unmarshal(data, &turboJSON)
 	if err != nil {
 		println("error unmarshalling", err.Error())
 		return nil, err
