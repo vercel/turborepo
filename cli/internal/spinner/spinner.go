@@ -71,7 +71,15 @@ func WaitFor(ctx context.Context, fn func(), terminal cli.Ui, msg string, initia
 			return nil
 		}
 	} else {
-		terminal.Output(msg)
+		// wait for the timeout before displaying a message, even with no tty
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-doneCh:
+			return nil
+		case <-time.After(initialDelay):
+			terminal.Output(msg)
+		}
 		select {
 		case <-ctx.Done():
 		case <-doneCh:
