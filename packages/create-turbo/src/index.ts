@@ -116,15 +116,15 @@ async function run() {
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
-          { name: "npm", value: "npm" },
+          { name: "npm", value: PACKAGE_MANAGERS["npm"] },
           {
             name: "pnpm",
-            value: "pnpm",
+            value: PACKAGE_MANAGERS["pnpm"],
             disabled: !isPnpmInstalled && "not installed",
           },
           {
             name: "yarn",
-            value: "yarn",
+            value: PACKAGE_MANAGERS["yarn"],
             disabled: !isYarnInstalled && "not installed",
           },
         ],
@@ -180,7 +180,7 @@ async function run() {
   });
 
   sharedPkg.packageManager = `${
-    answers.packageManager
+    answers.packageManager.command
   }@${getPackageManagerVersion(answers.packageManager)}`;
   sharedPkg.name = projectName;
 
@@ -236,7 +236,7 @@ async function run() {
       installArgs.push(`--registry=${npmRegistry}`);
     }
 
-    await execa(`${answers.packageManager}`, installArgs, {
+    await execa(`${answers.packageManager.command}`, installArgs, {
       stdio: "ignore",
       cwd: projectDir,
     });
@@ -280,10 +280,10 @@ async function run() {
   }
 
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager} run build`));
+  console.log(chalk.cyan(`  ${answers.packageManager.command} run build`));
   console.log(`     Build all apps and packages`);
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager} run dev`));
+  console.log(chalk.cyan(`  ${answers.packageManager.command} run dev`));
   console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
