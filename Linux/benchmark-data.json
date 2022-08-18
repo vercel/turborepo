@@ -1,0 +1,54 @@
+{
+  "lastUpdate": 1660840080525,
+  "repoUrl": "https://github.com/vercel/turborepo",
+  "entries": {
+    "Linux Benchmark": [
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "7bfa00ea4c2c51117e89d9a1bcd1d486d0c91753",
+          "message": "Run benchmarks, push data to tinybird and gh-pages (#1715)\n\nNew revision of the large monorepo benchmark. Still set to manual. Produces both benchmark-action-compatible json as well as tinybird-compatible ndjson.\n\nSends ndjson to tinybird and json to gh-pages.\n\nTested on my own fork of the repo.",
+          "timestamp": "2022-08-17T21:48:09Z",
+          "url": "https://github.com/vercel/turborepo/commit/7bfa00ea4c2c51117e89d9a1bcd1d486d0c91753"
+        },
+        "date": 1660840080522,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 711542,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 9358.8,
+            "unit": "ms",
+            "range": "1266"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 9148,
+            "unit": "ms",
+            "range": "164"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 35543,
+            "unit": "ms",
+            "range": "8749"
+          }
+        ]
+      }
+    ]
+  }
+}
