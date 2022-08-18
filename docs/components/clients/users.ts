@@ -371,9 +371,15 @@ export const users = [
     pinned: true,
   },
   {
+    caption: "n8n",
+    image: "/images/logos/n8n.svg",
+    infoLink: "https://n8n.io",
+    pinned: true,
+  },
+  {
     caption: "Xata",
     image: "/images/logos/xata.svg",
     infoLink: "https://xata.io",
-    pinned: true,
+    pinned: true,  
   },
 ];
