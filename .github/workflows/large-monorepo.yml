@@ -5,7 +5,7 @@ on: workflow_dispatch
 jobs:
   build:
     name: Run Benchmarks
-    timeout-minutes: 40
+    timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
