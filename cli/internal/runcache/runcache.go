@@ -32,13 +32,14 @@ type Opts struct {
 	TaskOutputModeOverride *util.TaskOutputMode
 	LogReplayer            LogReplayer
 	OutputWatcher          OutputWatcher
+	TraceOutputs           bool
 }
 
 // AddFlags adds the flags relevant to the runcache package to the given FlagSet
 func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
 	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
-
+	flags.BoolVar(&opts.TraceOutputs, "trace-outputs", false, "Include a list of every output file in the run summary ")
 	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
 	if err != nil {
 		panic(err)
@@ -111,6 +112,7 @@ type RunCache struct {
 	repoRoot               fs.AbsolutePath
 	logReplayer            LogReplayer
 	outputWatcher          OutputWatcher
+	traceOutputs           bool
 	colorCache             *colorcache.ColorCache
 }
 
@@ -124,6 +126,7 @@ func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *col
 		repoRoot:               repoRoot,
 		logReplayer:            opts.LogReplayer,
 		outputWatcher:          opts.OutputWatcher,
+		traceOutputs:           opts.TraceOutputs,
 		colorCache:             colorCache,
 	}
 	if rc.logReplayer == nil {
@@ -145,12 +148,14 @@ type TaskCache struct {
 	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
 	LogFileName       fs.AbsolutePath
+	cacheResults      map[string]interface{}
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
-func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
+		tc.cacheResults["cacheRead"] = "disabled"
 		if tc.taskOutputMode != util.NoTaskOutput {
 			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
@@ -166,21 +171,26 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O
-		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
+		hit, _, duration, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
 		if err != nil {
+			tc.cacheResults["cacheRead"] = "error"
 			return false, err
 		} else if !hit {
+			tc.cacheResults["cacheRead"] = "miss"
 			if tc.taskOutputMode != util.NoTaskOutput {
 				terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			return false, nil
 		}
+		tc.cacheResults["cacheRead"] = "hit"
+		tc.cacheResults["timeSavedMs"] = duration
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
 			logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
 			terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
+		tc.cacheResults["cacheRead"] = "unchanged"
 		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
@@ -225,7 +235,7 @@ func (fwc *fileWriterCloser) Close() error {
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
-func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
+func (tc *TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{os.Stdout}, nil
 	}
@@ -262,8 +272,9 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 var _emptyIgnore []string
 
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
-func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
+func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
+		tc.cacheResults["cacheWrite"] = "disabled"
 		return nil
 	}
 
@@ -287,7 +298,13 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 	}
 
 	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths); err != nil {
+		// TODO: perhaps we shouldn't fail the run if we fail to write to cache?
+		tc.cacheResults["cacheWrite"] = "error"
 		return err
+	}
+	tc.cacheResults["cacheWrite"] = "cached"
+	if tc.rc.traceOutputs {
+		tc.cacheResults["cacheFilesWritten"] = relativePaths
 	}
 	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
 	if err != nil {
@@ -299,9 +316,13 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 	return nil
 }
 
+func (tc *TaskCache) ReportResults() map[string]interface{} {
+	return tc.cacheResults
+}
+
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) *TaskCache {
 	logFileName := rc.repoRoot.Join(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
@@ -314,7 +335,10 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		taskOutputMode = *rc.taskOutputModeOverride
 	}
 
-	return TaskCache{
+	cacheResults := make(map[string]interface{})
+	cacheResults["taskHash"] = hash
+	cacheResults["outputGlobs"] = repoRelativeGlobs
+	return &TaskCache{
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
 		hash:              hash,
@@ -322,6 +346,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
 		LogFileName:       logFileName,
+		cacheResults:      cacheResults,
 	}
 }
 

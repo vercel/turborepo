@@ -15,6 +15,8 @@ import (
 	"github.com/mitchellh/cli"
 )
 
+type cacheResult interface{}
+
 // RunResult represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
 type RunResult struct {
@@ -72,6 +74,8 @@ type BuildTargetState struct {
 	Status RunResultStatus
 	// Error, only populated for failure statuses
 	Err error
+
+	cacheResults cacheResult
 }
 
 type RunState struct {
@@ -105,7 +109,33 @@ func NewRunState(startedAt time.Time, tracingProfile string, sessionID ksuid.KSU
 	}
 }
 
-func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
+type Trace struct {
+	taskID      string
+	rs          *RunState
+	start       time.Time
+	chromeEvent *chrometracing.PendingEvent
+}
+
+func (t *Trace) AddCacheResults(results cacheResult) {
+	t.rs.addCacheResults(t.taskID, results)
+}
+
+func (t *Trace) Finish(outcome RunResultStatus, err error) {
+	t.chromeEvent.Done()
+	now := time.Now()
+	result := &RunResult{
+		Time:     now,
+		Duration: now.Sub(t.start),
+		Label:    t.taskID,
+		Status:   outcome,
+	}
+	if err != nil {
+		result.Err = fmt.Errorf("running %v failed: %w", t.taskID, err)
+	}
+	t.rs.add(result, t.taskID, false)
+}
+
+func (r *RunState) StartTrace(label string) *Trace {
 	start := time.Now()
 	r.add(&RunResult{
 		Time:   start,
@@ -113,19 +143,19 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 		Status: TargetBuilding,
 	}, label, true)
 	tracer := chrometracing.Event(label)
-	return func(outcome RunResultStatus, err error) {
-		defer tracer.Done()
-		now := time.Now()
-		result := &RunResult{
-			Time:     now,
-			Duration: now.Sub(start),
-			Label:    label,
-			Status:   outcome,
-		}
-		if err != nil {
-			result.Err = fmt.Errorf("running %v failed: %w", label, err)
-		}
-		r.add(result, label, false)
+	return &Trace{
+		taskID:      label,
+		rs:          r,
+		start:       start,
+		chromeEvent: tracer,
+	}
+}
+
+func (r *RunState) addCacheResults(taskID string, cacheResult cacheResult) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s, ok := r.state[taskID]; ok {
+		s.cacheResults = cacheResult
 	}
 }
 
@@ -198,6 +228,7 @@ func (r *RunState) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) 
 		taskSummary["endedAt"] = targetState.StartAt.Add(targetState.Duration).UnixMilli()
 		taskSummary["durationMs"] = targetState.Duration.Milliseconds()
 		taskSummary["status"] = targetState.Status.String()
+		taskSummary["cache"] = targetState.cacheResults
 		if targetState.Err != nil {
 			taskSummary["error"] = targetState.Err.Error()
 		}

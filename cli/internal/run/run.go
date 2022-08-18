@@ -896,7 +896,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	targetLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.Run(pt.TaskID)
+	tracer := e.runState.StartTrace(pt.TaskID)
 
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
@@ -922,18 +922,19 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	//
 	// bail if the script doesn't exist
 	if _, ok := pt.Command(); !ok {
-		tracer(TargetNonexistent, nil)
+		tracer.Finish(TargetNonexistent, nil)
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(pt, hash)
+	defer tracer.AddCacheResults(taskCache.ReportResults())
 	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
-		tracer(TargetCached, nil)
+		tracer.Finish(TargetCached, nil)
 		return nil
 	}
 	// Setup command execution
@@ -954,7 +955,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// be careful about this conditional given the default of cache = true
 	writer, err := taskCache.OutputWriter()
 	if err != nil {
-		tracer(TargetBuildFailed, err)
+		tracer.Finish(TargetBuildFailed, err)
 		e.logError(targetLogger, prettyTaskPrefix, err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
@@ -1000,7 +1001,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		if errors.Is(err, process.ErrClosing) {
 			return nil
 		}
-		tracer(TargetBuildFailed, err)
+		tracer.Finish(TargetBuildFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
@@ -1022,7 +1023,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 
 	// Clean up tracing
-	tracer(TargetBuilt, nil)
+	tracer.Finish(TargetBuilt, nil)
 	targetLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }
