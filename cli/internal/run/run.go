@@ -38,6 +38,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/spinner"
+	"github.com/vercel/turborepo/cli/internal/summary"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -720,11 +721,11 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.sessionID)
+	summary := summary.New(startAt, rs.Opts.runOpts.profile, r.sessionID)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
 		colorCache:     colorCache,
-		runState:       runState,
+		summary:        summary,
 		rs:             rs,
 		ui:             &cli.ConcurrentUi{Ui: r.ui},
 		turboCache:     turboCache,
@@ -760,7 +761,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	summaryPath := r.config.Cwd.Join(".turbo", "runs", r.sessionID.String()+".json")
-	if err := runState.Close(r.ui, rs.Opts.runOpts.profile, summaryPath); err != nil {
+	if err := summary.Close(r.ui, rs.Opts.runOpts.profile, summaryPath); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
 	if exitCode != 0 {
@@ -868,7 +869,7 @@ func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 
 type execContext struct {
 	colorCache     *colorcache.ColorCache
-	runState       *RunState
+	summary        *summary.Summary
 	rs             *runSpec
 	ui             cli.Ui
 	runCache       *runcache.RunCache
@@ -896,7 +897,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	targetLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.StartTrace(pt.TaskID)
+	tracer := e.summary.StartTrace(pt.TaskID)
 
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
@@ -922,7 +923,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	//
 	// bail if the script doesn't exist
 	if _, ok := pt.Command(); !ok {
-		tracer.Finish(TargetNonexistent, nil)
+		tracer.Finish(summary.TaskStateNonexistent, nil)
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
@@ -934,7 +935,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
-		tracer.Finish(TargetCached, nil)
+		tracer.Finish(summary.TaskStateCached, nil)
 		return nil
 	}
 	// Setup command execution
@@ -955,7 +956,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// be careful about this conditional given the default of cache = true
 	writer, err := taskCache.OutputWriter()
 	if err != nil {
-		tracer.Finish(TargetBuildFailed, err)
+		tracer.Finish(summary.TaskStateFailed, err)
 		e.logError(targetLogger, prettyTaskPrefix, err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
@@ -1001,7 +1002,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		if errors.Is(err, process.ErrClosing) {
 			return nil
 		}
-		tracer.Finish(TargetBuildFailed, err)
+		tracer.Finish(summary.TaskStateFailed, err)
 		targetLogger.Error("Error: command finished with error: %w", err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
@@ -1023,7 +1024,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 
 	// Clean up tracing
-	tracer.Finish(TargetBuilt, nil)
+	tracer.Finish(summary.TaskStateCompleted, nil)
 	targetLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }

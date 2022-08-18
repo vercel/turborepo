@@ -1,4 +1,4 @@
-package run
+package summary
 
 import (
 	"encoding/json"
@@ -17,141 +17,147 @@ import (
 
 type cacheResult interface{}
 
-// RunResult represents a single event in the build process, i.e. a target starting or finishing
+// taskEvent represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
-type RunResult struct {
+type taskEvent struct {
 	// Timestamp of this event
-	Time time.Time
-	// Duration of this event
-	Duration time.Duration
+	time time.Time
+	// duration of this event
+	duration time.Duration
 	// Target which has just changed
-	Label string
+	taskID string
 	// Its current status
-	Status RunResultStatus
+	taskState TaskState
 	// Error, only populated for failure statuses
-	Err error
+	err error
 }
 
-// RunResultStatus represents the status of a target when we log a build result.
-type RunResultStatus int
+// TaskState represents the status of a target when we log a build result.
+type TaskState int
 
 // The collection of expected build result statuses.
 const (
-	TargetBuilding RunResultStatus = iota
-	TargetBuildStopped
-	TargetBuilt
-	TargetCached
-	TargetBuildFailed
-	TargetNonexistent
+	TaskStateRunning TaskState = iota
+	TaskStateStopped
+	TaskStateCompleted
+	TaskStateCached
+	TaskStateFailed
+	TaskStateNonexistent
 )
 
-func (rr RunResultStatus) String() string {
-	switch rr {
-	case TargetBuilding:
+func (ts TaskState) String() string {
+	switch ts {
+	case TaskStateRunning:
 		return "running"
-	case TargetBuildStopped:
+	case TaskStateStopped:
 		return "stopped"
-	case TargetBuilt:
+	case TaskStateCompleted:
 		return "executed"
-	case TargetCached:
+	case TaskStateCached:
 		return "replayed"
-	case TargetBuildFailed:
+	case TaskStateFailed:
 		return "failed"
-	case TargetNonexistent:
+	case TaskStateNonexistent:
 		return "nonexistent"
 	default:
-		panic(fmt.Sprintf("unknown status: %v", int(rr)))
+		panic(fmt.Sprintf("unknown status: %v", int(ts)))
 	}
 }
 
-type BuildTargetState struct {
-	StartAt time.Time
+type taskState struct {
+	startAt time.Time
 
-	Duration time.Duration
-	// Target which has just changed
-	Label string
+	duration time.Duration
+	// taskID of the task which has just changed
+	taskID string
 	// Its current status
-	Status RunResultStatus
+	status TaskState
 	// Error, only populated for failure statuses
-	Err error
+	err error
 
 	cacheResults cacheResult
 }
 
-type RunState struct {
+// Summary collects information over the course of a turbo run
+// to produce a summary
+type Summary struct {
 	sessionID ksuid.KSUID
 	mu        sync.Mutex
-	state     map[string]*BuildTargetState
-	Success   int
-	Failure   int
+	state     map[string]*taskState
+	success   int
+	failure   int
 	// Is the output streaming?
-	Cached    int
-	Attempted int
+	cached    int
+	attempted int
 
 	startedAt time.Time
 }
 
-// NewRunState creates a RunState instance for tracking events during the
+// New creates a RunState instance for tracking events during the
 // course of a run.
-func NewRunState(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID) *RunState {
+func New(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID) *Summary {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
-	return &RunState{
+	return &Summary{
 		sessionID: sessionID,
-		Success:   0,
-		Failure:   0,
-		Cached:    0,
-		Attempted: 0,
-		state:     make(map[string]*BuildTargetState),
+		success:   0,
+		failure:   0,
+		cached:    0,
+		attempted: 0,
+		state:     make(map[string]*taskState),
 
 		startedAt: startedAt,
 	}
 }
 
+// Trace is a handle given to a single task so it can record events
 type Trace struct {
 	taskID      string
-	rs          *RunState
+	rs          *Summary
 	start       time.Time
 	chromeEvent *chrometracing.PendingEvent
 }
 
+// AddCacheResults records per-task cache information
 func (t *Trace) AddCacheResults(results cacheResult) {
 	t.rs.addCacheResults(t.taskID, results)
 }
 
-func (t *Trace) Finish(outcome RunResultStatus, err error) {
+// Finish records this task as being finished with the given outcome
+func (t *Trace) Finish(outcome TaskState, err error) {
 	t.chromeEvent.Done()
 	now := time.Now()
-	result := &RunResult{
-		Time:     now,
-		Duration: now.Sub(t.start),
-		Label:    t.taskID,
-		Status:   outcome,
+	result := &taskEvent{
+		time:      now,
+		duration:  now.Sub(t.start),
+		taskID:    t.taskID,
+		taskState: outcome,
 	}
 	if err != nil {
-		result.Err = fmt.Errorf("running %v failed: %w", t.taskID, err)
+		result.err = fmt.Errorf("running %v failed: %w", t.taskID, err)
 	}
 	t.rs.add(result, t.taskID, false)
 }
 
-func (r *RunState) StartTrace(label string) *Trace {
+// StartTrace returns a handle to track events for a given task
+func (r *Summary) StartTrace(taskID string) *Trace {
 	start := time.Now()
-	r.add(&RunResult{
-		Time:   start,
-		Label:  label,
-		Status: TargetBuilding,
-	}, label, true)
-	tracer := chrometracing.Event(label)
+	r.add(&taskEvent{
+		time:      start,
+		taskID:    taskID,
+		taskState: TaskStateRunning,
+	}, taskID, true)
+	tracer := chrometracing.Event(taskID)
 	return &Trace{
-		taskID:      label,
+		taskID:      taskID,
 		rs:          r,
 		start:       start,
 		chromeEvent: tracer,
 	}
 }
 
-func (r *RunState) addCacheResults(taskID string, cacheResult cacheResult) {
+func (r *Summary) addCacheResults(taskID string, cacheResult cacheResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[taskID]; ok {
@@ -159,38 +165,38 @@ func (r *RunState) addCacheResults(taskID string, cacheResult cacheResult) {
 	}
 }
 
-func (r *RunState) add(result *RunResult, previous string, active bool) {
+func (r *Summary) add(result *taskEvent, previous string, active bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s, ok := r.state[result.Label]; ok {
-		s.Status = result.Status
-		s.Err = result.Err
-		s.Duration = result.Duration
+	if s, ok := r.state[result.taskID]; ok {
+		s.status = result.taskState
+		s.err = result.err
+		s.duration = result.duration
 	} else {
-		r.state[result.Label] = &BuildTargetState{
-			StartAt:  result.Time,
-			Label:    result.Label,
-			Status:   result.Status,
-			Err:      result.Err,
-			Duration: result.Duration,
+		r.state[result.taskID] = &taskState{
+			startAt:  result.time,
+			taskID:   result.taskID,
+			status:   result.taskState,
+			err:      result.err,
+			duration: result.duration,
 		}
 	}
 	switch {
-	case result.Status == TargetBuildFailed:
-		r.Failure++
-		r.Attempted++
-	case result.Status == TargetCached:
-		r.Cached++
-		r.Attempted++
-	case result.Status == TargetBuilt:
-		r.Success++
-		r.Attempted++
+	case result.taskState == TaskStateFailed:
+		r.failure++
+		r.attempted++
+	case result.taskState == TaskStateCached:
+		r.cached++
+		r.attempted++
+	case result.taskState == TaskStateCompleted:
+		r.success++
+		r.attempted++
 	}
 }
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
-func (r *RunState) Close(terminal cli.Ui, filename string, summaryPath fs.AbsolutePath) error {
+func (r *Summary) Close(terminal cli.Ui, filename string, summaryPath fs.AbsolutePath) error {
 	endedAt := time.Now()
 	if err := writeChrometracing(filename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
@@ -201,18 +207,18 @@ func (r *RunState) Close(terminal cli.Ui, filename string, summaryPath fs.Absolu
 	}
 
 	maybeFullTurbo := ""
-	if r.Cached == r.Attempted && r.Attempted > 0 {
+	if r.cached == r.attempted && r.attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
 	terminal.Output("") // Clear the line
-	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
-	terminal.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
+	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.cached+r.success, r.attempted))
+	terminal.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.cached, r.attempted))
 	terminal.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", endedAt.Sub(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 	terminal.Output("")
 	return nil
 }
 
-func (r *RunState) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) error {
+func (r *Summary) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) error {
 	if err := summaryPath.EnsureDir(); err != nil {
 		return err
 	}
@@ -224,13 +230,13 @@ func (r *RunState) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) 
 	tasks := make(map[string]interface{})
 	for task, targetState := range r.state {
 		taskSummary := make(map[string]interface{})
-		taskSummary["startedAt"] = targetState.StartAt.UnixMilli()
-		taskSummary["endedAt"] = targetState.StartAt.Add(targetState.Duration).UnixMilli()
-		taskSummary["durationMs"] = targetState.Duration.Milliseconds()
-		taskSummary["status"] = targetState.Status.String()
+		taskSummary["startedAt"] = targetState.startAt.UnixMilli()
+		taskSummary["endedAt"] = targetState.startAt.Add(targetState.duration).UnixMilli()
+		taskSummary["durationMs"] = targetState.duration.Milliseconds()
+		taskSummary["status"] = targetState.status.String()
 		taskSummary["cache"] = targetState.cacheResults
-		if targetState.Err != nil {
-			taskSummary["error"] = targetState.Err.Error()
+		if targetState.err != nil {
+			taskSummary["error"] = targetState.err.Error()
 		}
 		tasks[task] = taskSummary
 	}
