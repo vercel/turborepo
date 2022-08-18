@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -35,11 +36,10 @@ import (
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turborepo/cli/internal/spinner"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
-
-	"github.com/pyr-sh/dag"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -205,7 +205,18 @@ type run struct {
 
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	pkgDepGraph, err := context.New(context.WithGraph(r.config, r.opts.cacheOpts.Dir))
+	packageJSONPath := r.config.Cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
+	if err != nil {
+		return fmt.Errorf("failed to read package.json: %w", err)
+	}
+	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, rootPackageJSON)
+	if err != nil {
+		return err
+	}
+	// TODO: these values come from a config file, hopefully viper can help us merge these
+	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+	pkgDepGraph, err := context.New(context.WithGraph(r.config.Cwd, rootPackageJSON, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}
@@ -227,7 +238,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
-	pipeline := r.config.TurboJSON.Pipeline
+	pipeline := turboJSON.Pipeline
 	if err := validateTasks(pipeline, targets); err != nil {
 		return err
 	}
@@ -255,7 +266,19 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			}
 		}
 	}
-	r.config.Logger.Debug("global hash", "value", pkgDepGraph.GlobalHash)
+	globalHash, err := calculateGlobalHash(
+		r.config.Cwd,
+		rootPackageJSON,
+		pipeline,
+		turboJSON.GlobalDependencies,
+		pkgDepGraph.PackageManager,
+		r.config.Logger,
+		os.Environ(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to calculate global hash: %v", err)
+	}
+	r.config.Logger.Debug("global hash", "value", globalHash)
 	r.config.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
@@ -263,7 +286,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
 		PackageInfos:     pkgDepGraph.PackageInfos,
-		GlobalHash:       pkgDepGraph.GlobalHash,
+		GlobalHash:       globalHash,
 		RootNode:         pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
@@ -663,9 +686,10 @@ func (r *run) logWarning(prefix string, err error) {
 }
 
 func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
 	if r.config.IsLoggedIn() {
-		analyticsSink = r.config.ApiClient
+		analyticsSink = apiClient
 	} else {
 		analyticsSink = analytics.NullSink
 	}
@@ -673,7 +697,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache, err := cache.New(rs.Opts.cacheOpts, r.config, analyticsClient, func(_cache cache.Cache, err error) {
+	turboCache, err := cache.New(rs.Opts.cacheOpts, r.config, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
@@ -688,23 +712,12 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			return errors.Wrap(err, "failed to set up caching")
 		}
 	}
-	defer turboCache.Shutdown()
+	defer func() {
+		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
+	}()
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
-	argSeparator := []string{"--"}
-	if is7PlusPnpm, err := util.Is7PlusPnpm(packageManager.Name); err != nil {
-		return errors.Wrap(err, "determining pnpm version")
-	} else if is7PlusPnpm {
-		// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
-		// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
-		// potentially breaking scripts that aren't expecting it.
-		//
-		// We are allowed to use nil here because argSeparator already has a type, so it's a typed nil,
-		// vs if we tried to call "args = append(args, nil...)", which would not work. This could
-		// just as easily be []string{}, but the style guide says to prefer nil for empty slices.
-		argSeparator = nil
-	}
 	ec := &execContext{
 		colorCache:     colorCache,
 		runState:       runState,
@@ -716,7 +729,6 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		packageManager: packageManager,
 		processes:      r.processes,
 		taskHashes:     hashes,
-		argSeparator:   argSeparator,
 	}
 
 	// run the thing
@@ -860,7 +872,6 @@ type execContext struct {
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
 	taskHashes     *taskhash.Tracker
-	argSeparator   []string
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -923,7 +934,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	argsactual := append([]string{"run"}, pt.Task)
 	if len(passThroughArgs) > 0 {
 		// This will be either '--' or a typed nil
-		argsactual = append(argsactual, e.argSeparator...)
+		argsactual = append(argsactual, e.packageManager.ArgSeparator...)
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 

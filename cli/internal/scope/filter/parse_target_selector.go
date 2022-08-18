@@ -16,12 +16,22 @@ type TargetSelector struct {
 	followProdDepsOnly  bool
 	parentDir           string
 	namePattern         string
-	diff                string
+	fromRef             string
+	toRefOverride       string
 	raw                 string
 }
 
 func (ts *TargetSelector) IsValid() bool {
-	return ts.diff != "" || ts.parentDir != "" || ts.namePattern != ""
+	return ts.fromRef != "" || ts.parentDir != "" || ts.namePattern != ""
+}
+
+// getToRef returns the git ref to use for upper bound of the comparison when finding changed
+// packages.
+func (ts *TargetSelector) getToRef() string {
+	if ts.toRefOverride == "" {
+		return "HEAD"
+	}
+	return ts.toRefOverride
 }
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
@@ -57,35 +67,30 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 
 	matches := targetSelectorRegex.FindAllStringSubmatch(selector, -1)
 
-	diff := ""
-	parentDir := ""
-	namePattern := ""
-
 	if len(matches) == 0 {
 		if isSelectorByLocation(selector) {
 			return TargetSelector{
-				diff:                diff,
 				exclude:             exclude,
-				excludeSelf:         false,
 				includeDependencies: includeDependencies,
 				includeDependents:   includeDependents,
-				namePattern:         namePattern,
 				parentDir:           filepath.Join(prefix, selector),
 				raw:                 rawSelector,
 			}, nil
 		}
 		return TargetSelector{
-			diff:                diff,
 			exclude:             exclude,
 			excludeSelf:         excludeSelf,
 			includeDependencies: includeDependencies,
 			includeDependents:   includeDependents,
 			namePattern:         selector,
-			parentDir:           parentDir,
 			raw:                 rawSelector,
 		}, nil
 	}
 
+	fromRef := ""
+	toRefOverride := ""
+	parentDir := ""
+	namePattern := ""
 	preAddDepdencies := false
 	if len(matches) > 0 && len(matches[0]) > 0 {
 		if len(matches[0][1]) > 0 {
@@ -96,21 +101,27 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 			parentDir = filepath.Join(prefix, parentDir[1:len(parentDir)-1])
 		}
 		if len(matches[0][3]) > 0 {
-			diff = matches[0][3]
-			if strings.HasPrefix(diff, "...") {
+			fromRef = matches[0][3]
+			if strings.HasPrefix(fromRef, "...") {
 				if parentDir == "" && namePattern == "" {
 					return TargetSelector{}, errCantMatchDependencies
 				}
 				preAddDepdencies = true
-				diff = diff[3:]
+				fromRef = fromRef[3:]
 			}
 			// strip []
-			diff = diff[1 : len(diff)-1]
+			fromRef = fromRef[1 : len(fromRef)-1]
+			refs := strings.Split(fromRef, "...")
+			if len(refs) == 2 {
+				fromRef = refs[0]
+				toRefOverride = refs[1]
+			}
 		}
 	}
 
 	return TargetSelector{
-		diff:                diff,
+		fromRef:             fromRef,
+		toRefOverride:       toRefOverride,
 		exclude:             exclude,
 		excludeSelf:         excludeSelf,
 		includeDependencies: includeDependencies,

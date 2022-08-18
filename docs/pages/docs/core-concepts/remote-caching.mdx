@@ -4,7 +4,7 @@ description: Share cache artifacts across machines for even faster builds.
 
 ---
 
-import Callout from "../../../components/callout";
+import Callout from "../../../components/Callout";
 
 # Remote Caching
 
@@ -18,7 +18,7 @@ What if there was a way to teleport and share a single cache across machines? Al
 
 Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost. This is possible because Turborepo uses content addressable storage.
 
-<Callout type="error">
+<Callout>
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 
@@ -67,7 +67,7 @@ To enable this feature, set the `remoteCache` options on your turbo config to in
 {
   "$schema": "https://turborepo.org/schema.json",
   "remoteCache": {
-    // Indicates if signature verifcation is enabled.
+    // Indicates if signature verification is enabled.
     "signature": true
   }
 }

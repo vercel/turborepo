@@ -21,7 +21,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo",
 			args{"foo", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -35,7 +35,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo...",
 			args{"foo...", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -49,7 +49,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...foo",
 			args{"...foo", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -63,7 +63,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...foo...",
 			args{"...foo...", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -77,7 +77,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo^...",
 			args{"foo^...", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         true,
 				includeDependencies: true,
@@ -91,7 +91,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...^foo",
 			args{"...^foo", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         true,
 				includeDependencies: false,
@@ -105,7 +105,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"./foo",
 			args{"./foo", "./"},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -119,7 +119,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"../foo",
 			args{"../foo", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -133,7 +133,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...{./foo}",
 			args{"...{./foo}", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -147,7 +147,7 @@ func TestParseTargetSelector(t *testing.T) {
 			".",
 			args{".", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -161,7 +161,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"..",
 			args{"..", "."},
 			TargetSelector{
-				diff:                "",
+				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -175,7 +175,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"[master]",
 			args{"[master]", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -186,10 +186,19 @@ func TestParseTargetSelector(t *testing.T) {
 			false,
 		},
 		{
+			"[from...to]",
+			args{"[from...to]", "."},
+			TargetSelector{
+				fromRef:       "from",
+				toRefOverride: "to",
+			},
+			false,
+		},
+		{
 			"{foo}[master]",
 			args{"{foo}[master]", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -203,7 +212,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"pattern{foo}[master]",
 			args{"pattern{foo}[master]", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -217,7 +226,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"[master]...",
 			args{"[master]...", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -231,7 +240,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...[master]",
 			args{"...[master]", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
@@ -245,7 +254,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"...[master]...",
 			args{"...[master]...", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: true,
@@ -256,10 +265,21 @@ func TestParseTargetSelector(t *testing.T) {
 			false,
 		},
 		{
+			"...[from...to]...",
+			args{"...[from...to]...", "."},
+			TargetSelector{
+				fromRef:             "from",
+				toRefOverride:       "to",
+				includeDependencies: true,
+				includeDependents:   true,
+			},
+			false,
+		},
+		{
 			"foo...[master]",
 			args{"foo...[master]", "."},
 			TargetSelector{
-				diff:              "master",
+				fromRef:           "master",
 				namePattern:       "foo",
 				matchDependencies: true,
 			},
@@ -269,7 +289,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"foo...[master]...",
 			args{"foo...[master]...", "."},
 			TargetSelector{
-				diff:                "master",
+				fromRef:             "master",
 				namePattern:         "foo",
 				matchDependencies:   true,
 				includeDependencies: true,
@@ -280,7 +300,7 @@ func TestParseTargetSelector(t *testing.T) {
 			"{foo}...[master]",
 			args{"{foo}...[master]", "."},
 			TargetSelector{
-				diff:              "master",
+				fromRef:           "master",
 				parentDir:         "foo",
 				matchDependencies: true,
 			},

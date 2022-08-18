@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/util"
+	"gotest.tools/v3/assert"
 
 	"github.com/pyr-sh/dag"
 )
@@ -166,9 +167,68 @@ libD#build
 	}
 }
 
+func TestRunPackageTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+	p.AddTask(&Task{
+		Name:     "app1#special",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	// equivalent to "turbo run special", without an entry for
+	// "special" in turbo.json. Only "app1#special" is defined.
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1", "libA"},
+		TaskNames: []string{"special"},
+	})
+	assert.NilError(t, err, "Prepare")
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
+	for _, err := range errs {
+		assert.NilError(t, err, "Execute")
+	}
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	expected := strings.TrimSpace(`
+___ROOT___
+app1#special
+  libA#build
+libA#build
+  ___ROOT___`)
+	assert.Equal(t, expected, actual)
+}
+
+func TestRunWithNoTasksFound(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app")
+	graph.Add("lib")
+	graph.Connect(dag.BasicEdge("app", "lib"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	err := p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app", "lib"},
+		TaskNames: []string{"build"},
+	})
+	// should not fail because we have no tasks in the scheduler
+	assert.NilError(t, err, "Prepare")
+}
+
 func TestIncludeRootTasks(t *testing.T) {
 	graph := &dag.AcyclicGraph{}
-	graph.Add(util.RootPkgName)
 	graph.Add("app1")
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
@@ -221,6 +281,110 @@ libA#test
 	expected = strings.TrimSpace(expected)
 	if actual != expected {
 		t.Errorf("task graph got:\n%v\nwant:\n%v", actual, expected)
+	}
+}
+
+func TestDependOnRootTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "//#root-task",
+		TopoDeps: make(util.Set),
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("//#root-task", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	assert.NilError(t, err, "Prepare")
+	errs := p.Execute(testVisitor, ExecOpts{
+		Concurrency: 10,
+	})
+	for _, err := range errs {
+		assert.NilError(t, err, "Execute")
+	}
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	expected := fmt.Sprintf(`%v#root-task
+  ___ROOT___
+___ROOT___
+app1#build
+  libA#build
+libA#build
+  %v#root-task`, util.RootPkgName, util.RootPkgName)
+	assert.Equal(t, expected, actual)
+}
+
+func TestDependOnMissingRootTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("//#root-task", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	if err == nil {
+		t.Error("expected an error depending on non-existent root task")
+	}
+}
+
+func TestDependOnUnenabledRootTask(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewScheduler(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "foo",
+		TopoDeps: make(util.Set),
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("//#foo", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&SchedulerExecutionOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	if err == nil {
+		t.Error("expected an error depending on un-enabled root task")
 	}
 }
 

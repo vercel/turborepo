@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "rangeStrategy": "update-lockfile",
+  "lockFileMaintenance": { "enabled": true },
+  "dependencyDashboard": true,
+  "dependencyDashboardAutoclose": true,
+  "major": {
+    "dependencyDashboardApproval": true
+  },
+  "postUpdateOptions": ["gomodTidy"],
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday",
+    "every weekend"
+  ],
+  "prCreation": "not-pending",
+  "prConcurrentLimit": 5,
+  "stabilityDays": 2
+}

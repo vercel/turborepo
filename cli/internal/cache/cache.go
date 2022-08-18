@@ -57,10 +57,11 @@ var ErrNoCachesEnabled = errors.New("no caches are enabled")
 // Opts holds configuration options for the cache
 // TODO(gsoltis): further refactor this into fs cache opts and http cache opts
 type Opts struct {
-	Dir            fs.AbsolutePath
-	SkipRemote     bool
-	SkipFilesystem bool
-	Workers        int
+	Dir             fs.AbsolutePath
+	SkipRemote      bool
+	SkipFilesystem  bool
+	Workers         int
+	RemoteCacheOpts fs.RemoteCacheOptions
 }
 
 var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
@@ -74,8 +75,8 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot fs.AbsolutePath) {
 }
 
 // New creates a new cache
-func New(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	c, err := newSyncCache(opts, config, recorder, onCacheRemoved)
+func New(opts Opts, config *config.Config, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+	c, err := newSyncCache(opts, config, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func New(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheR
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
@@ -105,7 +106,7 @@ func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder,
 	cacheImplementations := make([]Cache, 0, 2)
 
 	if useFsCache {
-		implementation, err := newFsCache(opts, recorder, config)
+		implementation, err := newFsCache(opts, recorder, config.Cwd)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +115,7 @@ func newSyncCache(opts Opts, config *config.Config, recorder analytics.Recorder,
 
 	if useHTTPCache {
 		fmt.Println(ui.Dim("• Remote computation caching enabled"))
-		implementation := newHTTPCache(opts, config, recorder)
+		implementation := newHTTPCache(opts, config, client, recorder, config.Cwd)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
 
@@ -168,7 +169,7 @@ type cacheRemoval struct {
 // storeUntil stores artifacts into higher priority caches than the given one.
 // Used after artifact retrieval to ensure we have them in eg. the directory cache after
 // downloading from the RPC cache.
-func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, outputGlobs []string, stopAt int) error {
+func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, files []string, stopAt int) error {
 	// Attempt to store on all caches simultaneously.
 	toRemove := make([]*cacheRemoval, stopAt)
 	g := &errgroup.Group{}
@@ -180,7 +181,7 @@ func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration in
 		c := cache
 		i := i
 		g.Go(func() error {
-			err := c.Put(target, key, duration, outputGlobs)
+			err := c.Put(target, key, duration, files)
 			if err != nil {
 				cd := &util.CacheDisabledError{}
 				if errors.As(err, &cd) {

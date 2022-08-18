@@ -158,12 +158,12 @@ func (nullRecorder) LogEvent(analytics.EventPayload) {}
 func TestNew(t *testing.T) {
 	// Test will bomb if this fails, no need to specially handle the error
 	cwd, _ := os.Getwd()
-
 	type args struct {
 		opts           Opts
 		config         *config.Config
 		recorder       analytics.Recorder
 		onCacheRemoved OnCacheRemoved
+		client         client
 	}
 	tests := []struct {
 		name    string
@@ -191,14 +191,11 @@ func TestNew(t *testing.T) {
 				opts: Opts{
 					SkipFilesystem: true,
 					SkipRemote:     false,
-				},
-				config: &config.Config{
-					TurboJSON: &fs.TurboJSON{
-						RemoteCacheOptions: fs.RemoteCacheOptions{
-							Signature: true,
-						},
+					RemoteCacheOpts: fs.RemoteCacheOptions{
+						Signature: true,
 					},
 				},
+				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
@@ -229,14 +226,11 @@ func TestNew(t *testing.T) {
 					Dir:            fs.AbsolutePath(cwd),
 					SkipFilesystem: false,
 					SkipRemote:     false,
-				},
-				config: &config.Config{
-					TurboJSON: &fs.TurboJSON{
-						RemoteCacheOptions: fs.RemoteCacheOptions{
-							Signature: true,
-						},
+					RemoteCacheOpts: fs.RemoteCacheOptions{
+						Signature: true,
 					},
 				},
+				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
@@ -248,7 +242,7 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.args.opts, tt.args.config, tt.args.recorder, tt.args.onCacheRemoved)
+			got, err := New(tt.args.opts, tt.args.config, tt.args.client, tt.args.recorder, tt.args.onCacheRemoved)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -36,17 +36,24 @@ type PackageManager struct {
 	// The directory in which package assets are stored by the Package Manager.
 	PackageDir string
 
+	// The separator that the Package Manger uses to identify arguments that
+	// should be passed through to the underlying script.
+	ArgSeparator []string
+
 	// Return the list of workspace glob
-	getWorkspaceGlobs func(rootpath string) ([]string, error)
+	getWorkspaceGlobs func(rootpath fs.AbsolutePath) ([]string, error)
 
 	// Return the list of workspace ignore globs
-	getWorkspaceIgnores func(pm PackageManager, rootpath string) ([]string, error)
+	getWorkspaceIgnores func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error)
+
+	// Detect if Turbo knows how to produce a pruned workspace for the project
+	canPrune func(cwd fs.AbsolutePath) (bool, error)
 
 	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
 
 	// Detect if the project is using the Package Manager by inspecting the system.
-	detect func(projectDirectory string, packageManager *PackageManager) (bool, error)
+	detect func(projectDirectory fs.AbsolutePath, packageManager *PackageManager) (bool, error)
 }
 
 var packageManagers = []PackageManager{
@@ -54,6 +61,7 @@ var packageManagers = []PackageManager{
 	nodejsBerry,
 	nodejsNpm,
 	nodejsPnpm,
+	nodejsPnpm6,
 }
 
 var (
@@ -72,7 +80,7 @@ func ParsePackageManagerString(packageManager string) (manager string, version s
 }
 
 // GetPackageManager attempts all methods for identifying the package manager in use.
-func GetPackageManager(projectDirectory string, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
+func GetPackageManager(projectDirectory fs.AbsolutePath, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
 	result, _ := readPackageManager(pkg)
 	if result != nil {
 		return result, nil
@@ -101,7 +109,7 @@ func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, er
 }
 
 // detectPackageManager attempts to detect the package manager by inspecting the project directory state.
-func detectPackageManager(projectDirectory string) (packageManager *PackageManager, err error) {
+func detectPackageManager(projectDirectory fs.AbsolutePath) (packageManager *PackageManager, err error) {
 	for _, packageManager := range packageManagers {
 		isResponsible, err := packageManager.detect(projectDirectory, &packageManager)
 		if err != nil {
@@ -116,7 +124,7 @@ func detectPackageManager(projectDirectory string) (packageManager *PackageManag
 }
 
 // GetWorkspaces returns the list of package.json files for the current repository.
-func (pm PackageManager) GetWorkspaces(rootpath string) ([]string, error) {
+func (pm PackageManager) GetWorkspaces(rootpath fs.AbsolutePath) ([]string, error) {
 	globs, err := pm.getWorkspaceGlobs(rootpath)
 	if err != nil {
 		return nil, err
@@ -132,7 +140,7 @@ func (pm PackageManager) GetWorkspaces(rootpath string) ([]string, error) {
 		return nil, err
 	}
 
-	f, err := globby.GlobFiles(rootpath, justJsons, ignores)
+	f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), justJsons, ignores)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +149,14 @@ func (pm PackageManager) GetWorkspaces(rootpath string) ([]string, error) {
 }
 
 // GetWorkspaceIgnores returns an array of globs not to search for workspaces.
-func (pm PackageManager) GetWorkspaceIgnores(rootpath string) ([]string, error) {
+func (pm PackageManager) GetWorkspaceIgnores(rootpath fs.AbsolutePath) ([]string, error) {
 	return pm.getWorkspaceIgnores(pm, rootpath)
+}
+
+// CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
+func (pm PackageManager) CanPrune(projectDirectory fs.AbsolutePath) (bool, error) {
+	if pm.canPrune != nil {
+		return pm.canPrune(projectDirectory)
+	}
+	return false, nil
 }

@@ -1,0 +1,37 @@
+{
+  "name": "eslint-plugin-turbo",
+  "version": "0.0.3",
+  "description": "ESLint plugin for Turborepo",
+  "keywords": [
+    "turbo",
+    "eslint",
+    "turborepo",
+    "eslintplugin",
+    "eslint-plugin"
+  ],
+  "author": "Vercel",
+  "main": "./dist/index.js",
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "publish": "pnpm build && pnpm publish",
+    "test": "jest",
+    "build": "tsup"
+  },
+  "devDependencies": {
+    "@types/eslint": "^8.4.5",
+    "@types/estree": "^1.0.0",
+    "@types/jest": "^27.4.0",
+    "@types/node": "^16.11.12",
+    "jest": "^27.4.3",
+    "ts-jest": "^27.1.1",
+    "tsup": "^6.2.0",
+    "turbo-utils": "workspace:*",
+    "typescript": "^4.7.4"
+  },
+  "peerDependencies": {
+    "eslint": "^7.23.0 || ^8.0.0"
+  },
+  "license": "MPL-2.0"
+}

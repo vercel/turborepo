@@ -3,9 +3,9 @@ package packagemanager
 import (
 	"fmt"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/Masterminds/semver"
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -18,8 +18,8 @@ var nodejsBerry = PackageManager{
 	Lockfile:   "yarn.lock",
 	PackageDir: "node_modules",
 
-	getWorkspaceGlobs: func(rootpath string) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(filepath.Join(rootpath, "package.json"))
+	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
+		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json").ToStringDuringMigration())
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -29,7 +29,7 @@ var nodejsBerry = PackageManager{
 		return pkg.Workspaces, nil
 	},
 
-	getWorkspaceIgnores: func(pm PackageManager, rootpath string) ([]string, error) {
+	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
 		// Matches upstream values:
 		// Key code: https://github.com/yarnpkg/berry/blob/8e0c4b897b0881878a1f901230ea49b7c8113fbe/packages/yarnpkg-core/sources/Workspace.ts#L64-L70
 		return []string{
@@ -37,6 +37,15 @@ var nodejsBerry = PackageManager{
 			"**/.git",
 			"**/.yarn",
 		}, nil
+	},
+
+	canPrune: func(cwd fs.AbsolutePath) (bool, error) {
+		if isNMLinker, err := util.IsNMLinker(cwd.ToStringDuringMigration()); err != nil {
+			return false, errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
+		} else if !isNMLinker {
+			return false, errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
+		}
+		return true, nil
 	},
 
 	// Versions newer than 2.0 are berry, and before that we simply call them yarn.
@@ -60,9 +69,9 @@ var nodejsBerry = PackageManager{
 
 	// Detect for berry needs to identify which version of yarn is running on the system.
 	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
-	detect: func(projectDirectory string, packageManager *PackageManager) (bool, error) {
-		specfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Specfile))
-		lockfileExists := fs.FileExists(filepath.Join(projectDirectory, packageManager.Lockfile))
+	detect: func(projectDirectory fs.AbsolutePath, packageManager *PackageManager) (bool, error) {
+		specfileExists := projectDirectory.Join(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
 
 		// Short-circuit, definitely not Yarn.
 		if !specfileExists || !lockfileExists {
@@ -70,7 +79,7 @@ var nodejsBerry = PackageManager{
 		}
 
 		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = projectDirectory
+		cmd.Dir = projectDirectory.ToString()
 		out, err := cmd.Output()
 		if err != nil {
 			return false, fmt.Errorf("could not detect yarn version: %w", err)
@@ -87,7 +96,7 @@ var nodejsBerry = PackageManager{
 		// We're Berry!
 
 		// Check for supported configuration.
-		isNMLinker, err := util.IsNMLinker(projectDirectory)
+		isNMLinker, err := util.IsNMLinker(projectDirectory.ToStringDuringMigration())
 
 		if err != nil {
 			// Failed to read the linker state, so we treat an unknown configuration as a failure.

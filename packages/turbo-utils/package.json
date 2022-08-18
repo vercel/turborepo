@@ -1,0 +1,34 @@
+{
+  "name": "turbo-utils",
+  "version": "0.0.0",
+  "description": "",
+  "homepage": "https://turborepo.org",
+  "keywords": [],
+  "author": "Vercel",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/turbo-utils"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "devDependencies": {
+    "@manypkg/find-root": "^1.1.0",
+    "@types/jest": "^27.4.0",
+    "@types/node": "^16.11.12",
+    "esbuild": "^0.14.38",
+    "jest": "^27.4.3",
+    "ts-jest": "^27.1.1",
+    "tsup": "^5.12.1",
+    "typescript": "^4.7.4"
+  }
+}

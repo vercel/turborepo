@@ -11,7 +11,6 @@ import (
 	"runtime"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"golang.org/x/sync/errgroup"
 )
@@ -20,15 +19,19 @@ import (
 type fsCache struct {
 	cacheDirectory string
 	recorder       analytics.Recorder
-	config         *config.Config
+	repoRoot       fs.AbsolutePath
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(opts Opts, recorder analytics.Recorder, config *config.Config) (*fsCache, error) {
+func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot fs.AbsolutePath) (*fsCache, error) {
 	if err := opts.Dir.MkdirAll(); err != nil {
 		return nil, err
 	}
-	return &fsCache{cacheDirectory: opts.Dir.ToStringDuringMigration(), recorder: recorder, config: config}, nil
+	return &fsCache{
+		cacheDirectory: opts.Dir.ToStringDuringMigration(),
+		recorder:       recorder,
+		repoRoot:       repoRoot,
+	}, nil
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
@@ -81,7 +84,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				statedFile := fs.LstatCachedFile{Path: f.config.Cwd.Join(file)}
+				statedFile := fs.LstatCachedFile{Path: f.repoRoot.Join(file)}
 				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)

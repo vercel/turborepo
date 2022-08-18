@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/filewatcher"
@@ -60,14 +59,21 @@ func (c *closer) close() {
 	})
 }
 
+var _defaultCookieTimeout = 500 * time.Millisecond
+
 // New returns a new instance of Server
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath fs.AbsolutePath) (*Server, error) {
-	watcher, err := fsnotify.NewWatcher()
+func New(serverName string, logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath fs.AbsolutePath) (*Server, error) {
+	cookieDir := fs.GetTurboDataDir().Join("cookies", serverName)
+	cookieJar, err := filewatcher.NewCookieJar(cookieDir, _defaultCookieTimeout)
+	if err != nil {
+		return nil, err
+	}
+	watcher, err := filewatcher.GetPlatformSpecificBackend(logger)
 	if err != nil {
 		return nil, err
 	}
 	fileWatcher := filewatcher.New(logger.Named("FileWatcher"), repoRoot, watcher)
-	globWatcher := globwatcher.New(logger.Named("GlobWatcher"), repoRoot)
+	globWatcher := globwatcher.New(logger.Named("GlobWatcher"), repoRoot, cookieJar)
 	server := &Server{
 		watcher:      fileWatcher,
 		globWatcher:  globWatcher,
@@ -76,10 +82,15 @@ func New(logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, log
 		logFilePath:  logFilePath,
 		repoRoot:     repoRoot,
 	}
+	server.watcher.AddClient(cookieJar)
 	server.watcher.AddClient(globWatcher)
 	server.watcher.AddClient(server)
 	if err := server.watcher.Start(); err != nil {
 		return nil, errors.Wrapf(err, "watching %v", repoRoot)
+	}
+	if err := server.watcher.AddRoot(cookieDir); err != nil {
+		_ = server.watcher.Close()
+		return nil, errors.Wrapf(err, "failed to watch cookie directory: %v", cookieDir)
 	}
 	return server, nil
 }
@@ -96,8 +107,8 @@ func (s *Server) tryClose() bool {
 
 // OnFileWatchEvent implements filewatcher.FileWatchClient.OnFileWatchEvent
 // In the event that the root of the monorepo is deleted, shut down the server.
-func (s *Server) OnFileWatchEvent(ev fsnotify.Event) {
-	if ev.Op&fsnotify.Remove != 0 && ev.Name == s.repoRoot.ToString() {
+func (s *Server) OnFileWatchEvent(ev filewatcher.Event) {
+	if ev.EventType == filewatcher.FileDeleted && ev.Path == s.repoRoot {
 		_ = s.tryClose()
 	}
 }
