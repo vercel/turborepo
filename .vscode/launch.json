@@ -69,6 +69,15 @@
       "args": ["run", "build"]
     },
     {
+      "name": "recent",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/examples/basic",
+      "args": ["recent"]
+    },
+    {
       "name": "Build Kitchen Sink",
       "type": "go",
       "request": "launch",

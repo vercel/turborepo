@@ -17,21 +17,6 @@ import (
 
 type cacheResult interface{}
 
-// taskEvent represents a single event in the build process, i.e. a target starting or finishing
-// building, or reaching some milestone within those steps.
-type taskEvent struct {
-	// Timestamp of this event
-	time time.Time
-	// duration of this event
-	duration time.Duration
-	// Target which has just changed
-	taskID string
-	// Its current status
-	taskState TaskState
-	// Error, only populated for failure statuses
-	err error
-}
-
 // TaskState represents the status of a target when we log a build result.
 type TaskState int
 
@@ -64,18 +49,20 @@ func (ts TaskState) String() string {
 	}
 }
 
-type taskState struct {
+type taskSummary struct {
 	startAt time.Time
 
 	duration time.Duration
 	// taskID of the task which has just changed
 	taskID string
-	// Its current status
-	status TaskState
+	// Its current state
+	state TaskState
 	// Error, only populated for failure statuses
 	err error
 
 	cacheResults cacheResult
+
+	hash string
 }
 
 // Summary collects information over the course of a turbo run
@@ -83,7 +70,7 @@ type taskState struct {
 type Summary struct {
 	sessionID ksuid.KSUID
 	mu        sync.Mutex
-	state     map[string]*taskState
+	state     map[string]*taskSummary
 	success   int
 	failure   int
 	// Is the output streaming?
@@ -105,7 +92,7 @@ func New(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID) *Sum
 		failure:   0,
 		cached:    0,
 		attempted: 0,
-		state:     make(map[string]*taskState),
+		state:     make(map[string]*taskSummary),
 
 		startedAt: startedAt,
 	}
@@ -113,46 +100,49 @@ func New(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID) *Sum
 
 // Trace is a handle given to a single task so it can record events
 type Trace struct {
-	taskID      string
-	rs          *Summary
-	start       time.Time
+	summary     *Summary
 	chromeEvent *chrometracing.PendingEvent
+	taskSummary *taskSummary
 }
 
 // AddCacheResults records per-task cache information
 func (t *Trace) AddCacheResults(results cacheResult) {
-	t.rs.addCacheResults(t.taskID, results)
+	t.taskSummary.cacheResults = results
+}
+
+func (t *Trace) SetFailed(err error) {
+	t.taskSummary.err = err
+	t.taskSummary.state = TaskStateFailed
+}
+
+func (t *Trace) SetResult(state TaskState) {
+	t.taskSummary.state = state
+}
+
+func (t *Trace) SetHash(hash string) {
+	t.taskSummary.hash = hash
 }
 
 // Finish records this task as being finished with the given outcome
-func (t *Trace) Finish(outcome TaskState, err error) {
+func (t *Trace) Finish() {
 	t.chromeEvent.Done()
 	now := time.Now()
-	result := &taskEvent{
-		time:      now,
-		duration:  now.Sub(t.start),
-		taskID:    t.taskID,
-		taskState: outcome,
-	}
-	if err != nil {
-		result.err = fmt.Errorf("running %v failed: %w", t.taskID, err)
-	}
-	t.rs.add(result, t.taskID, false)
+	t.taskSummary.duration = now.Sub(t.summary.startedAt)
+	t.summary.add(t.taskSummary)
 }
 
 // StartTrace returns a handle to track events for a given task
 func (r *Summary) StartTrace(taskID string) *Trace {
 	start := time.Now()
-	r.add(&taskEvent{
-		time:      start,
-		taskID:    taskID,
-		taskState: TaskStateRunning,
-	}, taskID, true)
+	ts := &taskSummary{
+		startAt: start,
+		taskID:  taskID,
+		state:   TaskStateRunning,
+	}
 	tracer := chrometracing.Event(taskID)
 	return &Trace{
-		taskID:      taskID,
-		rs:          r,
-		start:       start,
+		summary:     r,
+		taskSummary: ts,
 		chromeEvent: tracer,
 	}
 }
@@ -165,32 +155,21 @@ func (r *Summary) addCacheResults(taskID string, cacheResult cacheResult) {
 	}
 }
 
-func (r *Summary) add(result *taskEvent, previous string, active bool) {
+func (r *Summary) add(taskSummary *taskSummary) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s, ok := r.state[result.taskID]; ok {
-		s.status = result.taskState
-		s.err = result.err
-		s.duration = result.duration
-	} else {
-		r.state[result.taskID] = &taskState{
-			startAt:  result.time,
-			taskID:   result.taskID,
-			status:   result.taskState,
-			err:      result.err,
-			duration: result.duration,
-		}
-	}
-	switch {
-	case result.taskState == TaskStateFailed:
+	r.state[taskSummary.taskID] = taskSummary
+	switch taskSummary.state {
+	case TaskStateFailed:
 		r.failure++
 		r.attempted++
-	case result.taskState == TaskStateCached:
+	case TaskStateCached:
 		r.cached++
 		r.attempted++
-	case result.taskState == TaskStateCompleted:
+	case TaskStateCompleted:
 		r.success++
 		r.attempted++
+	default:
 	}
 }
 
@@ -233,7 +212,8 @@ func (r *Summary) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) e
 		taskSummary["startedAt"] = targetState.startAt.UnixMilli()
 		taskSummary["endedAt"] = targetState.startAt.Add(targetState.duration).UnixMilli()
 		taskSummary["durationMs"] = targetState.duration.Milliseconds()
-		taskSummary["status"] = targetState.status.String()
+		taskSummary["status"] = targetState.state.String()
+		taskSummary["taskHash"] = targetState.hash
 		taskSummary["cache"] = targetState.cacheResults
 		if targetState.err != nil {
 			taskSummary["error"] = targetState.err.Error()

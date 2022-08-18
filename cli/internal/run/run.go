@@ -898,6 +898,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 
 	// Setup tracer
 	tracer := e.summary.StartTrace(pt.TaskID)
+	defer tracer.Finish()
 
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
@@ -912,18 +913,19 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 
 	passThroughArgs := e.rs.ArgsForTask(pt.Task)
 	hash, err := e.taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
-	e.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		e.ui.Error(fmt.Sprintf("Hashing error: %v", err))
 		// @TODO probably should abort fatally???
 	}
+	e.logger.Debug("task hash", "value", hash)
+	tracer.SetHash(hash)
 	// TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
 	// the following block should never get hit. In the meantime, keep it after hashing
 	// so that downstream tasks can count on the hash existing
 	//
 	// bail if the script doesn't exist
 	if _, ok := pt.Command(); !ok {
-		tracer.Finish(summary.TaskStateNonexistent, nil)
+		tracer.SetResult(summary.TaskStateNonexistent)
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
@@ -935,7 +937,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
-		tracer.Finish(summary.TaskStateCached, nil)
+		tracer.SetResult(summary.TaskStateCached)
 		return nil
 	}
 	// Setup command execution
@@ -956,7 +958,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// be careful about this conditional given the default of cache = true
 	writer, err := taskCache.OutputWriter()
 	if err != nil {
-		tracer.Finish(summary.TaskStateFailed, err)
+		tracer.SetFailed(err)
 		e.logError(targetLogger, prettyTaskPrefix, err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
@@ -1002,7 +1004,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		if errors.Is(err, process.ErrClosing) {
 			return nil
 		}
-		tracer.Finish(summary.TaskStateFailed, err)
+		tracer.SetFailed(err)
 		targetLogger.Error("Error: command finished with error: %w", err)
 		if !e.rs.Opts.runOpts.continueOnError {
 			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
@@ -1024,7 +1026,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 
 	// Clean up tracing
-	tracer.Finish(summary.TaskStateCompleted, nil)
+	tracer.SetResult(summary.TaskStateCompleted)
 	targetLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }

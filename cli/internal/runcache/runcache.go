@@ -336,7 +336,6 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) *TaskCache {
 	}
 
 	cacheResults := make(map[string]interface{})
-	cacheResults["taskHash"] = hash
 	cacheResults["outputGlobs"] = repoRelativeGlobs
 	return &TaskCache{
 		rc:                rc,
