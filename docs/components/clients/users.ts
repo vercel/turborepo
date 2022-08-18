@@ -376,4 +376,10 @@ export const users = [
     infoLink: "https://n8n.io",
     pinned: true,
   },
+  {
+    caption: "Xata",
+    image: "/images/logos/xata.svg",
+    infoLink: "https://xata.io",
+    pinned: true,  
+  },
 ];
