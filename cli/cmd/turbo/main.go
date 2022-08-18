@@ -9,6 +9,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
 	"github.com/vercel/turborepo/cli/internal/cmd/info"
+	"github.com/vercel/turborepo/cli/internal/cmd/recent"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon"
 	"github.com/vercel/turborepo/cli/internal/login"
@@ -93,6 +94,9 @@ func main() {
 		},
 		"daemon": func() (cli.Command, error) {
 			return &daemon.Command{Config: cf, UI: ui, SignalWatcher: signalWatcher}, nil
+		},
+		"recent": func() (cli.Command, error) {
+			return &recent.Command{Config: cf, UI: ui}, nil
 		},
 	}
 

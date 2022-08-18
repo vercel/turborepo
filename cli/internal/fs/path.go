@@ -106,6 +106,11 @@ func (ap AbsolutePath) DirExists() bool {
 	return err == nil && info.IsDir()
 }
 
+// ReadDir implements os.ReadDir for an absolute path
+func (ap AbsolutePath) ReadDir() ([]iofs.DirEntry, error) {
+	return os.ReadDir(ap.asString())
+}
+
 // ContainsPath returns true if this absolute path is a parent of the
 // argument.
 func (ap AbsolutePath) ContainsPath(other AbsolutePath) (bool, error) {
