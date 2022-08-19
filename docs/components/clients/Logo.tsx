@@ -3,6 +3,11 @@ import cn from "classnames";
 import Image from "next/future/image";
 import { TurboUser } from "./users";
 
+const DEFAULT_SIZE = {
+  width: 100,
+  height: 75,
+};
+
 export function Logo({
   user,
   theme,
@@ -12,6 +17,10 @@ export function Logo({
   theme: "dark" | "light";
   isLink: boolean;
 }) {
+  const styles = {
+    ...DEFAULT_SIZE,
+    ...user.style,
+  };
   const logo = (
     <Image
       src={user.image.replace(
@@ -19,10 +28,10 @@ export function Logo({
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
       alt={user.caption}
-      width={user.style?.width ?? 100}
-      height={user.style?.height ?? 75}
+      width={styles.width}
+      height={styles.height}
       priority={true}
-      style={user.style}
+      style={styles}
       className={cn("mx-8", {
         "hidden dark:inline": theme !== "dark",
         "dark:hidden inline": theme === "dark",

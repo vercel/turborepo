@@ -147,7 +147,6 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.volvo.com",
     pinned: true,
     style: {
-      height: 75,
       width: 75,
     },
   },
@@ -385,17 +384,11 @@ export const users: Array<TurboUser> = [
     image: "/images/logos/n8n.svg",
     infoLink: "https://n8n.io",
     pinned: true,
-    style: {
-      width: 75,
-    },
   },
   {
     caption: "Xata",
     image: "/images/logos/xata.svg",
     infoLink: "https://xata.io",
     pinned: true,
-    style: {
-      width: 75,
-    },
   },
 ];
