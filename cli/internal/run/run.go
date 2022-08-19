@@ -96,7 +96,7 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
+func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher, rawArgs []string) *cobra.Command {
 	var opts *Opts
 	var flags *pflag.FlagSet
 	cmd := &cobra.Command{
@@ -112,7 +112,7 @@ func getCmd(config *config.Config, ui cli.Ui, signalWatcher *signals.Watcher) *c
 				return errors.New("at least one task must be specified")
 			}
 			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(config, ui, opts, signalWatcher)
+			run := configureRun(config, ui, opts, signalWatcher, rawArgs)
 			ctx := cmd.Context()
 			return run.run(ctx, tasks)
 		},
@@ -148,7 +148,7 @@ func optsFromFlags(flags *pflag.FlagSet, config *config.Config) *Opts {
 	return opts
 }
 
-func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatcher *signals.Watcher) *run {
+func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatcher *signals.Watcher, rawArgs []string) *run {
 	if os.Getenv("TURBO_FORCE") == "true" {
 		opts.runcacheOpts.SkipReads = true
 	}
@@ -169,24 +169,25 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatche
 		config:    config,
 		ui:        output,
 		processes: processes,
+		rawArgs:   rawArgs,
 	}
 }
 
 // Synopsis of run command
 func (c *RunCommand) Synopsis() string {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher, nil)
 	return cmd.Short
 }
 
 // Help returns information about the `run` command
 func (c *RunCommand) Help() string {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher, nil)
 	return util.HelpForCobraCmd(cmd)
 }
 
 // Run executes tasks in the monorepo
 func (c *RunCommand) Run(args []string) int {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
+	cmd := getCmd(c.Config, c.UI, c.SignalWatcher, args)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	if err != nil {
@@ -206,6 +207,7 @@ type run struct {
 	config    *config.Config
 	ui        cli.Ui
 	processes *process.Manager
+	rawArgs   []string
 }
 
 func (r *run) run(ctx gocontext.Context, targets []string) error {
@@ -721,7 +723,9 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
-	summary := summary.New(startAt, rs.Opts.runOpts.profile, r.sessionID)
+	pkgsList := rs.FilteredPkgs.UnsafeListOfStrings()
+	sort.Strings(pkgsList)
+	summary := summary.New(startAt, rs.Opts.runOpts.profile, r.sessionID, r.rawArgs, pkgsList, rs.Targets)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
 		colorCache:     colorCache,

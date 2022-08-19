@@ -3,6 +3,7 @@ package summary
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,6 +72,9 @@ type Summary struct {
 	sessionID ksuid.KSUID
 	mu        sync.Mutex
 	state     map[string]*taskSummary
+	targets   []string
+	pkgs      []string
+	rawArgs   []string
 	success   int
 	failure   int
 	// Is the output streaming?
@@ -82,12 +86,15 @@ type Summary struct {
 
 // New creates a RunState instance for tracking events during the
 // course of a run.
-func New(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID) *Summary {
+func New(startedAt time.Time, tracingProfile string, sessionID ksuid.KSUID, rawArgs []string, pkgs []string, targets []string) *Summary {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
 	return &Summary{
 		sessionID: sessionID,
+		targets:   targets,
+		pkgs:      pkgs,
+		rawArgs:   rawArgs,
 		success:   0,
 		failure:   0,
 		cached:    0,
@@ -147,14 +154,6 @@ func (r *Summary) StartTrace(taskID string) *Trace {
 	}
 }
 
-func (r *Summary) addCacheResults(taskID string, cacheResult cacheResult) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if s, ok := r.state[taskID]; ok {
-		s.cacheResults = cacheResult
-	}
-}
-
 func (r *Summary) add(taskSummary *taskSummary) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -205,6 +204,9 @@ func (r *Summary) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) e
 	summary["sessionId"] = r.sessionID.String()
 	summary["startedAt"] = r.startedAt.UnixMilli()
 	summary["endedAt"] = endedAt.UnixMilli()
+	summary["entrypointPackages"] = r.pkgs
+	summary["targets"] = r.targets
+	summary["command"] = strings.Join(r.rawArgs, " ")
 	summary["durationMs"] = endedAt.Sub(r.startedAt).Milliseconds()
 	tasks := make(map[string]interface{})
 	for task, targetState := range r.state {
