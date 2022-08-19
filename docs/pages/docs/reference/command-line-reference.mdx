@@ -374,7 +374,7 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 
 You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precedence over the environment variable if both are present.
 
-If you're using Remote Caching on Vercel and building your project on Vercel, this environment variable and flag are not needed because they are automatically set for you. If you’re using Remote Caching on Vercel, but building in another CI provider like CircleCI or GitHub Actions, you can use a Vercel Personal Access Token as your `—token` or `TURBO_TOKEN`. If you are using a custom Remote Cache, this value will be used to send an HTTP Bearer token with requests to your custom Remote Cache.
+If you are using Remote Caching on Vercel and building your project on Vercel, this environment variable and flag are unnecessary because they are automatically set for you. Suppose you are using Remote Caching on Vercel but building in another CI provider like CircleCI or GitHub Actions. You can use a Vercel Personal Access Token as your `—token` or `TURBO_TOKEN`. If you are using a custom Remote Cache, this value will be used to send an HTTP Bearer token with requests to your custom Remote Cache. Default `false`. Restricts execution only to include specified tasks. This is similar to how `lerna` and `pnpm` run tasks by default.
 
 #### `--team`
 
