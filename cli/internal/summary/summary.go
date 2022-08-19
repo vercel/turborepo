@@ -177,6 +177,7 @@ func (r *Summary) add(taskSummary *taskSummary) {
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
+// TODO: versioning the serialized summary
 func (r *Summary) Close(terminal cli.Ui, filename string, summaryPath fs.AbsolutePath) error {
 	endedAt := time.Now()
 	if err := writeChrometracing(filename, terminal); err != nil {
