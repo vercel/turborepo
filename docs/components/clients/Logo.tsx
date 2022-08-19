@@ -22,6 +22,7 @@ export function Logo({
       width={user.style?.width ?? 100}
       height={user.style?.height ?? 75}
       priority={true}
+      style={user.style}
       className={cn("mx-8", {
         "hidden dark:inline": theme !== "dark",
         "dark:hidden inline": theme === "dark",
