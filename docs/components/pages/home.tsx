@@ -20,45 +20,13 @@ import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
 import Features from "../Features";
 import { Marquee } from "../clients/Marquee";
-import { users } from "../clients/users";
-import { useTheme } from "next-themes";
+import { Clients } from "../clients/Clients";
 
 export default function Home() {
   const onClick = () => {
     copy("npx create-turbo@latest");
     toast.success("Copied to clipboard");
   };
-
-  const { theme } = useTheme();
-
-  const showcase = users
-    .filter((p) => p.pinned)
-    .map((user, index) => (
-      <Image
-        key={`${user.infoLink}-${theme}-${index}-light`}
-        src={user.image.replace("/logos", "/logos/color")}
-        alt={user.caption}
-        width={user.style?.width ?? 100}
-        height={75}
-        style={{ width: "auto" }}
-        priority={true}
-        className="inline w-auto mx-8 dark:hidden"
-      />
-    ));
-  const showcaseLight = users
-    .filter((p) => p.pinned)
-    .map((user, index) => (
-      <Image
-        key={`${user.infoLink}-${theme}-${index}-dark`}
-        src={user.image.replace("/logos", "/logos/white")}
-        alt={user.caption}
-        width={user.style?.width ?? 100}
-        height={75}
-        style={{ width: "auto" }}
-        priority={true}
-        className="hidden w-auto mx-8 dark:inline"
-      />
-    ));
 
   return (
     <>
@@ -108,8 +76,7 @@ export default function Home() {
             Trusted by teams from around the world
           </p>
           <Marquee>
-            {showcase}
-            {showcaseLight}
+            <Clients />
           </Marquee>
         </div>
       </div>
