@@ -10,9 +10,14 @@ Building
 - Building turbo CLI: In `cli` run `make turbo`
 - Using turbo to build turbo CLI: `./turbow.js`
 
-Smoke Testing via examples:
+## Testing
 
-1.  In `cli` run `make e2e`
+From the `cli/` directory, you can
+
+- run smoke tests with `make e2e`
+- run unit tests with `make test-go`
+
+To run a single test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
 
 ## Debugging
 
