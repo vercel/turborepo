@@ -17,7 +17,7 @@ From the `cli/` directory, you can
 - run smoke tests with `make e2e`
 - run unit tests with `make test-go`
 
-To run a single test, you can run `go test [path/to/package_test.go]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
+To run a single test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
 
 ## Debugging
 
