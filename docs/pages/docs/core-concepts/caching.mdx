@@ -262,7 +262,7 @@ By now, you're probably wondering how `turbo` decides what constitutes a cache h
 First, `turbo` constructs a hash of the current global state of the monorepo:
 
 - The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](../reference/configuration#globalDependencies-1)
-- The sorted list environment variable key-value pairs that includes `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
+- The sorted list environment variable key-value pairs that include `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
 
 Then it adds more factors relevant to a given package's task:
 
