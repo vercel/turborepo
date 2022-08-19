@@ -1,4 +1,14 @@
-export const users = [
+import { CSSProperties } from "react";
+
+export type TurboUser = {
+  caption: string;
+  image: string;
+  infoLink: string;
+  pinned?: boolean;
+  style?: CSSProperties;
+};
+
+export const users: Array<TurboUser> = [
   {
     caption: "Vercel",
     image: "/images/logos/vercel.svg",
@@ -128,7 +138,7 @@ export const users = [
     infoLink: "https://espn.com",
     pinned: true,
     style: {
-      widt: 75,
+      width: 75,
     },
   },
   {
@@ -137,7 +147,6 @@ export const users = [
     infoLink: "https://www.volvo.com",
     pinned: true,
     style: {
-      height: 75,
       width: 75,
     },
   },
@@ -380,6 +389,6 @@ export const users = [
     caption: "Xata",
     image: "/images/logos/xata.svg",
     infoLink: "https://xata.io",
-    pinned: true,  
+    pinned: true,
   },
 ];
