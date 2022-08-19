@@ -5,7 +5,7 @@ import { Logo } from "./Logo";
 export function Clients({ linked }: { linked?: boolean }) {
   const showcaseDark = [];
   const showcaseLight = [];
-  users.forEach((user, idx) => {
+  users.forEach((user) => {
     if (user.pinned) {
       showcaseDark.push(
         <Logo
