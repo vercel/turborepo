@@ -5,7 +5,7 @@ on: workflow_dispatch
 jobs:
   build:
     name: Run Benchmarks
-    timeout-minutes: 40
+    timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -52,8 +52,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --filter=benchmark
 
+      - name: Download previous benchmark results
+        # continue on error so that we handle the bootstrap case where there is no previous data
+        continue-on-error: true
+        run: mkdir -p raw-data/${{ runner.os }} && curl -f -o raw-data/${{ runner.os }}/benchmark-data.json https://raw.githubusercontent.com/vercel/turborepo/gh-pages/${{ runner.os }}/benchmark-data.json
+
       - name: Run benchmarks
         run: cd benchmark && pnpm benchmark
+
+      - name: Save to Tinybird
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl \
+            -i \
+            -F "ndjson=@./benchmark/tinybird.ndjson" \
+            -X POST \
+            -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
+            'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
 
       - name: Store Benchmark Result
         uses: benchmark-action/github-action-benchmark@v1
@@ -62,7 +77,21 @@ jobs:
           # What benchmark tool the output is formatted as
           tool: "customSmallerIsBetter"
           output-file-path: ./benchmark/benchmarks.json
-          benchmark-data-dir-path: benchmarks/large-repo/${{ runner.os }}
-          auto-push: true
+          external-data-json-path: ./raw-data/${{ runner.os }}/benchmark-data.json
+          auto-push: false
           # GitHub API token to make a commit
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-fetch-gh-pages: true
+
+      - name: Deploy
+        if: github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@4.1.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gh-pages
+          folder: raw-data
+          clean: false
+          single-commit: false
+          git-config-email: github-bot@turborepo.org
+          repository-name: vercel/turborepo
+          commit-message: "Update"
