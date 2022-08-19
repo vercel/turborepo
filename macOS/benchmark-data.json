@@ -1,0 +1,54 @@
+{
+  "lastUpdate": 1660927557921,
+  "repoUrl": "https://github.com/vercel/turborepo",
+  "entries": {
+    "macOS Benchmark": [
+      {
+        "commit": {
+          "author": {
+            "name": "Greg Soltis",
+            "username": "gsoltis",
+            "email": "greg.soltis@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "5481b2bba3f11e287d39b5325000c3c426d2e542",
+          "message": "Add back symlinks in fs cache (#1453)\n\nThis brings back some behavior from before #1354. The filesystem cache will save all symlinks, and restore non-broken symlinks to files. Symlinks to directories continue to get restored as empty directories. Still TBD what we're going to do with broken symlinks in the filesystem cache, they currently are not restored.\n\nFor reference: the http cache saves and restores all symlinks.",
+          "timestamp": "2022-08-19T16:02:58Z",
+          "url": "https://github.com/vercel/turborepo/commit/5481b2bba3f11e287d39b5325000c3c426d2e542"
+        },
+        "date": 1660927557918,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 1283089,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 8503.8,
+            "unit": "ms",
+            "range": "1322"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 8658.6,
+            "unit": "ms",
+            "range": "505"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 63555,
+            "unit": "ms",
+            "range": "29521"
+          }
+        ]
+      }
+    ]
+  }
+}
