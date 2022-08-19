@@ -198,7 +198,7 @@ importers:
     });
   }
 
-  addPackage(name, internalDeps = []) {
+  addPackage(name, internalDeps: string[] = []) {
     return this.commitFiles({
       [`packages/${name}/build.js`]: `
 const fs = require('fs');
