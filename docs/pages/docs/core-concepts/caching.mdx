@@ -199,7 +199,7 @@ As of 1.4, when you run `turbo run build`, Turborepo will not consider any build
 
 ### `eslint-config-turbo`
 
-To further assist detecting unseen dependencies creeping into your builds, and to help ensure that your Turborepo cache can be correctly shared across every environment, use the [`eslint-config-turbo`](https://www.npmjs.com/package/eslint-config-turbo) package. While automatic environment variable inclusion should cover most situations with most frameworks, this ESLint config will provide just-in-time feedback for teams using other build time inlined environment variables that are not framework-prefixed, but impact build outputs. This will also help support teams using their own in-house frameworks that we cannot detect automatically.
+To further assist in detecting unseen dependencies creeping into your builds, and to help ensure that your Turborepo cache is correctly shared across every environment, use the [`eslint-config-turbo`](https://www.npmjs.com/package/eslint-config-turbo) package. While automatic environment variable inclusion should cover most situations with most frameworks, this ESLint config will provide just-in-time feedback for teams using other build time inlined environment variables. These variables are not framework-prefixed but impact build outputs. This will also help support teams using their in-house frameworks that we cannot detect automatically.
 
 To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats) file:
 
