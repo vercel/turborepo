@@ -316,6 +316,8 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 	return nil
 }
 
+// ReportResults returns the accumulated information about the cache usage.
+// TODO: more strongly type this when we have a better idea of what we want
 func (tc *TaskCache) ReportResults() map[string]interface{} {
 	return tc.cacheResults
 }

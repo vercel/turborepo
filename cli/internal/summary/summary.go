@@ -117,15 +117,18 @@ func (t *Trace) AddCacheResults(results cacheResult) {
 	t.taskSummary.cacheResults = results
 }
 
+// SetFailed marks this task as failed with the given error
 func (t *Trace) SetFailed(err error) {
 	t.taskSummary.err = err
 	t.taskSummary.state = TaskStateFailed
 }
 
+// SetResult marks the outcome for this task
 func (t *Trace) SetResult(state TaskState) {
 	t.taskSummary.state = state
 }
 
+// SetHash records the hash for this task
 func (t *Trace) SetHash(hash string) {
 	t.taskSummary.hash = hash
 }
