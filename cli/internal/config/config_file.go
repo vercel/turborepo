@@ -11,10 +11,6 @@ import (
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
 type TurborepoConfig struct {
-	// Token is a bearer token
-	// TODO: this should be dropped, it's a per-user config item, not per-repo,
-	// and should be properly managed by Viper
-	Token string `json:"token,omitempty"`
 	// Team id
 	TeamId string `json:"teamId,omitempty"`
 	// ApiUrl is the backend url (defaults to api.vercel.com)
@@ -116,6 +112,8 @@ func ReadUserConfigFile(path fs.AbsolutePath) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
+	userViper.SetEnvPrefix("turbo")
+	userViper.MustBindEnv("token")
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}

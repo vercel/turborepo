@@ -196,9 +196,6 @@ func Test_sso(t *testing.T) {
 	if repoConfigWritten.TeamId != expectedTeamID {
 		t.Errorf("repo config team id got %v want %v", repoConfigWritten.TeamId, expectedTeamID)
 	}
-	if repoConfigWritten.Token != "" {
-		t.Errorf("repo config file token, got %v want empty string", repoConfigWritten.Token)
-	}
 }
 
 func Test_ssoCachingDisabledShouldEnable(t *testing.T) {

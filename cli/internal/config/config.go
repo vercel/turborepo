@@ -98,6 +98,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		return nil, fmt.Errorf("reading user config file: %v", err)
 	}
+	token := userConfig.Token()
 	partialConfig, err := ReadRepoConfigFile(cwd)
 	if err != nil {
 		return nil, fmt.Errorf("reading repo config file: %v", err)
@@ -105,18 +106,17 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if partialConfig == nil {
 		partialConfig = defaultRepoConfig()
 	}
-	partialConfig.Token = userConfig.Token()
 
 	enverr := envconfig.Process("TURBO", partialConfig)
 	if enverr != nil {
 		return nil, fmt.Errorf("invalid environment variable: %w", err)
 	}
 
-	if partialConfig.Token == "" && IsCI() {
+	if token == "" && IsCI() {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
 		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
 		if vercelArtifactsToken != "" {
-			partialConfig.Token = vercelArtifactsToken
+			token = vercelArtifactsToken
 		}
 		if vercelArtifactsOwner != "" {
 			partialConfig.TeamId = vercelArtifactsOwner
@@ -168,7 +168,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 			}
 			partialConfig.LoginUrl = loginUrl
 		case strings.HasPrefix(arg, "--token="):
-			partialConfig.Token = arg[len("--token="):]
+			token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
 			partialConfig.TeamSlug = arg[len("--team="):]
 		case arg == "--preflight":
@@ -197,7 +197,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	c = &Config{
 		Logger:       logger,
-		Token:        partialConfig.Token,
+		Token:        token,
 		UserConfig:   userConfig,
 		TeamSlug:     partialConfig.TeamSlug,
 		TeamId:       partialConfig.TeamId,

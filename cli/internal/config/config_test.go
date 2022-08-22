@@ -8,7 +8,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/ui"
 )
+
+func TestEnvironmentToken(t *testing.T) {
+	expectedToken := "my-token"
+	err := os.Setenv("TURBO_TOKEN", expectedToken)
+	if err != nil {
+		t.Fatalf("setenv %v", err)
+	}
+
+	terminal := ui.Default()
+	cfg, err := ParseAndValidate([]string{"run", "build"}, terminal, "my-version")
+	if err != nil {
+		t.Fatalf("failed to parse config %v", err)
+	}
+	assert.Equal(t, cfg.Token, expectedToken)
+}
 
 func TestSelectCwd(t *testing.T) {
 	defaultCwd, err := fs.GetCwd()
