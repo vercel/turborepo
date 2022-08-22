@@ -21,8 +21,8 @@ To run a single test, you can run `go test ./[path/to/package/]`. See more [in t
 
 ## Debugging
 
-1.  Install `go get dlv-dap`
-1.  In VS Code Debugging tab, select `Basic Turbo Build` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example.
+1. Install `go install github.com/go-delve/delve/cmd/dlv@latest`
+2. In VS Code's "Run and Debug" tab, select `Build Basic` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example. This task is configured in [launch.json](./.vscode/launch.json).
 
 ## Updating `turbo`
 
