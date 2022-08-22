@@ -516,9 +516,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.15"
+version = "3.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44bbe24bbd31a185bc2c4f7c2abe80bea13a20d57ee4e55be70ac512bdc76417"
+checksum = "29e724a68d9319343bb3328c9cc2dfde263f4b3142ee1059a9980580171c954b"
 dependencies = [
  "atty",
  "bitflags",
@@ -533,9 +533,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.2.15"
+version = "3.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba52acd3b0a5c33aeada5cdaa3267cdc7c594a98731d4268cdc1532f4264cb4"
+checksum = "13547f7012c01ab4a0e8f8967730ada8f9fdf419e8b6c792788f39cf4e46eefa"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -728,10 +728,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "486d44227f71a1ef39554c0dc47e44b9f4139927c75043312690c3f476d1d788"
 dependencies = [
  "bitflags",
- "crossterm_winapi",
+ "crossterm_winapi 0.8.0",
  "libc",
  "mio 0.7.14",
  "parking_lot 0.11.2",
+ "signal-hook",
+ "signal-hook-mio",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "crossterm"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e64e6c0fbe2c17357405f7c758c1ef960fce08bdfb2c03d88d2a18d7e09c4b67"
+dependencies = [
+ "bitflags",
+ "crossterm_winapi 0.9.0",
+ "libc",
+ "mio 0.8.4",
+ "parking_lot 0.12.1",
  "signal-hook",
  "signal-hook-mio",
  "winapi 0.3.9",
@@ -742,6 +758,15 @@ name = "crossterm_winapi"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a6966607622438301997d3dac0d2f6e9a90c68bb6bc1785ea98456ab93c0507"
+dependencies = [
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "crossterm_winapi"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ae1b35a484aa10e07fe0638d02301c5ad24de82d310ccbd2f3693da5f09bf1c"
 dependencies = [
  "winapi 0.3.9",
 ]
@@ -1418,7 +1443,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccd2330d94af4679fb8f6351e40d0814babed901ffb24bdd1b2b03dcba424b8d"
 dependencies = [
  "bitflags",
- "crossterm",
+ "crossterm 0.21.0",
  "lazy_static",
  "newline-converter",
  "thiserror",
@@ -1967,7 +1992,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chromiumoxide",
- "clap 3.2.15",
+ "clap 3.2.17",
  "console-subscriber",
  "futures",
  "json",
@@ -1994,7 +2019,7 @@ name = "node-file-trace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.15",
+ "clap 3.2.17",
  "console-subscriber",
  "json",
  "owo-colors",
@@ -2858,6 +2883,7 @@ checksum = "29ad2e15f37ec9a6cc544097b78a1ec90001e9f71b81338ca39f430adaca99af"
 dependencies = [
  "libc",
  "mio 0.7.14",
+ "mio 0.8.4",
  "signal-hook",
 ]
 
@@ -3088,7 +3114,7 @@ name = "swc-ast-explorer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.2.15",
+ "clap 3.2.17",
  "regex",
  "swc",
  "swc_common",
@@ -4471,6 +4497,8 @@ name = "turbopack-cli-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap 3.2.17",
+ "crossterm 0.25.0",
  "lazy_static",
  "owo-colors",
  "serde",
@@ -4629,7 +4657,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand",
  "static_assertions",
 ]
@@ -5033,7 +5061,7 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "cargo-lock",
- "clap 3.2.15",
+ "clap 3.2.17",
  "inquire",
  "owo-colors",
  "semver 1.0.13",
