@@ -10,12 +10,12 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each npm lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
 
-Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold.
+Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold:
 
-1. Incoming new developers can look at the Turborepo `pipeline` and understand how tasks are related.
-2. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
+1. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
+1. New developers to a project can look at the Turborepo `pipeline` and understand how tasks are related.
 
-To give you a sense of how powerful this can be, the below diagram compares the `turbo` vs `lerna` task execution timelines:
+To give you a sense of how powerful this can be, the diagram below compares the `turbo` and `lerna` task execution timelines:
 
 ![Turborepo vs. Lerna Task Execution](/images/docs/turbo-vs-lerna-execution.png)
 
@@ -23,11 +23,9 @@ Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls
 
 ## Defining a `pipeline`
 
-To define your monorepo's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the `turbo.json` configuration file at the root of your monorepo. `turbo` interprets this configuration and conventions to properly schedule, execute, and cache the outputs of the tasks in your monorepo.
+To define your monorepo's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the `turbo.json` configuration file at the root of your monorepo. `turbo` interprets this configuration to schedule, execute, and cache the outputs of the tasks in your monorepo.
 
-Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key beneath it as well as some other options related to [caching](./caching).
-
-Packages that do not have this task defined in their `package.json`'s list of `scripts` will be ignored and skipped over during `turbo run`.
+Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that `turbo` will be able to execute using [`turbo run <task>`](../reference/command-line-reference#turbo-run-task1-task2-1). Each task can also be configured to specify dependencies (with the [`dependsOn`](../reference/configuration#dependson) key) as well as other options for [caching](./caching). Workspaces that do not have this task defined in their `package.json`'s list of `scripts` will be ignored during `turbo run`.
 
 An example Pipeline configuration in `turbo.json`:
 
@@ -64,44 +62,44 @@ The rough execution order for a given package based on the `dependsOn` keys abov
 The full pipeline can then be run:
 
 ```bash
-npx turbo run build test lint deploy
+npx turbo run deploy
 ```
 
 Turborepo will then efficiently schedule execution minimizing idle CPUs.
 
 ## Task Dependency Format
 
-What you are declaring here in the `pipeline` object of the `turbo` configuration is a dependency graph of tasks. In the above example, in plain english, the configuration translates to the following conventions:
+The `pipeline` conifguration declares the dependency graph of the tasks in your monorepo. In plain English, the example above translates to:
 
-```jsonc
+```diff
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      // A package's `build` task depends on that package's
-      // topological dependencies' and devDependencies'
-      // `build` tasks  being completed first
-      // (that's what the `^` symbol signifies).
++      // A package's `build` task depends on that package's
++      // topological dependencies' and devDependencies'
++      // `build` tasks  being completed first. The `^` symbol
++      // indicates an upstream dependency.
       "dependsOn": ["^build"]
     },
     "test": {
-      // A package's `test` task depends on that package's
-      // own `build` task being completed first.
++      // A package's `test` task depends on that package's
++      // own `build` task being completed first.
       "dependsOn": ["build"],
       "outputs": [],
-      // A package's `test` task should only be rerun when
-      // either a `.tsx` or `.ts` file has changed.
++      // A package's `test` task should only be rerun when
++      // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "lint": {
-      // A package's `lint` task has no dependencies and
-      // can be run whenever.
++      // A package's `lint` task has no dependencies and
++      // can be run whenever.
       "outputs": []
     },
     "deploy": {
-      // A package's `deploy` task depends on the `build`,
-      // `test`, and `lint` tasks of the same package
-      // being completed.
++      // A package's `deploy` task depends on the `build`,
++      // `test`, and `lint` tasks of the same package
++      // being completed.
       "dependsOn": ["build", "test", "lint"],
       "outputs": []
     }
@@ -113,7 +111,7 @@ What you are declaring here in the `pipeline` object of the `turbo` configuratio
 
 The `^` symbol explicitly declares that the task has a [package-topological](../glossary#topological-order-1) dependency on another task.
 
-A common pattern in many TypeScript monorepos is to declare that a package's `build` task (e.g. `tsc`) should only run once the `build` tasks of all of its dependencies in the monorepo have run their own `build` tasks. This type of relationship can be expressed as follows:
+A common pattern in TypeScript monorepos, for example, is to declare that a package's `build` task (e.g. `tsc`) should only run once the `build` tasks of all of its dependencies in the monorepo have run their own `build` tasks. This type of relationship can be expressed as follows:
 
 ```jsonc
 {
@@ -152,7 +150,9 @@ An empty dependency list (`dependsOn` is either undefined or `[]`) means that a 
 
 A package is considered to have been updated when any of the files in that package have changed.
 However, for some tasks, we only want to rerun that task when relevant files have changed.
-Specifying `inputs` lets us define which files are relevant for a particular task:
+Specifying `inputs` lets us define which files are relevant for a particular task. For example, the
+`test` configuration below declares that the `test` task only needs to execute if a `.tsx` or `.ts` file
+in the `src/` and `test/` subdirectories has changed since the last execution.
 
 ```jsonc
 {
@@ -173,11 +173,9 @@ Specifying `inputs` lets us define which files are relevant for a particular tas
 }
 ```
 
-In this scenario, the `test` will only be rerun if a `.tsx` or `.ts` file has changed in the package.
-
 ### Tasks that are in the `pipeline` but not in SOME `package.json`
 
-Sometimes tasks declared in the `pipeline` are not present in all packages' `package.json` files. `turbo` will automatically and gracefully ignore those. No problem!
+Sometimes tasks declared in the `pipeline` are not present in all packages' `package.json` files. `turbo` will gracefully ignore those. No problem!
 
 ### `pipeline` tasks are the only ones that `turbo` knows about
 
@@ -185,15 +183,16 @@ Sometimes tasks declared in the `pipeline` are not present in all packages' `pac
 
 ### Implicit Dependencies and Specific Package Tasks
 
-Sometimes you need to manually place a package-task dependency on another package-task. This can occur especially in repos that are just coming off of a `lerna` or `rush` repository where the tasks are traditionally run in separate phases. Sometimes assumptions are made for those repositories that are not expressible in the simple task `pipeline` configuration, as seen above.
-Additionally, you may need to express implicit dependencies or sequences between applications or microservices when using `turbo` in CI/CD.
+Sometimes, you may want to create a package-task dependency on another package-task. This can be especially helpful for repos migrating from `lerna` or `rush`, where tasks are run in separate phases by default. Sometimes these configurations make assumptions that cannot be expressed in a simple `pipeline` configuration, as seen above. Or you may just want to express sequences of tasks between applications or microservices when using `turbo` in CI/CD.
 
-For these cases, you can express these relationships in your `pipeline` configuration like this:
+For these cases, you can express these relationships in your `pipeline` configuration using the `<package>#<task>` syntax.
+The example below describes the `deploy` script of a `frontend` application that depends on the `deploy` and `health-check` scripts of `backend`, as well as the `test` script of a `ui` package:
 
 ```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
+    // Standard configuration
     "build": {
       "dependsOn": ["^build"]
     },
@@ -205,30 +204,34 @@ For these cases, you can express these relationships in your `pipeline` configur
       "dependsOn": ["test", "build"],
       "outputs": []
     },
+
+    // Explicit package-task to package-task dependency
     "frontend#deploy": {
       "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"],
       "outputs": []
-    }
+    },
   }
 }
 ```
 
-In this example, we illustrate a `deploy` script of a `frontend` application depends on both the `deploy` and `health-check` npm scripts of `backend` as well as the `test` script of a `ui` package. The syntax is `<package>#<task>`.
-
-This seems like it goes against the `"test": { "dependsOn": ["build"] }` and `"deploy": { "dependsOn": ["test"] }`, but it does not. Since `test` and `deploy` scripts do not have topological dependencies (e.g. `^<task>`), they theoretically can get triggered anytime once their own package's `build` and `test` scripts have finished! Unless they are being used for applications/services for deployment orchestration, the general guidance is to get rid of these specific package-task to package-task dependencies in the pipeline as quickly as possible (so the builds can be optimized better).
+This explicit configuration for `frontend#deploy` may seem to conflict with the `test` and `deploy` task configurations, but it does not. Since `test` and `deploy` do not have topological dependencies (e.g. `^<task>`), they can execute any time after their package's `build` and `test` scripts have finished.
 
 <Callout>
-  **Note: Package-tasks do not inherit cache configuration. You must redeclare
-  [`outputs`](../reference/configuration#outputs) at the moment.**
+  Notes:
+
+1. Although this `<package>#<task>` syntax is a useful escape hatch, we generally recommend using it for deployment orchestration tasks such as health checks, rather than build-time dependencies, so that Turbo can optimize these tasks more efficiently
+1. Package-tasks do not inherit cache configuration. You must redeclare
+   [`outputs`](../reference/configuration#outputs) at the moment.
+
 </Callout>
 
 ### Running tasks defined in the monorepo's root `package.json` file
 
 `turbo` can run tasks that exist in the `package.json` file at the root of the monorepo.
-These must be added to the pipeline configuration using the form `"//#<task>": {...}`. This is
-true even for tasks that already have their own entry. For example, if you already have `"build": {...}`
-in your pipeline, but want to include the `build` script defined in the monorepo's root `package.json` file when running
-`turbo run build`, you must opt the root into it by also including `"//#build": {...}` in your configuration.
+These must be explicitly added to the pipeline configuration using the key syntax `"//#<task>"`. This is
+true even for tasks that already have their own entry. For example, if your pipeline declares a `"build"` task,
+and you want to include the `build` script defined in the monorepo's root `package.json` file with
+`turbo run build`, you must opt the root into it by declaring `"//#build": {...}` in your configuration.
 Conversely, you _do not_ need to define a generic `"my-task": {...}` entry if all you need is `"//#my-task": {...}`.
 
 A sample pipeline that defines the root task `format` and opts the root into `test` might look like:

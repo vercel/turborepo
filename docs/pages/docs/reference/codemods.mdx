@@ -38,22 +38,20 @@ For example, for Yarn v1:
     "apps/*",
     "packages/*"
   ],
-  ...
+  // ...
 }
 ```
 
-```json
-// After
+```diff
 {
   "name": "turborepo-basic",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "yarn@1.22.17",
++  "packageManager": "yarn@1.22.17",
   "workspaces": [
     "apps/*",
     "packages/*"
-  ],
-  ...
+  ]
 }
 ```
 
@@ -92,21 +90,26 @@ For example:
 }
 ```
 
-```json
+```diff
 // After, package.json
 {
   "name": "Monorepo root",
   "private": true,
+-  "turbo": {
+-    "pipeline": {
+-      ...
+-    }
+-  },
   ...
 }
 
 // After, turbo.json
-{
-  "$schema": "https://turborepo.org/schema.json",
-  "pipeline": {
-    ...
-  }
-}
++{
++  "$schema": "https://turborepo.org/schema.json",
++  "pipeline": {
++    ...
++  }
++}
 ```
 
 #### Usage
