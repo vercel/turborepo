@@ -227,6 +227,11 @@ func GetTurboDataDir() AbsolutePath {
 	return dataHome.Join("turborepo")
 }
 
+func GetUserConfigDir() AbsolutePath {
+	configHome := AbsolutePathFromUpstream(xdg.ConfigHome)
+	return configHome.Join("turborepo")
+}
+
 type pathValue struct {
 	base     AbsolutePath
 	current  *AbsolutePath

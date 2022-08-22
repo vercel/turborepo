@@ -170,8 +170,7 @@ func (l *login) run(c *config.Config) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
-	if err != nil {
+	if err := c.UserConfig.SetToken(query.Get("token")); err != nil {
 		return err
 	}
 	rawToken := query.Get("token")
@@ -242,8 +241,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: verifiedUser.Token})
-	if err != nil {
+	if err := c.UserConfig.SetToken(verifiedUser.Token); err != nil {
 		return errors.Wrap(err, "failed to save auth token")
 	}
 	l.ui.Info("")

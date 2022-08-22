@@ -37,6 +37,10 @@ type Config struct {
 
 	// Bearer token
 	Token string
+
+	// UserConfig is a wrapper around access to user-specific config values.
+	// In the future, it should replace the above Token
+	UserConfig *UserConfig
 	// vercel.com / remote cache team id
 	TeamId string
 	// vercel.com / remote cache team slug
@@ -88,13 +92,11 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		return nil, err
 	}
+
 	// Precedence is flags > env > config > default
-	userConfig, err := ReadUserConfigFile()
+	userConfig, err := GetUserConfig()
 	if err != nil {
 		return nil, fmt.Errorf("reading user config file: %v", err)
-	}
-	if userConfig == nil {
-		userConfig = defaultUserConfig()
 	}
 	partialConfig, err := ReadRepoConfigFile(cwd)
 	if err != nil {
@@ -103,7 +105,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if partialConfig == nil {
 		partialConfig = defaultRepoConfig()
 	}
-	partialConfig.Token = userConfig.Token
+	partialConfig.Token = userConfig.Token()
 
 	enverr := envconfig.Process("TURBO", partialConfig)
 	if enverr != nil {
@@ -196,6 +198,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	c = &Config{
 		Logger:       logger,
 		Token:        partialConfig.Token,
+		UserConfig:   userConfig,
 		TeamSlug:     partialConfig.TeamSlug,
 		TeamId:       partialConfig.TeamId,
 		ApiUrl:       partialConfig.ApiUrl,

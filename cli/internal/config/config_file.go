@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 
-	"github.com/adrg/xdg"
+	"github.com/spf13/viper"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 // TurborepoConfig is a configuration object for the logged-in turborepo.com user
 type TurborepoConfig struct {
 	// Token is a bearer token
+	// TODO: this should be dropped, it's a per-user config item, not per-repo,
+	// and should be properly managed by Viper
 	Token string `json:"token,omitempty"`
 	// Team id
 	TeamId string `json:"teamId,omitempty"`
@@ -24,11 +25,37 @@ type TurborepoConfig struct {
 	TeamSlug string `json:"teamSlug,omitempty" envconfig:"team"`
 }
 
-func defaultUserConfig() *TurborepoConfig {
-	return &TurborepoConfig{
-		ApiUrl:   "https://vercel.com/api",
-		LoginUrl: "https://vercel.com",
+// UserConfig is a wrapper around the user-specific configuration values
+// for Turborepo.
+type UserConfig struct {
+	userViper *viper.Viper
+	path      fs.AbsolutePath
+}
+
+// Token returns the Bearer token for this user if it exists
+func (uc *UserConfig) Token() string {
+	return uc.userViper.GetString("token")
+}
+
+// SetToken saves a Bearer token for this user, writing it to the
+// user config file, creating it if necessary
+func (uc *UserConfig) SetToken(token string) error {
+	uc.userViper.Set("token", token)
+	return uc.write()
+}
+
+// Internal call to save this config data to the user config file.
+func (uc *UserConfig) write() error {
+	if err := uc.path.EnsureDir(); err != nil {
+		return err
 	}
+	return uc.userViper.WriteConfig()
+}
+
+// Delete deletes the config file. This user config shouldn't be used
+// afterwards, it needs to be re-initialized
+func (uc *UserConfig) Delete() error {
+	return uc.path.Remove()
 }
 
 func defaultRepoConfig() *TurborepoConfig {
@@ -62,43 +89,6 @@ func WriteRepoConfigFile(repoRoot fs.AbsolutePath, toWrite *TurborepoConfig) err
 	return writeConfigFile(path, toWrite)
 }
 
-func getUserConfigPath() (fs.AbsolutePath, error) {
-	path, err := xdg.SearchConfigFile(filepath.Join("turborepo", "config.json"))
-	// Not finding an existing config file is not an error.
-	// We simply bail with no path, and no error.
-	if err != nil {
-		return "", nil
-	}
-	absPath, err := fs.CheckedToAbsolutePath(path)
-	if err != nil {
-		return "", err
-	}
-	return absPath, nil
-}
-
-func createUserConfigPath() (fs.AbsolutePath, error) {
-	path, err := xdg.ConfigFile(filepath.Join("turborepo", "config.json"))
-	if err != nil {
-		return "", err
-	}
-	absPath, err := fs.CheckedToAbsolutePath(path)
-	if err != nil {
-		return "", err
-	}
-	return absPath, nil
-}
-
-// WriteUserConfigFile writes the given configuration to a user-specific
-// configuration file. This is for values that are not shared with a team, such
-// as credentials.
-func WriteUserConfigFile(config *TurborepoConfig) error {
-	path, err := createUserConfigPath()
-	if err != nil {
-		return err
-	}
-	return writeConfigFile(path, config)
-}
-
 // readConfigFile reads a config file at a path
 func readConfigFile(path fs.AbsolutePath, defaults func() *TurborepoConfig) (*TurborepoConfig, error) {
 	b, err := path.ReadFile()
@@ -119,44 +109,33 @@ func readConfigFile(path fs.AbsolutePath, defaults func() *TurborepoConfig) (*Tu
 	return config, nil
 }
 
-// ReadUserConfigFile reads a user config file
-func ReadUserConfigFile() (*TurborepoConfig, error) {
-	path, err := getUserConfigPath()
-
-	// Check the error first, that means we got a hit, but failed on path conversion.
-	if err != nil {
+// ReadUserConfigFile is public for tests, it creates a UserConfig using the
+// specified path as the user config file. Note that the path or its parents
+// do not need to exist. On a write to this configuration, they will be created.
+func ReadUserConfigFile(path fs.AbsolutePath) (*UserConfig, error) {
+	userViper := viper.New()
+	userViper.SetConfigFile(path.ToString())
+	userViper.SetConfigType("json")
+	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+	return &UserConfig{
+		userViper: userViper,
+		path:      path,
+	}, nil
+}
 
-	// Otherwise, we just didn't find anything, which isn't an error.
-	if path == "" {
-		return nil, nil
-	}
+func getUserConfigPath() fs.AbsolutePath {
+	return fs.GetUserConfigDir().Join("config.json")
+}
 
-	// Found something!
-	return readConfigFile(path, defaultUserConfig)
+// GetUserConfig reads a user config file
+func GetUserConfig() (*UserConfig, error) {
+	return ReadUserConfigFile(getUserConfigPath())
 }
 
 // ReadRepoConfigFile reads the user-specific configuration values
 func ReadRepoConfigFile(repoRoot fs.AbsolutePath) (*TurborepoConfig, error) {
 	path := repoRoot.Join(".turbo", "config.json")
 	return readConfigFile(path, defaultRepoConfig)
-}
-
-// DeleteUserConfigFile deletes a user config file
-func DeleteUserConfigFile() error {
-	path, err := getUserConfigPath()
-
-	// Check the error first, that means we got a hit, but failed on path conversion.
-	if err != nil {
-		return err
-	}
-
-	// Otherwise, we just didn't find anything, which isn't an error.
-	if path == "" {
-		return nil
-	}
-
-	// Found a config file!
-	return path.Remove()
 }
