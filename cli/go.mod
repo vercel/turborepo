@@ -34,12 +34,12 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.2
 	github.com/yookoala/realpath v1.0.0
-	github.com/yosuke-furukawa/json5 v0.1.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.46.0
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.2.0
+	muzzammil.xyz/jsonc v1.0.0
 )
 
 require (
@@ -75,5 +75,4 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	muzzammil.xyz/jsonc v1.0.0 // indirect
 )
