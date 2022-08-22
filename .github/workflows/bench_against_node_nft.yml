@@ -25,6 +25,7 @@ jobs:
 
     steps:
       - name: Initialize github status
+        if: github.event_name == 'pull_request'
         uses: ouzi-dev/commit-status-updater@v1.0.4
         with:
           name: Bench against Node.js nft / bench (pull_request)
@@ -59,7 +60,7 @@ jobs:
           command: xtask
           args: nft-bench-result
       - name: Report github status
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: ouzi-dev/commit-status-updater@v1.0.4
         with:
           name: Bench against Node.js nft / bench (pull_request)
