@@ -86,6 +86,19 @@ func GetPackageDeps(rootPath fs.AbsolutePath, p *PackageDepsOptions) (map[turbop
 	return result, nil
 }
 
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string)
+	for _, file := range files {
+		hash, err := fs.GitLikeHashFile(file.ToString())
+		if err != nil {
+			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
+		}
+
+		hashObject[file.ToUnixPath()] = hash
+	}
+	return hashObject, nil
+}
+
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
 func GetHashableDeps(rootPath fs.AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
@@ -99,10 +112,19 @@ func GetHashableDeps(rootPath fs.AbsolutePath, files []turbopath.AbsoluteSystemP
 		}
 		output[index] = anchoredSystemPath
 	}
-	return gitHashObject(convertedRootPath, output)
+	hashObject, err := gitHashObject(convertedRootPath, output)
+	if err != nil {
+		manuallyHashedObject, err := manuallyHashFiles(convertedRootPath, output)
+		if err != nil {
+			return nil, err
+		}
+		hashObject = manuallyHashedObject
+	}
+
+	return hashObject, nil
 }
 
-// gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
+// gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths to `git hash-object`.
 // `git hash-object` expects paths to use Unix separators, even on Windows.
 //
 // Note: paths of files to hash passed to `git hash-object` are processed as relative to the given anchor.

@@ -88,7 +88,7 @@ func calculateGlobalHash(rootpath fs.AbsolutePath, rootPackageJSON *fs.PackageJS
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
+		return "", fmt.Errorf("error hashing files: %w", err)
 	}
 	globalHashable := struct {
 		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
