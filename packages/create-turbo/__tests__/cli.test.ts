@@ -261,16 +261,26 @@ async function runInteractiveCLI(
   cli: childProcess.ChildProcessWithoutNullStreams
 ): Promise<string> {
   let accumulator = "";
+  let advancedPackageManager = false;
+  let advancedPath = false;
 
   return new Promise((resolve, reject) => {
     cli.stdout.on("data", (data) => {
       accumulator += data.toString("utf8");
 
-      if (accumulator.match(/Which package manager do you want to use/g)) {
+      if (
+        !advancedPackageManager &&
+        accumulator.match(/Which package manager do you want to use/g)
+      ) {
+        advancedPackageManager = true;
         cli.stdin.write(keys.enter);
       }
 
-      if (accumulator.match(/Where would you like to create your turborepo/g)) {
+      if (
+        !advancedPath &&
+        accumulator.match(/Where would you like to create your turborepo/g)
+      ) {
+        advancedPath = true;
         cli.stdin.write(keys.enter);
       }
     });
