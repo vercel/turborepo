@@ -61,16 +61,6 @@ describe("create-turbo cli", () => {
     cleanupTestDir();
   });
 
-  beforeEach(() => {
-    // cleanup before each test case in case the previous test timed out.
-    cleanupTestDir();
-  });
-
-  afterEach(() => {
-    // clean up test dir in between test cases since we are using the same directory for each one.
-    cleanupTestDir();
-  });
-
   describe("--no-install", () => {
     it(
       "interactively configure",
@@ -111,49 +101,45 @@ describe("create-turbo cli", () => {
       1000 * 30
     );
 
-    Object.values(PACKAGE_MANAGERS)
-      .flat()
-      .forEach((packageManager) => {
-        it(
-          `--use-${packageManager.command}: guides the user through the process (${packageManager.name})`,
-          async () => {
-            configurePackageManager(packageManager);
-            let testDir = `my-${packageManager.name}-no-install-turborepo`;
-            const cli = spawn(
-              "node",
-              [createTurbo, "--no-install", `--use-${packageManager.command}`],
-              { cwd }
-            );
-
-            const stdout = await runInteractiveCLI(cli, testDir);
-
-            expect(stdout).toContain(
-              ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
-            );
-
-            expect(stdout).toContain(
-              `? Where would you like to create your turborepo? (./my-turborepo)`
-            );
-
-            expect(stdout).toContain(
-              ">>> Created a new turborepo with the following:"
-            );
-
-            expect(stdout).toContain(
-              `>>> Success! Created a new Turborepo at "${testDir}"`
-            );
-
-            expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
-              new RegExp(`^${packageManager.command}`)
-            );
-
-            expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
-              false
-            );
-          },
-          1000 * 30
+    it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
+      `--use-$command: guides the user through the process ($name)`,
+      async (packageManager) => {
+        configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-no-install-turborepo`;
+        const cli = spawn(
+          "node",
+          [createTurbo, "--no-install", `--use-${packageManager.command}`],
+          { cwd }
         );
-      });
+
+        const stdout = await runInteractiveCLI(cli, testDir);
+
+        expect(stdout).toContain(
+          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+        );
+
+        expect(stdout).toContain(
+          `? Where would you like to create your turborepo? (./my-turborepo)`
+        );
+
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${testDir}"`
+        );
+
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
+          new RegExp(`^${packageManager.command}`)
+        );
+
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          false
+        );
+      },
+      1000 * 30
+    );
   });
 
   describe("with installation", () => {
@@ -196,45 +182,41 @@ describe("create-turbo cli", () => {
       1000 * 120
     );
 
-    Object.values(PACKAGE_MANAGERS)
-      .flat()
-      .forEach((packageManager) => {
-        it(
-          `--use-${packageManager.command} (${packageManager.name})`,
-          async () => {
-            configurePackageManager(packageManager);
-            let testDir = `my-${packageManager.name}-noninteractive-install-turborepo`;
-            const cli = spawn(
-              "node",
-              [createTurbo, `--use-${packageManager.command}`, testDir],
-              { cwd }
-            );
-
-            const stdout = await runInteractiveCLI(cli, testDir);
-
-            expect(stdout).toContain(
-              ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
-            );
-
-            expect(stdout).toContain(
-              ">>> Created a new turborepo with the following:"
-            );
-
-            expect(stdout).toContain(
-              `>>> Success! Created a new Turborepo at "${testDir}"`
-            );
-
-            expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
-              new RegExp(`^${packageManager.command}`)
-            );
-
-            expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
-              true
-            );
-          },
-          1000 * 120
+    it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
+      `--use-$command ($name)`,
+      async (packageManager) => {
+        configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-noninteractive-install-turborepo`;
+        const cli = spawn(
+          "node",
+          [createTurbo, `--use-${packageManager.command}`, testDir],
+          { cwd }
         );
-      });
+
+        const stdout = await runInteractiveCLI(cli, testDir);
+
+        expect(stdout).toContain(
+          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+        );
+
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${testDir}"`
+        );
+
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
+          new RegExp(`^${packageManager.command}`)
+        );
+
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          true
+        );
+      },
+      1000 * 120
+    );
   });
 
   describe("printing version", () => {
