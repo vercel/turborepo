@@ -6,8 +6,6 @@ import semver from "semver";
 import stripAnsi from "strip-ansi";
 import { PackageManager, PACKAGE_MANAGERS } from "../src/constants";
 
-const DEFAULT_APP_NAME = "my-turborepo";
-
 const execFile = util.promisify(childProcess.execFile);
 
 const keys = {
@@ -19,7 +17,6 @@ const keys = {
 
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
 const cwd = path.join(__dirname, "../../../..");
-const testDir = path.join(cwd, DEFAULT_APP_NAME);
 
 // Increase default timeout for this test file
 // since we are spawning a process to call turbo CLI and that can take some time
@@ -78,17 +75,19 @@ describe("create-turbo cli", () => {
     it(
       "default: guides the user through the process",
       async () => {
-        configurePackageManager(PACKAGE_MANAGERS["npm"][0]);
+        let packageManager = PACKAGE_MANAGERS["npm"][0];
+        configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-turborepo`;
         const cli = spawn("node", [createTurbo, "--no-install"], { cwd });
 
-        const stdout = await runInteractiveCLI(cli);
+        const stdout = await runInteractiveCLI(cli, testDir);
 
         expect(stdout).toContain(
           ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
         );
 
         expect(stdout).toContain(
-          `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
+          `? Where would you like to create your turborepo? (./my-turborepo)`
         );
 
         expect(stdout).toMatch(
@@ -100,12 +99,14 @@ describe("create-turbo cli", () => {
         );
 
         expect(stdout).toContain(
-          `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+          `>>> Success! Created a new Turborepo at "${testDir}"`
         );
 
-        expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(/^npm/);
 
-        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          false
+        );
       },
       1000 * 30
     );
@@ -117,20 +118,21 @@ describe("create-turbo cli", () => {
           `--use-${packageManager.command}: guides the user through the process (${packageManager.name})`,
           async () => {
             configurePackageManager(packageManager);
+            let testDir = `my-${packageManager.name}-turborepo`;
             const cli = spawn(
               "node",
               [createTurbo, "--no-install", `--use-${packageManager.command}`],
               { cwd }
             );
 
-            const stdout = await runInteractiveCLI(cli);
+            const stdout = await runInteractiveCLI(cli, testDir);
 
             expect(stdout).toContain(
               ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
             );
 
             expect(stdout).toContain(
-              `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
+              `? Where would you like to create your turborepo? (./my-turborepo)`
             );
 
             expect(stdout).toContain(
@@ -138,14 +140,14 @@ describe("create-turbo cli", () => {
             );
 
             expect(stdout).toContain(
-              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+              `>>> Success! Created a new Turborepo at "${testDir}"`
             );
 
-            expect(getGeneratedPackageJSON().packageManager).toMatch(
+            expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
               new RegExp(`^${packageManager.command}`)
             );
 
-            expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(
+            expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
               false
             );
           },
@@ -158,12 +160,14 @@ describe("create-turbo cli", () => {
     it(
       "default",
       async () => {
-        configurePackageManager(PACKAGE_MANAGERS["npm"][0]);
-        const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {
+        let packageManager = PACKAGE_MANAGERS["npm"][0];
+        configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-turborepo`;
+        const cli = spawn("node", [createTurbo, testDir], {
           cwd,
         });
 
-        const stdout = await runInteractiveCLI(cli);
+        const stdout = await runInteractiveCLI(cli, testDir);
 
         expect(stdout).toContain(
           ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
@@ -178,12 +182,14 @@ describe("create-turbo cli", () => {
         );
 
         expect(stdout).toContain(
-          `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+          `>>> Success! Created a new Turborepo at "my-${packageManager.name}-turborepo"`
         );
 
-        expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(/^npm/);
 
-        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          true
+        );
       },
       1000 * 120
     );
@@ -195,17 +201,14 @@ describe("create-turbo cli", () => {
           `--use-${packageManager.command} (${packageManager.name})`,
           async () => {
             configurePackageManager(packageManager);
+            let testDir = `my-${packageManager.name}-turborepo`;
             const cli = spawn(
               "node",
-              [
-                createTurbo,
-                `--use-${packageManager.command}`,
-                `./${DEFAULT_APP_NAME}`,
-              ],
+              [createTurbo, `--use-${packageManager.command}`, testDir],
               { cwd }
             );
 
-            const stdout = await runInteractiveCLI(cli);
+            const stdout = await runInteractiveCLI(cli, testDir);
 
             expect(stdout).toContain(
               ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
@@ -216,14 +219,14 @@ describe("create-turbo cli", () => {
             );
 
             expect(stdout).toContain(
-              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+              `>>> Success! Created a new Turborepo at "${testDir}"`
             );
 
-            expect(getGeneratedPackageJSON().packageManager).toMatch(
+            expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
               new RegExp(`^${packageManager.command}`)
             );
 
-            expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(
+            expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
               true
             );
           },
@@ -258,7 +261,8 @@ describe("create-turbo cli", () => {
 });
 
 async function runInteractiveCLI(
-  cli: childProcess.ChildProcessWithoutNullStreams
+  cli: childProcess.ChildProcessWithoutNullStreams,
+  projectDirectory: string = ""
 ): Promise<string> {
   let accumulator = "";
   let advancedPackageManager = false;
@@ -281,6 +285,7 @@ async function runInteractiveCLI(
         accumulator.match(/Where would you like to create your turborepo/g)
       ) {
         advancedPath = true;
+        cli.stdin.write(Buffer.from(projectDirectory, "utf8"));
         cli.stdin.write(keys.enter);
       }
     });
@@ -299,15 +304,19 @@ async function runInteractiveCLI(
   });
 }
 
+const testDirRegex = /^my-(pnpm|npm|yarn|berry)-turborepo$/;
 function cleanupTestDir() {
-  if (fs.existsSync(testDir)) {
-    fs.rmSync(testDir, { recursive: true });
-  }
+  let children = fs.readdirSync(cwd);
+  children.forEach((childDir) => {
+    if (testDirRegex.test(childDir)) {
+      fs.rmSync(path.join(cwd, childDir), { recursive: true });
+    }
+  });
 }
 
-function getGeneratedPackageJSON() {
+function getGeneratedPackageJSON(testDir: string) {
   return JSON.parse(
-    fs.readFileSync(path.join(testDir, "package.json")).toString()
+    fs.readFileSync(path.join(cwd, testDir, "package.json")).toString()
   );
 }
 
