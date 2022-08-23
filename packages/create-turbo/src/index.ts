@@ -6,7 +6,6 @@ import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
-import lt from "semver/functions/lt";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
@@ -218,24 +217,7 @@ async function run() {
       },
     }).start();
 
-    let supportsRegistryArg = false;
-    try {
-      // yarn >= v2 only support specifying a registry via config (no cli param)
-      supportsRegistryArg = lt(
-        getPackageManagerVersion(answers.packageManager),
-        "2.0.0"
-      );
-    } catch (err) {}
-
     const installArgs = ["install"];
-    if (supportsRegistryArg) {
-      // Using the official npm registry for installation could be very
-      // slow for users in different regions (like China), so use the
-      // user customized registry from the config instead
-      const npmRegistry = await getNpmRegistry(answers.packageManager);
-      installArgs.push(`--registry=${npmRegistry}`);
-    }
-
     await execa(`${answers.packageManager.command}`, installArgs, {
       stdio: "ignore",
       cwd: projectDir,
@@ -303,20 +285,6 @@ async function run() {
     chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
   );
   console.log();
-}
-
-async function getNpmRegistry(pkgManager: PackageManager): Promise<string> {
-  try {
-    // npm/pnpm/yarn share the same CLI configuration commands
-    const { stdout: registry } = await execa(pkgManager.command, [
-      "config",
-      "get",
-      "registry",
-    ]);
-    return registry;
-  } catch (error) {
-    return "";
-  }
 }
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
