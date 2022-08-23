@@ -94,9 +94,6 @@ func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.
 			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
 		}
 
-		if err != nil {
-			return nil, fmt.Errorf("File path cannot be made relative: %w", err)
-		}
 		hashObject[file.ToUnixPath()] = hash
 	}
 	return hashObject, nil
