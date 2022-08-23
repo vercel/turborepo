@@ -2,7 +2,6 @@
 
 import * as path from "path";
 import execa from "execa";
-import fse from "fs-extra";
 import fs from "fs";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -137,19 +136,19 @@ async function run() {
   let relativeProjectDir = path.relative(process.cwd(), projectDir);
   let projectDirIsCurrentDir = relativeProjectDir === "";
   if (!projectDirIsCurrentDir) {
-    if (fse.existsSync(projectDir) && fs.readdirSync(projectDir).length !== 0) {
+    if (fs.existsSync(projectDir) && fs.readdirSync(projectDir).length !== 0) {
       console.log(
         `️🚨 Oops, "${relativeProjectDir}" already exists. Please try again with a different directory.`
       );
       process.exit(1);
     } else {
-      await fse.mkdirp(projectDir);
+      fs.mkdirSync(projectDir, { recursive: true });
     }
   }
 
   // copy the shared template
   let sharedTemplate = path.resolve(__dirname, "../templates", `_shared_ts`);
-  await fse.copy(sharedTemplate, projectDir);
+  fs.cpSync(sharedTemplate, projectDir, { recursive: true });
 
   let packageManagerVersion = getPackageManagerVersion(answers.packageManager);
   let packageManagerConfigs = PACKAGE_MANAGERS[answers.packageManager];
@@ -167,12 +166,15 @@ async function run() {
     "../templates",
     packageManager.template
   );
-  if (fse.existsSync(packageManagerTemplate)) {
-    await fse.copy(packageManagerTemplate, projectDir, { overwrite: true });
+  if (fs.existsSync(packageManagerTemplate)) {
+    fs.cpSync(packageManagerTemplate, projectDir, {
+      recursive: true,
+      force: true,
+    });
   }
 
   // rename dotfiles
-  await fse.move(
+  fs.renameSync(
     path.join(projectDir, "gitignore"),
     path.join(projectDir, ".gitignore")
   );
@@ -194,7 +196,7 @@ async function run() {
   sharedPkg.name = projectName;
 
   // write package.json
-  await fse.writeFile(
+  fs.writeFileSync(
     path.join(projectDir, "package.json"),
     JSON.stringify(sharedPkg, null, 2)
   );
