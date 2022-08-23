@@ -312,8 +312,9 @@ function cleanPrompt<T extends { toString(): string }>(data: T): string {
 }
 
 function getPromptChoices(prompt: string) {
+  let cursorIndex = Math.max(prompt.indexOf("❯"), prompt.indexOf(">"));
   return prompt
-    .slice(prompt.indexOf("❯") + 2)
+    .slice(cursorIndex + 2)
     .split("\n")
     .map((s) => s.trim());
 }
