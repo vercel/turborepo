@@ -80,7 +80,7 @@ describe("create-turbo cli", () => {
 
   describe("--no-install", () => {
     it("default: guides the user through the process", async () => {
-      configurePackageManager(PACKAGE_MANAGERS["npm"]);
+      configurePackageManager(PACKAGE_MANAGERS["npm"][0]);
       const cli = spawn("node", [createTurbo, "--no-install"], { cwd });
 
       const messages = await runInteractiveCLI(cli);
@@ -114,50 +114,52 @@ describe("create-turbo cli", () => {
       expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
     });
 
-    Object.values(PACKAGE_MANAGERS).forEach((packageManager) => {
-      it(`--use-${packageManager.command}: guides the user through the process (${packageManager.name})`, async () => {
-        configurePackageManager(packageManager);
-        const cli = spawn(
-          "node",
-          [createTurbo, "--no-install", `--use-${packageManager.command}`],
-          { cwd }
-        );
-        const messages = await runInteractiveCLI(cli);
+    Object.values(PACKAGE_MANAGERS)
+      .flat()
+      .forEach((packageManager) => {
+        it(`--use-${packageManager.command}: guides the user through the process (${packageManager.name})`, async () => {
+          configurePackageManager(packageManager);
+          const cli = spawn(
+            "node",
+            [createTurbo, "--no-install", `--use-${packageManager.command}`],
+            { cwd }
+          );
+          const messages = await runInteractiveCLI(cli);
 
-        expect(messages[0]).toEqual(
-          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
-        );
+          expect(messages[0]).toEqual(
+            ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+          );
 
-        expect(messages[1]).toEqual(
-          `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
-        );
+          expect(messages[1]).toEqual(
+            `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
+          );
 
-        expect(messages[2]).toMatch(
-          /^>>> Bootstrapped a new turborepo with the following:/
-        );
+          expect(messages[2]).toMatch(
+            /^>>> Bootstrapped a new turborepo with the following:/
+          );
 
-        expect(
-          messages.find((msg) =>
-            msg.match(
-              new RegExp(
-                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+          expect(
+            messages.find((msg) =>
+              msg.match(
+                new RegExp(
+                  `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+                )
               )
             )
-          )
-        ).toBeTruthy();
+          ).toBeTruthy();
 
-        expect(getGeneratedPackageJSON().packageManager).toMatch(
-          new RegExp(`^${packageManager.command}`)
-        );
+          expect(getGeneratedPackageJSON().packageManager).toMatch(
+            new RegExp(`^${packageManager.command}`)
+          );
 
-        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
+          expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
+        });
       });
-    });
   });
 
   describe("with installation", () => {
     it("default", async () => {
-      configurePackageManager(PACKAGE_MANAGERS["npm"]);
+      configurePackageManager(PACKAGE_MANAGERS["npm"][0]);
       const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {
         cwd,
       });
@@ -189,45 +191,47 @@ describe("create-turbo cli", () => {
       expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
     }, 100_000);
 
-    Object.values(PACKAGE_MANAGERS).forEach((packageManager) => {
-      it(`--use-${packageManager.command} (${packageManager.name})`, async () => {
-        configurePackageManager(packageManager);
-        const cli = spawn(
-          "node",
-          [
-            createTurbo,
-            `--use-${packageManager.command}`,
-            `./${DEFAULT_APP_NAME}`,
-          ],
-          { cwd }
-        );
-        const messages = await runInteractiveCLI(cli);
+    Object.values(PACKAGE_MANAGERS)
+      .flat()
+      .forEach((packageManager) => {
+        it(`--use-${packageManager.command} (${packageManager.name})`, async () => {
+          configurePackageManager(packageManager);
+          const cli = spawn(
+            "node",
+            [
+              createTurbo,
+              `--use-${packageManager.command}`,
+              `./${DEFAULT_APP_NAME}`,
+            ],
+            { cwd }
+          );
+          const messages = await runInteractiveCLI(cli);
 
-        expect(messages[0]).toEqual(
-          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
-        );
+          expect(messages[0]).toEqual(
+            ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+          );
 
-        expect(messages[1]).toMatch(
-          /^>>> Creating a new turborepo with the following:/
-        );
+          expect(messages[1]).toMatch(
+            /^>>> Creating a new turborepo with the following:/
+          );
 
-        expect(
-          messages.find((msg) =>
-            msg.match(
-              new RegExp(
-                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+          expect(
+            messages.find((msg) =>
+              msg.match(
+                new RegExp(
+                  `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+                )
               )
             )
-          )
-        ).toBeTruthy();
+          ).toBeTruthy();
 
-        expect(getGeneratedPackageJSON().packageManager).toMatch(
-          new RegExp(`^${packageManager.command}`)
-        );
+          expect(getGeneratedPackageJSON().packageManager).toMatch(
+            new RegExp(`^${packageManager.command}`)
+          );
 
-        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
-      }, 100_000);
-    });
+          expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
+        }, 100_000);
+      });
   });
 
   describe("printing version", () => {

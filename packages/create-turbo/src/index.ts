@@ -7,19 +7,19 @@ import fs from "fs";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
-import { gte } from "semver";
+import { satisfies } from "semver";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
-import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
+import { shouldUsePnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
-import { PackageManager, PACKAGE_MANAGERS } from "./constants";
+import { CommandName, PACKAGE_MANAGERS } from "./constants";
 import { getPackageManagerVersion } from "./getPackageManagerVersion";
 
 interface Answers {
-  packageManager: PackageManager;
+  packageManager: CommandName;
 }
 
 const turboGradient = gradient("#0099F7", "#F11712");
@@ -103,29 +103,29 @@ async function run() {
   const isPnpmInstalled = shouldUsePnpm();
   let answers: Answers;
   if (flags.useNpm) {
-    answers = { packageManager: PACKAGE_MANAGERS["npm"] };
+    answers = { packageManager: "npm" };
   } else if (flags.usePnpm) {
-    answers = { packageManager: PACKAGE_MANAGERS["pnpm"] };
+    answers = { packageManager: "pnpm" };
   } else if (flags.useYarn) {
-    answers = { packageManager: PACKAGE_MANAGERS["yarn"] };
+    answers = { packageManager: "yarn" };
   } else {
     answers = await inquirer.prompt<{
-      packageManager: PackageManager;
+      packageManager: CommandName;
     }>([
       {
         name: "packageManager",
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
-          { name: "npm", value: PACKAGE_MANAGERS["npm"] },
+          { name: "npm", value: "npm" },
           {
             name: "pnpm",
-            value: PACKAGE_MANAGERS["pnpm"],
+            value: "pnpm",
             disabled: !isPnpmInstalled && "not installed",
           },
           {
             name: "yarn",
-            value: PACKAGE_MANAGERS["yarn"],
+            value: "yarn",
             disabled: !isYarnInstalled && "not installed",
           },
         ],
@@ -151,18 +151,21 @@ async function run() {
   let sharedTemplate = path.resolve(__dirname, "../templates", `_shared_ts`);
   await fse.copy(sharedTemplate, projectDir);
 
-  let packageManager = answers.packageManager;
-  const packageManagerVersion = getPackageManagerVersion(packageManager);
+  let packageManagerVersion = getPackageManagerVersion(answers.packageManager);
+  let packageManagerConfigs = PACKAGE_MANAGERS[answers.packageManager];
+  let packageManager = packageManagerConfigs.find((packageManager) =>
+    satisfies(packageManagerVersion, packageManager.semver)
+  );
 
-  if (packageManager.name === "yarn" && gte(packageManagerVersion, "2.0.0")) {
-    packageManager = PACKAGE_MANAGERS["berry"];
+  if (!packageManager) {
+    throw new Error("Unsupported package manager version.");
   }
 
   // copy the per-package-manager template
   let packageManagerTemplate = path.resolve(
     __dirname,
     "../templates",
-    packageManager.name
+    packageManager.template
   );
   if (fse.existsSync(packageManagerTemplate)) {
     await fse.copy(packageManagerTemplate, projectDir, { overwrite: true });
@@ -278,14 +281,14 @@ async function run() {
   console.log(`speed boost, enable Remote Caching with Vercel by`);
   console.log(`entering the following command:`);
   console.log();
-  console.log(chalk.cyan(`  ${getNpxCommand(packageManager)} turbo login`));
+  console.log(chalk.cyan(`  ${packageManager.executable} turbo login`));
   console.log();
   console.log(`We suggest that you begin by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
     console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
   }
-  console.log(chalk.cyan(`  ${getNpxCommand(packageManager)} turbo login`));
+  console.log(chalk.cyan(`  ${packageManager.executable} turbo login`));
   console.log();
 }
 
@@ -312,13 +315,5 @@ async function notifyUpdate(): Promise<void> {
     process.exit();
   } catch {
     // ignore error
-  }
-}
-
-function getNpxCommand(pkgManager: PackageManager): string {
-  if (pkgManager.command === "pnpm") {
-    return getNpxCommandOfPnpm();
-  } else {
-    return "npx";
   }
 }
