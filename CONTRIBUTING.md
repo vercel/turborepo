@@ -43,3 +43,10 @@ TURBO_BINARY_PATH=~/repos/vercel/turborepo/cli/turbo.exe npm link turbo
 ```
 
 If you're using a different package manager replace npm accordingly.
+
+## Publishing
+
+1. `brew install goreleaser`
+2. Add `GORELEASER_KEY` env var with the Go Releaser Pro key (ask @turbo-oss to get access to the key)
+3. Update `version.txt` (do not commit this change to git manually)
+4. `cd cli && make publish`
