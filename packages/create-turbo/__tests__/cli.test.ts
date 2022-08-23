@@ -81,31 +81,27 @@ describe("create-turbo cli", () => {
         configurePackageManager(PACKAGE_MANAGERS["npm"][0]);
         const cli = spawn("node", [createTurbo, "--no-install"], { cwd });
 
-        const messages = await runInteractiveCLI(cli);
+        const stdout = await runInteractiveCLI(cli);
 
-        expect(messages[0]).toEqual(
+        expect(stdout).toContain(
           ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
         );
 
-        expect(messages[1]).toEqual(
+        expect(stdout).toContain(
           `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
         );
 
-        expect(getPromptChoices(messages[2])).toEqual(["npm", "pnpm", "yarn"]);
-
-        expect(messages[3]).toMatch(
-          /^>>> Bootstrapped a new turborepo with the following:/
+        expect(stdout).toMatch(
+          /\? Which package manager do you want to use\? \(Use arrow keys\)\n.*npm \n.*pnpm \n.*yarn \n/
         );
 
-        expect(
-          messages.find((msg) =>
-            msg.match(
-              new RegExp(
-                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-              )
-            )
-          )
-        ).toBeTruthy();
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+        );
 
         expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
 
@@ -126,29 +122,24 @@ describe("create-turbo cli", () => {
               [createTurbo, "--no-install", `--use-${packageManager.command}`],
               { cwd }
             );
-            const messages = await runInteractiveCLI(cli);
 
-            expect(messages[0]).toEqual(
+            const stdout = await runInteractiveCLI(cli);
+
+            expect(stdout).toContain(
               ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
             );
 
-            expect(messages[1]).toEqual(
+            expect(stdout).toContain(
               `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
             );
 
-            expect(messages[2]).toMatch(
-              /^>>> Bootstrapped a new turborepo with the following:/
+            expect(stdout).toContain(
+              ">>> Created a new turborepo with the following:"
             );
 
-            expect(
-              messages.find((msg) =>
-                msg.match(
-                  new RegExp(
-                    `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-                  )
-                )
-              )
-            ).toBeTruthy();
+            expect(stdout).toContain(
+              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+            );
 
             expect(getGeneratedPackageJSON().packageManager).toMatch(
               new RegExp(`^${packageManager.command}`)
@@ -172,27 +163,23 @@ describe("create-turbo cli", () => {
           cwd,
         });
 
-        const messages = await runInteractiveCLI(cli);
+        const stdout = await runInteractiveCLI(cli);
 
-        expect(messages[0]).toEqual(
+        expect(stdout).toContain(
           ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
         );
 
-        expect(getPromptChoices(messages[1])).toEqual(["npm", "pnpm", "yarn"]);
-
-        expect(messages[2]).toMatch(
-          /^>>> Creating a new turborepo with the following:/
+        expect(stdout).toMatch(
+          /\? Which package manager do you want to use\? \(Use arrow keys\)\n.*npm \n.*pnpm \n.*yarn \n/
         );
 
-        expect(
-          messages.find((msg) =>
-            msg.match(
-              new RegExp(
-                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-              )
-            )
-          )
-        ).toBeTruthy();
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+        );
 
         expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
 
@@ -217,25 +204,20 @@ describe("create-turbo cli", () => {
               ],
               { cwd }
             );
-            const messages = await runInteractiveCLI(cli);
 
-            expect(messages[0]).toEqual(
+            const stdout = await runInteractiveCLI(cli);
+
+            expect(stdout).toContain(
               ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
             );
 
-            expect(messages[1]).toMatch(
-              /^>>> Creating a new turborepo with the following:/
+            expect(stdout).toContain(
+              ">>> Created a new turborepo with the following:"
             );
 
-            expect(
-              messages.find((msg) =>
-                msg.match(
-                  new RegExp(
-                    `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-                  )
-                )
-              )
-            ).toBeTruthy();
+            expect(stdout).toContain(
+              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
+            );
 
             expect(getGeneratedPackageJSON().packageManager).toMatch(
               new RegExp(`^${packageManager.command}`)
@@ -277,75 +259,34 @@ describe("create-turbo cli", () => {
 
 async function runInteractiveCLI(
   cli: childProcess.ChildProcessWithoutNullStreams
-): Promise<string[]> {
+): Promise<string> {
+  let accumulator = "";
+
   return new Promise((resolve, reject) => {
-    let previousPrompt: string;
-    const messages: string[] = [];
-
     cli.stdout.on("data", (data) => {
-      let prompt = cleanPrompt(data);
+      accumulator += data.toString("utf8");
 
-      if (
-        !prompt ||
-        prompt.startsWith(">>> TURBOREPO") ||
-        isSamePrompt(prompt, previousPrompt)
-      ) {
-        return;
-      }
-
-      messages.push(prompt);
-
-      if (prompt.match(/Which package manager do you want to use/)) {
+      if (accumulator.match(/Which package manager do you want to use/g)) {
         cli.stdin.write(keys.enter);
       }
 
-      if (prompt.match(/Where would you like to create your turborepo/)) {
+      if (accumulator.match(/Where would you like to create your turborepo/g)) {
         cli.stdin.write(keys.enter);
       }
-
-      previousPrompt = prompt;
     });
 
     cli.on("exit", () => {
-      resolve(messages);
+      // Insert newlines between inquirer prompt passes.
+      accumulator = accumulator.replaceAll("\u001b[G?", "\u001b[G\n?");
+
+      // Removes the ANSI escape sequences that would result in things being excluded in the accumulator.
+      resolve(stripAnsi(accumulator));
     });
 
     cli.on("error", (e) => {
       reject(e);
     });
   });
-}
-
-// These utils are a bit gnarly but they help me deal with the weirdness of node
-// process stdout data formatting and inquirer. They're gross but make the tests
-// easier to read than inlining everything IMO. Would be thrilled to delete them tho.
-function cleanPrompt<T extends { toString(): string }>(data: T): string {
-  return stripAnsi(data.toString())
-    .trim()
-    .split("\n")
-    .map((s) => s.replace(/\s+$/, ""))
-    .join("\n");
-}
-
-function getPromptChoices(prompt: string) {
-  let cursorIndex = Math.max(prompt.indexOf("❯"), prompt.indexOf(">"));
-  return prompt
-    .slice(cursorIndex + 2)
-    .split("\n")
-    .map((s) => s.trim());
-}
-
-function isSamePrompt(
-  currentPrompt: string,
-  previousPrompt: string | undefined
-) {
-  if (previousPrompt === undefined) {
-    return false;
-  }
-  let promptStart = previousPrompt.split("\n")[0];
-  promptStart = promptStart.slice(0, promptStart.lastIndexOf("("));
-
-  return currentPrompt.startsWith(promptStart);
 }
 
 function cleanupTestDir() {

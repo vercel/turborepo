@@ -201,27 +201,25 @@ async function run() {
     JSON.stringify(sharedPkg, null, 2)
   );
 
-  if (flags.install) {
-    console.log();
-    console.log(`>>> Creating a new turborepo with the following:`);
-    console.log();
-    console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
-    console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
-    console.log(
-      ` - ${chalk.bold("packages/ui")}: Shared React component library`
-    );
-    console.log(
-      ` - ${chalk.bold(
-        "packages/eslint-config-custom"
-      )}: Shared configuration (ESLint)`
-    );
-    console.log(
-      ` - ${chalk.bold(
-        "packages/tsconfig"
-      )}: Shared TypeScript \`tsconfig.json\``
-    );
-    console.log();
+  console.log();
+  console.log(`>>> Created a new turborepo with the following:`);
+  console.log();
+  console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
+  console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
+  console.log(
+    ` - ${chalk.bold("packages/ui")}: Shared React component library`
+  );
+  console.log(
+    ` - ${chalk.bold(
+      "packages/eslint-config-custom"
+    )}: Shared configuration (ESLint)`
+  );
+  console.log(
+    ` - ${chalk.bold("packages/tsconfig")}: Shared TypeScript \`tsconfig.json\``
+  );
+  console.log();
 
+  if (flags.install) {
     const spinner = ora({
       text: "Installing dependencies...",
       spinner: {
@@ -234,24 +232,6 @@ async function run() {
       cwd: projectDir,
     });
     spinner.stop();
-  } else {
-    console.log();
-    console.log(`>>> Bootstrapped a new turborepo with the following:`);
-    console.log();
-    console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
-    console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
-    console.log(
-      ` - ${chalk.bold("packages/ui")}: Shared React component library`
-    );
-    console.log(
-      ` - ${chalk.bold("packages/config")}: Shared configuration (ESLint)`
-    );
-    console.log(
-      ` - ${chalk.bold(
-        "packages/tsconfig"
-      )}: Shared TypeScript \`tsconfig.json\``
-    );
-    console.log();
   }
 
   process.chdir(projectDir);
@@ -260,14 +240,14 @@ async function run() {
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
-      )} Your new Turborepo is ready. `
+      )} Your new Turborepo is ready.`
     );
     console.log("Inside this directory, you can run several commands:");
   } else {
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
-      )} Created a new Turborepo at "${relativeProjectDir}". `
+      )} Created a new Turborepo at "${relativeProjectDir}".`
     );
     console.log("Inside that directory, you can run several commands:");
   }
