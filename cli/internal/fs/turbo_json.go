@@ -41,7 +41,7 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 		return rootPackageJSON.LegacyTurboConfig, nil
 	}
 
-	turboJSON, err := ReadTurboJSON(turboJSONPath)
+	turboJSON, err := readTurboJSON(turboJSONPath)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", configFile, err)
 	}
