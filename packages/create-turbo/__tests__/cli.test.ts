@@ -51,10 +51,6 @@ describe("create-turbo cli", () => {
   beforeAll(() => {
     cleanupTestDir();
 
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
-    }
-
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
       throw new Error(
