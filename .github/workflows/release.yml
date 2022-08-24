@@ -31,6 +31,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 2
+          token: ${{ secrets.TURBOBOT }}
 
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -63,6 +64,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --filter=turbo-monorepo
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
 
       - name: Version
         run: ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
