@@ -11,24 +11,24 @@ import (
 // Match reports whether name matches the shell pattern.
 // The pattern syntax is:
 //
-//  pattern:
-//    { term }
-//  term:
-//    '*'         matches any sequence of non-path-separators
-//    '/**/'      matches zero or more directories
-//    '?'         matches any single non-path-separator character
-//    '[' [ '^' '!' ] { character-range } ']'
-//                character class (must be non-empty)
-//                starting with `^` or `!` negates the class
-//    '{' { term } [ ',' { term } ... ] '}'
-//                alternatives
-//    c           matches character c (c != '*', '?', '\\', '[')
-//    '\\' c      matches character c
+//	pattern:
+//	  { term }
+//	term:
+//	  '*'         matches any sequence of non-path-separators
+//	  '/**/'      matches zero or more directories
+//	  '?'         matches any single non-path-separator character
+//	  '[' [ '^' '!' ] { character-range } ']'
+//	              character class (must be non-empty)
+//	              starting with `^` or `!` negates the class
+//	  '{' { term } [ ',' { term } ... ] '}'
+//	              alternatives
+//	  c           matches character c (c != '*', '?', '\\', '[')
+//	  '\\' c      matches character c
 //
-//  character-range:
-//    c           matches character c (c != '\\', '-', ']')
-//    '\\' c      matches character c
-//    lo '-' hi   matches character c for lo <= c <= hi
+//	character-range:
+//	  c           matches character c (c != '\\', '-', ']')
+//	  '\\' c      matches character c
+//	  lo '-' hi   matches character c for lo <= c <= hi
 //
 // Match returns true if `name` matches the file name `pattern`. `name` and
 // `pattern` are split on forward slash (`/`) characters and may be relative or
@@ -48,7 +48,6 @@ import (
 // which use a different path separator (such as Windows), what you want
 // is PathMatch(). Alternatively, you can run filepath.ToSlash() on both
 // pattern and name and then use this function.
-//
 func Match(pattern, name string) (bool, error) {
 	return matchWithSeparator(pattern, name, '/', true)
 }
@@ -62,7 +61,6 @@ func Match(pattern, name string) (bool, error) {
 // assumes that both `pattern` and `name` are using the system's path
 // separator. If you can't be sure of that, use filepath.ToSlash() on both
 // `pattern` and `name`, and then use the Match() function instead.
-//
 func PathMatch(pattern, name string) (bool, error) {
 	return matchWithSeparator(pattern, name, filepath.Separator, true)
 }
