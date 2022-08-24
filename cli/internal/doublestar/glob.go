@@ -25,7 +25,6 @@ import (
 // Like `io/fs.Glob()`, patterns containing `/./`, `/../`, or starting with `/`
 // will return no results and no errors. You can use SplitPattern to divide a
 // pattern into a base path (to initialize an `FS` object) and pattern.
-//
 func Glob(fsys fs.FS, pattern string) ([]string, error) {
 	if !ValidatePattern(pattern) {
 		return nil, ErrBadPattern

@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 
 import { exec } from "child_process";
-import {
-  getTurboRoot,
-  getScopeFromPath,
-  getScopeFromArgs,
-  getComparison,
-} from "./utils";
+import { getTurboRoot, getScopeFromPath, getScopeFromArgs } from "turbo-utils";
+import { getComparison } from "./getComparison";
 
 console.log(
   "\u226B Using Turborepo to determine if this project is affected by the commit..."

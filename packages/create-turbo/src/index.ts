@@ -6,7 +6,6 @@ import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
-import lt from "semver/functions/lt";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
@@ -14,7 +13,7 @@ import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
 import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
-import { PackageManager } from "./types";
+import { PackageManager, PACKAGE_MANAGERS } from "./constants";
 import { getPackageManagerVersion } from "./getPackageManagerVersion";
 
 interface Answers {
@@ -102,11 +101,11 @@ async function run() {
   const isPnpmInstalled = shouldUsePnpm();
   let answers: Answers;
   if (flags.useNpm) {
-    answers = { packageManager: "npm" };
+    answers = { packageManager: PACKAGE_MANAGERS["npm"] };
   } else if (flags.usePnpm) {
-    answers = { packageManager: "pnpm" };
+    answers = { packageManager: PACKAGE_MANAGERS["pnpm"] };
   } else if (flags.useYarn) {
-    answers = { packageManager: "yarn" };
+    answers = { packageManager: PACKAGE_MANAGERS["yarn"] };
   } else {
     answers = await inquirer.prompt<{
       packageManager: PackageManager;
@@ -116,15 +115,15 @@ async function run() {
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
-          { name: "npm", value: "npm" },
+          { name: "npm", value: PACKAGE_MANAGERS["npm"] },
           {
             name: "pnpm",
-            value: "pnpm",
+            value: PACKAGE_MANAGERS["pnpm"],
             disabled: !isPnpmInstalled && "not installed",
           },
           {
             name: "yarn",
-            value: "yarn",
+            value: PACKAGE_MANAGERS["yarn"],
             disabled: !isYarnInstalled && "not installed",
           },
         ],
@@ -154,7 +153,7 @@ async function run() {
   let serverTemplate = path.resolve(
     __dirname,
     "../templates",
-    answers.packageManager
+    answers.packageManager.command
   );
   if (fse.existsSync(serverTemplate)) {
     await fse.copy(serverTemplate, projectDir, { overwrite: true });
@@ -180,7 +179,7 @@ async function run() {
   });
 
   sharedPkg.packageManager = `${
-    answers.packageManager
+    answers.packageManager.command
   }@${getPackageManagerVersion(answers.packageManager)}`;
   sharedPkg.name = projectName;
 
@@ -218,25 +217,8 @@ async function run() {
       },
     }).start();
 
-    let supportsRegistryArg = false;
-    try {
-      // yarn >= v2 only support specifying a registry via config (no cli param)
-      supportsRegistryArg = lt(
-        getPackageManagerVersion(answers.packageManager),
-        "2.0.0"
-      );
-    } catch (err) {}
-
     const installArgs = ["install"];
-    if (supportsRegistryArg) {
-      // Using the official npm registry for installation could be very
-      // slow for users in different regions (like China), so use the
-      // user customized registry from the config instead
-      const npmRegistry = await getNpmRegistry(answers.packageManager);
-      installArgs.push(`--registry=${npmRegistry}`);
-    }
-
-    await execa(`${answers.packageManager}`, installArgs, {
+    await execa(`${answers.packageManager.command}`, installArgs, {
       stdio: "ignore",
       cwd: projectDir,
     });
@@ -280,10 +262,10 @@ async function run() {
   }
 
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager} run build`));
+  console.log(chalk.cyan(`  ${answers.packageManager.command} run build`));
   console.log(`     Build all apps and packages`);
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager} run dev`));
+  console.log(chalk.cyan(`  ${answers.packageManager.command} run dev`));
   console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
@@ -303,20 +285,6 @@ async function run() {
     chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
   );
   console.log();
-}
-
-async function getNpmRegistry(pkgManager: PackageManager): Promise<string> {
-  try {
-    // npm/pnpm/yarn share the same CLI configuration commands
-    const { stdout: registry } = await execa(pkgManager, [
-      "config",
-      "get",
-      "registry",
-    ]);
-    return registry;
-  } catch (error) {
-    return "";
-  }
 }
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
@@ -346,9 +314,7 @@ async function notifyUpdate(): Promise<void> {
 }
 
 function getNpxCommand(pkgManager: PackageManager): string {
-  if (pkgManager === "yarn") {
-    return "npx";
-  } else if (pkgManager === "pnpm") {
+  if (pkgManager.command === "pnpm") {
     return getNpxCommandOfPnpm();
   } else {
     return "npx";

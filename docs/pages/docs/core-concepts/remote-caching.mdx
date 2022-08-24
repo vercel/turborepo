@@ -10,15 +10,13 @@ import Callout from "../../../components/Callout";
 
 A major key 🔑 to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
 
-At the moment, your Turborepo caches your tasks on your local filesystem (i.e. "single-player mode," if you will). However, what if there was a way to take advantage of the computational work done by your teammates or your CI (i.e. "co-op multiplayer mode")?
-
-What if there was a way to teleport and share a single cache across machines? Almost like a "Dropbox" for your Turborepo cache.
+By default, Turborepo caches the outputs of your tasks on your machine's local file system. We call this "single-player mode." But what if you could take advantage of the computational work done by your teammates or your CI by sharing a single cache across machines? In other words, what if you could turn on "co-op multiplayer mode", or a "Dropbox" for your Turborepo cache?
 
 > Remote Caching has entered the chat.
 
 Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost. This is possible because Turborepo uses content addressable storage.
 
-<Callout type="error">
+<Callout>
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 
@@ -26,13 +24,13 @@ Turborepo can use a technique known as Remote Caching to share cache artifacts a
 
 ### For Local Development
 
-If you want to link your local turborepo to your Remote Cache you do so by first authenticating the Turborepo CLI with your Vercel account:
+If you want to link your local turborepo to your Remote Cache, first authenticate the Turborepo CLI with your Vercel account:
 
 ```sh
 npx turbo login
 ```
 
-Next, you can link your turborepo to your remote cache by running the following command:
+Next, link your Turborepo to your remote cache:
 
 ```
 npx turbo link
@@ -51,7 +49,7 @@ Then run the same build again. If things are working properly, `turbo` should no
 
 ### Remote Caching on Vercel Builds
 
-If you are building and hosting your apps on Vercel, then Remote Caching will be automatically set up for you on your behalf once you use `turbo`. You need to update your build settings to build with `turbo`.
+If you are building and hosting your apps on Vercel, Remote Caching will be automatically set up on your behalf once you use `turbo`. You need to update your [build settings](https://vercel.com/docs/concepts/deployments/configure-a-build) to build with `turbo`.
 
 Please refer to the [Vercel documentation](https://vercel.com/docs/concepts/git/monorepos#turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=docs-link) for instructions.
 
@@ -77,7 +75,7 @@ To enable this feature, set the `remoteCache` options on your turbo config to in
 
 You can self-host your own Remote Cache or use other remote caching service providers as long as they comply with Turborepo's Remote Caching Server API.
 
-You can set / control the remote caching domain by specifying the `--api` and `--token` flags, where `--api` is the hostname and `--token` is a bearer token.
+You can set the remote caching domain by specifying the `--api` and `--token` flags, where `--api` is the hostname and `--token` is a bearer token.
 
 ```sh
 turbo run build --api="https://my-server.example.com" --token="xxxxxxxxxxxxxxxxx"

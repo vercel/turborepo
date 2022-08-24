@@ -14,6 +14,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/env"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/hashing"
+	"github.com/vercel/turborepo/cli/internal/inference"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -76,7 +78,7 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 }
 
 func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) (string, error) {
-	hashObject, pkgDepsErr := fs.GetPackageDeps(repoRoot, &fs.PackageDepsOptions{
+	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
 	})
@@ -258,7 +260,14 @@ func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Se
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
-	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies)
+
+	var envPrefixes []string
+	framework := inference.InferFramework(pt.Pkg)
+	if framework != nil && framework.EnvPrefix != "" {
+		envPrefixes = append(envPrefixes, framework.EnvPrefix)
+	}
+
+	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies, envPrefixes)
 	outputs := pt.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {

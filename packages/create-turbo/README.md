@@ -5,7 +5,7 @@
 To get started, open a new shell and run:
 
 ```sh
-$ npx create-turbo@latest
+npx create-turbo@latest
 ```
 
 Then follow the prompts you see in your terminal.

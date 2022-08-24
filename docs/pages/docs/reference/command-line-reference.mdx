@@ -40,8 +40,8 @@ turbo run build --color
 ```
 
 Alternatively, you can also enable color using the `FORCE_COLOR` environment variable (borrowed
-from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)). Going
-this route may also unlock some additional colored output from the actual tasks themselves if
+from the [supports-color nodejs package](https://www.npmjs.com/package/supports-color)). Note that
+this may also enable additional colored output from the actual tasks themselves if
 they use `supports-color` to determine whether or not to output with colored output.
 
 ```sh
@@ -216,7 +216,7 @@ You can also specify these in your `turbo` configuration as `globalDependencies`
 
 `type: string[]`
 
-Ignore **files or directories** from impacting scope. Uses glob patterns via [`multimatch`](https://github.com/sindresorhus/multimatch) under the hood.
+Ignore **files or directories** from impacting scope. Uses glob patterns under the hood.
 
 ```
 turbo run build --ignore="apps/**/*"
@@ -272,7 +272,7 @@ turbo run build --output-logs=new-only
 
 #### `--only`
 
-Default `false`. Restricts execution to only include specified tasks. This is very similar to how how `lerna` or `pnpm` run tasks by default.
+Default `false`. Restricts execution to include specified tasks only. This is very similar to how `lerna` and `pnpm` run tasks by default.
 
 Given this pipeline in `turbo.json`:
 
@@ -336,7 +336,9 @@ turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --
 
 #### `--serial`
 
-**Deprecated in v0.5.3:** Use [`--concurrency=1`](#--concurrency) instead.
+<Callout type="error">
+`serial` is deprecated in `0.5.3`.Please use [`--concurrency=1`](#--concurrency) instead.
+</Callout>
 
 Executes all tasks serially (i.e. one-at-a-time).
 
@@ -372,7 +374,7 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 
 You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precedence over the environment variable if both are present.
 
-If you're using Remote Caching on Vercel, and your building your project on Vercel, this environment variable and flag are not needed because they are automatically set for you. If you’re using Remote Caching on Vercel, but building in another CI provider like CircleCI or GitHub Actions, you can use a Vercel Personal Access Token as your `—token` or `TURBO_TOKEN`. If you are using a custom Remote Cache, this value will be used to send an HTTP Bearer token with requests to your custom Remote Cache.
+If you are using Remote Caching on Vercel and building your project on Vercel, this environment variable and flag are unnecessary because they are automatically set for you. Suppose you are using Remote Caching on Vercel but building in another CI provider like CircleCI or GitHub Actions. You can use a Vercel Personal Access Token as your `--token` or `TURBO_TOKEN`. If you are using a custom Remote Cache, this value will be used to send an HTTP Bearer token with requests to your custom Remote Cache.
 
 #### `--team`
 

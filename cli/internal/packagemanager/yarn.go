@@ -11,12 +11,13 @@ import (
 )
 
 var nodejsYarn = PackageManager{
-	Name:       "nodejs-yarn",
-	Slug:       "yarn",
-	Command:    "yarn",
-	Specfile:   "package.json",
-	Lockfile:   "yarn.lock",
-	PackageDir: "node_modules",
+	Name:         "nodejs-yarn",
+	Slug:         "yarn",
+	Command:      "yarn",
+	Specfile:     "package.json",
+	Lockfile:     "yarn.lock",
+	PackageDir:   "node_modules",
+	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json").ToStringDuringMigration())
@@ -49,6 +50,10 @@ var nodejsYarn = PackageManager{
 		}
 
 		return ignores, nil
+	},
+
+	canPrune: func(cwd fs.AbsolutePath) (bool, error) {
+		return true, nil
 	},
 
 	// Versions older than 2.0 are yarn, after that they become berry

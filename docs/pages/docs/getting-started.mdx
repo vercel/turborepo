@@ -6,11 +6,11 @@ description: Create your first monorepo or add Turborepo to an existing project.
 import Callout from "../../components/Callout";
 import { Tabs, Tab } from '../../components/Tabs'
 
-# Overview
+# Getting Started with Turborepo
 
-Turborepo is a build system for JavaScript and TypeScript monorepos: codebases containing multiple projects, often using multiple frameworks, in a single unified code repository. Monorepos have many advantages, but they require appropriate tooling in order to scale. Turborepo leverages advanced build system ideas and techniques to speed up development, without the configuration and complexity. By abstracting the configurations, scripts, and tooling, Turborepo allows you to start shipping fast.
+## Creating a new monorepo
 
-You can incrementally adopt Turborepo for new and existing projects. To create a new monorepo, get started with:
+To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package/create-turbo) npm package:
 
 ```sh
 npx create-turbo@latest
@@ -83,7 +83,7 @@ After configuring your workspaces, re-run your package manager's `install` comma
 
 ## Install `turbo`
 
-Add `turbo` as a development dependency in the root of your monorepo.
+Add [`turbo`](https://www.npmjs.com/package/turbo) as a development dependency at the root of your monorepo.
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -103,18 +103,15 @@ Add `turbo` as a development dependency in the root of your monorepo.
   </Tab>
 </Tabs>
 
-The `turbo` package is a little shell that will install the proper `turbo-<os>-<arch>` package for you operating system and architecture.
+The `turbo` package is a shell script that will install the proper `turbo-<os>-<arch>` package for your operating system and architecture.
 
 ## Create `turbo.json`
 
 In the root of your monorepo, create an empty file named `turbo.json`. This will hold the configuration for Turborepo.
 
-If your git repo's base branch is not `origin/master`, then you need to specify a `baseBranch` too. For example, `origin/main`.
-
 ```json filename="./turbo.json"
 {
-  "$schema": "https://turborepo.org/schema.json",
-  "baseBranch": "origin/main"
+  "$schema": "https://turborepo.org/schema.json"
 }
 ```
 
@@ -122,9 +119,9 @@ If your git repo's base branch is not `origin/master`, then you need to specify 
 
 To define your monorepo's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
 
-Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key beneath it as well as some other options related to [caching](./features/caching). For more information on configuring your pipeline, see the [`Pipelines`](./core-concepts/pipelines) documentation.
+Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key inside it as well as some other options related to [caching](./features/caching). For more information on configuring your pipeline, see the [`Pipelines`](./core-concepts/pipelines) documentation.
 
-Packages that do not have the specified script defined in their `package.json`'s list of `scripts` will be ignored by `turbo`.
+Workspaces that do not have the specified script defined in their `package.json`'s list of `scripts` will be ignored by `turbo`.
 
 ```jsonc filename="./turbo.json"
 {
@@ -165,7 +162,7 @@ Packages that do not have the specified script defined in their `package.json`'s
 }
 ```
 
-The rough execution order for a given package based on the `dependsOn` keys:
+The rough execution order for a given package is based on the `dependsOn` keys:
 
 1. `build` once its upstream dependencies have run their `build` commands
 2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs) within a package
@@ -245,7 +242,7 @@ At the moment, Turborepo caches your tasks on your local filesystem (i.e. "singl
 
 Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost.
 
-<Callout type="error">
+<Callout>
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
 </Callout>
 

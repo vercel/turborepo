@@ -1,4 +1,4 @@
-package fs
+package hashing
 
 import (
 	"bufio"
@@ -9,7 +9,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -24,7 +27,7 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
+func GetPackageDeps(rootPath fs.AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
 	pkgPath := rootPath.Join(p.PackagePath)
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
@@ -35,11 +38,23 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 		}
 		result = gitLsTreeOutput
 	} else {
-		gitLsFilesOutput, err := gitLsFiles(pkgPath, p.InputPatterns)
+		absoluteFilesToHash, err := globby.GlobFiles(pkgPath.ToStringDuringMigration(), p.InputPatterns, nil)
 		if err != nil {
-			return nil, fmt.Errorf("could not get git hashes for file patterns %v in package %s: %w", p.InputPatterns, p.PackagePath, err)
+			return nil, errors.Wrapf(err, "failed to resolve input globs %v", p.InputPatterns)
 		}
-		result = gitLsFilesOutput
+		filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
+		for i, rawPath := range absoluteFilesToHash {
+			relativePathString, err := pkgPath.RelativePathString(rawPath)
+			if err != nil {
+				return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
+			}
+			filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
+		}
+		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToStringDuringMigration()), filesToHash)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
+		}
+		result = hashes
 	}
 
 	// Update the checked in hashes with the current repo status
@@ -71,9 +86,22 @@ func GetPackageDeps(rootPath AbsolutePath, p *PackageDepsOptions) (map[turbopath
 	return result, nil
 }
 
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string)
+	for _, file := range files {
+		hash, err := fs.GitLikeHashFile(file.ToString())
+		if err != nil {
+			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
+		}
+
+		hashObject[file.ToUnixPath()] = hash
+	}
+	return hashObject, nil
+}
+
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+func GetHashableDeps(rootPath fs.AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	output := make([]turbopath.AnchoredSystemPath, len(files))
 	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
@@ -84,10 +112,19 @@ func GetHashableDeps(rootPath AbsolutePath, files []turbopath.AbsoluteSystemPath
 		}
 		output[index] = anchoredSystemPath
 	}
-	return gitHashObject(convertedRootPath, output)
+	hashObject, err := gitHashObject(convertedRootPath, output)
+	if err != nil {
+		manuallyHashedObject, err := manuallyHashFiles(convertedRootPath, output)
+		if err != nil {
+			return nil, err
+		}
+		hashObject = manuallyHashedObject
+	}
+
+	return hashObject, nil
 }
 
-// gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths `git hash-object`.
+// gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths to `git hash-object`.
 // `git hash-object` expects paths to use Unix separators, even on Windows.
 //
 // Note: paths of files to hash passed to `git hash-object` are processed as relative to the given anchor.
@@ -233,7 +270,7 @@ func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *g
 
 // gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
 // that are present in the `git` index at a particular revision.
-func gitLsTree(rootPath AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+func gitLsTree(rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
 	cmd := exec.Command(
 		"git",     // Using `git` from $PATH,
 		"ls-tree", // list the contents of the git index,
@@ -253,36 +290,6 @@ func gitLsTree(rootPath AbsolutePath) (map[turbopath.AnchoredUnixPath]string, er
 	for _, entry := range entries {
 		lsTreeEntry := gitoutput.LsTreeEntry(entry)
 		output[turbopath.AnchoredUnixPathFromUpstream(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
-	}
-
-	return output, nil
-}
-
-// gitLsTree returns a map of paths to their SHA hashes starting from a list of patterns relative to a directory
-// that are present in the `git` index at a particular revision.
-func gitLsFiles(rootPath AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]string, error) {
-	cmd := exec.Command(
-		"git",      // Using `git` from $PATH,
-		"ls-files", // tell me about git index information of some files,
-		"--stage",  // including information about the state of the object so that we can get the hashes,
-		"-z",       // with each file path relative to the invocation directory and \000-terminated,
-		"--",       // and any additional argument you see is a path, promise.
-	)
-
-	// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
-	cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
-	cmd.Dir = rootPath.ToString()            // Include files only from this directory.
-
-	entries, err := runGitCommand(cmd, "ls-files", gitoutput.NewLSFilesReader)
-	if err != nil {
-		return nil, err
-	}
-
-	output := make(map[turbopath.AnchoredUnixPath]string, len(entries))
-
-	for _, entry := range entries {
-		lsFilesEntry := gitoutput.LsFilesEntry(entry)
-		output[turbopath.AnchoredUnixPathFromUpstream(lsFilesEntry.GetField(gitoutput.Path))] = lsFilesEntry.GetField(gitoutput.ObjectName)
 	}
 
 	return output, nil
@@ -354,7 +361,7 @@ func (s statusCode) isDelete() bool {
 // We need to calculate where the repository's location is in order to determine what the full path is
 // before we can return those paths relative to the calling directory, normalizing to the behavior of
 // `ls-files` and `ls-tree`.
-func gitStatus(rootPath AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
+func gitStatus(rootPath fs.AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
 	cmd := exec.Command(
 		"git",               // Using `git` from $PATH,
 		"status",            // tell me about the status of the working tree,
