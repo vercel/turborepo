@@ -44,7 +44,12 @@ TURBO_BINARY_PATH=~/repos/vercel/turborepo/cli/turbo.exe npm link turbo
 
 If you're using a different package manager replace npm accordingly.
 
-## Publishing
+## Publishing `turbo` to the npm registry
+
+Canary builds are automatically published when code is merged to the `main` branch.
+See the [`release` Github workflow](./.github/workflows/release.yml).
+
+To manually release:
 
 1. `brew install goreleaser`
 2. Add `GORELEASER_KEY` env var with the Go Releaser Pro key (ask @turbo-oss to get access to the key)
