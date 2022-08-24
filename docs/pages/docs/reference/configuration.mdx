@@ -225,9 +225,16 @@ Specifying `[]` will cause the task to be rerun when any version-controlled file
 
 ### `outputMode`
 
-`type: string`
+`type: "full" | "hash-only" | "new-only" | "none"`
 
-Defaults to `full`. The style of output for the task. Use "full" to display the entire output of the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to show the full output of cache misses and the computed hashes for cache hits. Use "none" to hide task output.
+Defaults to `full`. The style of output for the task.
+
+| option    | description                              |
+| --------- | ---------------------------------------- |
+| full      | This is the default. Displays all output |
+| hash-only | Show only the hashes of the tasks        |
+| new-only  | Only show output from cache misses       |
+| none      | Hides all task output                    |
 
 **Example**
 
