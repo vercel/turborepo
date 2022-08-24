@@ -5535,17 +5535,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vercel/node-module-trace@0.0.1, @vercel/node-module-trace@workspace:packages/node-module-trace":
+"@vercel/node-module-trace@0.0.2, @vercel/node-module-trace@workspace:packages/node-module-trace":
   version: 0.0.0-use.local
   resolution: "@vercel/node-module-trace@workspace:packages/node-module-trace"
   languageName: unknown
   linkType: soft
 
-"@vercel/turbo-tracing-next-plugin@0.0.0, @vercel/turbo-tracing-next-plugin@workspace:packages/turbo-tracing-next-plugin":
+"@vercel/turbo-tracing-next-plugin@0.0.1, @vercel/turbo-tracing-next-plugin@workspace:packages/turbo-tracing-next-plugin":
   version: 0.0.0-use.local
   resolution: "@vercel/turbo-tracing-next-plugin@workspace:packages/turbo-tracing-next-plugin"
   dependencies:
-    "@vercel/webpack-node-module-trace": 0.0.3
+    "@vercel/webpack-node-module-trace": 0.0.4
     next: ^12.2.5
   peerDependencies:
     next: ">= 12"
@@ -5556,7 +5556,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vercel/turbo-tracing-test-app@workspace:packages/turbo-tracing-next-plugin/test/with-mongodb-mongoose"
   dependencies:
-    "@vercel/turbo-tracing-next-plugin": 0.0.0
+    "@vercel/turbo-tracing-next-plugin": 0.0.1
     cross-env: ^7.0.3
     mongoose: ^6.4.5
     next: latest
@@ -5566,12 +5566,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vercel/webpack-node-module-trace@0.0.3, @vercel/webpack-node-module-trace@workspace:packages/webpack-nmt":
+"@vercel/webpack-node-module-trace@0.0.4, @vercel/webpack-node-module-trace@workspace:packages/webpack-nmt":
   version: 0.0.0-use.local
   resolution: "@vercel/webpack-node-module-trace@workspace:packages/webpack-nmt"
   dependencies:
     "@types/webpack": ^5.28.0
-    "@vercel/node-module-trace": 0.0.1
+    "@vercel/node-module-trace": 0.0.2
     webpack: ^5.73.0
   peerDependencies:
     webpack: ^5.0.0
