@@ -3,6 +3,8 @@ title: Configuration Options - turbo.json
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
+import Callout from "../../../components/Callout";
+
 # Configuration Options (`turbo.json`)
 
 You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and npm users).
@@ -222,6 +224,10 @@ Specifying `[]` will cause the task to be rerun when any version-controlled file
   }
 }
 ```
+
+<Callout type="info">
+  Note: `turbo.json` is *always* considered an input. If you modify `turbo.json`, all caches are invalidated.
+</Callout>
 
 ### `outputMode`
 
