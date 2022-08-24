@@ -6,11 +6,30 @@ description: Pipelines with Turborepo specify task relationships explicitly and 
 import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
-# Pipelining Package Tasks
+# What is a pipeline?
 
-In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each npm lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
+The tasks in your monorepo often need to run in a certain order. For instance, `build` might need to always be run before `test`. You might be used to writing a `package.json` script like the one below:
 
-Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold:
+```json
+{
+  "scripts": {
+    // Run the build, for instance using Next
+    "build": "next build",
+    // Run the build BEFORE you test
+    "test": "npm run build && jest"
+  }
+}
+```
+
+In this situation, `test` _depends on_ `build`. But what if this workspace needs to wait for _another_ workspace to be built before it can proceed?
+
+For example, what if your `@acme/app` workspace uses the `@acme/components` workspace, which also uses the `@acme/shared-utils` workspace...
+
+This is your pipeline - the network of dependencies in your tasks across your monorepo.
+
+## Your pipeline probably isn't optimized
+
+You can specify the dependencies between tasks in your monorepo by using `turbo.json`.
 
 1. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
 1. New developers to a project can look at the Turborepo `pipeline` and understand how tasks are related.
