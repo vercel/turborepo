@@ -82,6 +82,15 @@ jobs:
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
 
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
       - name: Version
         run: |
           ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
@@ -91,3 +100,4 @@ jobs:
         run: cd cli && make publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
