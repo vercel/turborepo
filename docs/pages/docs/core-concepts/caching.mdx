@@ -89,6 +89,10 @@ determining a cache hit on the `test` task:
 }
 ```
 
+<Callout type="info">
+  Note: `turbo.json` is *always* considered an input. If you modify `turbo.json`, all caches are invalidated.
+</Callout>
+
 When you use `turbo` with tools that inline environment variables at build time (e.g. [Next.js](https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser) or [Create React App](https://create-react-app.dev/docs/adding-custom-environment-variables/)), it is important to tell `turbo` about it. Otherwise, you could ship a cached artifact with the wrong environment variables!
 
 Luckily, you can control `turbo`'s cache fingerprinting (also known as "hashing") behavior based on the values of both environment variables and the contents of files:
