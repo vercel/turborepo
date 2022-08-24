@@ -85,7 +85,7 @@ func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion stri
 	return client
 }
 
-// IsLoggedIn returns true if this ApiClient has a credential (token)
+// IsLoggedIn returns true if this ApiClient has appropriate credentials
 func (c *ApiClient) IsLoggedIn() bool {
 	return c.token != "" && (c.teamID != "" || c.teamSlug != "")
 }
