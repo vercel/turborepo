@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1660927557921,
+  "lastUpdate": 1661301830216,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -46,6 +46,52 @@
             "value": 63555,
             "unit": "ms",
             "range": "29521"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Mehul Kar",
+            "username": "mehulkar",
+            "email": "mehul.kar@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "39f9fb5b96038f94800340dc187cc7752d070c7a",
+          "message": "Autofix fixable lint issues (#1748)",
+          "timestamp": "2022-08-23T23:39:49Z",
+          "url": "https://github.com/vercel/turborepo/commit/39f9fb5b96038f94800340dc187cc7752d070c7a"
+        },
+        "date": 1661301830212,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 1159495,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 26283.8,
+            "unit": "ms",
+            "range": "3894"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 34183.8,
+            "unit": "ms",
+            "range": "16938"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 56513.8,
+            "unit": "ms",
+            "range": "16771"
           }
         ]
       }
