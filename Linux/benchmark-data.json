@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1660926678108,
+  "lastUpdate": 1661300914658,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -92,6 +92,52 @@
             "value": 31876,
             "unit": "ms",
             "range": "14212"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Mehul Kar",
+            "username": "mehulkar",
+            "email": "mehul.kar@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "39f9fb5b96038f94800340dc187cc7752d070c7a",
+          "message": "Autofix fixable lint issues (#1748)",
+          "timestamp": "2022-08-23T23:39:49Z",
+          "url": "https://github.com/vercel/turborepo/commit/39f9fb5b96038f94800340dc187cc7752d070c7a"
+        },
+        "date": 1661300914656,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 885663,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 9934.2,
+            "unit": "ms",
+            "range": "471"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 9636.2,
+            "unit": "ms",
+            "range": "431"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 44130.6,
+            "unit": "ms",
+            "range": "12410"
           }
         ]
       }
