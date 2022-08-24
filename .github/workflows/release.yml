@@ -8,7 +8,7 @@ on:
         default: 'prerelease'
         type: choice
         options:
-        - prelease
+        - prerelease
         - prepatch
         - preminor
         - premajor
@@ -83,7 +83,9 @@ jobs:
           git config --global user.email 'turbobot@vercel.com'
 
       - name: Version
-        run: ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+        run: |
+          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+          cat version.txt
 
       - name: Release
         run: cd cli && make publish

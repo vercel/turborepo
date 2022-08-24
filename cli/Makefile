@@ -1,4 +1,4 @@
-TURBO_VERSION = $(shell head -n 1 ../version.txt)
+TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 ifeq ($(OS),Windows_NT)
@@ -87,6 +87,8 @@ prepublish:
 	make -j3 bench/turbo test-go lint-go
 
 publish: clean prepublish build
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
