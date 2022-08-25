@@ -162,13 +162,15 @@ func (p *prune) prune(opts *opts) error {
 		return errors.Wrap(err, "could not create output directory")
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	lockfile := rootPackageJSON.SubLockfile
 	targets := []interface{}{opts.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
 	if err != nil {
 		return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
 	}
 	targets = append(targets, internalDeps.List()...)
+
+	lockfileKeys := make([]string, len(rootPackageJSON.TransitiveDeps))
+	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
 
 	for _, internalDep := range targets {
 		if internalDep == ctx.RootNode {
@@ -192,9 +194,7 @@ func (p *prune) prune(opts *opts) error {
 			}
 		}
 
-		for k, v := range ctx.PackageInfos[internalDep].SubLockfile {
-			lockfile[k] = v
-		}
+		lockfileKeys = append(lockfileKeys, ctx.PackageInfos[internalDep].TransitiveDeps...)
 
 		p.ui.Output(fmt.Sprintf(" - Added %v", ctx.PackageInfos[internalDep].Name))
 	}
@@ -221,6 +221,10 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 
+	lockfile, err := ctx.Lockfile.SubLockfile(lockfileKeys)
+	if err != nil {
+		return errors.Wrap(err, "Failed creating pruned lockfile")
+	}
 	var b bytes.Buffer
 	yamlEncoder := yaml.NewEncoder(&b)
 	yamlEncoder.SetIndent(2)

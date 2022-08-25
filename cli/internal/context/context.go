@@ -9,6 +9,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -26,7 +27,7 @@ type Context struct {
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
 	RootNode         string
-	Lockfile         *fs.YarnLockfile
+	Lockfile         lockfile.Lockfile
 	PackageManager   *packagemanager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -205,7 +206,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	if util.IsYarn(c.PackageManager.Name) {
-		pkg.SubLockfile = make(fs.YarnLockfile)
+		pkg.TransitiveDeps = []string{}
 		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
@@ -276,7 +277,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 		}
 	}
 
-	pkg.SubLockfile = make(fs.YarnLockfile)
+	pkg.TransitiveDeps = []string{}
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
@@ -335,42 +336,38 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 		wg.Add(1)
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
-			var lockfileKey string
-			lockfileKey1 := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
-			lockfileKey2 := fmt.Sprintf("%v@npm:%v", directDepName, unresolvedVersion)
-			if seen.Contains(lockfileKey1) || seen.Contains(lockfileKey2) {
-				return
+
+			possibleKeys := c.Lockfile.PossibleKeys(directDepName, unresolvedVersion)
+
+			for _, key := range possibleKeys {
+				if seen.Contains(key) {
+					return
+				}
 			}
 
-			seen.Add(lockfileKey1)
-			seen.Add(lockfileKey2)
-
-			var entry *fs.LockfileEntry
-			entry1, ok1 := (*c.Lockfile)[lockfileKey1]
-			entry2, ok2 := (*c.Lockfile)[lockfileKey2]
-			if !ok1 && !ok2 {
-				return
+			for _, key := range possibleKeys {
+				seen.Add(key)
 			}
-			if ok1 {
-				lockfileKey = lockfileKey1
-				entry = entry1
-			} else {
-				lockfileKey = lockfileKey2
-				entry = entry2
+
+			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(directDepName, unresolvedVersion)
+
+			if !ok {
+				return
 			}
 
 			pkg.Mu.Lock()
-			pkg.SubLockfile[lockfileKey] = entry
+			pkg.TransitiveDeps = append(pkg.TransitiveDeps, key)
 			pkg.Mu.Unlock()
-			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
+			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, resolvedVersion))
 
-			if len(entry.Dependencies) > 0 {
-				c.resolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
-			}
-			if len(entry.OptionalDependencies) > 0 {
-				c.resolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
+			allDeps, ok := c.Lockfile.AllDependencies(key)
+			if !ok {
+				panic(fmt.Sprintf("Unable to find entry for %s", key))
 			}
 
+			if len(allDeps) > 0 {
+				c.resolveDepGraph(wg, allDeps, resolvedDepsSet, seen, pkg)
+			}
 		}(directDepName, unresolvedVersion)
 	}
 }
