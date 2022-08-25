@@ -117,6 +117,8 @@ publish: clean prepublish build
 	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG)
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
 
+	# Force push to ensure that the version used for the release is published.
+	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
 	git push -f origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
