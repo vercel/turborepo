@@ -286,7 +286,7 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 		relativePaths[index] = relativePath
 	}
 
-	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir, tc.hash, duration, relativePaths); err != nil {
+	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir.ToStringDuringMigration(), tc.hash, duration, relativePaths); err != nil {
 		return err
 	}
 	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
@@ -306,7 +306,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
 	for index, output := range hashableOutputs {
-		repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir, output)
+		repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode

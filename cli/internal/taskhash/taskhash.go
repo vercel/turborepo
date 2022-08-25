@@ -105,7 +105,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 		return nil, err
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir, ".gitignore").ToString())
+	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 		includePattern = "{" + strings.Join(inputs, ",") + "}"
 	}
 
-	pathPrefix := rootPath.Join(pkg.Dir).ToString()
+	pathPrefix := rootPath.Join(pkg.Dir.ToStringDuringMigration()).ToString()
 	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
