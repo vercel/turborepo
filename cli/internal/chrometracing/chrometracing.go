@@ -148,18 +148,18 @@ func (pe *PendingEvent) Done() {
 
 // Event logs a unit of work. To instrument a Go function, use e.g.:
 //
-//   func calcPi() {
-//     defer chrometracing.Event("calculate pi").Done()
-//     // …
-//   }
+//	func calcPi() {
+//	  defer chrometracing.Event("calculate pi").Done()
+//	  // …
+//	}
 //
 // For more finely-granular traces, use e.g.:
 //
-//   for _, cmd := range commands {
-//     ev := chrometracing.Event("initialize " + cmd.Name)
-//     cmd.Init()
-//     ev.Done()
-//   }
+//	for _, cmd := range commands {
+//	  ev := chrometracing.Event("initialize " + cmd.Name)
+//	  cmd.Init()
+//	  ev.Done()
+//	}
 func Event(name string) *PendingEvent {
 	if trace.file == nil {
 		return &PendingEvent{}

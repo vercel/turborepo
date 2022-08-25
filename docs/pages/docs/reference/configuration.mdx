@@ -3,6 +3,8 @@ title: Configuration Options - turbo.json
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
+import Callout from "../../../components/Callout";
+
 # Configuration Options (`turbo.json`)
 
 You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and npm users).
@@ -67,7 +69,7 @@ Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline tas
 
 Items in `dependsOn` without `^` prefix, express the relationships between tasks at the package level (e.g. "a package's `test` and `lint` commands depend on `build` being completed first").
 
-Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends the value of that environment variable.
+Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends on the value of that environment variable.
 
 **Example: Basics**
 
@@ -170,7 +172,7 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
 
 `type: boolean`
 
-Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs-1). Setting `cache` to false is useful for daemon or long-running "watch" or development mode tasks that you don't want to cache.
+Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs-1). Setting `cache` to false is useful for daemon or long-running "watch" or development mode tasks you don't want to cache. Setting this option to `false` will ignore all other options.
 
 **Example**
 
@@ -200,7 +202,7 @@ Defaults to `[]`. Tells `turbo` the set of files to consider when determining if
 Setting this to a list of globs will cause the task to only be rerun when files matching those globs have
 changed. This can be helpful if you want to, for example, skip running tests unless a source file changed.
 
-Specifying `[]` will cause the task to be rerun when any file changes.
+Specifying `[]` will cause the task to be rerun when any version-controlled file in the workspace changes.
 
 **Example**
 
@@ -223,11 +225,22 @@ Specifying `[]` will cause the task to be rerun when any file changes.
 }
 ```
 
+<Callout type="info">
+  Note: `turbo.json` is *always* considered an input. If you modify `turbo.json`, all caches are invalidated.
+</Callout>
+
 ### `outputMode`
 
-`type: string`
+`type: "full" | "hash-only" | "new-only" | "none"`
 
-Defaults to `full`. The style of output for the task. Use "full" to display the entire output of the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to show the full output of cache misses and the computed hashes for cache hits. Use "none" to hide task output.
+Defaults to `full`. The style of output for the task.
+
+| option    | description                              |
+| --------- | ---------------------------------------- |
+| full      | This is the default. Displays all output |
+| hash-only | Show only the hashes of the tasks        |
+| new-only  | Only show output from cache misses       |
+| none      | Hides all task output                    |
 
 **Example**
 

@@ -716,7 +716,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
 		colorCache:     colorCache,
