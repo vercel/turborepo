@@ -299,9 +299,7 @@ func TestParseConfig(t *testing.T) {
 	}
 
 	cf := &config.Config{
-		Cwd:    defaultCwd,
-		Token:  "some-token",
-		TeamId: "my-team",
+		Cwd: defaultCwd,
 		Cache: &config.CacheConfig{
 			Workers: 10,
 		},
@@ -343,9 +341,7 @@ func TestParseRunOptionsUsesCWDFlag(t *testing.T) {
 
 	t.Run("accepts cwd argument", func(t *testing.T) {
 		cf := &config.Config{
-			Cwd:    cwd,
-			Token:  "some-token",
-			TeamId: "my-team",
+			Cwd: cwd,
 			Cache: &config.CacheConfig{
 				Workers: 10,
 			},
@@ -436,9 +432,7 @@ func TestUsageText(t *testing.T) {
 		t.Fatalf("failed to get cwd: %v", err)
 	}
 	cf := &config.Config{
-		Cwd:    defaultCwd,
-		Token:  "some-token",
-		TeamId: "my-team",
+		Cwd: defaultCwd,
 		Cache: &config.CacheConfig{
 			Workers: 10,
 		},

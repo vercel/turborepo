@@ -33,7 +33,7 @@ type link struct {
 	logger              hclog.Logger
 	cwd                 fs.AbsolutePath
 	modifyGitIgnore     bool
-	apiURL              string
+	repoConfig          *config.RepoConfig
 	apiClient           linkAPIClient
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
@@ -63,7 +63,7 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 				logger:              config.Logger,
 				cwd:                 config.Cwd,
 				modifyGitIgnore:     !dontModifyGitIgnore,
-				apiURL:              config.ApiUrl,
+				repoConfig:          config.RepoConfig,
 				apiClient:           apiClient,
 				promptSetup:         promptSetup,
 				promptTeam:          promptTeam,
@@ -221,10 +221,7 @@ func (l *link) run() error {
 	}
 
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	err = config.WriteRepoConfigFile(l.cwd, &config.TurborepoConfig{
-		TeamId: teamID,
-		ApiUrl: l.apiURL,
-	})
+	err = l.repoConfig.SetTeamID(teamID)
 	if err != nil {
 		return fmt.Errorf("could not link current directory to team/user.\n%w", err)
 	}

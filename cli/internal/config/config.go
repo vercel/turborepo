@@ -14,7 +14,6 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 
 	hclog "github.com/hashicorp/go-hclog"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
 )
@@ -32,19 +31,6 @@ func IsCI() bool {
 // Config is a struct that contains user inputs and our logger
 type Config struct {
 	Logger hclog.Logger
-	// TODO: Token through ApiUrl should maybe be grouped together
-	// in their own struct, as they will come from config files
-
-	// Bearer token
-	Token string
-	// vercel.com / remote cache team id
-	TeamId string
-	// vercel.com / remote cache team slug
-	TeamSlug string
-	// Backend API URL
-	ApiUrl string
-	// Login URL
-	LoginUrl string
 	// Turborepo CLI Version
 	TurboVersion string
 	Cache        *CacheConfig
@@ -53,11 +39,12 @@ type Config struct {
 
 	UsePreflight      bool
 	MaxClientFailures uint64
-}
 
-// IsLoggedIn returns true if we have a token and either a team id or team slug
-func (c *Config) IsLoggedIn() bool {
-	return c.Token != "" && (c.TeamId != "" || c.TeamSlug != "")
+	LoginURL string
+
+	UserConfig   *UserConfig
+	RepoConfig   *RepoConfig
+	RemoteConfig client.RemoteConfig
 }
 
 // CacheConfig
@@ -69,7 +56,7 @@ type CacheConfig struct {
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
-func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config, err error) {
+func ParseAndValidate(args []string, ui cli.Ui, turboVersion string, userConfigFile fs.AbsolutePath) (c *Config, err error) {
 
 	// Special check for ./turbo invocation without any args
 	// Return the help message
@@ -88,36 +75,28 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	if err != nil {
 		return nil, err
 	}
+
 	// Precedence is flags > env > config > default
-	userConfig, err := ReadUserConfigFile()
+	userConfig, err := ReadUserConfigFile(userConfigFile)
 	if err != nil {
 		return nil, fmt.Errorf("reading user config file: %v", err)
 	}
-	if userConfig == nil {
-		userConfig = defaultUserConfig()
-	}
-	partialConfig, err := ReadRepoConfigFile(cwd)
+	token := userConfig.Token()
+	repoConfig, err := ReadRepoConfigFile(GetRepoConfigPath(cwd))
 	if err != nil {
 		return nil, fmt.Errorf("reading repo config file: %v", err)
 	}
-	if partialConfig == nil {
-		partialConfig = defaultRepoConfig()
-	}
-	partialConfig.Token = userConfig.Token
+	remoteConfig := repoConfig.GetRemoteConfig(token)
 
-	enverr := envconfig.Process("TURBO", partialConfig)
-	if enverr != nil {
-		return nil, fmt.Errorf("invalid environment variable: %w", err)
-	}
-
-	if partialConfig.Token == "" && IsCI() {
+	if token == "" && IsCI() {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
 		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
 		if vercelArtifactsToken != "" {
-			partialConfig.Token = vercelArtifactsToken
+			remoteConfig.Token = vercelArtifactsToken
 		}
 		if vercelArtifactsOwner != "" {
-			partialConfig.TeamId = vercelArtifactsOwner
+			//repoConfig.TeamId = vercelArtifactsOwner
+			remoteConfig.TeamID = vercelArtifactsOwner
 		}
 	}
 
@@ -134,6 +113,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	usePreflight := os.Getenv("TURBO_PREFLIGHT") == "true"
 
+	loginURL := repoConfig.LoginURL()
 	// Process arguments looking for `-v` flags to control the log level.
 	// This overrides whatever the env var set.
 	for _, arg := range args {
@@ -154,21 +134,21 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 				level = hclog.Trace
 			}
 		case strings.HasPrefix(arg, "--api="):
-			apiUrl := arg[len("--api="):]
-			if _, err := url.ParseRequestURI(apiUrl); err != nil {
-				return nil, fmt.Errorf("%s is an invalid URL", apiUrl)
+			apiURL := arg[len("--api="):]
+			if _, err := url.ParseRequestURI(apiURL); err != nil {
+				return nil, fmt.Errorf("%s is an invalid URL", apiURL)
 			}
-			partialConfig.ApiUrl = apiUrl
+			remoteConfig.APIURL = apiURL
 		case strings.HasPrefix(arg, "--url="):
-			loginUrl := arg[len("--url="):]
-			if _, err := url.ParseRequestURI(loginUrl); err != nil {
-				return nil, fmt.Errorf("%s is an invalid URL", loginUrl)
+			loginURLArg := arg[len("--url="):]
+			if _, err := url.ParseRequestURI(loginURLArg); err != nil {
+				return nil, fmt.Errorf("%s is an invalid URL", loginURLArg)
 			}
-			partialConfig.LoginUrl = loginUrl
+			loginURL = loginURLArg
 		case strings.HasPrefix(arg, "--token="):
-			partialConfig.Token = arg[len("--token="):]
+			remoteConfig.Token = arg[len("--token="):]
 		case strings.HasPrefix(arg, "--team="):
-			partialConfig.TeamSlug = arg[len("--team="):]
+			remoteConfig.TeamSlug = arg[len("--team="):]
 		case arg == "--preflight":
 			usePreflight = true
 		default:
@@ -195,11 +175,10 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 
 	c = &Config{
 		Logger:       logger,
-		Token:        partialConfig.Token,
-		TeamSlug:     partialConfig.TeamSlug,
-		TeamId:       partialConfig.TeamId,
-		ApiUrl:       partialConfig.ApiUrl,
-		LoginUrl:     partialConfig.LoginUrl,
+		UserConfig:   userConfig,
+		RepoConfig:   repoConfig,
+		RemoteConfig: remoteConfig,
+		LoginURL:     loginURL,
 		TurboVersion: turboVersion,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
@@ -216,15 +195,11 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 // this Config instance.
 func (c *Config) NewClient() *client.ApiClient {
 	apiClient := client.NewClient(
-		c.ApiUrl,
+		c.RemoteConfig,
 		c.Logger,
 		c.TurboVersion,
-		c.TeamId,
-		c.TeamSlug,
-		c.MaxClientFailures,
-		c.UsePreflight,
+		client.Opts{UsePreflight: c.UsePreflight},
 	)
-	apiClient.SetToken(c.Token)
 	return apiClient
 }
 
