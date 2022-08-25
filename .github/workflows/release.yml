@@ -60,7 +60,8 @@ jobs:
           # Optional: working directory, useful for monorepos
           working-directory: cli
 
-          # Optional: golangci-lint command line arguments.
+          # `golangci-lint-action` does not have an "install only" option.
+          # We ignore the output of this run, instead using it just to install the binary.
           args: --issues-exit-code=0
 
       - uses: pnpm/action-setup@v2.2.2

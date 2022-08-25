@@ -46,12 +46,11 @@ If you're using a different package manager replace npm accordingly.
 
 ## Publishing `turbo` to the npm registry
 
-Canary builds are automatically published when code is merged to the `main` branch.
-See the [`release` Github workflow](./.github/workflows/release.yml).
+All builds are handled by manually triggering the appropriate [`release` GitHub workflow](./.github/workflows/release.yml).
 
-To manually release:
+To manually run a release:
 
 1. `brew install goreleaser`
-2. Add `GORELEASER_KEY` env var with the Go Releaser Pro key (ask @turbo-oss to get access to the key)
+2. Add `GORELEASER_KEY` env var with the GoReleaser Pro key (ask @turbo-oss to get access to the key)
 3. Update `version.txt` (do not commit this change to git manually)
 4. `cd cli && make publish`
