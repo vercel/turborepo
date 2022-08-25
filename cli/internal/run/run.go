@@ -36,6 +36,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/scm"
 	"github.com/vercel/turborepo/cli/internal/scope"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turborepo/cli/internal/spinner"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -204,13 +205,18 @@ type run struct {
 
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, r.config.RootPackageJSON)
+	packageJSONPath := r.config.Cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
+	if err != nil {
+		return fmt.Errorf("failed to read package.json: %w", err)
+	}
+	turboJSON, err := fs.ReadTurboConfig(r.config.Cwd, rootPackageJSON)
 	if err != nil {
 		return err
 	}
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
-	pkgDepGraph, err := context.New(context.WithGraph(r.config, turboJSON, r.opts.cacheOpts.Dir))
+	pkgDepGraph, err := context.New(context.WithGraph(r.config.Cwd, rootPackageJSON, r.opts.cacheOpts.Dir))
 	if err != nil {
 		return err
 	}
@@ -260,7 +266,19 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			}
 		}
 	}
-	r.config.Logger.Debug("global hash", "value", pkgDepGraph.GlobalHash)
+	globalHash, err := calculateGlobalHash(
+		r.config.Cwd,
+		rootPackageJSON,
+		pipeline,
+		turboJSON.GlobalDependencies,
+		pkgDepGraph.PackageManager,
+		r.config.Logger,
+		os.Environ(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to calculate global hash: %v", err)
+	}
+	r.config.Logger.Debug("global hash", "value", globalHash)
 	r.config.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.Dir)
 
 	// TODO: consolidate some of these arguments
@@ -268,7 +286,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
 		PackageInfos:     pkgDepGraph.PackageInfos,
-		GlobalHash:       pkgDepGraph.GlobalHash,
+		GlobalHash:       globalHash,
 		RootNode:         pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
@@ -694,9 +712,11 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			return errors.Wrap(err, "failed to set up caching")
 		}
 	}
-	defer turboCache.Shutdown()
+	defer func() {
+		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.ui, "...writing to cache...", 1500*time.Millisecond)
+	}()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile, r.config)
+	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.config.Cwd, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
 		colorCache:     colorCache,

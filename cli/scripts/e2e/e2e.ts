@@ -550,7 +550,7 @@ function runSmokeTests<T>(
     }
   );
 
-  if (npmClient === "yarn") {
+  if (["yarn"].includes(npmClient)) {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
     suite(
@@ -571,7 +571,7 @@ function runSmokeTests<T>(
         const expected = [
           "out/package.json",
           "out/turbo.json",
-          "out/yarn.lock",
+          `out/${getLockfileForPackageManager(npmClient)}`,
           "out/packages/a/build.js",
           "out/packages/a/lint.js",
           "out/packages/a/package.json",
@@ -580,6 +580,58 @@ function runSmokeTests<T>(
           "out/packages/b/lint.js",
           "out/packages/b/package.json",
           "out/packages/b/test.js",
+        ];
+        for (const file of expected) {
+          assert.ok(
+            files.includes(file),
+            `Expected file ${file} to be generated`
+          );
+        }
+        const install = repo.run("install", ["--frozen-lockfile"], {
+          cwd: options.cwd
+            ? path.join(options.cwd, "out")
+            : path.join(repo.root, "out"),
+        });
+        assert.is(
+          install.exitCode,
+          0,
+          "Expected yarn install --frozen-lockfile to succeed"
+        );
+      }
+    );
+
+    suite(
+      `${npmClient} + turbo prune --docker${
+        options.cwd ? " from " + options.cwd : ""
+      }`,
+      async () => {
+        const pruneCommandOutput = getCommandOutputAsArray(
+          repo.turbo("prune", ["--scope=a", "--docker"], options)
+        );
+        assert.fixture(pruneCommandOutput[1], " - Added a");
+        assert.fixture(pruneCommandOutput[2], " - Added b");
+
+        let files = [];
+        assert.not.throws(() => {
+          files = repo.globbySync("out/**/*", {
+            cwd: options.cwd ?? repo.root,
+          });
+        }, `Could not read generated \`out\` directory after \`turbo prune\``);
+        const expected = [
+          "out/full/package.json",
+          "out/json/package.json",
+          "out/full/turbo.json",
+          `out/${getLockfileForPackageManager(npmClient)}`,
+          "out/full/packages/a/build.js",
+          "out/full/packages/a/lint.js",
+          "out/full/packages/a/package.json",
+          "out/json/packages/a/package.json",
+          "out/full/packages/a/test.js",
+          "out/full/packages/b/build.js",
+          "out/full/packages/b/lint.js",
+          "out/full/packages/b/package.json",
+          "out/json/packages/b/package.json",
+          "out/full/packages/b/test.js",
         ];
         for (const file of expected) {
           assert.ok(

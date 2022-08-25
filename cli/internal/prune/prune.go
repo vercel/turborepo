@@ -119,11 +119,12 @@ type prune struct {
 // Prune creates a smaller monorepo with only the required workspaces
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.config.Cwd)
-	turboJSON, err := fs.ReadTurboConfig(p.config.Cwd, p.config.RootPackageJSON)
+	rootPackageJSONPath := p.config.Cwd.Join("package.json")
+	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath.ToStringDuringMigration())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	ctx, err := context.New(context.WithGraph(p.config, turboJSON, cacheDir))
+	ctx, err := context.New(context.WithGraph(p.config.Cwd, rootPackageJSON, cacheDir))
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
@@ -133,6 +134,11 @@ func (p *prune) prune(opts *opts) error {
 		return errors.Errorf("invalid scope: package %v not found", opts.scope)
 	}
 	outDir := p.config.Cwd.Join(opts.outputDir)
+	fullDir := outDir
+	if opts.docker {
+		fullDir = fullDir.Join("full")
+	}
+
 	p.logger.Trace("target", "value", target.Name)
 	p.logger.Trace("directory", "value", target.Dir)
 	p.logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
@@ -140,14 +146,12 @@ func (p *prune) prune(opts *opts) error {
 	p.logger.Trace("docker", "value", opts.docker)
 	p.logger.Trace("out dir", "value", outDir.ToString())
 
-	if !util.IsYarn(ctx.PackageManager.Name) {
+	canPrune, err := ctx.PackageManager.CanPrune(p.config.Cwd)
+	if err != nil {
+		return err
+	}
+	if !canPrune {
 		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
-	} else if ctx.PackageManager.Name == "nodejs-berry" {
-		if isNMLinker, err := util.IsNMLinker(p.config.Cwd.ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
-		} else if !isNMLinker {
-			return errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
-		}
 	}
 
 	p.ui.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
@@ -157,7 +161,7 @@ func (p *prune) prune(opts *opts) error {
 		return errors.Wrap(err, "could not create output directory")
 	}
 	workspaces := []string{}
-	lockfile := p.config.RootPackageJSON.SubLockfile
+	lockfile := rootPackageJSON.SubLockfile
 	targets := []interface{}{opts.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
 	if err != nil {
@@ -170,28 +174,20 @@ func (p *prune) prune(opts *opts) error {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
+		targetDir := fullDir.Join(ctx.PackageInfos[internalDep].Dir)
+		if err := targetDir.EnsureDir(); err != nil {
+			return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
+		}
+		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
+			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
+		}
 		if opts.docker {
-			targetDir := outDir.Join("full", ctx.PackageInfos[internalDep].Dir)
 			jsonDir := outDir.Join("json", ctx.PackageInfos[internalDep].PackageJSONPath)
-			if err := targetDir.EnsureDir(); err != nil {
-				return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
-			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
-				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
-			}
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
 			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
-			}
-		} else {
-			targetDir := outDir.Join(ctx.PackageInfos[internalDep].Dir)
-			if err := targetDir.EnsureDir(); err != nil {
-				return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
-			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
-				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 			}
 		}
 
@@ -202,40 +198,24 @@ func (p *prune) prune(opts *opts) error {
 		p.ui.Output(fmt.Sprintf(" - Added %v", ctx.PackageInfos[internalDep].Name))
 	}
 	p.logger.Trace("new workspaces", "value", workspaces)
+	if fs.FileExists(".gitignore") {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join(".gitignore")}, fullDir.Join(".gitignore").ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "failed to copy root .gitignore")
+		}
+	}
+
+	if fs.FileExists("turbo.json") {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("turbo.json")}, fullDir.Join("turbo.json").ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "failed to copy root turbo.json")
+		}
+	}
+
+	if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("package.json")}, fullDir.Join("package.json").ToStringDuringMigration()); err != nil {
+		return errors.Wrap(err, "failed to copy root package.json")
+	}
+
 	if opts.docker {
-		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join(".gitignore")}, outDir.Join("full", ".gitignore").ToStringDuringMigration()); err != nil {
-				return errors.Wrap(err, "failed to copy root .gitignore")
-			}
-		}
-		// We only need to actually copy turbo.json into "full" folder since it isn't needed for installation in docker
-		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("turbo.json")}, outDir.Join("full", "turbo.json").ToStringDuringMigration()); err != nil {
-				return errors.Wrap(err, "failed to copy root turbo.json")
-			}
-		}
-
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("package.json")}, outDir.Join("full", "package.json").ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "failed to copy root package.json")
-		}
-
 		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("package.json")}, outDir.Join("json", "package.json").ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "failed to copy root package.json")
-		}
-	} else {
-		if fs.FileExists(".gitignore") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join(".gitignore")}, outDir.Join(".gitignore").ToStringDuringMigration()); err != nil {
-				return errors.Wrap(err, "failed to copy root .gitignore")
-			}
-		}
-
-		if fs.FileExists("turbo.json") {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("turbo.json")}, outDir.Join("turbo.json").ToStringDuringMigration()); err != nil {
-				return errors.Wrap(err, "failed to copy root turbo.json")
-			}
-		}
-
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.config.Cwd.Join("package.json")}, outDir.Join("package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	}
