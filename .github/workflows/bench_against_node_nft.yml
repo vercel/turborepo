@@ -50,6 +50,7 @@ jobs:
 
       - name: Run benchmark
         uses: actions-rs/cargo@v1
+        timeout-minutes: 60
         with:
           command: nextest
           args: run -j 1 --no-fail-fast -r -p turbopack --features bench_against_node_nft bench_against_node_nft

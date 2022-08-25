@@ -46,6 +46,7 @@ jobs:
           key: benchmark
 
       - uses: sokra/criterion-compare-action@significant
+        timeout-minutes: 120
         with:
           branchName: base
 

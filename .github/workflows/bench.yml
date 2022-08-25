@@ -25,6 +25,7 @@ jobs:
 
       - name: Run cargo bench
         uses: actions-rs/cargo@v1
+        timeout-minutes: 60
         with:
           command: bench
 
