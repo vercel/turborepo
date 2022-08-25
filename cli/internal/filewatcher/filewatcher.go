@@ -2,17 +2,12 @@
 package filewatcher
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
-	"github.com/karrick/godirwalk"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
@@ -24,16 +19,56 @@ var _ignores = []string{".git", "node_modules"}
 // 1) do not need synchronization
 // 2) should minimize the work they are doing when called, if possible
 type FileWatchClient interface {
-	OnFileWatchEvent(ev fsnotify.Event)
+	OnFileWatchEvent(ev Event)
 	OnFileWatchError(err error)
 	OnFileWatchClosed()
+}
+
+// FileEvent is an enum covering the kinds of things that can happen
+// to files that we might be interested in
+type FileEvent int
+
+const (
+	// FileAdded - this is a new file
+	FileAdded FileEvent = iota + 1
+	// FileDeleted - this file has been removed
+	FileDeleted
+	// FileModified - this file has been changed in some way
+	FileModified
+	// FileRenamed - a file's name has changed
+	FileRenamed
+	// FileOther - some other backend-specific event has happened
+	FileOther
+)
+
+var (
+	// ErrFilewatchingClosed is returned when filewatching has been closed
+	ErrFilewatchingClosed = errors.New("Close() has already been called for filewatching")
+	// ErrFailedToStart is returned when filewatching fails to start up
+	ErrFailedToStart = errors.New("filewatching failed to start")
+)
+
+// Event is the backend-independent information about a file change
+type Event struct {
+	Path      fs.AbsolutePath
+	EventType FileEvent
+}
+
+// Backend is the interface that describes what an underlying filesystem watching backend
+// must provide.
+type Backend interface {
+	AddRoot(root fs.AbsolutePath, excludePatterns ...string) error
+	Events() <-chan Event
+	Errors() <-chan error
+	Close() error
+	Start() error
 }
 
 // FileWatcher handles watching all of the files in the monorepo.
 // We currently ignore .git and top-level node_modules. We can revisit
 // if necessary.
 type FileWatcher struct {
-	*fsnotify.Watcher
+	backend Backend
 
 	logger         hclog.Logger
 	repoRoot       fs.AbsolutePath
@@ -45,90 +80,44 @@ type FileWatcher struct {
 }
 
 // New returns a new FileWatcher instance
-func New(logger hclog.Logger, repoRoot fs.AbsolutePath, watcher *fsnotify.Watcher) *FileWatcher {
+func New(logger hclog.Logger, repoRoot fs.AbsolutePath, backend Backend) *FileWatcher {
 	excludes := make([]string, len(_ignores))
 	for i, ignore := range _ignores {
 		excludes[i] = filepath.ToSlash(repoRoot.Join(ignore).ToString() + "/**")
 	}
 	excludePattern := "{" + strings.Join(excludes, ",") + "}"
 	return &FileWatcher{
-		Watcher:        watcher,
+		backend:        backend,
 		logger:         logger,
 		repoRoot:       repoRoot,
 		excludePattern: excludePattern,
 	}
 }
 
+// Close shuts down filewatching
+func (fw *FileWatcher) Close() error {
+	return fw.backend.Close()
+}
+
 // Start recursively adds all directories from the repo root, redacts the excluded ones,
 // then fires off a goroutine to respond to filesystem events
 func (fw *FileWatcher) Start() error {
-	if err := fw.watchRecursively(fw.repoRoot); err != nil {
+	if err := fw.backend.AddRoot(fw.repoRoot, fw.excludePattern); err != nil {
 		return err
 	}
-	// Revoke the ignored directories, which are automatically added
-	// because they are children of watched directories.
-	for _, dir := range fw.WatchList() {
-		excluded, err := doublestar.Match(fw.excludePattern, filepath.ToSlash(dir))
-		if err != nil {
-			return err
-		}
-		if excluded {
-			if err := fw.Remove(dir); err != nil {
-				fw.logger.Warn(fmt.Sprintf("failed to remove watch on %v: %v", dir, err))
-			}
-		}
+	if err := fw.backend.Start(); err != nil {
+		return err
 	}
 	go fw.watch()
 	return nil
 }
 
-func (fw *FileWatcher) watchRecursively(root fs.AbsolutePath) error {
-	err := fs.WalkMode(root.ToString(), func(name string, isDir bool, info os.FileMode) error {
-		excluded, err := doublestar.Match(fw.excludePattern, filepath.ToSlash(name))
-		if err != nil {
-			return err
-		}
-		if excluded {
-			return godirwalk.SkipThis
-		}
-		if info.IsDir() && (info&os.ModeSymlink == 0) {
-			fw.logger.Debug(fmt.Sprintf("started watching %v", name))
-			if err := fw.Add(name); err != nil {
-				return errors.Wrapf(err, "failed adding watch to %v", name)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// onFileAdded helps up paper over cross-platform inconsistencies in fsnotify.
-// Some fsnotify backends automatically add the contents of directories. Some do
-// not. Adding a watch is idempotent, so anytime any file we care about gets added,
-// watch it.
-func (fw *FileWatcher) onFileAdded(name string) error {
-	info, err := os.Lstat(name)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// We can race with a file being added and removed. Ignore it
-			return nil
-		}
-		return errors.Wrapf(err, "error checking lstat of new file %v", name)
-	}
-	if info.IsDir() {
-		if err := fw.watchRecursively(fs.AbsolutePath(name)); err != nil {
-			return errors.Wrapf(err, "failed recursive watch of %v", name)
-		}
-	} else {
-		if err := fw.Add(name); err != nil {
-			return errors.Wrapf(err, "failed adding watch to %v", name)
-		}
-	}
-	return nil
+// AddRoot registers the root a filesystem hierarchy to be watched for changes. Events are *not*
+// fired for existing files when AddRoot is called, only for subsequent changes.
+// NOTE: if it appears helpful, we could change this behavior so that we provide a stream of initial
+// events.
+func (fw *FileWatcher) AddRoot(root fs.AbsolutePath, excludePatterns ...string) error {
+	return fw.backend.AddRoot(root, excludePatterns...)
 }
 
 // watch is the main file-watching loop. Watching is not recursive,
@@ -137,23 +126,17 @@ func (fw *FileWatcher) watch() {
 outer:
 	for {
 		select {
-		case ev, ok := <-fw.Watcher.Events:
+		case ev, ok := <-fw.backend.Events():
 			if !ok {
 				fw.logger.Info("Events channel closed. Exiting watch loop")
 				break outer
-			}
-			if ev.Op&fsnotify.Create != 0 {
-				if err := fw.onFileAdded(ev.Name); err != nil {
-					fw.logger.Warn(fmt.Sprintf("failed to handle adding %v: %v", ev.Name, err))
-					continue outer
-				}
 			}
 			fw.clientsMu.RLock()
 			for _, client := range fw.clients {
 				client.OnFileWatchEvent(ev)
 			}
 			fw.clientsMu.RUnlock()
-		case err, ok := <-fw.Watcher.Errors:
+		case err, ok := <-fw.backend.Errors():
 			if !ok {
 				fw.logger.Info("Errors channel closed. Exiting watch loop")
 				break outer

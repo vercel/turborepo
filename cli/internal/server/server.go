@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/filewatcher"
@@ -69,7 +68,7 @@ func New(serverName string, logger hclog.Logger, repoRoot fs.AbsolutePath, turbo
 	if err != nil {
 		return nil, err
 	}
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := filewatcher.GetPlatformSpecificBackend(logger)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +88,7 @@ func New(serverName string, logger hclog.Logger, repoRoot fs.AbsolutePath, turbo
 	if err := server.watcher.Start(); err != nil {
 		return nil, errors.Wrapf(err, "watching %v", repoRoot)
 	}
-	if err := server.watcher.Add(cookieDir.ToStringDuringMigration()); err != nil {
+	if err := server.watcher.AddRoot(cookieDir); err != nil {
 		_ = server.watcher.Close()
 		return nil, errors.Wrapf(err, "failed to watch cookie directory: %v", cookieDir)
 	}
@@ -108,8 +107,8 @@ func (s *Server) tryClose() bool {
 
 // OnFileWatchEvent implements filewatcher.FileWatchClient.OnFileWatchEvent
 // In the event that the root of the monorepo is deleted, shut down the server.
-func (s *Server) OnFileWatchEvent(ev fsnotify.Event) {
-	if ev.Op&fsnotify.Remove != 0 && ev.Name == s.repoRoot.ToString() {
+func (s *Server) OnFileWatchEvent(ev filewatcher.Event) {
+	if ev.EventType == filewatcher.FileDeleted && ev.Path == s.repoRoot {
 		_ = s.tryClose()
 	}
 }

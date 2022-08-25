@@ -3,12 +3,11 @@ title: Filtering Packages
 description: Only build the packages you care about
 ---
 
-import Callout from "../../../components/callout";
+import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Filtering Packages
 
-Filtering packages allows you to target your tasks to only the packages you care about.
 Turborepo supports a `pnpm`-like `--filter` flag that allows you to select the packages
 that will act as "entry points" into your monorepo's package/task graph.
 You can filter your project by package name, package directory, whether packages include dependents/dependencies, and by changes
@@ -37,12 +36,18 @@ is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
 The monorepo's root package can be selected using the token `//`.
 
 ```sh
-# Build 'my-pkg', letting turbo infer task dependencies from the pipeline defined in turbo.json
+# Build 'my-pkg', letting turbo infer task dependencies
+# from the pipeline defined in turbo.json
 turbo run build --filter=my-pkg
-# Build '@foo/bar', letting turbo infer task dependencies from the pipeline defined in turbo.json
+
+# Build '@foo/bar', letting turbo infer task dependencies
+# from the pipeline defined in turbo.json
 turbo run build --filter=@foo/bar
-# Build all packages that start with 'admin-', letting turbo infer task dependencies from the pipeline defined in turbo.json
+
+# Build all packages that start with 'admin-', letting turbo infer task
+# dependencies from the pipeline defined in turbo.json
 turbo run build --filter=admin-*
+
 # Run the format script from the root "package.json" file:
 turbo run format --filter=//
 ```
@@ -56,6 +61,7 @@ selected.
 ```sh
 # Test 'my-lib' and everything that depends on 'my-lib'
 turbo run test --filter=...my-lib
+
 # Test everything that depends on 'my-lib', but not 'my-lib' itself
 turbo run test --filter=...^my-lib
 ```
@@ -68,6 +74,7 @@ Optionally including a `^` (`my-app^...`) will select all of `my-app`'s dependen
 ```sh
 # Build 'my-app' and its dependencies
 turbo run build --filter=my-app...
+
 # Build 'my-app's dependencies, but not 'my-app' itself
 turbo run build --filter=my-app^...
 ```
@@ -75,12 +82,14 @@ turbo run build --filter=my-app^...
 ### Filter by directory or directory tree
 
 Supports exact matches (`--filter=./apps/docs`) and globs (`--filter=./apps/*`).
-When combined with other components, must be enclosed in `{}` (`--filter=...{./libs/*}`).
+When combined with other components, enclose in `{}`. For example, `--filter=...{./libs/*}`.
 
 ```sh
 # Build all of the packages in the 'apps' directory
 turbo run build --filter=./apps/*
-# Build all of the packages in the 'libs' directory, and all the packages that depends on them
+
+# Build all of the packages in the 'libs' directory,
+# and all the packages that depends on them
 turbo run build --filter=...{./libs/*}
 ```
 
@@ -100,12 +109,17 @@ you can pass `--filter=foo...[HEAD^1]`. Note that this feature is different from
 ```sh
 # Test everything that changed in the last commit
 turbo run test --filter=[HEAD^1]
+
 # Build everything that depends on changes in branch 'my-feature'
 turbo run build --filter=...[origin/my-feature]
+
 # Build '@foo/bar' if it or any of its dependencies changed in the last commit
 turbo run build --filter=@foo/bar...[HEAD^1]
-# Test each package in the '@scope' scope that is in the 'packages' directory, if it has changed in the last commit
+
+# Test each package in the '@scope' scope that is in the 'packages' directory,
+# if it has changed in the last commit
 turbo run test --filter=@scope/*{./packages/*}[HEAD^1]
+
 # Test each package that changed between 'main' and 'my-feature'
 turbo run test --filter=[main...my-feature]
 ```

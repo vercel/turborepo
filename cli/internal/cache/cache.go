@@ -169,7 +169,7 @@ type cacheRemoval struct {
 // storeUntil stores artifacts into higher priority caches than the given one.
 // Used after artifact retrieval to ensure we have them in eg. the directory cache after
 // downloading from the RPC cache.
-func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, outputGlobs []string, stopAt int) error {
+func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, files []string, stopAt int) error {
 	// Attempt to store on all caches simultaneously.
 	toRemove := make([]*cacheRemoval, stopAt)
 	g := &errgroup.Group{}
@@ -181,7 +181,7 @@ func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration in
 		c := cache
 		i := i
 		g.Go(func() error {
-			err := c.Put(target, key, duration, outputGlobs)
+			err := c.Put(target, key, duration, files)
 			if err != nil {
 				cd := &util.CacheDisabledError{}
 				if errors.As(err, &cd) {

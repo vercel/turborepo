@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/filewatcher"
@@ -118,12 +117,12 @@ func (g *GlobWatcher) GetChangedGlobs(hash string, candidates []string) ([]strin
 // On a file change, check if we have a glob that matches this file. Invalidate
 // any matching globs, and remove them from the set of unchanged globs for the correspondin
 // hashes. If this is the last glob for a hash, remove the hash from being tracked.
-func (g *GlobWatcher) OnFileWatchEvent(ev fsnotify.Event) {
+func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 	// At this point, we don't care what the Op is, any Op represents a change
 	// that should invalidate matching globs
 	g.logger.Debug(fmt.Sprintf("Got fsnotify event %v", ev))
-	absolutePath := ev.Name
-	repoRelativePath, err := g.repoRoot.RelativePathString(absolutePath)
+	absolutePath := ev.Path
+	repoRelativePath, err := g.repoRoot.RelativePathString(absolutePath.ToStringDuringMigration())
 	if err != nil {
 		g.logger.Error(fmt.Sprintf("could not get relative path from %v to %v: %v", g.repoRoot, absolutePath, err))
 		return

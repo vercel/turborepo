@@ -3,7 +3,7 @@ title: Workspaces
 description: Use workspaces to organize your turborepo apps and packages.
 ---
 
-import Callout from "../../../components/callout";
+import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 import { Tabs, Tab } from '../../../components/Tabs'
 
@@ -11,16 +11,16 @@ import { Tabs, Tab } from '../../../components/Tabs'
 
 Workspaces are a feature implemented by package managers to assist with working on multiple apps and packages in the same codebase.
 
-Turborepo is compatible with three package managers, [npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description), [Yarn](https://classic.yarnpkg.com/lang/en/docs/workspaces/), and [pnpm](https://pnpm.io/workspaces), each with its own implementation of workspaces and functionality. Your package manager will determine how your apps and packages are organized in your workspaces and run in your turborepo.
+Turborepo is compatible with three package managers ([npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description), [Yarn 1](https://classic.yarnpkg.com/lang/en/docs/workspaces/), and [pnpm](https://pnpm.io/workspaces)), each with its own implementation of workspaces and functionality. Your package manager will determine how your apps and packages are organized in your workspaces and run in your turborepo.
 
 ## Configuring workspaces
 
-To use workspaces, you'll first need to declare their file system locations to your package manager
+To use workspaces, you must first declare their file system locations to your package manager.
 
-A common/recommended convention is to have an `apps` folder and a `packages` folder. The `apps` folder can contain workspaces for launchable apps, such as a Next.js or Svelte app. The `packages` folder can contain workspaces for packages that are used by either an app, or another package. Again, this isn't a requirement, but just a suggested folder structure
+A common convention we recommend is having top-level `apps/` and `packages/` directories. This isn't a requirement but just a suggested directory structure. The `apps` folder can contain workspaces for launchable apps, such as a [Next.js](https://nextjs.org/) or [Svelte](https://svelte.dev/) app. The `packages` folder can contain workspaces for packages used by either an app or another package.
 
 <Callout>
-Unlike when working in a single-package repository, you'll need to consider how to name your workspaces. If you avoid npm naming collisions, you can use an npm organization or user scope to namespace your packages. For example, you might set the `name` key in `./apps/api/package.json` to `@mycompany/api`.
+Unlike a single-package repository, you'll need to consider how to name your workspaces. If you avoid `npm` naming collisions, you can use an npm organization or user scope to namespace your packages. For example, you might set the `name` key in `./apps/api/package.json` to `@mycompany/api`.
 </Callout>
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
@@ -73,8 +73,6 @@ Unlike when working in a single-package repository, you'll need to consider how 
   </Tab>
 </Tabs>
 
-Each folder that matches any of the globs in the list is considered a workspace folder. In the examples, the `apps` and `packages` folders contain folders that are workspaces, and the `docs` folder itself is a workspace.
-
 ```
 monorepo/
 ├─ docs/
@@ -87,16 +85,15 @@ monorepo/
 ├─ sdk/
 ```
 
-Using the same workspace configuration, the `monorepo/docs/`, `monorepo/apps/api/`, `monorepo/apps/mobile/`, `monorepo/packages/config/`, and `monorepo/packages/tsconfig/` folders are all considered workspaces.
-The `monorepo/sdk/` folder is not considered a workspace and it is not included in the workspace configuration.
+In the example above, all directories inside `monorepo/apps/` and `monorepo/packages/` are workspaces, and the `monorepo/docs` directory itself is also a workspace. `monorepo/sdk/` is _not_ a workspace, as it is not included in the workspace configuration.
 
 ## Managing workspaces
 
-When you move, delete, or rename your workspaces, you will have to make sure that all folders linked within your `package.json` matches. Anytime you change the configuration of your workspace, make sure all the dependencies of the workspace are also updated. Re-run your npm client's install command to check your configuration. If there are any problems after that, you may have to delete your `node_modules` folder and run an install again.
+When you move, delete, or rename your workspaces, you must ensure that all folders linked within your `package.json` should match. Anytime you change your workspace configuration, provide all the dependencies of the workspace that are updated. Re-run your package manager's install command to check your configuration. If there are problems after that, you may have to delete your `node_modules` folder and re-run an install.
 
 ## Managing dependencies
 
-To manage dependencies within workspaces in your monorepo, you will need to run commands that will only manage the dependencies of each workspace rather than for the entire monorepo.
+To manage dependencies within workspaces in your monorepo, ensure you are running commands from within the target workspace, or by specifying the workspace when running from root:
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>

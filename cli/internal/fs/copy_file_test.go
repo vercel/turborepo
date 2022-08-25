@@ -147,6 +147,7 @@ func TestRecursiveCopyOrLinkFile(t *testing.T) {
 	//     a
 	//     link -> ../b
 	//     broken -> missing
+	//     circle -> ../child
 	src := fs.NewDir(t, "recursive-copy-or-link")
 	dst := fs.NewDir(t, "recursive-copy-or-link-dist")
 	childDir := filepath.Join(src.Path(), "child")
@@ -171,6 +172,8 @@ func TestRecursiveCopyOrLinkFile(t *testing.T) {
 
 	srcBrokenLinkPath := filepath.Join(childDir, "broken")
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
+	circlePath := filepath.Join(childDir, "circle")
+	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
 
 	shouldLink := true
 	shouldFallback := false
@@ -201,6 +204,16 @@ func TestRecursiveCopyOrLinkFile(t *testing.T) {
 	if brokenLinkExists {
 		t.Errorf("We cached a broken link at %v", dstBrokenLinkPath)
 	}
+	// Currently, we convert symlink-to-directory to empty-directory
+	// This is very likely not ideal behavior, but leaving this test here to verify
+	// that it is what we expect at this point in time.
+	dstCirclePath := filepath.Join(dst.Path(), "child", "circle")
+	circleStat, err := os.Lstat(dstCirclePath)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, circleStat.IsDir(), true)
+	entries, err := os.ReadDir(dstCirclePath)
+	assert.NilError(t, err, "ReadDir")
+	assert.Equal(t, len(entries), 0)
 }
 
 func TestSameFile(t *testing.T) {

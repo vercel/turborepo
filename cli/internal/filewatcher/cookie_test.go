@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -19,13 +18,13 @@ func TestWaitForCookie(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 5*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
 	assert.NilError(t, err, "Start")
 	fw.AddClient(jar)
-	err = fw.Add(cookieDir.ToString())
+	err = fw.AddRoot(cookieDir)
 	assert.NilError(t, err, "Add")
 
 	err = jar.WaitForCookie()
@@ -40,13 +39,13 @@ func TestWaitForCookieAfterClose(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 5*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
 	assert.NilError(t, err, "Start")
 	fw.AddClient(jar)
-	err = fw.Add(cookieDir.ToString())
+	err = fw.AddRoot(cookieDir)
 	assert.NilError(t, err, "Add")
 
 	err = fw.Close()
@@ -63,7 +62,7 @@ func TestWaitForCookieTimeout(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 10*time.Millisecond)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
@@ -84,7 +83,7 @@ func TestWaitForCookieWithError(t *testing.T) {
 	jar, err := NewCookieJar(cookieDir, 10*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
 
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := GetPlatformSpecificBackend(logger)
 	assert.NilError(t, err, "NewWatcher")
 	fw := New(logger, repoRoot, watcher)
 	err = fw.Start()
@@ -123,7 +122,7 @@ func TestWaitForCookieWithError(t *testing.T) {
 
 	// ensure waiting for a new cookie still works.
 	// Add the filewatch to allow cookies work normally
-	err = fw.Add(cookieDir.ToString())
+	err = fw.AddRoot(cookieDir)
 	assert.NilError(t, err, "Add")
 
 	err = jar.WaitForCookie()

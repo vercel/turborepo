@@ -3,8 +3,8 @@ package globwatcher
 import (
 	"testing"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hashicorp/go-hclog"
+	"github.com/vercel/turborepo/cli/internal/filewatcher"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
 )
@@ -78,9 +78,9 @@ func TestTrackOutputs(t *testing.T) {
 	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make an irrelevant change
-	globWatcher.OnFileWatchEvent(fsnotify.Event{
-		Op:   fsnotify.Create,
-		Name: repoRoot.Join("my-pkg", "irrelevant").ToString(),
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.Join("my-pkg", "irrelevant"),
 	})
 
 	changed, err = globWatcher.GetChangedGlobs(hash, globs)
@@ -88,9 +88,9 @@ func TestTrackOutputs(t *testing.T) {
 	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make a relevant change
-	globWatcher.OnFileWatchEvent(fsnotify.Event{
-		Op:   fsnotify.Create,
-		Name: repoRoot.Join("my-pkg", "dist", "foo").ToString(),
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.Join("my-pkg", "dist", "foo"),
 	})
 
 	changed, err = globWatcher.GetChangedGlobs(hash, globs)
@@ -100,9 +100,9 @@ func TestTrackOutputs(t *testing.T) {
 	assert.Equal(t, expected, changed[0], "Expected dist glob to have changed")
 
 	// Change a file matching the other glob
-	globWatcher.OnFileWatchEvent(fsnotify.Event{
-		Op:   fsnotify.Create,
-		Name: repoRoot.Join("my-pkg", ".next", "foo").ToString(),
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.Join("my-pkg", ".next", "foo"),
 	})
 	// We should no longer be watching anything, since both globs have
 	// registered changes
@@ -136,16 +136,16 @@ func TestWatchSingleFile(t *testing.T) {
 	assert.Equal(t, 1, len(globWatcher.hashGlobs))
 
 	// A change to an irrelevant file
-	globWatcher.OnFileWatchEvent(fsnotify.Event{
-		Op:   fsnotify.Create,
-		Name: repoRoot.Join("my-pkg", ".next", "foo").ToString(),
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.Join("my-pkg", ".next", "foo"),
 	})
 	assert.Equal(t, 1, len(globWatcher.hashGlobs))
 
 	// Change the watched file
-	globWatcher.OnFileWatchEvent(fsnotify.Event{
-		Op:   fsnotify.Write,
-		Name: repoRoot.Join("my-pkg", ".next", "next-file").ToString(),
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.Join("my-pkg", ".next", "next-file"),
 	})
 	assert.Equal(t, 0, len(globWatcher.hashGlobs))
 }

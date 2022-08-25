@@ -3,28 +3,28 @@ title: Documentation
 description: Turborepo is a high-performance build system for JavaScript and TypeScript codebases.
 ---
 
-import Features from "../../components/features";
+import Features from "../../components/Features";
 
 # Turborepo Documentation
 
-<Features />
+<Features page="docs" detailed={false} />
 
 Turborepo is a blazing fast build system for JavaScript/TypeScript _monorepos_: codebases containing multiple
-projects, often using multiple frameworks, in a single unified
+projects, often using multiple frameworks, in a single, unified
 code repository.
 
-Monorepos have many advantages, but they require appropriate tooling in order to scale. Turborepo provides this tooling and more. It leverages advanced build system ideas and techniques to speed up development, but with a fraction of the configuration and complexity. Instead of wasting countless days worrying about _how_ you're shipping, Turborepo lets you focus on _what_ you're shipping by abstracting all the annoying configuration, scripts, and tooling on your behalf.
+Monorepos have many advantages, but they require appropriate tooling to scale. Turborepo provides this tooling and more. It leverages advanced build system ideas and techniques to speed up development, but with a fraction of the configuration and complexity. Turborepo abstracts all the annoying configuration, scripts, and tooling into `turbo.json`, so you can focus on _what_ you're shipping instead of worrying about _how_ it'll get shipped.
 
-Last but not least, unlike other build systems, Turborepo is designed to be incrementally adopted, so you can gradually and partially add it to most codebases in a few minutes.
+Most importantly, unlike other build systems, Turborepo is designed to be incrementally adopted, so you can gradually and partially add it to most codebases in a few minutes.
 
 ## Why Turborepo?
 
-- **Faster, incremental builds**: Building once is painful enough, Turborepo will remember what you've built and skip the stuff that's already been computed.
-- **Content-aware hashing**: Turborepo looks at the contents of your files, not timestamps to figure out what needs to be built.
+- **Faster, incremental builds**: Building once is painful enough, Turborepo will remember what you (or someone on your team) built and skip work that's already been done.
+- **Content-aware hashing**: Turborepo looks at the contents of your files, not timestamps, to figure out what needs to be built.
 - **Cloud caching**: Share a cloud build cache with your teammates and CI/CD for even faster builds.
 - **Parallel execution**: Execute builds using every core at maximum parallelism without wasting idle CPUs.
 - **Zero runtime overhead**: Turborepo doesn't interfere with your runtime code or touch your sourcemaps. It does what it does and then gets out of your way.
 - **Task pipelines**: Define the relationships between your tasks and then let Turborepo optimize what to build and when.
 - **Pruned subsets**: Speed up PaaS deploys by generating a subset of your monorepo with only what's needed to build a specific target.
 - **Convention-based config**: Reduce complexity through convention. Fan out configuration with just a few lines of JSON.
-- **Profile in your browser**: Generate build profiles and import them in Chrome or Edge to understand which tasks are taking the longest.
+- **Profile in your browser**: Generate build profiles and view them in a browser to understand which tasks are taking the longest.

@@ -33,7 +33,6 @@ type GlobWalkFunc func(path string, d fs.DirEntry) error
 // separator even if that's not correct for your OS (like Windows). If you
 // aren't sure if that's the case, you can use filepath.ToSlash() on your
 // pattern before calling GlobWalk().
-//
 func GlobWalk(fsys fs.FS, pattern string, fn GlobWalkFunc) error {
 	if !ValidatePattern(pattern) {
 		return ErrBadPattern

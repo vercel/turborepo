@@ -48,8 +48,6 @@ type Config struct {
 	// Turborepo CLI Version
 	TurboVersion string
 	Cache        *CacheConfig
-	// package.json at the root of the repo
-	RootPackageJSON *fs.PackageJSON
 	// Current Working Directory
 	Cwd fs.AbsolutePath
 
@@ -91,11 +89,6 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		return nil, err
 	}
 	// Precedence is flags > env > config > default
-	packageJSONPath := cwd.Join("package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
-	if err != nil {
-		return nil, fmt.Errorf("package.json: %w", err)
-	}
 	userConfig, err := ReadUserConfigFile()
 	if err != nil {
 		return nil, fmt.Errorf("reading user config file: %v", err)
@@ -118,8 +111,14 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 	}
 
 	if partialConfig.Token == "" && IsCI() {
-		partialConfig.Token = os.Getenv("VERCEL_ARTIFACTS_TOKEN")
-		partialConfig.TeamId = os.Getenv("VERCEL_ARTIFACTS_OWNER")
+		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
+		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
+		if vercelArtifactsToken != "" {
+			partialConfig.Token = vercelArtifactsToken
+		}
+		if vercelArtifactsOwner != "" {
+			partialConfig.TeamId = vercelArtifactsOwner
+		}
 	}
 
 	app := args[0]
@@ -205,8 +204,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string) (c *Config,
 		Cache: &CacheConfig{
 			Workers: runtime.NumCPU() + 2,
 		},
-		RootPackageJSON: rootPackageJSON,
-		Cwd:             cwd,
+		Cwd: cwd,
 
 		UsePreflight:      usePreflight,
 		MaxClientFailures: maxRemoteFailCount,

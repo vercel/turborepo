@@ -4,16 +4,13 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist"
+    ".": "./dist",
+    "./styles.css": "./dist/styles.css"
   },
   "license": "MIT",
   "scripts": {
-    "build": "run-p \"build:*\"",
-    "dev": "run-p \"dev:*\"",
-    "build:styles": "tailwindcss -i ./src/styles.css -o ./dist/styles.css",
-    "dev:styles": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch",
-    "build:source": "tsup src/index.tsx --format esm,cjs --dts --external react",
-    "dev:source": "tsup src/index.tsx --format esm,cjs --dts --external react --watch",
+    "build": "tsup src/index.tsx --format esm,cjs --dts --external react && tailwindcss -i ./src/styles.css -o ./dist/styles.css",
+    "dev": "tsup src/index.tsx --format esm,cjs --dts --external react --watch & tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
@@ -22,10 +19,9 @@
     "concurrently": "^7.2.2",
     "eslint": "^7.32.0",
     "eslint-config-custom": "*",
-    "npm-run-all": "^4.1.5",
     "react": "^17.0.2",
-    "tailwind": "^4.0.0",
     "tailwind-config": "*",
+    "tailwindcss": "^3.1.5",
     "tsconfig": "*",
     "tsup": "^6.1.3",
     "typescript": "^4.5.2"
