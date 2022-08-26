@@ -22,6 +22,12 @@ You can also clone a Turborepo starter repository to get a head start on your mo
 
 This tutorial will walk you through using the Turborepo [`basic` example](https://github.com/vercel/turborepo/tree/main/examples/basic). By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
 
+<Callout type="info">
+
+During this tutorial, some lines of code are omitted from the code samples. For instance, when showing a `package.json` we won't show _all_ of the keys - only the ones that matter.
+
+</Callout>
+
 ### 1. Running `create-turbo`
 
 First, run:
@@ -247,7 +253,100 @@ It's important to understand the dependencies between these packages. Let's map 
 - `tsconfig` - no dependencies
 - `eslint-config-custom` - no dependencies
 
-### 3. Running tasks with Turbo
+Note that **the Turborepo CLI is not responsible for managing these dependencies**. All of the things above are handled by the package manager you chose (`npm`, `pnpm` or `yarn`).
+
+### 3. Running tasks with `turbo`
+
+We now understand our repository and its dependencies. How does Turborepo help?
+
+Turborepo helps by making running tasks simpler and _much_ more efficient.
+
+#### Understanding `turbo.json`
+
+Let's take a look inside our root `package.json`:
+
+```json
+// package.json
+
+{
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+  },
+}
+```
+
+We've got three tasks specified here in `scripts` which use `turbo run`. You'll notice that each of them is specified in `turbo.json`:
+
+```json
+// turbo.json
+
+{
+  "pipeline": {
+    "build": {
+//   ^^^^^
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+//   ^^^^
+      "outputs": []
+    },
+    "dev": {
+//   ^^^
+      "cache": false
+    }
+  }
+}
+```
+
+What we're seeing here is that we've _registered_ three tasks with `turbo` - `lint`, `dev` and `build`. Every task that's registered inside `turbo.json` can be run with `turbo run <task>`.
+
+To see this in action, let's add a script to the root `package.json`:
+
+```diff
+{
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
++   "hello": "turbo run hello"
+  }
+}
+```
+
+Now, let's run `hello`.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run hello
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn hello
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run hello
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll see this error in the console:
+
+```
+task `hello` not found in turbo `pipeline` in "turbo.json".
+Are you sure you added it?
+```
+
+That's worth remembering - **in order for turbo to run a task, it must be in `turbo.json`**.
 
 ### How does HMR work?
 
