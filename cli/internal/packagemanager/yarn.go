@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Masterminds/semver"
@@ -11,6 +12,19 @@ import (
 	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
+
+var rnLineEnding = regexp.MustCompile("\"|:\r\n$")
+var nLineEnding = regexp.MustCompile("\"|:\n$")
+var r = regexp.MustCompile(`^[\w"]`)
+var double = regexp.MustCompile(`\:\"\:`)
+var o = regexp.MustCompile(`\"\s\"`)
+
+// deals with colons
+// integrity sha-... -> integrity: sha-...
+// "@apollo/client" latest -> "@apollo/client": latest
+// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
+// apollo-client "0.0.0" -> apollo-client: "0.0.0"
+var a = regexp.MustCompile(`(\w|\")\s(\"|\w)`)
 
 var nodejsYarn = PackageManager{
 	Name:         "nodejs-yarn",
