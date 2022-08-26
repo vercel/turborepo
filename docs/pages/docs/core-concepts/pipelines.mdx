@@ -23,7 +23,7 @@ The tasks in your monorepo often need to run in a certain order. For instance, `
 
 In this situation, `test` _depends on_ `build`. But what if this workspace needs to wait for _another_ workspace to be built before it can proceed?
 
-For example, what if your `@acme/app` workspace uses the `@acme/components` workspace, which also uses the `@acme/shared-utils` workspace...
+For example, what if your `@acme/app` workspace depends the `@acme/components` workspace, which also depends on the `@acme/shared-utils` workspace... It can get confusing.
 
 This is your pipeline - the network of dependencies in your tasks across your monorepo.
 
