@@ -7,6 +7,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	l "github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -108,5 +109,9 @@ var nodejsBerry = PackageManager{
 
 		// Berry, supported configuration.
 		return true, nil
+	},
+
+	readLockfile: func(contents []byte) (l.Lockfile, error) {
+		return l.DecodeBerryLockfile(contents)
 	},
 }

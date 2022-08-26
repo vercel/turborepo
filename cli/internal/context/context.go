@@ -130,12 +130,11 @@ func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheD
 			c.PackageManager = packageManager
 		}
 
-		// this should go into the packagemanager abstraction
-		if util.IsYarn(c.PackageManager.Name) {
-			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, cacheDir)
-			if err != nil {
-				return fmt.Errorf("yarn.lock: %w", err)
-			}
+		lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
+		if err != nil {
+			return err
+		}
+		if lockfile != nil {
 			c.Lockfile = lockfile
 		}
 
