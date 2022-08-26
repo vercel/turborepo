@@ -7,7 +7,7 @@ package packagemanager
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -171,7 +171,7 @@ func (pm PackageManager) ReadLockfile(cacheDir fs.AbsolutePath, projectDirectory
 	if pm.readLockfile == nil {
 		return nil, nil
 	}
-	contents, err := ioutil.ReadFile(string(projectDirectory.Join(pm.Lockfile)))
+	contents, err := os.ReadFile(string(projectDirectory.Join(pm.Lockfile)))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
 	}

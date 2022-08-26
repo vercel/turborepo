@@ -1,3 +1,4 @@
+// Package lockfile provides the lockfile interface and implementations for the various package managers
 package lockfile
 
 import "io"
@@ -6,7 +7,7 @@ import "io"
 type Lockfile interface {
 	// PossibleKeys Given a package name and version return all of the keys it might appear as in the lockfile
 	PossibleKeys(name string, version string) []string
-	// ResovlePackage Given a package and version returns the key, resolved version, and if it was found
+	// ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 	ResolvePackage(name string, version string) (string, string, bool)
 	// AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
 	AllDependencies(key string) (map[string]string, bool)
