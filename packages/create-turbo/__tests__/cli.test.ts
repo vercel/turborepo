@@ -305,8 +305,15 @@ function getGeneratedPackageJSON(testDir: string) {
 }
 
 function configurePackageManager(packageManager: PackageManager) {
-  execSync(
-    `corepack prepare ${packageManager.command}@${packageManager.version} --activate`,
-    { stdio: "ignore", cwd }
-  );
+  if (packageManager.name === "npm") {
+    // Corepack on Windows in GitHub CI is failing to progress on first invocation.
+    // It's actually unnecessary to use Corepack for `npm` at this time, so skip it.
+    execSync(`corepack disable`);
+  } else {
+    execSync(`corepack enable`);
+    execSync(
+      `corepack prepare ${packageManager.command}@${packageManager.version} --activate`,
+      { stdio: "ignore", cwd }
+    );
+  }
 }
