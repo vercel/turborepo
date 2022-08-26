@@ -51,7 +51,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		t.Fatalf("failed to write contents to .gitignore: %v", err)
 	}
 	rootIgnoreFile.Close()
-	pkgIgnoreFilename := repoRoot.Join(turbopath.RelativeSystemPath(pkgName.ToString()), ".gitignore")
+	pkgIgnoreFilename := pkgName.RestoreAnchor(repoRoot).Join(".gitignore")
 	err = fs.EnsureDir(pkgIgnoreFilename.ToString())
 	if err != nil {
 		t.Fatalf("failed to ensure directories for %v: %v", pkgIgnoreFilename, err)

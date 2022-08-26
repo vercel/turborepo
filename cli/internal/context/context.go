@@ -308,14 +308,12 @@ func (c *Context) parsePackageJSON(repoRoot fs.AbsolutePath, pkgJSONPath fs.Abso
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// log.Printf("[TRACE] reading package.json : %+v", buildFilePath)
 	if pkgJSONPath.FileExists() {
 		pkg, err := fs.ReadPackageJSON(pkgJSONPath)
 		if err != nil {
 			return fmt.Errorf("parsing %s: %w", pkgJSONPath, err)
 		}
 
-		// log.Printf("[TRACE] adding %+v to graph", pkg.Name)
 		relativePkgJSONPath, err := repoRoot.PathTo(pkgJSONPath)
 		if err != nil {
 			return err
