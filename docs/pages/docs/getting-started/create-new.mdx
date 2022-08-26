@@ -8,6 +8,8 @@ import { Tabs, Tab } from '../../../components/Tabs'
 
 # Creating a new monorepo
 
+## Quickstart
+
 To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package/create-turbo) npm package:
 
 ```sh
@@ -16,7 +18,241 @@ npx create-turbo@latest
 
 You can also clone a Turborepo starter repository to get a head start on your monorepo. To see Turborepo examples and starters, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turborepo/tree/main/examples).
 
-<Callout>
-These docs are in progress! Check out out [GitHub repository](https://github.com/vercel/turborepo) for progress.
-  
+## Full tutorial
+
+This tutorial will walk you through using the Turborepo [`basic` example](https://github.com/vercel/turborepo/tree/main/examples/basic). By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
+
+### 1. Running `create-turbo`
+
+First, run:
+
+```sh
+npx create-turbo@latest
+```
+
+This installs the [`create-turbo`](https://www.npmjs.com/package/create-turbo) CLI, and runs it. You'll be asked several questions:
+
+#### Where would you like to create your turborepo?
+
+Choose anywhere you like. The default is `./my-turborepo`.
+
+#### Which package manager do you want to use?
+
+Turborepo doesn't handle installing packages, so you'll need to choose either:
+
+- [npm](https://npmjs.com/)
+- [pnpm](https://pnpm.io/)
+- [yarn](https://yarnpkg.com/)
+
+If you're not sure, we recommend choosing `pnpm`. If you don't have it installed, cancel `create-turbo` (via `ctrl-C`) and take a look at the [installation instructions](https://pnpm.io/installation).
+
+#### Installation
+
+Once you've picked a package manager, `create-turbo` will create a bunch of new files inside the folder name you picked. It'll also install all the dependencies that come with the `basic` example by default.
+
+### 2. Exploring your new repo
+
+You might have noticed something in the terminal. `create-turbo` gave you a description of all of the things it was adding.
+
+```
+>>> Creating a new turborepo with the following:
+
+ - apps/web: Next.js with TypeScript
+ - apps/docs: Next.js with TypeScript
+ - packages/ui: Shared React component library
+ - packages/eslint-config-custom: Shared configuration (ESLint)
+ - packages/tsconfig: Shared TypeScript `tsconfig.json`
+```
+
+Each of these is a _workspace_ - a folder containing a `package.json`. Each workspace can declare its own dependencies, run its own scripts, and export code for other workspaces to use.
+
+Open the root folder - `./my-turborepo` - in your favourite code editor.
+
+#### Understanding `packages/ui`
+
+First, open `./packages/ui/package.json`. You'll notice that the package's name is `"name": "ui"` - right at the top of the file.
+
+Next, open `./apps/web/package.json`. You'll notice that this package's name is `"name": "web"`. But also - take a look in its dependencies.
+
+You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
+
+```json
+{
+  "dependencies": {
+    "ui": "workspace:*"
+  }
+}
+```
+
+This means that our **web app depends on our local `ui` package**.
+
+If you look inside `apps/docs/package.json`, you'll see the same thing. Both `web` and `docs` depend on `ui` - a shared component library.
+
+This pattern of sharing code across applications is extremely common in monorepos - and means that multiple apps can share a single design system.
+
+#### Understanding imports and exports
+
+Take a look inside `./apps/docs/pages/index.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
+
+```tsx
+// apps/docs/pages/index.tsx
+
+import { Button } from "ui";
+//       ^^^^^^         ^^
+
+export default function Docs() {
+  return (
+    <div>
+      <h1>Docs</h1>
+      <Button />
+    </div>
+  );
+}
+```
+
+They're importing `Button` directly from a dependency called `ui`! How does that work? Where is `Button` coming from?
+
+Open `packages/ui/package.json`. You'll notice these two attributes:
+
+```json
+// packages/ui/package.json
+{
+  "main": "./index.tsx",
+  "types": "./index.tsx",
+}
+```
+
+When packages import from `ui`, `main` tells them where to access the code they're importing. `types` tells them where the TypeScript types are located.
+
+So, let's look inside `packages/ui/index.tsx`:
+
+```tsx
+// packages/ui/index.tsx
+
+import * as React from "react";
+export * from "./Button";
+```
+
+Everything inside this file will be able to be used by packages that depend on `ui`.
+
+`index.tsx` is exporting everything from a file called `./Button`, so let's go there:
+
+```tsx
+// packages/ui/Button.tsx
+
+import * as React from "react";
+
+export const Button = () => {
+  return <button>Boop</button>;
+};
+```
+
+We've found our button! Any changes we make in this file will be shared across `web` and `docs`. Pretty cool!
+
+<Callout type="idea">
+
+Try experimenting with exporting a different function from this file. Perhaps `add(a, b)` for adding two numbers together.
+
+This can then be imported by `web` and `docs`.
+
 </Callout>
+
+#### Understanding `tsconfig`
+
+We have two more workspaces to look at, `tsconfig` and `eslint-config-custom`. Each of these allow for shared configuration across the monorepo. Let's look in `tsconfig`:
+
+```json
+// packages/tsconfig/package.json
+{
+  "name": "tsconfig",
+  "files": [
+    "base.json",
+    "nextjs.json",
+    "react-library.json"
+  ]
+}
+```
+
+Here, we specify three files to be exported, inside `files`. Packages which depend on `tsconfig` can then import them directly.
+
+For instance, `packages/ui` depends on `tsconfig`:
+
+```json
+// packages/ui/package.json
+
+{
+  "devDependencies": {
+    "tsconfig": "workspace:*",
+  }
+}
+```
+
+And inside its `tsconfig.json` file, it imports it using `extends`:
+
+```json
+// packages/ui/tsconfig.json
+
+{
+  "extends": "tsconfig/react-library.json",
+}
+```
+
+This pattern allows for a monorepo to share a single `tsconfig.json` across all its workspaces, reducing code duplication.
+
+#### Understanding `eslint-config-custom`
+
+Our final package is `eslint-config-custom`.
+
+You'll notice that this is named slightly differently to the other workspaces. It's not as concise as `ui` or `tsconfig`. Let's take a look inside `.eslintrc.js` in the root of the monorepo to figure out why.
+
+```ts
+// .eslintrc.js
+
+module.exports = {
+  // This tells ESLint to load the config from the package `eslint-config-custom`
+  extends: ["custom"],
+};
+```
+
+[ESLint](https://eslint.org/) resolves configuration files by looking for packages with the name `eslint-config-*`. This lets us write `extends: ['custom']` and have ESLint find our local workspace.
+
+But why is this in the root of the monorepo?
+
+The way ESLint finds its configuration file is by looking at the closest `.eslintrc.js`. If it can't find one in the current directory, it'll look in the directory above until it finds one.
+
+So that means that if we're working on code inside `packages/ui` (which doesn't have a `.eslintrc.js`) it'll refer to the _root_ instead.
+
+Apps that _do_ have an `.eslintrc.js` can refer to `custom` in the same way. For instance, in `docs`:
+
+```ts
+// apps/docs/.eslintrc.js
+
+module.exports = {
+  root: true,
+  extends: ["custom"],
+};
+```
+
+Just like `tsconfig`, `eslint-config-custom` lets us share ESLint configs across our entire monorepo, keeping things consistent no matter what project you're working on.
+
+#### Summary
+
+It's important to understand the dependencies between these packages. Let's map them out:
+
+{/* Could be worth a diagram here? */}
+
+- `web` - depends on `ui`, `tsconfig` and `eslint-config-custom`
+- `docs` - depends on `ui`, `tsconfig` and `eslint-config-custom`
+- `ui` - depends on `tsconfig` and `eslint-config-custom`
+- `tsconfig` - no dependencies
+- `eslint-config-custom` - no dependencies
+
+### 3. Running tasks with Turbo
+
+### How does HMR work?
+
+### Adding a new package
+
+#### Setting up HMR
+
+### Running only one package at a time
