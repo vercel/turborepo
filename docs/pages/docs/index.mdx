@@ -13,13 +13,13 @@ Turborepo is a blazing fast build system for JavaScript/TypeScript monorepos - c
 
 ## The problem
 
-Monorepos have many advantages - but **they struggle to scale**. Each repository you add has its own test suite, its own build process and its own pipeline. A single monorepo might have **hundreds of tasks to perform**.
+Monorepos have many advantages - but **they struggle to scale**. Each workspace you add has its own test suite, its own linting and its own build process. A single monorepo might have **hundreds of tasks to perform**.
 
 ## The solution
 
-**Turborepo speeds up your monorepo**. Our remote cache stores the result of all your tasks, meaning that **your CI never needs to do the same work twice**.
+**Turborepo solves your monorepo's scaling problem**. Our remote cache stores the result of all your tasks, meaning that **your CI never needs to do the same work twice**.
 
-Task scheduling can be a nightmare in a monorepo. Imagine `yarn build` needs to run before `yarn test`, across 40 workspaces. Turborepo **can schedule your tasks for maximum speed**, across all available cores.
+Task scheduling can be difficult in a monorepo. Imagine `yarn build` needs to run before `yarn test`, across all your workspaces. Turborepo **can schedule your tasks for maximum speed**, across all available cores.
 
 Turborepo can be **adopted incrementally**. It uses the `package.json` scripts you've already written, the dependencies you've already declared, and a single `turbo.json` file. You can **use it with any package manager**, like `npm`, `yarn` or `pnpm`. You can add it to any monorepo in just a few minutes.
 
