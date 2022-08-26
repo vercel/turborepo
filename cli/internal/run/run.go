@@ -914,7 +914,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// Create a logger
 	targetUI := taskCache.NewTerminal(e.ui)
 
-	hit, err := taskCache.RestoreOutputs(targetUI, targetLogger)
+	hit, err := taskCache.RestoreOutputs(ctx, targetUI, targetLogger)
 	if err != nil {
 		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
