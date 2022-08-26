@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
@@ -329,7 +328,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, repoRoot fs.AbsolutePath) *httpCache {
+func newHTTPCache(opts Opts, teamID string, client client, recorder analytics.Recorder, repoRoot fs.AbsolutePath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
@@ -338,7 +337,7 @@ func newHTTPCache(opts Opts, config *config.Config, client client, recorder anal
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
-			teamId:  config.TeamId,
+			teamId:  teamID,
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
 		repoRoot: repoRoot,

@@ -81,17 +81,17 @@ import { Tabs, Tab } from '../../../components/Tabs'
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
-    npm install turbo -D
+    npm install turbo --save-dev
     ```
   </Tab>
   <Tab>
     ```bash
-    yarn add turbo --dev -W
+    yarn add turbo --dev --ignore-workspace-root-check
     ```
   </Tab>
   <Tab>
     ```bash
-    pnpm add turbo -Dw
+    pnpm add turbo --save-dev --ignore-workspace-root-check
     ```
   </Tab>
 </Tabs>
