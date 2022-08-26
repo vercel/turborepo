@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLogstreamerOk(t *testing.T) {
@@ -103,7 +105,8 @@ func TestLogstreamerFlush(t *testing.T) {
 	defer logStreamerOut.Close()
 
 	logStreamerOut.Write([]byte(text))
-	logStreamerOut.flush()
+	err := logStreamerOut.flush()
+	assert.Nil(t, err, "there should be no error when logStreamerOut is flushed")
 	byteWriter.Flush()
 
 	s := strings.TrimSpace(buffer.String())
