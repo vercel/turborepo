@@ -9,6 +9,7 @@ import (
 
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -37,12 +38,12 @@ func Test_filter(t *testing.T) {
 	graph.Add("project-0")
 	packageJSONs["project-0"] = &fs.PackageJSON{
 		Name: "project-0",
-		Dir:  filepath.Join("packages", "project-0"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join("packages", "project-0")),
 	}
 	graph.Add("project-1")
 	packageJSONs["project-1"] = &fs.PackageJSON{
 		Name: "project-1",
-		Dir:  filepath.Join("packages", "project-1"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join("packages", "project-1")),
 	}
 	graph.Add("project-2")
 	packageJSONs["project-2"] = &fs.PackageJSON{
@@ -68,7 +69,7 @@ func Test_filter(t *testing.T) {
 	graph.Add("project-6")
 	packageJSONs["project-6"] = &fs.PackageJSON{
 		Name: "project-6",
-		Dir:  filepath.Join("project-5", "packages", "project-6"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join("project-5", "packages", "project-6")),
 	}
 	// Add dependencies
 	graph.Connect(dag.BasicEdge("project-0", "project-1"))
@@ -287,7 +288,7 @@ func Test_matchScopedPackage(t *testing.T) {
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  filepath.Join(root, "packages", "bar"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join(root, "packages", "bar")),
 	}
 	r := &Resolver{
 		Graph:        graph,
@@ -315,12 +316,12 @@ func Test_matchExactPackages(t *testing.T) {
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  filepath.Join(root, "packages", "@foo", "bar"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join(root, "packages", "@foo", "bar")),
 	}
 	graph.Add("bar")
 	packageJSONs["bar"] = &fs.PackageJSON{
 		Name: "bar",
-		Dir:  filepath.Join(root, "packages", "bar"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join(root, "packages", "bar")),
 	}
 	r := &Resolver{
 		Graph:        graph,
@@ -348,12 +349,12 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  filepath.Join(root, "packages", "@foo", "bar"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join(root, "packages", "@foo", "bar")),
 	}
 	graph.Add("@types/bar")
 	packageJSONs["@types/bar"] = &fs.PackageJSON{
 		Name: "@types/bar",
-		Dir:  filepath.Join(root, "packages", "@types", "bar"),
+		Dir:  turbopath.AnchoredSystemPath(filepath.Join(root, "packages", "@types", "bar")),
 	}
 	r := &Resolver{
 		Graph:        graph,
