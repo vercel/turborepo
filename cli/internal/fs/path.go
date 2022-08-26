@@ -222,6 +222,13 @@ func GetTurboDataDir() AbsolutePath {
 	return dataHome.Join("turborepo")
 }
 
+// GetUserConfigDir returns the platform-specific common location
+// for configuration files that belong to a user.
+func GetUserConfigDir() AbsolutePath {
+	configHome := AbsolutePathFromUpstream(xdg.ConfigHome)
+	return configHome.Join("turborepo")
+}
+
 type pathValue struct {
 	base     AbsolutePath
 	current  *AbsolutePath

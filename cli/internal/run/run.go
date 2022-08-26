@@ -155,9 +155,6 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatche
 		opts.cacheOpts.SkipFilesystem = true
 	}
 
-	if !config.IsLoggedIn() {
-		opts.cacheOpts.SkipRemote = true
-	}
 	processes := process.NewManager(config.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
@@ -688,9 +685,10 @@ func (r *run) logWarning(prefix string, err error) {
 func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
-	if r.config.IsLoggedIn() {
+	if apiClient.IsLoggedIn() {
 		analyticsSink = apiClient
 	} else {
+		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink
 	}
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.config.Logger.Named("analytics"))
