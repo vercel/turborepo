@@ -1,7 +1,7 @@
 import type { Feature } from "../content/features";
 
 type FeatureProps = {
-  feature: Feature;
+  feature: Omit<Feature, "page">;
   // include feature description
   detailed?: boolean;
 };
