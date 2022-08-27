@@ -148,6 +148,12 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
 }
 
+// PathTo returns the relative path between two absolute paths
+// This should likely eventually return an AnchoredSystemPath
+func (ap AbsolutePath) PathTo(other AbsolutePath) (string, error) {
+	return ap.RelativePathString(other.asString())
+}
+
 // Symlink implements os.Symlink(target, ap) for absolute path
 func (ap AbsolutePath) Symlink(target string) error {
 	return os.Symlink(target, ap.asString())

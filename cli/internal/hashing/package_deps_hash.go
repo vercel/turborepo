@@ -21,14 +21,14 @@ import (
 type PackageDepsOptions struct {
 	// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
 	// containing package.json. If omitted, the default value is the current working directory.
-	PackagePath string
+	PackagePath turbopath.AnchoredSystemPath
 
 	InputPatterns []string
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(rootPath fs.AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
-	pkgPath := rootPath.Join(p.PackagePath)
+	pkgPath := rootPath.Join(p.PackagePath.ToStringDuringMigration())
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
 	if len(p.InputPatterns) == 0 {
