@@ -18,12 +18,6 @@ const keys = {
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
 const cwd = path.join(__dirname, "../../../..");
 
-// Increase default timeout for this test file
-// since we are spawning a process to call turbo CLI and that can take some time
-// This may be overriden in individual tests with a third param to the `it` block. E.g.:
-// it('', () => {}, <override ms>)
-jest.setTimeout(10_000);
-
 const EXPECTED_HELP_MESSAGE = `
 "
   Create a new Turborepo
@@ -179,7 +173,7 @@ describe("create-turbo cli", () => {
           true
         );
       },
-      1000 * 120
+      1000 * 60 * 5
     );
 
     it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
@@ -215,7 +209,7 @@ describe("create-turbo cli", () => {
           true
         );
       },
-      1000 * 120
+      1000 * 60 * 5
     );
   });
 
