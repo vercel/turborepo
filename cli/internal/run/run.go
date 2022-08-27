@@ -155,9 +155,6 @@ func configureRun(config *config.Config, output cli.Ui, opts *Opts, signalWatche
 		opts.cacheOpts.SkipFilesystem = true
 	}
 
-	if !config.IsLoggedIn() {
-		opts.cacheOpts.SkipRemote = true
-	}
 	processes := process.NewManager(config.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
@@ -206,7 +203,7 @@ type run struct {
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
 	packageJSONPath := r.config.Cwd.Join("package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
+	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
@@ -688,9 +685,10 @@ func (r *run) logWarning(prefix string, err error) {
 func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
-	if r.config.IsLoggedIn() {
+	if apiClient.IsLoggedIn() {
 		analyticsSink = apiClient
 	} else {
+		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink
 	}
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.config.Logger.Named("analytics"))
@@ -826,7 +824,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 			Package:      pt.PackageName,
 			Hash:         hash,
 			Command:      command,
-			Dir:          pt.Pkg.Dir,
+			Dir:          pt.Pkg.Dir.ToString(),
 			Outputs:      pt.TaskDefinition.Outputs,
 			LogFile:      pt.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
@@ -939,7 +937,8 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
-	cmd.Dir = pt.Pkg.Dir
+	// TODO(gsoltis): I think this might be an actual bug? cmd.Dir should probably be an absolute path
+	cmd.Dir = pt.Pkg.Dir.ToStringDuringMigration()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 
