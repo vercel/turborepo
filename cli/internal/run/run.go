@@ -537,14 +537,17 @@ var _persistentFlags = []string{
 	"trace",
 	"cpuprofile",
 	"heap",
-	"no-gc",
 	"cwd",
 }
 
 func noopPersistentOptsDuringMigration(flags *pflag.FlagSet) {
 	_ = flags.CountP("verbosity", "v", "verbosity")
+	_ = flags.Bool("no-gc", false, "")
 	if err := flags.MarkHidden("verbosity"); err != nil {
 		// fail fast if we've misconfigured our flags
+		panic(err)
+	}
+	if err := flags.MarkHidden("no-gc"); err != nil {
 		panic(err)
 	}
 	for _, flag := range _persistentFlags {
