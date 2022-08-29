@@ -86,7 +86,10 @@ build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 prepublish:
 	make -j3 bench/turbo test-go lint-go
 
-publish: clean prepublish build
+../.npmrc:
+	echo '//registry.npmjs.org/:_authToken=$${NPM_TOKEN}' > ../.npmrc
+
+publish: clean prepublish build ../.npmrc
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
