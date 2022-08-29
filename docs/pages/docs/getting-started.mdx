@@ -169,7 +169,7 @@ The rough execution order for a given package is based on the `dependsOn` keys:
 3. `lint` runs in an arbitrary order as it has no upstream dependencies
 4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished.
 
-After execution, the full pipline can run:
+After execution, the full pipeline can run:
 
 ```sh
 npx turbo run build test lint deploy
