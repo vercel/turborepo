@@ -147,20 +147,17 @@ func main() {
 				}
 			}
 		} else {
-			// Don't disable the GC if this is a long-running process
-			isServe := false
+			// Check if the user has request GC be turned off
+			disableGC := false
 			for _, arg := range args {
 				if arg == "--no-gc" {
-					isServe = true
+					disableGC = true
 					break
 				}
 			}
 
-			// Disable the GC since we're just going to allocate a bunch of memory
-			// and then exit anyway. This speedup is not insignificant. Make sure to
-			// only do this here once we know that we're not going to be a long-lived
-			// process though.
-			if !isServe {
+			// If the user requests GC be disabled, honor that request.
+			if disableGC {
 				debug.SetGCPercent(-1)
 			}
 
