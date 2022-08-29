@@ -235,7 +235,7 @@ func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.
 	for _, changedFile := range changedFiles {
 		found := false
 		for pkgName, pkgInfo := range packageInfos {
-			if pkgName != util.RootPkgName && fileInPackage(changedFile, pkgInfo.Dir) {
+			if pkgName != util.RootPkgName && fileInPackage(changedFile, pkgInfo.Dir.ToStringDuringMigration()) {
 				changedPackages.Add(pkgName)
 				found = true
 				break

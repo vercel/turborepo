@@ -118,13 +118,11 @@ type userClient interface {
 }
 
 type login struct {
-	ui       *cli.ColoredUi
-	logger   hclog.Logger
-	repoRoot fs.AbsolutePath
-	openURL  browserClient
-	client   userClient
-	//writeUserConfig     configWriter
-	//writeRepoConfig     configWriter
+	ui                  *cli.ColoredUi
+	logger              hclog.Logger
+	repoRoot            fs.AbsolutePath
+	openURL             browserClient
+	client              userClient
 	promptEnableCaching func() (bool, error)
 }
 
@@ -142,11 +140,11 @@ func (l *login) directUserToURL(url string) {
 
 func (l *login) run(c *config.Config) error {
 	l.logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
-	l.logger.Debug(fmt.Sprintf("api url: %v", c.ApiUrl))
-	l.logger.Debug(fmt.Sprintf("login url: %v", c.LoginUrl))
+	l.logger.Debug(fmt.Sprintf("api url: %v", c.RemoteConfig.APIURL))
+	l.logger.Debug(fmt.Sprintf("login url: %v", c.LoginURL))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
-	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginUrl, redirectURL)
-	l.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginUrl))
+	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginURL, redirectURL)
+	l.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginURL))
 
 	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -154,7 +152,7 @@ func (l *login) run(c *config.Config) error {
 	var query url.Values
 	oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
-		http.Redirect(w, r, c.LoginUrl+"/turborepo/success", http.StatusFound)
+		http.Redirect(w, r, c.LoginURL+"/turborepo/success", http.StatusFound)
 	}, defaultPort)
 	if err != nil {
 		return errors.Wrap(err, "failed to start local server")
@@ -170,8 +168,7 @@ func (l *login) run(c *config.Config) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: query.Get("token")})
-	if err != nil {
+	if err := c.UserConfig.SetToken(query.Get("token")); err != nil {
 		return err
 	}
 	rawToken := query.Get("token")
@@ -197,7 +194,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	query.Add("teamId", ssoTeam)
 	query.Add("mode", "login")
 	query.Add("next", redirectURL)
-	loginURL := fmt.Sprintf("%v/api/auth/sso?%v", c.LoginUrl, query.Encode())
+	loginURL := fmt.Sprintf("%v/api/auth/sso?%v", c.LoginURL, query.Encode())
 
 	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -242,8 +239,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	err = config.WriteUserConfigFile(&config.TurborepoConfig{Token: verifiedUser.Token})
-	if err != nil {
+	if err := c.UserConfig.SetToken(verifiedUser.Token); err != nil {
 		return errors.Wrap(err, "failed to save auth token")
 	}
 	l.ui.Info("")
@@ -254,7 +250,7 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 		if err != nil {
 			return err
 		}
-		err = config.WriteRepoConfigFile(l.repoRoot, &config.TurborepoConfig{TeamId: verifiedUser.TeamID, ApiUrl: c.ApiUrl})
+		err = c.RepoConfig.SetTeamID(verifiedUser.TeamID)
 		if err != nil {
 			return errors.Wrap(err, "failed to save teamId")
 		}

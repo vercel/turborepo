@@ -13,6 +13,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
@@ -120,7 +121,7 @@ type prune struct {
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.config.Cwd)
 	rootPackageJSONPath := p.config.Cwd.Join("package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath.ToStringDuringMigration())
+	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
@@ -160,7 +161,7 @@ func (p *prune) prune(opts *opts) error {
 	if err := packageJSONPath.EnsureDir(); err != nil {
 		return errors.Wrap(err, "could not create output directory")
 	}
-	workspaces := []string{}
+	workspaces := []turbopath.AnchoredSystemPath{}
 	lockfile := rootPackageJSON.SubLockfile
 	targets := []interface{}{opts.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
@@ -174,19 +175,19 @@ func (p *prune) prune(opts *opts) error {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		targetDir := fullDir.Join(ctx.PackageInfos[internalDep].Dir)
+		targetDir := fullDir.Join(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
 		if err := targetDir.EnsureDir(); err != nil {
 			return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 		}
-		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
+		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
 		if opts.docker {
-			jsonDir := outDir.Join("json", ctx.PackageInfos[internalDep].PackageJSONPath)
+			jsonDir := outDir.Join("json", ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir.ToStringDuringMigration()); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		}

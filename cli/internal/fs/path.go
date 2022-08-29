@@ -148,6 +148,12 @@ func (ap AbsolutePath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(ap.asString(), path)
 }
 
+// PathTo returns the relative path between two absolute paths
+// This should likely eventually return an AnchoredSystemPath
+func (ap AbsolutePath) PathTo(other AbsolutePath) (string, error) {
+	return ap.RelativePathString(other.asString())
+}
+
 // Symlink implements os.Symlink(target, ap) for absolute path
 func (ap AbsolutePath) Symlink(target string) error {
 	return os.Symlink(target, ap.asString())
@@ -156,11 +162,6 @@ func (ap AbsolutePath) Symlink(target string) error {
 // Readlink implements os.Readlink(ap) for an absolute path
 func (ap AbsolutePath) Readlink() (string, error) {
 	return os.Readlink(ap.asString())
-}
-
-// Link implements os.Link(ap, target) for absolute path
-func (ap AbsolutePath) Link(target string) error {
-	return os.Link(ap.asString(), target)
 }
 
 // Remove removes the file or (empty) directory at the given path
@@ -225,6 +226,13 @@ func TempDir(subDir string) AbsolutePath {
 func GetTurboDataDir() AbsolutePath {
 	dataHome := AbsolutePathFromUpstream(xdg.DataHome)
 	return dataHome.Join("turborepo")
+}
+
+// GetUserConfigDir returns the platform-specific common location
+// for configuration files that belong to a user.
+func GetUserConfigDir() AbsolutePath {
+	configHome := AbsolutePathFromUpstream(xdg.ConfigHome)
+	return configHome.Join("turborepo")
 }
 
 type pathValue struct {
