@@ -30,11 +30,6 @@ func (p AnchoredUnixPath) RelativeTo(basePath AnchoredUnixPath) (AnchoredUnixPat
 	return AnchoredUnixPath(processed), err
 }
 
-// RestoreAnchor prefixes the AnchoredUnixPath with its anchor to return an AbsoluteUnixPath.
-func (p AnchoredUnixPath) RestoreAnchor(anchor AbsoluteUnixPath) AbsoluteUnixPath {
-	return AbsoluteUnixPath(filepath.Join(anchor.ToString(), p.ToString()))
-}
-
 // Join appends relative path segments to this RelativeUnixPath.
 func (p AnchoredUnixPath) Join(additional ...RelativeUnixPath) AnchoredUnixPath {
 	cast := RelativeUnixPathArray(additional)
