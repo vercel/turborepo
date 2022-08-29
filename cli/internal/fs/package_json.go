@@ -2,25 +2,26 @@ package fs
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"sync"
+
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // PackageJSON represents NodeJS package.json
 type PackageJSON struct {
-	Name                   string            `json:"name,omitempty"`
-	Version                string            `json:"version,omitempty"`
-	Scripts                map[string]string `json:"scripts,omitempty"`
-	Dependencies           map[string]string `json:"dependencies,omitempty"`
-	DevDependencies        map[string]string `json:"devDependencies,omitempty"`
-	OptionalDependencies   map[string]string `json:"optionalDependencies,omitempty"`
-	PeerDependencies       map[string]string `json:"peerDependencies,omitempty"`
-	PackageManager         string            `json:"packageManager,omitempty"`
-	Os                     []string          `json:"os,omitempty"`
-	Workspaces             Workspaces        `json:"workspaces,omitempty"`
-	Private                bool              `json:"private,omitempty"`
-	PackageJSONPath        string
-	Dir                    string // relative path from repo root to the package
+	Name                   string                       `json:"name,omitempty"`
+	Version                string                       `json:"version,omitempty"`
+	Scripts                map[string]string            `json:"scripts,omitempty"`
+	Dependencies           map[string]string            `json:"dependencies,omitempty"`
+	DevDependencies        map[string]string            `json:"devDependencies,omitempty"`
+	OptionalDependencies   map[string]string            `json:"optionalDependencies,omitempty"`
+	PeerDependencies       map[string]string            `json:"peerDependencies,omitempty"`
+	PackageManager         string                       `json:"packageManager,omitempty"`
+	Os                     []string                     `json:"os,omitempty"`
+	Workspaces             Workspaces                   `json:"workspaces,omitempty"`
+	Private                bool                         `json:"private,omitempty"`
+	PackageJSONPath        turbopath.AnchoredSystemPath // relative path from repo root to the package.json file
+	Dir                    turbopath.AnchoredSystemPath // relative path from repo root to the package
 	InternalDeps           []string
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
@@ -50,18 +51,15 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Parse parses package.json payload and returns structure.
-func Parse(payload []byte) (*PackageJSON, error) {
-	var packagejson *PackageJSON
-	err := json.Unmarshal(payload, &packagejson)
-	return packagejson, err
-}
-
 // ReadPackageJSON returns a struct of package.json
-func ReadPackageJSON(path string) (*PackageJSON, error) {
-	b, err := ioutil.ReadFile(path)
+func ReadPackageJSON(path AbsolutePath) (*PackageJSON, error) {
+	b, err := path.ReadFile()
 	if err != nil {
 		return nil, err
 	}
-	return Parse(b)
+	packageJSON := &PackageJSON{}
+	if err := json.Unmarshal(b, packageJSON); err != nil {
+		return nil, err
+	}
+	return packageJSON, nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -56,28 +57,28 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	packagesInfos := map[interface{}]*fs.PackageJSON{
 		"app0": {
-			Dir: filepath.FromSlash("app/app0"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app0")),
 		},
 		"app1": {
-			Dir: filepath.FromSlash("app/app1"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app1")),
 		},
 		"app2": {
-			Dir: filepath.FromSlash("app/app2"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app2")),
 		},
 		"app2-a": {
-			Dir: filepath.FromSlash("app/app2-a"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app2-a")),
 		},
 		"libA": {
-			Dir: filepath.FromSlash("libs/libA"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libA")),
 		},
 		"libB": {
-			Dir: filepath.FromSlash("libs/libB"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libB")),
 		},
 		"libC": {
-			Dir: filepath.FromSlash("libs/libC"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libC")),
 		},
 		"libD": {
-			Dir: filepath.FromSlash("libs/libD"),
+			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libD")),
 		},
 	}
 	packageNames := []string{}
