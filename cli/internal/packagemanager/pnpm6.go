@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 
 	"github.com/Masterminds/semver"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gopkg.in/yaml.v3"
 )
@@ -74,5 +75,9 @@ var nodejsPnpm6 = PackageManager{
 		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
+	},
+
+	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+		return lockfile.DecodePnpmLockfile(contents)
 	},
 }

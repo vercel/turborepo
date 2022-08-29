@@ -202,7 +202,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	for dep, version := range pkg.Dependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if util.IsYarn(c.PackageManager.Name) {
+	if c.Lockfile != nil {
 		pkg.TransitiveDeps = []string{}
 		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
@@ -326,7 +326,7 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsolutePath, pkgJSONPath 
 }
 
 func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if !util.IsYarn(c.PackageManager.Name) {
+	if c.Lockfile == nil {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
