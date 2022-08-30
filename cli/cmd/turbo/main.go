@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -147,20 +146,6 @@ func main() {
 				}
 			}
 		} else {
-			// Check if the user has request GC be turned off
-			disableGC := false
-			for _, arg := range args {
-				if arg == "--no-gc" {
-					disableGC = true
-					break
-				}
-			}
-
-			// If the user requests GC be disabled, honor that request.
-			if disableGC {
-				debug.SetGCPercent(-1)
-			}
-
 			exitCode, err = c.Run()
 			if err != nil {
 				ui.Error(err.Error())
