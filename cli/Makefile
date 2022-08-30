@@ -108,6 +108,8 @@ publish: clean prepublish build
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
+	npm config set "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist
 
