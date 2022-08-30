@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Feature } from "../content/features";
 
 type FeatureProps = {
@@ -6,25 +7,49 @@ type FeatureProps = {
   detailed?: boolean;
 };
 
+const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
+  const { Icon, name, description } = props.feature;
+  return (
+    <>
+      <div>
+        <Icon
+          className="h-8 w-8 dark:text-white  rounded-full p-1.5 dark:bg-white dark:bg-opacity-10 bg-black bg-opacity-5 text-black"
+          aria-hidden="true"
+        />
+      </div>
+      <div className="mt-4">
+        <h3 className="text-lg font-medium dark:text-white">{name}</h3>
+        <p className="mt-2 text-base font-medium text-gray-500 dark:text-gray-400">
+          {description}
+        </p>
+      </div>
+    </>
+  );
+};
+
+const featureWrapperClasses = `block p-10 bg-white shadow-lg rounded-xl dark:bg-opacity-5 no-underline`;
+
+export const DetailedFeatureLink = (props: {
+  href: string;
+  feature: FeatureProps["feature"];
+}) => {
+  return (
+    <Link href={props.href}>
+      <a className={featureWrapperClasses}>
+        <DetailedFeatureInner feature={props.feature}></DetailedFeatureInner>
+      </a>
+    </Link>
+  );
+};
+
 export default function Feature(props: FeatureProps) {
   const { feature, detailed = false } = props;
   const { Icon, name, description } = feature;
 
   if (detailed) {
     return (
-      <div className="p-10 bg-white shadow-lg rounded-xl dark:bg-opacity-5 ">
-        <div>
-          <Icon
-            className="h-8 w-8 dark:text-white  rounded-full p-1.5 dark:bg-white dark:bg-opacity-10 bg-black bg-opacity-5 text-black"
-            aria-hidden="true"
-          />
-        </div>
-        <div className="mt-4">
-          <h3 className="text-lg font-medium dark:text-white">{name}</h3>
-          <p className="mt-2 text-base font-medium text-gray-500 dark:text-gray-400">
-            {description}
-          </p>
-        </div>
+      <div className={featureWrapperClasses}>
+        <DetailedFeatureInner feature={feature} />
       </div>
     );
   }
