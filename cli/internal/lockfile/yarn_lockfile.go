@@ -14,16 +14,16 @@ import (
 
 var rnLineEnding = regexp.MustCompile("\"|:\r\n$")
 var nLineEnding = regexp.MustCompile("\"|:\n$")
-var r = regexp.MustCompile(`^[\w"]`)
+var lineStart = regexp.MustCompile(`^[\w"]`)
 var double = regexp.MustCompile(`\:\"\:`)
-var o = regexp.MustCompile(`\"\s\"`)
+var quotedWhitespace = regexp.MustCompile(`\"\s\"`)
 
 // deals with colons
 // integrity sha-... -> integrity: sha-...
 // "@apollo/client" latest -> "@apollo/client": latest
 // "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
 // apollo-client "0.0.0" -> apollo-client: "0.0.0"
-var a = regexp.MustCompile(`(\w|\")\s(\"|\w)`)
+var spaceDelimitedChars = regexp.MustCompile(`(\w|\")\s(\"|\w)`)
 
 // YarnLockfileEntry package information from yarn lockfile
 type YarnLockfileEntry struct {
@@ -42,14 +42,9 @@ type YarnLockfile map[string]*YarnLockfileEntry
 
 var _ Lockfile = (*YarnLockfile)(nil)
 
-// PossibleKeys Given a package name and version return all of the keys it might appear as in the lockfile
-func (l *YarnLockfile) PossibleKeys(name string, version string) []string {
-	return yarnPossibleKeys(name, version)
-}
-
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 func (l *YarnLockfile) ResolvePackage(name string, version string) (string, string, bool) {
-	for _, key := range l.PossibleKeys(name, version) {
+	for _, key := range yarnPossibleKeys(name, version) {
 		if entry, ok := (*l)[key]; ok {
 			return key, entry.Version, true
 		}
@@ -76,8 +71,8 @@ func (l *YarnLockfile) AllDependencies(key string) (map[string]string, bool) {
 	return deps, true
 }
 
-// SubLockfile Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (l *YarnLockfile) SubLockfile(packages []string) (Lockfile, error) {
+// Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
+func (l *YarnLockfile) Subgraph(packages []string) (Lockfile, error) {
 	lockfile := make(YarnLockfile, len(packages))
 	for _, key := range packages {
 		entry, ok := (*l)[key]
@@ -141,20 +136,20 @@ func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 	}
 
 	for i, line := range lines {
-		if r.MatchString(line) {
+		if lineStart.MatchString(line) {
 			first := fmt.Sprintf("\"%v\":", l.ReplaceAllString(line, ""))
 			lines[i] = double.ReplaceAllString(first, "\":")
 		}
 	}
 
 	if hasLF {
-		output = o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
+		output = quotedWhitespace.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
 	} else {
-		output = o.ReplaceAllString(strings.Join(lines, "\r\n"), "\": \"")
+		output = quotedWhitespace.ReplaceAllString(strings.Join(lines, "\r\n"), "\": \"")
 	}
 
-	next = []byte(a.ReplaceAllStringFunc(output, func(m string) string {
-		parts := a.FindStringSubmatch(m)
+	next = []byte(spaceDelimitedChars.ReplaceAllStringFunc(output, func(m string) string {
+		parts := spaceDelimitedChars.FindStringSubmatch(m)
 		return fmt.Sprintf("%s: %s", parts[1], parts[2])
 	}))
 
@@ -171,6 +166,9 @@ func yarnPossibleKeys(name string, version string) []string {
 	return []string{
 		fmt.Sprintf("%v@%v", name, version),
 		fmt.Sprintf("%v@npm:%v", name, version),
+		fmt.Sprintf("%v@file:%v", name, version),
+		fmt.Sprintf("%v@workspace:%v", name, version),
+		fmt.Sprintf("%v@yarn:%v", name, version),
 	}
 }
 

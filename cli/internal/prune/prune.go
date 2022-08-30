@@ -165,7 +165,7 @@ func (p *prune) prune(opts *opts) error {
 	}
 	targets = append(targets, internalDeps.List()...)
 
-	lockfileKeys := make([]string, len(rootPackageJSON.TransitiveDeps))
+	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
 	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
 
 	for _, internalDep := range targets {
@@ -217,7 +217,7 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 
-	lockfile, err := ctx.Lockfile.SubLockfile(lockfileKeys)
+	lockfile, err := ctx.Lockfile.Subgraph(lockfileKeys)
 	if err != nil {
 		return errors.Wrap(err, "Failed creating pruned lockfile")
 	}

@@ -134,9 +134,7 @@ func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheD
 		if err != nil {
 			return err
 		}
-		if lockfile != nil {
-			c.Lockfile = lockfile
-		}
+		c.Lockfile = lockfile
 
 		if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
 			// TODO(Gaspar) was this the intended return error?
@@ -336,19 +334,11 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
 
-			possibleKeys := c.Lockfile.PossibleKeys(directDepName, unresolvedVersion)
-
-			for _, key := range possibleKeys {
-				if seen.Contains(key) {
-					return
-				}
-			}
-
-			for _, key := range possibleKeys {
-				seen.Add(key)
-			}
-
 			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(directDepName, unresolvedVersion)
+			if seen.Contains(key) {
+				return
+			}
+			seen.Add(key)
 
 			if !ok {
 				return

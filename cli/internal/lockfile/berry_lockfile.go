@@ -16,14 +16,9 @@ type BerryLockfile map[string]*YarnLockfileEntry
 
 var _ Lockfile = (*BerryLockfile)(nil)
 
-// PossibleKeys Given a package name and version return all of the keys it might appear as in the lockfile
-func (l *BerryLockfile) PossibleKeys(name string, version string) []string {
-	return yarnPossibleKeys(name, version)
-}
-
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 func (l *BerryLockfile) ResolvePackage(name string, version string) (string, string, bool) {
-	for _, key := range l.PossibleKeys(name, version) {
+	for _, key := range yarnPossibleKeys(name, version) {
 		if entry, ok := (*l)[key]; ok {
 			return key, entry.Version, true
 		}
@@ -50,8 +45,8 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 	return deps, true
 }
 
-// SubLockfile Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (l *BerryLockfile) SubLockfile(packages []string) (Lockfile, error) {
+// Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
+func (l *BerryLockfile) Subgraph(packages []string) (Lockfile, error) {
 	lockfile := make(YarnLockfile, len(packages))
 	for _, key := range packages {
 		entry, ok := (*l)[key]
