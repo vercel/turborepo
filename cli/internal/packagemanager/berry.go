@@ -19,7 +19,7 @@ var nodejsBerry = PackageManager{
 	PackageDir: "node_modules",
 
 	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json").ToStringDuringMigration())
+		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}

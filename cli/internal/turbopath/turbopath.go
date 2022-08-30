@@ -83,13 +83,6 @@ func AbsoluteSystemPathFromUpstream(path string) AbsoluteSystemPath {
 	return AbsoluteSystemPath(path)
 }
 
-// AbsoluteUnixPathFromUpstream takes a path string and casts it to an
-// AbsoluteUnixPath without checking. If the input to this function is
-// not an AbsoluteUnixPath it will result in downstream errors.
-func AbsoluteUnixPathFromUpstream(path string) AbsoluteUnixPath {
-	return AbsoluteUnixPath(path)
-}
-
 // AnchoredSystemPathFromUpstream takes a path string and casts it to an
 // AnchoredSystemPath without checking. If the input to this function is
 // not an AnchoredSystemPath it will result in downstream errors.
