@@ -86,10 +86,7 @@ build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 prepublish:
 	make -j3 bench/turbo test-go lint-go
 
-../.npmrc:
-	echo '//registry.npmjs.org/:_authToken=$${NPM_TOKEN}' > ../.npmrc
-
-publish: clean prepublish build ../.npmrc
+publish: clean prepublish build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
@@ -110,6 +107,8 @@ publish: clean prepublish build ../.npmrc
 
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
+
+	npm config set "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist
