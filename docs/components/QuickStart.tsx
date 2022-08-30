@@ -1,43 +1,35 @@
-import Feature from "./Feature";
-import { SparklesIcon, ServerIcon } from "@heroicons/react/outline";
-import Link from "next/link";
+import { ServerIcon, SparklesIcon } from "@heroicons/react/outline";
+import { DetailedFeatureLink } from "./Feature";
 
 export const QuickStartArea = () => {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
-      <Feature
+      <DetailedFeatureLink
         feature={{
           Icon: SparklesIcon,
           description: (
             <p>
-              Want to start from scratch? Check out our guide on{" "}
-              <Link href="/docs/getting-started/create-new">
-                building a brand-new monorepo with Turborepo
-              </Link>
-              .
+              Want to start from scratch? Check out our guide on building a
+              brand-new monorepo with Turborepo.
             </p>
           ),
           name: "Create a new monorepo",
         }}
-        detailed
-      ></Feature>
-      <Feature
+        href="/docs/getting-started/create-new"
+      ></DetailedFeatureLink>
+      <DetailedFeatureLink
         feature={{
           Icon: ServerIcon,
           description: (
             <p>
               Turborepo can be incrementally added to any codebase. Check out
-              our guide on{" "}
-              <Link href="/docs/getting-started/existing-monorepo">
-                adding Turborepo to an existing monorepo
-              </Link>
-              .
+              our guide on adding Turborepo to an existing monorepo.
             </p>
           ),
           name: "Add to existing monorepo",
         }}
-        detailed
-      ></Feature>
+        href="/docs/getting-started/existing-monorepo"
+      ></DetailedFeatureLink>
     </div>
   );
 };
