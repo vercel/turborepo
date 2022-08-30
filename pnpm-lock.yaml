@@ -76,7 +76,7 @@ importers:
       next: 12.2.5
       next-themes: ^0.2.0
       nextra: 2.0.0-alpha.56
-      nextra-theme-docs: 2.0.0-alpha.59
+      nextra-theme-docs: 2.0.0-beta.21
       postcss: 8.4.16
       react: 17.0.2
       react-dom: 17.0.2
@@ -99,7 +99,7 @@ importers:
       next: 12.2.5_q6el6r4hbd2fftzckrwpdnyobi
       next-themes: 0.2.0_pzmtmsmkyiq4foirxc7gldcjme
       nextra: 2.0.0-alpha.56_react@17.0.2
-      nextra-theme-docs: 2.0.0-alpha.59_pzmtmsmkyiq4foirxc7gldcjme
+      nextra-theme-docs: 2.0.0-beta.21_pzmtmsmkyiq4foirxc7gldcjme
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
       react-hot-toast: 2.1.1_a3rolb2r43cxt5j5fxvpwhxlai
@@ -1410,20 +1410,20 @@ packages:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.13.0
 
-  /@reach/skip-nav/0.16.0_sfoxds7t5ydpegc3knd667wn6m:
-    resolution: {integrity: sha512-SY4PdNx+hQHbeOr/+qLc+QXdRt9NTVlt0r737bOqY1WURGBIEN9sGgsmIsHluP1/bQuAe0JKdOJ/tXiwQ3Z3ug==}
+  /@reach/skip-nav/0.17.0_sfoxds7t5ydpegc3knd667wn6m:
+    resolution: {integrity: sha512-wkkpQK3ffczzGHis6TaUvpOabuAL9n9Kh5vr4h56XPIJP3X77VcHUDk7MK3HbV1mTgamGxc9Hbd1sXKSWLu3yA==}
     peerDependencies:
       react: ^16.8.0 || 17.x
       react-dom: ^16.8.0 || 17.x
     dependencies:
-      '@reach/utils': 0.16.0_sfoxds7t5ydpegc3knd667wn6m
+      '@reach/utils': 0.17.0_sfoxds7t5ydpegc3knd667wn6m
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
       tslib: 2.4.0
     dev: false
 
-  /@reach/utils/0.16.0_sfoxds7t5ydpegc3knd667wn6m:
-    resolution: {integrity: sha512-PCggBet3qaQmwFNcmQ/GqHSefadAFyNCUekq9RrWoaU9hh/S4iaFgf2MBMdM47eQj5i/Bk0Mm07cP/XPFlkN+Q==}
+  /@reach/utils/0.17.0_sfoxds7t5ydpegc3knd667wn6m:
+    resolution: {integrity: sha512-M5y8fCBbrWeIsxedgcSw6oDlAMQDkl5uv3VnMVJ7guwpf4E48Xlh1v66z/1BgN/WYe2y8mB/ilFD2nysEfdGeA==}
     peerDependencies:
       react: ^16.8.0 || 17.x
       react-dom: ^16.8.0 || 17.x
@@ -5678,8 +5678,8 @@ packages:
     resolution: {integrity: sha512-y8j3a5/DkJCmS5x4dMCQL+OR0+2EAq3DOtio1COSHsmW2BGXnNCK3v12hJt1LrUz5iZH5g0LmuYOjDdI+czghA==}
     dev: false
 
-  /match-sorter/4.2.1:
-    resolution: {integrity: sha512-s+3h9TiZU9U1pWhIERHf8/f4LmBN6IXaRgo2CI17+XGByGS1GvG5VvXK9pcGyCjGe3WM3mSYRC3ipGrd5UEVgw==}
+  /match-sorter/6.3.1:
+    resolution: {integrity: sha512-mxybbo3pPNuA+ZuCUhm5bwNkXrJTbsk5VWbR5wiwz/GC6LIiegBGn2w3O08UG/jdbYLinw51fSQ5xNU1U3MgBw==}
     dependencies:
       '@babel/runtime': 7.18.9
       remove-accents: 0.4.2
@@ -6443,8 +6443,8 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.0.0-alpha.59_pzmtmsmkyiq4foirxc7gldcjme:
-    resolution: {integrity: sha512-X5/YZAJaX/TDDBEaUoAdsZ3gjnanRv2Q+1wKwtHsEa8QCz8z5BjgFqcIIXf6A8NK6vtaYS7R1paFga+wpFhpCg==}
+  /nextra-theme-docs/2.0.0-beta.21_pzmtmsmkyiq4foirxc7gldcjme:
+    resolution: {integrity: sha512-5aUZyBrEV1r+S8C/0VjZrCc9QwCMEakZUoFzxGoLESfjPYSfb8IqZUHoWC4Pvu3obXBtAxxnLs/KIfU/cNhIpw==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
@@ -6452,20 +6452,20 @@ packages:
     dependencies:
       '@headlessui/react': 1.6.6_sfoxds7t5ydpegc3knd667wn6m
       '@mdx-js/react': 2.1.2_react@17.0.2
-      '@reach/skip-nav': 0.16.0_sfoxds7t5ydpegc3knd667wn6m
-      classnames: 2.3.1
+      '@reach/skip-nav': 0.17.0_sfoxds7t5ydpegc3knd667wn6m
+      clsx: 1.2.1
       flexsearch: 0.7.21
       focus-visible: 5.2.0
       github-slugger: 1.4.0
       intersection-observer: 0.12.2
-      match-sorter: 4.2.1
+      match-sorter: 6.3.1
       next: 12.2.5_q6el6r4hbd2fftzckrwpdnyobi
       next-themes: 0.2.0_pzmtmsmkyiq4foirxc7gldcjme
       parse-git-url: 1.0.1
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
       scroll-into-view-if-needed: 2.2.29
-      title: 3.4.4
+      title: 3.5.3
     dev: false
 
   /nextra/2.0.0-alpha.56_react@17.0.2:
@@ -8101,8 +8101,8 @@ packages:
       tinycolor2: 1.4.2
     dev: false
 
-  /title/3.4.4:
-    resolution: {integrity: sha512-ViLJMyg5TFwWQ7Aqrs3e0IPINA99++cOLzQFIuBw6rKPhn8Cz7J7sdsag0BQPCf4ip7bHY1/docykbQe2R4N6Q==}
+  /title/3.5.3:
+    resolution: {integrity: sha512-20JyowYglSEeCvZv3EZ0nZ046vLarO37prvV0mbtQV7C8DJPGgN967r8SJkqd3XK3K3lD3/Iyfp3avjfil8Q2Q==}
     hasBin: true
     dependencies:
       arg: 1.0.0
