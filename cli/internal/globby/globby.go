@@ -14,6 +14,7 @@ import (
 )
 
 // GlobFiles returns an array of files that match the specified set of glob patterns.
+// The return files are absolute paths, assuming that basePath is an absolute path.
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
 	fsys := fs.CreateDirFSAtRoot(basePath)
 	fsysRoot := fs.GetDirFSRootPath(fsys)

@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     name: build and test
-    timeout-minutes: 15
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -24,7 +24,7 @@ jobs:
         os: [
             ubuntu-latest,
             macos-latest,
-            # windows-latest,
+            windows-latest,
           ]
 
     steps:
@@ -55,9 +55,6 @@ jobs:
         with:
           version: 7.2.1
 
-      - name: Setup Yarn
-        run: npm i -g yarn
-
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
@@ -80,8 +77,7 @@ jobs:
       - name: Run create-turbo tests
         # `pnpm --` calls the `turbo` script in the root package.json
         # --filter and --color args are for turbo CLI
-        # -- --runInBand is passed forward to jest (which is in packages/create-turbo package.json `test` script)
-        run: pnpm -- turbo run test --filter=create-turbo --color -- --runInBand
+        run: pnpm -- turbo run test --filter=create-turbo --color
 
       - name: Run all other packages tests
         run: pnpm -- turbo run test --filter=!create-turbo --filter=!cli --color

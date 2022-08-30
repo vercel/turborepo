@@ -24,7 +24,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	repoRoot := turbopath.AbsoluteSystemPathFromUpstream(root)
-	pkgName := turbopath.RelativeSystemPath("libA")
+	pkgName := turbopath.AnchoredSystemPath("libA")
 	type fileHash struct {
 		contents string
 		hash     string
@@ -51,7 +51,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		t.Fatalf("failed to write contents to .gitignore: %v", err)
 	}
 	rootIgnoreFile.Close()
-	pkgIgnoreFilename := repoRoot.Join(pkgName, ".gitignore")
+	pkgIgnoreFilename := pkgName.RestoreAnchor(repoRoot).Join(".gitignore")
 	err = fs.EnsureDir(pkgIgnoreFilename.ToString())
 	if err != nil {
 		t.Fatalf("failed to ensure directories for %v: %v", pkgIgnoreFilename, err)
@@ -85,7 +85,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	files[turbopath.AnchoredUnixPath("libA/.gitignore")] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
 
 	pkg := &fs.PackageJSON{
-		Dir: pkgName.ToString(),
+		Dir: pkgName,
 	}
 	hashes, err := manuallyHashPackage(pkg, []string{}, fs.AbsolutePath(repoRoot.ToString()))
 	if err != nil {
