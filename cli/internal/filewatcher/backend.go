@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // watchAddMode is used to indicate whether watchRecursively should synthesize events
@@ -64,7 +65,7 @@ func (f *fsNotifyBackend) Close() error {
 // Some fsnotify backends automatically add the contents of directories. Some do
 // not. Adding a watch is idempotent, so anytime any file we care about gets added,
 // watch it.
-func (f *fsNotifyBackend) onFileAdded(name fs.AbsolutePath) error {
+func (f *fsNotifyBackend) onFileAdded(name turbopath.AbsolutePath) error {
 	info, err := name.Lstat()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -86,7 +87,7 @@ func (f *fsNotifyBackend) onFileAdded(name fs.AbsolutePath) error {
 	return nil
 }
 
-func (f *fsNotifyBackend) watchRecursively(root fs.AbsolutePath, excludePatterns []string, addMode watchAddMode) error {
+func (f *fsNotifyBackend) watchRecursively(root turbopath.AbsolutePath, excludePatterns []string, addMode watchAddMode) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	err := fs.WalkMode(root.ToString(), func(name string, isDir bool, info os.FileMode) error {
@@ -187,7 +188,7 @@ func (f *fsNotifyBackend) Start() error {
 	return nil
 }
 
-func (f *fsNotifyBackend) AddRoot(root fs.AbsolutePath, excludePatterns ...string) error {
+func (f *fsNotifyBackend) AddRoot(root turbopath.AbsolutePath, excludePatterns ...string) error {
 	// We don't synthesize events for the initial watch
 	return f.watchRecursively(root, excludePatterns, dontSynthesizeEvents)
 }

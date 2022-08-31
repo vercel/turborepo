@@ -38,6 +38,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/spinner"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
@@ -868,7 +869,7 @@ type execContext struct {
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
 	taskHashes     *taskhash.Tracker
-	repoRoot       fs.AbsolutePath
+	repoRoot       turbopath.AbsolutePath
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -937,7 +938,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
-	// takes a RelativeSystemPath. Resolve during migration from AbsolutePath to
+	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsolutePath to
 	// AbsoluteSystemPath
 	cmd.Dir = e.repoRoot.Join(pt.Pkg.Dir.ToStringDuringMigration()).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)

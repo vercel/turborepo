@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
@@ -63,7 +64,7 @@ func expectNoFilesystemEvent(t *testing.T, ch <-chan Event) {
 	}
 }
 
-func expectWatching(t *testing.T, c *testClient, dirs []fs.AbsolutePath) {
+func expectWatching(t *testing.T, c *testClient, dirs []turbopath.AbsolutePath) {
 	t.Helper()
 	now := time.Now()
 	filename := fmt.Sprintf("test-%v", now.UnixMilli())
@@ -112,7 +113,7 @@ func TestFileWatching(t *testing.T) {
 		notify: ch,
 	}
 	fw.AddClient(c)
-	expectedWatching := []fs.AbsolutePath{
+	expectedWatching := []turbopath.AbsolutePath{
 		repoRoot,
 		repoRoot.Join("parent"),
 		repoRoot.Join("parent", "child"),
