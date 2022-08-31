@@ -9,6 +9,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -208,7 +209,7 @@ func TestNew(t *testing.T) {
 			name: "With just fsCache configured, new returns only an fsCache",
 			args: args{
 				opts: Opts{
-					Dir:            fs.AbsolutePath(cwd),
+					Dir:            turbopath.AbsolutePath(cwd),
 					SkipFilesystem: false,
 					SkipRemote:     true,
 				},
@@ -223,7 +224,7 @@ func TestNew(t *testing.T) {
 			name: "With both configured, new returns an fsCache and httpCache",
 			args: args{
 				opts: Opts{
-					Dir:            fs.AbsolutePath(cwd),
+					Dir:            turbopath.AbsolutePath(cwd),
 					SkipFilesystem: false,
 					SkipRemote:     false,
 					RemoteCacheOpts: fs.RemoteCacheOptions{

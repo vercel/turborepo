@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 type client interface {
@@ -33,7 +33,7 @@ type httpCache struct {
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
-	repoRoot       fs.AbsolutePath
+	repoRoot       turbopath.AbsolutePath
 }
 
 type limiter chan struct{}
@@ -223,7 +223,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 // restored. In the future, these should likely be repo-relative system paths
 // so that they are suitable for being fed into cache.Put for other caches.
 // For now, I think this is working because windows also accepts /-delimited paths.
-func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
+func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error) {
 	files := []string{}
 	missingLinks := []*tar.Header{}
 	gzr, err := gzip.NewReader(reader)
@@ -288,7 +288,7 @@ func restoreTar(root fs.AbsolutePath, reader io.Reader) ([]string, error) {
 
 var errNonexistentLinkTarget = errors.New("the link target does not exist")
 
-func restoreSymlink(root fs.AbsolutePath, hdr *tar.Header, allowNonexistentTargets bool) error {
+func restoreSymlink(root turbopath.AbsolutePath, hdr *tar.Header, allowNonexistentTargets bool) error {
 	// Note that hdr.Linkname is really the link target
 	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
 	linkFilename := root.Join(hdr.Name)
@@ -328,7 +328,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, teamID string, client client, recorder analytics.Recorder, repoRoot fs.AbsolutePath) *httpCache {
+func newHTTPCache(opts Opts, teamID string, client client, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,

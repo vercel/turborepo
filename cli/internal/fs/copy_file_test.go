@@ -7,13 +7,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/fs"
 )
 
 func TestCopyFile(t *testing.T) {
-	srcFilePath := AbsolutePath(filepath.Join(t.TempDir(), "src"))
-	destFilePath := AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	srcFilePath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "src"))
+	destFilePath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "dest"))
 	from := &LstatCachedFile{Path: srcFilePath}
 
 	// The src file doesn't exist, will error.
@@ -35,9 +36,9 @@ func TestCopyFile(t *testing.T) {
 	assert.NilError(t, err, "src exists dest does not, should not error.")
 
 	// Now test for symlinks.
-	symlinkSrcPath := AbsolutePath(filepath.Join(t.TempDir(), "symlink"))
-	symlinkTargetPath := AbsolutePath(filepath.Join(t.TempDir(), "target"))
-	symlinkDestPath := AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	symlinkSrcPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "symlink"))
+	symlinkTargetPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "target"))
+	symlinkDestPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "dest"))
 	fromSymlink := &LstatCachedFile{Path: symlinkSrcPath}
 
 	// Create the symlink target.
@@ -87,7 +88,7 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	assert.NilError(t, err, "Create")
 	err = srcFile.Chmod(readonlyMode)
 	assert.NilError(t, err, "Chmod")
-	err = CopyFile(&LstatCachedFile{Path: AbsolutePath(srcFilePath)}, dstFilePath)
+	err = CopyFile(&LstatCachedFile{Path: turbopath.AbsolutePath(srcFilePath)}, dstFilePath)
 	assert.NilError(t, err, "CopyOrLinkFile")
 	info, err := os.Lstat(dstFilePath)
 	assert.NilError(t, err, "Lstat")
