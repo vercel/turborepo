@@ -217,7 +217,7 @@ func Test_getTraversePath(t *testing.T) {
 	}
 }
 
-func requireGitCmd(t *testing.T, repoRoot fs.AbsolutePath, args ...string) {
+func requireGitCmd(t *testing.T, repoRoot turbopath.AbsolutePath, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoRoot.ToString()

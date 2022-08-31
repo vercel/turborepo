@@ -13,6 +13,7 @@ import (
 	"github.com/nightlyone/lockfile"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,11 +33,11 @@ func testBin() string {
 	return "node"
 }
 
-func getUnixSocket(dir fs.AbsolutePath) fs.AbsolutePath {
+func getUnixSocket(dir turbopath.AbsolutePath) turbopath.AbsolutePath {
 	return dir.Join("turbod-test.sock")
 }
 
-func getPidFile(dir fs.AbsolutePath) fs.AbsolutePath {
+func getPidFile(dir turbopath.AbsolutePath) turbopath.AbsolutePath {
 	return dir.Join("turbod-test.pid")
 }
 
@@ -157,7 +158,7 @@ type mockServer struct {
 	turbodprotocol.UnimplementedTurbodServer
 	helloErr     error
 	shutdownResp *turbodprotocol.ShutdownResponse
-	pidFile      fs.AbsolutePath
+	pidFile      turbopath.AbsolutePath
 }
 
 // Simulates server exiting by cleaning up the pid file

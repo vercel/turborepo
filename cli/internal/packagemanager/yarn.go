@@ -9,6 +9,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/lockfile"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 var nodejsYarn = PackageManager{
@@ -20,7 +21,7 @@ var nodejsYarn = PackageManager{
 	PackageDir:   "node_modules",
 	ArgSeparator: []string{"--"},
 
-	getWorkspaceGlobs: func(rootpath fs.AbsolutePath) ([]string, error) {
+	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
@@ -31,7 +32,7 @@ var nodejsYarn = PackageManager{
 		return pkg.Workspaces, nil
 	},
 
-	getWorkspaceIgnores: func(pm PackageManager, rootpath fs.AbsolutePath) ([]string, error) {
+	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsolutePath) ([]string, error) {
 		// function: https://github.com/yarnpkg/yarn/blob/3119382885ea373d3c13d6a846de743eca8c914b/src/config.js#L799
 
 		// Yarn is unique in ignore patterns handling.
@@ -53,7 +54,7 @@ var nodejsYarn = PackageManager{
 		return ignores, nil
 	},
 
-	canPrune: func(cwd fs.AbsolutePath) (bool, error) {
+	canPrune: func(cwd turbopath.AbsolutePath) (bool, error) {
 		return true, nil
 	},
 
@@ -76,7 +77,7 @@ var nodejsYarn = PackageManager{
 	},
 
 	// Detect for yarn needs to identify which version of yarn is running on the system.
-	detect: func(projectDirectory fs.AbsolutePath, packageManager *PackageManager) (bool, error) {
+	detect: func(projectDirectory turbopath.AbsolutePath, packageManager *PackageManager) (bool, error) {
 		specfileExists := projectDirectory.Join(packageManager.Specfile).FileExists()
 		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
 

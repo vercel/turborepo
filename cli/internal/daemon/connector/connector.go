@@ -11,8 +11,8 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -43,9 +43,9 @@ type Opts struct {
 type Client struct {
 	turbodprotocol.TurbodClient
 	*grpc.ClientConn
-	SockPath fs.AbsolutePath
-	PidPath  fs.AbsolutePath
-	LogPath  fs.AbsolutePath
+	SockPath turbopath.AbsolutePath
+	PidPath  turbopath.AbsolutePath
+	LogPath  turbopath.AbsolutePath
 }
 
 // Connector instances are used to create a connection to turbo's daemon process
@@ -54,18 +54,18 @@ type Connector struct {
 	Logger       hclog.Logger
 	Bin          string
 	Opts         Opts
-	SockPath     fs.AbsolutePath
-	PidPath      fs.AbsolutePath
-	LogPath      fs.AbsolutePath
+	SockPath     turbopath.AbsolutePath
+	PidPath      turbopath.AbsolutePath
+	LogPath      turbopath.AbsolutePath
 	TurboVersion string
 }
 
 // ConnectionError is returned in the error case from connect. It wraps the underlying
 // cause and adds a message with the relevant files for the user to check.
 type ConnectionError struct {
-	SockPath fs.AbsolutePath
-	PidPath  fs.AbsolutePath
-	LogPath  fs.AbsolutePath
+	SockPath turbopath.AbsolutePath
+	PidPath  turbopath.AbsolutePath
+	LogPath  turbopath.AbsolutePath
 	cause    error
 }
 
@@ -94,7 +94,7 @@ func (c *Connector) wrapConnectionError(err error) error {
 // lockFile returns a pointer to where a lockfile should be.
 // lockfile.New does not perform IO and the only error it produces
 // is in the case a non-absolute path was provided. We're guaranteeing an
-// AbsolutePath, so an error here is an indication of a bug and
+// turbopath.AbsolutePath, so an error here is an indication of a bug and
 // we should crash.
 func (c *Connector) lockFile() lockfile.Lockfile {
 	lockFile, err := lockfile.New(c.PidPath.ToString())

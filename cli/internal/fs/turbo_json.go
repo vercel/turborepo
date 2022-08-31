@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"muzzammil.xyz/jsonc"
 )
@@ -25,7 +26,7 @@ type TurboJSON struct {
 const configFile = "turbo.json"
 
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
-func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 	// If the configFile exists, we use that
 	// If pkg.Turbo exists, we warn about running the migration
 	// Use pkg.Turbo if the configFile doesn't exist
@@ -55,7 +56,7 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 }
 
 // readTurboJSON reads the configFile in to a struct
-func readTurboJSON(path AbsolutePath) (*TurboJSON, error) {
+func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
 	file, err := path.Open()
 	if err != nil {
 		return nil, err
