@@ -21,11 +21,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [
-            ubuntu-latest,
-            macos-latest,
-            windows-latest,
-          ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
 
     steps:
       - name: Check out code
@@ -74,10 +74,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Lint
+        run: pnpm -- turbo run lint --filter=!cli
+
+      - name: Check types
+        run: pnpm -- turbo run check-types --filter=!cli
+
+      - name: Run packages tests
+        run: pnpm -- turbo run test --filter=!create-turbo --filter=!cli --color
+
       - name: Run create-turbo tests
         # `pnpm --` calls the `turbo` script in the root package.json
         # --filter and --color args are for turbo CLI
         run: pnpm -- turbo run test --filter=create-turbo --color
-
-      - name: Run all other packages tests
-        run: pnpm -- turbo run test --filter=!create-turbo --filter=!cli --color
