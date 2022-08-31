@@ -12,7 +12,6 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
@@ -58,26 +57,36 @@ var ErrNoCachesEnabled = errors.New("no caches are enabled")
 // Opts holds configuration options for the cache
 // TODO(gsoltis): further refactor this into fs cache opts and http cache opts
 type Opts struct {
-	Dir             turbopath.AbsolutePath
+	OverrideDir     string
 	SkipRemote      bool
 	SkipFilesystem  bool
 	Workers         int
 	RemoteCacheOpts fs.RemoteCacheOptions
 }
 
+// ResolveCacheDir calculates the location turbo should use to cache artifacts,
+// based on the options supplied by the user.
+func (o *Opts) ResolveCacheDir(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
+	if o.OverrideDir != "" {
+		return fs.ResolveUnknownPath(repoRoot, o.OverrideDir)
+	}
+	return DefaultLocation(repoRoot)
+}
+
 var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
 allow reading and caching artifacts using the remote cache.`
 
 // AddFlags adds cache-related flags to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot turbopath.AbsolutePath) {
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	// skipping remote caching not currently a flag
 	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
-	fs.AbsolutePathVar(flags, &opts.Dir, "cache-dir", repoRoot, "Specify local filesystem cache directory.", "./node_modules/.cache/turbo")
+	flags.StringVar(&opts.OverrideDir, "cache-dir", "", "Override the filesystem cache directory.")
+	flags.IntVar(&opts.Workers, "cache-workers", 10, "Set the number of concurrent cache operations")
 }
 
 // New creates a new cache
-func New(opts Opts, config *config.Config, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	c, err := newSyncCache(opts, config, client, recorder, onCacheRemoved)
+func New(opts Opts, repoRoot turbopath.AbsolutePath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+	c, err := newSyncCache(opts, repoRoot, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
 	}
@@ -88,7 +97,7 @@ func New(opts Opts, config *config.Config, client client, recorder analytics.Rec
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, config *config.Config, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, repoRoot turbopath.AbsolutePath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
@@ -107,7 +116,7 @@ func newSyncCache(opts Opts, config *config.Config, client client, recorder anal
 	cacheImplementations := make([]Cache, 0, 2)
 
 	if useFsCache {
-		implementation, err := newFsCache(opts, recorder, config.Cwd)
+		implementation, err := newFsCache(opts, recorder, repoRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +125,7 @@ func newSyncCache(opts Opts, config *config.Config, client client, recorder anal
 
 	if useHTTPCache {
 		fmt.Println(ui.Dim("• Remote computation caching enabled"))
-		implementation := newHTTPCache(opts, config.RemoteConfig.TeamID, client, recorder, config.Cwd)
+		implementation := newHTTPCache(opts, client, recorder, repoRoot)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
 
