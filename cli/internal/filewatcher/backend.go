@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // watchAddMode is used to indicate whether watchRecursively should synthesize events
