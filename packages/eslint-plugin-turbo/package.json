@@ -15,9 +15,10 @@
     "dist/**"
   ],
   "scripts": {
-    "publish": "pnpm build && pnpm publish",
+    "release": "pnpm build && pnpm publish",
     "test": "jest",
-    "build": "tsup"
+    "build": "tsup",
+    "check-types": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/eslint": "^8.4.5",
@@ -26,6 +27,7 @@
     "@types/node": "^16.11.12",
     "jest": "^27.4.3",
     "ts-jest": "^27.1.1",
+    "tsconfig": "workspace:*",
     "tsup": "^6.2.0",
     "turbo-utils": "workspace:*",
     "typescript": "^4.7.4"

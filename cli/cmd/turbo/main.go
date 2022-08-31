@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -147,23 +146,6 @@ func main() {
 				}
 			}
 		} else {
-			// Don't disable the GC if this is a long-running process
-			isServe := false
-			for _, arg := range args {
-				if arg == "--no-gc" {
-					isServe = true
-					break
-				}
-			}
-
-			// Disable the GC since we're just going to allocate a bunch of memory
-			// and then exit anyway. This speedup is not insignificant. Make sure to
-			// only do this here once we know that we're not going to be a long-lived
-			// process though.
-			if !isServe {
-				debug.SetGCPercent(-1)
-			}
-
 			exitCode, err = c.Run()
 			if err != nil {
 				ui.Error(err.Error())
