@@ -31,7 +31,7 @@ You can also clone a Turborepo starter repository to get a head start on your mo
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./guides/workspaces) documentation.
+`turbo` is built on top of Workspaces, a way of managing multiple workspaces from within a single monorepo. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./guides/workspaces) documentation.
 
 You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
@@ -66,7 +66,7 @@ Specify your `workspaces` in your monorepo's root `package.json` file:
   </Tab>
   <Tab>
 <div/>
-Specify your `packages` in `pnpm-workspace.yaml`.
+Specify your `workspaces` in `pnpm-workspace.yaml`.
 ```yaml filename="pnpm-workspace.yaml"
 packages:
   - "packages/*"
@@ -78,7 +78,7 @@ packages:
 After configuring your workspaces, re-run your package manager's `install` command.
 
 <Callout>
-  Note: Nested workspaces are not supported. As package names are required to be unique, moving each package to be a child of the monorepo's root package should meet your needs.
+  Note: Nested workspaces are not supported. As workspace names are required to be unique, moving each workspace to be a child of the monorepo's root should meet your needs.
 </Callout>
 
 ## Install `turbo`
@@ -128,32 +128,32 @@ Workspaces that do not have the specified script defined in their `package.json`
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      // A package's `build` script depends on that package's
+      // A workspace's `build` script depends on that workspace's
       // dependencies' and devDependencies'
       // `build` tasks  being completed first
       // (the `^` symbol signifies `upstream`).
       "dependsOn": ["^build"],
-      // note: output globs are relative to each package's `package.json`
+      // note: output globs are relative to each workspace's `package.json`
       // (and not the monorepo root)
       "outputs": [".next/**"]
     },
     "test": {
-      // A package's `test` script depends on that package's
+      // A workspace's `test` script depends on that workspace's
       // own `build` script being completed first.
       "dependsOn": ["build"],
       "outputs": [],
-      // A package's `test` script should only be rerun when
+      // A workspace's `test` script should only be rerun when
       // either a `.tsx` or `.ts` file has changed in `src` or `test` folders.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "lint": {
-      // A package's `lint` script has no dependencies and
+      // A workspace's `lint` script has no dependencies and
       // can be run whenever. It also has no filesystem outputs.
       "outputs": []
     },
     "deploy": {
-      // A package's `deploy` script depends on the `build`,
-      // `test`, and `lint` scripts of the same package
+      // A workspace's `deploy` script depends on the `build`,
+      // `test`, and `lint` scripts of the same workspace
       // being completed. It also has no filesystem outputs.
       "dependsOn": ["build", "test", "lint"],
       "outputs": []
@@ -162,10 +162,10 @@ Workspaces that do not have the specified script defined in their `package.json`
 }
 ```
 
-The rough execution order for a given package is based on the `dependsOn` keys:
+The rough execution order for a given workspace is based on the `dependsOn` keys:
 
 1. `build` once its upstream dependencies have run their `build` commands
-2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs) within a package
+2. `test` once its _own_ `build` command is finished and has no filesystem outputs (just logs) within a workspace
 3. `lint` runs in an arbitrary order as it has no upstream dependencies
 4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished.
 
@@ -260,7 +260,7 @@ Then, link your turborepo to your remote cache:
 npx turbo link
 ```
 
-Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
+Once enabled, make some changes to a workspace you are currently caching and run tasks against it with `turbo run`.
 Your cache artifacts will now be stored locally and in your Remote Cache. To verify that this worked, delete your local Turborepo cache:
 
 ```sh
@@ -284,5 +284,5 @@ You're now up and running with Turborepo, but there are still a few things to do
 - [Understand how Turborepo caching works](./core-concepts/caching)
 - [Correctly handle environment variables](./core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
 - [Learn to orchestrate task running with pipelines](./core-concepts/pipelines)
-- [Efficiently filter package tasks](./core-concepts/filtering)
+- [Efficiently filter workspace tasks](./core-concepts/filtering)
 - [Configure Turborepo with your CI provider](./ci)
