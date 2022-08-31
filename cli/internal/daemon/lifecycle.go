@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
@@ -87,7 +87,7 @@ func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 }
 
 type lifecycle struct {
-	repoRoot     fs.AbsolutePath
+	repoRoot     turbopath.AbsolutePath
 	logger       hclog.Logger
 	output       cli.Ui
 	turboVersion string
