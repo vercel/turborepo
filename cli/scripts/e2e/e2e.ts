@@ -550,9 +550,13 @@ function runSmokeTests<T>(
     }
   );
 
-  if (["yarn"].includes(npmClient)) {
+  if (["yarn", "pnpm6", "pnpm"].includes(npmClient)) {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
+    const installArgs = ["--frozen-lockfile"];
+    if (["pnpm6", "pnpm"].includes(npmClient)) {
+      installArgs.push("-r");
+    }
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
@@ -587,7 +591,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", ["--frozen-lockfile"], {
+        const install = repo.run("install", installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -595,7 +599,7 @@ function runSmokeTests<T>(
         assert.is(
           install.exitCode,
           0,
-          "Expected yarn install --frozen-lockfile to succeed"
+          `Expected ${npmClient} install --frozen-lockfile to succeed`
         );
       }
     );
@@ -639,7 +643,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", ["--frozen-lockfile"], {
+        const install = repo.run("install", installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -647,7 +651,7 @@ function runSmokeTests<T>(
         assert.is(
           install.exitCode,
           0,
-          "Expected yarn install --frozen-lockfile to succeed"
+          `Expected ${npmClient} install --frozen-lockfile to succeed`
         );
       }
     );

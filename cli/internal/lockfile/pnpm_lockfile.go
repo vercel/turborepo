@@ -29,9 +29,8 @@ packages:
 // PnpmLockfile Go representation of the contents of 'pnpm-lock.yaml'
 // Reference https://github.com/pnpm/pnpm/blob/main/packages/lockfile-types/src/index.ts
 type PnpmLockfile struct {
-	Version   float32                    `yaml:"lockfileVersion"`
-	Importers map[string]ProjectSnapshot `yaml:"importers"`
-	// Keys are of the form '/$PACKAGE/$VERSION'
+	Version            float32                    `yaml:"lockfileVersion"`
+	Importers          map[string]ProjectSnapshot `yaml:"importers"`
 	Packages           map[string]PackageSnapshot `yaml:"packages,omitempty"`
 	NeverBuiltDeps     []string                   `yaml:"neverBuiltDependencies,omitempty"`
 	OnlyBuiltDeps      []string                   `yaml:"onlyBuiltDependencies,omitempty"`
@@ -61,7 +60,10 @@ type PackageSnapshot struct {
 		Node string `yaml:"node"`
 		NPM  string `yaml:"npm,omitempty"`
 	} `yaml:"engines,omitempty,flow"`
-	HasBin bool `yaml:"hasBin,omitempty"`
+	CPU           []string `yaml:"cpu,omitempty,flow"`
+	Os            []string `yaml:"os,omitempty,flow"`
+	HasBin        bool     `yaml:"hasBin,omitempty"`
+	RequiresBuild bool     `yaml:"requiresBuild,omitempty"`
 
 	PeerDependencies     map[string]string `yaml:"peerDependencies,omitempty"`
 	PeerDependenciesMeta map[string]struct {
@@ -72,18 +74,15 @@ type PackageSnapshot struct {
 	TransitivePeerDeps   []string          `yaml:"transitivePeerDependencies,omitempty"`
 	BundledDependencies  []string          `yaml:"bundledDependencies,omitempty"`
 
-	Dev           bool `yaml:"dev"`
-	Optional      bool `yaml:"optional,omitempty"`
-	RequiresBuild bool `yaml:"requiresBuild,omitempty"`
-	Patched       bool `yaml:"patched,omitempty"`
-	Prepare       bool `yaml:"prepare,omitempty"`
+	Dev      bool `yaml:"dev"`
+	Optional bool `yaml:"optional,omitempty"`
+	Patched  bool `yaml:"patched,omitempty"`
+	Prepare  bool `yaml:"prepare,omitempty"`
 
 	// only needed for packages that aren't in npm
 	Name    string `yaml:"name,omitempty"`
 	Version string `yaml:"version,omitempty"`
 
-	Os         []string `yaml:"os,omitempty"`
-	CPU        []string `yaml:"cpu,omitempty"`
 	LibC       []string `yaml:"libc,omitempty"`
 	Deprecated string   `yaml:"deprecated,omitempty"`
 }
@@ -112,10 +111,13 @@ type PatchFile struct {
 }
 
 func isSupportedVersion(version float32) error {
-	if version != 5.3 && version != 5.4 {
-		return errors.Errorf("Unable to generate pnpm-lock.yaml with lockfileVersion: %f", version)
+	supportedVersions := []float32{5.3, 5.4}
+	for _, supportedVersion := range supportedVersions {
+		if version == supportedVersion {
+			return nil
+		}
 	}
-	return nil
+	return errors.Errorf("Unable to generate pnpm-lock.yaml with lockfileVersion: %f. Supported lockfile versions are %v", version, supportedVersions)
 }
 
 // DependencyMeta metadata for dependencies
@@ -139,22 +141,21 @@ func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
 	return &lockfile, nil
 }
 
-// PossibleKeys Given a package name and version return all of the keys it might appear as in the lockfile
-func (p *PnpmLockfile) PossibleKeys(name string, version string) []string {
-	return []string{fmt.Sprintf("/%s/%s", name, version)}
-}
-
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 func (p *PnpmLockfile) ResolvePackage(name string, version string) (string, string, bool) {
 	resolvedVersion, ok := p.resolveSpecifier(name, version)
 	if !ok {
-		// @nocommit should we panic if not found?
 		return "", "", false
 	}
-	for _, key := range p.PossibleKeys(name, resolvedVersion) {
-		if entry, ok := (p.Packages)[key]; ok {
-			return key, entry.Version, true
+	key := fmt.Sprintf("/%s/%s", name, resolvedVersion)
+	if entry, ok := (p.Packages)[key]; ok {
+		var version string
+		if entry.Version != "" {
+			version = entry.Version
+		} else {
+			version = resolvedVersion
 		}
+		return key, version, true
 	}
 
 	return "", "", false
@@ -183,8 +184,8 @@ func (p *PnpmLockfile) AllDependencies(key string) (map[string]string, bool) {
 	return deps, true
 }
 
-// SubLockfile Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (p *PnpmLockfile) SubLockfile(packages []string) (Lockfile, error) {
+// Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
+func (p *PnpmLockfile) Subgraph(packages []string) (Lockfile, error) {
 	lockfilePackages := make(map[string]PackageSnapshot, len(packages))
 	for _, key := range packages {
 		entry, ok := p.Packages[key]
@@ -211,7 +212,6 @@ func (p *PnpmLockfile) SubLockfile(packages []string) (Lockfile, error) {
 
 // Encode encode the lockfile representation and write it to the given writer
 func (p *PnpmLockfile) Encode(w io.Writer) error {
-	// will need custom serial logic since 5.3 vs 5.4 will change how we serialize
 	if err := isSupportedVersion(p.Version); err != nil {
 		return err
 	}
@@ -229,14 +229,25 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 }
 
 func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, bool) {
-	for _, importer := range p.Importers {
+	// Check if the specifier is already a resolved version
+	_, ok := p.Packages[fmt.Sprintf("/%s/%s", name, specifier)]
+	if ok {
+		return specifier, true
+	}
+	for workspacePkg, importer := range p.Importers {
 		for pkgName, pkgSpecifier := range importer.Specifiers {
 			if name == pkgName && specifier == pkgSpecifier {
-				resolvedVersion, ok := importer.Dependencies[name]
-				if !ok {
-					panic(fmt.Sprintf("Unable to find resolved version for %s@%s", name, specifier))
+				if resolvedVersion, ok := importer.Dependencies[name]; ok {
+					return resolvedVersion, true
 				}
-				return resolvedVersion, true
+				if resolvedVersion, ok := importer.DevDependencies[name]; ok {
+					return resolvedVersion, true
+				}
+				if resolvedVersion, ok := importer.OptionalDependencies[name]; ok {
+					return resolvedVersion, true
+				}
+
+				panic(fmt.Sprintf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePkg))
 			}
 		}
 	}
