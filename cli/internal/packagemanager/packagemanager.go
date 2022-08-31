@@ -7,12 +7,14 @@ package packagemanager
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -54,6 +56,9 @@ type PackageManager struct {
 
 	// Detect if the project is using the Package Manager by inspecting the system.
 	detect func(projectDirectory fs.AbsolutePath, packageManager *PackageManager) (bool, error)
+
+	// Read a lockfile for a given package manager
+	readLockfile func(contents []byte) (lockfile.Lockfile, error)
 }
 
 var packageManagers = []PackageManager{
@@ -159,4 +164,17 @@ func (pm PackageManager) CanPrune(projectDirectory fs.AbsolutePath) (bool, error
 		return pm.canPrune(projectDirectory)
 	}
 	return false, nil
+}
+
+// ReadLockfile will read the applicable lockfile into memory
+func (pm PackageManager) ReadLockfile(cacheDir fs.AbsolutePath, projectDirectory fs.AbsolutePath) (lockfile.Lockfile, error) {
+	if pm.readLockfile == nil {
+		return nil, nil
+	}
+	contents, err := os.ReadFile(string(projectDirectory.Join(pm.Lockfile)))
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
+	}
+
+	return pm.readLockfile(contents)
 }

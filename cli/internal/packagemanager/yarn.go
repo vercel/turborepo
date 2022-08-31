@@ -8,6 +8,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 )
 
 var nodejsYarn = PackageManager{
@@ -92,5 +93,9 @@ var nodejsYarn = PackageManager{
 		}
 
 		return packageManager.Matches(packageManager.Slug, strings.TrimSpace(string(out)))
+	},
+
+	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+		return lockfile.DecodeYarnLockfile(contents)
 	},
 }
