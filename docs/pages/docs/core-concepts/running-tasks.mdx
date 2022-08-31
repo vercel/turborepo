@@ -6,85 +6,71 @@ description: Pipelines with Turborepo specify task relationships explicitly and 
 import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
-# What is a pipeline?
+# Running Tasks
 
-The tasks in your monorepo often need to run in a certain order. For instance, `build` might need to always be run before `test`. You might be used to writing a `package.json` script like the one below:
+Every monorepo has two main building blocks: **workspaces** and **tasks**. Let's imagine you have a monorepo containing **three workspaces**, each with **three tasks**:
 
-```json
-{
-  "scripts": {
-    // Run the build, for instance using Next
-    "build": "next build",
-    // Run the build BEFORE you test
-    "test": "npm run build && jest"
-  }
-}
+![](/images/docs/your-monorepo-excalidraw.png)
+
+Here, both `apps/web` and `apps/doc` use code from `packages/shared`. In fact, when they're built (via `build`) **they need `packages/shared` to be built _first_**.
+
+## Most tools don't optimize for speed
+
+Let's imagine we want to run all our tasks across all our workspaces. In a tool like `yarn`, you might run a script like this:
+
+```
+yarn workspaces run lint
+yarn workspaces run test
+yarn workspaces run build
 ```
 
-In this situation, `test` _depends on_ `build`. But what if this workspace needs to wait for _another_ workspace to be built before it can proceed?
+This would mean the tasks run like this:
 
-For example, what if your `@acme/app` workspace depends the `@acme/components` workspace, which also depends on the `@acme/shared-utils` workspace... It can get confusing.
+![](/images/docs/yarn-workspaces-excalidraw.png)
 
-This is your pipeline - the network of dependencies in your tasks across your monorepo.
+As you can see, `lint` gets run in all the workspaces. Then, `build` gets run - with `shared` going first. Finally, `test` gets run.
 
-## Your pipeline probably isn't optimized
+**This is the slowest possible way to run these tasks**. Each task needs to wait for the previous one to finish before it can start. To improve on this, we'll need a tool that can multitask.
 
-You can specify the dependencies between tasks in your monorepo by using `turbo.json`.
+## Turborepo can multitask
 
-1. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
-1. New developers to a project can look at the Turborepo `pipeline` and understand how tasks are related.
-
-To give you a sense of how powerful this can be, the diagram below compares the `turbo` and `lerna` task execution timelines:
-
-![Turborepo vs. Lerna Task Execution](/images/docs/turbo-vs-lerna-execution.png)
-
-Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls--whereas `lerna` can only execute one task a time. The results speak for themselves.
-
-## Defining a `pipeline`
-
-To define your monorepo's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the `turbo.json` configuration file at the root of your monorepo. `turbo` interprets this configuration to schedule, execute, and cache the outputs of the tasks in your monorepo.
-
-Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that `turbo` will be able to execute using [`turbo run <task>`](../reference/command-line-reference#turbo-run-task1-task2-1). Each task can also be configured to specify dependencies (with the [`dependsOn`](../reference/configuration#dependson) key) as well as other options for [caching](./caching). Workspaces that do not have this task defined in their `package.json`'s list of `scripts` will be ignored during `turbo run`.
-
-An example Pipeline configuration in `turbo.json`:
+In `turbo.json`, **we can define our task dependencies declaratively**:
 
 ```json
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
+      // ^build means build must be run in dependencies
+      // before it can be run in this workspace
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["build"],
       "outputs": [],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "lint": {
-      "outputs": []
-    },
-    "deploy": {
-      "dependsOn": ["build", "test", "lint"],
       "outputs": []
     }
   }
 }
 ```
 
-The rough execution order for a given package based on the `dependsOn` keys above will be:
+We can replace our `yarn workspaces` script with this:
 
-1. `build` once its dependencies have run their `build` commands
-2. `test` once its _own_ `build` command is finished
-3. `lint` whenever
-4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished
-
-The full pipeline can then be run:
-
-```bash
-npx turbo run deploy
+```diff
+- yarn workspaces run lint
+- yarn workspaces run test
+- yarn workspaces run build
++ turbo run lint test build
 ```
 
-Turborepo will then efficiently schedule execution minimizing idle CPUs.
+When we run it, Turborepo will **multitask as many tasks as possible over all available CPU's**, meaning our tasks run like this:
+
+![](/images/docs/turborepo-excalidraw.png)
+
+Both `lint` and `test` run immediately, because they have no `dependsOn` specified in `turbo.json`.
+
+The `build` task inside `shared` completes first, then `web` and `docs` build afterwards.
 
 ## Task Dependency Format
 
