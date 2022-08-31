@@ -15,15 +15,15 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/colorcache"
-	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/nodes"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 // LogReplayer is a function that is responsible for replaying the contents of a given log file
-type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile fs.AbsolutePath)
+type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile turbopath.AbsolutePath)
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
@@ -108,14 +108,14 @@ type RunCache struct {
 	cache                  cache.Cache
 	readsDisabled          bool
 	writesDisabled         bool
-	repoRoot               fs.AbsolutePath
+	repoRoot               turbopath.AbsolutePath
 	logReplayer            LogReplayer
 	outputWatcher          OutputWatcher
 	colorCache             *colorcache.ColorCache
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
-func New(cache cache.Cache, repoRoot fs.AbsolutePath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
+func New(cache cache.Cache, repoRoot turbopath.AbsolutePath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
 	rc := &RunCache{
 		taskOutputModeOverride: opts.TaskOutputModeOverride,
 		cache:                  cache,
@@ -144,7 +144,7 @@ type TaskCache struct {
 	pt                *nodes.PackageTask
 	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
-	LogFileName       fs.AbsolutePath
+	LogFileName       turbopath.AbsolutePath
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
@@ -326,7 +326,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 }
 
 // defaultLogReplayer will try to replay logs back to the given Ui instance
-func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName fs.AbsolutePath) {
+func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopath.AbsolutePath) {
 	logger.Debug("start replaying logs")
 	f, err := logFileName.Open()
 	if err != nil {

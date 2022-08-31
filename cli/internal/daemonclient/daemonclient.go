@@ -6,8 +6,8 @@ import (
 	"context"
 
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // DaemonClient provides access to higher-level functionality from the daemon to a turbo run.
@@ -17,10 +17,10 @@ type DaemonClient struct {
 
 // Status provides details about the daemon's status
 type Status struct {
-	UptimeMs uint64          `json:"uptimeMs"`
-	LogFile  fs.AbsolutePath `json:"logFile"`
-	PidFile  fs.AbsolutePath `json:"pidFile"`
-	SockFile fs.AbsolutePath `json:"sockFile"`
+	UptimeMs uint64                 `json:"uptimeMs"`
+	LogFile  turbopath.AbsolutePath `json:"logFile"`
+	PidFile  turbopath.AbsolutePath `json:"pidFile"`
+	SockFile turbopath.AbsolutePath `json:"sockFile"`
 }
 
 // New creates a new instance of a DaemonClient.

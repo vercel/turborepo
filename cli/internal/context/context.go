@@ -118,7 +118,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheDir fs.AbsolutePath) Option {
+func WithGraph(repoRoot turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsolutePath) Option {
 	return func(c *Context) error {
 		rootpath := repoRoot.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
@@ -302,7 +302,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 	return nil
 }
 
-func (c *Context) parsePackageJSON(repoRoot fs.AbsolutePath, pkgJSONPath fs.AbsolutePath) error {
+func (c *Context) parsePackageJSON(repoRoot turbopath.AbsolutePath, pkgJSONPath turbopath.AbsolutePath) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
