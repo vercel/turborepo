@@ -3,7 +3,6 @@ package fs
 import (
 	"fmt"
 	iofs "io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,10 +10,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/spf13/pflag"
 )
-
-// AbsolutePath represents a platform-dependent absolute path on the filesystem,
-// and is used to enfore correct path manipulation
-type AbsolutePath string
 
 func CheckedToAbsolutePath(s string) (AbsolutePath, error) {
 	if filepath.IsAbs(s) {
@@ -60,128 +55,6 @@ func GetCwd() (AbsolutePath, error) {
 		return "", fmt.Errorf("cwd is not an absolute path %v: %v", cwdRaw, err)
 	}
 	return cwd, nil
-}
-
-func (ap AbsolutePath) ToStringDuringMigration() string {
-	return ap.asString()
-}
-
-func (ap AbsolutePath) Join(args ...string) AbsolutePath {
-	return AbsolutePath(filepath.Join(ap.asString(), filepath.Join(args...)))
-}
-func (ap AbsolutePath) asString() string {
-	return string(ap)
-}
-func (ap AbsolutePath) Dir() AbsolutePath {
-	return AbsolutePath(filepath.Dir(ap.asString()))
-}
-
-// MkdirAll implements os.MkdirAll(ap, DirPermissions|0644)
-func (ap AbsolutePath) MkdirAll() error {
-	return os.MkdirAll(ap.asString(), DirPermissions|0644)
-}
-
-// Open implements os.Open(ap) for an absolute path
-func (ap AbsolutePath) Open() (*os.File, error) {
-	return os.Open(ap.asString())
-}
-
-// OpenFile implements os.OpenFile for an absolute path
-func (ap AbsolutePath) OpenFile(flags int, mode os.FileMode) (*os.File, error) {
-	return os.OpenFile(ap.asString(), flags, mode)
-}
-
-func (ap AbsolutePath) FileExists() bool {
-	return FileExists(ap.asString())
-}
-
-// Lstat implements os.Lstat for absolute path
-func (ap AbsolutePath) Lstat() (os.FileInfo, error) {
-	return os.Lstat(ap.asString())
-}
-
-// DirExists returns true if this path points to a directory
-func (ap AbsolutePath) DirExists() bool {
-	info, err := ap.Lstat()
-	return err == nil && info.IsDir()
-}
-
-// ContainsPath returns true if this absolute path is a parent of the
-// argument.
-func (ap AbsolutePath) ContainsPath(other AbsolutePath) (bool, error) {
-	return DirContainsPath(ap.asString(), other.asString())
-}
-
-// ReadFile reads the contents of the specified file
-func (ap AbsolutePath) ReadFile() ([]byte, error) {
-	return ioutil.ReadFile(ap.asString())
-}
-
-// WriteFile writes the contents of the specified file
-func (ap AbsolutePath) WriteFile(contents []byte, mode os.FileMode) error {
-	return ioutil.WriteFile(ap.asString(), contents, mode)
-}
-
-// EnsureDir ensures that the directory containing this file exists
-func (ap AbsolutePath) EnsureDir() error {
-	return EnsureDir(ap.asString())
-}
-
-// Create is the AbsolutePath wrapper for os.Create
-func (ap AbsolutePath) Create() (*os.File, error) {
-	return os.Create(ap.asString())
-}
-
-// Ext implements filepath.Ext(ap) for an absolute path
-func (ap AbsolutePath) Ext() string {
-	return filepath.Ext(ap.asString())
-}
-
-// ToString returns the string representation of this absolute path. Used for
-// interfacing with APIs that require a string
-func (ap AbsolutePath) ToString() string {
-	return ap.asString()
-}
-
-// RelativePathString returns the relative path from this AbsolutePath to another absolute path in string form as a string
-func (ap AbsolutePath) RelativePathString(path string) (string, error) {
-	return filepath.Rel(ap.asString(), path)
-}
-
-// PathTo returns the relative path between two absolute paths
-// This should likely eventually return an AnchoredSystemPath
-func (ap AbsolutePath) PathTo(other AbsolutePath) (string, error) {
-	return ap.RelativePathString(other.asString())
-}
-
-// Symlink implements os.Symlink(target, ap) for absolute path
-func (ap AbsolutePath) Symlink(target string) error {
-	return os.Symlink(target, ap.asString())
-}
-
-// Readlink implements os.Readlink(ap) for an absolute path
-func (ap AbsolutePath) Readlink() (string, error) {
-	return os.Readlink(ap.asString())
-}
-
-// Remove removes the file or (empty) directory at the given path
-func (ap AbsolutePath) Remove() error {
-	return os.Remove(ap.asString())
-}
-
-// RemoveAll implements os.RemoveAll for absolute paths.
-func (ap AbsolutePath) RemoveAll() error {
-	return os.RemoveAll(ap.asString())
-}
-
-// Base implements filepath.Base for an absolute path
-func (ap AbsolutePath) Base() string {
-	return filepath.Base(ap.asString())
-}
-
-// Rename implements os.Rename(ap, dest) for absolute paths
-func (ap AbsolutePath) Rename(dest AbsolutePath) error {
-	return os.Rename(ap.asString(), dest.asString())
 }
 
 // GetVolumeRoot returns the root directory given an absolute path.
