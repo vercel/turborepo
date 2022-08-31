@@ -2,22 +2,23 @@
 
 import * as path from "path";
 import execa from "execa";
-import fse from "fs-extra";
+import fs from "fs";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
+import { satisfies } from "semver";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
-import { shouldUsePnpm, getNpxCommandOfPnpm } from "./shouldUsePnpm";
+import { shouldUsePnpm } from "./shouldUsePnpm";
 import { tryGitInit } from "./git";
-import { PackageManager, PACKAGE_MANAGERS } from "./constants";
+import { CommandName, PACKAGE_MANAGERS } from "./constants";
 import { getPackageManagerVersion } from "./getPackageManagerVersion";
 
 interface Answers {
-  packageManager: PackageManager;
+  packageManager: CommandName;
 }
 
 const turboGradient = gradient("#0099F7", "#F11712");
@@ -101,29 +102,29 @@ async function run() {
   const isPnpmInstalled = shouldUsePnpm();
   let answers: Answers;
   if (flags.useNpm) {
-    answers = { packageManager: PACKAGE_MANAGERS["npm"] };
+    answers = { packageManager: "npm" };
   } else if (flags.usePnpm) {
-    answers = { packageManager: PACKAGE_MANAGERS["pnpm"] };
+    answers = { packageManager: "pnpm" };
   } else if (flags.useYarn) {
-    answers = { packageManager: PACKAGE_MANAGERS["yarn"] };
+    answers = { packageManager: "yarn" };
   } else {
     answers = await inquirer.prompt<{
-      packageManager: PackageManager;
+      packageManager: CommandName;
     }>([
       {
         name: "packageManager",
         type: "list",
         message: "Which package manager do you want to use?",
         choices: [
-          { name: "npm", value: PACKAGE_MANAGERS["npm"] },
+          { name: "npm", value: "npm" },
           {
             name: "pnpm",
-            value: PACKAGE_MANAGERS["pnpm"],
+            value: "pnpm",
             disabled: !isPnpmInstalled && "not installed",
           },
           {
             name: "yarn",
-            value: PACKAGE_MANAGERS["yarn"],
+            value: "yarn",
             disabled: !isYarnInstalled && "not installed",
           },
         ],
@@ -135,32 +136,45 @@ async function run() {
   let relativeProjectDir = path.relative(process.cwd(), projectDir);
   let projectDirIsCurrentDir = relativeProjectDir === "";
   if (!projectDirIsCurrentDir) {
-    if (fse.existsSync(projectDir)) {
+    if (fs.existsSync(projectDir) && fs.readdirSync(projectDir).length !== 0) {
       console.log(
         `️🚨 Oops, "${relativeProjectDir}" already exists. Please try again with a different directory.`
       );
       process.exit(1);
     } else {
-      await fse.mkdir(projectDir);
+      fs.mkdirSync(projectDir, { recursive: true });
     }
   }
 
   // copy the shared template
   let sharedTemplate = path.resolve(__dirname, "../templates", `_shared_ts`);
-  await fse.copy(sharedTemplate, projectDir);
+  fs.cpSync(sharedTemplate, projectDir, { recursive: true });
 
-  // copy the server template
-  let serverTemplate = path.resolve(
+  let packageManagerVersion = getPackageManagerVersion(answers.packageManager);
+  let packageManagerConfigs = PACKAGE_MANAGERS[answers.packageManager];
+  let packageManager = packageManagerConfigs.find((packageManager) =>
+    satisfies(packageManagerVersion, packageManager.semver)
+  );
+
+  if (!packageManager) {
+    throw new Error("Unsupported package manager version.");
+  }
+
+  // copy the per-package-manager template
+  let packageManagerTemplate = path.resolve(
     __dirname,
     "../templates",
-    answers.packageManager.command
+    packageManager.template
   );
-  if (fse.existsSync(serverTemplate)) {
-    await fse.copy(serverTemplate, projectDir, { overwrite: true });
+  if (fs.existsSync(packageManagerTemplate)) {
+    fs.cpSync(packageManagerTemplate, projectDir, {
+      recursive: true,
+      force: true,
+    });
   }
 
   // rename dotfiles
-  await fse.move(
+  fs.renameSync(
     path.join(projectDir, "gitignore"),
     path.join(projectDir, ".gitignore")
   );
@@ -178,38 +192,34 @@ async function run() {
     };
   });
 
-  sharedPkg.packageManager = `${
-    answers.packageManager.command
-  }@${getPackageManagerVersion(answers.packageManager)}`;
+  sharedPkg.packageManager = `${packageManager.command}@${packageManagerVersion}`;
   sharedPkg.name = projectName;
 
   // write package.json
-  await fse.writeFile(
+  fs.writeFileSync(
     path.join(projectDir, "package.json"),
     JSON.stringify(sharedPkg, null, 2)
   );
 
-  if (flags.install) {
-    console.log();
-    console.log(`>>> Creating a new turborepo with the following:`);
-    console.log();
-    console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
-    console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
-    console.log(
-      ` - ${chalk.bold("packages/ui")}: Shared React component library`
-    );
-    console.log(
-      ` - ${chalk.bold(
-        "packages/eslint-config-custom"
-      )}: Shared configuration (ESLint)`
-    );
-    console.log(
-      ` - ${chalk.bold(
-        "packages/tsconfig"
-      )}: Shared TypeScript \`tsconfig.json\``
-    );
-    console.log();
+  console.log();
+  console.log(`>>> Created a new turborepo with the following:`);
+  console.log();
+  console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
+  console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
+  console.log(
+    ` - ${chalk.bold("packages/ui")}: Shared React component library`
+  );
+  console.log(
+    ` - ${chalk.bold(
+      "packages/eslint-config-custom"
+    )}: Shared configuration (ESLint)`
+  );
+  console.log(
+    ` - ${chalk.bold("packages/tsconfig")}: Shared TypeScript \`tsconfig.json\``
+  );
+  console.log();
 
+  if (flags.install) {
     const spinner = ora({
       text: "Installing dependencies...",
       spinner: {
@@ -217,30 +227,11 @@ async function run() {
       },
     }).start();
 
-    const installArgs = ["install"];
-    await execa(`${answers.packageManager.command}`, installArgs, {
+    await execa(`${packageManager.command}`, packageManager.installArgs, {
       stdio: "ignore",
       cwd: projectDir,
     });
     spinner.stop();
-  } else {
-    console.log();
-    console.log(`>>> Bootstrapped a new turborepo with the following:`);
-    console.log();
-    console.log(` - ${chalk.bold("apps/web")}: Next.js with TypeScript`);
-    console.log(` - ${chalk.bold("apps/docs")}: Next.js with TypeScript`);
-    console.log(
-      ` - ${chalk.bold("packages/ui")}: Shared React component library`
-    );
-    console.log(
-      ` - ${chalk.bold("packages/config")}: Shared configuration (ESLint)`
-    );
-    console.log(
-      ` - ${chalk.bold(
-        "packages/tsconfig"
-      )}: Shared TypeScript \`tsconfig.json\``
-    );
-    console.log();
   }
 
   process.chdir(projectDir);
@@ -249,41 +240,37 @@ async function run() {
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
-      )} Your new Turborepo is ready. `
+      )} Your new Turborepo is ready.`
     );
     console.log("Inside this directory, you can run several commands:");
   } else {
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
-      )} Created a new Turborepo at "${relativeProjectDir}". `
+      )} Created a new Turborepo at "${relativeProjectDir}".`
     );
     console.log("Inside that directory, you can run several commands:");
   }
 
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager.command} run build`));
+  console.log(chalk.cyan(`  ${packageManager.command} run build`));
   console.log(`     Build all apps and packages`);
   console.log();
-  console.log(chalk.cyan(`  ${answers.packageManager.command} run dev`));
+  console.log(chalk.cyan(`  ${packageManager.command} run dev`));
   console.log(`     Develop all apps and packages`);
   console.log();
   console.log(`Turborepo will cache locally by default. For an additional`);
   console.log(`speed boost, enable Remote Caching with Vercel by`);
   console.log(`entering the following command:`);
   console.log();
-  console.log(
-    chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
-  );
+  console.log(chalk.cyan(`  ${packageManager.executable} turbo login`));
   console.log();
   console.log(`We suggest that you begin by typing:`);
   console.log();
   if (!projectDirIsCurrentDir) {
     console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
   }
-  console.log(
-    chalk.cyan(`  ${getNpxCommand(answers.packageManager)} turbo login`)
-  );
+  console.log(chalk.cyan(`  ${packageManager.executable} turbo login`));
   console.log();
 }
 
@@ -310,13 +297,5 @@ async function notifyUpdate(): Promise<void> {
     process.exit();
   } catch {
     // ignore error
-  }
-}
-
-function getNpxCommand(pkgManager: PackageManager): string {
-  if (pkgManager.command === "pnpm") {
-    return getNpxCommandOfPnpm();
-  } else {
-    return "npx";
   }
 }

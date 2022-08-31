@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 type fseventsBackend struct {
@@ -61,7 +62,7 @@ var (
 
 // AddRoot starts watching a new directory hierarchy. Events matching the provided excludePatterns
 // will not be forwarded.
-func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...string) error {
+func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsolutePath, excludePatterns ...string) error {
 	// We need to resolve the real path to the hierarchy that we are going to watch
 	realRoot, err := realpath.Realpath(someRoot.ToString())
 	if err != nil {
@@ -145,7 +146,7 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 	return nil
 }
 
-func waitForCookie(root fs.AbsolutePath, events <-chan []fsevents.Event, timeout time.Duration) error {
+func waitForCookie(root turbopath.AbsolutePath, events <-chan []fsevents.Event, timeout time.Duration) error {
 	cookiePath := root.Join(".turbo-cookie")
 	if err := cookiePath.WriteFile([]byte("cookie"), 0755); err != nil {
 		return err

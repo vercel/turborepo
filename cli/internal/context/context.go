@@ -9,7 +9,9 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
@@ -25,7 +27,7 @@ type Context struct {
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
 	RootNode         string
-	Lockfile         *fs.YarnLockfile
+	Lockfile         lockfile.Lockfile
 	PackageManager   *packagemanager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -116,7 +118,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheDir fs.AbsolutePath) Option {
+func WithGraph(repoRoot turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsolutePath) Option {
 	return func(c *Context) error {
 		rootpath := repoRoot.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
@@ -128,14 +130,11 @@ func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheD
 			c.PackageManager = packageManager
 		}
 
-		// this should go into the packagemanager abstraction
-		if util.IsYarn(c.PackageManager.Name) {
-			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, cacheDir)
-			if err != nil {
-				return fmt.Errorf("yarn.lock: %w", err)
-			}
-			c.Lockfile = lockfile
+		lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
+		if err != nil {
+			return err
 		}
+		c.Lockfile = lockfile
 
 		if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
 			// TODO(Gaspar) was this the intended return error?
@@ -143,6 +142,7 @@ func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheD
 		}
 
 		// Get the workspaces from the package manager.
+		// workspaces are absolute paths
 		workspaces, err := c.PackageManager.GetWorkspaces(repoRoot)
 
 		if err != nil {
@@ -154,12 +154,9 @@ func WithGraph(repoRoot fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheD
 		// until all parsing is complete
 		parseJSONWaitGroup := &errgroup.Group{}
 		for _, workspace := range workspaces {
-			relativePkgPath, err := filepath.Rel(rootpath, workspace)
-			if err != nil {
-				return fmt.Errorf("non-nested package.json path %w", err)
-			}
+			pkgJSONPath := fs.UnsafeToAbsolutePath(workspace)
 			parseJSONWaitGroup.Go(func() error {
-				return c.parsePackageJSON(relativePkgPath)
+				return c.parsePackageJSON(repoRoot, pkgJSONPath)
 			})
 		}
 
@@ -206,7 +203,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	if util.IsYarn(c.PackageManager.Name) {
-		pkg.SubLockfile = make(fs.YarnLockfile)
+		pkg.TransitiveDeps = []string{}
 		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
@@ -254,7 +251,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir, rootpath) {
+		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
 			c.TopologicalGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
@@ -277,7 +274,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 		}
 	}
 
-	pkg.SubLockfile = make(fs.YarnLockfile)
+	pkg.TransitiveDeps = []string{}
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
@@ -305,21 +302,23 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 	return nil
 }
 
-func (c *Context) parsePackageJSON(buildFilePath string) error {
+func (c *Context) parsePackageJSON(repoRoot turbopath.AbsolutePath, pkgJSONPath turbopath.AbsolutePath) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// log.Printf("[TRACE] reading package.json : %+v", buildFilePath)
-	if fs.FileExists(buildFilePath) {
-		pkg, err := fs.ReadPackageJSON(buildFilePath)
+	if pkgJSONPath.FileExists() {
+		pkg, err := fs.ReadPackageJSON(pkgJSONPath)
 		if err != nil {
-			return fmt.Errorf("parsing %s: %w", buildFilePath, err)
+			return fmt.Errorf("parsing %s: %w", pkgJSONPath, err)
 		}
 
-		// log.Printf("[TRACE] adding %+v to graph", pkg.Name)
+		relativePkgJSONPath, err := repoRoot.PathTo(pkgJSONPath)
+		if err != nil {
+			return err
+		}
 		c.TopologicalGraph.Add(pkg.Name)
-		pkg.PackageJSONPath = buildFilePath
-		pkg.Dir = filepath.Dir(buildFilePath)
+		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
+		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
 		c.PackageInfos[pkg.Name] = pkg
 		c.PackageNames = append(c.PackageNames, pkg.Name)
 	}
@@ -334,42 +333,30 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 		wg.Add(1)
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
-			var lockfileKey string
-			lockfileKey1 := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
-			lockfileKey2 := fmt.Sprintf("%v@npm:%v", directDepName, unresolvedVersion)
-			if seen.Contains(lockfileKey1) || seen.Contains(lockfileKey2) {
+
+			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(directDepName, unresolvedVersion)
+			if seen.Contains(key) {
 				return
 			}
+			seen.Add(key)
 
-			seen.Add(lockfileKey1)
-			seen.Add(lockfileKey2)
-
-			var entry *fs.LockfileEntry
-			entry1, ok1 := (*c.Lockfile)[lockfileKey1]
-			entry2, ok2 := (*c.Lockfile)[lockfileKey2]
-			if !ok1 && !ok2 {
+			if !ok {
 				return
-			}
-			if ok1 {
-				lockfileKey = lockfileKey1
-				entry = entry1
-			} else {
-				lockfileKey = lockfileKey2
-				entry = entry2
 			}
 
 			pkg.Mu.Lock()
-			pkg.SubLockfile[lockfileKey] = entry
+			pkg.TransitiveDeps = append(pkg.TransitiveDeps, key)
 			pkg.Mu.Unlock()
-			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
+			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, resolvedVersion))
 
-			if len(entry.Dependencies) > 0 {
-				c.resolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
-			}
-			if len(entry.OptionalDependencies) > 0 {
-				c.resolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
+			allDeps, ok := c.Lockfile.AllDependencies(key)
+			if !ok {
+				panic(fmt.Sprintf("Unable to find entry for %s", key))
 			}
 
+			if len(allDeps) > 0 {
+				c.resolveDepGraph(wg, allDeps, resolvedDepsSet, seen, pkg)
+			}
 		}(directDepName, unresolvedVersion)
 	}
 }
