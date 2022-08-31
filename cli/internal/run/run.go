@@ -537,7 +537,6 @@ var _persistentFlags = []string{
 	"trace",
 	"cpuprofile",
 	"heap",
-	"no-gc",
 	"cwd",
 }
 
