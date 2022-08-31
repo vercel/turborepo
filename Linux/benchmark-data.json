@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1661300914658,
+  "lastUpdate": 1661961155090,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "Linux Benchmark": [
@@ -138,6 +138,52 @@
             "value": 44130.6,
             "unit": "ms",
             "range": "12410"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Matt Pocock",
+            "username": "mattpocock",
+            "email": "mattpocockvoice@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "930df01acb20239aa665befafd3edf3fde0d831b",
+          "message": "[refactor] - made Features components more reusable (#1782)\n\nNo behaviour changes.\n\nDid this in order to re-use the Feature component elsewhere.",
+          "timestamp": "2022-08-31T15:18:36Z",
+          "url": "https://github.com/vercel/turborepo/commit/930df01acb20239aa665befafd3edf3fde0d831b"
+        },
+        "date": 1661961155085,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 751856,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 9591.4,
+            "unit": "ms",
+            "range": "1364"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 9384.6,
+            "unit": "ms",
+            "range": "175"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 36593.4,
+            "unit": "ms",
+            "range": "11260"
           }
         ]
       }
