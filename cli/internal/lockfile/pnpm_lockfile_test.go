@@ -47,6 +47,33 @@ func Test_Roundtrip(t *testing.T) {
 	}
 }
 
+func Test_RoundtripCLRF(t *testing.T) {
+	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml"}
+
+	for _, lockfilePath := range lockfiles {
+		lockfileContent, err := getFixture(t, lockfilePath)
+		var lockfileWithCLRF []byte
+		if bytes.HasSuffix(lockfileContent, []byte("\r\n")) {
+			lockfileWithCLRF = lockfileContent
+		} else {
+			lockfileWithCLRF = bytes.ReplaceAll(lockfileContent, []byte("\n"), []byte("\r\n"))
+		}
+		if err != nil {
+			t.Errorf("failure getting fixture: %s", err)
+		}
+		lockfile, err := DecodePnpmLockfile(lockfileWithCLRF)
+		if err != nil {
+			t.Errorf("decoding failed %s", err)
+		}
+		var b bytes.Buffer
+		if err := lockfile.Encode(&b); err != nil {
+			t.Errorf("encoding failed %s", err)
+		}
+
+		assert.DeepEqual(t, string(lockfileWithCLRF), b.String())
+	}
+}
+
 func Test_SpecifierResolution(t *testing.T) {
 	contents, err := getFixture(t, "pnpm7-workspace.yaml")
 	if err != nil {
