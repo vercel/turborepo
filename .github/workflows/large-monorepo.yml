@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows: [Release]
-      types:
-        - completed
+    types:
+      - completed
 
 jobs:
   build:
