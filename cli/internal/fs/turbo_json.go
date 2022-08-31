@@ -37,7 +37,7 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 			// TODO: suggestion on how to create one
 			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
 		}
-		log.Printf("[WARNING] Turbo configuration now lives in \"%s\". Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"", configFile, configFile)
+		log.Printf("[WARNING] Turbo configuration now lives in \"%s\". Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile, configFile)
 		return rootPackageJSON.LegacyTurboConfig, nil
 	}
 
@@ -47,7 +47,7 @@ func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*Turb
 	}
 
 	if rootPackageJSON.LegacyTurboConfig != nil {
-		log.Printf("[WARNING] Ignoring legacy \"turbo\" key in package.json, using %s instead. Consider deleting the \"turbo\" key from package.json", configFile)
+		log.Printf("[WARNING] Ignoring legacy \"turbo\" key in package.json, using %s instead. Consider deleting the \"turbo\" key from package.json\n", configFile)
 		rootPackageJSON.LegacyTurboConfig = nil
 	}
 
