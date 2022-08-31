@@ -255,13 +255,11 @@ It's important to understand the dependencies between these packages. Let's map 
 
 Note that **the Turborepo CLI is not responsible for managing these dependencies**. All of the things above are handled by the package manager you chose (`npm`, `pnpm` or `yarn`).
 
-### 3. Running tasks with `turbo`
+### 3. Understanding `turbo.json`
 
 We now understand our repository and its dependencies. How does Turborepo help?
 
 Turborepo helps by making running tasks simpler and _much_ more efficient.
-
-#### Understanding `turbo.json`
 
 Let's take a look inside our root `package.json`:
 
@@ -271,7 +269,7 @@ Let's take a look inside our root `package.json`:
 {
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev",
     "lint": "turbo run lint",
   },
 }
@@ -348,10 +346,241 @@ Are you sure you added it?
 
 That's worth remembering - **in order for turbo to run a task, it must be in `turbo.json`**.
 
-### How does HMR work?
+Let's investigate the scripts we already have in place.
 
-### Adding a new package
+### 4. Linting with Turborepo
 
-#### Setting up HMR
+Try running our `lint` script:
 
-### Running only one package at a time
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run lint
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn lint
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run lint
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll notice several things happen in the terminal.
+
+1. Several scripts will be run at the same time, each prefixed with either `docs:lint`, `ui:lint` or `web:lint`.
+2. They'll each succeed, and you'll see `3 successful` in ther terminal.
+3. You'll also see `0 cached, 3 total`. We'll cover what this means later.
+
+The scripts that each run come from each workspace's `package.json`. Each workspace can optionally specify its own `lint` script:
+
+```json
+// apps/web/package.json
+{
+  "scripts": {
+    "lint": "next lint"
+  }
+}
+
+// apps/docs/package.json
+{
+  "scripts": {
+    "lint": "next lint"
+  }
+}
+
+// packages/ui/package.json
+{
+  "scripts": {
+    "lint": "eslint *.ts*"
+  },
+}
+```
+
+When we run `turbo run lint`, Turborepo looks at each `lint` script in each workspace and runs it. For more details, see our [pipelines](/docs/core-concepts/pipelines) docs.
+
+#### Using the cache
+
+Let's run our `lint` script one more time. You'll notice a few new things appear in the terminal:
+
+1. `cache hit, replaying output` appears for `docs:lint`, `web:lint` and `ui:lint`.
+2. You'll see `3 cached, 3 total`.
+3. The total runtime should be under `100ms`, and `>>> FULL TURBO` appears.
+
+Something interesting just happened. Turborepo realised that **our code hadn't changed since the last time we ran the lint script**.
+
+It had saved the logs from the previous run, so it just replayed them.
+
+Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
+
+```diff
+// apps/docs/pages/index.tsx
+
+import { Button } from "ui";
+
+export default function Docs() {
+  return (
+    <div>
+-     <h1>Docs</h1>
++     <h1>My great docs</h1>
+      <Button />
+    </div>
+  );
+}
+```
+
+Now, run the `lint` script again. You'll notice that:
+
+1. `docs:lint` has a comment saying `cache miss, executing`. This means that `docs` is running its linting.
+2. `2 cached, 3 total` appears at the bottom.
+
+This means that **the results of our previous tasks were still cached**. Only the `lint` script inside `docs` actually ran - again, speeding things up. To learn more, check our our [caching docs](/docs/core-concepts/caching).
+
+### 5. Building with Turborepo
+
+Let's try running our `build` script:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run build
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn build
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run build
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll see similar outputs to when we ran our lint script. Only `apps/docs` and `apps/web` specify a `build` script in their `package.json`, so only those are run.
+
+Take a look inside `build` in `turbo.json`. There's some interesting config there.
+
+```json
+// turbo.json
+
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    },
+  }
+}
+
+```
+
+You'll notice that some `outputs` have been specified. Declaring outputs will mean that when `turbo` finishes running your task, it'll save the output you specify in its cache.
+
+Both `apps/docs` and `apps/web` are Next.js apps, and they output builds to the `./.next` folder.
+
+Let's try something. Delete the `apps/docs/.next` build folder.
+
+Run the `build` script again. You'll notice:
+
+1. We hit `FULL TURBO` - the builds complete in under `100ms`.
+2. The `.next` folder re-appears!
+
+Turbo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/docs/core-concepts/caching#configuring-cache-outputs).
+
+### 6. Running dev scripts
+
+Let's now try running `dev`.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run dev
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dev
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run dev
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll notice some information in the terminal:
+
+1. Only two scripts will execute - `docs:dev` and `web:dev`. These are the only two workspaces which specify `dev`.
+2. Both `dev` scripts are run simultaneously, starting your Next.js apps on ports `3000` and `3001`.
+3. In the terminal, you'll see `cache bypass, force executing`.
+
+Try quitting out of the script, and re-running it. You'll notice we don't go `FULL TURBO`. Why is that?
+
+Take a look at `turbo.json`:
+
+```json
+// turbo.json
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so caching it makes no sense. Learn more about in our docs on [turning off caching](/docs/core-concepts/caching#turn-off-caching).
+
+#### Running `dev` on only one workspace at a time
+
+By default, `turbo run dev` will run `dev` on all workspaces at once. But sometimes, we might only want to choose one workspace.
+
+To handle this, we can add a `--filter` flag to our command. This `--filter` gets passed to the `turbo` CLI.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run dev -- --filter docs
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dev --filter docs
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run dev --filter docs
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll notice that it now only runs `docs:dev`. Learn more about [filtering workspaces](/docs/core-concepts/filtering) from our docs.
+
+## Summary
+
+Well done! You've learned all about your new monorepo, and how Turborepo makes handling your tasks easier.
+
+### Next steps
+
+- Need to add more tasks? Learn more about using [pipelines](/docs/core-concepts/pipelines)
+- Want to speed up your CI? Set up [remote caching](/docs/core-concepts/remote-caching).
+- Want some inspiration? Take a look at our directory of [examples](https://github.com/vercel/turborepo/tree/main/examples)
