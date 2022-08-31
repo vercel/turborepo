@@ -18,7 +18,7 @@ import paularmstrong from "../../images/paularmstrong.jpeg";
 
 import { Container } from "../Container";
 import Tweet, { Mention } from "../Tweet";
-import Features from "../Features";
+import { HomeFeatures } from "../Features";
 import { Marquee } from "../clients/Marquee";
 import { Clients } from "../clients/Clients";
 
@@ -90,7 +90,7 @@ export default function Home() {
             Turborepo reimagines build system techniques used by Facebook and
             Google to remove maintenance burden and overhead.
           </p>
-          <Features />
+          <HomeFeatures />
         </div>
       </div>
       <div className="">
