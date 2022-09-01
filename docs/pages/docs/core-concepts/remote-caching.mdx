@@ -8,13 +8,23 @@ import Callout from "../../../components/Callout";
 
 # Remote Caching
 
-A major key to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
+Turborepo's [task cache](/docs/core-concepts/caching) can save a lot of time by never doing the same work twice.
 
-By default, Turborepo caches the outputs of your tasks on your machine's local file system. We call this "single-player mode." But what if you could take advantage of the computational work done by your teammates or your CI by sharing a single cache across machines? In other words, what if you could turn on "co-op multiplayer mode", or a "Dropbox" for your Turborepo cache?
+But there's an issue - the **cache is local to your machine**. When you're working with a CI, this can result in a lot of duplicated work:
 
-> Remote Caching has entered the chat.
+![](/images/docs/local-caching.png)
 
-Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost. This is possible because Turborepo uses content addressable storage.
+Each environment - your machine, your colleague's machine, your CI - is having to **run `build` on the same source files**. That's because each environment has _its own local cache_.
+
+### A single, shared cache
+
+What if you could share a single cache across your entire org?
+
+![](/images/docs/remote-caching.png)
+
+By working with providers like [Vercel](#vercel), Turborepo can communicate with a remote cache - a server that stores the results of your tasks.
+
+This can save enormous amounts of time by **preventing duplicated work across your entire organization**.
 
 <Callout>
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
