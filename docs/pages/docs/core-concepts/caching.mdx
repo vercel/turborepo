@@ -7,16 +7,14 @@ import Callout from "../../../components/Callout";
 
 # Caching
 
-Turborepo ships with a **task cache**. It can cache the results of any task - meaning you can save time by skipping long-running jobs.
+Turborepo ships with a **task cache**. It can cache the results of any task - meaning you never need to do the same work twice.
+
+## Missing the cache
 
 Each task in your monorepo has an **input** and an **output**.
 
 - A `build` task takes in **source files as input** and returns **bundled files as output**.
 - A `lint` or `test` task also takes in **source files**, but outputs to **`stdout`**.
-
-Turborepo lets you configure each task's inputs and outputs so that you **never need to do the same work twice**.
-
-## Missing the cache
 
 Let's say you run a `build` task with Turborepo using `turbo run build`:
 
