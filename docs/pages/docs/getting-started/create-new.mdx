@@ -82,7 +82,7 @@ Next, open `./apps/web/package.json`. You'll notice that this package's name is 
 
 You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
 
-```json
+```json filename="packages/ui/package.json"
 {
   "dependencies": {
     "ui": "workspace:*"
@@ -100,9 +100,7 @@ This pattern of sharing code across applications is extremely common in monorepo
 
 Take a look inside `./apps/docs/pages/index.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
 
-```tsx
-// apps/docs/pages/index.tsx
-
+```tsx filename="apps/docs/pages/index.tsx"
 import { Button } from "ui";
 //       ^^^^^^         ^^
 
@@ -120,8 +118,7 @@ They're importing `Button` directly from a dependency called `ui`! How does that
 
 Open `packages/ui/package.json`. You'll notice these two attributes:
 
-```json
-// packages/ui/package.json
+```json filename="packages/ui/package.json"
 {
   "main": "./index.tsx",
   "types": "./index.tsx",
@@ -132,9 +129,7 @@ When packages import from `ui`, `main` tells them where to access the code they'
 
 So, let's look inside `packages/ui/index.tsx`:
 
-```tsx
-// packages/ui/index.tsx
-
+```tsx filename="packages/ui/index.tsx"
 import * as React from "react";
 export * from "./Button";
 ```
@@ -143,9 +138,7 @@ Everything inside this file will be able to be used by packages that depend on `
 
 `index.tsx` is exporting everything from a file called `./Button`, so let's go there:
 
-```tsx
-// packages/ui/Button.tsx
-
+```tsx filename="packages/ui/Button.tsx"
 import * as React from "react";
 
 export const Button = () => {
@@ -167,8 +160,7 @@ This can then be imported by `web` and `docs`.
 
 We have two more workspaces to look at, `tsconfig` and `eslint-config-custom`. Each of these allow for shared configuration across the monorepo. Let's look in `tsconfig`:
 
-```json
-// packages/tsconfig/package.json
+```json filename="packages/tsconfig/package.json"
 {
   "name": "tsconfig",
   "files": [
@@ -183,9 +175,7 @@ Here, we specify three files to be exported, inside `files`. Packages which depe
 
 For instance, `packages/ui` depends on `tsconfig`:
 
-```json
-// packages/ui/package.json
-
+```json filename="packages/ui/package.json"
 {
   "devDependencies": {
     "tsconfig": "workspace:*",
@@ -195,9 +185,7 @@ For instance, `packages/ui` depends on `tsconfig`:
 
 And inside its `tsconfig.json` file, it imports it using `extends`:
 
-```json
-// packages/ui/tsconfig.json
-
+```json filename="packages/ui/tsconfig.json"
 {
   "extends": "tsconfig/react-library.json",
 }
@@ -211,9 +199,7 @@ Our final package is `eslint-config-custom`.
 
 You'll notice that this is named slightly differently to the other workspaces. It's not as concise as `ui` or `tsconfig`. Let's take a look inside `.eslintrc.js` in the root of the monorepo to figure out why.
 
-```ts
-// .eslintrc.js
-
+```ts filename=".eslintrc.js"
 module.exports = {
   // This tells ESLint to load the config from the package `eslint-config-custom`
   extends: ["custom"],
@@ -230,9 +216,7 @@ So that means that if we're working on code inside `packages/ui` (which doesn't 
 
 Apps that _do_ have an `.eslintrc.js` can refer to `custom` in the same way. For instance, in `docs`:
 
-```ts
-// apps/docs/.eslintrc.js
-
+```ts filename="apps/docs/.eslintrc.js"
 module.exports = {
   root: true,
   extends: ["custom"],
@@ -263,9 +247,7 @@ Turborepo helps by making running tasks simpler and _much_ more efficient.
 
 Let's take a look inside our root `package.json`:
 
-```json
-// package.json
-
+```json filename="package.json"
 {
   "scripts": {
     "build": "turbo run build",
@@ -277,9 +259,7 @@ Let's take a look inside our root `package.json`:
 
 We've got three tasks specified here in `scripts` which use `turbo run`. You'll notice that each of them is specified in `turbo.json`:
 
-```json
-// turbo.json
-
+```json filename="turbo.json"
 {
   "pipeline": {
     "build": {
@@ -303,7 +283,7 @@ What we're seeing here is that we've _registered_ three tasks with `turbo` - `li
 
 To see this in action, let's add a script to the root `package.json`:
 
-```diff
+```diff filename="package.json"
 {
   "scripts": {
     "build": "turbo run build",
@@ -381,22 +361,23 @@ You'll notice several things happen in the terminal.
 
 The scripts that each run come from each workspace's `package.json`. Each workspace can optionally specify its own `lint` script:
 
-```json
-// apps/web/package.json
+```json filename="apps/web/package.json"
 {
   "scripts": {
     "lint": "next lint"
   }
 }
+```
 
-// apps/docs/package.json
+```json filename="apps/docs/package.json"
 {
   "scripts": {
     "lint": "next lint"
   }
 }
+```
 
-// packages/ui/package.json
+```json filename="packages/ui/package.json"
 {
   "scripts": {
     "lint": "eslint *.ts*"
@@ -420,9 +401,7 @@ It had saved the logs from the previous run, so it just replayed them.
 
 Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
 
-```diff
-// apps/docs/pages/index.tsx
-
+```diff filename="apps/docs/pages/index.tsx"
 import { Button } from "ui";
 
 export default function Docs() {
@@ -472,9 +451,7 @@ You'll see similar outputs to when we ran our lint script. Only `apps/docs` and 
 
 Take a look inside `build` in `turbo.json`. There's some interesting config there.
 
-```json
-// turbo.json
-
+```json filename="turbo.json"
 {
   "pipeline": {
     "build": {
@@ -482,7 +459,6 @@ Take a look inside `build` in `turbo.json`. There's some interesting config ther
     },
   }
 }
-
 ```
 
 You'll notice that some `outputs` have been specified. Declaring outputs will mean that when `turbo` finishes running your task, it'll save the output you specify in its cache.
@@ -533,8 +509,7 @@ Try quitting out of the script, and re-running it. You'll notice we don't go `FU
 
 Take a look at `turbo.json`:
 
-```json
-// turbo.json
+```json filename="turbo.json"
 {
   "pipeline": {
     "dev": {
