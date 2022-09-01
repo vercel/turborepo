@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1662011160492,
+  "lastUpdate": 1662049938319,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -230,6 +230,52 @@
             "value": 46678.8,
             "unit": "ms",
             "range": "11097"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Nathan Hammond",
+            "username": "nathanhammond",
+            "email": "nathan.hammond@vercel.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0dc75028bad221e9836816ace92bf5395425074a",
+          "message": "Turborepo usage. (#1827)",
+          "timestamp": "2022-09-01T16:12:53Z",
+          "url": "https://github.com/vercel/turborepo/commit/0dc75028bad221e9836816ace92bf5395425074a"
+        },
+        "date": 1662049938317,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 1352976,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 8495.4,
+            "unit": "ms",
+            "range": "912"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 16448.8,
+            "unit": "ms",
+            "range": "41237"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 47566,
+            "unit": "ms",
+            "range": "15060"
           }
         ]
       }
