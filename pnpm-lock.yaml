@@ -69,6 +69,7 @@ importers:
       classnames: 2.3.1
       copy-to-clipboard: 3.3.2
       csstype: 3.1.0
+      deepmerge: ^4.2.2
       eslint: 8.10.0
       eslint-config-next: 12.2.5
       eslint-config-prettier: 8.5.0
@@ -95,6 +96,7 @@ importers:
       axios: 0.27.2
       classnames: 2.3.1
       copy-to-clipboard: 3.3.2
+      deepmerge: 4.2.2
       js-cookie: 3.0.1
       next: 12.2.5_q6el6r4hbd2fftzckrwpdnyobi
       next-themes: 0.2.0_pzmtmsmkyiq4foirxc7gldcjme
@@ -114,7 +116,7 @@ importers:
       eslint-config-next: 12.2.5_ltkjkrq5dazqovqoaeaug2aium
       eslint-config-prettier: 8.5.0_eslint@8.10.0
       postcss: 8.4.16
-      tailwindcss: 3.1.8
+      tailwindcss: 3.1.8_postcss@8.4.16
       ts-json-schema-generator: 0.98.0
       typescript: 4.7.4
 
@@ -2817,7 +2819,6 @@ packages:
   /deepmerge/4.2.2:
     resolution: {integrity: sha512-FJ3UgI4gIl+PHZm53knsuSFpE+nESMr7M4v9QcgB7S63Kj/6WqMiFQJpBBYz1Pt+66bZpP3Q7Lye0Oo9MPKEdg==}
     engines: {node: '>=0.10.0'}
-    dev: true
 
   /defaults/1.0.3:
     resolution: {integrity: sha512-s82itHOnYrN0Ib8r+z7laQz3sdE+4FP3d9Q7VLO7U+KRT+CR0GsWuyHxzdAY82I7cXv0G/twrqomTJLOssO5HA==}
@@ -8153,10 +8154,12 @@ packages:
       strip-ansi: 6.0.1
     dev: true
 
-  /tailwindcss/3.1.8:
+  /tailwindcss/3.1.8_postcss@8.4.16:
     resolution: {integrity: sha512-YSneUCZSFDYMwk+TGq8qYFdCA3yfBRdBlS7txSq0LUmzyeqRe3a8fBQzbz9M3WS/iFT4BNf/nmw9mEzrnSaC0g==}
     engines: {node: '>=12.13.0'}
     hasBin: true
+    peerDependencies:
+      postcss: ^8.0.9
     dependencies:
       arg: 5.0.2
       chokidar: 3.5.3
