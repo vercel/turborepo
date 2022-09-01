@@ -108,7 +108,7 @@ publish: clean prepublish build
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
-	npm config set --location=global "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist
@@ -120,10 +120,11 @@ publish: clean prepublish build
 	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
 
 	# Publish the remaining JS packages in order to avoid race conditions.
-	npm publish --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	# npm publish --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
-	npm publish --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
-	npm publish --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
+	cd $(CLI_DIR)/../
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
+	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
 	# Force push to ensure that the version used for the release is published.
 	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
