@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
@@ -120,7 +120,7 @@ type userClient interface {
 type login struct {
 	ui                  *cli.ColoredUi
 	logger              hclog.Logger
-	repoRoot            fs.AbsolutePath
+	repoRoot            turbopath.AbsolutePath
 	openURL             browserClient
 	client              userClient
 	promptEnableCaching func() (bool, error)

@@ -38,6 +38,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/spinner"
 	"github.com/vercel/turborepo/cli/internal/taskhash"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
@@ -537,7 +538,6 @@ var _persistentFlags = []string{
 	"trace",
 	"cpuprofile",
 	"heap",
-	"no-gc",
 	"cwd",
 }
 
@@ -721,12 +721,12 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		runState:       runState,
 		rs:             rs,
 		ui:             &cli.ConcurrentUi{Ui: r.ui},
-		turboCache:     turboCache,
 		runCache:       runCache,
 		logger:         r.config.Logger,
 		packageManager: packageManager,
 		processes:      r.processes,
 		taskHashes:     hashes,
+		repoRoot:       r.config.Cwd,
 	}
 
 	// run the thing
@@ -865,11 +865,11 @@ type execContext struct {
 	rs             *runSpec
 	ui             cli.Ui
 	runCache       *runcache.RunCache
-	turboCache     cache.Cache
 	logger         hclog.Logger
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
 	taskHashes     *taskhash.Tracker
+	repoRoot       turbopath.AbsolutePath
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -937,8 +937,10 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	}
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
-	// TODO(gsoltis): I think this might be an actual bug? cmd.Dir should probably be an absolute path
-	cmd.Dir = pt.Pkg.Dir.ToStringDuringMigration()
+	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
+	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsolutePath to
+	// AbsoluteSystemPath
+	cmd.Dir = e.repoRoot.Join(pt.Pkg.Dir.ToStringDuringMigration()).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 

@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/grpc_testing"
@@ -93,7 +94,7 @@ func newTestRPCServer() *testRPCServer {
 	}
 }
 
-func waitForFile(t *testing.T, filename fs.AbsolutePath, timeout time.Duration) {
+func waitForFile(t *testing.T, filename turbopath.AbsolutePath, timeout time.Duration) {
 	t.Helper()
 	deadline := time.After(timeout)
 outer:

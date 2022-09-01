@@ -23,7 +23,7 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-func calculateGlobalHash(rootpath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate the global hash
 	globalDeps := make(util.Set)
 
