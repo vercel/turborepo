@@ -36,11 +36,11 @@ is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
 The monorepo's root can be selected using the token `//`.
 
 ```sh
-# Build 'my-pkg', letting turbo infer task dependencies
+# Build 'my-pkg', letting `turbo` infer task dependencies
 # from the pipeline defined in turbo.json
 turbo run build --filter=my-pkg
 
-# Build '@foo/bar', letting turbo infer task dependencies
+# Build '@foo/bar', letting `turbo` infer task dependencies
 # from the pipeline defined in turbo.json
 turbo run build --filter=@foo/bar
 

@@ -126,11 +126,11 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 ```
 
 <Callout type="info">
-  When Turbo detects a common frontend framework in a workspace, it will automatically depend on
+  When Turborepo detects a common frontend framework in a workspace, it will automatically depend on
   environment variables that are going to be inlined in your build. For example, if the `web`
   workspace contains a Next.js project, you do not need to specify any environment variables that
   [start with `NEXT_PUBLIC_`](https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser) in the `dependsOn` config.
-  Turbo already knows that the build output will change when the value of these environment variables
+  Turborepo already knows that the build output will change when the value of these environment variables
   change, so it will depend on them automatically. See more in the [docs on caching](/docs/core-concepts/caching#automatic-environment-variable-inclusion).
 </Callout>
 
