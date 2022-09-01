@@ -12,6 +12,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
@@ -82,7 +83,7 @@ func getConfig(t *testing.T) *config.Config {
 }
 
 type testResult struct {
-	repoRoot            fs.AbsolutePath
+	repoRoot            turbopath.AbsolutePath
 	clientErr           error
 	openedURL           string
 	stepCh              chan struct{}
@@ -116,7 +117,7 @@ func (tr *testResult) getTestLogin() login {
 	}
 }
 
-func newTest(t *testing.T, repoRoot fs.AbsolutePath, redirectedURL string) *testResult {
+func newTest(t *testing.T, repoRoot turbopath.AbsolutePath, redirectedURL string) *testResult {
 	stepCh := make(chan struct{}, 1)
 	tr := &testResult{
 		repoRoot: repoRoot,

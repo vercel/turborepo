@@ -6,12 +6,13 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // RepoConfig is a configuration object for the logged-in turborepo.com user
 type RepoConfig struct {
 	repoViper *viper.Viper
-	path      fs.AbsolutePath
+	path      turbopath.AbsolutePath
 }
 
 // LoginURL returns the configured URL for authenticating the user
@@ -60,7 +61,7 @@ func (rc *RepoConfig) Delete() error {
 // for Turborepo.
 type UserConfig struct {
 	userViper *viper.Viper
-	path      fs.AbsolutePath
+	path      turbopath.AbsolutePath
 }
 
 // Token returns the Bearer token for this user if it exists
@@ -95,7 +96,7 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path fs.AbsolutePath) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsolutePath) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
@@ -112,7 +113,7 @@ func ReadUserConfigFile(path fs.AbsolutePath) (*UserConfig, error) {
 
 // DefaultUserConfigPath returns the default platform-dependent place that
 // we store the user-specific configuration.
-func DefaultUserConfigPath() fs.AbsolutePath {
+func DefaultUserConfigPath() turbopath.AbsolutePath {
 	return fs.GetUserConfigDir().Join("config.json")
 }
 
@@ -125,7 +126,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path fs.AbsolutePath) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -146,6 +147,6 @@ func ReadRepoConfigFile(path fs.AbsolutePath) (*RepoConfig, error) {
 }
 
 // GetRepoConfigPath reads the user-specific configuration values
-func GetRepoConfigPath(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func GetRepoConfigPath(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
 	return repoRoot.Join(".turbo", "config.json")
 }

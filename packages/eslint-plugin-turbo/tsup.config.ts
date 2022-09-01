@@ -1,6 +1,7 @@
-import { defineConfig } from "tsup";
+import { defineConfig, Options } from "tsup";
 
-export default defineConfig({
+export default defineConfig((options: Options) => ({
   entry: ["lib/index.ts"],
   clean: true,
-});
+  ...options,
+}));

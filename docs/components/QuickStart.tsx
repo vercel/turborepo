@@ -7,8 +7,8 @@ export const QuickStartArea = () => {
       <DetailedFeatureLink
         feature={{
           Icon: SparklesIcon,
-          description: `Want to start from scratch? Check out our guide on building a
-          brand-new monorepo with Turborepo.`,
+          description: `Build a
+          brand-new monorepo powered by Turborepo.`,
           name: "Create a new monorepo",
         }}
         href="/docs/getting-started/create-new"
@@ -16,8 +16,7 @@ export const QuickStartArea = () => {
       <DetailedFeatureLink
         feature={{
           Icon: ServerIcon,
-          description: `Turborepo can be incrementally added to any codebase. Check out
-          our guide on adding Turborepo to an existing monorepo.`,
+          description: `Incrementally add Tuborepo to your existing monorepo codebase. `,
           name: "Add to existing monorepo",
         }}
         href="/docs/getting-started/existing-monorepo"

@@ -21,6 +21,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -59,26 +60,26 @@ func (c *Command) Synopsis() string {
 
 type daemon struct {
 	logger     hclog.Logger
-	repoRoot   fs.AbsolutePath
+	repoRoot   turbopath.AbsolutePath
 	timeout    time.Duration
 	reqCh      chan struct{}
 	timedOutCh chan struct{}
 }
 
-func getRepoHash(repoRoot fs.AbsolutePath) string {
+func getRepoHash(repoRoot turbopath.AbsolutePath) string {
 	pathHash := sha256.Sum256([]byte(repoRoot.ToString()))
 	// We grab a substring of the hash because there is a 108-character limit on the length
 	// of a filepath for unix domain socket.
 	return hex.EncodeToString(pathHash[:])[:16]
 }
 
-func getDaemonFileRoot(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func getDaemonFileRoot(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
 	tempDir := fs.TempDir("turbod")
 	hexHash := getRepoHash(repoRoot)
 	return tempDir.Join(hexHash)
 }
 
-func getLogFilePath(repoRoot fs.AbsolutePath) (fs.AbsolutePath, error) {
+func getLogFilePath(repoRoot turbopath.AbsolutePath) (turbopath.AbsolutePath, error) {
 	hexHash := getRepoHash(repoRoot)
 	base := repoRoot.Base()
 	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
@@ -87,12 +88,12 @@ func getLogFilePath(repoRoot fs.AbsolutePath) (fs.AbsolutePath, error) {
 	return logsDir.Join(logFilename), nil
 }
 
-func getUnixSocket(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func getUnixSocket(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
 	root := getDaemonFileRoot(repoRoot)
 	return root.Join("turbod.sock")
 }
 
-func getPidFile(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func getPidFile(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
 	root := getDaemonFileRoot(repoRoot)
 	return root.Join("turbod.pid")
 }
@@ -171,7 +172,7 @@ var errInactivityTimeout = errors.New("turbod shut down from inactivity")
 
 // tryAcquirePidfileLock attempts to ensure that only one daemon is running from the given pid file path
 // at a time. If this process fails to write its PID to the lockfile, it must exit.
-func tryAcquirePidfileLock(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
+func tryAcquirePidfileLock(pidPath turbopath.AbsolutePath) (lockfile.Lockfile, error) {
 	if err := pidPath.EnsureDir(); err != nil {
 		return "", err
 	}
@@ -307,7 +308,7 @@ type ClientOpts = connector.Opts
 type Client = connector.Client
 
 // GetClient returns a client that can be used to interact with the daemon
-func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (*Client, error) {
+func GetClient(ctx context.Context, repoRoot turbopath.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (*Client, error) {
 	sockPath := getUnixSocket(repoRoot)
 	pidPath := getPidFile(repoRoot)
 	logPath, err := getLogFilePath(repoRoot)

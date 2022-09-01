@@ -11,6 +11,13 @@ func (p AnchoredSystemPath) ToString() string {
 	return string(p)
 }
 
+// ToStringDuringMigration returns the string representation of this path, and is for
+// use in situations where we expect a future path migration to remove the need for the
+// string representation
+func (p AnchoredSystemPath) ToStringDuringMigration() string {
+	return string(p)
+}
+
 // ToSystemPath returns itself.
 func (p AnchoredSystemPath) ToSystemPath() AnchoredSystemPath {
 	return p

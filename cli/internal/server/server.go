@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globwatcher"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -28,8 +29,8 @@ type Server struct {
 	globWatcher  *globwatcher.GlobWatcher
 	turboVersion string
 	started      time.Time
-	logFilePath  fs.AbsolutePath
-	repoRoot     fs.AbsolutePath
+	logFilePath  turbopath.AbsolutePath
+	repoRoot     turbopath.AbsolutePath
 	closerMu     sync.Mutex
 	closer       *closer
 }
@@ -62,7 +63,7 @@ func (c *closer) close() {
 var _defaultCookieTimeout = 500 * time.Millisecond
 
 // New returns a new instance of Server
-func New(serverName string, logger hclog.Logger, repoRoot fs.AbsolutePath, turboVersion string, logFilePath fs.AbsolutePath) (*Server, error) {
+func New(serverName string, logger hclog.Logger, repoRoot turbopath.AbsolutePath, turboVersion string, logFilePath turbopath.AbsolutePath) (*Server, error) {
 	cookieDir := fs.GetTurboDataDir().Join("cookies", serverName)
 	cookieJar, err := filewatcher.NewCookieJar(cookieDir, _defaultCookieTimeout)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -19,11 +20,11 @@ import (
 type fsCache struct {
 	cacheDirectory string
 	recorder       analytics.Recorder
-	repoRoot       fs.AbsolutePath
+	repoRoot       turbopath.AbsolutePath
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot fs.AbsolutePath) (*fsCache, error) {
+func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) (*fsCache, error) {
 	if err := opts.Dir.MkdirAll(); err != nil {
 		return nil, err
 	}
