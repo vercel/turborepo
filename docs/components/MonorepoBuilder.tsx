@@ -59,12 +59,8 @@ const tools = satisfy<Record<string, Tool>>()({
       build: {
         outputs: ["dist/**"],
       },
-      dev: {
-        cache: false,
-      },
     },
     pkgPackageJsonScripts: {
-      dev: "npm run build --watch",
       build: "tsup src/index.ts",
     },
   },
@@ -193,6 +189,27 @@ const tools = satisfy<Record<string, Tool>>()({
     appPackageJsonScripts: {
       "storybook:build": "build-storybook",
       "storybook:dev": "start-storybook",
+    },
+  },
+  changesets: {
+    label: "Changesets",
+    rootPackageJsonScripts: {
+      publish: "npm run ci && changeset publish",
+    },
+  },
+  npm: {
+    label: "NPM Publish",
+    turboPipeline: {
+      publish: {
+        cache: false,
+        dependsOn: ["build", "test", "lint"],
+      },
+    },
+    appPackageJsonScripts: {
+      publish: "npm publish",
+    },
+    rootPackageJsonScripts: {
+      publish: "turbo run publish",
     },
   },
 });
