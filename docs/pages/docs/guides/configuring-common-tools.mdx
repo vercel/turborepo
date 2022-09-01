@@ -1,0 +1,342 @@
+# Configuring Common Tools
+
+## Linters
+
+### ESLint (no `--fix`)
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "lint": "eslint"
+  }
+}
+```
+
+### ESLint (with `--fix`)
+
+### TypeScript
+
+When used with `noEmit: true`, TypeScript produces no outputs, so can be considered a linter.
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "lint": "tsc"
+  }
+}
+```
+
+## Build Tools
+
+### `tsup`
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    // Runs the build script in watch mode
+    "dev": "npm run build --watch",
+    // This will bundle the src/index.ts file
+    "build": "tsup src/index.ts"
+  }
+}
+```
+
+### TypeScript
+
+## Frontend Frameworks
+
+### Next.js
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    },
+    "start": {
+      // build must always be run before start
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "dev": "next",
+    "build": "next build",
+    "lint": "next lint",
+    "start": "next start"
+  }
+}
+```
+
+### Remix
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      // By default, remix build outputs to build/**
+      "outputs": ["build/**"]
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "dev": "remix dev",
+    "build": "remix build"
+  }
+}
+```
+
+### Create React App
+
+### SvelteKit
+
+### Nuxt
+
+### Vite
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      // By default, vite build outputs to dist/**
+      "outputs": ["dist/**"]
+    },
+    "preview": {
+      // build must always be run before preview
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}
+```
+
+## Testing Frameworks
+
+### Jest
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "test": {
+      // Caches coverage files - default to []
+      // if not using coverage
+      "outputs": ["coverage"]
+    },
+    "test:watch": {
+      // Acts as a kind of dev script, so should
+      // never be cached
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  }
+}
+```
+
+### Vitest
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "test": {
+      // Caches coverage files - default to [] if not using
+      // coverage
+      "outputs": ["coverage"]
+    },
+    "test:watch": {
+      // Acts as a kind of dev script, so should
+      // never be cached
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
+  }
+}
+```
+
+### Cypress
+
+[Cypress](https://cypress.io/) is usually installed alongside your application, in a `cypress` folder.
+
+Using [`start-server-and-test`](https://www.npmjs.com/package/start-server-and-test), you can run your cypress tests using Turborepo easily.
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "test": {
+      // Cache screenshots and videos
+      "outputs": ["cypress/screenshots/**", "cypress/videos/**"]
+    },
+    "test:watch": {
+      // Acts as a kind of dev script, so should
+      // never be cached
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "dev": "next dev",
+    // This first runs a dev server on localhost:3000,
+    // then runs the Cypress tests against it.
+    // It closes the dev server once the tests are complete
+    "test": "start-server-and-test \"npm run dev\" http://localhost:3000 \"cypress run\"",
+    "test:watch": "cypress open"
+  },
+  "devDependencies": {
+    "start-server-and-test": "latest"
+  }
+}
+```
+
+### Playwright
+
+## Other Tools
+
+### Tailwind
+
+### Prisma
+
+### Prettier
+
+[Prettier](https://prettier.io/) is a code formatter. Because it changes input files itself, it can't really be cached with turborepo. However, you can run it like so:
+
+```jsonc filename="package.json"
+{
+  "scripts": {
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+}
+```
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // "//#format" refers to the script in the root
+    "//#format": {
+      "cache": false
+    },
+  }
+}
+```
+
+This would allow you to run `turbo run format` in the repository to run the root `format` script.
+
+### Storybook
+
+[Storybook](https://storybook.js.org/) is a tool for developing UI components in isolation.
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "storybook:build": {
+      // Caches the result of the build
+      "outputs": ["storybook-static/**"]
+    },
+    "storybook:dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+```jsonc filename="apps/my-app/package.json"
+{
+  "scripts": {
+    "storybook:build": "build-storybook",
+    "storybook:dev": "start-storybook",
+  },
+}
+```
