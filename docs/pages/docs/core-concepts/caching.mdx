@@ -188,13 +188,13 @@ Note that this automatic detection and inclusion only works if Turborepo success
   set environment variables that start with these prefixes even though they aren't part of your build
   output. These can change unpredicably &mdash; even on every build! &mdash; invalidating Turborepo's
   cache. To workaround this, Turborepo uses a `TURBO_CI_VENDOR_ENV_KEY` variable to
-  _exclude_ environment variables from Turbo's inference.
+  _exclude_ environment variables from Turborepo's inference.
 
-  For example, Vercel sets the `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA`. This value changes on every build,
-  so Vercel _also_ sets `TURBO_CI_VENDOR_ENV_KEY="NEXT_PUBLIC_VERCEL_"` to exclude these variables.
+For example, Vercel sets the `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA`. This value changes on every build,
+so Vercel _also_ sets `TURBO_CI_VENDOR_ENV_KEY="NEXT_PUBLIC_VERCEL_"` to exclude these variables.
 
-  Luckily, you only need to be aware of this on other build systems; you don't need to worry
-  about these edge cases when using Turborepo on Vercel.
+Luckily, you only need to be aware of this on other build systems; you don't need to worry
+about these edge cases when using Turborepo on Vercel.
 
 </Callout>
 
