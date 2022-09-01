@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1662005588351,
+  "lastUpdate": 1662011160492,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -184,6 +184,52 @@
             "value": 59532,
             "unit": "ms",
             "range": "23345"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Nathan Hammond",
+            "username": "nathanhammond",
+            "email": "nathan.hammond@vercel.com"
+          },
+          "committer": {
+            "name": "Nathan Hammond",
+            "username": "nathanhammond",
+            "email": "nathan.hammond@vercel.com"
+          },
+          "id": "dc64b580af304bd2ccdc3c0f897f3509f79d5ee6",
+          "message": "Change npm config location to global.",
+          "timestamp": "2022-09-01T05:25:27Z",
+          "url": "https://github.com/vercel/turborepo/commit/dc64b580af304bd2ccdc3c0f897f3509f79d5ee6"
+        },
+        "date": 1662011160490,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 1144388,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 7046,
+            "unit": "ms",
+            "range": "361"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 7212.4,
+            "unit": "ms",
+            "range": "621"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 46678.8,
+            "unit": "ms",
+            "range": "11097"
           }
         ]
       }
