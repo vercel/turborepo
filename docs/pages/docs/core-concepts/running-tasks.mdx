@@ -34,7 +34,9 @@ As you can see, `lint` gets run in all the workspaces. Then, `build` gets run - 
 
 ## Turborepo can multitask
 
-In `turbo.json`, **we can define our task dependencies declaratively**:
+Turborepo can schedule our tasks for maximum speed by understanding the dependencies between our tasks.
+
+First, we declare our tasks inside `turbo.json`:
 
 ```json
 {
@@ -55,7 +57,7 @@ In `turbo.json`, **we can define our task dependencies declaratively**:
 }
 ```
 
-We can replace our `yarn workspaces` script with this:
+Next, we can replace our `yarn workspaces` script with this:
 
 ```diff
 - yarn workspaces run lint
