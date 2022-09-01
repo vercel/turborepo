@@ -7,9 +7,42 @@ import Callout from "../../../components/Callout";
 
 # Caching
 
-Unlike other tools you may have used, Turborepo can cache emitted files and logs of previously run commands, so it can skip work that has already been done, yielding incredible time savings.
+Turborepo ships with a **task cache**. It can cache the results of any task - meaning you can save time by skipping long-running jobs.
 
-By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist/**` or `build/**` folders of a package task (defined in that package's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
+Each task in your monorepo has an **input** and an **output**.
+
+- A `build` task takes in **source files as input** and returns **bundled files as output**.
+- A `lint` or `test` task also takes in **source files**, but outputs to **`stdout`**.
+
+Turborepo lets you configure each task's inputs and outputs so that you **never need to do the same work twice**.
+
+## Missing the cache
+
+Let's say you run a `build` task with Turborepo using `turbo run build`:
+
+![](/images/docs/cache-miss.png)
+
+1. Turborepo will **take the inputs to your task** (by default all non-gitignored files), and **turn them into a hash**, like `78awdk123`.
+
+2. It'll then **check its local cache** for a folder named `78awdk123`.
+
+3. If it doesn't find it, it **runs the task**.
+
+4. Once the task is over, it **saves all the outputs** (including logs) under the hash.
+
+## Hitting the cache
+
+Let's say that you run the task again without changing any of the source files:
+
+![](/images/docs/cache-hit.png)
+
+1. The **hash will be the same** - `78awdk123`, because **the inputs haven't changed**.
+
+2. Turborepo will find the `78awdk123` folder in its cache.
+
+3. **Instead of running the task**, Turborepo will **replay the output** - printing the saved logs to `stdout` and restoring the output files.
+
+Restoring files and logs from the cache happens near-instantaneously. This can take your build times from many minutes down to **less than 100ms**.
 
 ## Configuring Cache Outputs
 
