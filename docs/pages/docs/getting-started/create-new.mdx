@@ -324,7 +324,7 @@ task `hello` not found in turbo `pipeline` in "turbo.json".
 Are you sure you added it?
 ```
 
-That's worth remembering - **in order for turbo to run a task, it must be in `turbo.json`**.
+That's worth remembering - **in order for `turbo` to run a task, it must be in `turbo.json`**.
 
 Let's investigate the scripts we already have in place.
 
@@ -472,7 +472,7 @@ Run the `build` script again. You'll notice:
 1. We hit `FULL TURBO` - the builds complete in under `100ms`.
 2. The `.next` folder re-appears!
 
-Turbo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/docs/core-concepts/caching#configuring-cache-outputs).
+Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/docs/core-concepts/caching#configuring-cache-outputs).
 
 ### 6. Running dev scripts
 
