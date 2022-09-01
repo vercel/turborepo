@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1661961734871,
+  "lastUpdate": 1662004609525,
   "repoUrl": "https://github.com/vercel/turborepo",
   "entries": {
     "macOS Benchmark": [
@@ -138,6 +138,52 @@
             "value": 65032.2,
             "unit": "ms",
             "range": "18851"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Nathan Hammond",
+            "username": "nathanhammond",
+            "email": "nathan.hammond@vercel.com"
+          },
+          "committer": {
+            "name": "Nathan Hammond",
+            "username": "nathanhammond",
+            "email": "nathan.hammond@vercel.com"
+          },
+          "id": "69ebb2994ddfb27cb94b65166b4ae0eccf7f0113",
+          "message": "Configure .npmrc in-project.",
+          "timestamp": "2022-09-01T01:17:37Z",
+          "url": "https://github.com/vercel/turborepo/commit/69ebb2994ddfb27cb94b65166b4ae0eccf7f0113"
+        },
+        "date": 1662004609523,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Clean Build",
+            "value": 1189792,
+            "unit": "ms",
+            "range": "0"
+          },
+          {
+            "name": "Cached Build - No Change",
+            "value": 7806.4,
+            "unit": "ms",
+            "range": "667"
+          },
+          {
+            "name": "Cached Build - Code Change",
+            "value": 7696.2,
+            "unit": "ms",
+            "range": "286"
+          },
+          {
+            "name": "Cached Build - Dependency Change",
+            "value": 46442.4,
+            "unit": "ms",
+            "range": "8554"
           }
         ]
       }
