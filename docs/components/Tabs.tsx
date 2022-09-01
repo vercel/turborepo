@@ -1,9 +1,14 @@
-import * as NextraTabs from "nextra-theme-docs/tabs";
+import type { FC } from "react";
+
+import { Tabs as NextraTabs, Tab } from "nextra-theme-docs";
 import useSWR from "swr";
 
-export const Tab = NextraTabs.Tab;
+export { Tab };
 
-export function Tabs({ storageKey = "tab-index", items, ...props }) {
+export const Tabs: FC<{
+  storageKey?: string;
+  items: string[];
+}> = function ({ storageKey = "tab-index", items, children = null, ...props }) {
   // Use SWR so all tabs with the same key can sync their states.
   const { data, mutate } = useSWR(storageKey, (key) => {
     try {
@@ -16,7 +21,7 @@ export function Tabs({ storageKey = "tab-index", items, ...props }) {
   const selectedIndex = items.indexOf(data);
 
   return (
-    <NextraTabs.Tabs
+    <NextraTabs
       onChange={(index) => {
         localStorage.setItem(storageKey, JSON.stringify(items[index]));
         mutate(items[index], false);
@@ -24,6 +29,8 @@ export function Tabs({ storageKey = "tab-index", items, ...props }) {
       selectedIndex={selectedIndex === -1 ? undefined : selectedIndex}
       items={items}
       {...props}
-    />
+    >
+      {children}
+    </NextraTabs>
   );
-}
+};

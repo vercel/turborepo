@@ -1,5 +1,10 @@
 @tailwind utilities;
 
+/* Override the Tailwind preflight */
+button[type='submit'] {
+  @apply bg-black;
+}
+
 body {
   background: linear-gradient(
       to bottom,
