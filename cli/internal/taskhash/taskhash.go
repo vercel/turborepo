@@ -77,7 +77,7 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) (string, error) {
+func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.AbsolutePath) (string, error) {
 	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
@@ -96,7 +96,7 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) 
 	return hashOfFiles, nil
 }
 
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopath.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
 	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
@@ -105,7 +105,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 		return nil, err
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir, ".gitignore").ToString())
+	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 		includePattern = "{" + strings.Join(inputs, ",") + "}"
 	}
 
-	pathPrefix := rootPath.Join(pkg.Dir).ToString()
+	pathPrefix := rootPath.Join(pkg.Dir.ToStringDuringMigration()).ToString()
 	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
@@ -155,7 +155,7 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot fs.AbsolutePath) error {
+func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsolutePath) error {
 	hashTasks := make(util.Set)
 	for _, v := range allTasks {
 		taskID, ok := v.(string)

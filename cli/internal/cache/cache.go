@@ -14,6 +14,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
@@ -42,7 +43,7 @@ type CacheEvent struct {
 }
 
 // DefaultLocation returns the default filesystem cache location, given a repo root
-func DefaultLocation(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func DefaultLocation(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
 	return repoRoot.Join("node_modules", ".cache", "turbo")
 }
 
@@ -57,7 +58,7 @@ var ErrNoCachesEnabled = errors.New("no caches are enabled")
 // Opts holds configuration options for the cache
 // TODO(gsoltis): further refactor this into fs cache opts and http cache opts
 type Opts struct {
-	Dir             fs.AbsolutePath
+	Dir             turbopath.AbsolutePath
 	SkipRemote      bool
 	SkipFilesystem  bool
 	Workers         int
@@ -68,7 +69,7 @@ var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
 allow reading and caching artifacts using the remote cache.`
 
 // AddFlags adds cache-related flags to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot fs.AbsolutePath) {
+func AddFlags(opts *Opts, flags *pflag.FlagSet, repoRoot turbopath.AbsolutePath) {
 	// skipping remote caching not currently a flag
 	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
 	fs.AbsolutePathVar(flags, &opts.Dir, "cache-dir", repoRoot, "Specify local filesystem cache directory.", "./node_modules/.cache/turbo")

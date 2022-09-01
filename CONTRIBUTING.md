@@ -7,8 +7,8 @@ Dependencies
 
 Building
 
-- Building turbo CLI: In `cli` run `make turbo`
-- Using turbo to build turbo CLI: `./turbow.js`
+- Building `turbo` CLI: In `cli` run `make turbo`
+- Using `turbo` to build `turbo` CLI: `./turbow.js`
 
 ## Testing
 
