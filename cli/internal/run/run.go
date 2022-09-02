@@ -685,7 +685,7 @@ func (r *run) logWarning(prefix string, err error) {
 func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	apiClient := r.config.NewClient()
 	var analyticsSink analytics.Sink
-	if apiClient.IsLoggedIn() {
+	if apiClient.IsLinked() {
 		analyticsSink = apiClient
 	} else {
 		r.opts.cacheOpts.SkipRemote = true
