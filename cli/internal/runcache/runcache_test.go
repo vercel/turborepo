@@ -40,9 +40,9 @@ Second line.
 		// Given
 		taskCache.rc.prefixStripped = false
 
-		expectedOutputLogs := `testPackageName: First line of log.
-testPackageName: Second line.
-testPackageName: 	Third line a little different`
+		expectedOutputLogs := `testPackageName:: First line of log.
+testPackageName:: Second line.
+testPackageName:: 	Third line a little different`
 
 		// When
 		writer, err := taskCache.OutputWriter()

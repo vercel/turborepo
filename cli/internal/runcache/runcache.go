@@ -326,7 +326,7 @@ func (tc TaskCache) ColoredPrefix() string {
 	}
 
 	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	return colorPrefixer("%s ", tc.pt.OutputPrefix())
+	return colorPrefixer("%s: ", tc.pt.OutputPrefix())
 }
 
 func (tc TaskCache) newPrefixWriter(bufWriter io.Writer) prefixedWriter {
