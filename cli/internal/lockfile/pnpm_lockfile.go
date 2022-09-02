@@ -1,31 +1,12 @@
 package lockfile
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io"
-	"strings"
-
-	"text/template"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
-
-const pnpmLockfileTemplate = `lockfileVersion: {{ .Version }}
-
-importers:
-{{ range $key, $val := .Importers }}
-  {{ $key }}:
-{{ displayProjectSnapshot $val }}
-{{ end }}
-packages:
-{{ range $key, $val :=  .Packages }}
-  {{ $key }}:
-{{ displayPackageSnapshot $val }}
-{{ end }}{{ if (eq .Version 5.4) }}
-{{ end }}`
 
 // PnpmLockfile Go representation of the contents of 'pnpm-lock.yaml'
 // Reference https://github.com/pnpm/pnpm/blob/main/packages/lockfile-types/src/index.ts
@@ -38,9 +19,6 @@ type PnpmLockfile struct {
 	Overrides          map[string]string          `yaml:"overrides,omitempty"`
 	PackageExtChecksum string                     `yaml:"packageExtensionsChecksum,omitempty"`
 	PatchedDeps        map[string]PatchFile       `yaml:"patchedDependencies,omitempty"`
-
-	// Used to track if CRLF should be used for newlines
-	hasCRLF bool
 }
 
 var _ Lockfile = (*PnpmLockfile)(nil)
@@ -133,7 +111,6 @@ type DependencyMeta struct {
 
 // DecodePnpmLockfile parse a pnpm lockfile
 func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
-	hasCRLF := bytes.HasSuffix(contents, []byte("\r\n"))
 	var lockfile PnpmLockfile
 	if err := yaml.Unmarshal(contents, &lockfile); err != nil {
 		return nil, errors.Wrap(err, "could not unmarshal lockfile: ")
@@ -142,8 +119,6 @@ func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
 	if err := isSupportedVersion(lockfile.Version); err != nil {
 		return nil, err
 	}
-
-	lockfile.hasCRLF = hasCRLF
 
 	return &lockfile, nil
 }
@@ -223,39 +198,13 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 		return err
 	}
 
-	funcMap := template.FuncMap{
-		"displayProjectSnapshot": displayProjectSnapshot,
-		"displayPackageSnapshot": displayPackageSnapshot,
-	}
-	t, err := template.New("pnpm lockfile").Funcs(funcMap).Parse(pnpmLockfileTemplate)
-	if err != nil {
-		return errors.Wrap(err, "unable to parse pnpm-lock.yaml template")
-	}
+	encoder := yaml.NewEncoder(w)
+	encoder.SetIndent(2)
 
-	if p.hasCRLF {
-		var b bytes.Buffer
-		if err := t.Execute(&b, p); err != nil {
-			return err
-		}
-		scanner := bufio.NewScanner(&b)
-		crlf := []byte("\r\n")
-		for scanner.Scan() {
-			line := scanner.Bytes()
-			if _, err := w.Write(line); err != nil {
-				return errors.Wrap(err, "error copying lockfile line")
-			}
-			if _, err := w.Write(crlf); err != nil {
-				return errors.Wrap(err, "error copying lockfile line")
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			return errors.Wrap(err, "error reading lockfile line from buffer")
-		}
-
-		return nil
+	if err := encoder.Encode(p); err != nil {
+		return errors.Wrap(err, "unable to encode pnpm lockfile")
 	}
-
-	return t.Execute(w, p)
+	return nil
 }
 
 func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, bool) {
@@ -282,40 +231,4 @@ func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, 
 		}
 	}
 	return "", false
-}
-
-func displayProjectSnapshot(projectSnapshot ProjectSnapshot) string {
-	var b bytes.Buffer
-	encoder := yaml.NewEncoder(&b)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(projectSnapshot); err != nil {
-		panic("failed to encode importers")
-	}
-
-	return indentLines(b.String())
-}
-
-func displayPackageSnapshot(packageSnapshot PackageSnapshot) string {
-	var b bytes.Buffer
-	encoder := yaml.NewEncoder(&b)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(packageSnapshot); err != nil {
-		panic("failed to encode importers")
-	}
-	return indentLines(b.String())
-}
-
-func indentLines(text string) string {
-	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	indentedLines := make([]string, len(lines))
-	for i, line := range lines {
-		if line == "" {
-			// Don't indent empty lines
-			indentedLines[i] = ""
-		} else {
-			indentedLines[i] = fmt.Sprintf("    %s", line)
-		}
-	}
-
-	return strings.Join(indentedLines, "\n")
 }

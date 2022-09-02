@@ -17,14 +17,14 @@ type Pnpm6Workspaces struct {
 }
 
 var nodejsPnpm6 = PackageManager{
-	Name:          "nodejs-pnpm6",
-	Slug:          "pnpm",
-	Command:       "pnpm",
-	Specfile:      "package.json",
-	Lockfile:      "pnpm-lock.yaml",
-	PackageDir:    "node_modules",
-	ArgSeparator:  []string{"--"},
-	WorkspacePath: "pnpm-workspace.yaml",
+	Name:                       "nodejs-pnpm6",
+	Slug:                       "pnpm",
+	Command:                    "pnpm",
+	Specfile:                   "package.json",
+	Lockfile:                   "pnpm-lock.yaml",
+	PackageDir:                 "node_modules",
+	ArgSeparator:               []string{"--"},
+	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
 		bytes, err := ioutil.ReadFile(rootpath.Join("pnpm-workspace.yaml").ToStringDuringMigration())

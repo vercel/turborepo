@@ -40,7 +40,7 @@ type PackageManager struct {
 	PackageDir string
 
 	// The location of the file that defines the workspace. Empty if workspaces defined in package.json
-	WorkspacePath string
+	WorkspaceConfigurationPath string
 
 	// The separator that the Package Manger uses to identify arguments that
 	// should be passed through to the underlying script.

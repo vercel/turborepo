@@ -29,8 +29,8 @@ var nodejsPnpm = PackageManager{
 	// We are allowed to use nil here because ArgSeparator already has a type, so it's a typed nil,
 	// This could just as easily be []string{}, but the style guide says to prefer
 	// nil for empty slices.
-	ArgSeparator:  nil,
-	WorkspacePath: "pnpm-workspace.yaml",
+	ArgSeparator:               nil,
+	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
 		bytes, err := ioutil.ReadFile(rootpath.Join("pnpm-workspace.yaml").ToStringDuringMigration())

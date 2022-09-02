@@ -157,10 +157,10 @@ func (p *prune) prune(opts *opts) error {
 	if err := packageJSONPath.EnsureDir(); err != nil {
 		return errors.Wrap(err, "could not create output directory")
 	}
-	if workspacePath := ctx.PackageManager.WorkspacePath; workspacePath != "" && fs.FileExists(p.config.Cwd.Join(workspacePath).ToStringDuringMigration()) {
+	if workspacePath := ctx.PackageManager.WorkspaceConfigurationPath; workspacePath != "" && fs.FileExists(p.config.Cwd.Join(workspacePath).ToStringDuringMigration()) {
 		workspaceFile := fs.LstatCachedFile{Path: p.config.Cwd.Join(workspacePath)}
-		if err := fs.CopyFile(&workspaceFile, outDir.Join(ctx.PackageManager.WorkspacePath).ToStringDuringMigration()); err != nil {
-			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspacePath)
+		if err := fs.CopyFile(&workspaceFile, outDir.Join(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
