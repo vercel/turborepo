@@ -96,9 +96,12 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
           // accessing key on process.env
           else if (
             "property" in node.parent &&
-            "name" in node.parent.property
+            "name" in node.parent.property &&
+            // && the property is not a variable.
+            // Types do not map to reality here.
+            (node.parent.property as any).parent?.computed !== true
           ) {
-            checkKey(node.parent, node.parent.property?.name);
+            checkKey(node.parent, node.parent.property.name);
           }
         }
       }
