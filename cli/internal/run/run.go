@@ -306,8 +306,8 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
-	hashTracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
-	err = hashTracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.config.Cwd)
+	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.config.Cwd)
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
 	}
@@ -339,7 +339,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			}
 		}
 	} else if rs.Opts.runOpts.dryRun {
-		tasksRun, err := r.executeDryRun(ctx, engine, g, hashTracker, rs)
+		tasksRun, err := r.executeDryRun(ctx, engine, g, tracker, rs)
 		if err != nil {
 			return err
 		}
@@ -391,7 +391,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		sort.Strings(packagesInScope)
 		r.ui.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		r.ui.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		return r.executeTasks(ctx, g, rs, engine, packageManager, hashTracker, startAt)
+		return r.executeTasks(ctx, g, rs, engine, packageManager, tracker, startAt)
 	}
 	return nil
 }
@@ -730,9 +730,9 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(pt.TaskID)
-		return ec.exec(ctx, pt, deps)
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		return ec.exec(ctx, packageTask, deps)
 	}), core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
@@ -779,22 +779,22 @@ type hashedTask struct {
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	taskIDs := []hashedTask{}
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, pt *nodes.PackageTask) error {
-		passThroughArgs := rs.ArgsForTask(pt.Task)
-		deps := engine.TaskGraph.DownEdges(pt.TaskID)
-		hash, err := taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
+	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		passThroughArgs := rs.ArgsForTask(packageTask.Task)
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
 		if err != nil {
 			return err
 		}
-		command, ok := pt.Command()
+		command, ok := packageTask.Command()
 		if !ok {
 			command = "<NONEXISTENT>"
 		}
-		isRootTask := pt.PackageName == util.RootPkgName
+		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", pt.Task, command)
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
 		}
-		ancestors, err := engine.TaskGraph.Ancestors(pt.TaskID)
+		ancestors, err := engine.TaskGraph.Ancestors(packageTask.TaskID)
 		if err != nil {
 			return err
 		}
@@ -805,7 +805,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 				stringAncestors = append(stringAncestors, dep.(string))
 			}
 		}
-		descendents, err := engine.TaskGraph.Descendents(pt.TaskID)
+		descendents, err := engine.TaskGraph.Descendents(packageTask.TaskID)
 		if err != nil {
 			return err
 		}
@@ -819,14 +819,14 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		sort.Strings(stringDescendents)
 
 		taskIDs = append(taskIDs, hashedTask{
-			TaskID:       pt.TaskID,
-			Task:         pt.Task,
-			Package:      pt.PackageName,
+			TaskID:       packageTask.TaskID,
+			Task:         packageTask.Task,
+			Package:      packageTask.PackageName,
 			Hash:         hash,
 			Command:      command,
-			Dir:          pt.Pkg.Dir.ToString(),
-			Outputs:      pt.TaskDefinition.Outputs,
-			LogFile:      pt.RepoRelativeLogFile(),
+			Dir:          packageTask.Pkg.Dir.ToString(),
+			Outputs:      packageTask.TaskDefinition.Outputs,
+			LogFile:      packageTask.RepoRelativeLogFile(),
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
 		})
@@ -882,18 +882,18 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps dag.Set) error {
+func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	targetLogger := e.logger.Named(pt.OutputPrefix())
+	targetLogger := e.logger.Named(packageTask.OutputPrefix())
 	targetLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.Run(pt.TaskID)
+	tracer := e.runState.Run(packageTask.TaskID)
 
 	// Create a logger
-	colorPrefixer := e.colorCache.PrefixColor(pt.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", pt.OutputPrefix())
+	colorPrefixer := e.colorCache.PrefixColor(packageTask.PackageName)
+	prettyTaskPrefix := colorPrefixer("%s: ", packageTask.OutputPrefix())
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: prettyTaskPrefix,
@@ -902,8 +902,8 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		WarnPrefix:   prettyTaskPrefix,
 	}
 
-	passThroughArgs := e.rs.ArgsForTask(pt.Task)
-	hash, err := e.taskHashes.CalculateTaskHash(pt, deps, passThroughArgs)
+	passThroughArgs := e.rs.ArgsForTask(packageTask.Task)
+	hash, err := e.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
 	e.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		e.ui.Error(fmt.Sprintf("Hashing error: %v", err))
@@ -914,13 +914,13 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// so that downstream tasks can count on the hash existing
 	//
 	// bail if the script doesn't exist
-	if _, ok := pt.Command(); !ok {
+	if _, ok := packageTask.Command(); !ok {
 		targetLogger.Debug("no task in package, skipping")
 		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(pt, hash)
+	taskCache := e.runCache.TaskCache(packageTask, hash)
 	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
 	if err != nil {
 		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
@@ -929,7 +929,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 		return nil
 	}
 	// Setup command execution
-	argsactual := append([]string{"run"}, pt.Task)
+	argsactual := append([]string{"run"}, packageTask.Task)
 	if len(passThroughArgs) > 0 {
 		// This will be either '--' or a typed nil
 		argsactual = append(argsactual, e.packageManager.ArgSeparator...)
@@ -940,7 +940,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
 	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsolutePath to
 	// AbsoluteSystemPath
-	cmd.Dir = e.repoRoot.Join(pt.Pkg.Dir.ToStringDuringMigration()).ToString()
+	cmd.Dir = e.repoRoot.Join(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 
@@ -1022,7 +1022,7 @@ func (e *execContext) exec(ctx gocontext.Context, pt *nodes.PackageTask, deps da
 	return nil
 }
 
-func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, pt *nodes.PackageTask) error) func(taskID string) error {
+func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 
 		name, task := util.GetPackageTaskFromId(taskID)
@@ -1030,24 +1030,25 @@ func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor fun
 		if !ok {
 			return fmt.Errorf("cannot find package %v for task %v", name, taskID)
 		}
+
 		// first check for package-tasks
-		pipeline, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
+		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
 		if !ok {
 			// then check for regular tasks
-			altpipe, notcool := g.Pipeline[task]
+			fallbackTaskDefinition, notcool := g.Pipeline[task]
 			// if neither, then bail
 			if !notcool && !ok {
 				return nil
 			}
 			// override if we need to...
-			pipeline = altpipe
+			taskDefinition = fallbackTaskDefinition
 		}
 		return visitor(ctx, &nodes.PackageTask{
 			TaskID:         taskID,
 			Task:           task,
 			PackageName:    name,
 			Pkg:            pkg,
-			TaskDefinition: &pipeline,
+			TaskDefinition: &taskDefinition,
 		})
 	}
 }
