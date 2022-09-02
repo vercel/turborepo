@@ -1,6 +1,6 @@
 `turbo-tooling` uses [Cargo workspaces][workspaces] monorepo. You'll find
-several workspaces inside the `creates/` directory. In order to run a particular
-create, you can use the `cargo run -p [CRATE_NAME]` command.
+several workspaces inside the `crates/` directory. In order to run a particular
+crate, you can use the `cargo run -p [CRATE_NAME]` command.
 
 ## Testing
 
