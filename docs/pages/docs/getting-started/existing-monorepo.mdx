@@ -19,7 +19,7 @@ import { Tabs, Tab } from '../../../components/Tabs'
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](./guides/workspaces) documentation.
+`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](../guides/workspaces) documentation.
 
 You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
@@ -105,9 +105,9 @@ In the root of your monorepo, create an empty file named `turbo.json`. This will
 
 ## Create a `pipeline`
 
-To define your monorepo's task dependency graph, use the [`pipeline`](./features/pipelines) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
+To define your monorepo's task dependency graph, use the [`pipeline`](../features/pipelines) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
 
-Each key in the [`pipeline`](./features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](./reference/command-line-reference#turbo-run-task1-task2-1). You can specify its dependencies with the [`dependsOn`](./reference/configuration#dependson) key inside it as well as some other options related to [caching](./features/caching). For more information on configuring your pipeline, see the [`Pipelines`](./core-concepts/pipelines) documentation.
+Each key in the [`pipeline`](../features/pipelines) object is the name of a `package.json` script that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key inside it as well as some other options related to [caching](../features/caching). For more information on configuring your pipeline, see the [`Pipelines`](../core-concepts/pipelines) documentation.
 
 Workspaces that do not have the specified script defined in their `package.json`'s list of `scripts` will be ignored by `turbo`.
 
