@@ -1,20 +1,28 @@
 import { useRouter } from "next/router";
+import { useConfig } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import TurboLogo from "./components/logos/Turbo";
 
 const theme = {
   github: "https://github.com/vercel/turborepo",
-  projectLink: "https://github.com/vercel/turborepo",
+  project: {
+    link: "https://github.com/vercel/turborepo",
+  },
   docsRepositoryBase:
     "https://github.com/vercel/turborepo/blob/main/docs/pages",
   titleSuffix: " | Turborepo",
-  search: true,
   unstable_flexsearch: true,
   unstable_staticImage: true,
-  floatTOC: true,
+  toc: {
+    float: true,
+  },
   font: false,
-  projectChatLink: "https://turborepo.org/discord",
-  feedbackLink: "Question? Give us feedback →",
+  projectChat: {
+    link: "https://turborepo.org/discord",
+  },
+  feedback: {
+    link: "Question? Give us feedback →",
+  },
   banner: function Banner() {
     return (
       <a
@@ -36,8 +44,9 @@ const theme = {
       </>
     );
   },
-  head: function Head({ title, meta }) {
+  head: function () {
     const router = useRouter();
+    const { frontMatter, title } = useConfig();
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -71,29 +80,35 @@ const theme = {
         <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
         <meta name="og:title" content={title} />
-        <meta name="og:description" content={meta.description} />
+        <meta name="og:description" content={frontMatter.description} />
         <meta
           property="og:url"
           content={`https://turborepo.org${router.asPath}`}
         />
         <meta
           property="twitter:image"
-          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
+          content={`https://turborepo.org${
+            frontMatter.ogImage ?? "/og-image.png"
+          }`}
         />
         <meta
           property="og:image"
-          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
+          content={`https://turborepo.org${
+            frontMatter.ogImage ?? "/og-image.png"
+          }`}
         />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turborepo" />
       </>
     );
   },
-  footerEditLink: () => {
-    return "Edit this page on GitHub";
+  editLink: {
+    text: "Edit this page on GitHub",
   },
-  footerText: () => {
-    return <Footer />;
+  footer: {
+    text: () => {
+      return <Footer />;
+    },
   },
   nextThemes: {
     defaultTheme: "dark",
