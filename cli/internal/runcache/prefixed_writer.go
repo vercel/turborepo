@@ -14,16 +14,20 @@ type prefixedWriter struct {
 // Writes the given `payload` and add the `prefix` to each new line.
 func (writer prefixedWriter) Write(payload []byte) (n int, err error) {
 	newLine := true
+	var totalLength int
 	for _, data := range payload {
 		if newLine {
-			if n, err = writer.underlyingWriter.Write([]byte(writer.prefix)); err != nil {
-				return n, err
+			_, err = writer.underlyingWriter.Write([]byte(writer.prefix))
+			if err != nil {
+				return totalLength, err
 			}
 			newLine = false
 		}
 
-		if n, err = writer.underlyingWriter.Write([]byte{data}); err != nil {
-			return n, err
+		n, err = writer.underlyingWriter.Write([]byte{data})
+		totalLength += n
+		if err != nil {
+			return totalLength, err
 		}
 
 		if data == '\n' {
@@ -31,5 +35,5 @@ func (writer prefixedWriter) Write(payload []byte) (n int, err error) {
 		}
 	}
 
-	return n, err
+	return totalLength, err
 }

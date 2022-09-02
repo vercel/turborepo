@@ -252,9 +252,14 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	}
 
 	fwc := &fileWriterCloser{
-		file:   output,
-		bufio:  bufWriter,
-		Writer: tc.newPrefixWriter(bufWriter),
+		file:  output,
+		bufio: bufWriter,
+	}
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
+		// only write to log file, not to stdout
+		fwc.Writer = bufWriter
+	} else {
+		fwc.Writer = io.MultiWriter(tc.newPrefixWriter(os.Stdout), bufWriter)
 	}
 
 	return fwc, nil
@@ -321,19 +326,13 @@ func (tc TaskCache) ColoredPrefix() string {
 	}
 
 	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	return colorPrefixer("%s: ", tc.pt.OutputPrefix())
+	return colorPrefixer("%s ", tc.pt.OutputPrefix())
 }
 
 func (tc TaskCache) newPrefixWriter(bufWriter io.Writer) prefixedWriter {
 	prefixedWriter := prefixedWriter{
-		prefix: tc.ColoredPrefix(),
-	}
-
-	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
-		// only write to log file, not to stdout
-		prefixedWriter.underlyingWriter = bufWriter
-	} else {
-		prefixedWriter.underlyingWriter = io.MultiWriter(os.Stdout, bufWriter)
+		prefix:           tc.ColoredPrefix(),
+		underlyingWriter: bufWriter,
 	}
 
 	return prefixedWriter
@@ -343,7 +342,7 @@ func (tc TaskCache) cacheHitMessage() string {
 	message := fmt.Sprintf("cache hit, replaying output %s\n", ui.Dim(tc.hash))
 	if tc.rc.prefixStripped {
 		prettyTaskPrefix := tc.ColoredPrefix()
-		message = fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))
+		message = fmt.Sprintf("%scache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))
 	}
 
 	return message
