@@ -69,7 +69,7 @@ You can enable Turborepo to sign artifacts with a secret key before uploading th
 Turborepo will verify the remote cache artifacts' integrity and authenticity when they're downloaded.
 Any artifacts that fail to verify will be ignored and treated as a cache miss by Turborepo.
 
-To enable this feature, set the `remoteCache` options on your turbo config to include `signature: true`. Then specify your secret key by declaring the `TURBO_REMOTE_CACHE_SIGNATURE_KEY` environment variable.
+To enable this feature, set the `remoteCache` options on your `turbo.json` config to include `signature: true`. Then specify your secret key by declaring the `TURBO_REMOTE_CACHE_SIGNATURE_KEY` environment variable.
 
 ```jsonc
 {

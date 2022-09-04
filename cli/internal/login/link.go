@@ -12,6 +12,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
@@ -31,7 +32,7 @@ type LinkCommand struct {
 type link struct {
 	ui                  cli.Ui
 	logger              hclog.Logger
-	cwd                 fs.AbsolutePath
+	cwd                 turbopath.AbsolutePath
 	modifyGitIgnore     bool
 	repoConfig          *config.RepoConfig
 	apiClient           linkAPIClient
@@ -42,7 +43,7 @@ type link struct {
 }
 
 type linkAPIClient interface {
-	IsLoggedIn() bool
+	HasUser() bool
 	GetTeams() (*client.TeamsResponse, error)
 	GetUser() (*client.UserResponse, error)
 	SetTeamID(teamID string)
@@ -139,7 +140,7 @@ func (l *link) run() error {
 		return errUserCanceled
 	}
 
-	if !l.apiClient.IsLoggedIn() {
+	if !l.apiClient.HasUser() {
 		return fmt.Errorf(util.Sprintf("User not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}."))
 	}
 

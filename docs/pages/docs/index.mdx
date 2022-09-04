@@ -3,11 +3,11 @@ title: Documentation
 description: Turborepo is a high-performance build system for JavaScript and TypeScript codebases.
 ---
 
-import Features from "../../components/Features";
+import { DocsFeatures } from "../../components/Features";
 
 # Turborepo Documentation
 
-<Features page="docs" detailed={false} />
+<DocsFeatures detailed={false} />
 
 Turborepo is a blazing fast build system for JavaScript/TypeScript _monorepos_: codebases containing multiple
 projects, often using multiple frameworks, in a single, unified
@@ -27,4 +27,4 @@ Most importantly, unlike other build systems, Turborepo is designed to be increm
 - **Task pipelines**: Define the relationships between your tasks and then let Turborepo optimize what to build and when.
 - **Pruned subsets**: Speed up PaaS deploys by generating a subset of your monorepo with only what's needed to build a specific target.
 - **Convention-based config**: Reduce complexity through convention. Fan out configuration with just a few lines of JSON.
-- **Profile in your browser**: Generate build profiles and view them in a browser to understand which tasks are taking the longest.
+- **Profile in your browser**: Generate build profiles in the chrometracing format and view them in a browser to understand which tasks are taking the longest.

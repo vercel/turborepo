@@ -1,4 +1,4 @@
-import { ComponentProps } from "react";
+import React, { ComponentProps } from "react";
 import {
   ArrowsExpandIcon,
   BeakerIcon,
@@ -13,7 +13,7 @@ import {
 
 export type Feature = {
   name: string;
-  description: string;
+  description: React.ReactNode;
   Icon: (props: ComponentProps<"svg">) => JSX.Element;
   page: "all" | "home" | "docs";
 };

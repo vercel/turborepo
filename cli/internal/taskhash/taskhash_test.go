@@ -87,7 +87,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
 	}
-	hashes, err := manuallyHashPackage(pkg, []string{}, fs.AbsolutePath(repoRoot.ToString()))
+	hashes, err := manuallyHashPackage(pkg, []string{}, turbopath.AbsolutePath(repoRoot.ToString()))
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -113,7 +113,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, fs.AbsolutePath(repoRoot.ToString()))
+	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, turbopath.AbsolutePath(repoRoot.ToString()))
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}

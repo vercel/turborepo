@@ -32,7 +32,7 @@ The following flags apply to all commands.
 #### `--color`
 
 Forces the use of color even when the output stream is not considered to be a TTY terminal.
-This can be used to enable turbo's color output for CI runners such as Github Actions which
+This can be used to enable `turbo`'s color output for CI runners such as Github Actions which
 have support for rendering color in their log output.
 
 ```sh
@@ -51,7 +51,7 @@ turbo run build
 
 #### `--no-color`
 
-Suppresses the use of color in the output when running turbo in an interactive / TTY session.
+Suppresses the use of color in the output when running `turbo` in an interactive / TTY session.
 
 ```sh
 turbo run build --no-color
@@ -263,7 +263,7 @@ turbo run dev --parallel --no-cache
 
 `type: string`
 
-Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only `turbo`-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
 
 ```shell
 turbo run build --output-logs=full
@@ -594,4 +594,4 @@ Unlink the current directory from the Remote Cache.
 
 ## `turbo bin`
 
-Get the path to the Turbo binary.
+Get the path to the `turbo` binary.

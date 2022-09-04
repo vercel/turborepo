@@ -1,17 +1,7 @@
 {
+  "extends": "tsconfig/library.json",
   "exclude": ["templates"],
   "compilerOptions": {
-    "lib": ["ES2019"],
-    "target": "ES2019",
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "outDir": "dist",
-    "rootDir": ".",
-    "allowJs": true
+    "rootDir": "."
   }
 }

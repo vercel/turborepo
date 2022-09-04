@@ -25,7 +25,7 @@ type PackageJSON struct {
 	InternalDeps           []string
 	UnresolvedExternalDeps map[string]string
 	ExternalDeps           []string
-	SubLockfile            YarnLockfile
+	TransitiveDeps         []string
 	LegacyTurboConfig      *TurboJSON `json:"turbo"`
 	Mu                     sync.Mutex
 	ExternalDepsHash       string
@@ -52,7 +52,7 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 }
 
 // ReadPackageJSON returns a struct of package.json
-func ReadPackageJSON(path AbsolutePath) (*PackageJSON, error) {
+func ReadPackageJSON(path turbopath.AbsolutePath) (*PackageJSON, error) {
 	b, err := path.ReadFile()
 	if err != nil {
 		return nil, err
