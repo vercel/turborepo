@@ -125,7 +125,7 @@ Open `packages/ui/package.json`. You'll notice these two attributes:
 }
 ```
 
-When packages import from `ui`, `main` tells them where to access the code they're importing. `types` tells them where the TypeScript types are located.
+When workspaces import from `ui`, `main` tells them where to access the code they're importing. `types` tells them where the TypeScript types are located.
 
 So, let's look inside `packages/ui/index.tsx`:
 
@@ -134,7 +134,7 @@ import * as React from "react";
 export * from "./Button";
 ```
 
-Everything inside this file will be able to be used by packages that depend on `ui`.
+Everything inside this file will be able to be used by workspaces that depend on `ui`.
 
 `index.tsx` is exporting everything from a file called `./Button`, so let's go there:
 
@@ -195,18 +195,18 @@ This pattern allows for a monorepo to share a single `tsconfig.json` across all 
 
 #### Understanding `eslint-config-custom`
 
-Our final package is `eslint-config-custom`.
+Our final workspace is `eslint-config-custom`.
 
 You'll notice that this is named slightly differently to the other workspaces. It's not as concise as `ui` or `tsconfig`. Let's take a look inside `.eslintrc.js` in the root of the monorepo to figure out why.
 
 ```ts filename=".eslintrc.js"
 module.exports = {
-  // This tells ESLint to load the config from the package `eslint-config-custom`
+  // This tells ESLint to load the config from the workspace `eslint-config-custom`
   extends: ["custom"],
 };
 ```
 
-[ESLint](https://eslint.org/) resolves configuration files by looking for packages with the name `eslint-config-*`. This lets us write `extends: ['custom']` and have ESLint find our local workspace.
+[ESLint](https://eslint.org/) resolves configuration files by looking for workspaces with the name `eslint-config-*`. This lets us write `extends: ['custom']` and have ESLint find our local workspace.
 
 But why is this in the root of the monorepo?
 
@@ -227,7 +227,7 @@ Just like `tsconfig`, `eslint-config-custom` lets us share ESLint configs across
 
 #### Summary
 
-It's important to understand the dependencies between these packages. Let's map them out:
+It's important to understand the dependencies between these workspaces. Let's map them out:
 
 {/* Could be worth a diagram here? */}
 
