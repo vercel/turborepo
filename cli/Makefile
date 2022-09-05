@@ -1,4 +1,4 @@
-TURBO_VERSION = $(shell head -n 1 ../version.txt)
+TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 ifeq ($(OS),Windows_NT)
@@ -87,6 +87,8 @@ prepublish:
 	make -j3 bench/turbo test-go lint-go
 
 publish: clean prepublish build
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
@@ -106,16 +108,27 @@ publish: clean prepublish build
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
+	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist
 
-	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG)
-	# cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG)
-	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG)
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
+	# Split packing from the publish step so that npm locates the correct .npmrc file.
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
 
-	git push origin main "v$(TURBO_VERSION)"
+	# Publish the remaining JS packages in order to avoid race conditions.
+	cd $(CLI_DIR)/../
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
+	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
+
+	# Force push to ensure that the version used for the release is published.
+	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
+	git push -f origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage

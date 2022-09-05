@@ -1,5 +1,4 @@
 import "../styles.css";
-import "nextra-theme-docs/style.css";
 import "../custom.css";
 
 import { SSRProvider } from "@react-aria/ssr";
@@ -19,13 +18,9 @@ if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
 }
 
 export default function Nextra({ Component, pageProps }: NextraAppProps) {
-  const getLayout = Component.getLayout || ((page) => page);
-
-  return getLayout(
-    <>
-      <SSRProvider>
-        <Component {...pageProps} />
-      </SSRProvider>
-    </>
+  return (
+    <SSRProvider>
+      <Component {...pageProps} />
+    </SSRProvider>
   );
 }

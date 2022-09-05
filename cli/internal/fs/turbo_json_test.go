@@ -22,7 +22,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 	rootDir := "testdata"
 	turboJSONPath := cwd.Join(rootDir)
 	packageJSONPath := cwd.Join(rootDir, "package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath.ToStringDuringMigration())
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)

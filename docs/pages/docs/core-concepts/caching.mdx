@@ -120,6 +120,10 @@ determining a cache hit on the `test` task:
 }
 ```
 
+<Callout type="info">
+  Note: `turbo.json` is *always* considered an input. If you modify `turbo.json`, all caches are invalidated.
+</Callout>
+
 When you use `turbo` with tools that inline environment variables at build time (e.g. [Next.js](https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser) or [Create React App](https://create-react-app.dev/docs/adding-custom-environment-variables/)), it is important to tell `turbo` about it. Otherwise, you could ship a cached artifact with the wrong environment variables!
 
 Luckily, you can control `turbo`'s cache fingerprinting (also known as "hashing") behavior based on the values of both environment variables and the contents of files:
@@ -209,6 +213,21 @@ Note that this automatic detection and inclusion only works if Turborepo success
 - SvelteKit: `VITE_*`
 - Vite: `VITE_*`
 - Vue: `VUE_APP_*`
+
+<Callout type="info">
+  There are some exceptions to the list above. For various reasons, CI systems (including Vercel)
+  set environment variables that start with these prefixes even though they aren't part of your build
+  output. These can change unpredicably &mdash; even on every build! &mdash; invalidating Turborepo's
+  cache. To workaround this, Turborepo uses a `TURBO_CI_VENDOR_ENV_KEY` variable to
+  _exclude_ environment variables from Turborepo's inference.
+
+For example, Vercel sets the `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA`. This value changes on every build,
+so Vercel _also_ sets `TURBO_CI_VENDOR_ENV_KEY="NEXT_PUBLIC_VERCEL_"` to exclude these variables.
+
+Luckily, you only need to be aware of this on other build systems; you don't need to worry
+about these edge cases when using Turborepo on Vercel.
+
+</Callout>
 
 The environment variables will only be included in the cache key for tasks in workspaces where that framework is used. In other words, environment variables inferred for Next.js apps will only be included in the cache key for workspaces detected as Next.js apps. Tasks in other workspaces in the monorepo will not be impacted.
 

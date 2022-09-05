@@ -34,7 +34,7 @@ func (pt *PackageTask) OutputPrefix() string {
 // RepoRelativeLogFile returns the path to the log file for this task execution as a
 // relative path from the root of the monorepo.
 func (pt *PackageTask) RepoRelativeLogFile() string {
-	return filepath.Join(pt.Pkg.Dir, ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
+	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
 }
 
 // HashableOutputs returns the package-relative globs for files to be considered outputs

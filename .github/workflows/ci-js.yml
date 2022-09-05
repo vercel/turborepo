@@ -4,6 +4,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
 on:
   push:
     branches: ["main"]
@@ -13,16 +16,16 @@ on:
 jobs:
   build:
     name: build and test
-    timeout-minutes: 15
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [
-            ubuntu-latest,
-            macos-latest,
-            # windows-latest,
-          ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
 
     steps:
       - name: Check out code
@@ -52,9 +55,6 @@ jobs:
         with:
           version: 7.2.1
 
-      - name: Setup Yarn
-        run: npm i -g yarn
-
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
         with:
@@ -74,11 +74,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Lint
+        run: pnpm -- turbo run lint --filter=!cli
+
+      - name: Check types
+        run: pnpm -- turbo run check-types --filter=!cli
+
+      - name: Run packages tests
+        run: pnpm -- turbo run test --filter=!create-turbo --filter=!cli --color
+
       - name: Run create-turbo tests
         # `pnpm --` calls the `turbo` script in the root package.json
         # --filter and --color args are for turbo CLI
-        # -- --runInBand is passed forward to jest (which is in packages/create-turbo package.json `test` script)
-        run: pnpm -- turbo run test --filter=create-turbo --color -- --runInBand
-
-      - name: Run all other packages tests
-        run: pnpm -- turbo run test --filter=!create-turbo --filter=!cli --color
+        run: pnpm -- turbo run test --filter=create-turbo --color
