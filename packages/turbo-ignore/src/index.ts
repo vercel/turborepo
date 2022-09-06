@@ -25,6 +25,11 @@ if (!scope) {
   console.error(
     "Error: app scope not found. turbo-ignore inferencing failed, proceeding with build."
   );
+  if (!pathScope.scope) {
+    console.error(
+      "Hint: turbo-ignore cannot process because the monorepo root package.json does not have the name field.\nset or pass it as an explicit argument to turbo-ignore"
+    );
+  }
   console.error("");
   process.exit(1);
 }
