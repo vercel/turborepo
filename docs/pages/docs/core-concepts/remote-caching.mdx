@@ -5,6 +5,7 @@ description: Share cache artifacts across machines for even faster builds.
 ---
 
 import Callout from "../../../components/Callout";
+import { Tabs, Tab } from "../../../components/Tabs";
 
 # Remote Caching
 
@@ -42,18 +43,27 @@ npx turbo login
 
 Next, link your Turborepo to your remote cache:
 
-```
+```sh
 npx turbo link
 ```
 
-Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
+Once enabled, make some changes to a workspace you are currently caching and run tasks against it with `turbo run`.
 Your cache artifacts will now be stored locally _and_ in your Remote Cache.
 
 To verify, delete your local Turborepo cache with:
 
-```sh
-rm -rf ./node_modules/.cache/turbo
-```
+<Tabs items={['unix', 'win']} storageKey="selected-os">
+  <Tab>
+    ```sh
+    rm -rf ./node_modules/.cache/turbo
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    rd /s /q "./node_modules/.cache/turbo"
+    ```
+  </Tab>
+</Tabs>
 
 Then run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
 
