@@ -54,3 +54,25 @@ jobs:
         with:
           command: nextest
           args: run --release
+
+  test-bench:
+    runs-on: ubuntu-latest
+    name: quick test bench - ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: test-bench
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 60
+        with:
+          command: test
+          args: --benches --release
