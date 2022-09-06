@@ -9,7 +9,7 @@ import Callout from "../../../components/Callout";
 
 Unlike other tools you may have used, Turborepo can cache emitted files and logs of previously run commands, so it can skip work that has already been done, yielding incredible time savings.
 
-By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist/**` or `build/**` folders of a package task (defined in that package's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
+By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist/**` or `build/**` folders of a workspace task (defined in that workspace's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
 
 ## Configuring Cache Outputs
 
@@ -50,7 +50,7 @@ and cache their `output`s in `./node_modules/.cache/turbo`.
 Sometimes you really don't need or want this cache behavior (e.g. when you're using [`next dev`](https://nextjs.org/docs/api-reference/cli#development) or `react-scripts start` for live reloading). To entirely disable caching, append `--no-cache` to any command:
 
 ```shell
-# Run `dev` npm script in all packages and apps in parallel,
+# Run `dev` npm script in all workspaces in parallel,
 # but don't cache the output
 turbo run dev --parallel --no-cache
 ```
@@ -97,7 +97,7 @@ When you use `turbo` with tools that inline environment variables at build time 
 
 Luckily, you can control `turbo`'s cache fingerprinting (also known as "hashing") behavior based on the values of both environment variables and the contents of files:
 
-- Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-package-task basis.
+- Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-workspace-task basis.
 - Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
 - Including files or globs of files in `globalDependencies` will impact the cache fingerprint of _all_ tasks.
 - The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
@@ -265,7 +265,7 @@ Be careful to ensure that all of your environment variables are configured prior
 Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
 
 ```shell
-# Run `build` npm script in all packages and apps,
+# Run `build` npm script in all workspaces,
 # ignoring cache hits.
 turbo run build --force
 ```
@@ -283,16 +283,16 @@ First, `turbo` constructs a hash of the current global state of the monorepo:
 - The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](../reference/configuration#globalDependencies-1)
 - The sorted list environment variable key-value pairs that include `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
 
-Then it adds more factors relevant to a given package's task:
+Then it adds more factors relevant to a given workspace's task:
 
-- Hash the contents of all version-controlled files in the package folder or the files matching the `inputs` globs, if present
+- Hash the contents of all version-controlled files in the workspace folder or the files matching the `inputs` globs, if present
 - The hashes of all internal dependencies
 - The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
-- The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a package's `package.json` from the root lockfile
-- The package task's name
+- The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a workspace's `package.json` from the root lockfile
+- The workspace task's name
 - The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in applicable [`pipeline.<task-or-package-task>.dependsOn`](../reference/configuration#dependson) list.
 
-Once `turbo` encounters a given package's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
+Once `turbo` encounters a given workspace's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
 
 The hash of a given task is injected at execution time as an environment variable `TURBO_HASH`. This value can be useful in stamping outputs or tagging Dockerfile etc.
 
@@ -300,6 +300,6 @@ The hash of a given task is injected at execution time as an environment variabl
   As of `turbo` v0.6.10, `turbo`'s hashing algorithm when using `npm` or `pnpm`
   differs slightly from the above. When using either of these package managers,
   `turbo` will include the hashed contents of the lockfile in its hash
-  algorithm for each package's task. It will _not_ parse/figure out the resolved
+  algorithm for each workspace's task. It will _not_ parse/figure out the resolved
   set of all dependencies like the current `yarn` implementation.
 </Callout>

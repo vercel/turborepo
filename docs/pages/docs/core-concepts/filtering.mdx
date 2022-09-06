@@ -1,24 +1,24 @@
 ---
-title: Filtering Packages
-description: Only build the packages you care about
+title: Filtering Workspaces
+description: Only build the workspaces you care about
 ---
 
 import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
-# Filtering Packages
+# Filtering Workspaces
 
-Turborepo supports a `pnpm`-like `--filter` flag that allows you to select the packages
-that will act as "entry points" into your monorepo's package/task graph.
-You can filter your project by package name, package directory, whether packages include dependents/dependencies, and by changes
+Turborepo supports a `pnpm`-like `--filter` flag that allows you to select the workspaces
+that will act as "entry points" into your monorepo's workspace/task graph.
+You can filter your project by workspace name, workspace directory, whether workspaces include dependents/dependencies, and by changes
 in git history.
 
-`turbo` will run each task against each matched package, ensuring that any dependencies
+`turbo` will run each task against each matched workspace, ensuring that any dependencies
 are run first, according to the `pipeline` specification in [`turbo.json`](/docs/reference/configuration#pipeline).
 
 ## Filter Syntax
 
-Filters specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+Filters specify combinations of workspaces, directories, and git commits to act as entrypoints
 for execution.
 
 Multiple filters can be combined to select distinct sets of targets. Additionally, filters
@@ -27,13 +27,13 @@ be in the final entrypoint selection.
 
 Turborepo's filter syntax is based on pnpm's filter syntax, so it should feel familiar to pnpm users.
 
-### Filter by package
+### Filter by workspace
 
 Supports exact matches (`--filter=my-pkg`), and globs (`--filter=*my-pkg*`) are supported.
-Scoped packages (`@foo/bar`) can be abbreviated to just the package name (`bar`) as long as the package name
+Scoped workspaces (`@foo/bar`) can be abbreviated to just the workspace name (`bar`) as long as the workspace name
 is unique within the monorepo (e.g. `@foo/bar` exists, but `@baz/bar` does not).
 
-The monorepo's root package can be selected using the token `//`.
+The monorepo's root can be selected using the token `//`.
 
 ```sh
 # Build 'my-pkg', letting `turbo` infer task dependencies
@@ -44,7 +44,7 @@ turbo run build --filter=my-pkg
 # from the pipeline defined in turbo.json
 turbo run build --filter=@foo/bar
 
-# Build all packages that start with 'admin-', letting `turbo` infer task
+# Build all workspaces that start with 'admin-', letting turbo infer task
 # dependencies from the pipeline defined in turbo.json
 turbo run build --filter=admin-*
 
@@ -52,7 +52,7 @@ turbo run build --filter=admin-*
 turbo run format --filter=//
 ```
 
-### Include dependents of matched packages
+### Include dependents of matched workspaces
 
 Prepend `...` to the filter. If `my-app` depends on `my-lib`, `...my-lib` will select `my-app` and `my-lib`.
 Optionally including a `^` (`...^my-lib`) will select all of `my-lib`'s dependents, but not `my-lib` itself. In this case, just `my-app` will be
@@ -66,7 +66,7 @@ turbo run test --filter=...my-lib
 turbo run test --filter=...^my-lib
 ```
 
-### Include dependencies of matched packages
+### Include dependencies of matched workspaces
 
 Append `...` to the end of the filter. If `my-app` depends on `my-lib`, `my-app...` will select `my-app` and `my-lib`.
 Optionally including a `^` (`my-app^...`) will select all of `my-app`'s dependencies, but not `my-app` itself. In this case, just `my-lib` will be selected.
@@ -85,25 +85,25 @@ Supports exact matches (`--filter=./apps/docs`) and globs (`--filter=./apps/*`).
 When combined with other components, enclose in `{}`. For example, `--filter=...{./libs/*}`.
 
 ```sh
-# Build all of the packages in the 'apps' directory
+# Build all of the workspaces in the 'apps' directory
 turbo run build --filter=./apps/*
 
-# Build all of the packages in the 'libs' directory,
-# and all the packages that depends on them
+# Build all of the workspaces in the 'libs' directory,
+# and all the workspaces that depends on them
 turbo run build --filter=...{./libs/*}
 ```
 
-### Filter by changed packages
+### Filter by changed workspaces
 
-Use the set of files changed since a specified commit to calculate packages. Enclose references in
-`[]`. For example, `--filter=[HEAD^1]` will select all packages that have changed in the most recent
+Use the set of files changed since a specified commit to calculate workspaces. Enclose references in
+`[]`. For example, `--filter=[HEAD^1]` will select all workspaces that have changed in the most recent
 commit. If you need to check a specific range of commits, rather than comparing to `HEAD`, you can set
 both ends of the comparison via `[<from commit>...<to commit>]`.
 
-You can use [`--ignore`](/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which packages have changed.
+You can use [`--ignore`](/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which workspaces have changed.
 
 You can additionally prepend the commit reference with `...` to match the dependencies of other components
-against the changed packages. For instance, to select `foo` if any of `foo`'s dependencies have changed in the last commit,
+against the changed workspaces. For instance, to select `foo` if any of `foo`'s dependencies have changed in the last commit,
 you can pass `--filter=foo...[HEAD^1]`. Note that this feature is different from `pnpm`'s syntax.
 
 ```sh
@@ -116,23 +116,23 @@ turbo run build --filter=...[origin/my-feature]
 # Build '@foo/bar' if it or any of its dependencies changed in the last commit
 turbo run build --filter=@foo/bar...[HEAD^1]
 
-# Test each package in the '@scope' scope that is in the 'packages' directory,
+# Test each workspace in the '@scope' scope that is in the 'packages' directory,
 # if it has changed in the last commit
 turbo run test --filter=@scope/*{./packages/*}[HEAD^1]
 
-# Test each package that changed between 'main' and 'my-feature'
+# Test each workspace that changed between 'main' and 'my-feature'
 turbo run test --filter=[main...my-feature]
 ```
 
-### Excluding packages
+### Excluding workspaces
 
-Prepend `!` to the filter. Matched packages from the entire filter will be excluded from the set of targets.
+Prepend `!` to the filter. Matched workspaces from the entire filter will be excluded from the set of targets.
 For example, match everything except `@foo/bar`: `--filter=!@foo/bar`. Note that you may need to escape `!` as appropriate for your shell (e.g. `\!`).
 
 ```sh
 # Build everything except '@foo/bar'
 turbo run build --filter=!@foo/bar
-# Build all of the packages in the 'apps' directory, except the 'admin' package
+# Build all of the workspaces in the 'apps' directory, except the 'admin' workspace
 turbo run build --filter=./apps/* --filter=!admin
 ```
 
