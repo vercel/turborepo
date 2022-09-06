@@ -20,7 +20,7 @@ To use workspaces, you must first declare their file system locations to your pa
 A common convention we recommend is having top-level `apps/` and `packages/` directories. This isn't a requirement but just a suggested directory structure. The `apps` folder can contain workspaces for launchable apps, such as a [Next.js](https://nextjs.org/) or [Svelte](https://svelte.dev/) app. The `packages` folder can contain workspaces for packages used by either an app or another package.
 
 <Callout>
-Unlike a single-package repository, you'll need to consider how to name your workspaces. If you avoid `npm` naming collisions, you can use an npm organization or user scope to namespace your packages. For example, you might set the `name` key in `./apps/api/package.json` to `@mycompany/api`.
+Unlike a single-package repository, you'll need to consider how to name your workspaces. If you avoid `npm` naming collisions, you can use an npm organization or user scope to namespace your workspaces. For example, you might set the `name` key in `./apps/api/package.json` to `@mycompany/api`.
 </Callout>
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
