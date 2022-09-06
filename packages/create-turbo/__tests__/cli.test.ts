@@ -95,7 +95,7 @@ describe("create-turbo cli", () => {
       1000 * 30
     );
 
-    it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
+    it.each(Object.values(PACKAGE_MANAGERS).flat())(
       `--use-$command: guides the user through the process ($name)`,
       async (packageManager) => {
         configurePackageManager(packageManager);
@@ -176,7 +176,7 @@ describe("create-turbo cli", () => {
       1000 * 60 * 5
     );
 
-    it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
+    it.each(Object.values(PACKAGE_MANAGERS).flat())(
       `--use-$command ($name)`,
       async (packageManager) => {
         configurePackageManager(packageManager);
