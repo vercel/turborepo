@@ -7,11 +7,11 @@ import Callout from "../../../components/Callout";
 
 # Caching
 
-Turborepo ships with a **task cache**. It can cache the results of any task - meaning you never need to do the same work twice.
+Turborepo can cache the results and logs of any task in your codebase—meaning you never need to do the same work twice.
 
 ## Missing the cache
 
-Each task in your monorepo has an **input** and an **output**.
+Each task in your codebase has **inputs** and an **outputs**.
 
 - A `build` task takes in **source files as input** and returns **bundled files as output**.
 - A `lint` or `test` task also takes in **source files**, but outputs to **`stdout`**.
@@ -20,7 +20,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 ![](../../../public/images/docs/cache-miss.png)
 
-1. Turborepo will **take the inputs to your task** (by default all non-gitignored files), and **turn them into a hash**, like `78awdk123`.
+1. Turborepo will **take the inputs to your task** (by default all non-gitignored files in the workspace folder), and **turn them into a hash**, like `78awdk123`.
 
 2. It'll then **check its local cache** for a folder named `78awdk123`.
 
@@ -38,9 +38,9 @@ Let's say that you run the task again without changing any of the source files:
 
 2. Turborepo will find the `78awdk123` folder in its cache.
 
-3. **Instead of running the task**, Turborepo will **replay the output** - printing the saved logs to `stdout` and restoring the output files.
+3. **Instead of running the task**, Turborepo will **replay the output** - printing the saved logs to `stdout` and restoring the saved output files to their respective position in the filesystem.
 
-Restoring files and logs from the cache happens near-instantaneously. This can take your build times from many minutes down to **less than 100ms**.
+Restoring files and logs from the cache happens near-instantaneously. This can take your build times from minutes or hours down to seconds or milliseconds. Although specific results will vary depending on the shape and granularity of your codebase's dependency graph, most teams find that they can cut their overall monthly build time by around 40-85% with Turborepo's caching.
 
 ## Configuring Cache Outputs
 
