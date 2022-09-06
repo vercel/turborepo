@@ -6,6 +6,7 @@ concurrency:
 
 env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  COREPACK_ENABLE_STRICT: 0
 
 on:
   push:

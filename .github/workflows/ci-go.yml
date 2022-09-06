@@ -2,6 +2,7 @@ name: CI Go
 
 env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  COREPACK_ENABLE_STRICT: 0
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
