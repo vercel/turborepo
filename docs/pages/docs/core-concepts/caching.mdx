@@ -45,6 +45,33 @@ and cache their `output`s in `./node_modules/.cache/turbo`.
   docs](https://eslint.org/docs/latest/developer-guide/working-with-rules#per-rule-performance).
 </Callout>
 
+## Configuring Cache Inputs
+
+A workspace is considered to have been updated when any of the files in that workspace have changed.
+However, for some tasks, we only want to rerun that task when relevant files have changed.
+Specifying `inputs` lets us define which files are relevant for a particular task. For example, the
+`test` configuration below declares that the `test` task only needs to execute if a `.tsx` or `.ts` file
+in the `src/` and `test/` subdirectories has changed since the last execution.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ... omitted for brevity
+
+   "test": {
+      // A workspace's `test` task depends on that workspace's
+      // own `build` task being completed first.
+      "dependsOn": ["build"],
+      "outputs": [],
+      // A workspace's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
+
 ## Turn off caching
 
 Sometimes you really don't need or want this cache behavior (e.g. when you're using [`next dev`](https://nextjs.org/docs/api-reference/cli#development) or `react-scripts start` for live reloading). To entirely disable caching, append `--no-cache` to any command:
