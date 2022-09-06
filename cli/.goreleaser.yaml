@@ -14,7 +14,7 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
-    mod_timestamp: '{{ .CommitTimestamp }}'
+    mod_timestamp: "{{ .CommitTimestamp }}"
     env:
       - CGO_ENABLED=0
     targets:
@@ -32,19 +32,19 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
-    mod_timestamp: '{{ .CommitTimestamp }}'
+    mod_timestamp: "{{ .CommitTimestamp }}"
     env:
       - CGO_ENABLED=1
     targets:
       - darwin_amd64
       - darwin_arm64
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
 snapshot:
   name_template: "{{ incpatch .Version }}"
 archives:
   - id: github
-    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     wrap_in_directory: true
     replacements:
       amd64: 64
@@ -56,28 +56,28 @@ archives:
       - LICENSE
       - README.md
   - id: npm
-    name_template: '{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}'
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
     wrap_in_directory: true
     replacements:
       amd64: 64
     format: tar.gz
     files:
       - LICENSE
-      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json'
-        dst: 'workaround/..'
+      - src: "scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json"
+        dst: "workaround/.."
         strip_parent: true
-      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/README.md'
-        dst: 'workaround/..'
+      - src: "scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/README.md"
+        dst: "workaround/.."
         strip_parent: true
-      - src: 'scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*'
-        dst: 'bin/'
+      - src: "scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*"
+        dst: "bin/"
         strip_parent: true
 changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+      - "^docs:"
+      - "^test:"
 release:
   github:
     owner: vercel
@@ -89,5 +89,5 @@ release:
 publishers:
   - name: npm
     ids:
-     - npm
-    cmd: 'npm publish{{ if .Prerelease }} --tag canary{{ end }} {{ abs .ArtifactPath }}'
+      - npm
+    cmd: "npm publish{{ if .Prerelease }} --tag canary{{ end }} {{ abs .ArtifactPath }}"
