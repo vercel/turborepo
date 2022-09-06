@@ -117,7 +117,7 @@ Workspaces that do not have the specified script defined in their `package.json`
   "pipeline": {
     "build": {
       // A package's `build` script depends on that package's
-      // dependencies' and devDependencies'
+      // dependencies and devDependencies
       // `build` tasks  being completed first
       // (the `^` symbol signifies `upstream`).
       "dependsOn": ["^build"],
