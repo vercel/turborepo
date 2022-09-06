@@ -1,0 +1,23 @@
+{
+  "name": "ui",
+  "version": "0.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint *.ts*",
+    "build": "rollup --config",
+    "dev": "npm run build -- --watch"
+  },
+  "devDependencies": {
+    "rollup": "^2.79.0",
+    "@rollup/plugin-typescript": "^8.5.0",
+    "@types/react": "^17.0.37",
+    "@types/react-dom": "^17.0.11",
+    "eslint": "^7.32.0",
+    "eslint-config-custom": "*",
+    "react": "^17.0.2",
+    "tsconfig": "*",
+    "typescript": "^4.5.2"
+  }
+}
