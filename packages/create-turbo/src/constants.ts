@@ -23,15 +23,15 @@ export const PACKAGE_MANAGERS: Record<CommandName, PackageManager[]> = {
     },
   ],
   pnpm: [
-    // {
-    //   name: "pnpm6",
-    //   template: "pnpm",
-    //   command: "pnpm",
-    //   installArgs: ["install"],
-    //   version: "latest-6",
-    //   executable: "pnpx",
-    //   semver: "6.x",
-    // },
+    {
+      name: "pnpm6",
+      template: "pnpm",
+      command: "pnpm",
+      installArgs: ["install"],
+      version: "latest-6",
+      executable: "pnpx",
+      semver: "6.x",
+    },    
     {
       name: "pnpm",
       template: "pnpm",
