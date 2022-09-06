@@ -14,7 +14,7 @@ Turborepo and Lerna have a lot a in common, but also some key differences.
 
 ## Tool Comparison
 
-Lerna is a monorepo task runner and npm workspace implementation. Both Turborepo and Lerna can be used to run tasks across packages in parallel and also topologically (i.e. if A depends on B, run B before A).
+Lerna is a monorepo task runner and npm workspace implementation. Both Turborepo and Lerna can be used to run tasks across workspaces in parallel and also topologically (i.e. if A depends on B, run B before A).
 
 ### Caching
 
@@ -24,7 +24,7 @@ However, unlike Turborepo, Lerna has no ability to [cache prior work](../core-co
 
 Turborepo's task scheduler is more powerful than Lerna's (which can only schedule one task at a time) thanks to [Turborepo pipelines](../core-concepts/pipelines). Turborepo reduces idle CPUs, saves compute resource, and collapse waterfalls—which ultimately results in faster overall builds.
 
-Let's look at an example. Imagine you have two packages A and B each with 3 tasks `build`, `test`, and `bundle`, where A depends on B being built....
+Let's look at an example. Imagine you have two workspaces A and B each with 3 tasks `build`, `test`, and `bundle`, where A depends on B being built....
 
 ![Turborepo vs. Lerna Task Execution](/images/docs/turbo-vs-lerna-execution.png)
 
@@ -76,7 +76,7 @@ Say you have a Lerna-powered monorepo setup like so:
 
 To add `turbo`, run the following command in your terminal
 
-import { Tabs, Tab } from '../../../components/Tabs'
+import { Tabs, Tab } from "../../../components/Tabs";
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
