@@ -11,10 +11,10 @@ Turborepo can cache the results and logs of any task in your codebase—meaning 
 
 ## Missing the cache
 
-Each task in your codebase has **inputs** and an **outputs**.
+Each task in your codebase has **inputs** and **outputs**.
 
-- A `build` task takes in **source files as input** and returns **bundled files as output**.
-- A `lint` or `test` task also takes in **source files**, but outputs to **`stdout`**.
+- A `build` task might take in **source files as input** and return **bundled files as output**.
+- A `lint` or `test` task might take in **source files**, and only output to **`stdout`**.
 
 Let's say you run a `build` task with Turborepo using `turbo run build`:
 
@@ -22,15 +22,19 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 1. Turborepo will **take the inputs to your task** (by default all non-gitignored files in the workspace folder), and **turn them into a hash**, like `78awdk123`.
 
-2. It'll then **check its local cache** for a folder named `78awdk123`.
+2. It'll then **check its cache** for a folder named `78awdk123`.
 
 3. If it doesn't find it, it **runs the task**.
 
-4. Once the task is over, it **saves all the outputs** (including logs) under the hash.
+4. Once the task is over, it **saves all the outputs** (including logs) into its cache under the hash.
+
+<Callout type="info">
+  Turborepo takes a lot of information into account when creating the hash - source files, environment variables, and even the source files of dependent workspaces. Learn more [below](/docs/core-concepts/caching#hashing).
+</Callout>
 
 ## Hitting the cache
 
-Let's say that you run the task again without changing any of the source files:
+Let's say that you run the task again without changing any of its inputs:
 
 ![](../../../public/images/docs/cache-hit.png)
 
