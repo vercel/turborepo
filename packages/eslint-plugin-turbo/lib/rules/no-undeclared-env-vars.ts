@@ -1,5 +1,5 @@
 import type { Rule } from "eslint";
-import { Node } from "estree";
+import { Node, MemberExpression } from "estree";
 import { RULES } from "../constants";
 import getEnvVarDependencies from "../utils/getEnvVarDependencies";
 
@@ -74,10 +74,24 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     }
   };
 
+  const isComputed = (
+    node: MemberExpression & Rule.NodeParentExtension
+  ): boolean => {
+    if ("computed" in node.parent) {
+      return node.parent.computed;
+    }
+
+    return false;
+  };
+
   return {
     MemberExpression(node) {
-      // we only care about complete process env declarations
-      if ("name" in node.object && "name" in node.property) {
+      // we only care about complete process env declarations and non-computed keys
+      if (
+        "name" in node.object &&
+        "name" in node.property &&
+        !isComputed(node)
+      ) {
         const objectName = node.object.name;
         const propertyName = node.property.name;
 
