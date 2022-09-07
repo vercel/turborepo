@@ -48,6 +48,7 @@ with a `PKG_CONFIG_SYSROOT_DIR` set to `/var/target` (same rule apply to `-L`)
 | Linux       | armhf (GOARM=6) | arm-linux-gnueabihf-gcc | arm-linux-gnueabihf-g++ | Verification required |
 | Linux       | armhf (GOARM=7) | arm-linux-gnueabihf-gcc | arm-linux-gnueabihf-g++ |           ✅          |
 | Windows     | amd64           | x86_64-w64-mingw32-gcc  | x86_64-w64-mingw32-g++  |           ✅          |
+| Windows     | arm64           | /llvm-mingw/llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64/bin/aarch64-w64-mingw32-gcc | /llvm-mingw/llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64/bin/aarch64-w64-mingw32-g++ |          ✅           |
 
 ## Docker
 
