@@ -1,17 +1,10 @@
----
-title: Workspaces
-description: Use workspaces to organize your turborepo apps and packages.
----
-
 import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 import { Tabs, Tab } from "../../../components/Tabs";
 
-# Getting started with workspaces
+# Workspaces
 
-Workspaces are a feature implemented by package managers to assist with working on multiple apps and packages in the same codebase.
-
-Turborepo is compatible with three package managers ([npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description), [Yarn 1](https://classic.yarnpkg.com/lang/en/docs/workspaces/), and [pnpm](https://pnpm.io/workspaces)), each with its own implementation of workspaces and functionality. Your package manager will determine how your apps and packages are organized in your workspaces and run in your turborepo.
+Workspaces help with working on multiple apps and packages in the same codebase. Your package manager will determine how your apps and packages are organized in your workspaces and run in your turborepo.
 
 ## Configuring workspaces
 
@@ -90,109 +83,3 @@ In the example above, all directories inside `monorepo/apps/` and `monorepo/pack
 ## Managing workspaces
 
 When you move, delete, or rename your workspaces, you must ensure that all folders linked within your `package.json` should match. Anytime you change your workspace configuration, provide all the dependencies of the workspace that are updated. Re-run your package manager's install command to check your configuration. If there are problems after that, you may have to delete your `node_modules` folder and re-run an install.
-
-## Managing dependencies
-
-To manage dependencies within workspaces in your monorepo, ensure you are running commands from within the target workspace, or by specifying the workspace when running from root:
-
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-
-    **Install**
-    ```bash
-    npm install <package> -w=<workspace>
-    ```
-
-    Example:
-    ```bash
-    npm install react -w=web
-    ```
-
-    **Uninstall**
-    ```bash
-    npm uninstall <package> -w=<workspace>
-    ```
-
-    Example:
-    ```bash
-    npm uninstall react -w=web
-    ```
-
-    **Update**
-    ```bash
-    npm update <package> -w=<workspace>
-    ```
-
-    Example:
-    ```bash
-    npm update react -w=web
-    ```
-
-  </Tab>
-  <Tab>
-
-    **Install**
-    ```bash
-    yarn workspace <workspace> add <package>
-    ```
-
-    Example:
-    ```bash
-    yarn workspace web add react
-    ```
-
-    **Uninstall**
-    ```bash
-    yarn workspace <workspace> remove <package>
-    ```
-
-    Example:
-    ```bash
-    yarn workspace web remove react
-    ```
-
-    **Update**
-    ```bash
-    yarn workspace <workspace> upgrade <package>
-    ```
-
-    Example:
-    ```bash
-    yarn workspace web upgrade react
-    ```
-
-  </Tab>
-  <Tab>
-
-    **Install**
-    ```bash
-    pnpm add <package> --filter <workspace>
-    ```
-
-    Example:
-    ```bash
-    pnpm add react --filter web
-    ```
-
-    **Uninstall**
-     ```bash
-    pnpm uninstall <package> --filter <workspace>
-    ```
-
-    Example:
-    ```bash
-    pnpm uninstall react --filter web
-    ```
-
-    **Update**
-     ```bash
-    pnpm up <package> --filter <workspace>
-    ```
-
-    Example:
-    ```bash
-    pnpm up react --filter web
-    ```
-
-  </Tab>
-</Tabs>

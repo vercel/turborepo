@@ -19,6 +19,11 @@ module.exports = withNextra({
         permanent: true,
       },
       {
+        source: "/docs/guides/workspaces",
+        destination: "/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
         source: "/discord{/}?",
         permanent: true,
         destination: "https://discord.gg/sSzyjxvbf5",
