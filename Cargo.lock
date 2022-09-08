@@ -2050,6 +2050,7 @@ dependencies = [
  "lazy_static",
  "mime",
  "next-core",
+ "portpicker",
  "regex",
  "serde",
  "tempfile",
@@ -2065,6 +2066,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-create-test-app",
  "turbopack-dev-server",
+ "url",
  "webbrowser",
 ]
 
@@ -2457,6 +2459,15 @@ dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
+]
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand",
 ]
 
 [[package]]
@@ -4839,13 +4850,12 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.2.2"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a507c383b2d33b5fc35d1861e77e6b383d158b2da5e14fe51b83dfedf6fd578c"
+checksum = "22fe195a4f217c25b25cb5058ced57059824a678474874038dc88d211bf508d3"
 dependencies = [
  "form_urlencoded",
  "idna",
- "matches",
  "percent-encoding",
 ]
 
