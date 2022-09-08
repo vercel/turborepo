@@ -9,6 +9,17 @@ import (
 	"syscall"
 )
 
+const (
+	Separator     = '\\' // OS-specific path separator
+	ListSeparator = ';'  // OS-specific path list separator
+)
+
+// IsPathSeparator reports whether c is a directory separator character.
+func IsPathSeparator(c uint8) bool {
+	// NOTE: Windows accepts / as path separator.
+	return c == '\\' || c == '/'
+}
+
 func isSlash(c uint8) bool {
 	return c == '\\' || c == '/'
 }

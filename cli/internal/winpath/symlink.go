@@ -16,18 +16,18 @@ func walkSymlinks(path string) (string, error) {
 	volLen := volumeNameLen(path)
 	pathSeparator := string(os.PathSeparator)
 
-	if volLen < len(path) && os.IsPathSeparator(path[volLen]) {
+	if volLen < len(path) && IsPathSeparator(path[volLen]) {
 		volLen++
 	}
 	vol := path[:volLen]
 	dest := vol
 	linksWalked := 0
 	for start, end := volLen, volLen; start < len(path); start = end {
-		for start < len(path) && os.IsPathSeparator(path[start]) {
+		for start < len(path) && IsPathSeparator(path[start]) {
 			start++
 		}
 		end = start
-		for end < len(path) && !os.IsPathSeparator(path[end]) {
+		for end < len(path) && !IsPathSeparator(path[end]) {
 			end++
 		}
 
@@ -51,7 +51,7 @@ func walkSymlinks(path string) (string, error) {
 			// after the volume.
 			var r int
 			for r = len(dest) - 1; r >= volLen; r-- {
-				if os.IsPathSeparator(dest[r]) {
+				if IsPathSeparator(dest[r]) {
 					break
 				}
 			}
@@ -73,7 +73,7 @@ func walkSymlinks(path string) (string, error) {
 
 		// Ordinary path component. Add it to result.
 
-		if len(dest) > volumeNameLen(dest) && !os.IsPathSeparator(dest[len(dest)-1]) {
+		if len(dest) > volumeNameLen(dest) && !IsPathSeparator(dest[len(dest)-1]) {
 			dest += pathSeparator
 		}
 
@@ -116,13 +116,13 @@ func walkSymlinks(path string) (string, error) {
 		v := volumeNameLen(link)
 		if v > 0 {
 			// Symlink to drive name is an absolute path.
-			if v < len(link) && os.IsPathSeparator(link[v]) {
+			if v < len(link) && IsPathSeparator(link[v]) {
 				v++
 			}
 			vol = link[:v]
 			dest = vol
 			end = len(vol)
-		} else if len(link) > 0 && os.IsPathSeparator(link[0]) {
+		} else if len(link) > 0 && IsPathSeparator(link[0]) {
 			// Symlink to absolute path.
 			dest = link[:1]
 			end = 1
@@ -131,7 +131,7 @@ func walkSymlinks(path string) (string, error) {
 			// path component in dest.
 			var r int
 			for r = len(dest) - 1; r >= volLen; r-- {
-				if os.IsPathSeparator(dest[r]) {
+				if IsPathSeparator(dest[r]) {
 					break
 				}
 			}

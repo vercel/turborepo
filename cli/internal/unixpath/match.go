@@ -302,7 +302,7 @@ func cleanGlobPathWindows(path string) (prefixLen int, cleaned string) {
 	switch {
 	case path == "":
 		return 0, "."
-	case vollen+1 == len(path) && os.IsPathSeparator(path[len(path)-1]): // /, \, C:\ and C:/
+	case vollen+1 == len(path) && IsPathSeparator(path[len(path)-1]): // /, \, C:\ and C:/
 		// do nothing to the path
 		return vollen + 1, path
 	case vollen == len(path) && len(path) == 2: // C:

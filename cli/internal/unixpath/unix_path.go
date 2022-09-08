@@ -8,6 +8,16 @@ package unixpath
 
 import "strings"
 
+const (
+	Separator     = '/' // OS-specific path separator
+	ListSeparator = ':' // OS-specific path list separator
+)
+
+// IsPathSeparator reports whether c is a directory separator character.
+func IsPathSeparator(c uint8) bool {
+	return Separator == c
+}
+
 // IsAbs reports whether the path is absolute.
 func IsAbs(path string) bool {
 	return strings.HasPrefix(path, "/")
