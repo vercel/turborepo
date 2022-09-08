@@ -57,12 +57,9 @@ RUN \
 
 # install a copy of mingw with aarch64 support to enable windows on arm64
 WORKDIR /llvm-mingw
-ARG TARGETARCH
 RUN \
-    if [ ${TARGETARCH} = "arm64" ]; then \
     wget "https://github.com/mstorsjo/llvm-mingw/releases/download/20220906/llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64.tar.xz" && \
-    tar -xvf llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64.tar.xz; \
-    fi
+    tar -xvf llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64.tar.xz
 
 FROM osx-cross-base AS osx-cross
 ARG OSX_CROSS_COMMIT
