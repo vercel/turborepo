@@ -78,7 +78,10 @@ jobs:
 
       - name: Snapshot
         uses: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
-        run: cd cli && make snapshot-turbo
+        #run: cd cli && make snapshot-turbo
+        with:
+          entrypoint: /bin/bash
+          args: cd cli && make snapshot-turbo
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
