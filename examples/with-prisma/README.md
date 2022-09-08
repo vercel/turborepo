@@ -74,12 +74,22 @@ yarn run db:seed
 
 For further more information on migrations, seeding & more, we recommend reading through the [Prisma Documentation](https://www.prisma.io/docs/).
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turborepo/examples/with-prisma with-prisma
+cd with-prisma
+yarn install
+git init . && git add . && git commit -m "Init"
+```
+
 ### Build
 
 To build all apps and packages, run the following command:
 
 ```bash
-cd my-turborepo
 yarn run build
 ```
 
@@ -88,7 +98,6 @@ yarn run build
 To develop all apps and packages, run the following command:
 
 ```bash
-cd my-turborepo
 yarn run dev
 ```
 

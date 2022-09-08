@@ -19,6 +19,16 @@ This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package ma
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turborepo/examples/with-docker with-docker
+cd with-docker
+git init . && git add . && git commit -m "Init"
+```
+
 ### Docker
 
 This repo is configured to be built with Docker, and Docker compose. To build all apps in this repo:

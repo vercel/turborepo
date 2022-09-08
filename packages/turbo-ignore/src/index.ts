@@ -25,6 +25,11 @@ if (!scope) {
   console.error(
     "Error: app scope not found. turbo-ignore inferencing failed, proceeding with build."
   );
+  if (!pathScope.scope) {
+    console.error(
+      'Error: the package.json is missing the "name" field.\nSet this field or pass the --scope flag to turbo-ignore.'
+    );
+  }
   console.error("");
   process.exit(1);
 }
