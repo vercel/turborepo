@@ -15,15 +15,15 @@ But there's an issue - the **cache is local to your machine**. When you're worki
 
 ![](../../../public/images/docs/local-caching.png)
 
-Each environment - your machine, your colleague's machine, your CI - has to **run `build` on the same source files**. That's because each environment has _its own local cache_.
+Since Turborepo only caches to the local filesystem by default, the same task (`turbo run build`) must be re-executed on each machine (by you, by your teammates, by your CI, by your PaaS, etc.) even when all of the task inputs are identical—which is wastes time and resources.
 
 ## A single, shared cache
 
-What if you could share a single cache across your entire org?
+What if you could share a single Turborepo cache across your entire team (and even your CI)?
 
 ![](../../../public/images/docs/remote-caching.png)
 
-By working with providers like [Vercel](#vercel), Turborepo can communicate with a remote cache - a cloud server that stores the results of your tasks.
+By working with providers like [Vercel](#vercel), Turborepo can securely communicate with a remote cache - a cloud server that stores the results of your tasks.
 
 This can save enormous amounts of time by **preventing duplicated work across your entire organization**.
 
