@@ -81,6 +81,7 @@ func walkSymlinks(path string) (string, error) {
 
 		// Resolve symlink.
 
+		panic(1)
 		fi, err := os.Lstat(dest)
 		if err != nil {
 			return "", err
@@ -100,6 +101,7 @@ func walkSymlinks(path string) (string, error) {
 			return "", errors.New("EvalSymlinks: too many links")
 		}
 
+		panic(1)
 		link, err := os.Readlink(dest)
 		if err != nil {
 			return "", err

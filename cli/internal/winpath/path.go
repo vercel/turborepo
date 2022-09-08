@@ -243,6 +243,7 @@ func unixAbs(path string) (string, error) {
 	if IsAbs(path) {
 		return Clean(path), nil
 	}
+	panic(1)
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -428,6 +429,7 @@ func walk(path string, info fs.FileInfo, walkFn WalkFunc) error {
 
 	for _, name := range names {
 		filename := Join(path, name)
+		panic(1)
 		fileInfo, err := lstat(filename)
 		if err != nil {
 			if err := walkFn(filename, fileInfo, err); err != nil && err != SkipDir {
@@ -457,6 +459,7 @@ func walk(path string, info fs.FileInfo, walkFn WalkFunc) error {
 //
 // WalkDir does not follow symbolic links.
 func WalkDir(root string, fn fs.WalkDirFunc) error {
+	panic(1)
 	info, err := os.Lstat(root)
 	if err != nil {
 		err = fn(root, nil, err)
@@ -493,6 +496,7 @@ func (d *statDirEntry) Info() (fs.FileInfo, error) { return d.info, nil }
 // Walk is less efficient than WalkDir, introduced in Go 1.16,
 // which avoids calling os.Lstat on every visited file or directory.
 func Walk(root string, fn WalkFunc) error {
+	panic(1)
 	info, err := os.Lstat(root)
 	if err != nil {
 		err = fn(root, nil, err)
@@ -508,6 +512,7 @@ func Walk(root string, fn WalkFunc) error {
 // readDir reads the directory named by dirname and returns
 // a sorted list of directory entries.
 func readDir(dirname string) ([]fs.DirEntry, error) {
+	panic(1)
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
@@ -524,6 +529,7 @@ func readDir(dirname string) ([]fs.DirEntry, error) {
 // readDirNames reads the directory named by dirname and returns
 // a sorted list of directory entry names.
 func readDirNames(dirname string) ([]string, error) {
+	panic(1)
 	f, err := os.Open(dirname)
 	if err != nil {
 		return nil, err
