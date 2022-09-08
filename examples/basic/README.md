@@ -24,9 +24,19 @@ This Turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
 
-## Setup
+## Using this example
 
-This repository is used in the `npx create-turbo@latest` command, and selected when choosing which package manager you wish to use with your monorepo (Yarn).
+This repository is used with `npx create-turbo@latest` command, but you can also use `degit` to
+download and run this example, like the other examples.
+
+Run the following command:
+
+```sh
+npx degit vercel/turborepo/examples/basic basic
+cd basic
+yarn install
+git init . && git add . && git commit -m "Init"
+```
 
 ### Build
 

@@ -26,7 +26,15 @@ This Turborepo has some additional tools already setup for you:
 
 ## Setup
 
-This repository is used in the `npx create-turbo@latest` command, and selected when choosing which package manager you wish to use with your monorepo (pnpm).
+This repository can be used by running `npx create-turbo@latest`, and selecting `pnpm` in the terminal prompt,
+or you can also download this folder like all the other examples with:
+
+```sh
+npx degit vercel/turborepo/examples/with-pnpm with-pnpm
+cd with-pnpm
+pnpm install
+git init . && git add . && git commit -m "Init"
+```
 
 ### Build
 
