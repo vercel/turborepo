@@ -11,3 +11,6 @@ RUN \
     /var/tmp/* \
     rm -rf /usr/share/man/* \
     /usr/share/doc
+
+ARG GIT_REPO
+LABEL org.opencontainers.image.source $GIT_REPO

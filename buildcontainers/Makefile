@@ -4,6 +4,7 @@ OWNER      ?= vercel
 VERSION    ?= v1.18.5
 IMAGE_NAME ?= ghcr.io/$(OWNER)/turbo-cross:$(VERSION)
 BASE_IMAGE ?= ghcr.io/$(OWNER)/goreleaser-cross:$(VERSION)
+GIT_REPO   ?= https://github.com/$(OWNER)/turborepo
 
 
 SUBIMAGES = arm64 \
@@ -14,6 +15,7 @@ turbo-cross-%:
 	@echo "building for $(@:turbo-cross-%=%)"
 	docker build \
 		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
+		--build-arg GIT_REPO=$(GIT_REPO) \
 		-t $(IMAGE_NAME)-$(@:turbo-cross-%=%) \
 		-f Dockerfile .
 
