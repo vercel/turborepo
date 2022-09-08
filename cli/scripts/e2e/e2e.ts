@@ -554,9 +554,6 @@ function runSmokeTests<T>(
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
     const installArgs = ["--frozen-lockfile"];
-    if (["pnpm6", "pnpm"].includes(npmClient)) {
-      installArgs.push("-r");
-    }
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
