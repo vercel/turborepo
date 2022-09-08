@@ -26,7 +26,7 @@ Turborepo's task scheduler is more powerful than Lerna's (which can only schedul
 
 Let's look at an example. Imagine you have two workspaces A and B each with 3 tasks `build`, `test`, and `bundle`, where A depends on B being built....
 
-![Turborepo vs. Lerna Task Execution](/images/docs/turbo-vs-lerna-execution.png)
+![Turborepo vs. Lerna Task Execution](/images/docs/turbo-vs-lerna-execution.webp)
 
 The above may not look like much. But imagine that A's `build` task takes 20 minutes, and now look at when B's tests run. Scheduling can save huge amounts of time when you have long build times.
 

@@ -106,19 +106,19 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
 
-![Vercel Access Tokens](/images/docs/vercel-tokens.png)
-![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+![Vercel Access Tokens](/images/docs/vercel-tokens.webp)
+![Vercel Access Tokens](/images/docs/vercel-create-token.webp)
 
 Copy the value to a safe place. You'll need it in a moment.
 
 2. Go to your Travis repository settings and scroll down to the _Environment Variables_ section. Create a new variable called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
 
-![Travis CI Variables](/images/docs/travis-ci-environment-variables.png)
+![Travis CI Variables](/images/docs/travis-ci-environment-variables.webp)
 
 3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
 
    If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
 
-![Vercel Account Slug](/images/docs/vercel-slug.png)
+![Vercel Account Slug](/images/docs/vercel-slug.webp)
 
 4. Travis CI automatically loads environment variables stored in project settings into the CI environment. No modifications are necessary for the CI file.
