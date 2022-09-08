@@ -25,7 +25,7 @@ You can use it to:
 - Filter by [changes in git history](#filter-by-changed-workspaces)
 - [Exclude workspaces](#excluding-workspaces) from selection
 
-Turborepo will run each task against each matched workspace, ensuring that any dependent tasks are run first, according to the `pipeline` specification in [`turbo.json`](/docs/reference/configuration#pipeline).
+Turborepo will run each task against each matched workspace, ensuring that any tasks which depend on it are run first, according to the `pipeline` specification in [`turbo.json`](/docs/reference/configuration#pipeline).
 
 ## Filter Syntax
 
@@ -39,7 +39,7 @@ turbo run build --filter=my-pkg --filter=my-app
 
 ### Filter by workspace name
 
-Supports exact matches (`--filter=my-pkg`), and globs (`--filter=*my-pkg*`).
+When you want to run a script in only one workspace, you can use a single filter: `--filter=my-pkg`.
 
 ```sh
 # Build 'my-pkg', letting `turbo` infer task dependencies
@@ -49,7 +49,11 @@ turbo run build --filter=my-pkg
 # Build '@acme/bar', letting `turbo` infer task dependencies
 # from the pipeline defined in turbo.json
 turbo run build --filter=@acme/bar
+```
 
+If you want to run tasks inside several workspaces with similar names, you can use glob syntax: `--filter=*my-pkg*`.
+
+```sh
 # Build all workspaces that start with 'admin-', letting turbo infer task
 # dependencies from the pipeline defined in turbo.json
 turbo run build --filter=admin-*
@@ -66,6 +70,8 @@ Some monorepos prepend their workspace names with a scope, such as `@acme/ui` an
 
 ### Include dependents of matched workspaces
 
+Sometimes, you'll want to ensure that your shared package isn't affecting any downstream dependencies. For that, you can use `--filter=...my-lib`.
+
 If `my-app` depends on `my-lib`, `...my-lib` will select `my-app` and `my-lib`.
 
 Including a `^` (`...^my-lib`) will select all of `my-lib`'s dependents, but not `my-lib` itself.
@@ -80,7 +86,9 @@ turbo run test --filter=...^my-lib
 
 ### Include dependencies of matched workspaces
 
-Append `...` to the end of the filter. If `my-app` depends on `my-lib`, `my-app...` will select `my-app` and `my-lib`.
+Sometimes, you'll want to make sure that `build` is run in all of the dependencies of the lib you're targeting. For that, you can use `--filter=my-app...`.
+
+If `my-app` depends on `my-lib`, `my-app...` will select `my-app` and `my-lib`.
 
 Including a `^` (`my-app^...`) will select all of `my-app`'s dependencies, but not `my-app` itself.
 
@@ -94,7 +102,7 @@ turbo run build --filter=my-app^...
 
 ### Filter by directory
 
-Supports:
+Useful for when you want to target a specific directory, not a workspace name. It supports:
 
 - Exact matches: `--filter=./apps/docs`
 - Globs: `--filter=./apps/*`
@@ -116,7 +124,7 @@ turbo run build --filter=...{./libs/*}
 
 ### Filter by changed workspaces
 
-Use the set of files changed since a specified commit to calculate workspaces. Enclose references in `[]`.
+You can run tasks on any workspaces which have changed since a certain commit. These need to be wrapped in `[]`.
 
 For example, `--filter=[HEAD^1]` will select all workspaces that have changed in the most recent commit:
 
@@ -127,8 +135,7 @@ turbo run test --filter=[HEAD^1]
 
 #### Check a range of commits
 
-If you need to check a specific range of commits, rather than comparing to `HEAD`, you can set
-both ends of the comparison via `[<from commit>...<to commit>]`.
+If you need to check a specific range of commits, rather than comparing to `HEAD`, you can set both ends of the comparison via `[<from commit>...<to commit>]`.
 
 ```sh
 # Test each workspace that changed between 'main' and 'my-feature'
@@ -138,8 +145,6 @@ turbo run test --filter=[main...my-feature]
 #### Ignoring changed files
 
 You can use [`--ignore`](/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which workspaces have changed.
-
-{/* TODO */}
 
 #### Combining with other syntaxes
 
