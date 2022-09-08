@@ -11,7 +11,7 @@ console.log(
 // check for TURBO_FORCE and bail early if it's set
 if (process.env.TURBO_FORCE === "true") {
   console.log(
-    "\u226B Turbo force detected, skipping check and proceeding with build."
+    "\u226B `TURBO_FORCE` detected, skipping check and proceeding with build."
   );
   process.exit(1);
 }
