@@ -1,6 +1,6 @@
 //go:build !windows
 
-package filepath
+package unixpath
 
 func evalSymlinks(path string) (string, error) {
 	return walkSymlinks(path)
