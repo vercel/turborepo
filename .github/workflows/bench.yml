@@ -31,7 +31,11 @@ jobs:
             TURBOPACK_BENCH_BUNDLERS: all
           - name: vite
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack CSR|Vite)""
+            args: -p next-dev -- "(Turbopack CSR|Vite)"
+            TURBOPACK_BENCH_BUNDLERS: all
+          - name: parcel
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR|Parcel)"
             TURBOPACK_BENCH_BUNDLERS: all
     runs-on: ubuntu-latest-16-core
     name: bench - ${{ matrix.bench.name }}
