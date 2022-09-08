@@ -5,15 +5,11 @@ before:
     - go mod tidy
 builds:
   - id: turbo-linux64
-    main: ./cmd/turbo
+    main: ./main.go
     binary: bin/turbo
-    goos:
-      - linux
-    goarch:
-      - arm64
-    hooks:
-      pre:
-        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    # hooks:
+    #   pre:
+    #     - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
     flags:
       - -trimpath
     ldflags:
@@ -22,4 +18,4 @@ builds:
     env:
       - CGO_ENABLED=1
     targets:
-      - linux_amd64
+      - linux_arm64

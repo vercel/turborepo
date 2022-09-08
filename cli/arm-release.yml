@@ -1,0 +1,67 @@
+project_name: turbo
+before:
+  hooks:
+    - make compile-protos
+    - go mod tidy
+
+dist: dist-arm64
+
+builds:
+  - id: turbo-linux-arm64
+    main: ./main.go
+    binary: bin/turbo
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - linux_arm64
+      - linux_amd64
+      - darwin_arm64
+    overrides:
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CC=oa64-clang
+          - CXX=oa64-clang++
+
+  - id: turbo-win-arm64
+    main: ./main.go
+    binary: bin/turbo
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+      - CC=/llvm-mingw/llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64/bin/aarch64-w64-mingw32-gcc
+      - CXX=/llvm-mingw/llvm-mingw-20220906-ucrt-ubuntu-18.04-aarch64/bin/aarch64-w64-mingw32-g++
+    targets:
+      - windows_arm64
+  - id: turbo-darwin-arm64
+    main: ./main.go
+    binary: bin/turbo
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    targets:
+      - darwin_arm64
