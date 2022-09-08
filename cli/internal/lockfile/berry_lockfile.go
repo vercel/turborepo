@@ -11,6 +11,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// YarnLockfileEntry package information from yarn lockfile
+type YarnLockfileEntry struct {
+	// resolved version for the particular entry based on the provided semver revision
+	Version   string `yaml:"version"`
+	Resolved  string `yaml:"resolved"`
+	Integrity string `yaml:"integrity"`
+	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
+	Dependencies map[string]string `yaml:"dependencies,omitempty"`
+	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
+	OptionalDependencies map[string]string `yaml:"optionalDependencies,omitempty"`
+}
+
 // BerryLockfile representation of berry lockfile
 type BerryLockfile map[string]*YarnLockfileEntry
 
@@ -47,7 +59,7 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
 func (l *BerryLockfile) Subgraph(packages []string) (Lockfile, error) {
-	lockfile := make(YarnLockfile, len(packages))
+	lockfile := make(BerryLockfile, len(packages))
 	for _, key := range packages {
 		entry, ok := (*l)[key]
 		if ok {
@@ -103,4 +115,22 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 
 	prettyLockFile := BerryLockfile(yarnSplitOutEntries(lockfile))
 	return &prettyLockFile, nil
+}
+
+func yarnSplitOutEntries(lockfile map[string]*YarnLockfileEntry) map[string]*YarnLockfileEntry {
+	prettyLockfile := map[string]*YarnLockfileEntry{}
+	// This final step is important, it splits any deps with multiple-resolutions
+	// (e.g. "@babel/generator@^7.13.0, @babel/generator@^7.13.9":) into separate
+	// entries in our map
+	// TODO: make concurrent
+	for key, val := range lockfile {
+		if strings.Contains(key, ",") {
+			for _, v := range strings.Split(key, ", ") {
+				prettyLockfile[strings.TrimSpace(v)] = val
+			}
+		} else {
+			prettyLockfile[key] = val
+		}
+	}
+	return prettyLockfile
 }
