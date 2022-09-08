@@ -145,7 +145,7 @@ This means that whenever `turbo run deploy` is run, `build` will also be run ins
 
 A common pattern in monorepos is to declare that a workspace's `build` task should only run once the `build` tasks of all _the workspaces it depends on_ are complete.
 
-The `^` symbol explicitly declares that the task has a [topological](../glossary#topological-order-1) dependency on another task.
+The `^` symbol explicitly declares that the task has a dependency on a task in a workspace it depends on.
 
 ```jsonc filename="turbo.json"
 {
@@ -210,7 +210,7 @@ The example below describes the `deploy` script of a `frontend` application that
 }
 ```
 
-This explicit configuration for `frontend#deploy` may seem to conflict with the `test` and `deploy` task configurations, but it does not. Since `test` and `deploy` do not have topological dependencies (e.g. `^<task>`), they can execute any time after their workspace's `build` and `test` scripts have finished.
+This explicit configuration for `frontend#deploy` may seem to conflict with the `test` and `deploy` task configurations, but it does not. Since `test` and `deploy` do not have dependencies on other workspaces (e.g. `^<task>`), they can execute any time after their workspace's `build` and `test` scripts have finished.
 
 <Callout>
   Notes:
