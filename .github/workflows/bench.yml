@@ -23,11 +23,11 @@ jobs:
             TURBOPACK_BENCH_COUNTS: all
           - name: next 12
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack SSR|Next 12)"
+            args: -p next-dev -- "(Turbopack SSR|Next.js 12)"
             TURBOPACK_BENCH_BUNDLERS: all
           - name: next 11
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack SSR|Next 11)"
+            args: -p next-dev -- "(Turbopack SSR|Next.js 11)"
             TURBOPACK_BENCH_BUNDLERS: all
           - name: vite
             cache_key: next-dev
