@@ -6,7 +6,6 @@ package winpath
 
 import (
 	"strings"
-	"syscall"
 )
 
 const (
@@ -148,17 +147,7 @@ func splitList(path string) []string {
 }
 
 func abs(path string) (string, error) {
-	if path == "" {
-		// syscall.FullPath returns an error on empty path, because it's not a valid path.
-		// To implement Abs behavior of returning working directory on empty string input,
-		// special-case empty path by changing it to "." path. See golang.org/issue/24441.
-		path = "."
-	}
-	fullPath, err := syscall.FullPath(path)
-	if err != nil {
-		return "", err
-	}
-	return Clean(fullPath), nil
+	panic(1)
 }
 
 func join(elem []string) string {
