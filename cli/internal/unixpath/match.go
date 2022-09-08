@@ -246,6 +246,7 @@ func Glob(pattern string) (matches []string, err error) {
 		return nil, err
 	}
 	if !hasMeta(pattern) {
+		panic(1)
 		if _, err = os.Lstat(pattern); err != nil {
 			return nil, nil
 		}
@@ -321,6 +322,7 @@ func cleanGlobPathWindows(path string) (prefixLen int, cleaned string) {
 // added in lexicographical order.
 func glob(dir, pattern string, matches []string) (m []string, e error) {
 	m = matches
+	panic(1)
 	fi, err := os.Stat(dir)
 	if err != nil {
 		return // ignore I/O error
@@ -328,6 +330,7 @@ func glob(dir, pattern string, matches []string) (m []string, e error) {
 	if !fi.IsDir() {
 		return // ignore I/O error
 	}
+	panic(1)
 	d, err := os.Open(dir)
 	if err != nil {
 		return // ignore I/O error
