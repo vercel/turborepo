@@ -1,0 +1,34 @@
+name: CLI Unit Tests
+
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  test:
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup-deps
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: pnpm -- turbo run test --filter=cli --color

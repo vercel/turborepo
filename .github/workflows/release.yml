@@ -31,29 +31,15 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 2
           token: ${{ secrets.TURBOBOT }}
 
-      - name: Set up Go
-        uses: actions/setup-go@v3
+      - uses: ./.github/actions/setup-deps
         with:
-          go-version: 1.18.0
-          cache: true
-          cache-dependency-path: cli/go.sum
-
-      - name: Set Up Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          version: "3.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Up Go and GRPC protobuf
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          setup-node: false # TODO: does this need to be customized? (corepack step is omitted here)
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
