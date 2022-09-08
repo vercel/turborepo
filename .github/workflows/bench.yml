@@ -17,25 +17,34 @@ jobs:
         bench:
           - name: generic
             cache_key: all
+            TURBOPACK_BENCH_COUNTS: 1000
           - name: turbopack
             cache_key: next-dev
             args: -p next-dev
-            TURBOPACK_BENCH_COUNTS: all
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+          - name: turbopack-large
+            cache_key: next-dev
+            args: -p next-dev
+            TURBOPACK_BENCH_COUNTS: 1000,2000,3000
           - name: next 12
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack SSR|Next.js 12)"
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 12)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
           - name: next 11
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack SSR|Next.js 11)"
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 11)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
           - name: vite
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack CSR|Vite)"
+            args: -p next-dev -- "(Turbopack CSR/1000|Vite)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
           - name: parcel
             cache_key: next-dev
-            args: -p next-dev -- "(Turbopack CSR|Parcel)"
+            args: -p next-dev -- "(Turbopack CSR/1000|Parcel)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
     runs-on: ubuntu-latest-16-core
     name: bench - ${{ matrix.bench.name }}
