@@ -90,6 +90,9 @@ build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 prepublish:
 	make -j3 bench/turbo test-go lint-go
 
+snapshot-turbo: clean build
+	goreleaser release --snapshot --rm-dist -f arm-release.yml
+
 publish: clean prepublish build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
