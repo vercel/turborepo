@@ -19,8 +19,8 @@ require (
 	github.com/hashicorp/go-gatedio v0.5.0
 	github.com/hashicorp/go-hclog v1.2.1
 	github.com/hashicorp/go-retryablehttp v0.6.8
+	github.com/iseki0/go-yarnlock v0.0.2-0.20220905015017-a2a90751cdfa
 	github.com/karrick/godirwalk v1.16.1
-	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mitchellh/cli v1.1.2
 	github.com/mitchellh/go-homedir v1.1.0
@@ -58,7 +58,6 @@ require (
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.11 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/iseki0/go-yarnlock v0.0.2-0.20220905015017-a2a90751cdfa // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
