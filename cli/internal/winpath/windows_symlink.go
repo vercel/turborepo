@@ -6,7 +6,6 @@ package winpath
 
 import (
 	"strings"
-	"syscall"
 )
 
 // normVolumeName is like VolumeName, but makes drive letter upper case.
@@ -24,20 +23,7 @@ func normVolumeName(path string) string {
 
 // normBase returns the last element of path with correct case.
 func normBase(path string) (string, error) {
-	p, err := syscall.UTF16PtrFromString(path)
-	if err != nil {
-		return "", err
-	}
-
-	var data syscall.Win32finddata
-
-	h, err := syscall.FindFirstFile(p, &data)
-	if err != nil {
-		return "", err
-	}
-	syscall.FindClose(h)
-
-	return syscall.UTF16ToString(data.FileName[:]), nil
+	panic(1)
 }
 
 // baseIsDotDot reports whether the last element of path is "..".
