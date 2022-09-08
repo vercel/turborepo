@@ -3,33 +3,19 @@ name: Bench against @vercel/nft
 on:
   push:
     branches: [main]
-  pull_request:
-    types: [synchronize, opened, reopened, edited]
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_PROFILE_RELEASE_LTO: true
   RUST_BACKTRACE: 1
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ github.event.action != 'edited' || github.event.changes.base != '' }}
-  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
-
 jobs:
   bench_vs_node_nft:
     # for edited events it should only run on base changes
-    if: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
     runs-on: ubuntu-latest
     name: bench
 
     steps:
-      - name: Initialize github status
-        if: github.event_name == 'pull_request'
-        uses: ouzi-dev/commit-status-updater@v1.0.4
-        with:
-          name: Bench against Node.js nft / bench (pull_request)
-          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
       - uses: actions/checkout@v3
       - uses: Swatinem/rust-cache@v1
         with:
@@ -60,10 +46,3 @@ jobs:
         with:
           command: xtask
           args: nft-bench-result
-      - name: Report github status
-        if: always() && github.event_name == 'pull_request'
-        uses: ouzi-dev/commit-status-updater@v1.0.4
-        with:
-          name: Bench against Node.js nft / bench (pull_request)
-          status: '${{ job.status }}'
-          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
