@@ -19,8 +19,8 @@ module.exports = withNextra({
         permanent: true,
       },
       {
-        source: "/docs/pipelines",
-        destination: "/docs/running-tasks",
+        source: "/docs/core-concepts/pipelines",
+        destination: "/docs/core-concepts/running-tasks",
         permanent: true,
       },
       {
