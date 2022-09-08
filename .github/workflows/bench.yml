@@ -15,37 +15,54 @@ jobs:
       fail-fast: false
       matrix:
         bench:
+          # One of Turbopack CSR or SSR with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This runs all the non next-dev benchmarks
           - name: generic
             cache_key: all
             TURBOPACK_BENCH_COUNTS: 1000
+
+          # This measures Turbopack CSR and SSR
           - name: turbopack
             cache_key: next-dev
             args: -p next-dev
             TURBOPACK_BENCH_COUNTS: 100,500,1000
+
+          # This measures Turbopack CSR and SSR with larger apps
           - name: turbopack-large
             cache_key: next-dev
             args: -p next-dev
             TURBOPACK_BENCH_COUNTS: 1000,2000,3000
+
+          # This measures Next.js 12
           - name: next 12
             cache_key: next-dev
             args: -p next-dev -- "(Turbopack SSR/1000|Next.js 12)"
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Next.js 11
           - name: next 11
             cache_key: next-dev
             args: -p next-dev -- "(Turbopack SSR/1000|Next.js 11)"
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Vite
           - name: vite
             cache_key: next-dev
             args: -p next-dev -- "(Turbopack CSR/1000|Vite)"
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Parcel
           - name: parcel
             cache_key: next-dev
             args: -p next-dev -- "(Turbopack CSR/1000|Parcel)"
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
+
     runs-on: ubuntu-latest-16-core
     name: bench - ${{ matrix.bench.name }}
 
