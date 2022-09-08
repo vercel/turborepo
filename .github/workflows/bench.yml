@@ -72,6 +72,17 @@ jobs:
           name: benchmark report ${{ matrix.bench.name }}
           path: target/criterion/
 
+      - name: Install critcmp
+        if: always()
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
       # This avoids putting this data into the rust-cache
       - name: Clear benchmarks
         run: rm -rf target/criterion
