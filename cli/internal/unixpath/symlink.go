@@ -14,7 +14,7 @@ import (
 
 func walkSymlinks(path string) (string, error) {
 	volLen := volumeNameLen(path)
-	pathSeparator := string(os.PathSeparator)
+	pathSeparator := string(Separator)
 
 	if volLen < len(path) && IsPathSeparator(path[volLen]) {
 		volLen++
