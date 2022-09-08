@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 
 	"github.com/Masterminds/semver"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gopkg.in/yaml.v3"
 )
@@ -16,13 +17,14 @@ type Pnpm6Workspaces struct {
 }
 
 var nodejsPnpm6 = PackageManager{
-	Name:         "nodejs-pnpm6",
-	Slug:         "pnpm",
-	Command:      "pnpm",
-	Specfile:     "package.json",
-	Lockfile:     "pnpm-lock.yaml",
-	PackageDir:   "node_modules",
-	ArgSeparator: []string{"--"},
+	Name:                       "nodejs-pnpm6",
+	Slug:                       "pnpm",
+	Command:                    "pnpm",
+	Specfile:                   "package.json",
+	Lockfile:                   "pnpm-lock.yaml",
+	PackageDir:                 "node_modules",
+	ArgSeparator:               []string{"--"},
+	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
 		bytes, err := ioutil.ReadFile(rootpath.Join("pnpm-workspace.yaml").ToStringDuringMigration())
@@ -74,5 +76,13 @@ var nodejsPnpm6 = PackageManager{
 		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
+	},
+
+	canPrune: func(cwd turbopath.AbsolutePath) (bool, error) {
+		return true, nil
+	},
+
+	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+		return lockfile.DecodePnpmLockfile(contents)
 	},
 }

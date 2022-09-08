@@ -39,6 +39,9 @@ type PackageManager struct {
 	// The directory in which package assets are stored by the Package Manager.
 	PackageDir string
 
+	// The location of the file that defines the workspace. Empty if workspaces defined in package.json
+	WorkspaceConfigurationPath string
+
 	// The separator that the Package Manger uses to identify arguments that
 	// should be passed through to the underlying script.
 	ArgSeparator []string
