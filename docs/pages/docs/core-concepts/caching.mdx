@@ -13,8 +13,8 @@ Turborepo can cache the results and logs of any task in your codebase—meaning 
 
 Each task in your codebase has **inputs** and **outputs**.
 
-- A `build` task might have **source files as inputs** and **outputs logs to `stderr` and `stdout` as well as  bundled/compiled file(s)**.
-- A `lint` or `test` task  might have **source files as inputs** and **outputs logs to `stdout` and `stderr`**.
+- A `build` task might have **source files as inputs** and **outputs logs to `stderr` and `stdout` as well as bundled/compiled file(s)**.
+- A `lint` or `test` task might have **source files as inputs** and **outputs logs to `stdout` and `stderr`**.
 
 Let's say you run a `build` task with Turborepo using `turbo run build`:
 
@@ -22,7 +22,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
 
-2. **Check the local filesystem cache**  for a folder named with the hash (e.g.`./node_modules/.cache/turbo/78awdk123`).
+2. **Check the local filesystem cache** for a folder named with the hash (e.g.`./node_modules/.cache/turbo/78awdk123`).
 
 3. If Turborepo doesn't find any matching artifacts for the calculated hash, Turborepo will then **execute the task**.
 
@@ -79,6 +79,33 @@ and cache their `output`s in `./node_modules/.cache/turbo`.
   more over in the [ESLint
   docs](https://eslint.org/docs/latest/developer-guide/working-with-rules#per-rule-performance).
 </Callout>
+
+## Configuring Cache Inputs
+
+A workspace is considered to have been updated when any of the files in that workspace have changed.
+However, for some tasks, we only want to rerun that task when relevant files have changed.
+Specifying `inputs` lets us define which files are relevant for a particular task. For example, the
+`test` configuration below declares that the `test` task only needs to execute if a `.tsx` or `.ts` file
+in the `src/` and `test/` subdirectories has changed since the last execution.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ... omitted for brevity
+
+   "test": {
+      // A workspace's `test` task depends on that workspace's
+      // own `build` task being completed first.
+      "dependsOn": ["build"],
+      "outputs": [],
+      // A workspace's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
 
 ## Turn off caching
 
