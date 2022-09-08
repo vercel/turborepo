@@ -58,11 +58,6 @@ func (b *lazybuf) string() string {
 	return b.volAndPath[:b.volLen] + string(b.buf[:b.w])
 }
 
-const (
-	Separator     = os.PathSeparator
-	ListSeparator = os.PathListSeparator
-)
-
 // Clean returns the shortest path name equivalent to path
 // by purely lexical processing. It applies the following rules
 // iteratively until no further processing can be done:
@@ -97,7 +92,7 @@ func Clean(path string) string {
 		}
 		return originalPath + "."
 	}
-	rooted := os.IsPathSeparator(path[0])
+	rooted := IsPathSeparator(path[0])
 
 	// Invariants:
 	//	reading from path; r is index of next byte to process.
@@ -114,20 +109,20 @@ func Clean(path string) string {
 
 	for r < n {
 		switch {
-		case os.IsPathSeparator(path[r]):
+		case IsPathSeparator(path[r]):
 			// empty path element
 			r++
-		case path[r] == '.' && (r+1 == n || os.IsPathSeparator(path[r+1])):
+		case path[r] == '.' && (r+1 == n || IsPathSeparator(path[r+1])):
 			// . element
 			r++
-		case path[r] == '.' && path[r+1] == '.' && (r+2 == n || os.IsPathSeparator(path[r+2])):
+		case path[r] == '.' && path[r+1] == '.' && (r+2 == n || IsPathSeparator(path[r+2])):
 			// .. element: remove to last separator
 			r += 2
 			switch {
 			case out.w > dotdot:
 				// can backtrack
 				out.w--
-				for out.w > dotdot && !os.IsPathSeparator(out.index(out.w)) {
+				for out.w > dotdot && !IsPathSeparator(out.index(out.w)) {
 					out.w--
 				}
 			case !rooted:
@@ -146,7 +141,7 @@ func Clean(path string) string {
 				out.append(Separator)
 			}
 			// copy element
-			for ; r < n && !os.IsPathSeparator(path[r]); r++ {
+			for ; r < n && !IsPathSeparator(path[r]); r++ {
 				out.append(path[r])
 			}
 		}
@@ -196,7 +191,7 @@ func SplitList(path string) []string {
 func Split(path string) (dir, file string) {
 	vol := VolumeName(path)
 	i := len(path) - 1
-	for i >= len(vol) && !os.IsPathSeparator(path[i]) {
+	for i >= len(vol) && !IsPathSeparator(path[i]) {
 		i--
 	}
 	return path[:i+1], path[i+1:]
@@ -218,7 +213,7 @@ func Join(elem ...string) string {
 // in the final element of path; it is empty if there is
 // no dot.
 func Ext(path string) string {
-	for i := len(path) - 1; i >= 0 && !os.IsPathSeparator(path[i]); i-- {
+	for i := len(path) - 1; i >= 0 && !IsPathSeparator(path[i]); i-- {
 		if path[i] == '.' {
 			return path[i:]
 		}
@@ -551,14 +546,14 @@ func Base(path string) string {
 		return "."
 	}
 	// Strip trailing slashes.
-	for len(path) > 0 && os.IsPathSeparator(path[len(path)-1]) {
+	for len(path) > 0 && IsPathSeparator(path[len(path)-1]) {
 		path = path[0 : len(path)-1]
 	}
 	// Throw away volume name
 	path = path[len(VolumeName(path)):]
 	// Find the last element
 	i := len(path) - 1
-	for i >= 0 && !os.IsPathSeparator(path[i]) {
+	for i >= 0 && !IsPathSeparator(path[i]) {
 		i--
 	}
 	if i >= 0 {
@@ -580,7 +575,7 @@ func Base(path string) string {
 func Dir(path string) string {
 	vol := VolumeName(path)
 	i := len(path) - 1
-	for i >= len(vol) && !os.IsPathSeparator(path[i]) {
+	for i >= len(vol) && !IsPathSeparator(path[i]) {
 		i--
 	}
 	dir := Clean(path[len(vol) : i+1])
