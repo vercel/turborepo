@@ -7,9 +7,44 @@ import Callout from "../../../components/Callout";
 
 # Caching
 
-Unlike other tools you may have used, Turborepo can cache emitted files and logs of previously run commands, so it can skip work that has already been done, yielding incredible time savings.
+Turborepo can cache the results and logs of any task in your codebase—meaning you never need to do the same work twice.
 
-By default, [`turbo run`](../reference/command-line-reference#turbo-run-task1-task2-1) considers any files emitted in the `dist/**` or `build/**` folders of a workspace task (defined in that workspace's `package.json` `scripts` object) to be cacheable. In addition, `turbo run` treats logs (`stderr` and`stdout`), which are automatically written to `.turbo/run-<command>.log`, as a cacheable artifact. By treating logs as artifacts, you can cache just about any command in your Turborepo.
+## Missing the cache
+
+Each task in your codebase has **inputs** and **outputs**.
+
+- A `build` task might have **source files as inputs** and **outputs logs to `stderr` and `stdout` as well as bundled/compiled file(s)**.
+- A `lint` or `test` task might have **source files as inputs** and **outputs logs to `stdout` and `stderr`**.
+
+Let's say you run a `build` task with Turborepo using `turbo run build`:
+
+![](../../../public/images/docs/cache-miss.png)
+
+1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
+
+2. **Check the local filesystem cache** for a folder named with the hash (e.g.`./node_modules/.cache/turbo/78awdk123`).
+
+3. If Turborepo doesn't find any matching artifacts for the calculated hash, Turborepo will then **execute the task**.
+
+4. Once the task is over, Turborepo **saves all the outputs** (including files and logs) into its cache under the hash.
+
+<Callout type="info">
+  Turborepo takes a lot of information into account when creating the hash - source files, environment variables, and even the source files of dependent workspaces. Learn more [below](/docs/core-concepts/caching#hashing).
+</Callout>
+
+## Hitting the cache
+
+Let's say that you run the task again without changing any of its inputs:
+
+![](../../../public/images/docs/cache-hit.png)
+
+1. The **hash will be the same** because **the inputs haven't changed** (e.g. `78awdk123`)
+
+2. Turborepo will find the folder in its cache with the calculated hash (e.g. `./node_modules/.cache/turbo/78awdk123`)
+
+3. **Instead of running the task**, Turborepo will **replay the output** - printing the saved logs to `stdout` and restoring the saved output files to their respective position in the filesystem.
+
+Restoring files and logs from the cache happens near-instantaneously. This can take your build times from minutes or hours down to seconds or milliseconds. Although specific results will vary depending on the shape and granularity of your codebase's dependency graph, most teams find that they can cut their overall monthly build time by around 40-85% with Turborepo's caching.
 
 ## Configuring Cache Outputs
 
@@ -44,6 +79,33 @@ and cache their `output`s in `./node_modules/.cache/turbo`.
   more over in the [ESLint
   docs](https://eslint.org/docs/latest/developer-guide/working-with-rules#per-rule-performance).
 </Callout>
+
+## Configuring Cache Inputs
+
+A workspace is considered to have been updated when any of the files in that workspace have changed.
+However, for some tasks, we only want to rerun that task when relevant files have changed.
+Specifying `inputs` lets us define which files are relevant for a particular task. For example, the
+`test` configuration below declares that the `test` task only needs to execute if a `.tsx` or `.ts` file
+in the `src/` and `test/` subdirectories has changed since the last execution.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ... omitted for brevity
+
+   "test": {
+      // A workspace's `test` task depends on that workspace's
+      // own `build` task being completed first.
+      "dependsOn": ["build"],
+      "outputs": [],
+      // A workspace's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
 
 ## Turn off caching
 

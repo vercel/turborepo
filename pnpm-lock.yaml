@@ -76,8 +76,8 @@ importers:
       postcss: 8.4.16
       react: 17.0.2
       react-dom: 17.0.2
-      react-hot-toast: 2.1.1
-      swr: 1.0.1
+      react-hot-toast: 2.3.0
+      swr: 1.3.0
       tailwindcss: 3.1.8
       ts-json-schema-generator: 0.98.0
       typescript: 4.8.2
@@ -94,8 +94,8 @@ importers:
       nextra-theme-docs: 2.0.0-beta.24_pzmtmsmkyiq4foirxc7gldcjme
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
-      react-hot-toast: 2.1.1_a3rolb2r43cxt5j5fxvpwhxlai
-      swr: 1.0.1_react@17.0.2
+      react-hot-toast: 2.3.0_a3rolb2r43cxt5j5fxvpwhxlai
+      swr: 1.3.0_react@17.0.2
     devDependencies:
       '@babel/core': 7.18.13
       '@types/node': 16.11.44
@@ -2646,11 +2646,6 @@ packages:
   /delayed-stream/1.0.0:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
-
-  /dequal/2.0.2:
-    resolution: {integrity: sha512-q9K8BlJVxK7hQYqa6XISGmBZbtQQWVXSrRrWreHC94rMt1QL/Impruc+7p2CYSYuVIUr+YCt6hjrs1kkdJRTug==}
-    engines: {node: '>=6'}
-    dev: false
 
   /dequal/2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
@@ -7080,8 +7075,8 @@ packages:
       scheduler: 0.20.2
     dev: false
 
-  /react-hot-toast/2.1.1_a3rolb2r43cxt5j5fxvpwhxlai:
-    resolution: {integrity: sha512-Odrp4wue0fHh0pOfZt5H+9nWCMtqs3wdlFSzZPp7qsxfzmbE26QmGWIh6hG43CukiPeOjA8WQhBJU8JwtWvWbQ==}
+  /react-hot-toast/2.3.0_a3rolb2r43cxt5j5fxvpwhxlai:
+    resolution: {integrity: sha512-/RxV+bfjld7tSJR1SCLzMAXgFuNW7fCpK6+vbYqfmbGSWcqTMz2rizrvfWKvtcPH5HK0NqxmBaC5SrAy1F42zA==}
     engines: {node: '>=10'}
     peerDependencies:
       react: '>=16'
@@ -7953,12 +7948,11 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
-  /swr/1.0.1_react@17.0.2:
-    resolution: {integrity: sha512-EPQAxSjoD4IaM49rpRHK0q+/NzcwoT8c0/Ylu/u3/6mFj/CWnQVjNJ0MV2Iuw/U+EJSd2TX5czdAwKPYZIG0YA==}
+  /swr/1.3.0_react@17.0.2:
+    resolution: {integrity: sha512-dkghQrOl2ORX9HYrMDtPa7LTVHJjCTeZoB1dqTbnnEDlSvN8JEKpYIYurDfvbQFUUS8Cg8PceFVZNkW0KNNYPw==}
     peerDependencies:
-      react: ^16.11.0 || ^17.0.0
+      react: ^16.11.0 || ^17.0.0 || ^18.0.0
     dependencies:
-      dequal: 2.0.2
       react: 17.0.2
     dev: false
 
