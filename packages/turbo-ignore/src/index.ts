@@ -7,6 +7,15 @@ import { getComparison } from "./getComparison";
 console.log(
   "\u226B Using Turborepo to determine if this project is affected by the commit..."
 );
+
+// check for TURBO_FORCE and bail early if it's set
+if (process.env.TURBO_FORCE === "true") {
+  console.log(
+    "\u226B Turbo force detected, skipping check and proceeding with build."
+  );
+  process.exit(1);
+}
+
 // find the monorepo root
 const root = getTurboRoot();
 if (!root) {
