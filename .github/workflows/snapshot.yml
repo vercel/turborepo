@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
+
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -72,25 +75,16 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      # - name: Version
-      #   run: |
-      #     ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-      #     cat version.txt
-      # - name: Log in to the Container registry
-      #   uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
-      #   with:
-      #     registry: ghcr.io
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Snapshot
-        uses: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
-        #run: cd cli && make snapshot-turbo
-        with:
-          entrypoint: /bin/bash
-          args: -c "cd cli && make snapshot-turbo"
-        env:
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+        run: cd cli && make snapshot-turbo
+      # - name: Snapshot
+      #   uses: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
+      #   #run: cd cli && make snapshot-turbo
+      #   with:
+      #     entrypoint: /bin/bash
+      #     args: -c "cd cli && make snapshot-turbo"
+      #   env:
+      #     GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Upload snapshot
         uses: actions/upload-artifact@v3
