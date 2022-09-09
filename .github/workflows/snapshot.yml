@@ -88,7 +88,7 @@ jobs:
         #run: cd cli && make snapshot-turbo
         with:
           entrypoint: /bin/bash
-          args: cd cli && make snapshot-turbo
+          args: pwd && ls
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
