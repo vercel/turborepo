@@ -15,7 +15,7 @@ func TestCreate(t *testing.T) {
 		fmt.Printf("%v", err)
 	}
 
-	archive.AddFile("/Users/nathanhammond/.zprofile")
+	archive.AddFile("/", "/Users/nathanhammond/.zprofile")
 }
 
 func TestOpen(t *testing.T) {
@@ -25,6 +25,4 @@ func TestOpen(t *testing.T) {
 	if err != nil {
 		fmt.Printf("%v", err)
 	}
-
-	archive.AddFile("/Users/nathanhammond/.zprofile")
 }
