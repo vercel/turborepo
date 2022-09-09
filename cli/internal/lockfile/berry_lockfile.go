@@ -124,12 +124,8 @@ func yarnSplitOutEntries(lockfile map[string]*YarnLockfileEntry) map[string]*Yar
 	// entries in our map
 	// TODO: make concurrent
 	for key, val := range lockfile {
-		if strings.Contains(key, ",") {
-			for _, v := range strings.Split(key, ", ") {
-				prettyLockfile[strings.TrimSpace(v)] = val
-			}
-		} else {
-			prettyLockfile[key] = val
+		for _, v := range strings.Split(key, ", ") {
+			prettyLockfile[strings.TrimSpace(v)] = val
 		}
 	}
 	return prettyLockfile

@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var crlfLiteral []byte = []byte("\r\n")
+var crlfLiteral = []byte("\r\n")
 
 // YarnLockfile representation of yarn lockfile
 type YarnLockfile struct {
