@@ -4,14 +4,22 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"crypto/sha512"
+	"errors"
 	"hash"
 	"io"
+	"io/fs"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 
+	"github.com/moby/sys/sequential"
+	"github.com/pyr-sh/dag"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
+)
+
+var (
+	errNonexistentLinkTarget = errors.New("the link target does not exist")
+	errCycleDetected         = errors.New("symlinks in the cache are cyclic")
 )
 
 // CacheItem is a `tar` utility with a little bit extra.
@@ -28,6 +36,8 @@ type CacheItem struct {
 	gzw    *gzip.Writer
 	handle *os.File
 }
+
+// New CacheItem
 
 // Create makes a new CacheItem at the specified path.
 func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
@@ -60,42 +70,71 @@ func (ci *CacheItem) init() {
 
 // AddMetadata adds a file which is not part of the cache to the `tar`.
 // The contents of this file should not contain user input.
-func (ci *CacheItem) AddMetadata(path turbopath.AnchoredSystemPath) {
+func (ci *CacheItem) AddMetadata(anchor turbopath.AbsoluteSystemPath, path turbopath.AnchoredSystemPath) error {
 	ci.init()
-	ci.addFile("metadata", path)
+	return ci.addFile(turbopath.AnchoredSystemPath("metadata"), anchor, path)
 }
 
 // AddFile adds a user-cached item to the tar.
-func (ci *CacheItem) AddFile(path turbopath.AnchoredSystemPath) {
+func (ci *CacheItem) AddFile(anchor turbopath.AbsoluteSystemPath, path turbopath.AnchoredSystemPath) error {
 	ci.init()
-	ci.addFile("cache", path)
+	return ci.addFile(turbopath.AnchoredSystemPath("cache"), anchor, path)
 }
 
-func (ci *CacheItem) addFile(prefix string, path turbopath.AnchoredSystemPath) {
-	// Cache structure forces files into a separate directory.
-	var files = []struct {
-		Name, Body string
-	}{
-		{"readme.txt", "This archive contains some text files."},
-		{"gopher.txt", "Gopher names:\nGeorge\nGeoffrey\nGonzo"},
-		{"todo.txt", "Get animal handling license."},
+func (ci *CacheItem) addFile(cacheAnchor turbopath.AnchoredSystemPath, fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
+	// Calculate the fully-qualified path to the file to read it.
+	sourcePath := filePath.RestoreAnchor(fsAnchor)
+
+	// We grab the FileInfo which tar.FileInfoHeader accepts.
+	fileInfo, lstatErr := os.Lstat(sourcePath.ToString())
+	if lstatErr != nil {
+		return lstatErr
 	}
-	for _, file := range files {
-		hdr := &tar.Header{
-			Name: filepath.Join(prefix, file.Name),
-			Mode: 0600,
-			Size: int64(len(file.Body)),
+
+	// Determine if we need to populate the additional link argument to tar.FileInfoHeader.
+	var link string
+	if fileInfo.Mode()&fs.ModeSymlink != 0 {
+		linkTarget, readlinkErr := os.Readlink(sourcePath.ToString())
+		if readlinkErr != nil {
+			return readlinkErr
 		}
-		if err := ci.tw.WriteHeader(hdr); err != nil {
-			log.Fatal(err)
+		link = linkTarget
+	}
+
+	// Reanchor the file within the cache and normalize.
+	cacheDestinationName := filePath.Move(cacheAnchor).ToUnixPath()
+
+	// Generate the the header.
+	// We do not use header generation from stdlib because it can throw an error.
+	header, headerErr := FileInfoHeader(cacheDestinationName, fileInfo, link)
+	if headerErr != nil {
+		return headerErr
+	}
+
+	// Always write the header.
+	if err := ci.tw.WriteHeader(header); err != nil {
+		return err
+	}
+
+	// If there is a body to be written, do so.
+	if header.Typeflag == tar.TypeReg && header.Size > 0 {
+		// Windows has a distinct "sequential read" opening mode.
+		// We use a library that will switch to this mode for Windows.
+		sourceFile, sourceErr := sequential.Open(sourcePath.ToString())
+		defer func() { _ = sourceFile.Close() }()
+		if sourceErr != nil {
+			return sourceErr
 		}
-		if _, err := ci.tw.Write([]byte(file.Body)); err != nil {
-			log.Fatal(err)
+
+		if _, err := io.Copy(ci.tw, sourceFile); err != nil {
+			return err
 		}
 	}
+
+	return nil
 }
 
-// EXISTING
+// Existing CacheItem
 
 // Open returns an existing CacheItem at the specified path.
 func Open(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
@@ -120,11 +159,22 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 	defer func() { _ = gzr.Close() }()
 	tr := tar.NewReader(gzr)
 
+	// On first attempt to restore it's possible that a link target doesn't exist.
+	// Save them and come back to them.
+	missingLinks := make(map[string]*tar.Header)
+
 	restored := make([]turbopath.AnchoredSystemPath, 0)
 	for {
 		header, trErr := tr.Next()
 		if trErr == io.EOF {
-			break // End of archive
+			// The end, time to restore the missing links.
+			missingLinksRestored, missingLinksErr := restoreMissingLinks(missingLinks, tr)
+			restored = append(restored, missingLinksRestored...)
+			if missingLinksErr != nil {
+				return restored, missingLinksErr
+			}
+
+			break
 		}
 		if trErr != nil {
 			return restored, trErr
@@ -132,12 +182,21 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 
 		// The reader will not advance until tr.Next is called.
 		// We can treat this as file metadata + body reader.
+
+		// Make sure that we pass our safety checks.
 		validateErr := validateEntry(header, tr)
 		if validateErr != nil {
 			return restored, validateErr
 		}
+
+		// Actually attempt to place the file on disk.
 		file, restoreErr := restoreEntry(header, tr)
 		if restoreErr != nil {
+			if errors.Is(restoreErr, errNonexistentLinkTarget) {
+				// Links get one shot to be valid, then they're DAG'd and delayed.
+				missingLinks[header.Name] = header
+				continue
+			}
 			return restored, restoreErr
 		}
 		restored = append(restored, file)
@@ -148,6 +207,48 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 
 func validateEntry(header *tar.Header, reader *tar.Reader) error {
 	return nil
+}
+
+func restoreMissingLinks(missingLinks map[string]*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
+	restored := make([]turbopath.AnchoredSystemPath, 0)
+
+	var g dag.AcyclicGraph
+	for _, header := range missingLinks {
+		g.Add(header.Name)
+	}
+	for key, header := range missingLinks {
+		g.Connect(dag.BasicEdge(key, header.Name))
+	}
+
+	cycles := g.Cycles()
+	if cycles != nil {
+		return restored, errCycleDetected
+	}
+
+	var roots dag.Set
+	for _, v := range g.Vertices() {
+		if g.UpEdges(v).Len() == 0 {
+			roots.Add(v)
+		}
+	}
+
+	var walkFunc dag.DepthWalkFunc
+	walkFunc = func(vertex dag.Vertex, depth int) error {
+		header := vertex.(*tar.Header)
+		file, restoreErr := restoreEntry(header, tr)
+		if restoreErr != nil {
+			return restoreErr
+		}
+
+		restored = append(restored, file)
+		return nil
+	}
+	walkError := g.DepthFirstWalk(roots, walkFunc)
+	if walkError != nil {
+		return restored, walkError
+	}
+
+	return restored, nil
 }
 
 func restoreEntry(header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
