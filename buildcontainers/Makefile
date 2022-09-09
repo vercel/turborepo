@@ -14,6 +14,7 @@ SUBIMAGES = arm64 \
 turbo-cross-%:
 	@echo "building for $(@:turbo-cross-%=%)"
 	docker build \
+		--platform=linux/$(@:turbo-cross-%=%) \
 		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 		--build-arg GIT_REPO=$(GIT_REPO) \
 		-t $(IMAGE_NAME)-$(@:turbo-cross-%=%) \
@@ -32,6 +33,8 @@ push-turbo-cross: $(patsubst %, push-turbo-cross-%,$(SUBIMAGES))
 .PHONY: manifest-create
 manifest-create: push-turbo-cross
 	@echo "creating manifest $(IMAGE_NAME)"
+	# delete an existing one if it exists. Recreating with the same SHAs should result in an identical manifest
+	docker manifest rm $(IMAGE_NAME) 2> /dev/null || true
 	docker manifest create $(IMAGE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_NAME)-$(arch))
 
 .PHONY: manifest-push
