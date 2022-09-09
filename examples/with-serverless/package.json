@@ -1,0 +1,28 @@
+{
+  "name": "with-serverless",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Turborepo implementation with Serverless Framework",
+  "workspaces": [
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "sls:package:dev": "turbo run sls:package:dev",
+    "sls:package:prod": "turbo run sls:package:prod",
+    "sls:deploy:dev": "turbo run sls:deploy:dev",
+    "sls:deploy:prod": "turbo run sls:deploy:prod",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "test": "turbo run test"
+  },
+  "author": "Hafiz Nor <fizdotcom@gmail.com>",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=7.0.0"
+  },
+  "devDependencies": {
+    "prettier": "^2.7.1",
+    "turbo": "latest"
+  }
+}
