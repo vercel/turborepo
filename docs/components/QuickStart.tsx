@@ -48,7 +48,7 @@ export const LearnMoreArea = () => {
           name: "Never do the same work twice",
         }}
         href="/docs/core-concepts/caching"
-      ></DetailedFeatureLink>
+      />
     </div>
   );
 };
