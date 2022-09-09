@@ -84,8 +84,6 @@ manifest-create-base:
 manifest-create:
 	@echo "creating manifest $(IMAGE_NAME)"
 	docker manifest create $(IMAGE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_NAME)-$(arch))
-	@echo "creating base manifest $(IMAGE_NAME)-base"
-	docker manifest create $(IMAGE_NAME)-base $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_NAME)-base-$(arch))
 
 .PHONY: manifest-push-base
 manifest-push-base:
