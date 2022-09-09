@@ -149,6 +149,18 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
         },
       ],
     },
+    {
+      code: "const getEnv = (key) => process.env[key];",
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
+    {
+      code: "function getEnv(key) { return process.env[key]; }",
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
+    {
+      code: "for (let x of ['ONE', 'TWO', 'THREE']) { console.log(process.env[x]); }",
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
   ],
 
   invalid: [

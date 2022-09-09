@@ -68,7 +68,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string, userConfigF
 	cmd, inputFlags := args[0], args[1:]
 	// Special check for version command
 	// command is ./turbo --version
-	if len(inputFlags) == 0 && (cmd == "version" || cmd == "--version" || cmd == "-version") {
+	if len(inputFlags) == 0 && (cmd == "--version" || cmd == "-version") {
 		return nil, nil
 	}
 

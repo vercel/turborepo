@@ -374,8 +374,8 @@ func Test_CanPrune(t *testing.T) {
 		"nodejs-npm":   {false, false},
 		"nodejs-berry": {false, true},
 		"nodejs-yarn":  {true, false},
-		"nodejs-pnpm":  {false, false},
-		"nodejs-pnpm6": {false, false},
+		"nodejs-pnpm":  {true, false},
+		"nodejs-pnpm6": {true, false},
 	}
 
 	tests := make([]test, len(packageManagers))
