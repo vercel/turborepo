@@ -13,13 +13,15 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
     <>
       <div className="inline-flex items-center space-x-3">
         <Icon
-          className="h-8 w-8 dark:text-white  rounded-full p-1.5 dark:bg-white dark:bg-opacity-10 bg-black bg-opacity-5 text-black block"
+          className="h-8 w-8 dark:text-white flex-shrink-0 rounded-full p-1.5 dark:bg-white dark:bg-opacity-10 bg-black bg-opacity-5 text-black block"
           aria-hidden="true"
         />
-        <h3 className="m-0 text-lg font-medium dark:text-white">{name}</h3>
+        <h3 className="m-0 text-lg font-medium leading-6 dark:text-white">
+          {name}
+        </h3>
       </div>
       <div>
-        <p className="mt-2 text-base font-medium text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-base font-medium leading-7 text-gray-500 dark:text-gray-400">
           {description}
         </p>
       </div>
