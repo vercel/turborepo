@@ -56,13 +56,13 @@ goreleaser-cross-%:
 		-f Dockerfile .
 
 .PHONY: goreleaser-cross-base
-goreleaser-cross: $(patsubst %, goreleaser-cross-base-%,$(SUBIMAGES))
+goreleaser-cross-base: $(patsubst %, goreleaser-cross-base-%,$(SUBIMAGES))
 
 .PHONY: goreleaser-cross
 goreleaser-cross: $(patsubst %, goreleaser-cross-%,$(SUBIMAGES))
 
 .PHONY: docker-push-base-%
-docker-push-%:
+docker-push-base-%:
 	docker push $(IMAGE_BASE_NAME)-$(@:docker-push-base-%=%)
 
 .PHONY: docker-push-%
@@ -70,7 +70,7 @@ docker-push-%:
 	docker push $(IMAGE_NAME)-$(@:docker-push-%=%)
 
 .PHONY: docker-push-base
-docker-push: $(patsubst %, docker-push-base-%,$(SUBIMAGES))
+docker-push-base: $(patsubst %, docker-push-base-%,$(SUBIMAGES))
 
 .PHONY: docker-push
 docker-push: $(patsubst %, docker-push-%,$(SUBIMAGES))
