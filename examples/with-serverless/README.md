@@ -27,6 +27,9 @@ export AWS_ACCESS_KEY_ID=<your-aws-access-key-id>
 export AWS_SECRET_ACCESS_KEY=<your-aws-secret-access-key>
 export AWS_DEFAULT_REGION=us-west-1
 
+# Install Serverless globally
+npm install --location=global serverless
+
 # Install dependencies
 npm install
 
@@ -68,6 +71,7 @@ npm run sls:remove:prod
 
 This Turborepo has some additional tools already setup for you:
 
+- [Serverless Framework](https://www.serverless.com/) for handling Serverless Functions
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
