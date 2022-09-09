@@ -23,7 +23,7 @@ func TestRoundtrip(t *testing.T) {
 		t.Error(err)
 	}
 
-	assert.Equal(t, string(content), b.String())
+	assert.DeepEqual(t, string(content), b.String())
 }
 
 func TestKeySplitting(t *testing.T) {

@@ -46,6 +46,7 @@ require (
 require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
+	github.com/andybalholm/crlf v0.0.0-20171020200849-670099aa064f // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

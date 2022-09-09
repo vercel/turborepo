@@ -1,16 +1,21 @@
 package lockfile
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
+	"github.com/andybalholm/crlf"
 	"github.com/iseki0/go-yarnlock"
 	"github.com/pkg/errors"
 )
 
+var crlfLiteral []byte = []byte("\r\n")
+
 // YarnLockfile representation of yarn lockfile
 type YarnLockfile struct {
-	inner yarnlock.LockFile
+	inner   yarnlock.LockFile
+	hasCLRF bool
 }
 
 var _ Lockfile = (*YarnLockfile)(nil)
@@ -54,12 +59,16 @@ func (l *YarnLockfile) Subgraph(packages []string) (Lockfile, error) {
 		}
 	}
 
-	return &YarnLockfile{lockfile}, nil
+	return &YarnLockfile{lockfile, l.hasCLRF}, nil
 }
 
 // Encode encode the lockfile representation and write it to the given writer
 func (l *YarnLockfile) Encode(w io.Writer) error {
-	if err := l.inner.Encode(w); err != nil {
+	writer := w
+	if l.hasCLRF {
+		writer = crlf.NewWriter(w)
+	}
+	if err := l.inner.Encode(writer); err != nil {
 		return errors.Wrap(err, "Unable to encode yarn.lock")
 	}
 	return nil
@@ -68,12 +77,13 @@ func (l *YarnLockfile) Encode(w io.Writer) error {
 // DecodeYarnLockfile Takes the contents of a yarn lockfile and returns a struct representation
 func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 	lockfile, err := yarnlock.ParseLockFileData(contents)
+	hasCLRF := bytes.HasSuffix(contents, crlfLiteral)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to decode yarn.lock")
 	}
 
-	return &YarnLockfile{lockfile}, nil
+	return &YarnLockfile{lockfile, hasCLRF}, nil
 }
 
 func yarnPossibleKeys(name string, version string) []string {
