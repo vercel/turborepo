@@ -24,7 +24,7 @@ export default function Nextra({ Component, pageProps }: NextraAppProps) {
         {/**
          * Globally defined svg linear gradient, for use in icons
          */}
-        <svg>
+        <svg height="0px" width="0px">
           <defs>
             <linearGradient
               id="pink-gradient"
