@@ -2,8 +2,8 @@
 
 set -e
 
-IMG=ghcr.io/gsoltis/turbo-cross:v1.18.5-arm64
-#IMG=ghcr.io/gsoltis/goreleaser-cross:v1.18.5-arm64
+IMG=ghcr.io/gsoltis/turbo-cross:v1.18.5-amd64
+#IMG=ghcr.io/gsoltis/goreleaser-cross:v1.18.5-amd64
 
 docker run \
   --rm \
@@ -16,7 +16,7 @@ docker run \
   --platform linux/amd64 \
   --entrypoint /bin/bash \
   -it \
-  ghcr.io/goreleaser/goreleaser-cross:v1.18
+  $IMG
 
 # docker run \
 #   --rm \
