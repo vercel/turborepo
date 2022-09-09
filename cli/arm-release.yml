@@ -53,8 +53,8 @@ builds:
       - goos: windows
         goarch: arm64
         env:
-          - CC=/llvm-mingw/bin/aarch64-w64-mingw32-gcc
-          - CXX=/llvm-mingw/bin/aarch64-w64-mingw32-g++
+          - CC=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-gcc
+          - CXX=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-g++
       - goos: windows
         goarch: amd64
         goamd64: v1
