@@ -1,0 +1,33 @@
+{
+  "name": "@packages/logger",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Logger for aws lambda",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "test": "jest",
+    "watch": "jest --watchAll",
+    "build": "tsc",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "jest": {
+    "preset": "jest-presets/jest/node"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jest": "^26.0.22",
+    "jest": "^29.0.2",
+    "jest-presets": "*",
+    "ts-jest": "^29.0.0",
+    "tsconfig": "*",
+    "typescript": "^4.5.5"
+  },
+  "dependencies": {
+    "@aws-lambda-powertools/logger": "^1.2.1"
+  }
+}
