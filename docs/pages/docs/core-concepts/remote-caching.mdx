@@ -5,16 +5,27 @@ description: Share cache artifacts across machines for even faster builds.
 ---
 
 import Callout from "../../../components/Callout";
+import { Tabs, Tab } from "../../../components/Tabs";
 
 # Remote Caching
 
-A major key to Turborepo's speed is that it is both lazy and efficient—it does the least amount of work possible and it tries to never redo work that's already been done before.
+Turborepo's [task cache](/docs/core-concepts/caching) can save a lot of time by never doing the same work twice.
 
-By default, Turborepo caches the outputs of your tasks on your machine's local file system. We call this "single-player mode." But what if you could take advantage of the computational work done by your teammates or your CI by sharing a single cache across machines? In other words, what if you could turn on "co-op multiplayer mode", or a "Dropbox" for your Turborepo cache?
+But there's an issue - the **cache is local to your machine**. When you're working with a CI, this can result in a lot of duplicated work:
 
-> Remote Caching has entered the chat.
+![](../../../public/images/docs/local-caching.png)
 
-Turborepo can use a technique known as Remote Caching to share cache artifacts across machines for an additional speed boost. This is possible because Turborepo uses content addressable storage.
+Since Turborepo only caches to the local filesystem by default, the same task (`turbo run build`) must be **re-executed on each machine** (by you, by your teammates, by your CI, by your PaaS, etc.) even when all of the task inputs are identical — which **wastes time and resources**.
+
+## A single, shared cache
+
+What if you could share a single Turborepo cache across your entire team (and even your CI)?
+
+![](../../../public/images/docs/remote-caching.png)
+
+By working with providers like [Vercel](#vercel), Turborepo can securely communicate with a remote cache - a cloud server that stores the results of your tasks.
+
+This can save enormous amounts of time by **preventing duplicated work across your entire organization**.
 
 <Callout>
   Remote Caching is a powerful feature of Turborepo, but with great power comes great responsibility. Make sure you are caching correctly first and double check handling of environment variables. Please also remember Turborepo treats logs as artifacts, so be aware of what you are printing to the console.
@@ -32,18 +43,27 @@ npx turbo login
 
 Next, link your Turborepo to your remote cache:
 
-```
+```sh
 npx turbo link
 ```
 
-Once enabled, make some changes to a package or application you are currently caching and run tasks against it with `turbo run`.
+Once enabled, make some changes to a workspace you are currently caching and run tasks against it with `turbo run`.
 Your cache artifacts will now be stored locally _and_ in your Remote Cache.
 
 To verify, delete your local Turborepo cache with:
 
-```sh
-rm -rf ./node_modules/.cache/turbo
-```
+<Tabs items={['unix', 'win']} storageKey="selected-os">
+  <Tab>
+    ```sh
+    rm -rf ./node_modules/.cache/turbo
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    rd /s /q "./node_modules/.cache/turbo"
+    ```
+  </Tab>
+</Tabs>
 
 Then run the same build again. If things are working properly, `turbo` should not execute tasks locally, but rather download both the logs and artifacts from your Remote Cache and replay them back to you.
 

@@ -22,3 +22,14 @@ This Turborepo has some additional tools already setup for you:
 - [Expo](https://docs.expo.dev/) for native development
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [Prettier](https://prettier.io) for code formatting
+
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turborepo/examples/with-react-native-web with-react-native-web
+cd with-react-native-web
+yarn install
+git init . && git add . && git commit -m "Init"
+```
