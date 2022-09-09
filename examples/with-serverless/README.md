@@ -10,7 +10,7 @@ This turborepo uses [NPM](https://www.npmjs.com/package/download) as a package m
 
 - `calculator`: a [TypeScript](https://www.typescriptlang.org/) sample private module
 - `simple-calculator-api`: a simple [Serverless Framework](https://serverless.com/) Calculator REST API
-- `scripts`: Jest configurations
+- `jest-presets`: Shared Jest configurations
 - `logger`: Isomorphic logger (a small wrapper around @aws-lambda-powertools/logger)
 - `tsconfig`: tsconfig.json;s used throughout the monorepo
 
