@@ -1,0 +1,18 @@
+{
+  "name": "@services/simple-calculator-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "sls:package:dev": "sls package --stage development --verbose",
+    "sls:package:prod": "sls package --stage production --verbose",
+    "sls:deploy:dev": "sls deploy --stage development --package .serverless --verbose",
+    "sls:deploy:prod": "sls deploy --stage production --package .serverless --verbose",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.102",
+    "aws-lambda": "^1.0.7",
+    "serverless-esbuild": "^1.32.8",
+    "serverless-offline": "^10.0.0"
+  }
+}

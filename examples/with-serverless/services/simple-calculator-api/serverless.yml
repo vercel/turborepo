@@ -1,0 +1,29 @@
+service: simple-calculator-api
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+
+package:
+  individually: true
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  stage: ${opt:stage, 'development'}
+
+custom:
+  esbuild:
+    packager: npm
+    bundle: true
+    minify: true
+    sourcemap: true
+    keepNames: true
+
+functions:
+  calculator:
+    handler: src/index.handler
+    events:
+      - http:
+          path: calculator
+          method: post
