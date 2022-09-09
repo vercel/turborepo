@@ -15,7 +15,8 @@ docker run \
   -w /go/src/turborepo/cli \
   --platform linux/arm64 \
   --entrypoint /bin/bash \
-  $IMG -c "pwd && ls"
+  -it \
+  $IMG
 
 
 # docker run \

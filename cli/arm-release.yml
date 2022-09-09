@@ -8,7 +8,7 @@ dist: dist-arm64
 
 builds:
   - id: turbo-arm64
-    main: ./main.go
+    main: ./cmd/turbo
     binary: bin/turbo
     hooks:
       pre:
