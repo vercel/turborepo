@@ -1,16 +1,21 @@
 package main
 
+// static int cgoCheck() {
+//     return 2;
+// }
 import "C"
 import (
+	"fmt"
 	"os"
 	"unsafe"
 
 	"github.com/vercel/turborepo/cli/internal/cmd"
 )
 
-const turboVersion = "0.0.1-banana"
-
 func main() {
+	// TODO(gsoltis): remove after verification
+	cgoCheck := C.cgoCheck()
+	fmt.Printf("CGO Check: %v\n", int(cgoCheck))
 	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion))
 }
 
