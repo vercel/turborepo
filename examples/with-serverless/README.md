@@ -51,6 +51,9 @@ npm run sls:deploy:prod
 ```
 
 Access the REST API via the AWS API Gateway endpoint generated.
+```
+https://{restapi_id}.execute-api.{region}.amazonaws.com/{stage_name}/{path}
+```
 
 To cleanup the resources:
 
@@ -66,6 +69,5 @@ npm run sls:remove:prod
 This Turborepo has some additional tools already setup for you:
 
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
 - [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
