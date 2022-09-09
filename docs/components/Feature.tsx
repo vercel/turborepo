@@ -16,7 +16,7 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
       <div className="inline-flex items-center space-x-3">
         <div className="flex items-center justify-center bg-black rounded-full bg-opacity-5 w-9 h-9 icon-circle">
           <Icon
-            className="h-8 w-8 dark:text-white flex-shrink-0 rounded-full p-1.5 text-black block"
+            className="h-8 w-8 dark:text-white flex-shrink-0 rounded-full p-1.5 text-black block dark:stroke-[url(#pink-gradient)]"
             aria-hidden="true"
           />
         </div>
