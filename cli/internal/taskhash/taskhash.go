@@ -54,16 +54,17 @@ type packageFileSpec struct {
 	inputs []string
 }
 
-func specFromPackageTask(pt *nodes.PackageTask) packageFileSpec {
+func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
 	return packageFileSpec{
-		pkg:    pt.PackageName,
-		inputs: pt.TaskDefinition.Inputs,
+		pkg:    packageTask.PackageName,
+		inputs: packageTask.TaskDefinition.Inputs,
 	}
 }
 
 // packageFileHashKey is a hashable representation of a packageFileSpec.
 type packageFileHashKey string
 
+// hashes the inputs for a packageTask
 func (pfs packageFileSpec) ToKey() packageFileHashKey {
 	sort.Strings(pfs.inputs)
 	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
@@ -77,7 +78,7 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) (string, error) {
+func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.AbsolutePath) (string, error) {
 	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
@@ -96,7 +97,7 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot fs.AbsolutePath) 
 	return hashOfFiles, nil
 }
 
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopath.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
 	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
@@ -105,7 +106,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 		return nil, err
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir, ".gitignore").ToString())
+	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath fs.Absol
 		includePattern = "{" + strings.Join(inputs, ",") + "}"
 	}
 
-	pathPrefix := rootPath.Join(pkg.Dir).ToString()
+	pathPrefix := rootPath.Join(pkg.Dir.ToStringDuringMigration()).ToString()
 	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
@@ -155,8 +156,9 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot fs.AbsolutePath) error {
+func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsolutePath) error {
 	hashTasks := make(util.Set)
+
 	for _, v := range allTasks {
 		taskID, ok := v.(string)
 		if !ok {
@@ -169,32 +171,38 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 		if pkgName == th.rootNode {
 			continue
 		}
+
 		taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
 		if !ok {
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
-		hashTasks.Add(&packageFileSpec{
+
+		pfs := &packageFileSpec{
 			pkg:    pkgName,
 			inputs: taskDefinition.Inputs,
-		})
+		}
+
+		hashTasks.Add(pfs)
 	}
 
 	hashes := make(map[packageFileHashKey]string)
 	hashQueue := make(chan *packageFileSpec, workerCount)
 	hashErrs := &errgroup.Group{}
+
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
-			for ht := range hashQueue {
-				pkg, ok := th.packageInfos[ht.pkg]
+			for packageFileSpec := range hashQueue {
+				pkg, ok := th.packageInfos[packageFileSpec.pkg]
 				if !ok {
-					return fmt.Errorf("cannot find package %v", ht.pkg)
+					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
-				hash, err := ht.hash(pkg, repoRoot)
+				hash, err := packageFileSpec.hash(pkg, repoRoot)
 				if err != nil {
 					return err
 				}
 				th.mu.Lock()
-				hashes[ht.ToKey()] = hash
+				pfsKey := packageFileSpec.ToKey()
+				hashes[pfsKey] = hash
 				th.mu.Unlock()
 			}
 			return nil
@@ -254,29 +262,31 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Set, args []string) (string, error) {
-	pkgFileHashKey := specFromPackageTask(pt).ToKey()
+func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, args []string) (string, error) {
+	pfs := specFromPackageTask(packageTask)
+	pkgFileHashKey := pfs.ToKey()
+
 	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
 
 	var envPrefixes []string
-	framework := inference.InferFramework(pt.Pkg)
+	framework := inference.InferFramework(packageTask.Pkg)
 	if framework != nil && framework.EnvPrefix != "" {
 		envPrefixes = append(envPrefixes, framework.EnvPrefix)
 	}
 
-	hashableEnvPairs := env.GetHashableEnvPairs(pt.TaskDefinition.EnvVarDependencies, envPrefixes)
-	outputs := pt.HashableOutputs()
+	hashableEnvPairs := env.GetHashableEnvPairs(packageTask.TaskDefinition.EnvVarDependencies, envPrefixes)
+	outputs := packageTask.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
 		return "", err
 	}
 	hash, err := fs.HashObject(&taskHashInputs{
 		hashOfFiles:          hashOfFiles,
-		externalDepsHash:     pt.Pkg.ExternalDepsHash,
-		task:                 pt.Task,
+		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
+		task:                 packageTask.Task,
 		outputs:              outputs,
 		passThruArgs:         args,
 		hashableEnvPairs:     hashableEnvPairs,
@@ -284,10 +294,10 @@ func (th *Tracker) CalculateTaskHash(pt *nodes.PackageTask, dependencySet dag.Se
 		taskDependencyHashes: taskDependencyHashes,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to hash task %v: %v", pt.TaskID, hash)
+		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}
 	th.mu.Lock()
-	th.packageTaskHashes[pt.TaskID] = hash
+	th.packageTaskHashes[packageTask.TaskID] = hash
 	th.mu.Unlock()
 	return hash, nil
 }

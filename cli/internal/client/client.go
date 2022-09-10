@@ -85,9 +85,14 @@ func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion stri
 	return client
 }
 
-// IsLoggedIn returns true if this ApiClient has appropriate credentials
-func (c *ApiClient) IsLoggedIn() bool {
-	return c.token != "" && (c.teamID != "" || c.teamSlug != "")
+// HasUser returns true if we have credentials for a user
+func (c *ApiClient) HasUser() bool {
+	return c.token != ""
+}
+
+// IsLinked returns true if we have a user and linked team
+func (c *ApiClient) IsLinked() bool {
+	return c.HasUser() && (c.teamID != "" || c.teamSlug != "")
 }
 
 // SetTeamID sets the team parameter used on all requests by this client

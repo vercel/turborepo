@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
@@ -105,7 +106,7 @@ func TestGetPackageManager(t *testing.T) {
 	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
-		projectDirectory fs.AbsolutePath
+		projectDirectory turbopath.AbsolutePath
 		pkg              *fs.PackageJSON
 		want             string
 		wantErr          bool
@@ -216,7 +217,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsolutePath
 		want     []string
 		wantErr  bool
 	}
@@ -225,7 +226,7 @@ func Test_GetWorkspaces(t *testing.T) {
 
 	repoRoot, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
-	rootPath := map[string]fs.AbsolutePath{
+	rootPath := map[string]turbopath.AbsolutePath{
 		"nodejs-npm":   repoRoot.Join("../../../examples/basic"),
 		"nodejs-berry": repoRoot.Join("../../../examples/basic"),
 		"nodejs-yarn":  repoRoot.Join("../../../examples/basic"),
@@ -307,7 +308,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsolutePath
 		want     []string
 		wantErr  bool
 	}
@@ -357,7 +358,7 @@ func Test_CanPrune(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsolutePath
 		want     bool
 		wantErr  bool
 	}
@@ -373,8 +374,8 @@ func Test_CanPrune(t *testing.T) {
 		"nodejs-npm":   {false, false},
 		"nodejs-berry": {false, true},
 		"nodejs-yarn":  {true, false},
-		"nodejs-pnpm":  {false, false},
-		"nodejs-pnpm6": {false, false},
+		"nodejs-pnpm":  {true, false},
+		"nodejs-pnpm6": {true, false},
 	}
 
 	tests := make([]test, len(packageManagers))

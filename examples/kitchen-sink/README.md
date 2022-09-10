@@ -30,7 +30,7 @@ This Turborepo has some additional tools already setup for you:
 
 ## Using this example
 
-We do not have a starter yet in `create-turbo` for this quite yet. If you want to use this in the interim, you run the following command:
+Run the following command:
 
 ```sh
 npx degit vercel/turborepo/examples/kitchen-sink kitchen-sink

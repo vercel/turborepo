@@ -12,8 +12,3 @@ export function shouldUsePnpm(): boolean {
     return false;
   }
 }
-
-export function getNpxCommandOfPnpm() {
-  const currentVersion = execSync("pnpm --version").toString();
-  return Number(currentVersion.split(".")[0]) >= 6 ? "pnpm dlx" : "pnpx";
-}

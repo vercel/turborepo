@@ -12,6 +12,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/mattn/go-isatty"
@@ -35,7 +36,7 @@ type Config struct {
 	TurboVersion string
 	Cache        *CacheConfig
 	// Current Working Directory
-	Cwd fs.AbsolutePath
+	Cwd turbopath.AbsolutePath
 
 	UsePreflight      bool
 	MaxClientFailures uint64
@@ -56,7 +57,7 @@ type CacheConfig struct {
 // ParseAndValidate parses the cmd line flags / env vars, and verifies that all required
 // flags have been set. Users can pass in flags when calling a subcommand, or set env vars
 // with the prefix 'TURBO_'. If both values are set, the env var value will be used.
-func ParseAndValidate(args []string, ui cli.Ui, turboVersion string, userConfigFile fs.AbsolutePath) (c *Config, err error) {
+func ParseAndValidate(args []string, ui cli.Ui, turboVersion string, userConfigFile turbopath.AbsolutePath) (c *Config, err error) {
 
 	// Special check for ./turbo invocation without any args
 	// Return the help message
@@ -67,7 +68,7 @@ func ParseAndValidate(args []string, ui cli.Ui, turboVersion string, userConfigF
 	cmd, inputFlags := args[0], args[1:]
 	// Special check for version command
 	// command is ./turbo --version
-	if len(inputFlags) == 0 && (cmd == "version" || cmd == "--version" || cmd == "-version") {
+	if len(inputFlags) == 0 && (cmd == "--version" || cmd == "-version") {
 		return nil, nil
 	}
 
@@ -209,7 +210,7 @@ func (c *Config) NewClient() *client.ApiClient {
 // so we do as well. This means that relative references out of the monorepo
 // will be relative to the resolved path, not necessarily the path that the
 // user uses to access the monorepo.
-func selectCwd(inputArgs []string) (fs.AbsolutePath, error) {
+func selectCwd(inputArgs []string) (turbopath.AbsolutePath, error) {
 	cwd, err := fs.GetCwd()
 	if err != nil {
 		return "", err

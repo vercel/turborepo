@@ -2,10 +2,7 @@ package prune
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -13,6 +10,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/context"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 
@@ -20,7 +18,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
 )
 
 // PruneCommand is a Command implementation that tells Turbo to run a task
@@ -120,7 +117,7 @@ type prune struct {
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.config.Cwd)
 	rootPackageJSONPath := p.config.Cwd.Join("package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath.ToStringDuringMigration())
+	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
@@ -160,8 +157,13 @@ func (p *prune) prune(opts *opts) error {
 	if err := packageJSONPath.EnsureDir(); err != nil {
 		return errors.Wrap(err, "could not create output directory")
 	}
-	workspaces := []string{}
-	lockfile := rootPackageJSON.SubLockfile
+	if workspacePath := ctx.PackageManager.WorkspaceConfigurationPath; workspacePath != "" && fs.FileExists(p.config.Cwd.Join(workspacePath).ToStringDuringMigration()) {
+		workspaceFile := fs.LstatCachedFile{Path: p.config.Cwd.Join(workspacePath)}
+		if err := fs.CopyFile(&workspaceFile, outDir.Join(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
+		}
+	}
+	workspaces := []turbopath.AnchoredSystemPath{}
 	targets := []interface{}{opts.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
 	if err != nil {
@@ -169,31 +171,32 @@ func (p *prune) prune(opts *opts) error {
 	}
 	targets = append(targets, internalDeps.List()...)
 
+	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
+	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
+
 	for _, internalDep := range targets {
 		if internalDep == ctx.RootNode {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		targetDir := fullDir.Join(ctx.PackageInfos[internalDep].Dir)
+		targetDir := fullDir.Join(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
 		if err := targetDir.EnsureDir(); err != nil {
 			return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 		}
-		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir, targetDir.ToStringDuringMigration()); err != nil {
+		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
 		if opts.docker {
-			jsonDir := outDir.Join("json", ctx.PackageInfos[internalDep].PackageJSONPath)
+			jsonDir := outDir.Join("json", ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath, jsonDir.ToStringDuringMigration()); err != nil {
+			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		}
 
-		for k, v := range ctx.PackageInfos[internalDep].SubLockfile {
-			lockfile[k] = v
-		}
+		lockfileKeys = append(lockfileKeys, ctx.PackageInfos[internalDep].TransitiveDeps...)
 
 		p.ui.Output(fmt.Sprintf(" - Added %v", ctx.PackageInfos[internalDep].Name))
 	}
@@ -220,63 +223,24 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 
-	var b bytes.Buffer
-	yamlEncoder := yaml.NewEncoder(&b)
-	yamlEncoder.SetIndent(2)
-	if err := yamlEncoder.Encode(lockfile); err != nil {
-		return errors.Wrap(err, "failed to materialize sub-lockfile. This can happen if your lockfile contains merge conflicts or is somehow corrupted. Please report this if it occurs")
-	}
-	if err := outDir.Join("yarn.lock").WriteFile(b.Bytes(), fs.DirPermissions); err != nil {
-		return errors.Wrap(err, "failed to write sub-lockfile")
-	}
-
-	yarnTmpFilePath := outDir.Join("yarn-tmp.lock")
-	tmpGeneratedLockfile, err := yarnTmpFilePath.Create()
+	lockfile, err := ctx.Lockfile.Subgraph(lockfileKeys)
 	if err != nil {
-		return errors.Wrap(err, "failed create temporary lockfile")
+		return errors.Wrap(err, "Failed creating pruned lockfile")
 	}
-	tmpGeneratedLockfileWriter := bufio.NewWriter(tmpGeneratedLockfile)
-
-	if ctx.PackageManager.Name == "nodejs-yarn" {
-		tmpGeneratedLockfileWriter.WriteString("# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.\n# yarn lockfile v1\n\n")
-	} else {
-		tmpGeneratedLockfileWriter.WriteString("# This file is generated by running \"yarn install\" inside your project.\n# Manual changes might be lost - proceed with caution!\n\n__metadata:\n  version: 5\n  cacheKey: 8\n\n")
-	}
-
-	// because of yarn being yarn, we need to inject lines in between each block of YAML to make it "valid" SYML
-	lockFilePath := outDir.Join("yarn.lock")
-	generatedLockfile, err := lockFilePath.Open()
+	lockfilePath := outDir.Join(ctx.PackageManager.Lockfile)
+	lockfileFile, err := lockfilePath.Create()
 	if err != nil {
-		return errors.Wrap(err, "failed to massage lockfile")
+		return errors.Wrap(err, "Failed to create lockfile")
 	}
 
-	scan := bufio.NewScanner(generatedLockfile)
-	buf := make([]byte, 0, 1024*1024)
-	scan.Buffer(buf, 10*1024*1024)
-	for scan.Scan() {
-		line := scan.Text() //Writing to Stdout
-		if !strings.HasPrefix(line, " ") {
-			tmpGeneratedLockfileWriter.WriteString(fmt.Sprintf("\n%v\n", strings.ReplaceAll(line, "'", "\"")))
-		} else {
-			tmpGeneratedLockfileWriter.WriteString(fmt.Sprintf("%v\n", strings.ReplaceAll(line, "'", "\"")))
-		}
-	}
-	// Make sure to flush the log write before we start saving it.
-	if err := tmpGeneratedLockfileWriter.Flush(); err != nil {
-		return errors.Wrap(err, "failed to flush to temporary lock file")
+	lockfileWriter := bufio.NewWriter(lockfileFile)
+	if err := lockfile.Encode(lockfileWriter); err != nil {
+		return errors.Wrap(err, "Failed to encode pruned lockfile")
 	}
 
-	// Close the files before we rename them
-	if err := tmpGeneratedLockfile.Close(); err != nil {
-		return errors.Wrap(err, "failed to close temporary lock file")
-	}
-	if err := generatedLockfile.Close(); err != nil {
-		return errors.Wrap(err, "failed to close existing lock file")
+	if err := lockfileWriter.Flush(); err != nil {
+		return errors.Wrap(err, "Failed to flush pruned lockfile")
 	}
 
-	// Rename the file
-	if err := os.Rename(yarnTmpFilePath.ToStringDuringMigration(), lockFilePath.ToStringDuringMigration()); err != nil {
-		return errors.Wrap(err, "failed finalize lockfile")
-	}
 	return nil
 }

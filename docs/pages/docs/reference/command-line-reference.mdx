@@ -3,7 +3,7 @@ title: CLI Reference
 description: Turborepo is a high-performance build system for JavaScript and TypeScript codebases.
 ---
 
-import Callout from '../../../components/Callout'
+import Callout from "../../../components/Callout";
 
 # Command-Line Reference
 
@@ -32,7 +32,7 @@ The following flags apply to all commands.
 #### `--color`
 
 Forces the use of color even when the output stream is not considered to be a TTY terminal.
-This can be used to enable turbo's color output for CI runners such as Github Actions which
+This can be used to enable `turbo`'s color output for CI runners such as Github Actions which
 have support for rendering color in their log output.
 
 ```sh
@@ -51,7 +51,7 @@ turbo run build
 
 #### `--no-color`
 
-Suppresses the use of color in the output when running turbo in an interactive / TTY session.
+Suppresses the use of color in the output when running `turbo` in an interactive / TTY session.
 
 ```sh
 turbo run build --no-color
@@ -67,7 +67,7 @@ turbo run build
 
 ## `turbo run <task>`
 
-Run npm scripts across all packages in specified scope. Tasks must be specified in your `pipeline` configuration.
+Run npm scripts across all workspaces in specified scope. Tasks must be specified in your `pipeline` configuration.
 
 `turbo run <task1> <task2> [options] [-- <args passed to task1 and task2>]`
 
@@ -122,7 +122,7 @@ turbo run build --cwd=./somewhere/else
   `--deps` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#include-dependents-of-matched-packages) instead.
 </Callout>
 
-Defaults to `true`. Include dependent packages/apps consumers in the execution.
+Defaults to `true`. Include dependent workspace consumers in the execution.
 
 ```sh
 turbo run build --deps
@@ -131,17 +131,17 @@ turbo run build --no-deps
 
 **Example**
 
-Let's say you have packages A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
+Let's say you have workspaces A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
 
 #### `--dry / --dry-run`
 
-Instead of executing tasks, display details about the affected packages and tasks that would be run.
+Instead of executing tasks, display details about the affected workspaces and tasks that would be run.
 Specify `--dry=json` to get the output in JSON format.
 
 Task details include:
 
 - `task`: The name of the task to be executed
-- `package`: The package in which to run the task
+- `package`: The workspace in which to run the task
 - `hash`: The hash of the task, used for caching
 - `directory`: The directory where the task will be run
 - `command`: The actual command used to run the task
@@ -154,7 +154,7 @@ Task details include:
 
 `type: string[]`
 
-Specify combinations of package(s)/apps, directories, and git commits to act as entrypoints
+Specify combinations of workspaces, directories, and git commits to act as entrypoints
 for execution.
 
 Multiple filters can be combined to select distinct sets of targets. Additionally, filters
@@ -188,7 +188,7 @@ turbo run build test lint --graph=my-graph.html
 <Callout type="info">
   **Known Bug**: All possible pipeline task nodes will be added to the
   graph at the moment, even if that pipeline task does not actually exist in a
-  given package. This has no impact on execution, it means that 1) the terminal output may overstate the number of packages in which a task is running and 2) your dot viz graph may contain additional nodes that represents tasks that do not exist.
+  given workspace. This has no impact on execution, it means that 1) the terminal output may overstate the number of workspaces in which a task is running and 2) your dot viz graph may contain additional nodes that represents tasks that do not exist.
 </Callout>
 
 #### `--force`
@@ -246,7 +246,7 @@ Just a quick overview.
   `--include-dependencies` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#include-dependencies-of-matched-packages) instead.
 </Callout>
 
-Default `false`. When `true`, `turbo` will add any packages that the packages in the current execution _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
+Default `false`. When `true`, `turbo` will add any workspaces that the workspaces in the current execution _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
 
 This is useful when using `--filter` in CI as it guarantees that every dependency needed for the execution is actually executed.
 
@@ -263,7 +263,7 @@ turbo run dev --parallel --no-cache
 
 `type: string`
 
-Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only turbo-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only `turbo`-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
 
 ```shell
 turbo run build --output-logs=full
@@ -298,11 +298,11 @@ Given this pipeline in `turbo.json`:
 turbo run test --only
 ```
 
-Will execute _only_ the `test` tasks in each package. It will not `build`.
+Will execute _only_ the `test` tasks in each workspace. It will not `build`.
 
 #### `--parallel`
 
-Default `false`. Run commands in parallel across packages and apps and ignore the dependency graph. This is useful for developing with live reloading.
+Default `false`. Run commands in parallel across workspaces and ignore the dependency graph. This is useful for developing with live reloading.
 
 ```sh
 turbo run lint --parallel --no-cache
@@ -327,7 +327,7 @@ The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment v
 
 `type: string[]`
 
-Specify/filter package(s)/apps to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
+Specify/filter workspaces to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
 
 ```sh
 turbo run lint --scope="@example/**"
@@ -352,7 +352,7 @@ turbo run build --serial
   `--since` is deprecated in `1.2.x`. Please use [`--filter`](/docs/core-concepts/filtering#filter-by-changed-packages) instead.
 </Callout>
 
-Filter execution based on which packages have changed since a merge-base.
+Filter execution based on which workspaces have changed since a merge-base.
 
 ```
 turbo run build --since=origin/main
@@ -360,8 +360,8 @@ turbo run build --since=origin/main
 
 <Callout type="info">
   **Important**: This uses the `git diff ${target_branch}...` mechanism to
-  identify which packages have changed. There is an assumption that all the
-  input files for a package exist inside their respective package/app folders.
+  identify which workspaces have changed. There is an assumption that all the
+  input files for a workspace exist inside their respective workspace folders.
 </Callout>
 
 #### `--token`
@@ -449,7 +449,7 @@ turbo run build -vvv
 
 ## `turbo prune --scope=<target>`
 
-Generate a sparse/partial monorepo with a pruned lockfile for a target package.
+Generate a sparse/partial monorepo with a pruned lockfile for a target workspace.
 
 <Callout>
   This command is not yet implemented for `npm` or `pnpm`.
@@ -457,12 +457,12 @@ Generate a sparse/partial monorepo with a pruned lockfile for a target package.
 
 This command will generate folder called `out` with the following inside of it:
 
-- The full source code of all internal packages that are needed to build the target
-- A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
+- The full source code of all internal workspaces that are needed to build the target
+- A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the workspaces in the pruned workspace.
 - A copy of the root `package.json`
 
 ```
-.                                 # Folder full source code for all package needed to build the target
+.                                 # Folder full source code for all workspaces needed to build the target
 ├── package.json                  # The root `package.json`
 ├── packages
 │   ├── ui
@@ -594,4 +594,4 @@ Unlink the current directory from the Remote Cache.
 
 ## `turbo bin`
 
-Get the path to the Turbo binary.
+Get the path to the `turbo` binary.

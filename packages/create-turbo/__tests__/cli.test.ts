@@ -1,12 +1,10 @@
 import childProcess, { execSync, spawn } from "child_process";
-import fs from "fs-extra";
+import fs from "fs";
 import path from "path";
 import util from "util";
 import semver from "semver";
 import stripAnsi from "strip-ansi";
 import { PackageManager, PACKAGE_MANAGERS } from "../src/constants";
-
-const DEFAULT_APP_NAME = "my-turborepo";
 
 const execFile = util.promisify(childProcess.execFile);
 
@@ -18,13 +16,7 @@ const keys = {
 };
 
 const createTurbo = path.resolve(__dirname, "../dist/index.js");
-const testDir = path.join(__dirname, "../my-turborepo");
-
-// Increase default timeout for this test file
-// since we are spawning a process to call turbo CLI and that can take some time
-// This may be overriden in individual tests with a third param to the `it` block. E.g.:
-// it('', () => {}, <override ms>)
-jest.setTimeout(10_000);
+const cwd = path.join(__dirname, "../../../..");
 
 const EXPECTED_HELP_MESSAGE = `
 "
@@ -48,12 +40,7 @@ const EXPECTED_HELP_MESSAGE = `
 
 describe("create-turbo cli", () => {
   beforeAll(() => {
-    execSync("corepack disable", { stdio: "ignore" });
     cleanupTestDir();
-
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
-    }
 
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
@@ -64,170 +51,166 @@ describe("create-turbo cli", () => {
   });
 
   afterAll(() => {
-    execSync("corepack enable", { stdio: "ignore" });
-
     // clean up after the whole test suite just in case any excptions prevented beforeEach callback from running
     cleanupTestDir();
   });
 
-  beforeEach(() => {
-    // cleanup before each test case in case the previous test timed out.
-    cleanupTestDir();
-  });
-
-  afterEach(() => {
-    // clean up test dir in between test cases since we are using the same directory for each one.
-    cleanupTestDir();
-  });
-
   describe("--no-install", () => {
-    it("default: guides the user through the process", async () => {
-      configurePackageManager(PACKAGE_MANAGERS["npm"]);
-      const cli = spawn("node", [createTurbo, "--no-install"], {});
-
-      const messages = await runInteractiveCLI(cli);
-
-      expect(messages[0]).toEqual(
-        ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
-      );
-
-      expect(messages[1]).toEqual(
-        `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
-      );
-
-      expect(getPromptChoices(messages[2])).toEqual(["npm", "pnpm", "yarn"]);
-
-      expect(messages[3]).toMatch(
-        /^>>> Bootstrapped a new turborepo with the following:/
-      );
-
-      expect(
-        messages.find((msg) =>
-          msg.match(
-            new RegExp(
-              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-            )
-          )
-        )
-      ).toBeTruthy();
-
-      expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
-
-      expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
-    });
-
-    Object.values(PACKAGE_MANAGERS).forEach((packageManager) => {
-      it(`--use-${packageManager.command}: guides the user through the process (${packageManager.name})`, async () => {
+    it(
+      "interactively configure",
+      async () => {
+        let packageManager = PACKAGE_MANAGERS["npm"][0];
         configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-interactive-no-install-turborepo`;
+        const cli = spawn("node", [createTurbo, "--no-install"], { cwd });
+
+        const stdout = await runInteractiveCLI(cli, testDir);
+
+        expect(stdout).toContain(
+          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+        );
+
+        expect(stdout).toContain(
+          `? Where would you like to create your turborepo? (./my-turborepo)`
+        );
+
+        expect(stdout).toMatch(
+          /\? Which package manager do you want to use\? \(Use arrow keys\)\n.*npm \n.*pnpm \n.*yarn \n/
+        );
+
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${testDir}"`
+        );
+
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(/^npm/);
+
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          false
+        );
+      },
+      1000 * 30
+    );
+
+    it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
+      `--use-$command: guides the user through the process ($name)`,
+      async (packageManager) => {
+        configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-no-install-turborepo`;
         const cli = spawn(
           "node",
           [createTurbo, "--no-install", `--use-${packageManager.command}`],
-          {}
+          { cwd }
         );
-        const messages = await runInteractiveCLI(cli);
 
-        expect(messages[0]).toEqual(
+        const stdout = await runInteractiveCLI(cli, testDir);
+
+        expect(stdout).toContain(
           ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
         );
 
-        expect(messages[1]).toEqual(
-          `? Where would you like to create your turborepo? (./${DEFAULT_APP_NAME})`
+        expect(stdout).toContain(
+          `? Where would you like to create your turborepo? (./my-turborepo)`
         );
 
-        expect(messages[2]).toMatch(
-          /^>>> Bootstrapped a new turborepo with the following:/
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
         );
 
-        expect(
-          messages.find((msg) =>
-            msg.match(
-              new RegExp(
-                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-              )
-            )
-          )
-        ).toBeTruthy();
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${testDir}"`
+        );
 
-        expect(getGeneratedPackageJSON().packageManager).toMatch(
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
           new RegExp(`^${packageManager.command}`)
         );
 
-        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(false);
-      });
-    });
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          false
+        );
+      },
+      1000 * 30
+    );
   });
 
   describe("with installation", () => {
-    it("default", async () => {
-      configurePackageManager(PACKAGE_MANAGERS["npm"]);
-      const cli = spawn("node", [createTurbo, `./${DEFAULT_APP_NAME}`], {});
-
-      const messages = await runInteractiveCLI(cli);
-
-      expect(messages[0]).toEqual(
-        ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
-      );
-
-      expect(getPromptChoices(messages[1])).toEqual(["npm", "pnpm", "yarn"]);
-
-      expect(messages[2]).toMatch(
-        /^>>> Creating a new turborepo with the following:/
-      );
-
-      expect(
-        messages.find((msg) =>
-          msg.match(
-            new RegExp(
-              `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-            )
-          )
-        )
-      ).toBeTruthy();
-
-      expect(getGeneratedPackageJSON().packageManager).toMatch(/^npm/);
-
-      expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
-    }, 100_000);
-
-    Object.values(PACKAGE_MANAGERS).forEach((packageManager) => {
-      it(`--use-${packageManager.command} (${packageManager.name})`, async () => {
+    it(
+      "interactively configure and install",
+      async () => {
+        let packageManager = PACKAGE_MANAGERS["npm"][0];
         configurePackageManager(packageManager);
-        const cli = spawn(
-          "node",
-          [
-            createTurbo,
-            `--use-${packageManager.command}`,
-            `./${DEFAULT_APP_NAME}`,
-          ],
-          {}
-        );
-        const messages = await runInteractiveCLI(cli);
+        let testDir = `my-${packageManager.name}-interactive-install-turborepo`;
+        const cli = spawn("node", [createTurbo], { cwd });
 
-        expect(messages[0]).toEqual(
+        const stdout = await runInteractiveCLI(cli, testDir);
+
+        expect(stdout).toContain(
           ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
         );
 
-        expect(messages[1]).toMatch(
-          /^>>> Creating a new turborepo with the following:/
+        expect(stdout).toContain(
+          `? Where would you like to create your turborepo? (./my-turborepo)`
         );
 
-        expect(
-          messages.find((msg) =>
-            msg.match(
-              new RegExp(
-                `>>> Success! Created a new Turborepo at "${DEFAULT_APP_NAME}"`
-              )
-            )
-          )
-        ).toBeTruthy();
+        expect(stdout).toMatch(
+          /\? Which package manager do you want to use\? \(Use arrow keys\)\n.*npm \n.*pnpm \n.*yarn \n/
+        );
 
-        expect(getGeneratedPackageJSON().packageManager).toMatch(
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${testDir}"`
+        );
+
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(/^npm/);
+
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          true
+        );
+      },
+      1000 * 60 * 5
+    );
+
+    it.concurrent.each(Object.values(PACKAGE_MANAGERS).flat())(
+      `--use-$command ($name)`,
+      async (packageManager) => {
+        configurePackageManager(packageManager);
+        let testDir = `my-${packageManager.name}-noninteractive-install-turborepo`;
+        const cli = spawn(
+          "node",
+          [createTurbo, `--use-${packageManager.command}`, testDir],
+          { cwd }
+        );
+
+        const stdout = await runInteractiveCLI(cli, testDir);
+
+        expect(stdout).toContain(
+          ">>> Welcome to Turborepo! Let's get you set up with a new codebase."
+        );
+
+        expect(stdout).toContain(
+          ">>> Created a new turborepo with the following:"
+        );
+
+        expect(stdout).toContain(
+          `>>> Success! Created a new Turborepo at "${testDir}"`
+        );
+
+        expect(getGeneratedPackageJSON(testDir).packageManager).toMatch(
           new RegExp(`^${packageManager.command}`)
         );
 
-        expect(fs.existsSync(path.join(testDir, "node_modules"))).toBe(true);
-      }, 100_000);
-    });
+        expect(fs.existsSync(path.join(cwd, testDir, "node_modules"))).toBe(
+          true
+        );
+      },
+      1000 * 60 * 5
+    );
   });
 
   describe("printing version", () => {
@@ -256,38 +239,41 @@ describe("create-turbo cli", () => {
 });
 
 async function runInteractiveCLI(
-  cli: childProcess.ChildProcessWithoutNullStreams
-): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    let previousPrompt: string;
-    const messages: string[] = [];
+  cli: childProcess.ChildProcessWithoutNullStreams,
+  projectDirectory: string = ""
+): Promise<string> {
+  let accumulator = "";
+  let advancedPackageManager = false;
+  let advancedPath = false;
 
+  return new Promise((resolve, reject) => {
     cli.stdout.on("data", (data) => {
-      let prompt = cleanPrompt(data);
+      accumulator += data.toString("utf8");
 
       if (
-        !prompt ||
-        prompt.startsWith(">>> TURBOREPO") ||
-        isSamePrompt(prompt, previousPrompt)
+        !advancedPackageManager &&
+        accumulator.match(/Which package manager do you want to use/g)
       ) {
-        return;
-      }
-
-      messages.push(prompt);
-
-      if (prompt.match(/Which package manager do you want to use/)) {
+        advancedPackageManager = true;
         cli.stdin.write(keys.enter);
       }
 
-      if (prompt.match(/Where would you like to create your turborepo/)) {
+      if (
+        !advancedPath &&
+        accumulator.match(/Where would you like to create your turborepo/g)
+      ) {
+        advancedPath = true;
+        cli.stdin.write(Buffer.from(projectDirectory, "utf8"));
         cli.stdin.write(keys.enter);
       }
-
-      previousPrompt = prompt;
     });
 
     cli.on("exit", () => {
-      resolve(messages);
+      // Insert newlines between inquirer prompt passes.
+      accumulator = accumulator.replaceAll("\u001b[G?", "\u001b[G\n?");
+
+      // Removes the ANSI escape sequences that would result in things being excluded in the accumulator.
+      resolve(stripAnsi(accumulator));
     });
 
     cli.on("error", (e) => {
@@ -296,73 +282,32 @@ async function runInteractiveCLI(
   });
 }
 
-// These utils are a bit gnarly but they help me deal with the weirdness of node
-// process stdout data formatting and inquirer. They're gross but make the tests
-// easier to read than inlining everything IMO. Would be thrilled to delete them tho.
-function cleanPrompt<T extends { toString(): string }>(data: T): string {
-  return stripAnsi(data.toString())
-    .trim()
-    .split("\n")
-    .map((s) => s.replace(/\s+$/, ""))
-    .join("\n");
-}
-
-function getPromptChoices(prompt: string) {
-  return prompt
-    .slice(prompt.indexOf("❯") + 2)
-    .split("\n")
-    .map((s) => s.trim());
-}
-
-function isSamePrompt(
-  currentPrompt: string,
-  previousPrompt: string | undefined
-) {
-  if (previousPrompt === undefined) {
-    return false;
-  }
-  let promptStart = previousPrompt.split("\n")[0];
-  promptStart = promptStart.slice(0, promptStart.lastIndexOf("("));
-
-  return currentPrompt.startsWith(promptStart);
-}
-
+const testDirRegex = /^my-.+-turborepo$/;
 function cleanupTestDir() {
-  if (fs.existsSync(testDir)) {
-    fs.rmSync(testDir, { recursive: true });
-  }
-  fs.rmSync(path.join(__dirname, "../.yarn"), { recursive: true, force: true });
-  fs.rmSync(path.join(__dirname, "../.yarnrc"), { force: true });
-  fs.rmSync(path.join(__dirname, "../.yarnrc.yml"), { force: true });
+  let children = fs.readdirSync(cwd);
+  children.forEach((childDir) => {
+    if (testDirRegex.test(childDir)) {
+      fs.rmSync(path.join(cwd, childDir), { recursive: true });
+    }
+  });
 }
 
-function getGeneratedPackageJSON() {
+function getGeneratedPackageJSON(testDir: string) {
   return JSON.parse(
-    fs.readFileSync(path.join(testDir, "package.json")).toString()
+    fs.readFileSync(path.join(cwd, testDir, "package.json")).toString()
   );
 }
 
 function configurePackageManager(packageManager: PackageManager) {
-  // If `corepack` plays nicer this can be uncommented to not rely on globals:
-  // execSync(`corepack prepare ${packageManager.command}@latest --activate`, { stdio: "ignore" });
-
-  try {
-    switch (packageManager) {
-      case PACKAGE_MANAGERS["yarn"]:
-        // Switch to classic.
-        execSync("yarn set version classic", { stdio: "ignore" });
-        // Ensure that it's the latest stable version.
-        execSync("yarn set version", { stdio: "ignore" });
-        return;
-      case PACKAGE_MANAGERS["berry"]:
-        // Switch to berry.
-        execSync("yarn set version berry", { stdio: "ignore" });
-        // Ensure that it's the latest stable version.
-        execSync("yarn set version stable", { stdio: "ignore" });
-        return;
-    }
-  } catch (e) {
-    // We only end up here if we try to set "classic" _from_ classic.
-    // The method shape in `yarn` does not match `berry`.
+  if (packageManager.name === "npm") {
+    // Corepack on Windows in GitHub CI is failing to progress on first invocation.
+    // It's actually unnecessary to use Corepack for `npm` at this time, so skip it.
+    execSync(`corepack disable`);
+  } else {
+    execSync(`corepack enable`);
+    execSync(
+      `corepack prepare ${packageManager.command}@${packageManager.version} --activate`,
+      { stdio: "ignore", cwd }
+    );
   }
 }

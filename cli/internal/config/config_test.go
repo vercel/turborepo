@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 )
 
@@ -55,7 +56,7 @@ func TestSelectCwd(t *testing.T) {
 	cases := []struct {
 		Name      string
 		InputArgs []string
-		Expected  fs.AbsolutePath
+		Expected  turbopath.AbsolutePath
 	}{
 		{
 			Name:      "default",
