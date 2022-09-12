@@ -12,6 +12,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
@@ -31,9 +32,9 @@ type LinkCommand struct {
 type link struct {
 	ui                  cli.Ui
 	logger              hclog.Logger
-	cwd                 fs.AbsolutePath
+	cwd                 turbopath.AbsolutePath
 	modifyGitIgnore     bool
-	apiURL              string
+	repoConfig          *config.RepoConfig
 	apiClient           linkAPIClient
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
@@ -42,7 +43,7 @@ type link struct {
 }
 
 type linkAPIClient interface {
-	IsLoggedIn() bool
+	HasUser() bool
 	GetTeams() (*client.TeamsResponse, error)
 	GetUser() (*client.UserResponse, error)
 	SetTeamID(teamID string)
@@ -63,7 +64,7 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 				logger:              config.Logger,
 				cwd:                 config.Cwd,
 				modifyGitIgnore:     !dontModifyGitIgnore,
-				apiURL:              config.ApiUrl,
+				repoConfig:          config.RepoConfig,
 				apiClient:           apiClient,
 				promptSetup:         promptSetup,
 				promptTeam:          promptTeam,
@@ -139,7 +140,7 @@ func (l *link) run() error {
 		return errUserCanceled
 	}
 
-	if !l.apiClient.IsLoggedIn() {
+	if !l.apiClient.HasUser() {
 		return fmt.Errorf(util.Sprintf("User not found. Please login to Turborepo first by running ${BOLD}`npx turbo login`${RESET}."))
 	}
 
@@ -221,10 +222,7 @@ func (l *link) run() error {
 	}
 
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	err = config.WriteRepoConfigFile(l.cwd, &config.TurborepoConfig{
-		TeamId: teamID,
-		ApiUrl: l.apiURL,
-	})
+	err = l.repoConfig.SetTeamID(teamID)
 	if err != nil {
 		return fmt.Errorf("could not link current directory to team/user.\n%w", err)
 	}

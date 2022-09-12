@@ -29,6 +29,10 @@ const basicPipeline = {
       outputs: ["dist/**"],
       inputs: [],
     },
+    "//#args": {
+      dependsOn: [],
+      outputs: [],
+    },
   },
   globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
 };
@@ -37,7 +41,7 @@ const basicPipeline = {
 process.env.TURBO_TOKEN = "";
 
 let suites = [];
-for (let npmClient of ["yarn", "berry", "pnpm", "npm"] as const) {
+for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
@@ -111,7 +115,7 @@ const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "berry" | "pnpm" | "npm",
+  npmClient: "yarn" | "berry" | "pnpm6" | "pnpm" | "npm",
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {
@@ -487,9 +491,69 @@ function runSmokeTests<T>(
     }
   );
 
-  if (npmClient === "yarn") {
+  suite(
+    `${npmClient} passes through correct args ${
+      options.cwd ? " from " + options.cwd : ""
+    }`,
+    async () => {
+      const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
+        const result = getCommandOutputAsArray(
+          repo.turbo("run", inputArgs, options)
+        );
+        // Find the output logs of the test script
+        const needle = "//:args: Output:";
+        const script_output = result.find((line) => line.startsWith(needle));
+
+        assert.ok(
+          script_output != undefined && script_output.startsWith(needle),
+          `Unable to find '//:arg' output in '${result}'`
+        );
+        const [node, ...args] = JSON.parse(
+          script_output.substring(needle.length)
+        );
+
+        assert.match(
+          node,
+          "node",
+          `Expected node binary path (${node}) to contain 'node'`
+        );
+        assert.equal(args, passedArgs);
+      };
+
+      const tests = [
+        [["args", "--filter=//", "--", "--script-arg=42"], ["--script-arg=42"]],
+        [["args", "--filter=//", "--", "--filter=//"], ["--filter=//"]],
+        [["--filter=//", "args", "--", "--filter=//"], ["--filter=//"]],
+        [
+          ["args", "--", "--script-arg", "42"],
+          ["--script-arg", "42"],
+        ],
+        [["args"], []],
+        [["args", "--"], []],
+        [
+          ["args", "--", "--", "--"],
+          ["--", "--"],
+        ],
+        [
+          ["args", "--", "first", "--", "second"],
+          ["first", "--", "second"],
+        ],
+        [
+          ["args", "--", "-f", "--f", "---f", "----f"],
+          ["-f", "--f", "---f", "----f"],
+        ],
+      ];
+
+      for (const [input, expected] of tests) {
+        expectArgsPassed(input, expected);
+      }
+    }
+  );
+
+  if (["yarn", "pnpm6", "pnpm"].includes(npmClient)) {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
+    const installArgs = ["--frozen-lockfile"];
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
@@ -508,7 +572,7 @@ function runSmokeTests<T>(
         const expected = [
           "out/package.json",
           "out/turbo.json",
-          "out/yarn.lock",
+          `out/${getLockfileForPackageManager(npmClient)}`,
           "out/packages/a/build.js",
           "out/packages/a/lint.js",
           "out/packages/a/package.json",
@@ -524,7 +588,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", ["--frozen-lockfile"], {
+        const install = repo.run("install", installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -532,14 +596,66 @@ function runSmokeTests<T>(
         assert.is(
           install.exitCode,
           0,
-          "Expected yarn install --frozen-lockfile to succeed"
+          `Expected ${npmClient} install --frozen-lockfile to succeed`
+        );
+      }
+    );
+
+    suite(
+      `${npmClient} + turbo prune --docker${
+        options.cwd ? " from " + options.cwd : ""
+      }`,
+      async () => {
+        const pruneCommandOutput = getCommandOutputAsArray(
+          repo.turbo("prune", ["--scope=a", "--docker"], options)
+        );
+        assert.fixture(pruneCommandOutput[1], " - Added a");
+        assert.fixture(pruneCommandOutput[2], " - Added b");
+
+        let files = [];
+        assert.not.throws(() => {
+          files = repo.globbySync("out/**/*", {
+            cwd: options.cwd ?? repo.root,
+          });
+        }, `Could not read generated \`out\` directory after \`turbo prune\``);
+        const expected = [
+          "out/full/package.json",
+          "out/json/package.json",
+          "out/full/turbo.json",
+          `out/${getLockfileForPackageManager(npmClient)}`,
+          "out/full/packages/a/build.js",
+          "out/full/packages/a/lint.js",
+          "out/full/packages/a/package.json",
+          "out/json/packages/a/package.json",
+          "out/full/packages/a/test.js",
+          "out/full/packages/b/build.js",
+          "out/full/packages/b/lint.js",
+          "out/full/packages/b/package.json",
+          "out/json/packages/b/package.json",
+          "out/full/packages/b/test.js",
+        ];
+        for (const file of expected) {
+          assert.ok(
+            files.includes(file),
+            `Expected file ${file} to be generated`
+          );
+        }
+        const install = repo.run("install", installArgs, {
+          cwd: options.cwd
+            ? path.join(options.cwd, "out")
+            : path.join(repo.root, "out"),
+        });
+        assert.is(
+          install.exitCode,
+          0,
+          `Expected ${npmClient} install --frozen-lockfile to succeed`
         );
       }
     );
   }
 }
 
-type PackageManager = "yarn" | "pnpm" | "npm" | "berry";
+type PackageManager = "yarn" | "pnpm6" | "pnpm" | "npm" | "berry";
 
 // getLockfileForPackageManager returns the name of the lockfile for the given package manager
 function getLockfileForPackageManager(ws: PackageManager) {
@@ -547,6 +663,8 @@ function getLockfileForPackageManager(ws: PackageManager) {
     case "yarn":
       return "yarn.lock";
     case "pnpm":
+      return "pnpm-lock.yaml";
+    case "pnpm6":
       return "pnpm-lock.yaml";
     case "npm":
       return "package-lock.json";

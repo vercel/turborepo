@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -60,7 +59,7 @@ func main() {
 	c.ErrorWriter = os.Stderr
 	// Parse and validate cmd line flags and env vars
 	// Note that cf can be nil
-	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion)
+	cf, err := config.ParseAndValidate(c.Args, ui, turboVersion, config.DefaultUserConfigPath())
 	if err != nil {
 		ui.Error(fmt.Sprintf("%s %s", uiPkg.ERROR_PREFIX, color.RedString(err.Error())))
 		os.Exit(1)
@@ -147,23 +146,6 @@ func main() {
 				}
 			}
 		} else {
-			// Don't disable the GC if this is a long-running process
-			isServe := false
-			for _, arg := range args {
-				if arg == "--no-gc" {
-					isServe = true
-					break
-				}
-			}
-
-			// Disable the GC since we're just going to allocate a bunch of memory
-			// and then exit anyway. This speedup is not insignificant. Make sure to
-			// only do this here once we know that we're not going to be a long-lived
-			// process though.
-			if !isServe {
-				debug.SetGCPercent(-1)
-			}
-
 			exitCode, err = c.Run()
 			if err != nil {
 				ui.Error(err.Error())

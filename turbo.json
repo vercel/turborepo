@@ -1,6 +1,5 @@
 {
   "$schema": "./docs/public/schema.json",
-  "baseBranch": "origin/main",
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],
@@ -8,6 +7,10 @@
     },
     "lint": {
       "outputs": []
+    },
+    "check-types": {
+      "outputs": [],
+      "dependsOn": ["^build"]
     },
     "dev": {
       "cache": false

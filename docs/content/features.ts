@@ -1,4 +1,4 @@
-import { ComponentProps } from "react";
+import React, { ComponentProps } from "react";
 import {
   ArrowsExpandIcon,
   BeakerIcon,
@@ -13,7 +13,7 @@ import {
 
 export type Feature = {
   name: string;
-  description: string;
+  description: React.ReactNode;
   Icon: (props: ComponentProps<"svg">) => JSX.Element;
   page: "all" | "home" | "docs";
 };
@@ -31,18 +31,18 @@ const FEATURES: Features = [
     name: "Content-aware hashing",
     description: `Turborepo looks at the contents of your files, not timestamps to figure out what needs to be built.`,
     Icon: FingerPrintIcon,
+    page: "home",
+  },
+  {
+    name: "Parallel execution",
+    description: `Execute builds using every core at maximum parallelism without wasting idle CPUs.`,
+    Icon: LightningBoltIcon,
     page: "all",
   },
   {
     name: "Remote Caching",
     description: `Share a remote build cache with your teammates and CI/CD for even faster builds.`,
     Icon: CloudUploadIcon,
-    page: "all",
-  },
-  {
-    name: "Parallel execution",
-    description: `Execute builds using every core at maximum parallelism without wasting idle CPUs.`,
-    Icon: LightningBoltIcon,
     page: "all",
   },
   {
@@ -73,13 +73,7 @@ const FEATURES: Features = [
     name: `Profile in your browser`,
     description: `Generate build profiles and import them in Chrome or Edge to understand which tasks are taking the longest.`,
     Icon: ChartBarIcon,
-    page: "all",
-  },
-  {
-    name: "JSON configuration",
-    description: `Reduce complexity through convention. Fan out configuration with just a few lines of JSON.`,
-    Icon: BeakerIcon,
-    page: "docs",
+    page: "home",
   },
 ];
 

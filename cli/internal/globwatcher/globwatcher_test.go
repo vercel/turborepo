@@ -6,10 +6,11 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turborepo/cli/internal/filewatcher"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
-func setup(t *testing.T, repoRoot fs.AbsolutePath) {
+func setup(t *testing.T, repoRoot turbopath.AbsolutePath) {
 	// Directory layout:
 	// <repoRoot>/
 	//   my-pkg/

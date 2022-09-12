@@ -3,17 +3,17 @@ package fs
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"strings"
 
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/yosuke-furukawa/json5/encoding/json5"
+	"muzzammil.xyz/jsonc"
 )
 
 // TurboJSON is the root turborepo configuration
 type TurboJSON struct {
-	// Base Git branch
-	Base string `json:"baseBranch,omitempty"`
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
@@ -23,46 +23,50 @@ type TurboJSON struct {
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-// ReadTurboConfig toggles between reading from package.json or turbo.json to support early adopters.
-func ReadTurboConfig(rootPath AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
-	// If turbo.json exists, we use that
+const configFile = "turbo.json"
+
+// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
+func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+	// If the configFile exists, we use that
 	// If pkg.Turbo exists, we warn about running the migration
-	// Use pkg.Turbo if turbo.json doesn't exist
+	// Use pkg.Turbo if the configFile doesn't exist
 	// If neither exists, it's a fatal error
-	turboJSONPath := rootPath.Join("turbo.json")
+	turboJSONPath := rootPath.Join(configFile)
 
 	if !turboJSONPath.FileExists() {
 		if rootPackageJSON.LegacyTurboConfig == nil {
 			// TODO: suggestion on how to create one
-			return nil, fmt.Errorf("Could not find turbo.json. Follow directions at https://turborepo.org/docs/getting-started to create one")
+			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
 		}
-		log.Println("[WARNING] Turbo configuration now lives in \"turbo.json\". Migrate to turbo.json by running \"npx @turbo/codemod create-turbo-config\"")
+		log.Printf("[WARNING] Turbo configuration now lives in \"%s\". Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile, configFile)
 		return rootPackageJSON.LegacyTurboConfig, nil
 	}
 
-	turboJSON, err := ReadTurboJSON(turboJSONPath)
+	turboJSON, err := readTurboJSON(turboJSONPath)
 	if err != nil {
-		return nil, fmt.Errorf("turbo.json: %w", err)
+		return nil, fmt.Errorf("%s: %w", configFile, err)
 	}
 
 	if rootPackageJSON.LegacyTurboConfig != nil {
-		log.Println("[WARNING] Ignoring legacy \"turbo\" key in package.json, using turbo.json instead. Consider deleting the \"turbo\" key from package.json")
+		log.Printf("[WARNING] Ignoring legacy \"turbo\" key in package.json, using %s instead. Consider deleting the \"turbo\" key from package.json\n", configFile)
 		rootPackageJSON.LegacyTurboConfig = nil
 	}
 
 	return turboJSON, nil
 }
 
-// ReadTurboJSON reads turbo.json in to a struct
-func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
+// readTurboJSON reads the configFile in to a struct
+func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
 	file, err := path.Open()
 	if err != nil {
 		return nil, err
 	}
-
 	var turboJSON *TurboJSON
-	decoder := json5.NewDecoder(file)
-	err = decoder.Decode(&turboJSON)
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	err = jsonc.Unmarshal(data, &turboJSON)
 	if err != nil {
 		println("error unmarshalling", err.Error())
 		return nil, err
@@ -70,7 +74,7 @@ func ReadTurboJSON(path AbsolutePath) (*TurboJSON, error) {
 	return turboJSON, nil
 }
 
-// RemoteCacheOptions is a struct for deserializing .remoteCache of turbo.json
+// RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
 type RemoteCacheOptions struct {
 	TeamID    string `json:"teamId,omitempty"`
 	Signature bool   `json:"signature,omitempty"`
@@ -84,10 +88,10 @@ type pipelineJSON struct {
 	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
 }
 
-// Pipeline is a struct for deserializing .pipeline in turbo.json
+// Pipeline is a struct for deserializing .pipeline in configFile
 type Pipeline map[string]TaskDefinition
 
-// GetTaskDefinition returns a TaskDefinition from a serialized definition in turbo.json
+// GetTaskDefinition returns a TaskDefinition from a serialized definition in configFile
 func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	if entry, ok := pc[taskID]; ok {
 		return entry, true
@@ -114,7 +118,7 @@ func (pc Pipeline) HasTask(task string) bool {
 	return false
 }
 
-// TaskDefinition is a representation of the turbo.json pipeline for further computation.
+// TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
 	Outputs                 []string
 	ShouldCache             bool

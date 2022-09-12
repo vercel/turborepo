@@ -17,7 +17,7 @@ With Turborepo's Remote Caching, you are responsible for configuring cache behav
 
 ## Do I have to use Vercel to use Turborepo?
 
-No. Turborepo is an open source project and is not tied to any specific hosting provider or Remote Cache provider. The default Remote Cache provider is Vercel, should you opt-in to enable it. However, you can use any other provider that you like as long as they support the same API. There are a several open source community Remote Caches that are compatible with Turborepo.
+No. Turborepo is an open-source project and is not tied to any specific hosting provider or Remote Cache provider. The default Remote Cache provider is Vercel, should you opt-in to enable it. However, you can use any other provider you like if they support the same API. Several open-source community Remote Caches are compatible with Turborepo.
 
 ## Can I use Turborepo with a different Remote Cache provider other than Vercel?
 
@@ -29,8 +29,8 @@ Due to the nature of Turborepo's functionality, no personal information is gathe
 
 ## Does Turborepo collect any personally identifiable information when using Remote Caching?
 
-When [Remote Caching](./core-concepts/remote-caching) is enabled, by default Turbo will utilize your Vercel account to cache artifacts in the cloud. Thus, for any data privacy questions and concerns, please refer to [Turborepo's Privacy Policy](https://turborepo.org/privacy) and [Vercel's Privacy Policy](https://vercel.com/legal/privacy-policy). If you use a different Remote Cache provider, please refer to the provider's privacy policy.
+When [Remote Caching](./core-concepts/remote-caching) is enabled, by default Turborepo will utilize your Vercel account to cache artifacts in the cloud. Thus, for any data privacy questions and concerns, please refer to [Turborepo's Privacy Policy](https://turborepo.org/privacy) and [Vercel's Privacy Policy](https://vercel.com/legal/privacy-policy). If you use a different Remote Cache provider, please refer to the provider's privacy policy.
 
 ## How can I retain Fast Refresh in my Turborepo when using multiple Next.js applications?
 
-[Fast Refresh](https://nextjs.org/docs/basic-features/fast-refresh) gives you instantaneous feedback on edits made to your React components in Next.js applications. If your Turborepo has multiple Next.js applications, you can use `next-transpile-modules` to ensure that imports across packages will work with Fast Refresh when changes are made. Turborepo will effectively watch for any edits and the rebuild when saving. You can get started from [this example](https://github.com/vercel/turborepo/tree/main/examples/basic) which is set up to handle Fast Refresh.
+[Fast Refresh](https://nextjs.org/docs/basic-features/fast-refresh) gives you instantaneous feedback on edits made to your React components in Next.js applications. If your Turborepo has multiple Next.js applications, you can use `next-transpile-modules` to ensure that imports across workspaces will work with Fast Refresh when changes are made. Turborepo will effectively watch for any edits and the rebuild when saving. You can get started from [this example](https://github.com/vercel/turborepo/tree/main/examples/basic) which is set up to handle Fast Refresh.

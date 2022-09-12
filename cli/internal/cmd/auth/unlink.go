@@ -66,7 +66,7 @@ func UnlinkCmd(ch *UnlinkCommand) *cobra.Command {
 		Use:   "unlink",
 		Short: "Unlink the current directory from your Vercel organization and disable Remote Caching",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := config.WriteRepoConfigFile(ch.Config.Cwd, &config.TurborepoConfig{}); err != nil {
+			if err := ch.Config.RepoConfig.Delete(); err != nil {
 				return ch.logError("could not unlink. Something went wrong: %w", err)
 			}
 

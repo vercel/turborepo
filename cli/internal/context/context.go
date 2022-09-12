@@ -2,17 +2,14 @@ package context
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -23,8 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const _globalCacheKey = "Real G's move in silence like lasagna"
-
 // Context of the CLI
 type Context struct {
 	// TODO(gsoltis): should the RootPackageJSON be included in PackageInfos?
@@ -32,8 +27,7 @@ type Context struct {
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
 	RootNode         string
-	GlobalHash       string
-	Lockfile         *fs.YarnLockfile
+	Lockfile         lockfile.Lockfile
 	PackageManager   *packagemanager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -124,51 +118,32 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // WithGraph attaches information about the package dependency graph to the Context instance being
 // constructed.
-func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.AbsolutePath) Option {
+func WithGraph(repoRoot turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsolutePath) Option {
 	return func(c *Context) error {
-		rootpath := config.Cwd.ToStringDuringMigration()
+		rootpath := repoRoot.ToStringDuringMigration()
 		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 		c.RootNode = core.ROOT_NODE_NAME
 
-		if packageManager, err := packagemanager.GetPackageManager(config.Cwd, config.RootPackageJSON); err != nil {
+		if packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON); err != nil {
 			return err
 		} else {
 			c.PackageManager = packageManager
 		}
 
-		// this should go into the packagemanager abstraction
-		if util.IsYarn(c.PackageManager.Name) {
-			lockfile, err := fs.ReadLockfile(rootpath, c.PackageManager.Name, cacheDir)
-			if err != nil {
-				return fmt.Errorf("yarn.lock: %w", err)
-			}
-			c.Lockfile = lockfile
+		lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
+		if err != nil {
+			return err
 		}
+		c.Lockfile = lockfile
 
-		if err := c.resolveWorkspaceRootDeps(config.RootPackageJSON); err != nil {
+		if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
 			// TODO(Gaspar) was this the intended return error?
 			return fmt.Errorf("could not resolve workspaces: %w", err)
 		}
 
-		// TODO: it seems like calculating the global hash could be separate from
-		// construction of the package-dependency graph
-		globalHash, err := calculateGlobalHash(
-			config.Cwd,
-			config.RootPackageJSON,
-			turboJSON.Pipeline,
-			turboJSON.GlobalDependencies,
-			c.PackageManager,
-			config.Logger,
-			os.Environ(),
-		)
-		if err != nil {
-			return fmt.Errorf("failed to calculate global hash: %v", err)
-		}
-
-		c.GlobalHash = globalHash
-
 		// Get the workspaces from the package manager.
-		workspaces, err := c.PackageManager.GetWorkspaces(config.Cwd)
+		// workspaces are absolute paths
+		workspaces, err := c.PackageManager.GetWorkspaces(repoRoot)
 
 		if err != nil {
 			return fmt.Errorf("workspace configuration error: %w", err)
@@ -179,12 +154,9 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 		// until all parsing is complete
 		parseJSONWaitGroup := &errgroup.Group{}
 		for _, workspace := range workspaces {
-			relativePkgPath, err := filepath.Rel(rootpath, workspace)
-			if err != nil {
-				return fmt.Errorf("non-nested package.json path %w", err)
-			}
+			pkgJSONPath := fs.UnsafeToAbsolutePath(workspace)
 			parseJSONWaitGroup.Go(func() error {
-				return c.parsePackageJSON(relativePkgPath)
+				return c.parsePackageJSON(repoRoot, pkgJSONPath)
 			})
 		}
 
@@ -205,11 +177,11 @@ func WithGraph(config *config.Config, turboJSON *fs.TurboJSON, cacheDir fs.Absol
 		// Resolve dependencies for the root package. We override the vertexName in the graph
 		// for the root package, since it can have an arbitrary name. We need it to have our
 		// RootPkgName so that we can identify it as the root later on.
-		err = c.populateTopologicGraphForPackageJSON(config.RootPackageJSON, rootpath, util.RootPkgName)
+		err = c.populateTopologicGraphForPackageJSON(rootPackageJSON, rootpath, util.RootPkgName)
 		if err != nil {
 			return fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 		}
-		c.PackageInfos[util.RootPkgName] = config.RootPackageJSON
+		c.PackageInfos[util.RootPkgName] = rootPackageJSON
 
 		return nil
 	}
@@ -230,8 +202,8 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	for dep, version := range pkg.Dependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if util.IsYarn(c.PackageManager.Name) {
-		pkg.SubLockfile = make(fs.YarnLockfile)
+	if c.Lockfile != nil {
+		pkg.TransitiveDeps = []string{}
 		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
@@ -279,7 +251,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir, rootpath) {
+		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
 			c.TopologicalGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
@@ -302,7 +274,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 		}
 	}
 
-	pkg.SubLockfile = make(fs.YarnLockfile)
+	pkg.TransitiveDeps = []string{}
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
 	c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
@@ -330,21 +302,23 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 	return nil
 }
 
-func (c *Context) parsePackageJSON(buildFilePath string) error {
+func (c *Context) parsePackageJSON(repoRoot turbopath.AbsolutePath, pkgJSONPath turbopath.AbsolutePath) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// log.Printf("[TRACE] reading package.json : %+v", buildFilePath)
-	if fs.FileExists(buildFilePath) {
-		pkg, err := fs.ReadPackageJSON(buildFilePath)
+	if pkgJSONPath.FileExists() {
+		pkg, err := fs.ReadPackageJSON(pkgJSONPath)
 		if err != nil {
-			return fmt.Errorf("parsing %s: %w", buildFilePath, err)
+			return fmt.Errorf("parsing %s: %w", pkgJSONPath, err)
 		}
 
-		// log.Printf("[TRACE] adding %+v to graph", pkg.Name)
+		relativePkgJSONPath, err := repoRoot.PathTo(pkgJSONPath)
+		if err != nil {
+			return err
+		}
 		c.TopologicalGraph.Add(pkg.Name)
-		pkg.PackageJSONPath = buildFilePath
-		pkg.Dir = filepath.Dir(buildFilePath)
+		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
+		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
 		c.PackageInfos[pkg.Name] = pkg
 		c.PackageNames = append(c.PackageNames, pkg.Name)
 	}
@@ -352,156 +326,37 @@ func (c *Context) parsePackageJSON(buildFilePath string) error {
 }
 
 func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if !util.IsYarn(c.PackageManager.Name) {
+	if c.Lockfile == nil {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
 		wg.Add(1)
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
-			var lockfileKey string
-			lockfileKey1 := fmt.Sprintf("%v@%v", directDepName, unresolvedVersion)
-			lockfileKey2 := fmt.Sprintf("%v@npm:%v", directDepName, unresolvedVersion)
-			if seen.Contains(lockfileKey1) || seen.Contains(lockfileKey2) {
+
+			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(directDepName, unresolvedVersion)
+			if seen.Contains(key) {
 				return
 			}
+			seen.Add(key)
 
-			seen.Add(lockfileKey1)
-			seen.Add(lockfileKey2)
-
-			var entry *fs.LockfileEntry
-			entry1, ok1 := (*c.Lockfile)[lockfileKey1]
-			entry2, ok2 := (*c.Lockfile)[lockfileKey2]
-			if !ok1 && !ok2 {
+			if !ok {
 				return
-			}
-			if ok1 {
-				lockfileKey = lockfileKey1
-				entry = entry1
-			} else {
-				lockfileKey = lockfileKey2
-				entry = entry2
 			}
 
 			pkg.Mu.Lock()
-			pkg.SubLockfile[lockfileKey] = entry
+			pkg.TransitiveDeps = append(pkg.TransitiveDeps, key)
 			pkg.Mu.Unlock()
-			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, entry.Version))
+			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, resolvedVersion))
 
-			if len(entry.Dependencies) > 0 {
-				c.resolveDepGraph(wg, entry.Dependencies, resolvedDepsSet, seen, pkg)
-			}
-			if len(entry.OptionalDependencies) > 0 {
-				c.resolveDepGraph(wg, entry.OptionalDependencies, resolvedDepsSet, seen, pkg)
+			allDeps, ok := c.Lockfile.AllDependencies(key)
+			if !ok {
+				panic(fmt.Sprintf("Unable to find entry for %s", key))
 			}
 
+			if len(allDeps) > 0 {
+				c.resolveDepGraph(wg, allDeps, resolvedDepsSet, seen, pkg)
+			}
 		}(directDepName, unresolvedVersion)
 	}
-}
-
-// getHashableTurboEnvVarsFromOs returns a list of environment variables names and
-// that are safe to include in the global hash
-func getHashableTurboEnvVarsFromOs(env []string) ([]string, []string) {
-	var justNames []string
-	var pairs []string
-	for _, e := range env {
-		kv := strings.SplitN(e, "=", 2)
-		if strings.Contains(kv[0], "THASH") {
-			justNames = append(justNames, kv[0])
-			pairs = append(pairs, e)
-		}
-	}
-	return justNames, pairs
-}
-
-// Variables that we always include
-var _defaultEnvVars = []string{
-	"VERCEL_ANALYTICS_ID",
-}
-
-func calculateGlobalHash(rootpath fs.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
-	// Calculate the global hash
-	globalDeps := make(util.Set)
-
-	globalHashableEnvNames := []string{}
-	globalHashableEnvPairs := []string{}
-	// Calculate global file and env var dependencies
-	for _, builtinEnvVar := range _defaultEnvVars {
-		globalHashableEnvNames = append(globalHashableEnvNames, builtinEnvVar)
-		globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", builtinEnvVar, os.Getenv(builtinEnvVar)))
-	}
-	if len(externalGlobalDependencies) > 0 {
-		var globs []string
-		for _, v := range externalGlobalDependencies {
-			if strings.HasPrefix(v, "$") {
-				trimmed := strings.TrimPrefix(v, "$")
-				globalHashableEnvNames = append(globalHashableEnvNames, trimmed)
-				globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-			} else {
-				globs = append(globs, v)
-			}
-		}
-
-		if len(globs) > 0 {
-			ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
-			if err != nil {
-				return "", err
-			}
-
-			f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globs, ignores)
-			if err != nil {
-				return "", err
-			}
-
-			for _, val := range f {
-				globalDeps.Add(val)
-			}
-		}
-	}
-
-	// get system env vars for hashing purposes, these include any variable that includes "TURBO"
-	// that is NOT TURBO_TOKEN or TURBO_TEAM or TURBO_BINARY_PATH.
-	names, pairs := getHashableTurboEnvVarsFromOs(env)
-	globalHashableEnvNames = append(globalHashableEnvNames, names...)
-	globalHashableEnvPairs = append(globalHashableEnvPairs, pairs...)
-	// sort them for consistent hashing
-	sort.Strings(globalHashableEnvNames)
-	sort.Strings(globalHashableEnvPairs)
-	logger.Debug("global hash env vars", "vars", globalHashableEnvNames)
-
-	if !util.IsYarn(packageManager.Name) {
-		// If we are not in Yarn, add the specfile and lockfile to global deps
-		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
-		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
-	}
-
-	// No prefix, global deps already have full paths
-	globalDepsArray := globalDeps.UnsafeListOfStrings()
-	globalDepsPaths := make([]turbopath.AbsoluteSystemPath, len(globalDepsArray))
-	for i, path := range globalDepsArray {
-		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
-	}
-
-	globalFileHashMap, err := fs.GetHashableDeps(rootpath, globalDepsPaths)
-	if err != nil {
-		return "", fmt.Errorf("error hashing files. make sure that git has been initialized %w", err)
-	}
-	globalHashable := struct {
-		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-		rootExternalDepsHash string
-		hashedSortedEnvPairs []string
-		globalCacheKey       string
-		pipeline             fs.Pipeline
-	}{
-		globalFileHashMap:    globalFileHashMap,
-		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
-		hashedSortedEnvPairs: globalHashableEnvPairs,
-		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipeline,
-	}
-	globalHash, err := fs.HashObject(globalHashable)
-	if err != nil {
-		return "", fmt.Errorf("error hashing global dependencies %w", err)
-	}
-	return globalHash, nil
 }

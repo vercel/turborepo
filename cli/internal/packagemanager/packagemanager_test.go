@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
@@ -105,7 +106,7 @@ func TestGetPackageManager(t *testing.T) {
 	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
-		projectDirectory fs.AbsolutePath
+		projectDirectory turbopath.AbsolutePath
 		pkg              *fs.PackageJSON
 		want             string
 		wantErr          bool
@@ -118,9 +119,16 @@ func TestGetPackageManager(t *testing.T) {
 			wantErr:          false,
 		},
 		{
-			name:             "finds pnpm from a package manager string",
+			name:             "finds pnpm6 from a package manager string",
 			projectDirectory: cwd,
 			pkg:              &fs.PackageJSON{PackageManager: "pnpm@1.2.3"},
+			want:             "nodejs-pnpm6",
+			wantErr:          false,
+		},
+		{
+			name:             "finds pnpm from a package manager string",
+			projectDirectory: cwd,
+			pkg:              &fs.PackageJSON{PackageManager: "pnpm@7.8.9"},
 			want:             "nodejs-pnpm",
 			wantErr:          false,
 		},
@@ -167,8 +175,14 @@ func Test_readPackageManager(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "finds pnpm from a package manager string",
+			name:    "finds pnpm6 from a package manager string",
 			pkg:     &fs.PackageJSON{PackageManager: "pnpm@1.2.3"},
+			want:    "nodejs-pnpm6",
+			wantErr: false,
+		},
+		{
+			name:    "finds pnpm from a package manager string",
+			pkg:     &fs.PackageJSON{PackageManager: "pnpm@7.8.9"},
 			want:    "nodejs-pnpm",
 			wantErr: false,
 		},
@@ -203,7 +217,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsolutePath
 		want     []string
 		wantErr  bool
 	}
@@ -212,11 +226,12 @@ func Test_GetWorkspaces(t *testing.T) {
 
 	repoRoot, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
-	rootPath := map[string]fs.AbsolutePath{
+	rootPath := map[string]turbopath.AbsolutePath{
 		"nodejs-npm":   repoRoot.Join("../../../examples/basic"),
 		"nodejs-berry": repoRoot.Join("../../../examples/basic"),
 		"nodejs-yarn":  repoRoot.Join("../../../examples/basic"),
 		"nodejs-pnpm":  repoRoot.Join("../../../examples/with-pnpm"),
+		"nodejs-pnpm6": repoRoot.Join("../../../examples/with-pnpm"),
 	}
 
 	want := map[string][]string{
@@ -242,6 +257,13 @@ func Test_GetWorkspaces(t *testing.T) {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
 		},
 		"nodejs-pnpm": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/ui/package.json")),
+		},
+		"nodejs-pnpm6": {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/docs/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/apps/web/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-pnpm/packages/eslint-config-custom/package.json")),
@@ -286,7 +308,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsolutePath
 		want     []string
 		wantErr  bool
 	}
@@ -298,6 +320,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
 		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
 		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**"},
+		"nodejs-pnpm6": {"**/node_modules/**", "**/bower_components/**"},
 	}
 
 	tests := make([]test, len(packageManagers))
@@ -326,6 +349,56 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotToSlash, tt.want) {
 				t.Errorf("GetWorkspaceIgnores() = %v, want %v", gotToSlash, tt.want)
+			}
+		})
+	}
+}
+
+func Test_CanPrune(t *testing.T) {
+	type test struct {
+		name     string
+		pm       PackageManager
+		rootPath turbopath.AbsolutePath
+		want     bool
+		wantErr  bool
+	}
+
+	type want struct {
+		want    bool
+		wantErr bool
+	}
+
+	cwd, err := fs.GetCwd()
+	assert.NilError(t, err, "GetCwd")
+	wants := map[string]want{
+		"nodejs-npm":   {false, false},
+		"nodejs-berry": {false, true},
+		"nodejs-yarn":  {true, false},
+		"nodejs-pnpm":  {true, false},
+		"nodejs-pnpm6": {true, false},
+	}
+
+	tests := make([]test, len(packageManagers))
+	for i, packageManager := range packageManagers {
+		tests[i] = test{
+			name:     packageManager.Name,
+			pm:       packageManager,
+			rootPath: cwd.Join("../../../examples/basic"),
+			want:     wants[packageManager.Name].want,
+			wantErr:  wants[packageManager.Name].wantErr,
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			canPrune, err := tt.pm.CanPrune(tt.rootPath)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CanPrune() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if canPrune != tt.want {
+				t.Errorf("CanPrune() = %v, want %v", canPrune, tt.want)
 			}
 		})
 	}

@@ -7,15 +7,15 @@ description: Versioning, publishing, changelogs, linting, testing, automation, a
 
 Below is a running list of additional monorepo tools that you may find useful in your turborepo.
 
-💯 = stuff we use or have used in [Turborepo's own monorepo](https://github.com/vercel/turborepo)
+💯 = stuff we use or have used in [Turborepo's own monorepo](https://github.com/vercel/turborepo).
 
 ## Versioning, Publishing, and Changelog Generation
 
-For the foreseeable future, `turbo` is not going to deal with package publishing. Versioning/Publishing is an extremely opinionated topic with a lot of existing solutions. Our advice is to avoid versioning packages altogether unless you actually need to publish them to npm for external consumption. If you have to version your packages, we really like the workflow of Changesets (especially for open source projects).
+For the foreseeable future, `turbo` will not manage publishing workspaces as packages. Versioning/Publishing is an extremely opinionated topic with many existing solutions. We advise avoiding versioning workspace altogether unless you need to publish them to npm for external consumption. If you have to version your workspace, we like the workflow of Changesets (especially for open source projects).
 
 - [changesets/changesets](https://github.com/changesets/changesets) - 🦋 A way to manage your versioning and changelogs with a focus on monorepos
 - [microsoft/beachball](https://github.com/microsoft/beachball) - The Sunniest Semantic Version Bumper
-- [lerna/lerna](https://github.com/lerna/lerna) - A tool for managing JavaScript projects with multiple packages.
+- [lerna/lerna](https://github.com/lerna/lerna) - A tool for managing JavaScript projects with multiple workspaces.
 - [lerna/lerna-changelog](https://github.com/lerna/lerna-changelog) - PR-based changelog generator with monorepo support
 - [intuit/auto](https://github.com/intuit/auto) - Generate releases based on semantic version labels on pull requests.
 
@@ -42,6 +42,7 @@ For the foreseeable future, `turbo` is not going to deal with package publishing
 We are planning to officially add code generation to `turbo` sometime in the future. In the meantime, we suggest using [plopjs/plop](https://github.com/plopjs/plop).
 
 - [sapegin/mrm](https://github.com/sapegin/mrm) - Codemods for your project config files
+- [code-shaper/code-shaper](https://www.code-shaper.dev/) - Plugin-based code generation tool to scaffold applications and components. Built-in support for Turborepo. Off-the-shelf plugins for frameworks like React & Next.js, or write your own for custom patterns.
 - [plopjs/plop](https://github.com/plopjs/plop) - Codegen CLI
 - [facebook/jscodeshift](https://github.com/facebook/jscodeshift) - A JavaScript codemod toolkit.
 - [codemod-js/codemod](https://github.com/codemod-js/codemod) - Rewrites JavaScript and TypeScript using babel plugins.

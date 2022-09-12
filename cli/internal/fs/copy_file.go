@@ -11,44 +11,9 @@ import (
 	"github.com/karrick/godirwalk"
 )
 
-// CopyOrLinkFile either copies or hardlinks a file based on the link argument.
-// Falls back to a copy if link fails and fallback is true.
-func CopyOrLinkFile(from *LstatCachedFile, to string, link bool, fallback bool) error {
-	if link {
-		fromMode, err := from.GetMode()
-		if err != nil {
-			return err
-		}
-		if (fromMode & os.ModeSymlink) != 0 {
-			// Don't try to hard-link to a symlink, that doesn't work reliably across all platforms.
-			// Instead recreate an equivalent symlink in the new location.
-			dest, err := from.Path.Readlink()
-			if err != nil {
-				return err
-			}
-			// Make sure the link we're about to create doesn't already exist
-			if err := os.Remove(to); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			return os.Symlink(dest, to)
-		}
-		if err := from.Path.Link(to); err == nil || !fallback {
-			return err
-		}
-	}
-	return CopyFile(from, to)
-}
-
 // RecursiveCopy copies either a single file or a directory.
 // 'mode' is the mode of the destination file.
 func RecursiveCopy(from string, to string) error {
-	return RecursiveCopyOrLinkFile(from, to, false, false)
-}
-
-// RecursiveCopyOrLinkFile recursively copies or links a file or directory.
-// If 'link' is true then we'll hardlink files instead of copying them.
-// If 'fallback' is true then we'll fall back to a copy if linking fails.
-func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) error {
 	// Verified all callers are passing in absolute paths for from (and to)
 	statedFrom := LstatCachedFile{Path: UnsafeToAbsolutePath(from)}
 	fromType, err := statedFrom.GetType()
@@ -62,16 +27,11 @@ func RecursiveCopyOrLinkFile(from string, to string, link bool, fallback bool) e
 			if isDir {
 				return os.MkdirAll(dest, DirPermissions)
 			}
-			if isSame, err := SameFile(statedFrom.Path.ToStringDuringMigration(), name); err != nil {
-				return err
-			} else if isSame {
-				return nil
-			}
 			// name is absolute, (originates from godirwalk)
-			return CopyOrLinkFile(&LstatCachedFile{Path: UnsafeToAbsolutePath(name), fileType: &fileType}, dest, link, fallback)
+			return CopyFile(&LstatCachedFile{Path: UnsafeToAbsolutePath(name), fileType: &fileType}, dest)
 		})
 	}
-	return CopyOrLinkFile(&statedFrom, to, link, fallback)
+	return CopyFile(&statedFrom, to)
 }
 
 // Walk implements an equivalent to filepath.Walk.
@@ -113,32 +73,4 @@ func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.Fi
 		AllowNonDirectory:   true,
 		FollowSymbolicLinks: false,
 	})
-}
-
-// SameFile returns true if the two given paths refer to the same physical
-// file on disk, using the unique file identifiers from the underlying
-// operating system. For example, on Unix systems this checks whether the
-// two files are on the same device and have the same inode.
-func SameFile(a string, b string) (bool, error) {
-	if a == b {
-		return true, nil
-	}
-
-	aInfo, err := os.Lstat(a)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	bInfo, err := os.Lstat(b)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	return os.SameFile(aInfo, bInfo), nil
 }

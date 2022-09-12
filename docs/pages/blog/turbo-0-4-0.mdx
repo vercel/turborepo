@@ -21,7 +21,7 @@ I'm excited to announce the release of Turborepo v0.4.0!
 
 ## Rewritten in Go
 
-Although I initially prototyped turbo in TypeScript, it became clear that certain items on the roadmap would require better performance. After around a month or so of work, I'm excited to finally release Go version of the `turbo` CLI. Not only does it boot in a milliseconds, but the new Go implementation is somewhere between 10x and 100x faster at hashing than the Node.js implementation. With this new foundation (and some features you're about to read about), Turborepo can now scale to intergalactic sized projects while remaining blazing fast all thanks to Go's awesome concurrency controls.
+Although I initially prototyped `turbo` in TypeScript, it became clear that certain items on the roadmap would require better performance. After around a month or so of work, I'm excited to finally release Go version of the `turbo` CLI. Not only does it boot in a milliseconds, but the new Go implementation is somewhere between 10x and 100x faster at hashing than the Node.js implementation. With this new foundation (and some features you're about to read about), Turborepo can now scale to intergalactic sized projects while remaining blazing fast all thanks to Go's awesome concurrency controls.
 
 ## Better Hashing
 
@@ -83,28 +83,29 @@ Let's look at how to use `turbo prune` inside of Docker.
 FROM node:alpine AS base
 RUN apk update && apk add git
 
-## Globally install turbo
+## Globally install `turbo`
 RUN npm i -g turbo
 
 # Prune the workspace for the `frontend` app
 FROM base as pruner
-COPY .git ./.git
+WORKDIR /app
 COPY . .
-RUN turbo prune --scope=frontend
+RUN turbo prune --scope=frontend --docker
 
 # Add pruned lockfile and package.json's of the pruned subworkspace
-FROM pruner AS installer
-COPY --from=builder /app/out/json/ .
-COPY --from=builder /app/out/yarn.lock ./yarn.lock
+FROM base AS installer
+WORKDIR /app
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/yarn.lock ./yarn.lock
 # Install only the deps needed to build the target
 RUN yarn install
 
 # Copy source code of pruned subworkspace and build
-FROM installer as builder
+FROM base as builder
 WORKDIR /app
-COPY --from=pruner .git ./.git
+COPY --from=pruner /app/.git ./.git
+COPY --from=pruner /app/out/full/ .
 COPY --from=installer /app/ .
-COPY --from=builder /app/out/full/ .
 RUN turbo run build --scope=frontend
 
 # Start the app
@@ -135,7 +136,7 @@ Here's how it works:
   "turbo": {
     "pipeline": {
       "build": {
-        // This `^` tells turbo that this pipeline target relies on a topological target being completed.
+        // This `^` tells `turbo` that this pipeline target relies on a topological target being completed.
         // In english, this reads as: "this package's `build` command depends on its dependencies' or
         // devDependencies' `build` command being completed"
         "dependsOn": ["^build"]

@@ -34,7 +34,7 @@ rm -rf .turbo
 Install the latest version version of `turbo`:
 
 ```sh
-yarn add turbo -W --dev
+yarn add turbo --save-dev --ignore-workspace-root-check
 ```
 
 ## 3. Setup Remote Caching
@@ -50,7 +50,7 @@ Please note that we are not migrating cache artifacts to Vercel. We apologize fo
 If you were using Remote Caching for local development, upgrading will take a minute or two. To get started, login to the Vercel CLI:
 
 ```sh
-npx vercel login
+npx turbo login
 ```
 
 Now we can set up Remote Caching through Vercel by running:
@@ -63,14 +63,14 @@ Follow the prompts and select the Vercel account (user or team) to wish to conne
 
 ### On Vercel
 
-- If you already used Turborepo and Vercel together, you should remove `TURBO_TOKEN`, `TURBO_TEAM`, and `TURBO_PROJECT` environment variables from all projects. These are now automatically set on your behalf by Vercel.
+- If you already used Turborepo and Vercel together, remove `TURBO_TOKEN`, `TURBO_TEAM`, and `TURBO_PROJECT` environment variables from all projects. These are now automatically set on your behalf by Vercel.
 
 - Remove the usage of `--team`, `--token`, and `--project` CLI flags in your Vercel project settings and/or `package.json` scripts.
 
 ### On other CI/CD
 
 - Replace your turborepo.com personal access token with a new [Vercel personal access token](https://vercel.com/account/tokens) and update `TURBO_TOKEN` environment variable or equivalent usage of the `--token` CLI flag.
-- Remove `TURBO_PROJECT` environment variable and remove all usage of the `--project` CLI flag. This has been deprecated.
+- Remove the `TURBO_PROJECT` environment variable and remove all usage of the `--project` CLI flag. This has been deprecated.
 - Update the value of the `TURBO_TEAM` environment variable and `--team` CLI flag to be your Vercel account slug (i.e. `https://vercel.com/<slug>`).
 
 ### Getting Help

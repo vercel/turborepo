@@ -1,4 +1,7 @@
-name: CI
+name: CI Go
+
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,6 +56,16 @@ jobs:
         with:
           node-version: 16
           cache: pnpm
+
+      - name: Configure corepack
+        # Forcibly upgrade our available version of corepack.
+        # The bundled version in node 16 has known issues.
+        # Prepends the corepack bin dir so that it is always first.
+        shell: bash
+        run: |
+          npm install --force --global corepack@latest
+          npm config get prefix >> $GITHUB_PATH
+          corepack enable
 
       - name: Install dependencies
         run: pnpm install

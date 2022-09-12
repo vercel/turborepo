@@ -1,13 +1,16 @@
 name: Large Repo Benchmark
 
 on:
-  schedule:
-    - cron: "0 0 * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types:
+      - completed
 
 jobs:
   build:
     name: Run Benchmarks
-    timeout-minutes: 40
+    timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -27,6 +30,17 @@ jobs:
           cache-dependency-path: cli/go.sum
         id: go
 
+      - name: Set Up Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Up Go and GRPC protobuf
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+
       - uses: pnpm/action-setup@v2.2.2
         with:
           version: 7.2.1
@@ -43,8 +57,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --filter=benchmark
 
+      - name: Download previous benchmark results
+        # continue on error so that we handle the bootstrap case where there is no previous data
+        continue-on-error: true
+        run: mkdir -p raw-data/${{ runner.os }} && curl -f -o raw-data/${{ runner.os }}/benchmark-data.json https://raw.githubusercontent.com/vercel/turborepo/gh-pages/${{ runner.os }}/benchmark-data.json
+
       - name: Run benchmarks
         run: cd benchmark && pnpm benchmark
+
+      - name: Save to Tinybird
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl \
+            -i \
+            -F "ndjson=@./benchmark/tinybird.ndjson" \
+            -X POST \
+            -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
+            'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
 
       - name: Store Benchmark Result
         uses: benchmark-action/github-action-benchmark@v1
@@ -53,7 +82,21 @@ jobs:
           # What benchmark tool the output is formatted as
           tool: "customSmallerIsBetter"
           output-file-path: ./benchmark/benchmarks.json
-          benchmark-data-dir-path: benchmarks/large-repo/${{ runner.os }}
-          auto-push: true
+          external-data-json-path: ./raw-data/${{ runner.os }}/benchmark-data.json
+          auto-push: false
           # GitHub API token to make a commit
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-fetch-gh-pages: true
+
+      - name: Deploy
+        if: github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4.4.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gh-pages
+          folder: raw-data
+          clean: false
+          single-commit: false
+          git-config-email: github-bot@turborepo.org
+          repository-name: vercel/turborepo
+          commit-message: "Update"

@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
 // absolute unix paths parse differently based on whether or not we're on windows.
 // Windows will treat them as relative paths, to be made relative to cwd.
 // Unix-like OSes will treat them as absolute and can be returned directly.
-func platformSpecificAbsoluteUnixPathExpectation(cwd AbsolutePath, absoluteUnixPath string) AbsolutePath {
+func platformSpecificAbsoluteUnixPathExpectation(cwd turbopath.AbsolutePath, absoluteUnixPath string) turbopath.AbsolutePath {
 	if runtime.GOOS == "windows" {
 		return cwd.Join(absoluteUnixPath)
 	}
@@ -23,12 +24,12 @@ func TestAbsPathVar(t *testing.T) {
 	cwd, err := GetCwd()
 	assert.NilError(t, err, "GetCwd")
 	flags := pflag.NewFlagSet("foo", pflag.ContinueOnError)
-	var target AbsolutePath
+	var target turbopath.AbsolutePath
 	AbsolutePathVar(flags, &target, "foo", cwd, "some usage info", "")
 
 	for _, test := range []struct {
 		input    string
-		expected AbsolutePath
+		expected turbopath.AbsolutePath
 	}{
 		{
 			"bar",

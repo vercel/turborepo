@@ -8,7 +8,6 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	turbofs "github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
 )
 
@@ -30,7 +29,7 @@ func subdirForTest(t *testing.T) string {
 	if tu, ok := tt.(testingUtil); ok {
 		tu.Helper()
 	}
-	cwd, err := turbofs.GetCwd()
+	cwd, err := fs.GetCwd()
 	assert.NilError(t, err, "cwd")
 	dir, err := os.MkdirTemp(cwd.ToString(), "turbo-test")
 	assert.NilError(t, err, "MkdirTemp")
@@ -85,6 +84,8 @@ func TestPut(t *testing.T) {
 
 	srcBrokenLinkPath := filepath.Join(childDir, "broken")
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
+	circlePath := filepath.Join(childDir, "circle")
+	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
 
 	files := []string{
 		filepath.Join(src, filepath.FromSlash("/")),            // src
@@ -93,6 +94,7 @@ func TestPut(t *testing.T) {
 		filepath.Join(src, "b"),                                // bPath,
 		filepath.Join(src, filepath.FromSlash("child/link")),   // srcLinkPath,
 		filepath.Join(src, filepath.FromSlash("child/broken")), // srcBrokenLinkPath,
+		filepath.Join(src, filepath.FromSlash("child/circle")), // circlePath
 	}
 
 	dst := subdirForTest(t)
@@ -118,27 +120,46 @@ func TestPut(t *testing.T) {
 	dstCachePath := filepath.Join(dst, hash)
 
 	dstAPath := filepath.Join(dstCachePath, src, "child", "a")
-	got, err := turbofs.SameFile(aPath, dstAPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
-	}
+	assertFileMatches(t, aPath, dstAPath)
 
 	dstBPath := filepath.Join(dstCachePath, src, "b")
-	got, err = turbofs.SameFile(bPath, dstBPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
-	}
+	assertFileMatches(t, bPath, dstBPath)
 
 	dstLinkPath := filepath.Join(dstCachePath, src, "child", "link")
-	target, err := os.Lstat(dstLinkPath)
-	assert.NilError(t, err, "Lstat")
-	assert.Check(t, target.Mode().IsRegular(), "the cached file is a regular file")
+	target, err := os.Readlink(dstLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != linkTarget {
+		t.Errorf("Readlink got %v, want %v", target, linkTarget)
+	}
 
 	dstBrokenLinkPath := filepath.Join(dstCachePath, src, "child", "broken")
-	_, err = os.Lstat(dstBrokenLinkPath)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	target, err = os.Readlink(dstBrokenLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != "missing" {
+		t.Errorf("Readlink got %v, want missing", target)
+	}
+
+	dstCirclePath := filepath.Join(dstCachePath, src, "child", "circle")
+	circleLinkDest, err := os.Readlink(dstCirclePath)
+	assert.NilError(t, err, "Readlink")
+	expectedCircleLinkDest := filepath.FromSlash("../child")
+	if circleLinkDest != expectedCircleLinkDest {
+		t.Errorf("Cache link got %v, want %v", circleLinkDest, expectedCircleLinkDest)
+	}
+}
+
+func assertFileMatches(t *testing.T, orig string, copy string) {
+	t.Helper()
+	origBytes, err := ioutil.ReadFile(orig)
+	assert.NilError(t, err, "ReadFile")
+	copyBytes, err := ioutil.ReadFile(copy)
+	assert.NilError(t, err, "ReadFile")
+	assert.DeepEqual(t, origBytes, copyBytes)
+	origStat, err := os.Lstat(orig)
+	assert.NilError(t, err, "Lstat")
+	copyStat, err := os.Lstat(copy)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, origStat.Mode(), copyStat.Mode())
 }
 
 func TestFetch(t *testing.T) {
@@ -154,6 +175,7 @@ func TestFetch(t *testing.T) {
 	//         a
 	//         link -> ../b
 	//         broken -> missing
+	//         circle -> ../child
 	//
 	// Ensure we end up with a matching directory under a
 	// "some-package" directory:
@@ -190,6 +212,8 @@ func TestFetch(t *testing.T) {
 
 	srcBrokenLinkPath := filepath.Join(childDir, "broken")
 	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
+	circlePath := filepath.Join(childDir, "circle")
+	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
 
 	metadataPath := filepath.Join(cacheDir, "the-hash-meta.json")
 	err = ioutil.WriteFile(metadataPath, []byte(`{"hash":"the-hash","duration":0}`), 0777)
@@ -223,26 +247,31 @@ func TestFetch(t *testing.T) {
 	t.Logf("files %v", files)
 
 	dstAPath := filepath.Join(dstOutputPath, "child", "a")
-	got, err := turbofs.SameFile(aPath, dstAPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", aPath, dstAPath)
-	}
+	assertFileMatches(t, aPath, dstAPath)
 
 	dstBPath := filepath.Join(dstOutputPath, "b")
-	got, err = turbofs.SameFile(bPath, dstBPath)
-	assert.NilError(t, err, "SameFile")
-	if got {
-		t.Errorf("SameFile(%v, %v) got true, want false", bPath, dstBPath)
-	}
+	assertFileMatches(t, bPath, dstBPath)
 
 	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
-	dstLstat, dstLstErr := os.Lstat(dstLinkPath)
-	assert.NilError(t, dstLstErr, "Lstat")
-	assert.Check(t, dstLstat.Mode().IsRegular(), "the cached file is a regular file")
+	target, err := os.Readlink(dstLinkPath)
+	assert.NilError(t, err, "Readlink")
+	if target != linkTarget {
+		t.Errorf("Readlink got %v, want %v", target, linkTarget)
+	}
 
 	// We currently don't restore broken symlinks. This is probably a bug
 	dstBrokenLinkPath := filepath.Join(dstOutputPath, "child", "broken")
 	_, err = os.Readlink(dstBrokenLinkPath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
+
+	// Currently, on restore, we convert symlink-to-directory to empty-directory
+	// This is very likely not ideal behavior, but leaving this test here to verify
+	// that it is what we expect at this point in time.
+	dstCirclePath := filepath.Join(dstOutputPath, "child", "circle")
+	circleStat, err := os.Lstat(dstCirclePath)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, circleStat.IsDir(), true)
+	entries, err := os.ReadDir(dstCirclePath)
+	assert.NilError(t, err, "ReadDir")
+	assert.Equal(t, len(entries), 0)
 }

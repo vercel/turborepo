@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 
 import { exec } from "child_process";
-import {
-  getTurboRoot,
-  getScopeFromPath,
-  getScopeFromArgs,
-  getComparison,
-} from "./utils";
+import { getTurboRoot, getScopeFromPath, getScopeFromArgs } from "turbo-utils";
+import { getComparison } from "./getComparison";
 
 console.log(
   "\u226B Using Turborepo to determine if this project is affected by the commit..."
 );
+
+// check for TURBO_FORCE and bail early if it's set
+if (process.env.TURBO_FORCE === "true") {
+  console.log(
+    "\u226B `TURBO_FORCE` detected, skipping check and proceeding with build."
+  );
+  process.exit(1);
+}
+
 // find the monorepo root
 const root = getTurboRoot();
 if (!root) {
@@ -29,6 +34,11 @@ if (!scope) {
   console.error(
     "Error: app scope not found. turbo-ignore inferencing failed, proceeding with build."
   );
+  if (!pathScope.scope) {
+    console.error(
+      'Error: the package.json is missing the "name" field.\nSet this field or pass the --scope flag to turbo-ignore.'
+    );
+  }
   console.error("");
   process.exit(1);
 }

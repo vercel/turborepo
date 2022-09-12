@@ -1,4 +1,4 @@
-TURBO_VERSION = $(shell head -n 1 ../version.txt)
+TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 ifeq ($(OS),Windows_NT)
@@ -66,7 +66,11 @@ fmt-go: $(GO_FILES) go.mod go.sum
 install: | ./package.json
 	pnpm install --filter=cli
 
-e2e: install turbo
+corepack:
+	which corepack || npm install -g corepack@latest
+	corepack enable
+
+e2e: corepack install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt
@@ -83,8 +87,14 @@ prepublish:
 	make -j3 bench/turbo test-go lint-go
 
 publish: clean prepublish build
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
+
+	# Stop if versions are not updated.
+	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
+	@test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
@@ -95,19 +105,30 @@ publish: clean prepublish build
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 
+	# Include the patch in the log.
+	git format-patch HEAD~1 --stdout | cat
+
+	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist
 
+	# Split packing from the publish step so that npm locates the correct .npmrc file.
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+
 	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../packages/turbo && npm publish --tag $(TURBO_TAG)
-	# cd $(CLI_DIR)/../packages/turbo-ignore && npm publish --tag $(TURBO_TAG)
-	cd $(CLI_DIR)/../packages/create-turbo && npm publish --tag $(TURBO_TAG)
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm publish --tag $(TURBO_TAG)
+	cd $(CLI_DIR)/../
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
+	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
-	pnpm install --filter=turbo --ignore-scripts
-	git commit -anm "Update lockfile"
-
-	git push origin main "v$(TURBO_VERSION)"
+	# Force push to ensure that the version used for the release is published.
+	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
+	git push -f origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
@@ -145,3 +166,16 @@ clean-build:
 clean-demo:
 	rm -rf node_modules
 	rm -rf demo
+
+CRAM_ENV := .cram_env
+
+$(CRAM_ENV)/bin/pip:
+	python3 -m venv $(CRAM_ENV)
+
+$(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
+	$(CRAM_ENV)/bin/pip install prysk
+
+INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
+
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES)
+	$(CRAM_ENV)/bin/prysk $(INTEGRATION_TEST_FILES)
