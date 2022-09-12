@@ -20,15 +20,24 @@ const (
 
 var defaultOutputs = []string{"dist/**/*", "build/**/*"}
 
-// TurboJSON is the root turborepo configuration
-type TurboJSON struct {
+type rawTurboJSON struct {
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
+	// Global env
+	GlobalEnv []string `json:"globalEnv,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline Pipeline
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+}
+
+// TurboJSON is the root turborepo configuration
+type TurboJSON struct {
+	GlobalDeps         []string
+	GlobalEnv          []string
+	Pipeline           Pipeline
+	RemoteCacheOptions RemoteCacheOptions
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
@@ -107,10 +116,13 @@ func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	err = jsonc.Unmarshal(data, &turboJSON)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return turboJSON, nil
 }
 
@@ -191,5 +203,44 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	c.Inputs = rawPipeline.Inputs
 	c.OutputMode = rawPipeline.OutputMode
+	return nil
+}
+
+// UnmarshalJSON deserializes TurboJSON objects into struct
+func (c *TurboJSON) UnmarshalJSON(data []byte) error {
+	raw := &rawTurboJSON{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	envVarDependencies := make(util.Set)
+	globalFileDependencies := make(util.Set)
+
+	for _, value := range raw.GlobalEnv {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			// Hard error to help people specify this correctly during migration.
+			// TODO: Remove this error after we have run summary.
+			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
+		}
+
+		envVarDependencies.Add(value)
+	}
+
+	for _, value := range raw.GlobalDependencies {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
+		} else {
+			globalFileDependencies.Add(value)
+		}
+	}
+
+	// turn the set into an array and assign to the TurboJSON struct fields.
+	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
+	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
+
+	// copy these over, we don't need any changes here.
+	c.Pipeline = raw.Pipeline
+	c.RemoteCacheOptions = raw.RemoteCacheOptions
+
 	return nil
 }
