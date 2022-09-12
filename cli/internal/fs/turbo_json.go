@@ -12,6 +12,14 @@ import (
 	"muzzammil.xyz/jsonc"
 )
 
+const (
+	configFile                   = "turbo.json"
+	envPipelineDelimiter         = "$"
+	topologicalPipelineDelimiter = "^"
+)
+
+var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+
 // TurboJSON is the root turborepo configuration
 type TurboJSON struct {
 	// Global root filesystem dependencies
@@ -23,7 +31,33 @@ type TurboJSON struct {
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-const configFile = "turbo.json"
+// RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
+type RemoteCacheOptions struct {
+	TeamID    string `json:"teamId,omitempty"`
+	Signature bool   `json:"signature,omitempty"`
+}
+
+type pipelineJSON struct {
+	Outputs    *[]string           `json:"outputs"`
+	Cache      *bool               `json:"cache,omitempty"`
+	DependsOn  []string            `json:"dependsOn,omitempty"`
+	Inputs     []string            `json:"inputs,omitempty"`
+	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
+}
+
+// Pipeline is a struct for deserializing .pipeline in configFile
+type Pipeline map[string]TaskDefinition
+
+// TaskDefinition is a representation of the configFile pipeline for further computation.
+type TaskDefinition struct {
+	Outputs                 []string
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
+	OutputMode              util.TaskOutputMode
+}
 
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
@@ -80,23 +114,6 @@ func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
 	return turboJSON, nil
 }
 
-// RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
-type RemoteCacheOptions struct {
-	TeamID    string `json:"teamId,omitempty"`
-	Signature bool   `json:"signature,omitempty"`
-}
-
-type pipelineJSON struct {
-	Outputs    *[]string           `json:"outputs"`
-	Cache      *bool               `json:"cache,omitempty"`
-	DependsOn  []string            `json:"dependsOn,omitempty"`
-	Inputs     []string            `json:"inputs,omitempty"`
-	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
-}
-
-// Pipeline is a struct for deserializing .pipeline in configFile
-type Pipeline map[string]TaskDefinition
-
 // GetTaskDefinition returns a TaskDefinition from a serialized definition in configFile
 func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	if entry, ok := pc[taskID]; ok {
@@ -123,24 +140,6 @@ func (pc Pipeline) HasTask(task string) bool {
 	}
 	return false
 }
-
-// TaskDefinition is a representation of the configFile pipeline for further computation.
-type TaskDefinition struct {
-	Outputs                 []string
-	ShouldCache             bool
-	EnvVarDependencies      []string
-	TopologicalDependencies []string
-	TaskDependencies        []string
-	Inputs                  []string
-	OutputMode              util.TaskOutputMode
-}
-
-const (
-	envPipelineDelimiter         = "$"
-	topologicalPipelineDelimiter = "^"
-)
-
-var defaultOutputs = []string{"dist/**/*", "build/**/*"}
 
 // UnmarshalJSON deserializes JSON into a TaskDefinition
 func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
