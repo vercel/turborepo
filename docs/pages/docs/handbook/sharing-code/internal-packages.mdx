@@ -26,7 +26,7 @@ This sounds complex, but it's extremely easy to set up.
 
 ## Our first internal package
 
-We're going to create a shared `maths` package inside our monorepo.
+We're going to create a shared `math-helpers` package inside our monorepo.
 
 ### 1. Create your monorepo
 
@@ -34,17 +34,17 @@ If you don't have an existing monorepo, create one [using our guide](/docs/getti
 
 ### 2. Create a new package
 
-Inside `/packages`, create a new folder called `maths`.
+Inside `/packages`, create a new folder called `math-helpers`.
 
 ```bash
-mkdir packages/maths
+mkdir packages/math-helpers
 ```
 
 Create a `package.json`:
 
-```json filename="packages/maths/package.json"
+```json filename="packages/math-helpers/package.json"
 {
-  "name": "maths",
+  "name": "math-helpers",
   "dependencies": {
     // Use whatever version of TypeScript you're using
     "typescript": "latest"
@@ -52,9 +52,9 @@ Create a `package.json`:
 }
 ```
 
-Create a `src` folder, and add a TypeScript file at `packages/maths/src/index.ts`.
+Create a `src` folder, and add a TypeScript file at `packages/math-helpers/src/index.ts`.
 
-```ts filename="packages/maths/src/index.ts"
+```ts filename="packages/math-helpers/src/index.ts"
 export const add = (a: number, b: number) => {
   return a + b;
 };
@@ -64,9 +64,9 @@ export const subtract = (a: number, b: number) => {
 };
 ```
 
-You'll also need to add a `tsconfig.json` at `packages/maths/tsconfig.json`:
+You'll also need to add a `tsconfig.json` at `packages/math-helpers/tsconfig.json`:
 
-```json filename="packages/maths/tsconfig.json"
+```json filename="packages/math-helpers/tsconfig.json"
 {
   "compilerOptions": {
     "esModuleInterop": true,
@@ -86,14 +86,14 @@ Great! We've now got all the files we need for our internal package.
 
 ### 3. Import the package
 
-We're now going to import the package and see what happens. Go into one of your apps, and add `maths` into the dependencies of its package.json:
+We're now going to import the package and see what happens. Go into one of your apps, and add `math-helpers` into the dependencies of its package.json:
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
-    "maths": "*"
+    "math-helpers": "*"
   }
 }
 ```
@@ -102,7 +102,7 @@ We're now going to import the package and see what happens. Go into one of your 
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
-    "maths": "*"
+    "math-helpers": "*"
   }
 }
 ```
@@ -111,7 +111,7 @@ We're now going to import the package and see what happens. Go into one of your 
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
-    "maths": "workspace:*"
+    "math-helpers": "workspace:*"
   }
 }
 ```
@@ -120,10 +120,10 @@ We're now going to import the package and see what happens. Go into one of your 
 
 [Install all packages from root](/docs/handbook/package-installation) to ensure that dependency works.
 
-Now add an import from `maths` into one of its source files:
+Now add an import from `math-helpers` into one of your app's source files:
 
 ```diff
-+ import { add } from "maths";
++ import { add } from "math-helpers";
 
 + add(1, 2);
 ```
@@ -131,18 +131,18 @@ Now add an import from `maths` into one of its source files:
 You'll likely see an error!
 
 ```
-Cannot find module 'maths' or its corresponding type declarations.
+Cannot find module 'math-helpers' or its corresponding type declarations.
 ```
 
-That's because we haven't done a crucial thing - we haven't told our `maths/package.json` what the entry point to our package is.
+That's because we've missed a step. We haven't told our `math-helpers/package.json` what the entry point to our package is.
 
 ### 4. Fix `main` and `types`
 
-Go back to `packages/maths/package.json` and add two fields, `main` and `types`:
+Go back to `packages/math-helpers/package.json` and add two fields, `main` and `types`:
 
-```json filename="packages/maths/package.json"
+```json filename="packages/math-helpers/package.json"
 {
-  "name": "maths",
+  "name": "math-helpers",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
@@ -151,7 +151,7 @@ Go back to `packages/maths/package.json` and add two fields, `main` and `types`:
 }
 ```
 
-Now, anything that imports our `maths` module will be pointed directly towards the `src/index.ts` file - _that's_ the file that they will import.
+Now, anything that imports our `math-helpers` module will be pointed directly towards the `src/index.ts` file - _that's_ the file that they will import.
 
 Go back to `apps/web/pages/index.tsx`. The error should be gone!
 
@@ -183,7 +183,7 @@ pnpm run dev
 When it starts running, you'll likely see an error in your web browser:
 
 ```
-../../packages/maths/src/index.ts
+../../packages/math-helpers/src/index.ts
 Module parse failed: Unexpected token (1:21)
 You may need an appropriate loader to handle this file type,
 currently no loaders are configured to process this file.
@@ -230,8 +230,8 @@ The fix is simple - we need to tell Remix to bundle the files from certain packa
 
     ```ts filename="apps/web/next.config.js"
     const withTM = require("next-transpile-modules")([
-      // Add "maths" to this array:
-      "maths",
+      // Add "math-helpers" to this array:
+      "math-helpers",
     ]);
 
     module.exports = withTM({
@@ -249,12 +249,12 @@ The fix is simple - we need to tell Remix to bundle the files from certain packa
   </Tab>
   <Tab>
 
-    We can do that using `"maths"` to our `serverDependenciesToBundle` inside our `remix.config.js`:
+    We can do that using `"math-helpers"` to our `serverDependenciesToBundle` inside our `remix.config.js`:
 
 ```js filename="apps/remix/remix.config.js"
 module.exports = {
   // ...other config
-  serverDependenciesToBundle: ["maths"],
+  serverDependenciesToBundle: ["math-helpers"],
 };
 ```
 
@@ -267,7 +267,7 @@ module.exports = {
 
 ### 7. Summary
 
-We are now able to add any amount of code into our `maths` package, and use it in any app in our monorepo.
+We are now able to add any amount of code into our `math-helpers` package, and use it in any app in our monorepo.
 
 This pattern is extremely powerful for creating pieces of code that can be easily shared between teams.
 
