@@ -1,75 +1,82 @@
 ---
-title: Pipelines
-description: Pipelines with Turborepo specify task relationships explicitly and conventionally.
+title: Running Tasks
+description: Turborepo helps you specify task dependencies declaratively.
 ---
 
 import Callout from "../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
-# Pipelining Workspace Tasks
+# Running Tasks
 
-In traditional monorepo task runners, like `lerna` or even `yarn`'s own built-in `workspaces run` command, each npm lifecycle script like `build` or `test` is run [topologically](../glossary#topological-order) (which is the mathematical term for "dependency-first" order) or in parallel individually. Depending on the dependency graph of the monorepo, CPU cores might be left idle—wasting valuable time and resources.
+Every monorepo has two main building blocks: **workspaces** and **tasks**. Let's imagine you have a monorepo containing **three workspaces**, each with **three tasks**:
 
-Turborepo gives developers a way to specify task relationships explicitly and conventionally. The advantage here is twofold:
+![](../../../public/images/docs/your-monorepo-excalidraw.png)
 
-1. `turbo` can use this explicit declaration to perform an optimized and scheduled execution based on the abundant availability of multi-core processors.
-1. New developers to a project can look at the Turborepo `pipeline` and understand how tasks are related.
+Here, both `apps/web` and `apps/doc` use code from `packages/shared`. In fact, when they're built (via `build`) **they need `packages/shared` to be built _first_**.
 
-To give you a sense of how powerful this can be, the diagram below compares the `turbo` and `lerna` task execution timelines:
+## Most tools don't optimize for speed
 
-![Turborepo vs. Lerna Task Execution](/images/docs/turbo-vs-lerna-execution.png)
+Let's imagine we want to run all our tasks across all our workspaces. In a tool like `yarn`, you might run a script like this:
 
-Notice that `turbo` is able to schedule tasks efficiently--collapsing waterfalls--whereas `lerna` can only execute one task a time. The results speak for themselves.
+```
+yarn workspaces run lint
+yarn workspaces run test
+yarn workspaces run build
+```
 
-## Defining a `pipeline`
+This would mean the tasks run like this:
 
-To define your monorepo's task dependency graph, use the [`pipeline`](../reference/configuration#pipeline) key in the `turbo.json` configuration file at the root of your monorepo. `turbo` interprets this configuration to schedule, execute, and cache the outputs of the tasks in your monorepo.
+![](../../../public/images/docs/yarn-workspaces-excalidraw.png)
 
-Each key in the [`pipeline`](../reference/configuration#pipeline) object is the name of a task that `turbo` will be able to execute using [`turbo run <task>`](../reference/command-line-reference#turbo-run-task1-task2-1). Each task can also be configured to specify dependencies (with the [`dependsOn`](../reference/configuration#dependson) key) as well as other options for [caching](./caching). Workspaces that do not have this task defined in their `package.json`'s list of `scripts` will be ignored during `turbo run`.
+As you can see, `lint` gets run in all the workspaces. Then, `build` gets run - with `shared` going first. Finally, `test` gets run.
 
-An example Pipeline configuration in `turbo.json`:
+**This is the slowest possible way to run these tasks**. Each task needs to wait for the previous one to finish before it can start. To improve on this, we'll need a tool that can multitask.
+
+## Turborepo can multitask
+
+Turborepo can schedule our tasks for maximum speed by understanding the dependencies between our tasks.
+
+First, we declare our tasks inside `turbo.json`:
 
 ```json
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
+      // ^build means build must be run in dependencies
+      // before it can be run in this workspace
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["build"],
       "outputs": [],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     },
     "lint": {
-      "outputs": []
-    },
-    "deploy": {
-      "dependsOn": ["build", "test", "lint"],
       "outputs": []
     }
   }
 }
 ```
 
-The rough execution order for a given workspace based on the `dependsOn` keys above will be:
+Next, we can replace our `yarn workspaces` script with this:
 
-1. `build` once its dependencies have run their `build` commands
-2. `test` once its _own_ `build` command is finished
-3. `lint` whenever
-4. `deploy` once its _own_ `build`, `test`, and `lint` commands have finished
-
-The full pipeline can then be run:
-
-```bash
-npx turbo run deploy
+```diff
+- yarn workspaces run lint
+- yarn workspaces run test
+- yarn workspaces run build
++ turbo run lint test build
 ```
 
-Turborepo will then efficiently schedule execution minimizing idle CPUs.
+When we run it, Turborepo will **multitask as many tasks as possible over all available CPU's**, meaning our tasks run like this:
 
-## Task Dependency Format
+![](../../../public/images/docs/turborepo-excalidraw.png)
 
-The `pipeline` configuration declares the dependency graph of the tasks in your monorepo. In plain English, the example above translates to:
+Both `lint` and `test` run immediately, because they have no `dependsOn` specified in `turbo.json`.
+
+The `build` task inside `shared` completes first, then `web` and `docs` build afterwards.
+
+## Defining a pipeline
+
+The `pipeline` configuration declares which tasks depend on each other in your monorepo. Here's a kitchen sink example:
 
 ```diff
 {
@@ -107,13 +114,40 @@ The `pipeline` configuration declares the dependency graph of the tasks in your 
 }
 ```
 
-### Topological Dependency
+Let's walk through some common patterns you'll want to get to know before diving in to `turbo.json`.
 
-The `^` symbol explicitly declares that the task has a [workspace-topological](../glossary#topological-order-1) dependency on another task.
+### Dependencies between tasks
 
-A common pattern in TypeScript monorepos, for example, is to declare that a workspace's `build` task (e.g. `tsc`) should only run once the `build` tasks of all of its dependencies in the monorepo have run their own `build` tasks. This type of relationship can be expressed as follows:
+#### In the same workspace
 
-```jsonc
+There might be tasks which need to run _before_ other tasks. For instance, `build` might need to be run before `deploy`.
+
+If both tasks are in the same workspace, you can specify the relationship like this:
+
+```json filename="turbo.json"
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {},
+    "deploy": {
+      // A workspace's `deploy` task depends on the `build`,
+      // task of the same workspace being completed.
+      "dependsOn": ["build"],
+      "outputs": []
+    }
+  }
+}
+```
+
+This means that whenever `turbo run deploy` is run, `build` will also be run inside the same workspace.
+
+#### In a different workspace
+
+A common pattern in monorepos is to declare that a workspace's `build` task should only run once the `build` tasks of all _the workspaces it depends on_ are complete.
+
+The `^` symbol explicitly declares that the task has a dependency on a task in a workspace it depends on.
+
+```jsonc filename="turbo.json"
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
@@ -122,23 +156,20 @@ A common pattern in TypeScript monorepos, for example, is to declare that a work
       // and devDependencies' `build` commands being completed first"
       "dependsOn": ["^build"]
     }
-    // ... omitted for brevity
   }
 }
 ```
 
-### Empty Dependency List
+#### No dependencies
 
-An empty dependency list (`dependsOn` is either undefined or `[]`) means that a task can start executing whenever it can! After all, it has NO dependencies.
+An empty dependency list (`dependsOn` is either undefined or `[]`) means that nothing needs to run before this task! After all, it has NO dependencies.
 
 ```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
-    // ... omitted for brevity
-
     "lint": {
-      // A workspace's `lint` command has no dependencies and can be run at
+      // A workspace's `lint` command has no dependencies and can be run
       // whenever.
       "outputs": []
     }
@@ -146,42 +177,7 @@ An empty dependency list (`dependsOn` is either undefined or `[]`) means that a 
 }
 ```
 
-### Restricting Inputs to a Task
-
-A workspace is considered to have been updated when any of the files in that workspace have changed.
-However, for some tasks, we only want to rerun that task when relevant files have changed.
-Specifying `inputs` lets us define which files are relevant for a particular task. For example, the
-`test` configuration below declares that the `test` task only needs to execute if a `.tsx` or `.ts` file
-in the `src/` and `test/` subdirectories has changed since the last execution.
-
-```jsonc
-{
-  "$schema": "https://turborepo.org/schema.json",
-  "pipeline": {
-    // ... omitted for brevity
-
-   "test": {
-      // A workspace's `test` task depends on that workspace's
-      // own `build` task being completed first.
-      "dependsOn": ["build"],
-      "outputs": [],
-      // A workspace's `test` task should only be rerun when
-      // either a `.tsx` or `.ts` file has changed.
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
-    }
-  }
-}
-```
-
-### Tasks that are in the `pipeline` but not in SOME `package.json`
-
-Sometimes tasks declared in the `pipeline` are not present in all workspaces' `package.json` files. `turbo` will gracefully ignore those. No problem!
-
-### `pipeline` tasks are the only ones that `turbo` knows about
-
-`turbo` will only account for tasks declared in the `pipeline` configuration. If it's not listed there, `turbo` will not know how to run them.
-
-### Implicit Dependencies and Specific Workspace Tasks
+#### Specific workspace-tasks
 
 Sometimes, you may want to create a workspace-task dependency on another workspace-task. This can be especially helpful for repos migrating from `lerna` or `rush`, where tasks are run in separate phases by default. Sometimes these configurations make assumptions that cannot be expressed in a simple `pipeline` configuration, as seen above. Or you may just want to express sequences of tasks between applications or microservices when using `turbo` in CI/CD.
 
@@ -214,7 +210,7 @@ The example below describes the `deploy` script of a `frontend` application that
 }
 ```
 
-This explicit configuration for `frontend#deploy` may seem to conflict with the `test` and `deploy` task configurations, but it does not. Since `test` and `deploy` do not have topological dependencies (e.g. `^<task>`), they can execute any time after their workspace's `build` and `test` scripts have finished.
+This explicit configuration for `frontend#deploy` may seem to conflict with the `test` and `deploy` task configurations, but it does not. Since `test` and `deploy` do not have dependencies on other workspaces (e.g. `^<task>`), they can execute any time after their workspace's `build` and `test` scripts have finished.
 
 <Callout>
   Notes:
@@ -225,7 +221,7 @@ This explicit configuration for `frontend#deploy` may seem to conflict with the 
 
 </Callout>
 
-### Running tasks defined in the monorepo's root `package.json` file
+### Running tasks from the root
 
 `turbo` can run tasks that exist in the `package.json` file at the root of the monorepo.
 These must be explicitly added to the pipeline configuration using the key syntax `"//#<task>"`. This is
@@ -277,3 +273,13 @@ opt in those tasks which don't themselves trigger a `turbo` run that would recur
 Turborepo's Pipeline API design and this page of documentation was inspired by [Microsoft's Lage project](https://microsoft.github.io/lage/docs/Guide/pipeline#defining-a-pipeline).
 Shoutout to [Kenneth Chau](https://twitter.com/kenneth_chau) for the idea of fanning out tasks in such a concise and elegant way.
 </Callout>
+
+### Tips
+
+#### Tasks that are in the `pipeline` but not in SOME `package.json`
+
+Sometimes tasks declared in the `pipeline` are not present in all workspaces' `package.json` files. `turbo` will gracefully ignore those. No problem!
+
+#### `pipeline` tasks are the only ones that `turbo` knows about
+
+`turbo` will only account for tasks declared in the `pipeline` configuration. If it's not listed there, `turbo` will not know how to run them.

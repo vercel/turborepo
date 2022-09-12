@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/fatih/color"
 	"github.com/vercel/turborepo/cli/internal/config"
@@ -66,7 +67,7 @@ func LogoutCmd(ch *LogoutCommand) *cobra.Command {
 		Use:   "logout",
 		Short: "Logout of your Vercel account",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := ch.Config.UserConfig.Delete(); err != nil {
+			if err := ch.Config.UserConfig.Delete(); err != nil && !os.IsNotExist(err) {
 				return ch.logError("could not logout. Something went wrong: %w", err)
 			}
 

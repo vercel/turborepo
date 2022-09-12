@@ -15,7 +15,7 @@ As well as a few others tools preconfigured:
 - [Changesets](https://github.com/changesets/changesets) for managing versioning and changelogs
 - [GitHub Actions](https://github.com/changesets/action) for fully automated package publishing
 
-## Getting Started
+## Using this example
 
 Clone the design system example locally or [from GitHub](https://github.com/vercel/turborepo/tree/main/examples/design-system):
 

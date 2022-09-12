@@ -348,6 +348,7 @@ fs.copyFileSync(
           shell: true,
           ...options,
         });
+      case "pnpm6":
       case "pnpm":
         return execa.sync("pnpm", [command, ...(args || [])], {
           cwd: this.root,
