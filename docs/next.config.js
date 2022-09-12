@@ -19,7 +19,7 @@ module.exports = withNextra({
         permanent: true,
       },
       {
-        source: "/docs/guides/migrate-from-lerna",,
+        source: "/docs/guides/migrate-from-lerna",
         destination: "/docs/handbook/lerna",
         permanent: true,
       },
