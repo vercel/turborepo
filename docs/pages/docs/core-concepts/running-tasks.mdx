@@ -218,7 +218,7 @@ This explicit configuration for `frontend#deploy` may seem to conflict with the 
 1. Although this `<workspace>#<task>` syntax is a useful escape hatch, we generally recommend using it for deployment orchestration tasks such as health checks, rather than build-time dependencies, so that Turborepo can optimize these tasks more efficiently
 1. Package-tasks do not inherit cache configuration. You must redeclare
    [`outputs`](../reference/configuration#outputs) at the moment.
-1. The `<workspace>` part refers to the `name` field in the workspace's `package.json`. Make sure to use the same name, otherwise the task won't run.
+1. `<workspace>` must match the `name` key in the workspace's `package.json` or the task will be ignored.
 
 </Callout>
 
