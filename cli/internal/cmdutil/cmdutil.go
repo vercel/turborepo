@@ -38,8 +38,7 @@ type Helper struct {
 	TurboVersion string
 
 	// for UI
-	forceColor bool
-	noColor    bool
+	noColor bool
 	// for logging
 	verbosity int
 
@@ -77,12 +76,15 @@ func (h *Helper) Cleanup(flags *pflag.FlagSet) {
 
 func (h *Helper) getUI(flags *pflag.FlagSet) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
+
 	if flags.Changed("no-color") && h.noColor {
 		colorMode = ui.ColorModeSuppressed
-	}
-	if flags.Changed("color") && h.forceColor {
+	} else {
 		colorMode = ui.ColorModeForced
+
+		os.Setenv("FORCE_COLOR", "1")
 	}
+
 	return ui.BuildColoredUi(colorMode)
 }
 
@@ -126,7 +128,6 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 // AddFlags adds common flags for all turbo commands to the given flagset and binds
 // them to this instance of Helper
 func (h *Helper) AddFlags(flags *pflag.FlagSet) {
-	flags.BoolVar(&h.forceColor, "color", false, "Force color usage in the terminal")
 	flags.BoolVar(&h.noColor, "no-color", false, "Suppress color usage in the terminal")
 	flags.CountVarP(&h.verbosity, "verbosity", "v", "verbosity")
 	flags.StringVar(&h.rawRepoRoot, "cwd", "", "The directory in which to run turbo")
