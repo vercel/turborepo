@@ -1,14 +1,18 @@
 include .env
 
 REGISTRY           ?= ghcr.io
-TAG_VERSION        ?= $(shell git describe --tags --abbrev=0)
+TAG_VERSION        ?= snapshot
+OWNER              ?= goreleaser
+GIT_REPO           ?= https://github.com/goreleaser/goreleaser-cross
 
 ifeq ($(REGISTRY),)
-	IMAGE_BASE_NAME := goreleaser/goreleaser-cross-base:$(TAG_VERSION)
-	IMAGE_NAME      := goreleaser/goreleaser-cross:$(TAG_VERSION)
+	IMAGE_BASE_NAME  := $(OWNER)/goreleaser-cross-base:$(TAG_VERSION)
+	IMAGE_NAME       := $(OWNER)/goreleaser-cross:$(TAG_VERSION)
+	TURBO_IMAGE_NAME := $(OWNER)/turbo-cross:$(TAG_VERSION)
 else
-	IMAGE_BASE_NAME := $(REGISTRY)/goreleaser/goreleaser-cross-base:$(TAG_VERSION)
-	IMAGE_NAME      := $(REGISTRY)/goreleaser/goreleaser-cross:$(TAG_VERSION)
+	IMAGE_BASE_NAME  := $(REGISTRY)/$(OWNER)/goreleaser-cross-base:$(TAG_VERSION)
+	IMAGE_NAME       := $(REGISTRY)/$(OWNER)/goreleaser-cross:$(TAG_VERSION)
+	TURBO_IMAGE_NAME := $(REGISTRY)/$(OWNER)/turbo-cross:$(TAG_VERSION)
 endif
 
 OSX_SDK            := MacOSX12.0.sdk
@@ -36,6 +40,8 @@ goreleaser-cross-base-%:
 	@echo "building $(IMAGE_BASE_NAME)-$(@:goreleaser-cross-base-%=%)"
 	$(DOCKER_BUILD) --platform=linux/$(@:goreleaser-cross-base-%=%) -t $(IMAGE_BASE_NAME)-$(@:goreleaser-cross-base-%=%) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
+		--build-arg OWNER=$(OWNER) \
+		--build-arg GIT_REPO=$(GIT_REPO) \
 		--build-arg GORELEASER_VERSION=$(GORELEASER_VERSION) \
 		--build-arg TINI_VERSION=$(TINI_VERSION) \
 		--build-arg COSIGN_VERSION=$(COSIGN_VERSION) \
@@ -45,9 +51,11 @@ goreleaser-cross-base-%:
 
 .PHONY: goreleaser-cross-%
 goreleaser-cross-%:
-	@echo "building $(IMAGE_NAME)-$(@:goreleaser-cross-%=%)"
+	@echo "building $(IMAGE_NAME)-$(@:goreleaser-cross-%=%) on top of $(IMAGE_BASE_NAME)"
 	$(DOCKER_BUILD) --platform=linux/$(@:goreleaser-cross-%=%) -t $(IMAGE_NAME)-$(@:goreleaser-cross-%=%) \
-		--build-arg GO_VERSION=$(GO_VERSION) \
+		--build-arg OWNER=$(OWNER) \
+		--build-arg GIT_REPO=$(GIT_REPO) \
+		--build-arg BASE_IMAGE=$(IMAGE_BASE_NAME) \
 		--build-arg OSX_SDK=$(OSX_SDK) \
 		--build-arg OSX_SDK_SUM=$(OSX_SDK_SUM) \
 		--build-arg OSX_VERSION_MIN=$(OSX_VERSION_MIN) \
@@ -78,11 +86,13 @@ docker-push: $(patsubst %, docker-push-%,$(SUBIMAGES))
 .PHONY: manifest-create-base
 manifest-create-base:
 	@echo "creating base manifest $(IMAGE_BASE_NAME)"
+	docker manifest rm $(IMAGE_BASE_NAME) 2> /dev/null || true
 	docker manifest create $(IMAGE_BASE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_BASE_NAME)-$(arch))
 
 .PHONY: manifest-create
 manifest-create:
 	@echo "creating manifest $(IMAGE_NAME)"
+	docker manifest rm $(IMAGE_NAME) 2> /dev/null || true
 	docker manifest create $(IMAGE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_NAME)-$(arch))
 
 .PHONY: manifest-push-base
@@ -95,10 +105,33 @@ manifest-push:
 	@echo "pushing manifest $(IMAGE_NAME)"
 	docker manifest push $(IMAGE_NAME)
 
-.PHONY: tags
-tags:
-	@echo $(IMAGE_NAME) $(foreach arch,$(SUBIMAGES), $(IMAGE_NAME)-$(arch))
+.PHONY: turbo-cross-%
+turbo-cross-%:
+	@echo "building for $(@:turbo-cross-%=%)"
+	docker build \
+		--platform=linux/$(@:turbo-cross-%=%) \
+		--build-arg BASE_IMAGE=$(IMAGE_NAME) \
+		--build-arg GIT_REPO=$(GIT_REPO) \
+		-t $(TURBO_IMAGE_NAME)-$(@:turbo-cross-%=%) \
+		-f Dockerfile.turbo .
 
-.PHONY: tag
-tag:
-	@echo $(TAG_VERSION)
+.PHONY: turbo-cross
+turbo-cross: $(patsubst %, turbo-cross-%,$(SUBIMAGES))
+
+.PHONY: push-turbo-cross-%
+push-turbo-cross-%: turbo-cross-%
+	docker push $(TURBO_IMAGE_NAME)-$(@:push-turbo-cross-%=%)
+
+.PHONY: push-turbo-cross
+push-turbo-cross: $(patsubst %, push-turbo-cross-%,$(SUBIMAGES))
+
+.PHONY: manifest-create-turbo
+manifest-create-turbo:
+	@echo "creating manifest $(TURBO_IMAGE_NAME)"
+	docker manifest rm $(TURBO_IMAGE_NAME) 2> /dev/null || true
+	docker manifest create $(TURBO_IMAGE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(TURBO_IMAGE_NAME)-$(arch))
+
+.PHONY: manifest-push-turbo
+manifest-push-turbo:
+	@echo "pushing manifest $(TURBO_IMAGE_NAME)"
+	docker manifest push $(TURBO_IMAGE_NAME)

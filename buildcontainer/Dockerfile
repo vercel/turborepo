@@ -1,7 +1,5 @@
-# golang parameters
-ARG GO_VERSION
-
-FROM ghcr.io/goreleaser/goreleaser-cross-base:v${GO_VERSION} AS osx-cross-base
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS osx-cross-base
 ENV OSX_CROSS_PATH=/osxcross
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -13,13 +11,6 @@ RUN \
  && dpkgArch="$(dpkg --print-architecture)" \
  && dpkg --add-architecture amd64 \
  && dpkg --add-architecture arm64 \
- && dpkg --add-architecture armel \
- && dpkg --add-architecture armhf \
- && dpkg --add-architecture i386 \
- && dpkg --add-architecture mips \
- && dpkg --add-architecture mipsel \
- && dpkg --add-architecture powerpc \
- && dpkg --add-architecture ppc64el \
  && apt-get update \
  && apt-get install --no-install-recommends -y -q \
         autoconf \
@@ -36,10 +27,6 @@ RUN \
         mingw-w64 \
         crossbuild-essential-amd64 \
         crossbuild-essential-arm64 \
-        crossbuild-essential-armel \
-        crossbuild-essential-armhf \
-        crossbuild-essential-mipsel \
-        crossbuild-essential-ppc64el \
         devscripts \
         libtool \
         llvm \
@@ -106,8 +93,10 @@ RUN \
  && UNATTENDED=1 OSX_VERSION_MIN=${OSX_VERSION_MIN} ./build.sh
 
 FROM osx-cross-base AS final
-LABEL maintainer="Artur Troian <troian dot ap at gmail dot com>"
-LABEL "org.opencontainers.image.source"="https://github.com/goreleaser/goreleaser-cross"
+ARG MAINTAINER
+ARG GIT_REPO
+LABEL maintainer=${MAINTAINER}
+LABEL "org.opencontainers.image.source"=${GIT_REPO}
 
 ARG DEBIAN_FRONTEND=noninteractive
 
