@@ -8,89 +8,60 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strings"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
-	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 
-	"github.com/fatih/color"
-	"github.com/mitchellh/cli"
 	"github.com/spf13/cobra"
 )
-
-// LoginCommand is a Command implementation allows the user to login to turbo
-type LoginCommand struct {
-	Config *config.Config
-	UI     *cli.ColoredUi
-}
-
-// Synopsis of run command
-func (c *LoginCommand) Synopsis() string {
-	return "Login to your Vercel account"
-}
-
-// Help returns information about the `run` command. Match the cobra output for now, until
-// we can wire up cobra for real
-func (c *LoginCommand) Help() string {
-	helpText := `
-Login to your Vercel account
-
-Usage:
-  turbo login [flags]
-
-Flags:
-      --sso-team string   attempt to authenticate to the specified team using SSO
-`
-	return strings.TrimSpace(helpText)
-}
 
 const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
-// Run logs into the api with PKCE and writes the token to turbo user config directory
-func (c *LoginCommand) Run(args []string) int {
+// NewLoginCommand returns the cobra subcommand for turbo login
+func NewLoginCommand(helper *cmdutil.Helper) *cobra.Command {
 	var ssoTeam string
-	loginCommand := &cobra.Command{
-		Use:           "turbo login",
+	cmd := &cobra.Command{
+		Use:           "login",
 		Short:         "Login to your Vercel account",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			apiClient := c.Config.NewClient()
+			ctx := cmd.Context()
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
+			}
 			login := login{
-				ui:                  c.UI,
-				logger:              c.Config.Logger,
-				repoRoot:            c.Config.Cwd,
+				base:                base,
 				openURL:             browser.OpenBrowser,
-				client:              apiClient,
+				client:              base.APIClient,
 				promptEnableCaching: promptEnableCaching,
 			}
 			if ssoTeam != "" {
-				err := login.loginSSO(c.Config, ssoTeam)
+				err := login.loginSSO(ctx, ssoTeam)
 				if err != nil {
 					if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
-						c.UI.Info("Canceled. Turborepo not set up.")
+						base.UI.Info("Canceled. Turborepo not set up.")
 					} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
-						c.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+						base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
 					} else {
-						login.logError(err)
+						base.LogError("SSO login failed: %v", err)
 					}
 					return err
 				}
 			} else {
-				err := login.run(c.Config)
+				err := login.run(ctx)
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
-						c.UI.Info("Canceled. Turborepo not set up.")
+						base.UI.Info("Canceled. Turborepo not set up.")
 					} else {
-						login.logError(err)
+						base.LogError("login failed: %v", err)
 					}
 					return err
 				}
@@ -98,13 +69,8 @@ func (c *LoginCommand) Run(args []string) int {
 			return nil
 		},
 	}
-	loginCommand.Flags().StringVar(&ssoTeam, "sso-team", "", "attempt to authenticate to the specified team using SSO")
-	loginCommand.SetArgs(args)
-	err := loginCommand.Execute()
-	if err != nil {
-		return 1
-	}
-	return 0
+	cmd.Flags().StringVar(&ssoTeam, "sso-team", "", "attempt to authenticate to the specified team using SSO")
+	return cmd
 }
 
 type browserClient = func(url string) error
@@ -118,41 +84,37 @@ type userClient interface {
 }
 
 type login struct {
-	ui                  *cli.ColoredUi
-	logger              hclog.Logger
-	repoRoot            turbopath.AbsolutePath
-	openURL             browserClient
+	base    *cmdutil.CmdBase
+	openURL browserClient
+	// Use our own interface, rather than base.APIClient directly,
+	// to allow for injection of a client in tests
 	client              userClient
 	promptEnableCaching func() (bool, error)
-}
-
-func (l *login) logError(err error) {
-	l.logger.Error("error", err)
-	l.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 
 func (l *login) directUserToURL(url string) {
 	err := l.openURL(url)
 	if err != nil {
-		l.ui.Warn(fmt.Sprintf("Failed to open browser. Please visit %v in your browser", url))
+		l.base.UI.Warn(fmt.Sprintf("Failed to open browser. Please visit %v in your browser", url))
 	}
 }
 
-func (l *login) run(c *config.Config) error {
-	l.logger.Debug(fmt.Sprintf("turbo v%v", c.TurboVersion))
-	l.logger.Debug(fmt.Sprintf("api url: %v", c.RemoteConfig.APIURL))
-	l.logger.Debug(fmt.Sprintf("login url: %v", c.LoginURL))
+func (l *login) run(ctx context.Context) error {
+	loginURLBase := l.base.RepoConfig.LoginURL()
+	l.base.Logger.Debug(fmt.Sprintf("turbo v%v", l.base.TurboVersion))
+	l.base.Logger.Debug(fmt.Sprintf("api url: %v", l.base.RemoteConfig.APIURL))
+	l.base.Logger.Debug(fmt.Sprintf("login url: %v", loginURLBase))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
-	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", c.LoginURL, redirectURL)
-	l.ui.Info(util.Sprintf(">>> Opening browser to %v", c.LoginURL))
+	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", loginURLBase, redirectURL)
+	l.base.UI.Info(util.Sprintf(">>> Opening browser to %v", loginURL))
 
-	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	rootctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
 	var query url.Values
 	oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.Query()
-		http.Redirect(w, r, c.LoginURL+"/turborepo/success", http.StatusFound)
+		http.Redirect(w, r, loginURLBase+"/turborepo/success", http.StatusFound)
 	}, defaultPort)
 	if err != nil {
 		return errors.Wrap(err, "failed to start local server")
@@ -168,7 +130,7 @@ func (l *login) run(c *config.Config) error {
 	// Stop the spinner before we return to ensure terminal is left in a good state
 	s.Stop("")
 
-	if err := c.UserConfig.SetToken(query.Get("token")); err != nil {
+	if err := l.base.UserConfig.SetToken(query.Get("token")); err != nil {
 		return err
 	}
 	rawToken := query.Get("token")
@@ -177,26 +139,26 @@ func (l *login) run(c *config.Config) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	l.ui.Info("")
-	l.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
-	l.ui.Info("")
-	l.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-	l.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
-	l.ui.Info("")
-	l.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
-	l.ui.Info("")
+	l.base.UI.Info("")
+	l.base.UI.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
+	l.base.UI.Info("")
+	l.base.UI.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
+	l.base.UI.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
+	l.base.UI.Info("")
+	l.base.UI.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+	l.base.UI.Info("")
 	return nil
 }
 
-func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
+func (l *login) loginSSO(ctx context.Context, ssoTeam string) error {
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	query := make(url.Values)
 	query.Add("teamId", ssoTeam)
 	query.Add("mode", "login")
 	query.Add("next", redirectURL)
-	loginURL := fmt.Sprintf("%v/api/auth/sso?%v", c.LoginURL, query.Encode())
+	loginURL := fmt.Sprintf("%v/api/auth/sso?%v", l.base.RepoConfig.LoginURL(), query.Encode())
 
-	rootctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	rootctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
 	var verificationToken string
@@ -239,38 +201,38 @@ func (l *login) loginSSO(c *config.Config, ssoTeam string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get user information")
 	}
-	if err := c.UserConfig.SetToken(verifiedUser.Token); err != nil {
+	if err := l.base.UserConfig.SetToken(verifiedUser.Token); err != nil {
 		return errors.Wrap(err, "failed to save auth token")
 	}
-	l.ui.Info("")
-	l.ui.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
-	l.ui.Info("")
+	l.base.UI.Info("")
+	l.base.UI.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
+	l.base.UI.Info("")
 	if verifiedUser.TeamID != "" {
 		err = l.verifyCachingEnabled(verifiedUser.TeamID)
 		if err != nil {
 			return err
 		}
-		err = c.RepoConfig.SetTeamID(verifiedUser.TeamID)
+		err = l.base.RepoConfig.SetTeamID(verifiedUser.TeamID)
 		if err != nil {
 			return errors.Wrap(err, "failed to save teamId")
 		}
-		l.ui.Info(util.Sprintf("${CYAN}Remote Caching enabled for %s${RESET}", ssoTeam))
-		l.ui.Info("")
-		l.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
-		l.ui.Info("  all your team’s Vercel projects. It also can share outputs")
-		l.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
-		l.ui.Info("  This results in faster build times and deployments for your team.")
-		l.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
-		l.ui.Info("")
-		l.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
+		l.base.UI.Info(util.Sprintf("${CYAN}Remote Caching enabled for %s${RESET}", ssoTeam))
+		l.base.UI.Info("")
+		l.base.UI.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
+		l.base.UI.Info("  all your team’s Vercel projects. It also can share outputs")
+		l.base.UI.Info("  with other services that enable Remote Caching, like CI/CD systems.")
+		l.base.UI.Info("  This results in faster build times and deployments for your team.")
+		l.base.UI.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+		l.base.UI.Info("")
+		l.base.UI.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {
 
-		l.ui.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-		l.ui.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
-		l.ui.Info("")
-		l.ui.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
+		l.base.UI.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
+		l.base.UI.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
+		l.base.UI.Info("")
+		l.base.UI.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
 	}
-	l.ui.Info("")
+	l.base.UI.Info("")
 	return nil
 }
 
@@ -294,7 +256,7 @@ func (l *login) verifyCachingEnabled(teamID string) error {
 			}
 			if shouldEnable {
 				url := fmt.Sprintf("https://vercel.com/teams/%v/settings/billing", team.Slug)
-				l.ui.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
+				l.base.UI.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
 				l.directUserToURL(url)
 				return errTryAfterEnable
 			}

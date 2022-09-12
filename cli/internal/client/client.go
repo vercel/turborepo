@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -61,6 +62,11 @@ type Opts struct {
 	UsePreflight bool
 }
 
+// AddFlags adds flags specific to the api client to the given flagset
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
+	flags.BoolVar(&opts.UsePreflight, "preflight", false, "When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization")
+}
+
 // New creates a new ApiClient
 func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *ApiClient {
 	client := &ApiClient{
@@ -98,6 +104,11 @@ func (c *ApiClient) IsLinked() bool {
 // SetTeamID sets the team parameter used on all requests by this client
 func (c *ApiClient) SetTeamID(teamID string) {
 	c.teamID = teamID
+}
+
+// GetTeamID returns the currently configured team id
+func (c *ApiClient) GetTeamID() string {
+	return c.teamID
 }
 
 func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
