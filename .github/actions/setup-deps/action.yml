@@ -8,13 +8,17 @@ inputs:
     description: "Set to false to prevent Node setup steps"
     required: false
     default: true
+  go-version:
+    description: "Change Go version"
+    required: false
+    default: "1.18"
 runs:
   using: "composite"
   steps:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.0
+        go-version: ${{ inputs.go-version }}
         cache: true
         cache-dependency-path: cli/go.sum
 

@@ -28,6 +28,10 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           setup-node: false
 
+          # A bunch of the linters crash with Go 1.18.
+          # See https://github.com/golangci/golangci-lint/issues/2649
+          go-version: 1.17
+
       - name: Setup Protos
         run: cd cli && make compile-protos
 
