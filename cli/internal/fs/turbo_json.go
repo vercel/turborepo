@@ -27,32 +27,38 @@ const configFile = "turbo.json"
 
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
-	// If the configFile exists, we use that
-	// If pkg.Turbo exists, we warn about running the migration
-	// Use pkg.Turbo if the configFile doesn't exist
-	// If neither exists, it's a fatal error
+
 	turboJSONPath := rootPath.Join(configFile)
 
-	if !turboJSONPath.FileExists() {
-		if rootPackageJSON.LegacyTurboConfig == nil {
-			// TODO: suggestion on how to create one
-			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+	// Check if turbo key in package.json exists
+	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
+
+	// If the configFile exists, use that
+	if turboJSONPath.FileExists() {
+		turboJSON, err := readTurboJSON(turboJSONPath)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", configFile, err)
 		}
-		log.Printf("[WARNING] Turbo configuration now lives in \"%s\". Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile, configFile)
+
+		// If pkg.Turbo exists, log a warning and delete it from the representation
+		// TODO: turn off this warning eventually
+		if hasLegacyConfig {
+			log.Printf("[WARNING] Ignoring \"turbo\" key in package.json, using %s instead.", configFile)
+			rootPackageJSON.LegacyTurboConfig = nil
+		}
+
+		return turboJSON, nil
+	}
+
+	// Use pkg.Turbo if the configFile doesn't exist and we want the fallback feature
+	// TODO: turn this fallback off eventually
+	if hasLegacyConfig {
+		log.Printf("[DEPRECATED] \"turbo\" in package.json is deprecated. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
 		return rootPackageJSON.LegacyTurboConfig, nil
 	}
 
-	turboJSON, err := readTurboJSON(turboJSONPath)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", configFile, err)
-	}
-
-	if rootPackageJSON.LegacyTurboConfig != nil {
-		log.Printf("[WARNING] Ignoring legacy \"turbo\" key in package.json, using %s instead. Consider deleting the \"turbo\" key from package.json\n", configFile)
-		rootPackageJSON.LegacyTurboConfig = nil
-	}
-
-	return turboJSON, nil
+	// If there's no turbo.json and no turbo key in package.json, return an error.
+	return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct
