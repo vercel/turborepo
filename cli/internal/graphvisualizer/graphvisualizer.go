@@ -9,14 +9,14 @@ import (
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 )
 
 // GraphVisualizer requirements
 type GraphVisualizer struct {
-	config    *config.Config
+	repoRoot  turbopath.AbsolutePath
 	ui        cli.Ui
 	TaskGraph *dag.AcyclicGraph
 }
@@ -28,9 +28,9 @@ func hasGraphViz() bool {
 }
 
 // New creates an instance of ColorCache with helpers for adding colors to task outputs
-func New(config *config.Config, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
+func New(repoRoot turbopath.AbsolutePath, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
 	return &GraphVisualizer{
-		config:    config,
+		repoRoot:  repoRoot,
 		ui:        ui,
 		TaskGraph: TaskGraph,
 	}
@@ -58,12 +58,12 @@ func (g *GraphVisualizer) RenderDotGraph() {
 // GenerateGraphFile saves a visualization of the TaskGraph to a file (or renders a DotGraph as a fallback))
 func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 	graphString := g.generateDotString()
-	outputFilename := g.config.Cwd.Join(outputName)
+	outputFilename := g.repoRoot.Join(outputName)
 	ext := outputFilename.Ext()
 	// use .jpg as default extension if none is provided
 	if ext == "" {
 		ext = ".jpg"
-		outputFilename = g.config.Cwd.Join(outputName + ext)
+		outputFilename = g.repoRoot.Join(outputName + ext)
 	}
 	if ext == ".html" {
 		f, err := outputFilename.Create()

@@ -25,6 +25,7 @@ import (
 type client interface {
 	PutArtifact(hash string, body []byte, duration int, tag string) error
 	FetchArtifact(hash string) (*http.Response, error)
+	GetTeamID() string
 }
 
 type httpCache struct {
@@ -328,7 +329,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, teamID string, client client, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
@@ -337,7 +338,7 @@ func newHTTPCache(opts Opts, teamID string, client client, recorder analytics.Re
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
-			teamId:  teamID,
+			teamId:  client.GetTeamID(),
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
 		repoRoot: repoRoot,
