@@ -11,8 +11,6 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
   const { Icon, name, description } = props.feature;
   return (
     <>
-      <div className="bg-circle-pink"></div>
-      <div className="bg-circle-blue"></div>
       <div className="inline-flex items-center space-x-3">
         <div className="flex items-center justify-center bg-black rounded-full bg-opacity-5 w-9 h-9 icon-circle">
           <Icon
@@ -32,35 +30,6 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
       <style jsx global>{`
         html.dark .icon-circle {
           background: linear-gradient(180deg, rgba(50, 134, 241, 0.2) 0%, rgba(195, 58, 195, 0.2) 100%);
-        }
-        .bg-circle-blue {
-          position: absolute;
-          width: 180px;
-          height: 180px;
-          top: 0;
-          left: calc(25% - 180px / 2); 
-          top: -90px;
-          z-index: -1;         
-
-          mix-blend-mode: normal;
-          filter: blur(90px);
-          opacity: 0.3;
-          background: linear-gradient(180deg, #4EBFFF 0%, #BD69FF 100%);
-        }
-
-        .bg-circle-pink {
-          position: absolute;
-          width: 180px;
-          height: 180px;
-          top: 0;
-          left: calc(75% - 180px / 2); 
-          top: -90px;
-          z-index: -1;         
-
-          background: linear-gradient(180deg, #FF3358 0%, #FF4FD8 100%);
-          mix-blend-mode: normal;
-          filter: blur(90px);
-          opacity: 0.3;
         }
       `}</style>
     </>
