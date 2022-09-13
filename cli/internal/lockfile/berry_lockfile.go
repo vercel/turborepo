@@ -122,7 +122,6 @@ func yarnSplitOutEntries(lockfile map[string]*YarnLockfileEntry) map[string]*Yar
 	// This final step is important, it splits any deps with multiple-resolutions
 	// (e.g. "@babel/generator@^7.13.0, @babel/generator@^7.13.9":) into separate
 	// entries in our map
-	// TODO: make concurrent
 	for key, val := range lockfile {
 		for _, v := range strings.Split(key, ", ") {
 			prettyLockfile[strings.TrimSpace(v)] = val

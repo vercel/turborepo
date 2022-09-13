@@ -37,7 +37,7 @@ func TestKeySplitting(t *testing.T) {
 		t.Error(err)
 	}
 
-	// @babel/types has multiple entries, these should all apear in the lockfile struct
+	// @babel/types has multiple entries, these should all appear in the lockfile struct
 	keys := []string{
 		"@babel/types@^7.18.10",
 		"@babel/types@^7.18.6",
