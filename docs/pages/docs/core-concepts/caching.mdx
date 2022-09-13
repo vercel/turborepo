@@ -130,7 +130,7 @@ You can also disable caching on specific tasks by setting the [`pipeline.<task>.
 }
 ```
 
-## Alter Caching Based on Environment Variables and Files
+## Alter Caching Based on File Changes
 
 For some tasks, you may not want a cache miss if an irrelevant file has changed. For instance, updating `README.md`
 might not need to trigger a cache miss for the `test` task. You can use `inputs` to restrict the set
@@ -152,16 +152,44 @@ determining a cache hit on the `test` task:
 ```
 
 <Callout type="info">
-  Note: `turbo.json` is *always* considered an input. If you modify `turbo.json`, all caches are invalidated.
+  `package.json` is *always* considered an input for tasks in the workspace it lives in.
+  This is because the *definition* of the task itself lives in package.json in the `scripts` key.
+  If you change that, any cached output is considered invalid.
 </Callout>
 
-When you use `turbo` with tools that inline environment variables at build time (e.g. [Next.js](https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser) or [Create React App](https://create-react-app.dev/docs/adding-custom-environment-variables/)), it is important to tell `turbo` about it. Otherwise, you could ship a cached artifact with the wrong environment variables!
+If you want _all_ tasks to depend on certain files, you can declare this dependency in the
+`globalDependencies` array.
 
-Luckily, you can control `turbo`'s cache fingerprinting (also known as "hashing") behavior based on the values of both environment variables and the contents of files:
+```diff
+{
+  "$schema": "https://turborepo.org/schema.json",
++  "globalDependencies": [".env"],
+  "pipeline": {
+    // ...other tasks
+    "test": {
+      "outputs": [], // leave empty to only cache logs
+      "dependsOn": ["build"],
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
+
+<Callout type="info">
+  `turbo.json` is *always* considered a global input. If you modify `turbo.json`, all caches
+  are invalidated.
+</Callout>
+
+## Altering Caching Based on Environment Variables
+
+When you use `turbo` with tools that inline environment variables at build time
+(e.g. [Next.js][1] or [Create React App][2]), it is important to tell `turbo` about it.
+Otherwise, you could ship a cached build with the wrong environment variables!
+
+Luckily, you can control `turbo`'s caching behavior (also known as "hashing") based on
+the values of environment variables:
 
 - Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-workspace-task basis.
-- Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
-- Including files or globs of files in `globalDependencies` will impact the cache fingerprint of _all_ tasks.
 - The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```jsonc
@@ -188,29 +216,48 @@ Luckily, you can control `turbo`'s cache fingerprinting (also known as "hashing"
       ],
       "outputs": [".next/**"],
     },
+  }
+}
+```
 
-    // override settings for the "build" task for the "docs" app
-    "docs#build": {
+To alter the cache for _all_ tasks, you can declare environment variables in the
+`globalDependencies` array:
+
+```diff
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
       "dependsOn": [
         "^build",
-        // env vars that will impact the hash of "build" task for only "docs" app
+        // env vars will impact hashes of all "build" tasks
+        "$SOME_ENV_VAR",
+      ],
+      "outputs": ["dist/**"]
+    },
+
+    // override settings for the "build" task for the "web" app
+    "web#build": {
+      "dependsOn": [
+        "^build",
+        // env vars that will impact the hash of "build" task for only "web" app
         "$STRIPE_SECRET_KEY",
         "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
         "$NEXT_PUBLIC_ANALYTICS_ID",
       ],
       "outputs": [".next/**"],
-    }
+    },
   },
-  "globalDependencies": [
-    "$GITHUB_TOKEN",// env var that will impact the hashes of all tasks,
-    "tsconfig.json", // file contents will impact the hashes of all tasks,
-    ".env.*", // glob file contents will impact the hashes of all tasks,
-  ]
++  "globalDependencies": [
++    "$GITHUB_TOKEN",// env var that will impact the hashes of all tasks,
++    "tsconfig.json", // file contents will impact the hashes of all tasks,
++    ".env.*", // glob file contents will impact the hashes of all tasks,
++  ]
 }
 ```
 
-<Callout type="info">
-  Pro Tip: It is more common for monorepos to use environment variables in workspaces that contain applications (such as a website) rather than shared packages (such as a UI component library). Thus, to get higher cache hit rates, you should likely only "depend on" environment variables in package-specific tasks in your `turbo.json` configuration.
+<Callout type="idea">
+  It is more common for monorepos to use environment variables in workspaces that contain applications (such as a website) rather than shared packages (such as a UI component library). Thus, to get higher cache hit rates, you should likely only "depend on" environment variables in package-specific tasks in your `turbo.json` configuration.
 </Callout>
 
 ### Automatic environment variable inclusion
@@ -365,3 +412,6 @@ The hash of a given task is injected at execution time as an environment variabl
   algorithm for each workspace's task. It will _not_ parse/figure out the resolved
   set of all dependencies like the current `yarn` implementation.
 </Callout>
+
+[1]: https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser
+[2]: https://create-react-app.dev/docs/adding-custom-environment-variables/
