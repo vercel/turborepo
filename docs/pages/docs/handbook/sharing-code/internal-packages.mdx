@@ -177,7 +177,7 @@ pnpm run dev
   </Tab>
 </Tabs>
 
-<Tabs items={['Next.js', 'Vite','Remix']} storageKey="selected-framework">
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
 
 When it starts running, you'll likely see an error in your web browser:
@@ -202,24 +202,11 @@ The fix is simple - we need to tell Next.js to bundle the files from certain pac
   <Tab>
     Because `vite` transpiles modules by default, there's no more setup needed! Skip to step 7.
   </Tab>
-  <Tab>
-
-When you run the app, you'll likely see an error like this:
-
-```
-SyntaxError: Unexpected token 'export'
-```
-
-This is what happens when you try and import an un-bundled file into a Remix app.
-
-The fix is simple - we need to tell Remix to bundle the files from certain packages it imports.
-
-  </Tab>
 </Tabs>
 
 ### 6. Configuring your app
 
-<Tabs items={['Next.js', 'Vite', "Remix"]} storageKey="selected-framework">
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
 
     We can do that using [`next-transpile-modules`](https://www.npmjs.com/package/next-transpile-modules).
@@ -246,22 +233,6 @@ The fix is simple - we need to tell Remix to bundle the files from certain packa
   </Tab>
   <Tab>
     No configuration is needed!
-  </Tab>
-  <Tab>
-
-    We can do that using `"math-helpers"` to our `serverDependenciesToBundle` inside our `remix.config.js`:
-
-```js filename="apps/remix/remix.config.js"
-module.exports = {
-  // ...other config
-  serverDependenciesToBundle: ["math-helpers"],
-};
-```
-
-    Restart your dev script, and go to the browser.
-
-    **The error has disappeared!**
-
   </Tab>
 </Tabs>
 

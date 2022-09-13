@@ -19,7 +19,7 @@ Turborepo works by keeping your workspace's tasks where they belong - in each wo
 
 Your `apps/web/package.json` should have a `build` script inside:
 
-<Tabs items={['Next.js', 'Vite', "Remix"]} storageKey="selected-framework">
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
 ```json filename="apps/web/package.json"
 {
@@ -38,20 +38,11 @@ Your `apps/web/package.json` should have a `build` script inside:
 }
 ```
   </Tab>
-  <Tab>
-```json filename="apps/web/package.json"
-{
-  "scripts": {
-    "build": "remix build"
-  }
-}
-```
-  </Tab>
 </Tabs>
 
 Inside `turbo.json`, you can add `build` to the pipeline.
 
-<Tabs items={['Next.js', 'Vite', "Remix"]} storageKey="selected-framework">
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
 ```json filename="turbo.json"
 {
@@ -73,21 +64,6 @@ Inside `turbo.json`, you can add `build` to the pipeline.
   }
 }
 ```
-  </Tab>
-  <Tab>
-
-Depending on what your `serverBuildTarget` is, your `outputs` should be configured differently. By default, the directory will be `build` and `client/build`. But check out the [Remix docs](https://remix.run/) to learn which build files you should be caching.
-
-```json filename="turbo.json"
-{
-  "pipeline": {
-    "build": {
-      "outputs": ["build/**", "public/build/**"]
-    }
-  }
-}
-```
-
   </Tab>
 </Tabs>
 
