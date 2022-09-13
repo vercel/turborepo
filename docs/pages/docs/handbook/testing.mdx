@@ -53,14 +53,71 @@ Inside the root `turbo.json`, we recommend setting up a `test` task in your [pip
 }
 ```
 
-Now, inside your root `package.json`
+Now, inside your root `package.json`, add a `test` script:
 
-### Coverage reports
+```json filename="package.json"
+{
+  "scripts": {
+    "test": "turbo run test"
+  }
+}
+```
 
-## End-to-end tests
+Now, you can run `test` using your package manager and have Turborepo test the entire repository.
+
+Because of Turborepo's [caching](/docs/core-concepts/caching), this also means that only repositories that have changed files will be tested - resulting in a lot of time saved.
 
 ## Running tests in watch mode
 
+In Turborepo, 'watch' tasks behave differently to normal tasks. When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/docs/core-concepts/caching) with Turborepo.
+
+But when you run your tests in 'watch' mode, the process never exits. This makes a watch task more like a [development task](/docs/handbook/dev).
+
+Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in 'watch' mode.
+
+Here's an example:
+
+<Tabs items={["Jest", "Vitest"]} storageKey="selected-test-runner">
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}
+```
+    </Tab>
+</Tabs>
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "test": {
+      "outputs": []
+    },
+    "test:watch": {
+      "cache": false
+    }
+  }
+}
 ```
 
+```json filename="package.json"
+{
+  "scripts": {
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch"
+  }
+}
 ```
