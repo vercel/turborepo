@@ -42,7 +42,7 @@ export default function Home() {
         <h1 className="max-w-5xl text-center mx-auto text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
           Monorepos that
           <br className="hidden lg:block" />
-          <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-blue-500 ">
+          <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-pink-gradient-start to-blue-500 ">
             make ship happen.
           </span>{" "}
         </h1>
@@ -118,7 +118,7 @@ export default function Home() {
               doesn&apos;t require PhD to learn or a staff to maintain.
             </p>
             <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
-              <b className="relative inline-block text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-red-500">
+              <b className="relative inline-block text-transparent bg-clip-text bg-gradient-to-r from-pink-gradient-start to-blue-500">
                 With Turborepo, we&apos;re doing just that.
               </b>{" "}
               We&apos;re abstracting the complex configuration needed for most
