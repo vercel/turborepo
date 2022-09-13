@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -96,12 +97,15 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsolutePath) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsolutePath, flags *pflag.FlagSet) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
+	if err := userViper.BindPFlag("token", flags.Lookup("token")); err != nil {
+		return nil, err
+	}
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -109,6 +113,11 @@ func ReadUserConfigFile(path turbopath.AbsolutePath) (*UserConfig, error) {
 		userViper: userViper,
 		path:      path,
 	}, nil
+}
+
+// AddUserConfigFlags adds per-user configuration item flags to the given flagset
+func AddUserConfigFlags(flags *pflag.FlagSet) {
+	flags.String("token", "", "Set the auth token for API calls")
 }
 
 // DefaultUserConfigPath returns the default platform-dependent place that
@@ -126,7 +135,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsolutePath, flags *pflag.FlagSet) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -137,6 +146,9 @@ func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
 	repoViper.MustBindEnv("teamid")
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
+	if err := repoViper.BindPFlag("loginurl", flags.Lookup("login")); err != nil {
+		return nil, err
+	}
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -144,6 +156,13 @@ func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
 		repoViper: repoViper,
 		path:      path,
 	}, nil
+}
+
+// AddRepoConfigFlags adds per-repository configuration items to the given flagset
+func AddRepoConfigFlags(flags *pflag.FlagSet) {
+	flags.String("team", "", "Set the team slug for API calls")
+	flags.String("api", "", "Override the endpoint for API calls")
+	flags.String("login", "", "Override the login endpoint")
 }
 
 // GetRepoConfigPath reads the user-specific configuration values

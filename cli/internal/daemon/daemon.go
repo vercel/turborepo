@@ -12,51 +12,19 @@ import (
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/server"
 	"github.com/vercel/turborepo/cli/internal/signals"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Command is the wrapper around the daemon command until we port fully to cobra
-type Command struct {
-	Config        *config.Config
-	UI            cli.Ui
-	SignalWatcher *signals.Watcher
-}
-
-// Run runs the daemon command
-func (c *Command) Run(args []string) int {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
-	cmd.SetArgs(args)
-	err := cmd.Execute()
-	if err != nil {
-		return 1
-	}
-	return 0
-}
-
-// Help returns information about the `daemon` command
-func (c *Command) Help() string {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
-	return util.HelpForCobraCmd(cmd)
-}
-
-// Synopsis of daemon command
-func (c *Command) Synopsis() string {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
-	return cmd.Short
-}
 
 type daemon struct {
 	logger     hclog.Logger
@@ -107,15 +75,20 @@ func (d *daemon) logError(err error) {
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
+// GetCmd returns the root daemon command
+func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
 	var idleTimeout time.Duration
 	cmd := &cobra.Command{
-		Use:           "turbo daemon",
+		Use:           "daemon",
 		Short:         "Runs turbod",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logFilePath, err := getLogFilePath(config.Cwd)
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
+			}
+			logFilePath, err := getLogFilePath(base.RepoRoot)
 			if err != nil {
 				return err
 			}
@@ -136,13 +109,13 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 			ctx := cmd.Context()
 			d := &daemon{
 				logger:     logger,
-				repoRoot:   config.Cwd,
+				repoRoot:   base.RepoRoot,
 				timeout:    idleTimeout,
 				reqCh:      make(chan struct{}),
 				timedOutCh: make(chan struct{}),
 			}
-			serverName := getRepoHash(config.Cwd)
-			turboServer, err := server.New(serverName, d.logger.Named("rpc server"), config.Cwd, config.TurboVersion, logFilePath)
+			serverName := getRepoHash(base.RepoRoot)
+			turboServer, err := server.New(serverName, d.logger.Named("rpc server"), base.RepoRoot, base.TurboVersion, logFilePath)
 			if err != nil {
 				d.logError(err)
 				return err
@@ -157,15 +130,15 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 		},
 	}
 	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 4*time.Hour, "Set the idle timeout for turbod")
-	addDaemonSubcommands(cmd, config, output)
+	addDaemonSubcommands(cmd, helper)
 	return cmd
 }
 
-func addDaemonSubcommands(cmd *cobra.Command, config *config.Config, output cli.Ui) {
-	addStatusCmd(cmd, config, output)
-	addStartCmd(cmd, config, output)
-	addStopCmd(cmd, config, output)
-	addRestartCmd(cmd, config, output)
+func addDaemonSubcommands(cmd *cobra.Command, helper *cmdutil.Helper) {
+	addStatusCmd(cmd, helper)
+	addStartCmd(cmd, helper)
+	addStopCmd(cmd, helper)
+	addRestartCmd(cmd, helper)
 }
 
 var errInactivityTimeout = errors.New("turbod shut down from inactivity")

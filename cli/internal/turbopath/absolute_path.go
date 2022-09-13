@@ -176,3 +176,12 @@ func (ap AbsolutePath) Base() string {
 func (ap AbsolutePath) Rename(dest AbsolutePath) error {
 	return os.Rename(ap.asString(), dest.asString())
 }
+
+// EvalSymlinks implements filepath.EvalSymlinks for absolute path
+func (ap AbsolutePath) EvalSymlinks() (AbsolutePath, error) {
+	result, err := filepath.EvalSymlinks(ap.asString())
+	if err != nil {
+		return "", err
+	}
+	return AbsolutePath(result), nil
+}
