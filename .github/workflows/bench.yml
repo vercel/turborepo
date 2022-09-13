@@ -63,6 +63,13 @@ jobs:
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
 
+          # This measures Webpack
+          - name: webpack
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Webpack)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
     runs-on: ubuntu-latest-16-core
     name: bench - ${{ matrix.bench.name }}
 
