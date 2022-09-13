@@ -4,6 +4,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
 import Callout from "../../../components/Callout";
+import OutputModeTable from '../../../components/output-mode-table.mdx';
 
 # Configuration Options (`turbo.json`)
 
@@ -241,14 +242,9 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
 
 `type: "full" | "hash-only" | "new-only" | "none"`
 
-Defaults to `full`. The style of output for the task.
+Set type of output logging.
 
-| option    | description                              |
-| --------- | ---------------------------------------- |
-| full      | This is the default. Displays all output |
-| hash-only | Show only the hashes of the tasks        |
-| new-only  | Only show output from cache misses       |
-| none      | Hides all task output                    |
+<OutputModeTable />
 
 **Example**
 
