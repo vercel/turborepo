@@ -1,0 +1,100 @@
+# Development tasks in a monorepo
+
+The vast majority of dev workflows look like this:
+
+1. Open a repository
+2. Run a `dev` task while they develop
+3. At the end of the day, shut down the `dev` task and close the repository.
+
+`dev` will likely be the most frequently run task in your repository, so getting it right is important.
+
+## Types of `dev` tasks
+
+`dev` tasks come in many shapes and sizes:
+
+1. Running a local development server for a web app
+1. Running [`nodemon`](https://www.npmjs.com/package/nodemon) to re-run a backend process every time code changes.
+1. Running tests in `--watch` mode
+
+## Setup with Turborepo
+
+You should specify your dev task like this in your `turbo.json`.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "outputs": [],
+      "cache": false
+    }
+  }
+}
+```
+
+Since `dev` tasks don't produce outputs, `outputs` is empty. Dev tasks are also unique in that you _never_ want to [cache](/docs/core-concepts/caching) them, so we set `cache` as `false`.
+
+### Setting up `package.json`
+
+You should also provide a `dev` task in your root `package.json`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "dev": "turbo run dev"
+  }
+}
+```
+
+This will allow developers to run the task directly from their normal task runner.
+
+## Running tasks _before_ `dev`
+
+In some workflows, you'll want to run tasks _before_ you run your `dev` script. For instance, generating code or running a `db:migrate` task.
+
+In these cases, use [`dependsOn`](/docs/core-concepts/running-tasks#in-the-same-workspace) to say that any `codegen` or `db:migrate` tasks should be run _before_ dev is run.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "dependsOn": ["codegen", "db:migrate"],
+      "cache": false,
+      "outputs": [],
+    },
+    "codegen": {
+      "outputs": ["./codegen-outputs/**"]
+    },
+    "db:migrate": {
+      "outputs": [],
+      "cache": false
+    }
+  }
+}
+```
+
+Then, in your app's `package.json`:
+
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    // For example, starting the Next.js dev server
+    "dev": "next",
+    // For example, running a custom code generation script
+    "codegen": "node ./my-codegen-script.js",
+    // For example, using Prisma
+    "db:migrate": "prisma db push"
+  }
+}
+```
+
+This means that users of your dev script _don't need to worry about codegen or migrating their database_ - it gets handled for them before their dev server even starts.
+
+## Running `dev` only in certain workspaces
+
+To run a `dev` task in only certain workspaces, you should use the [`--filter` syntax](/docs/core-concepts/filtering). For example:
+
+```bash
+turbo run dev --filter app
+```
+
+Will only run `dev` in the workspace named `app`.
