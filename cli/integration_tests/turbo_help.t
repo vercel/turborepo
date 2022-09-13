@@ -3,7 +3,7 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
-  Turbo charge your monorepo
+  Turbocharge your monorepo
   
   Usage:
     turbo [command]
