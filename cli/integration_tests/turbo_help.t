@@ -39,7 +39,7 @@ Test help flag
   Use "turbo [command] --help" for more information about a command.
 
   $ ${TURBO} --help
-  Turbo charge your monorepo
+  Turbocharge your monorepo
   
   Usage:
     turbo [command]
