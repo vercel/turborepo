@@ -21,7 +21,7 @@ export const TailwindIcon: IconType = (props) => {
   );
 };
 
-export const GitHubIcon: IconType = ({ height = 28 }) => {
+export const GitHubIcon: IconType = ({ height = 28, ...props }) => {
   return (
     <svg
       height={height}
