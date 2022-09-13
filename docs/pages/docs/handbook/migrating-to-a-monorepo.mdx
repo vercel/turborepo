@@ -63,27 +63,7 @@ my-monorepo
 
 ## Managing dependencies
 
-Once your apps are in the right folder structure, you'll need to think about their dependencies. Mis-matched dependencies in different repositories can mean that code runs unexpectedly.
-
-Our recommended method for handling this problem is with [`@manypkg/cli`](https://www.npmjs.com/package/@manypkg/cli) - a CLI which can ensure that your dependencies match across your repositories.
-
-Here's a quick example. At the root of your `package.json`, add a `postinstall` script.
-
-```json filename="package.json"
-{
-  "scripts": {
-    // This will check your dependencies match
-    // after each installation
-    "postinstall": "manypkg check"
-  },
-  "dependencies": {
-    // Make sure you install @manypkg/cli
-    "@manypkg/cli": "latest"
-  }
-}
-```
-
-You can also run `manypkg fix` to automatically update them throughout your repository.
+Once your apps are in the right folder structure, you'll need to think about their dependencies. Our section on [handling mismatched package versions](/docs/handbook/package-installation#handling-mis-matched-package-versions) should help.
 
 ## Handling tasks
 
