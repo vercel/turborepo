@@ -10,6 +10,8 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/moby/sys/sequential"
@@ -20,6 +22,7 @@ import (
 var (
 	errNonexistentLinkTarget = errors.New("the link target does not exist")
 	errCycleDetected         = errors.New("symlinks in the cache are cyclic")
+	errTraversal             = errors.New("tar attempts to write outside of directory")
 )
 
 // CacheItem is a `tar` utility with a little bit extra.
@@ -168,6 +171,7 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 		header, trErr := tr.Next()
 		if trErr == io.EOF {
 			// The end, time to restore the missing links.
+			// Sneakily, these have already all passed through validateEntry.
 			missingLinksRestored, missingLinksErr := restoreMissingLinks(missingLinks, tr)
 			restored = append(restored, missingLinksRestored...)
 			if missingLinksErr != nil {
@@ -184,9 +188,8 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 		// We can treat this as file metadata + body reader.
 
 		// Make sure that we pass our safety checks.
-		validateErr := validateEntry(header, tr)
-		if validateErr != nil {
-			return restored, validateErr
+		if !checkName(header.Name) {
+			return restored, errTraversal
 		}
 
 		// Actually attempt to place the file on disk.
@@ -205,8 +208,53 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 	return restored, nil
 }
 
-func validateEntry(header *tar.Header, reader *tar.Reader) error {
-	return nil
+var _osPath = filepath.Join("os", "path")
+var _osPathTest = _osPath + string(os.PathSeparator)
+
+// checkName ensures that we don't restore outside of our target folder.
+func checkName(name string) bool {
+	// For `turbo`-created inputs we know this is an AnchoredUnixPath but
+	// it's third-party input so we should treat it as an attack vector.
+	//
+	// Assuming we don't know _anything_ about this input, it's really just
+	// a byte string. We need to ensure that, if we use it as a path on this
+	// platform, it will not traverse outside of the current directory.
+	//
+	// In this check we're not looking for _correctness_ (a path with quotes)
+	// will very much not restore on Windows, but we don't care), we're looking
+	// for safety.
+
+	// 1. Clean it.
+	// We can do this with respect to the current operating system.
+	// We don't care if it doesn't parse to something reasonable.
+	// "." is the result if this is an empty string.
+	cleanedPath := filepath.Clean(name)
+
+	// 2. Make sure it isn't an absolute path.
+	// Windows in particular has _lots_ of sneaky absolute paths.
+	// We should make sure we don't step on these.
+	// Again, checking against the current OS is the only thing required.
+	var cleanedNonAbsolutePath string
+	if !filepath.IsAbs(cleanedPath) {
+		cleanedNonAbsolutePath = cleanedPath
+	}
+
+	// 3. Now we know that the "path" with regards to this platform:
+	// - Has all traversal (..\, ../, .) accumulated to the front of the path.
+	// - Is not absolute.
+	//
+	// Our last step is to ensure that if we join it with a path for the current
+	// OS that the resulting string is prefixed with:
+	// - The os path
+	// - The os separator, and
+	// - at least one more character.
+	//
+	// We must have the additional character to ensure that it is not simply
+	// collapsing everything to _osPath itself.
+	testJoin := filepath.Join(_osPath, cleanedNonAbsolutePath)
+	safe := strings.HasPrefix(testJoin, _osPathTest) && (len(testJoin) > len(_osPathTest))
+
+	return safe
 }
 
 func restoreMissingLinks(missingLinks map[string]*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
@@ -252,6 +300,16 @@ func restoreMissingLinks(missingLinks map[string]*tar.Header, tr *tar.Reader) ([
 }
 
 func restoreEntry(header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+	// We're permissive on creation, but restrictive on restoration.
+	// There is no need to prevent the cache creation in any case.
+	// And on restoration, if we fail, we simply run the task.
+	// This reduces "effective cache hit ratio"
+	// This is to constrain the overall API that we support.
+
+	// We need to traverse `header.Name` from base to root split at
+	// `os.Separator` to make sure we don't end up following a symlink
+	// outside of the restore path.
+
 	switch header.Typeflag {
 	case tar.TypeDir:
 	case tar.TypeReg:
