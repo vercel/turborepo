@@ -1,0 +1,110 @@
+import { Tabs, Tab } from '../../../components/Tabs'
+import Callout from '../../../components/Callout'
+
+# Building your App
+
+Unless your monorepo is only used for [publishing packages to NPM](/docs/handbook/publishing-packages/basics), it will likely contain at least one application. Co-ordinating your app's builds with Turborepo can lead to some extraordinary gains in speed.
+
+## Setting up the build
+
+Turborepo works by keeping your workspace's tasks where they belong - in each workspace's `package.json`. Let's imagine you have a monorepo that looks like this:
+
+```
+├── apps
+│   └── web
+│       └── package.json
+├── package.json
+└── turbo.json
+```
+
+Your `apps/web/package.json` should have a `build` script inside:
+
+<Tabs items={['Next.js', 'Vite', "Remix"]} storageKey="selected-framework">
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "build": "next build"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "build": "vite build"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "build": "remix build"
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+Inside `turbo.json`, you can add `build` to the pipeline.
+
+<Tabs items={['Next.js', 'Vite', "Remix"]} storageKey="selected-framework">
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    }
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+  </Tab>
+  <Tab>
+
+Depending on what your `serverBuildTarget` is, your `outputs` should be configured differently. By default, the directory will be `build` and `client/build`. But check out the [Remix docs](https://remix.run/) to learn which build files you should be caching.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["build/**", "client/build/**"]
+    }
+  }
+}
+```
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+
+We configure the `outputs` so that we can enable [caching](/docs/core-concepts/caching) - an extremely powerful feature of Turborepo that can skip builds that have been done before.
+
+</Callout>
+
+Now, add a script to your root `package.json`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "turbo run build"
+  }
+}
+```
+
+This means that running `build` from root using your package manager will build all of the apps in the repository. Thanks to caching, you can end up with extremely fast build times.
