@@ -178,10 +178,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	turboJSON, err := fs.ReadTurboConfig(r.base.RepoRoot, rootPackageJSON)
+	turboJSON, err := fs.LoadTurboConfig(r.base.RepoRoot, rootPackageJSON, r.opts.runOpts.singlePackage)
 	if err != nil {
 		return err
 	}
+
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
 	pkgDepGraph, err := context.New(context.WithGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot)))
@@ -437,9 +438,10 @@ type runOpts struct {
 	dryRun     bool
 	dryRunJSON bool
 	// Graph flags
-	graphDot  bool
-	graphFile string
-	noDaemon  bool
+	graphDot      bool
+	graphFile     string
+	noDaemon      bool
+	singlePackage bool
 }
 
 var (
@@ -472,6 +474,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
 	flags.BoolVar(&opts.only, "only", false, _onlyHelp)
 	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
+	flags.BoolVar(&opts.singlePackage, "single-package", false, "Run turbo in single-package mode")
 	// This is a no-op flag, we don't need it anymore
 	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
 	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
@@ -483,6 +486,9 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	}
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
+		panic(err)
+	}
+	if err := flags.MarkHidden("single-package"); err != nil {
 		panic(err)
 	}
 	aliases["dry"] = "dry-run"

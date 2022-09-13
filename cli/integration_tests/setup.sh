@@ -1,2 +1,7 @@
 #!/bin/sh
-TURBO=${TESTDIR}/../turbo
+
+DIR=${TESTDIR}
+while [ $(basename $DIR) != "cli" ]; do
+  DIR=$(dirname $DIR)
+done
+TURBO=${DIR}/turbo

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"muzzammil.xyz/jsonc"
@@ -70,6 +72,39 @@ type TaskDefinition struct {
 	OutputMode              util.TaskOutputMode
 }
 
+func LoadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+	var turboJSON *TurboJSON
+	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
+	if !includeSynthesizedFromRootPackageJSON && err != nil {
+		// There was an error, and we don't have any chance of recovering
+		// because we aren't synthesizing anything
+		return nil, err
+	} else if !includeSynthesizedFromRootPackageJSON {
+		// We're not synthesizing anything and there was no error, we're done
+		return turboFromFiles, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		// turbo.json doesn't exist, but we're going try to synthesize something
+		turboJSON = &TurboJSON{
+			Pipeline: make(Pipeline),
+		}
+	} else if err != nil {
+		// some other happened, we can't recover
+		return nil, err
+	} else {
+		// we're synthesizing, but we have a starting point
+		turboJSON = turboFromFiles
+	}
+
+	for scriptName, _ := range rootPackageJSON.Scripts {
+		// How do we encode these? do we synthesize // when finding the task?
+		if !turboJSON.Pipeline.HasTask(scriptName) {
+			taskName := util.RootTaskID(scriptName)
+			turboJSON.Pipeline[taskName] = TaskDefinition{}
+		}
+	}
+	return turboJSON, nil
+}
+
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 
@@ -103,8 +138,13 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	}
 
 	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
 }
+
+// func SynthesizeTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+// 	turboJSON := &TurboJSON{}
+
+// }
 
 // readTurboJSON reads the configFile in to a struct
 func readTurboJSON(path turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
