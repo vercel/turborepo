@@ -1,15 +1,13 @@
 package cache
 
 import (
-	"os"
+	"net/http"
 	"reflect"
 	"sync/atomic"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -110,6 +108,25 @@ func TestPutCachingDisabled(t *testing.T) {
 	}
 }
 
+type fakeClient struct{}
+
+// FetchArtifact implements client
+func (*fakeClient) FetchArtifact(hash string) (*http.Response, error) {
+	panic("unimplemented")
+}
+
+// GetTeamID implements client
+func (*fakeClient) GetTeamID() string {
+	return "fake-team-id"
+}
+
+// PutArtifact implements client
+func (*fakeClient) PutArtifact(hash string, body []byte, duration int, tag string) error {
+	panic("unimplemented")
+}
+
+var _ client = &fakeClient{}
+
 func TestFetchCachingDisabled(t *testing.T) {
 	disabledCache := newDisabledCache()
 	caches := []Cache{
@@ -158,13 +175,12 @@ func (nullRecorder) LogEvent(analytics.EventPayload) {}
 
 func TestNew(t *testing.T) {
 	// Test will bomb if this fails, no need to specially handle the error
-	cwd, _ := os.Getwd()
+	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	type args struct {
 		opts           Opts
-		config         *config.Config
 		recorder       analytics.Recorder
 		onCacheRemoved OnCacheRemoved
-		client         client
+		client         fakeClient
 	}
 	tests := []struct {
 		name    string
@@ -179,7 +195,6 @@ func TestNew(t *testing.T) {
 					SkipFilesystem: true,
 					SkipRemote:     true,
 				},
-				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
@@ -191,12 +206,10 @@ func TestNew(t *testing.T) {
 			args: args{
 				opts: Opts{
 					SkipFilesystem: true,
-					SkipRemote:     false,
 					RemoteCacheOpts: fs.RemoteCacheOptions{
 						Signature: true,
 					},
 				},
-				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
@@ -209,41 +222,32 @@ func TestNew(t *testing.T) {
 			name: "With just fsCache configured, new returns only an fsCache",
 			args: args{
 				opts: Opts{
-					Dir:            turbopath.AbsolutePath(cwd),
-					SkipFilesystem: false,
-					SkipRemote:     true,
+					SkipRemote: true,
 				},
-				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
-			want:    &fsCache{},
-			wantErr: false,
+			want: &fsCache{},
 		},
 		{
 			name: "With both configured, new returns an fsCache and httpCache",
 			args: args{
 				opts: Opts{
-					Dir:            turbopath.AbsolutePath(cwd),
-					SkipFilesystem: false,
-					SkipRemote:     false,
 					RemoteCacheOpts: fs.RemoteCacheOptions{
 						Signature: true,
 					},
 				},
-				config:         &config.Config{},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
 			},
 			want: &cacheMultiplexer{
 				caches: []Cache{&fsCache{}, &httpCache{}},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.args.opts, tt.args.config, tt.args.client, tt.args.recorder, tt.args.onCacheRemoved)
+			got, err := New(tt.args.opts, repoRoot, &tt.args.client, tt.args.recorder, tt.args.onCacheRemoved)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return
