@@ -25,11 +25,12 @@ type fsCache struct {
 
 // newFsCache creates a new filesystem cache
 func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) (*fsCache, error) {
-	if err := opts.Dir.MkdirAll(); err != nil {
+	cacheDir := opts.ResolveCacheDir(repoRoot)
+	if err := cacheDir.MkdirAll(); err != nil {
 		return nil, err
 	}
 	return &fsCache{
-		cacheDirectory: opts.Dir.ToStringDuringMigration(),
+		cacheDirectory: cacheDir.ToStringDuringMigration(),
 		recorder:       recorder,
 		repoRoot:       repoRoot,
 	}, nil
