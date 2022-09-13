@@ -24,7 +24,6 @@ You should specify your dev task like this in your `turbo.json`.
 {
   "pipeline": {
     "dev": {
-      "outputs": [],
       "cache": false
     }
   }
@@ -59,13 +58,11 @@ In these cases, use [`dependsOn`](/docs/core-concepts/running-tasks#in-the-same-
     "dev": {
       "dependsOn": ["codegen", "db:migrate"],
       "cache": false,
-      "outputs": [],
     },
     "codegen": {
       "outputs": ["./codegen-outputs/**"]
     },
     "db:migrate": {
-      "outputs": [],
       "cache": false
     }
   }

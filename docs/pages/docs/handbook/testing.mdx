@@ -1,0 +1,66 @@
+import { Tabs, Tab } from '../../../components/Tabs'
+import Callout from '../../../components/Callout'
+
+# Testing in a Monorepo
+
+Along with linting and building, testing is a crucial part of a production-ready monorepo. Whether you're using end-to-end tests or a unit test suite, integrating them with Turborepo will lead to enormous speed-ups.
+
+## Working with test runners
+
+Let's say we have a monorepo that looks like this:
+
+```
+├── apps
+│   └── web
+│       └── package.json
+└── packages
+    └── shared
+        └── package.json
+```
+
+Both `apps/web` and `packages/shared` have their own test suite. Their `package.json` files look like this:
+
+<Tabs items={["Jest", "Vitest"]} storageKey="selected-test-runner">
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "jest"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+```
+    </Tab>
+</Tabs>
+
+Inside the root `turbo.json`, we recommend setting up a `test` task in your [pipeline](/docs/core-concepts/running-tasks):
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "test": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Now, inside your root `package.json`
+
+### Coverage reports
+
+## End-to-end tests
+
+## Running tests in watch mode
+
+```
+
+```
