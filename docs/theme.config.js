@@ -4,7 +4,6 @@ import { Footer } from "./components/Footer";
 import TurboLogo from "./components/logos/Turbo";
 
 const theme = {
-  github: "https://github.com/vercel/turborepo",
   project: {
     link: "https://github.com/vercel/turborepo",
   },
@@ -17,7 +16,7 @@ const theme = {
     float: true,
   },
   font: false,
-  projectChat: {
+  chat: {
     link: "https://turborepo.org/discord",
   },
   feedback: {

@@ -230,6 +230,7 @@ func requireGitCmd(t *testing.T, repoRoot turbopath.AbsolutePath, args ...string
 func TestGetPackageDeps(t *testing.T) {
 	// Directory structure:
 	// <root>/
+	//   new-root-file <- new file not added to git
 	//   my-pkg/
 	//     committed-file
 	//     deleted-file
@@ -280,6 +281,11 @@ func TestGetPackageDeps(t *testing.T) {
 	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
+	// create an untracked file in git up a level
+	rootFilePath := repoRoot.Join("new-root-file")
+	err = rootFilePath.WriteFile([]byte("new-root bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+
 	tests := []struct {
 		opts     *PackageDepsOptions
 		expected map[turbopath.AnchoredUnixPath]string
@@ -320,6 +326,20 @@ func TestGetPackageDeps(t *testing.T) {
 				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
+		// inputs with traversal work
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"../**/*-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"../new-root-file": "8906ddcdd634706188bd8ef1c98ac07b9be3425e",
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
+				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
+			},
+		},
 		// inputs with another glob pattern works
 		{
 			opts: &PackageDepsOptions{
@@ -327,6 +347,19 @@ func TestGetPackageDeps(t *testing.T) {
 				InputPatterns: []string{"**/{uncommitted,committed}-file"},
 			},
 			expected: map[turbopath.AnchoredUnixPath]string{
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+		// inputs with another glob pattern + traversal work
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"../**/{new-root,uncommitted,committed}-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"../new-root-file": "8906ddcdd634706188bd8ef1c98ac07b9be3425e",
 				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
 				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
