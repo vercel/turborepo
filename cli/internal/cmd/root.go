@@ -79,7 +79,7 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 
 	cmd := &cobra.Command{
 		Use:              "turbo",
-		Short:            "Turbo charge your monorepo",
+		Short:            "Turbocharge your monorepo",
 		TraverseChildren: true,
 		Version:          helper.TurboVersion,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
