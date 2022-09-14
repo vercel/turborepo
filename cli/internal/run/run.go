@@ -185,7 +185,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
-	pkgDepGraph, err := context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot))
+
+	var pkgDepGraph *context.Context
+	if r.opts.runOpts.singlePackage {
+		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
+	} else {
+		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot))
+	}
 	if err != nil {
 		return err
 	}
@@ -318,46 +324,19 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
 		if rs.Opts.runOpts.dryRunJSON {
-			dryRun := &struct {
-				Packages []string     `json:"packages"`
-				Tasks    []hashedTask `json:"tasks"`
-			}{
-				Packages: packagesInScope,
-				Tasks:    tasksRun,
+			var rendered string
+			if r.opts.runOpts.singlePackage {
+				rendered, err = renderDryRunSinglePackageJSON(tasksRun)
+			} else {
+				rendered, err = renderDryRunFullJSON(tasksRun, packagesInScope)
 			}
-			bytes, err := json.MarshalIndent(dryRun, "", "  ")
 			if err != nil {
-				return errors.Wrap(err, "failed to render JSON")
+				return err
 			}
-			r.base.UI.Output(string(bytes))
+			r.base.UI.Output(rendered)
 		} else {
-			r.base.UI.Output("")
-			r.base.UI.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
-			p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-			fmt.Fprintln(p, "Name\tPath\t")
-			for _, pkg := range packagesInScope {
-				fmt.Fprintf(p, "%s\t%s\t\n", pkg, g.PackageInfos[pkg].Dir)
-			}
-			p.Flush()
-
-			r.base.UI.Output("")
-			r.base.UI.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
-
-			for _, task := range tasksRun {
-				r.base.UI.Info(util.Sprintf("${BOLD}%s${RESET}", task.TaskID))
-				w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
-				w.Flush()
+			if err := displayDryTextRun(r.base.UI, tasksRun, packagesInScope, g.PackageInfos, r.opts.runOpts.singlePackage); err != nil {
+				return err
 			}
 		}
 	} else {
@@ -366,6 +345,80 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		r.base.UI.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
 		r.base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		return r.executeTasks(ctx, g, rs, engine, packageManager, tracker, startAt)
+	}
+	return nil
+}
+
+func renderDryRunSinglePackageJSON(tasksRun []hashedTask) (string, error) {
+	singlePackageTasks := make([]hashedSinglePackageTask, len(tasksRun))
+	for i, ht := range tasksRun {
+		singlePackageTasks[i] = ht.toSinglePackageTask()
+	}
+	dryRun := &struct {
+		Tasks []hashedSinglePackageTask `json:"tasks"`
+	}{singlePackageTasks}
+	bytes, err := json.MarshalIndent(dryRun, "", "  ")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to render JSON")
+	}
+	return string(bytes), nil
+}
+
+func renderDryRunFullJSON(tasksRun []hashedTask, packagesInScope []string) (string, error) {
+	dryRun := &struct {
+		Packages []string     `json:"packages"`
+		Tasks    []hashedTask `json:"tasks"`
+	}{
+		Packages: packagesInScope,
+		Tasks:    tasksRun,
+	}
+	bytes, err := json.MarshalIndent(dryRun, "", "  ")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to render JSON")
+	}
+	return string(bytes), nil
+}
+
+func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []string, packageInfos map[interface{}]*fs.PackageJSON, isSinglePackage bool) error {
+	if !isSinglePackage {
+		ui.Output("")
+		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
+		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+		fmt.Fprintln(p, "Name\tPath\t")
+		for _, pkg := range packagesInScope {
+			fmt.Fprintf(p, "%s\t%s\t\n", pkg, packageInfos[pkg].Dir)
+		}
+		if err := p.Flush(); err != nil {
+			return err
+		}
+	}
+
+	ui.Output("")
+	ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
+
+	for _, task := range tasksRun {
+		taskName := task.TaskID
+		if isSinglePackage {
+			taskName = util.RootTaskTaskName(taskName)
+		}
+		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
+		if !isSinglePackage {
+			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
+		}
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
+		if err := w.Flush(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -723,6 +776,24 @@ type hashedTask struct {
 	Dir          string           `json:"directory"`
 	Dependencies []string         `json:"dependencies"`
 	Dependents   []string         `json:"dependents"`
+}
+
+func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
+	return hashedSinglePackageTask{
+		Task:    util.RootTaskTaskName(ht.TaskID),
+		Hash:    ht.Hash,
+		Command: ht.Command,
+		Outputs: ht.Outputs,
+		LogFile: ht.LogFile,
+	}
+}
+
+type hashedSinglePackageTask struct {
+	Task    string   `json:"task"`
+	Hash    string   `json:"hash"`
+	Command string   `json:"command"`
+	Outputs []string `json:"outputs"`
+	LogFile string   `json:"logFile"`
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {

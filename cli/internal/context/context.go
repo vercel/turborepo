@@ -101,6 +101,22 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 	return constraint.Check(pkgVersion)
 }
 
+func SinglePackageGraph(repoRoot turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
+	packageInfos := make(map[interface{}]*fs.PackageJSON)
+	packageInfos[util.RootPkgName] = rootPackageJSON
+	c := &Context{
+		PackageInfos: packageInfos,
+		RootNode:     core.ROOT_NODE_NAME,
+	}
+	c.TopologicalGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
+	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	if err != nil {
+		return nil, err
+	}
+	c.PackageManager = packageManager
+	return c, nil
+}
+
 // BuildPackageGraph constructs a Context instance with information about the package dependency graph
 func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsoluteSystemPath) (*Context, error) {
 	c := &Context{}

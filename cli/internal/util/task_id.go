@@ -31,6 +31,10 @@ func GetPackageTaskFromId(taskId string) (packageName string, task string) {
 	return arr[0], arr[1]
 }
 
+func RootTaskTaskName(taskID string) string {
+	return strings.TrimPrefix(taskID, RootPkgName+TaskDelimiter)
+}
+
 // IsPackageTask returns true if a is a package-specific task (e.g. myapp#build)
 func IsPackageTask(task string) bool {
 	return strings.Contains(task, TaskDelimiter)
