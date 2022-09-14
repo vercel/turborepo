@@ -35,6 +35,8 @@ jobs:
         with:
           token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
