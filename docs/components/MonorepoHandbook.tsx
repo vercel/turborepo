@@ -111,7 +111,7 @@ export const TasksArea = () => {
         }}
         href="/docs/handbook/publishing-packages/basics"
       ></DetailedFeatureLink>
-      <DetailedFeatureLink
+      {/* <DetailedFeatureLink
         feature={{
           Icon: BookmarkIcon,
           description:
@@ -119,7 +119,7 @@ export const TasksArea = () => {
           name: "Code Generation",
         }}
         href="/docs/handbook/code-generators"
-      ></DetailedFeatureLink>
+      ></DetailedFeatureLink> */}
     </Wrapper>
   );
 };
