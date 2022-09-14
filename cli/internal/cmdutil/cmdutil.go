@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -52,18 +53,23 @@ type Helper struct {
 	// to allow overrides in tests
 	UserConfigPath turbopath.AbsolutePath
 
-	cleanups []io.Closer
+	cleanupsMu sync.Mutex
+	cleanups   []io.Closer
 }
 
 // RegisterCleanup saves a function to be run after turbo execution,
 // even if the command that runs returns an error
 func (h *Helper) RegisterCleanup(cleanup io.Closer) {
+	h.cleanupsMu.Lock()
+	defer h.cleanupsMu.Unlock()
 	h.cleanups = append(h.cleanups, cleanup)
 }
 
 // Cleanup runs the register cleanup handlers. It requires the flags
 // to the root command so that it can construct a UI if necessary
 func (h *Helper) Cleanup(flags *pflag.FlagSet) {
+	h.cleanupsMu.Lock()
+	defer h.cleanupsMu.Unlock()
 	var ui cli.Ui
 	for _, cleanup := range h.cleanups {
 		if err := cleanup.Close(); err != nil {
