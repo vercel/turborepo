@@ -1,0 +1,51 @@
+// mocked test comment
+{
+  "pipeline": {
+    "build": {
+      // mocked test comment
+      "dependsOn": [
+        // mocked test comment
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**"
+      ],
+      "outputMode": "new-only"
+    }, // mocked test comment
+    "lint": {
+      "outputs": [],
+      "dependsOn": [
+        "$MY_VAR"
+      ],
+      "cache": true,
+      "outputMode": "new-only"
+    },
+    "dev": {
+      "cache": false,
+      "outputMode": "full"
+    },
+    /* mocked test comment */
+    "publish": {
+      "outputs": [
+        "dist/**"
+      ],
+      "inputs": [
+         /* 
+          mocked test comment 
+         */
+        "build/**/*"
+      ],
+      "dependsOn": [
+         /* mocked test comment */"^publish",
+        "build",
+        "admin#lint"
+      ],
+      "cache": false
+    }
+  },
+  "remoteCache": {
+    "teamId": "team_id",
+    "signature": true
+  }
+}
