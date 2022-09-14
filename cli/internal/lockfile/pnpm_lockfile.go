@@ -214,7 +214,7 @@ func pruneImporters(importers *map[string]ProjectSnapshot, workspacePackages []t
 	}
 
 	for _, workspacePath := range workspacePackages {
-		workspace := string(workspacePath)
+		workspace := workspacePath.ToUnixPath().ToString()
 		importer, ok := (*importers)[workspace]
 
 		if !ok {
