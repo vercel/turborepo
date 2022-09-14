@@ -78,6 +78,16 @@ func (l *YarnLockfile) Encode(w io.Writer) error {
 func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 	lockfile, err := yarnlock.ParseLockFileData(contents)
 	hasCRLF := bytes.HasSuffix(contents, _crlfLiteral)
+	newline := []byte("\n")
+
+	// there's no trailing newline for this file, need to inspect more to see newline style
+	if !hasCRLF && !bytes.HasSuffix(contents, newline) {
+		firstNewline := bytes.IndexByte(contents, newline[0])
+		if firstNewline != -1 && firstNewline != 0 {
+			byteBeforeNewline := contents[firstNewline-1]
+			hasCRLF = byteBeforeNewline == '\r'
+		}
+	}
 
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to decode yarn.lock")
