@@ -1,0 +1,22 @@
+name: "PR: Enable Docs Merge"
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+on:
+  workflow_run:
+    workflows: [Release]
+
+    # TODO: do we need to check if upstream workflow completed successfully?
+    types: [completed]
+
+jobs:
+  DoIt:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo merged"
+
+      - name: Update Labels
+        shell: bash
+        # TODO: the --label filter should only be for the release type from the upstream workflow...
+        # TODO: this doesn't seem to work yet
+        run: |
+          gh pr list --label "pr: docs" --draft=false --json "number" | jq -c ".[]" | jq .number | xargs gh pr edit --remove-label="pr: hold" --add-label="pr: automerge"

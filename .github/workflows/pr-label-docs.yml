@@ -1,0 +1,16 @@
+name: "PR: Add Labels to Docs Changes"
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+on:
+  pull_request:
+    types:
+      - opened
+    paths:
+      - "docs/*"
+
+jobs:
+  add-label:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+        gh pr edit $GITHUB_PR --add-label "docs,pr: on hold"
