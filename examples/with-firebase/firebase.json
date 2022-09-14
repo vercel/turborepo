@@ -1,0 +1,31 @@
+{
+  "functions": {
+    "source": "apps/api"
+  },
+  "hosting": {
+    "public": "apps/web/dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "function": "server"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "emulators": {
+    "ui": {
+      "enabled": true
+    },
+    "functions": {
+      "port": 5001
+    },
+    "hosting": {
+      "enabled": true,
+      "port": 5000
+    }
+  }
+}
