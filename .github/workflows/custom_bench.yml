@@ -1,0 +1,74 @@
+name: Custom next-dev Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Filter'
+        default: '(bench_startup|bench_hydration|bench_simple_file_change|bench_restart)/Turbopack'
+        required: true
+      counts:
+        description: 'Modules counts'
+        default: '100,1000'
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_LTO: true
+  RUST_BACKTRACE: 1
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest-16-core
+    name: ${{ github.event.inputs.filter }} - ${{ github.event.inputs.counts }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          cache: 'yarn'
+          node-version: 16
+
+      - name: install node.js dependencies
+        run: yarn install
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: benchmark-next-dev
+
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+      - name: Run cargo bench
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 90
+        env:
+          TURBOPACK_BENCH_BUNDLERS: all
+          TURBOPACK_BENCH_COUNTS: ${{ github.event.inputs.counts }}
+        with:
+          command: bench
+          args: -p next-dev -- "${{ github.event.inputs.filter }}"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark report
+          path: target/criterion/
+
+      - name: Install critcmp
+        if: always()
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
+      # This avoids putting this data into the rust-cache
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
