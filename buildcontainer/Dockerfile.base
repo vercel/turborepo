@@ -1,0 +1,56 @@
+# golang parameters
+ARG GO_VERSION
+
+FROM golang:${GO_VERSION}-bullseye
+LABEL maintainer="Artur Troian <troian dot ap at gmail dot com>"
+LABEL "org.opencontainers.image.source"="https://github.com/goreleaser/goreleaser-cross-base"
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG GORELEASER_VERSION
+ARG APT_MIRROR
+ARG TINI_VERSION
+ARG COSIGN_VERSION
+ARG COSIGN_SHA256
+ARG GORELEASER_DOWNLOAD_URL=https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}
+
+# install cosign
+COPY --from=gcr.io/projectsigstore/cosign:v1.11.1@sha256:f9fd5a287a67f4b955d08062a966df10f9a600b6b8583fd367bce3f1f000a429 /ko-app/cosign /usr/local/bin/cosign
+COPY entrypoint.sh /
+
+# Install deps
+RUN \
+    set -x \
+ && dpkgArch="$(dpkg --print-architecture)" \
+ && curl --fail -sSL -o /tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-$dpkgArch \
+ && chmod +x /tini \
+ && echo "Starting image build for Debian" \
+ && sed -ri "s/(httpredir|deb).debian.org/${APT_MIRROR:-deb.debian.org}/g" /etc/apt/sources.list \
+ && sed -ri "s/(security).debian.org/${APT_MIRROR:-security.debian.org}/g" /etc/apt/sources.list \
+ && apt-get update \
+ && apt-get install --no-install-recommends -y -q \
+    software-properties-common \
+ && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 apt-key add - \
+ && echo "deb [arch=$dpkgArch] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list \
+ && apt-get update \
+ && apt-get install --no-install-recommends -y -q \
+        docker-ce \
+        docker-ce-cli \
+        make \
+        git-core \
+        wget \
+        xz-utils \
+        cmake \
+        openssl \
+ && apt -y autoremove \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+ && GORELEASER_DOWNLOAD_FILE=goreleaser_${GORELEASER_VERSION}_${dpkgArch}.deb \
+ && GORELEASER_DOWNLOAD_DEB="${GORELEASER_DOWNLOAD_URL}/${GORELEASER_DOWNLOAD_FILE}" \
+ && wget https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/checksums.txt.pem \
+ && cosign verify-blob --cert checksums.txt.pem --signature "${GORELEASER_DOWNLOAD_URL}/checksums.txt.sig" "${GORELEASER_DOWNLOAD_URL}/checksums.txt" \
+ && wget ${GORELEASER_DOWNLOAD_DEB} \
+ && dpkg -i ${GORELEASER_DOWNLOAD_FILE} \
+ && rm ${GORELEASER_DOWNLOAD_FILE} \
+ && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/tini", "--", "/entrypoint.sh"]
