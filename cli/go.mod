@@ -19,8 +19,8 @@ require (
 	github.com/hashicorp/go-gatedio v0.5.0
 	github.com/hashicorp/go-hclog v1.2.1
 	github.com/hashicorp/go-retryablehttp v0.6.8
+	github.com/iseki0/go-yarnlock v0.0.2-0.20220905015017-a2a90751cdfa
 	github.com/karrick/godirwalk v1.16.1
-	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-isatty v0.0.14
 	github.com/mitchellh/cli v1.1.2
 	github.com/mitchellh/go-homedir v1.1.0
@@ -33,7 +33,7 @@ require (
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.12.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	github.com/yookoala/realpath v1.0.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.46.2
@@ -46,6 +46,7 @@ require (
 require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
+	github.com/andybalholm/crlf v0.0.0-20171020200849-670099aa064f // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
