@@ -4,9 +4,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
 on:
   pull_request:
     types: [opened, edited, synchronize]

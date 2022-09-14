@@ -1,8 +1,5 @@
 name: CLI Run Examples
 
-env:
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
