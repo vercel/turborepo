@@ -195,7 +195,10 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 		OnlyBuiltDependencies:     p.OnlyBuiltDependencies,
 		Overrides:                 p.Overrides,
 		PackageExtensionsChecksum: p.PackageExtensionsChecksum,
-		PatchedDependencies:       p.PatchedDependencies,
+		// TODO only the applicable patches should be copied to the subgraph
+		// before we can implement this we need to be able to prune the pnpm section
+		// of package.json otherwise installation will fail
+		PatchedDependencies: p.PatchedDependencies,
 	}
 
 	return &lockfile, nil
@@ -237,6 +240,20 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 		return errors.Wrap(err, "unable to encode pnpm lockfile")
 	}
 	return nil
+}
+
+// Patches return a list of patches used in the lockfile
+func (p *PnpmLockfile) Patches() []string {
+	if len(p.PatchedDependencies) == 0 {
+		return nil
+	}
+	patches := make([]string, len(p.PatchedDependencies))
+	i := 0
+	for _, patch := range p.PatchedDependencies {
+		patches[i] = patch.Path
+		i++
+	}
+	return patches
 }
 
 func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, bool) {

@@ -105,6 +105,11 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 	return nil
 }
 
+// Patches return a list of patches used in the lockfile
+func (l *BerryLockfile) Patches() []string {
+	return nil
+}
+
 // DecodeBerryLockfile Takes the contents of a berry lockfile and returns a struct representation
 func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 	var lockfile map[string]*YarnLockfileEntry

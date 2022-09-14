@@ -17,4 +17,6 @@ type Lockfile interface {
 	Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error)
 	// Encode encode the lockfile representation and write it to the given writer
 	Encode(w io.Writer) error
+	// Patches return a list of patches used in the lockfile
+	Patches() []string
 }

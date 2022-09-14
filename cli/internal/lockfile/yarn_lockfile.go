@@ -75,6 +75,11 @@ func (l *YarnLockfile) Encode(w io.Writer) error {
 	return nil
 }
 
+// Patches return a list of patches used in the lockfile
+func (l *YarnLockfile) Patches() []string {
+	return nil
+}
+
 // DecodeYarnLockfile Takes the contents of a yarn lockfile and returns a struct representation
 func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 	lockfile, err := yarnlock.ParseLockFileData(contents)
