@@ -46,10 +46,9 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: ./.github/actions/setup-deps
+      - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          setup-node: false # TODO: Does this need to be customized in this workflow?
 
       - uses: pnpm/action-setup@v2.2.2
         with:

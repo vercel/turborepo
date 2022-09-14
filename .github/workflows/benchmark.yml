@@ -17,28 +17,14 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-deps
+      - uses: actions/checkout@v
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          setup-node: false # TODO: does this need to be customized in this workflow?
-
-      - uses: pnpm/action-setup@v2.2.2
-        with:
-          version: 7.2.1
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-          cache: pnpm
 
       - name: Build
         run: cd cli && make turbo
-
-      - name: Install dependencies
-        run: pnpm install --filter=benchmark
 
       - name: Download previous benchmark results
         # continue on error so that we handle the bootstrap case where there is no previous data

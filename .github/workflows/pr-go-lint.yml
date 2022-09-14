@@ -20,11 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-deps
+      - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          setup-node: false
 
       - name: Setup Protos
         run: cd cli && make compile-protos
