@@ -31,7 +31,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      # TODO: what is this for? The other Go workflows don't need it
       - name: Install Sponge
         shell: bash
         run: |
@@ -51,7 +50,6 @@ jobs:
         with:
           version: 7.2.1
 
-      # TODO: Is this necessary? The other Go jobs don't include this
       - name: Make sure pnpm always has a cache
         shell: bash
         run: |
