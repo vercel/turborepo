@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -131,7 +132,7 @@ func (p *PnpmLockfile) ResolvePackage(name string, version string) (string, stri
 	if !ok {
 		return "", "", false
 	}
-	key := fmt.Sprintf("/%s/%s", name, resolvedVersion)
+	key := formatPnpmKey(name, resolvedVersion)
 	if entry, ok := (p.Packages)[key]; ok {
 		var version string
 		if entry.Version != "" {
@@ -169,7 +170,7 @@ func (p *PnpmLockfile) AllDependencies(key string) (map[string]string, bool) {
 }
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (p *PnpmLockfile) Subgraph(packages []string) (Lockfile, error) {
+func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	lockfilePackages := make(map[string]PackageSnapshot, len(packages))
 	for _, key := range packages {
 		entry, ok := p.Packages[key]
@@ -180,9 +181,15 @@ func (p *PnpmLockfile) Subgraph(packages []string) (Lockfile, error) {
 		}
 	}
 
+	importers, err := pruneImporters(&p.Importers, workspacePackages)
+
+	if err != nil {
+		return nil, err
+	}
+
 	lockfile := PnpmLockfile{
 		Version:                   p.Version,
-		Importers:                 p.Importers,
+		Importers:                 importers,
 		Packages:                  lockfilePackages,
 		NeverBuiltDependencies:    p.NeverBuiltDependencies,
 		OnlyBuiltDependencies:     p.OnlyBuiltDependencies,
@@ -192,6 +199,29 @@ func (p *PnpmLockfile) Subgraph(packages []string) (Lockfile, error) {
 	}
 
 	return &lockfile, nil
+}
+
+// Prune imports to only those have all of their dependencies in the packages list
+func pruneImporters(importers *map[string]ProjectSnapshot, workspacePackages []turbopath.AnchoredSystemPath) (map[string]ProjectSnapshot, error) {
+	prunedImporters := map[string]ProjectSnapshot{}
+
+	// Copy over root level importer
+	if root, ok := (*importers)["."]; ok {
+		prunedImporters["."] = root
+	}
+
+	for _, workspacePath := range workspacePackages {
+		workspace := string(workspacePath)
+		importer, ok := (*importers)[workspace]
+
+		if !ok {
+			return nil, fmt.Errorf("Unable to find import entry for workspace package %s", workspace)
+		}
+
+		prunedImporters[workspace] = importer
+	}
+
+	return prunedImporters, nil
 }
 
 // Encode encode the lockfile representation and write it to the given writer
@@ -211,7 +241,7 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 
 func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, bool) {
 	// Check if the specifier is already a resolved version
-	_, ok := p.Packages[fmt.Sprintf("/%s/%s", name, specifier)]
+	_, ok := p.Packages[formatPnpmKey(name, specifier)]
 	if ok {
 		return specifier, true
 	}
@@ -233,4 +263,8 @@ func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, 
 		}
 	}
 	return "", false
+}
+
+func formatPnpmKey(name string, version string) string {
+	return fmt.Sprintf("/%s/%s", name, version)
 }

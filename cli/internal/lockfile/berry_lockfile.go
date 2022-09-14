@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,7 +59,7 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 }
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (l *BerryLockfile) Subgraph(packages []string) (Lockfile, error) {
+func (l *BerryLockfile) Subgraph(_ []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	lockfile := make(BerryLockfile, len(packages))
 	for _, key := range packages {
 		entry, ok := (*l)[key]

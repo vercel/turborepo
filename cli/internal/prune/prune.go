@@ -190,7 +190,7 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 
-	lockfile, err := ctx.Lockfile.Subgraph(lockfileKeys)
+	lockfile, err := ctx.Lockfile.Subgraph(workspaces, lockfileKeys)
 	if err != nil {
 		return errors.Wrap(err, "Failed creating pruned lockfile")
 	}

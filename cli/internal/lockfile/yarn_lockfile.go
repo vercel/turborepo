@@ -8,6 +8,7 @@ import (
 	"github.com/andybalholm/crlf"
 	"github.com/iseki0/go-yarnlock"
 	"github.com/pkg/errors"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 var _crlfLiteral = []byte("\r\n")
@@ -50,7 +51,7 @@ func (l *YarnLockfile) AllDependencies(key string) (map[string]string, bool) {
 }
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (l *YarnLockfile) Subgraph(packages []string) (Lockfile, error) {
+func (l *YarnLockfile) Subgraph(_ []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	lockfile := make(map[string]yarnlock.LockFileEntry, len(packages))
 	for _, key := range packages {
 		entry, ok := (l.inner)[key]
