@@ -907,6 +907,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "easy-error"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04cc9717c61d2908f50d16ebb5677c7e82ea2bdf7cb52f66b30fe079f3212e16"
+
+[[package]]
 name = "either"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3146,6 +3152,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "styled_jsx"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9af0e60ffad88deac85060d184711f54e01b848c4c0455a6dab45c46fced53c1"
+dependencies = [
+ "easy-error",
+ "swc_core",
+ "tracing",
+]
+
+[[package]]
 name = "supports-color"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3327,10 +3344,12 @@ dependencies = [
  "swc_css_ast",
  "swc_css_codegen",
  "swc_css_parser",
+ "swc_css_prefixer",
  "swc_css_utils",
  "swc_css_visit",
  "swc_ecma_ast",
  "swc_ecma_codegen",
+ "swc_ecma_minifier",
  "swc_ecma_parser",
  "swc_ecma_quote_macros",
  "swc_ecma_transforms_base",
@@ -3395,6 +3414,23 @@ dependencies = [
  "swc_atoms",
  "swc_common",
  "swc_css_ast",
+]
+
+[[package]]
+name = "swc_css_prefixer"
+version = "0.121.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "774759d18cf8a0e2f5cab1d7fff457bb383f4b8e8c2fbe25a0a52e2a74c9a7be"
+dependencies = [
+ "once_cell",
+ "preset_env_base",
+ "serde",
+ "serde_json",
+ "swc_atoms",
+ "swc_common",
+ "swc_css_ast",
+ "swc_css_utils",
+ "swc_css_visit",
 ]
 
 [[package]]
@@ -4725,6 +4761,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_regex",
+ "styled_jsx",
  "swc_core",
  "testing",
  "tokio",
