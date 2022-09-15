@@ -3,11 +3,11 @@ import { Tabs, Tab } from '../../../../components/Tabs'
 
 # Bundling packages in a Monorepo
 
-Unlike [internal](TODO) packages, external packages can be deployed to npm _and_ used locally. In this guide, we'll be using a bundler to bundle a package to [`CommonJS`](https://en.wikipedia.org/wiki/CommonJS), the most commonly used format used on npm.
+Unlike [internal](/docs/handbook/sharing-code/internal-packages) packages, external packages can be deployed to npm _and_ used locally. In this guide, we'll be using a bundler to bundle a package to [`CommonJS`](https://en.wikipedia.org/wiki/CommonJS), the most commonly used format used on npm.
 
 ## Setting up a build script
 
-Let's start with a package created using our [internal packages](TODO) tutorial.
+Let's start with a package created using our [internal packages](/docs/handbook/sharing-code/internal-packages) tutorial.
 
 There, we created a `math-helpers` package which contained a few helper functions for adding and subtracting. We've decided that this package is good enough for `npm`, so we're going to bundle it.
 
@@ -32,7 +32,7 @@ We're going to add a `build` script to `math-helpers`, using a bundler. If you'r
 <Tabs items={['tsup']} storageKey="selected-bundler">
   <Tab>
 
-First install, `tsup` inside `packages/math-helpers` using your [package manager](TODO).
+First install, `tsup` inside `packages/math-helpers` using your [package manager](/docs/handbook/package-installation).
 
 ```json filename="packages/math-helpers/package.json"
 {
@@ -57,7 +57,7 @@ First install, `tsup` inside `packages/math-helpers` using your [package manager
 }
 ```
 
-That way, when `tsup` is run the outputs can be [cached](TODO) by Turborepo.
+That way, when `tsup` is run the outputs can be [cached](/docs/core-concepts/caching) by Turborepo.
 
 Finally, we should change `main` to point at `./dist/index.js` inside `package.json`. `types` can point at `./dist/index.d.ts`:
 
@@ -81,7 +81,7 @@ Bundling is a complicated topic, and we don't have space here to cover everythin
 
 ### Building our package before our app
 
-Before we can run `turbo run build`, there's one thing we need to consider. We've just added a [task dependency](TODO) into our monorepo. The `build` of `packages/math-helpers` needs to run **before** the `build` of `apps/web`.
+Before we can run `turbo run build`, there's one thing we need to consider. We've just added a [task dependency](/docs/core-concepts/running-tasks) into our monorepo. The `build` of `packages/math-helpers` needs to run **before** the `build` of `apps/web`.
 
 Fortunately, we can use `dependsOn` to easily configure this.
 
