@@ -68,12 +68,81 @@ Examples of **correct** code for this rule:
 }
 ```
 
+### Environment accessor functions
+
+In addition to direct access to properties on `process.env`, this rule also allows for dynamic
+access to environment variables via accessor functions. Specify the function name with the
+`envAccessors` options.
+
+The following examples assume `envAccessors: ["ensureEnv"]` in `eslintrc` and the following code:
+
+```js
+const client = MyAPI({ token: ensureEnv("MY_API_TOKEN") });
+```
+
+Examples of **incorrect** code for this rule:
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+Examples of **correct** code for this rule:
+
+```json
+{
+  "globalDependencies": ["$MY_API_TOKEN"]
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build", "$MY_API_TOKEN"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
 ## Options
 
-| Option        | Required | Default     | Details                                                                                                                                     | Example                                      |
-| ------------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `turboConfig` | No       | Auto-detect | Resolved `turbo.json` configuration                                                                                                         | `require("./turbo.json")`                    |
-| `allowList`   | No       | []          | An array of strings (or regular expressions) to exclude. NOTE: an env variable should only be excluded if it has no effect on build outputs | `["MY_API_TOKEN", "^MY_ENV_PREFIX_[A-Z]+$"]` |
+| Option         | Required | Default     | Details                                                                                                                                     | Example                                      |
+| -------------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `turboConfig`  | No       | Auto-detect | Resolved `turbo.json` configuration                                                                                                         | `require("./turbo.json")`                    |
+| `allowList`    | No       | []          | An array of strings (or regular expressions) to exclude. NOTE: an env variable should only be excluded if it has no effect on build outputs | `["MY_API_TOKEN", "^MY_ENV_PREFIX_[A-Z]+$"]` |
+| `envAccessors` | No       | []          | An array of function identifier names which should be treated as environment accessors                                                      | `["getEnv", "ensureEnv"]`                    |
 
 ## Further Reading
 

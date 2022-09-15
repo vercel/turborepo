@@ -29,6 +29,13 @@ const meta: Rule.RuleMetaData = {
             type: "string",
           },
         },
+        envAccessors: {
+          default: [],
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
       },
     },
   ],
@@ -85,6 +92,22 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   };
 
   return {
+    // Check for invocations of envAccessors
+    CallExpression(node) {
+      const { callee } = node;
+      if (
+        callee.type === "Identifier" &&
+        options?.[0]?.envAccessors?.includes(callee.name)
+      ) {
+        const [firstArg] = node.arguments;
+        if (firstArg?.type === "Literal") {
+          if (typeof firstArg.value === "string") {
+            checkKey(node, firstArg.value);
+          }
+        }
+      }
+    },
+    // Check for literal process.env property access
     MemberExpression(node) {
       // we only care about complete process env declarations and non-computed keys
       if (

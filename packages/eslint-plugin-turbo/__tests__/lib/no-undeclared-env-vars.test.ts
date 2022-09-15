@@ -161,6 +161,28 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       code: "for (let x of ['ONE', 'TWO', 'THREE']) { console.log(process.env[x]); }",
       options: [{ turboConfig: getTestTurboConfig() }],
     },
+    {
+      code: `
+        getEnv('GLOBAL_ENV_KEY');
+        getEnv("TASK_ENV_KEY");
+      `,
+      options: [
+        { turboConfig: getTestTurboConfig(), envAccessors: ["getEnv"] },
+      ],
+    },
+    {
+      code: `
+        getEnv("TASK_ENV_KEY");
+        getEnv("ENV_VAR_ALLOWED");
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          envAccessors: ["getEnv"],
+          allowList: ["^ENV_VAR_[A-Z]+$"],
+        },
+      ],
+    },
   ],
 
   invalid: [
@@ -328,6 +350,48 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
         {
           message:
             "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        getEnv('GLOBAL_ENV_KEY');
+        getEnv('GLOBAL_ENV_KEY_NEW');
+        getEnv("TASK_ENV_KEY_NEW");
+      `,
+      options: [
+        { turboConfig: getTestTurboConfig(), envAccessors: ["getEnv"] },
+      ],
+      errors: [
+        {
+          message:
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        getEnv("TASK_ENV_KEY_NEW");
+        getEnv("ENV_VAR_ALLOWED");
+      `,
+      options: [
+        {
+          turboConfig: getTestTurboConfig(),
+          envAccessors: ["getEnv"],
+        },
+      ],
+      errors: [
+        {
+          message:
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_ALLOWED is not listed as a dependency in turbo.json",
         },
       ],
     },
