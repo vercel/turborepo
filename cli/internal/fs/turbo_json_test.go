@@ -2,6 +2,7 @@ package fs
 
 import (
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -134,6 +135,90 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 	assert.Equal(t, rootPackageJSON.LegacyTurboConfig == nil, true)
 }
 
+func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
+	testDir := getTestDir(t, "invalid-env-1")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
+	testDir := getTestDir(t, "invalid-env-2")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
+	testDir := getTestDir(t, "invalid-global-env")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
+	testDir := getTestDir(t, "legacy-env")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	pipeline := turboJSON.Pipeline
+	assert.EqualValues(t, sortedArray(pipeline["task1"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task2"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task3"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task4"].EnvVarDependencies), sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, sortedArray(pipeline["task6"].EnvVarDependencies), sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
+	assert.EqualValues(t, sortedArray(pipeline["task7"].EnvVarDependencies), sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, sortedArray(pipeline["task8"].EnvVarDependencies), sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, sortedArray(pipeline["task9"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task10"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task11"].EnvVarDependencies), sortedArray([]string{"A", "B"}))
+
+	// check global env vars also
+	assert.EqualValues(t, sortedArray([]string{"FOO", "BAR", "BAZ", "QUX"}), sortedArray(turboJSON.GlobalEnv))
+	assert.EqualValues(t, sortedArray([]string{"somefile.txt"}), sortedArray(turboJSON.GlobalDeps))
+}
+
 // Helpers
 func validateOutput(t *testing.T, actual Pipeline, expected map[string]TaskDefinition) {
 	// check top level keys
@@ -171,4 +256,9 @@ func getTestDir(t *testing.T, testName string) turbopath.AbsolutePath {
 	}
 
 	return cwd.Join("testdata", testName)
+}
+
+func sortedArray(arr []string) []string {
+	sort.Strings(arr)
+	return arr
 }
