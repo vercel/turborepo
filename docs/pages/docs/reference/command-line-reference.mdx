@@ -4,6 +4,7 @@ description: Turborepo is a high-performance build system for JavaScript and Typ
 ---
 
 import Callout from "../../../components/Callout";
+import OuputModeTable from '../../../components/output-mode-table.mdx';
 
 # Command-Line Reference
 
@@ -263,7 +264,11 @@ turbo run dev --parallel --no-cache
 
 `type: string`
 
-Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only `turbo`-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+Set type of output logging. Defaults to "outputMode" for the task in `turbo.json`.
+
+<OuputModeTable />
+
+**Example**
 
 ```shell
 turbo run build --output-logs=full

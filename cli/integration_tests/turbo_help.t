@@ -47,7 +47,7 @@ Test help flag
   Available Commands:
     bin         Get the path to the Turbo binary
     completion  Generate the autocompletion script for the specified shell
-    daemon      Runs turbod
+    daemon      Runs the Turborepo background daemon
     help        Help about any command
     link        Link your local directory to a Vercel organization and enable remote caching.
     login       Login to your Vercel account

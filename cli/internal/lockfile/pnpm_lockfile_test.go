@@ -19,7 +19,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if err != nil {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}
-	lockfilePath := cwd.Join("testdata", "pnpm-lockfiles", name)
+	lockfilePath := cwd.Join("testdata", name)
 	if !lockfilePath.FileExists() {
 		return nil, errors.Errorf("unable to find 'testdata/%s'", name)
 	}

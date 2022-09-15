@@ -23,7 +23,7 @@ type GraphVisualizer struct {
 
 // hasGraphViz checks for the presence of https://graphviz.org/
 func hasGraphViz() bool {
-	err := exec.Command("dot", "-v").Run()
+	err := exec.Command("dot", "-V").Run()
 	return err == nil
 }
 
