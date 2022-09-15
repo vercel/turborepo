@@ -4,6 +4,10 @@ inputs:
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
     required: true
+  go-version:
+    description: "Go version."
+    required: false
+    default: 1.18
 runs:
   using: "composite"
   steps:
