@@ -1,5 +1,8 @@
 // mocked test comment
 {
+  // Both global declarations with duplicates and with
+  "globalDependencies": ["$FOO", "$BAR", "somefile.txt", "somefile.txt"],
+  "globalEnv": ["FOO", "BAZ", "QUX"],
   "pipeline": {
     // Only legacy declaration
     "task1": {
