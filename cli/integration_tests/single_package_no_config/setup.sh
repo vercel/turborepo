@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SCRIPT_DIR=$(dirname $0)
+SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 cp -a ${SCRIPT_DIR}/my-pkg/* ${TARGET_DIR}/
 git init ${TARGET_DIR} --quiet

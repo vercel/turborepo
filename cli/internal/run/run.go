@@ -783,20 +783,24 @@ type hashedTask struct {
 
 func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
 	return hashedSinglePackageTask{
-		Task:    util.RootTaskTaskName(ht.TaskID),
-		Hash:    ht.Hash,
-		Command: ht.Command,
-		Outputs: ht.Outputs,
-		LogFile: ht.LogFile,
+		Task:         util.RootTaskTaskName(ht.TaskID),
+		Hash:         ht.Hash,
+		Command:      ht.Command,
+		Outputs:      ht.Outputs,
+		LogFile:      ht.LogFile,
+		Dependencies: ht.Dependencies,
+		Dependents:   ht.Dependents,
 	}
 }
 
 type hashedSinglePackageTask struct {
-	Task    string   `json:"task"`
-	Hash    string   `json:"hash"`
-	Command string   `json:"command"`
-	Outputs []string `json:"outputs"`
-	LogFile string   `json:"logFile"`
+	Task         string   `json:"task"`
+	Hash         string   `json:"hash"`
+	Command      string   `json:"command"`
+	Outputs      []string `json:"outputs"`
+	LogFile      string   `json:"logFile"`
+	Dependencies []string `json:"dependencies"`
+	Dependents   []string `json:"dependents"`
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
