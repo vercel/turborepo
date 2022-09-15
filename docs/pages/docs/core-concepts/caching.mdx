@@ -186,7 +186,7 @@ When you use `turbo` with tools that inline environment variables at build time
 (e.g. [Next.js][1] or [Create React App][2]), it is important to tell `turbo` about it.
 Otherwise, you could ship a cached build with the wrong environment variables!
 
-Luckily, you can control `turbo`'s caching behavior (also known as "hashing") based on
+You can control `turbo`'s caching behavior based on
 the values of environment variables:
 
 - Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-workspace-task basis.
