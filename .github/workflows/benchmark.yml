@@ -17,45 +17,14 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
         with:
-          fetch-depth: 2
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.18.0
-          cache: true
-          cache-dependency-path: cli/go.sum
-        id: go
-
-      - name: Set Up Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          version: "3.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Up Go and GRPC protobuf
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
-
-      - uses: pnpm/action-setup@v2.2.2
-        with:
-          version: 7.2.1
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-          cache: pnpm
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build
         run: cd cli && make turbo
-
-      - name: Install dependencies
-        run: pnpm install --filter=benchmark
 
       - name: Download previous benchmark results
         # continue on error so that we handle the bootstrap case where there is no previous data
