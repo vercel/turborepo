@@ -5,35 +5,71 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gopkg.in/yaml.v3"
 )
 
-// YarnLockfileEntry package information from yarn lockfile
-type YarnLockfileEntry struct {
+var _multipleKeyRegex = regexp.MustCompile(" *, *")
+
+// A tag cannot start with a "v"
+var _tagRegex = regexp.MustCompile("^[a-zA-Z0-9.-_-[v]][a-zA-Z0-9._-]*$")
+
+// var _patchSemverRegex = regexp.MustCompile("^patch:[^@]+@(?!npm(:|%3A))")
+
+// BerryLockfileEntry package information from yarn lockfile
+// Full Definition at https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-core/sources/Manifest.ts
+// Only a subset of full definition are written to the lockfile
+type BerryLockfileEntry struct {
+	// TODO figure out ordering for these
 	// resolved version for the particular entry based on the provided semver revision
-	Version   string `yaml:"version"`
-	Resolved  string `yaml:"resolved"`
-	Integrity string `yaml:"integrity"`
-	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
-	Dependencies map[string]string `yaml:"dependencies,omitempty"`
-	// the list of unresolved modules and revisions (e.g. type-detect : ^4.0.0)
-	OptionalDependencies map[string]string `yaml:"optionalDependencies,omitempty"`
+	Version      string `yaml:"version"`
+	LanguageName string `yaml:"languageName,omitempty"`
+
+	Dependencies     map[string]string `yaml:"dependencies,omitempty"`
+	PeerDependencies map[string]string `yaml:"peerDependencies,omitempty"`
+
+	DependenciesMeta map[string]struct {
+		Optional bool `yaml:"optional,omitempty"`
+	} `yaml:"dependenciesMeta,omitempty"`
+	PeerDependenciesMeta map[string]struct {
+		Optional bool `yaml:"optional,omitempty"`
+	} `yaml:"peerDependenciesMeta,omitempty"`
+
+	Bin map[string]string `yaml:"bin,omitempty"`
+
+	LinkType   string `yaml:"linkType,omitempty"`
+	Resolution string `yaml:"resolution,omitempty"`
+	Checksum   string `yaml:"checksum,omitempty"`
+	Conditions string `yaml:"conditions,omitempty"`
+
+	// Only used for metadata entry
+	CacheKey int `yaml:"cacheKey,omitempty"`
 }
 
 // BerryLockfile representation of berry lockfile
-type BerryLockfile map[string]*YarnLockfileEntry
+type BerryLockfile struct {
+	packages map[_Locator]*BerryLockfileEntry
+	// might be numbers?
+	version  int
+	cacheKey int
+	// Mapping descriptors (lodash@npm:^4.17.21) to their resolutions (lodash@npm:4.17.21)
+	descriptors map[_Descriptor]_Locator
+}
 
 var _ Lockfile = (*BerryLockfile)(nil)
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 func (l *BerryLockfile) ResolvePackage(name string, version string) (string, string, bool) {
-	for _, key := range yarnPossibleKeys(name, version) {
-		if entry, ok := (*l)[key]; ok {
-			return key, entry.Version, true
+	for _, key := range berryPossibleKeys(name, version) {
+		if locator, ok := l.descriptors[key]; ok {
+			entry := l.packages[locator]
+			return locator.asString(), entry.Version, true
 		}
 	}
 
@@ -43,7 +79,13 @@ func (l *BerryLockfile) ResolvePackage(name string, version string) (string, str
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
 func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 	deps := map[string]string{}
-	entry, ok := (*l)[key]
+	var locator _Locator
+	if err := locator.parseLocator(key); err != nil {
+		// We should never hit this as we have already vetted all entries in the lockfile
+		// during the creation of the lockfile struct
+		panic(fmt.Sprintf("invalid locator string: %s", key))
+	}
+	entry, ok := l.packages[locator]
 	if !ok {
 		return deps, false
 	}
@@ -51,7 +93,7 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 	for name, version := range entry.Dependencies {
 		deps[name] = version
 	}
-	for name, version := range entry.OptionalDependencies {
+	for name, version := range entry.PeerDependencies {
 		deps[name] = version
 	}
 
@@ -60,15 +102,28 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
 func (l *BerryLockfile) Subgraph(_ []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
-	lockfile := make(BerryLockfile, len(packages))
+	prunedPackages := make(map[_Locator]*BerryLockfileEntry, len(packages))
 	for _, key := range packages {
-		entry, ok := (*l)[key]
+		var locator _Locator
+		if err := locator.parseLocator(key); err != nil {
+			// We should never hit this as we have already vetted all entries in the lockfile
+			// during the creation of the lockfile struct
+			panic(fmt.Sprintf("invalid locator string: %s", key))
+		}
+		entry, ok := l.packages[locator]
 		if ok {
-			lockfile[key] = entry
+			prunedPackages[locator] = entry
 		}
 	}
 
-	return &lockfile, nil
+	return &BerryLockfile{
+		packages: prunedPackages,
+		version:  l.version,
+		cacheKey: l.cacheKey,
+		// TODO we probably need to prune this by checking all of the descriptors used
+		// in the pruned entries
+		descriptors: l.descriptors,
+	}, nil
 }
 
 // Encode encode the lockfile representation and write it to the given writer
@@ -112,26 +167,141 @@ func (l *BerryLockfile) Patches() []turbopath.AnchoredUnixPath {
 
 // DecodeBerryLockfile Takes the contents of a berry lockfile and returns a struct representation
 func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
-	var lockfile map[string]*YarnLockfileEntry
+	var packages map[string]*BerryLockfileEntry
 
-	err := yaml.Unmarshal(contents, &lockfile)
+	err := yaml.Unmarshal(contents, &packages)
 	if err != nil {
 		return &BerryLockfile{}, fmt.Errorf("could not unmarshal lockfile: %w", err)
 	}
 
-	prettyLockFile := BerryLockfile(yarnSplitOutEntries(lockfile))
+	metadata, ok := packages["__metadata"]
+	if !ok {
+		return nil, errors.New("No __metadata entry found when decoding yarn.lock")
+	}
+	version, err := strconv.Atoi(metadata.Version)
+	if err != nil {
+		return nil, errors.Wrap(err, "yarn lockfile version isn't valid integer")
+	}
+	delete(packages, "__metadata")
+
+	// we want to populate these
+	locatorToPackage := map[_Locator]*BerryLockfileEntry{}
+	descriptorToLocator := map[_Descriptor]_Locator{}
+
+	for key, data := range packages {
+		var locator _Locator
+		if err := locator.parseLocator(data.Resolution); err != nil {
+			return nil, errors.Wrap(err, "unable to parse entry")
+		}
+
+		locatorToPackage[locator] = data
+
+		// All descriptors that resolve to a single locator are grouped into a single key
+		for _, entry := range _multipleKeyRegex.Split(key, -1) {
+			descriptor := _Descriptor{}
+			if err := descriptor.parseDescriptor(entry); err != nil {
+				return nil, errors.Wrap(err, "Bad entry key found")
+			}
+
+			// Before version 6
+			if version <= 6 {
+				_, err := semver.NewConstraint(descriptor.versionRange)
+				if err == nil || _tagRegex.MatchString(descriptor.versionRange) {
+					descriptor.versionRange = fmt.Sprintf("npm:%s", descriptor.versionRange)
+				}
+			}
+
+			descriptorToLocator[descriptor] = locator
+		}
+	}
+
+	// TODO better naming
+	prettyLockFile := BerryLockfile{
+		packages:    locatorToPackage,
+		version:     version,
+		cacheKey:    metadata.CacheKey,
+		descriptors: descriptorToLocator,
+	}
 	return &prettyLockFile, nil
 }
 
-func yarnSplitOutEntries(lockfile map[string]*YarnLockfileEntry) map[string]*YarnLockfileEntry {
-	prettyLockfile := map[string]*YarnLockfileEntry{}
-	// This final step is important, it splits any deps with multiple-resolutions
-	// (e.g. "@babel/generator@^7.13.0, @babel/generator@^7.13.9":) into separate
-	// entries in our map
-	for key, val := range lockfile {
-		for _, v := range strings.Split(key, ", ") {
-			prettyLockfile[strings.TrimSpace(v)] = val
-		}
+// Fields shared between _Locator and _Descriptor
+type _Ident struct {
+	// Scope of package w/o leading @
+	scope string
+	// Name of package
+	name string
+}
+
+type _Locator struct {
+	_Ident
+	// Resolved version e.g. 1.2.3
+	reference string
+}
+
+type _Descriptor struct {
+	_Ident
+	// Version range e.g. ^1.0.0
+	versionRange string
+}
+
+var _locatorRegexp = regexp.MustCompile("^(?:@([^/]+?)/)?([^/]+?)(?:@(.+))$")
+
+func (l *_Locator) parseLocator(data string) error {
+	matches := _locatorRegexp.FindStringSubmatch(data)
+	if len(matches) != 4 {
+		return fmt.Errorf("%s is not a valid locator string", data)
 	}
-	return prettyLockfile
+	l.scope = matches[1]
+	l.name = matches[2]
+	l.reference = matches[3]
+
+	return nil
+}
+
+func (l *_Locator) asString() string {
+	if l.scope == "" {
+		return fmt.Sprintf("%s@%s", l.name, l.reference)
+	}
+	return fmt.Sprintf("@%s/%s@%s", l.scope, l.name, l.reference)
+}
+
+var _descriptorRegexp = regexp.MustCompile("^(?:@([^/]+?)/)?([^/]+?)(?:@(.+))?$")
+
+func (d *_Descriptor) parseDescriptor(data string) error {
+	matches := _descriptorRegexp.FindStringSubmatch(data)
+	if len(matches) != 4 {
+		return fmt.Errorf("%s is not a valid descriptor string", data)
+	}
+
+	d.scope = matches[1]
+	d.name = matches[2]
+	d.versionRange = matches[3]
+
+	return nil
+}
+
+func (d *_Descriptor) asString() string {
+	if d.scope == "" {
+		return fmt.Sprintf("%s@%s", d.name, d.versionRange)
+	}
+	return fmt.Sprintf("@%s/%s@%s", d.scope, d.name, d.versionRange)
+}
+
+func berryPossibleKeys(name string, version string) []_Descriptor {
+	makeDescriptor := func(protocol string) _Descriptor {
+		descriptorString := fmt.Sprintf("%s@%s%s", name, protocol, version)
+		var descriptor _Descriptor
+		if err := descriptor.parseDescriptor(descriptorString); err != nil {
+			panic("Generated invalid descriptor")
+		}
+		return descriptor
+	}
+	return []_Descriptor{
+		makeDescriptor(""),
+		makeDescriptor("npm:"),
+		makeDescriptor("file:"),
+		makeDescriptor("workspace:"),
+		makeDescriptor("yarn:"),
+	}
 }
