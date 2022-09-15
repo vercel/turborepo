@@ -106,7 +106,7 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 }
 
 // Patches return a list of patches used in the lockfile
-func (l *BerryLockfile) Patches() []string {
+func (l *BerryLockfile) Patches() []turbopath.AnchoredUnixPath {
 	return nil
 }
 

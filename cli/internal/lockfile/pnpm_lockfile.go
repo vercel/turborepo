@@ -181,8 +181,7 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 		}
 	}
 
-	importers, err := pruneImporters(&p.Importers, workspacePackages)
-
+	importers, err := pruneImporters(p.Importers, workspacePackages)
 	if err != nil {
 		return nil, err
 	}
@@ -205,17 +204,17 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 }
 
 // Prune imports to only those have all of their dependencies in the packages list
-func pruneImporters(importers *map[string]ProjectSnapshot, workspacePackages []turbopath.AnchoredSystemPath) (map[string]ProjectSnapshot, error) {
+func pruneImporters(importers map[string]ProjectSnapshot, workspacePackages []turbopath.AnchoredSystemPath) (map[string]ProjectSnapshot, error) {
 	prunedImporters := map[string]ProjectSnapshot{}
 
 	// Copy over root level importer
-	if root, ok := (*importers)["."]; ok {
+	if root, ok := importers["."]; ok {
 		prunedImporters["."] = root
 	}
 
 	for _, workspacePath := range workspacePackages {
 		workspace := workspacePath.ToUnixPath().ToString()
-		importer, ok := (*importers)[workspace]
+		importer, ok := importers[workspace]
 
 		if !ok {
 			return nil, fmt.Errorf("Unable to find import entry for workspace package %s", workspace)
@@ -243,14 +242,14 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 }
 
 // Patches return a list of patches used in the lockfile
-func (p *PnpmLockfile) Patches() []string {
+func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 	if len(p.PatchedDependencies) == 0 {
 		return nil
 	}
-	patches := make([]string, len(p.PatchedDependencies))
+	patches := make([]turbopath.AnchoredUnixPath, len(p.PatchedDependencies))
 	i := 0
 	for _, patch := range p.PatchedDependencies {
-		patches[i] = patch.Path
+		patches[i] = turbopath.AnchoredUnixPath(patch.Path)
 		i++
 	}
 	return patches

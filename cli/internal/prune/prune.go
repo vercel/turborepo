@@ -197,7 +197,10 @@ func (p *prune) prune(opts *opts) error {
 
 	if patches := lockfile.Patches(); patches != nil {
 		for _, patch := range patches {
-			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.Join(patch)}, fullDir.Join(patch).ToStringDuringMigration()); err != nil {
+			if err := fs.CopyFile(
+				&fs.LstatCachedFile{Path: p.base.RepoRoot.Join(patch.ToString())},
+				fullDir.Join(patch.ToString()).ToStringDuringMigration(),
+			); err != nil {
 				return errors.Wrap(err, "Failed copying patch file")
 			}
 		}

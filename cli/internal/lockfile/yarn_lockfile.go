@@ -76,7 +76,7 @@ func (l *YarnLockfile) Encode(w io.Writer) error {
 }
 
 // Patches return a list of patches used in the lockfile
-func (l *YarnLockfile) Patches() []string {
+func (l *YarnLockfile) Patches() []turbopath.AnchoredUnixPath {
 	return nil
 }
 
