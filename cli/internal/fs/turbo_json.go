@@ -92,10 +92,20 @@ func LoadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJS
 		return nil, err
 	} else {
 		// we're synthesizing, but we have a starting point
+		// Note: this will have to change to support task inference in a monorepo
+		// for now, we're going to error on any "root" tasks and turn non-root tasks into root tasks
+		pipeline := make(Pipeline)
+		for taskID, taskDefinition := range turboFromFiles.Pipeline {
+			if util.IsPackageTask(taskID) {
+				return nil, fmt.Errorf("Package tasks (<package>#<task>) are not allowed in single-package repositories: found %v", taskID)
+			}
+			pipeline[util.RootTaskID(taskID)] = taskDefinition
+		}
 		turboJSON = turboFromFiles
+		turboJSON.Pipeline = pipeline
 	}
 
-	for scriptName, _ := range rootPackageJSON.Scripts {
+	for scriptName := range rootPackageJSON.Scripts {
 		// How do we encode these? do we synthesize // when finding the task?
 		if !turboJSON.Pipeline.HasTask(scriptName) {
 			taskName := util.RootTaskID(scriptName)
