@@ -342,7 +342,9 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	} else {
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
-		r.base.UI.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
+		if !r.opts.runOpts.singlePackage {
+			r.base.UI.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
+		}
 		r.base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		return r.executeTasks(ctx, g, rs, engine, packageManager, tracker, startAt)
 	}
@@ -717,16 +719,17 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
 	ec := &execContext{
-		colorCache:     colorCache,
-		runState:       runState,
-		rs:             rs,
-		ui:             &cli.ConcurrentUi{Ui: r.base.UI},
-		runCache:       runCache,
-		logger:         r.base.Logger,
-		packageManager: packageManager,
-		processes:      r.processes,
-		taskHashes:     hashes,
-		repoRoot:       r.base.RepoRoot,
+		colorCache:      colorCache,
+		runState:        runState,
+		rs:              rs,
+		ui:              &cli.ConcurrentUi{Ui: r.base.UI},
+		runCache:        runCache,
+		logger:          r.base.Logger,
+		packageManager:  packageManager,
+		processes:       r.processes,
+		taskHashes:      hashes,
+		repoRoot:        r.base.RepoRoot,
+		isSinglePackage: r.opts.runOpts.singlePackage,
 	}
 
 	// run the thing
@@ -900,16 +903,17 @@ func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 }
 
 type execContext struct {
-	colorCache     *colorcache.ColorCache
-	runState       *RunState
-	rs             *runSpec
-	ui             cli.Ui
-	runCache       *runcache.RunCache
-	logger         hclog.Logger
-	packageManager *packagemanager.PackageManager
-	processes      *process.Manager
-	taskHashes     *taskhash.Tracker
-	repoRoot       turbopath.AbsoluteSystemPath
+	colorCache      *colorcache.ColorCache
+	runState        *RunState
+	rs              *runSpec
+	ui              cli.Ui
+	runCache        *runcache.RunCache
+	logger          hclog.Logger
+	packageManager  *packagemanager.PackageManager
+	processes       *process.Manager
+	taskHashes      *taskhash.Tracker
+	repoRoot        turbopath.AbsoluteSystemPath
+	isSinglePackage bool
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -925,7 +929,8 @@ func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
 func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	targetLogger := e.logger.Named(packageTask.OutputPrefix())
+	outputPrefix := packageTask.OutputPrefix(e.isSinglePackage)
+	targetLogger := e.logger.Named(outputPrefix)
 	targetLogger.Debug("start")
 
 	// Setup tracer
@@ -933,7 +938,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(packageTask.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", packageTask.OutputPrefix())
+	prettyTaskPrefix := colorPrefixer("%s: ", outputPrefix)
 	targetUi := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: prettyTaskPrefix,
@@ -987,7 +992,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter()
+	writer, err := taskCache.OutputWriter(outputPrefix)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		e.logError(targetLogger, prettyTaskPrefix, err)

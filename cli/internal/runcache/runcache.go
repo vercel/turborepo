@@ -225,7 +225,7 @@ func (fwc *fileWriterCloser) Close() error {
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
-func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
+func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{os.Stdout}, nil
 	}
@@ -238,7 +238,7 @@ func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 		return nil, err
 	}
 	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	prettyTaskPrefix := colorPrefixer(tc.pt.OutputPrefix())
+	prettyTaskPrefix := colorPrefixer(outputPrefix)
 	bufWriter := bufio.NewWriter(output)
 	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))); err != nil {
 		// We've already errored, we don't care if there's a further error closing the file we just
