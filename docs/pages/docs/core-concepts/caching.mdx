@@ -248,11 +248,8 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
       "outputs": [".next/**"],
     },
   },
-+  "globalDependencies": [
-+    "$GITHUB_TOKEN",// env var that will impact the hashes of all tasks,
-+    "tsconfig.json", // file contents will impact the hashes of all tasks,
-+    ".env.*", // glob file contents will impact the hashes of all tasks,
-+  ]
++  // env var that will impact the hashes of all tasks,
++  "globalEnv": [ "GITHUB_TOKEN"] 
 }
 ```
 
