@@ -190,10 +190,22 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 
-	lockfile, err := ctx.Lockfile.Subgraph(lockfileKeys)
+	lockfile, err := ctx.Lockfile.Subgraph(workspaces, lockfileKeys)
 	if err != nil {
 		return errors.Wrap(err, "Failed creating pruned lockfile")
 	}
+
+	if patches := lockfile.Patches(); patches != nil {
+		for _, patch := range patches {
+			if err := fs.CopyFile(
+				&fs.LstatCachedFile{Path: p.base.RepoRoot.Join(patch.ToString())},
+				fullDir.Join(patch.ToString()).ToStringDuringMigration(),
+			); err != nil {
+				return errors.Wrap(err, "Failed copying patch file")
+			}
+		}
+	}
+
 	lockfilePath := outDir.Join(ctx.PackageManager.Lockfile)
 	lockfileFile, err := lockfilePath.Create()
 	if err != nil {
