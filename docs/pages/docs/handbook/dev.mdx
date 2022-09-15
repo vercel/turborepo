@@ -30,7 +30,7 @@ You should specify your dev task like this in your `turbo.json`.
 }
 ```
 
-Since `dev` tasks don't produce outputs, `outputs` is empty. Dev tasks are also unique in that you _never_ want to [cache](/docs/core-concepts/caching) them, so we set `cache` as `false`.
+Since `dev` tasks don't produce outputs, `outputs` is empty. Dev tasks are also unique in that you rarely want to [cache](/docs/core-concepts/caching) them, so we set `cache` as `false`.
 
 ### Setting up `package.json`
 
@@ -44,7 +44,7 @@ You should also provide a `dev` task in your root `package.json`:
 }
 ```
 
-This will allow developers to run the task directly from their normal task runner.
+This enables developers to run the task directly from their normal task runner.
 
 ## Running tasks _before_ `dev`
 
