@@ -1,19 +1,10 @@
-name: golangci-lint
+name: CLI Linter
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
 on:
-  # push:
-  #   tags:
-  #     - v*
-  #   branches:
-  #     - master
-  #     - main
   pull_request:
     types: [opened, edited, synchronize]
 
@@ -22,30 +13,15 @@ permissions:
   # Optional: allow read access to pull request. Use with `only-new-issues` option.
   pull-requests: read
 jobs:
-  golangci:
-    name: lint
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 2
-
-      - uses: actions/setup-go@v3
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-go
         with:
-          go-version: 1.17
-          cache: true
-          cache-dependency-path: cli/go.sum
-
-      - name: Set Up Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          version: "3.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Up Go and GRPC protobuf
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Protos
         run: cd cli && make compile-protos
