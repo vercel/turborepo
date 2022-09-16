@@ -245,6 +245,12 @@ export const users: Array<TurboUser> = [
     },
   },
   {
+    caption: "Vimeo",
+    image: "/images/logos/vimeo.svg",
+    infoLink: "https://vimeo.com",
+    pinned: true,
+  },
+  {
     caption: "GoodRx",
     image: "/images/logos/goodrx.svg",
     infoLink: "https://goodrx.com",
