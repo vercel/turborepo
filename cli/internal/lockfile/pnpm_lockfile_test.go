@@ -19,7 +19,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if err != nil {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}
-	lockfilePath := cwd.Join("testdata", "pnpm-lockfiles", name)
+	lockfilePath := cwd.Join("testdata", name)
 	if !lockfilePath.FileExists() {
 		return nil, errors.Errorf("unable to find 'testdata/%s'", name)
 	}
@@ -69,9 +69,10 @@ func Test_SpecifierResolution(t *testing.T) {
 	}
 
 	cases := []Case{
-		{pkg: "lodash", specifier: "latest", version: "4.17.21", found: true},
-		{pkg: "express", specifier: "^4.18.1", version: "4.18.1", found: true},
-		{pkg: "lodash", specifier: "other-tag", version: "", found: false},
+		{pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
+		{pkg: "typescript", specifier: "^4.5.3", version: "4.8.3", found: true},
+		{pkg: "lodash", specifier: "bad-tag", version: "", found: false},
+		{pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
 	}
 
 	for _, testCase := range cases {

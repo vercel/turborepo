@@ -32,7 +32,7 @@ func GetPackageDeps(rootPath turbopath.AbsolutePath, p *PackageDepsOptions) (map
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
 
-	// make a copy of the inputPatterns array, becase we may be appending to it later.
+	// make a copy of the inputPatterns array, because we may be appending to it later.
 	calculatedInputs := make([]string, len(p.InputPatterns))
 	copy(calculatedInputs, p.InputPatterns)
 
@@ -50,7 +50,20 @@ func GetPackageDeps(rootPath turbopath.AbsolutePath, p *PackageDepsOptions) (map
 		// Note this package.json will be resolved relative to the pkgPath.
 		calculatedInputs = append(calculatedInputs, "package.json")
 
-		absoluteFilesToHash, err := globby.GlobFiles(pkgPath.ToStringDuringMigration(), calculatedInputs, nil)
+		// The input patterns are relative to the package.
+		// However, we need to change the globbing to be relative to the repo root.
+		// Prepend the package path to each of the input patterns.
+		prefixedInputPatterns := make([]string, len(calculatedInputs))
+		for index, pattern := range calculatedInputs {
+			rerooted, err := rootPath.PathTo(pkgPath.Join(pattern))
+			if err != nil {
+				return nil, err
+			}
+			prefixedInputPatterns[index] = rerooted
+		}
+
+		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, nil)
+
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
 		}

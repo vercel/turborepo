@@ -1,15 +1,24 @@
 import { log } from "logger";
+import Head from "next/head";
 import { CounterButton, NewTabLink } from "ui";
 
 export default function Store() {
   log("Hey! This is Home.");
   return (
-    <div>
-      <h1>Store</h1>
+    <div className="container">
+      <Head>
+        <title>Store | Kitchen Sink</title>
+      </Head>
+      <h1 className="title">
+        Store <br />
+        <span>Kitchen Sink</span>
+      </h1>
       <CounterButton />
-      <NewTabLink href="https://turborepo.org/">
-        Built With TurboRepo
-      </NewTabLink>
+      <p className="description">
+        Built With{" "}
+        <NewTabLink href="https://turborepo.org/">Turborepo</NewTabLink> +{" "}
+        <NewTabLink href="https://nextjs.org/">Next.js</NewTabLink>
+      </p>
     </div>
   );
 }

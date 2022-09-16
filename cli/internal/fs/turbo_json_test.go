@@ -2,33 +2,26 @@ package fs
 
 import (
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 func Test_ReadTurboConfig(t *testing.T) {
-	defaultCwd, err := os.Getwd()
-	if err != nil {
-		t.Errorf("failed to get cwd: %v", err)
-	}
-	cwd, err := CheckedToAbsolutePath(defaultCwd)
-	if err != nil {
-		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
-	}
+	testDir := getTestDir(t, "correct")
 
-	rootDir := "testdata"
-	turboJSONPath := cwd.Join(rootDir)
-	packageJSONPath := cwd.Join(rootDir, "package.json")
+	packageJSONPath := testDir.Join("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
 	}
 
-	turboJSON, turboJSONReadErr := ReadTurboConfig(turboJSONPath, rootPackageJSON)
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
 
 	if turboJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
@@ -70,24 +63,202 @@ func Test_ReadTurboConfig(t *testing.T) {
 		},
 	}
 
+	validateOutput(t, turboJSON.Pipeline, pipelineExpected)
+
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
-	if len(turboJSON.Pipeline) != len(pipelineExpected) {
+	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
+}
+
+func Test_ReadTurboConfig_Legacy(t *testing.T) {
+	testDir := getTestDir(t, "legacy-only")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	pipelineExpected := map[string]TaskDefinition{
+		"build": {
+			Outputs:                 []string{"dist/**/*", "build/**/*"},
+			TopologicalDependencies: []string{},
+			EnvVarDependencies:      []string{},
+			TaskDependencies:        []string{},
+			ShouldCache:             true,
+			OutputMode:              util.FullTaskOutput,
+		},
+	}
+
+	validateOutput(t, turboJSON.Pipeline, pipelineExpected)
+	assert.Empty(t, turboJSON.RemoteCacheOptions)
+}
+
+func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
+	testDir := getTestDir(t, "both")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	pipelineExpected := map[string]TaskDefinition{
+		"build": {
+			Outputs:                 []string{"dist/**", ".next/**"},
+			TopologicalDependencies: []string{"build"},
+			EnvVarDependencies:      []string{},
+			TaskDependencies:        []string{},
+			ShouldCache:             true,
+			OutputMode:              util.NewTaskOutput,
+		},
+	}
+
+	validateOutput(t, turboJSON.Pipeline, pipelineExpected)
+
+	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
+	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
+
+	assert.Equal(t, rootPackageJSON.LegacyTurboConfig == nil, true)
+}
+
+func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
+	testDir := getTestDir(t, "invalid-env-1")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
+	testDir := getTestDir(t, "invalid-env-2")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
+	testDir := getTestDir(t, "invalid-global-env")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
+	testDir := getTestDir(t, "legacy-env")
+
+	packageJSONPath := testDir.Join("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	pipeline := turboJSON.Pipeline
+	assert.EqualValues(t, sortedArray(pipeline["task1"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task2"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task3"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task4"].EnvVarDependencies), sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, sortedArray(pipeline["task6"].EnvVarDependencies), sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
+	assert.EqualValues(t, sortedArray(pipeline["task7"].EnvVarDependencies), sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, sortedArray(pipeline["task8"].EnvVarDependencies), sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, sortedArray(pipeline["task9"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task10"].EnvVarDependencies), sortedArray([]string{"A"}))
+	assert.EqualValues(t, sortedArray(pipeline["task11"].EnvVarDependencies), sortedArray([]string{"A", "B"}))
+
+	// check global env vars also
+	assert.EqualValues(t, sortedArray([]string{"FOO", "BAR", "BAZ", "QUX"}), sortedArray(turboJSON.GlobalEnv))
+	assert.EqualValues(t, sortedArray([]string{"somefile.txt"}), sortedArray(turboJSON.GlobalDeps))
+}
+
+// Helpers
+func validateOutput(t *testing.T, actual Pipeline, expected map[string]TaskDefinition) {
+	// check top level keys
+	if len(actual) != len(expected) {
 		expectedKeys := []string{}
-		for k := range pipelineExpected {
+		for k := range expected {
 			expectedKeys = append(expectedKeys, k)
 		}
 		actualKeys := []string{}
-		for k := range turboJSON.Pipeline {
+		for k := range actual {
 			actualKeys = append(actualKeys, k)
 		}
 		t.Errorf("pipeline tasks mismatch. got %v, want %v", strings.Join(actualKeys, ","), strings.Join(expectedKeys, ","))
 	}
-	for taskName, expectedTaskDefinition := range pipelineExpected {
-		actualTaskDefinition, ok := turboJSON.Pipeline[taskName]
+
+	// check individual task definitions
+	for taskName, expectedTaskDefinition := range expected {
+		actualTaskDefinition, ok := actual[taskName]
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
 		assert.EqualValuesf(t, expectedTaskDefinition, actualTaskDefinition, "task definition mismatch for %v", taskName)
 	}
-	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
+
+}
+
+func getTestDir(t *testing.T, testName string) turbopath.AbsolutePath {
+	defaultCwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	cwd, err := CheckedToAbsolutePath(defaultCwd)
+	if err != nil {
+		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
+	}
+
+	return cwd.Join("testdata", testName)
+}
+
+func sortedArray(arr []string) []string {
+	sort.Strings(arr)
+	return arr
 }

@@ -80,7 +80,7 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	var idleTimeout time.Duration
 	cmd := &cobra.Command{
 		Use:           "daemon",
-		Short:         "Runs turbod",
+		Short:         "Runs the Turborepo background daemon",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
