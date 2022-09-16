@@ -5,12 +5,12 @@ Setup
 Check
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
-  build: cache miss, executing 3f50a33cc496d697
+  build: cache miss, executing fb5ab7cab2c98c77
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache miss, executing d5990f5197c8e71b
+  test: cache miss, executing 3d586528c591ec52
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -23,12 +23,12 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
-  build: cache hit, replaying output 3f50a33cc496d697
+  build: cache hit, replaying output fb5ab7cab2c98c77
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache hit, replaying output d5990f5197c8e71b
+  test: cache hit, replaying output 3d586528c591ec52
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]

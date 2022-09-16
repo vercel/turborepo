@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task          = build                  
-    Hash          = 3f50a33cc496d697       
+    Hash          = fb5ab7cab2c98c77       
     Directory     =                        
     Command       = echo 'building' > foo  
     Outputs       = foo                    
@@ -17,7 +17,7 @@ Check
     Dependendents = test                   
   test
     Task          = test                                         
-    Hash          = d5990f5197c8e71b                             
+    Hash          = 3d586528c591ec52                             
     Directory     =                                              
     Command       = [[ ( -f foo ) && $(cat foo) == 'building' ]] 
     Outputs       =                                              
@@ -30,7 +30,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "3f50a33cc496d697",
+        "hash": "fb5ab7cab2c98c77",
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"
@@ -43,7 +43,7 @@ Check
       },
       {
         "task": "test",
-        "hash": "d5990f5197c8e71b",
+        "hash": "3d586528c591ec52",
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
         "outputs": [],
         "logFile": ".turbo/turbo-test.log",

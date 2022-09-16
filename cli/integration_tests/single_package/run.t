@@ -5,7 +5,7 @@ Setup
 Check
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
-  build: cache miss, executing 3ba5bda94a58b0bb
+  build: cache miss, executing 9f3c4fb1ea7d561d
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -18,7 +18,7 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
-  build: cache hit, replaying output 3ba5bda94a58b0bb
+  build: cache hit, replaying output 9f3c4fb1ea7d561d
   build: 
   build: > build
   build: > echo 'building' > foo
