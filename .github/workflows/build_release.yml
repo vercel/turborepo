@@ -47,11 +47,17 @@ jobs:
         with:
           key: release-${{ matrix.os.target }}
 
-      - name: Run cargo build
+      - name: Build node-file-trace
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
+          args: --release -p node-file-trace --target ${{ matrix.os.target }}
+
+      - name: Build next-dev
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p next-dev --target ${{ matrix.os.target }}
 
       - uses: actions/upload-artifact@v3
         with:
