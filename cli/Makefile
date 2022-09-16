@@ -90,11 +90,11 @@ build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 prepublish:
 	make -j3 bench/turbo test-go lint-go
 
-.PHONY snapshot-turbo-cross
+.PHONY: snapshot-turbo-cross
 snapshot-turbo-cross:
 	goreleaser release --snapshot --rm-dist -f cross-release.yml
 
-.PHONY snapshot-turbo-darwin
+.PHONY: snapshot-turbo-darwin
 snapshot-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-release.yml
 
