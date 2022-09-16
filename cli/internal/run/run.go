@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -347,6 +348,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached\t=\t%s\t${RESET}", strconv.FormatBool(task.Cached)))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
@@ -696,6 +698,7 @@ type hashedTask struct {
 	Task         string   `json:"task"`
 	Package      string   `json:"package"`
 	Hash         string   `json:"hash"`
+	Cached       bool     `json:"cached"`
 	Command      string   `json:"command"`
 	Outputs      []string `json:"outputs"`
 	LogFile      string   `json:"logFile"`
@@ -705,7 +708,38 @@ type hashedTask struct {
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+	apiClient := r.base.APIClient
+	var analyticsSink analytics.Sink
+	if apiClient.IsLinked() {
+		analyticsSink = apiClient
+	} else {
+		r.opts.cacheOpts.SkipRemote = true
+		analyticsSink = analytics.NullSink
+	}
+	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+
+	// Theoretically this is overkill, but bias towards not spamming the console
+	once := &sync.Once{}
+	turboCache, err := cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
+		// Currently the HTTP Cache is the only one that can be disabled.
+		// With a cache system refactor, we might consider giving names to the caches so
+		// we can accurately report them here.
+		once.Do(func() {
+			r.logWarning("Remote Caching is unavailable", err)
+		})
+	})
+
+	if err != nil {
+		if errors.Is(err, cache.ErrNoCachesEnabled) {
+			r.logWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+		} else {
+			return nil, errors.Wrap(err, "failed to set up caching")
+		}
+	}
+
 	taskIDs := []hashedTask{}
+
 	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -745,11 +779,17 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		}
 		sort.Strings(stringDescendents)
 
+		hit, err := turboCache.Assert(hash)
+		if err != nil {
+			return err
+		}
+
 		taskIDs = append(taskIDs, hashedTask{
 			TaskID:       packageTask.TaskID,
 			Task:         packageTask.Task,
 			Package:      packageTask.PackageName,
 			Hash:         hash,
+			Cached:       hit,
 			Command:      command,
 			Dir:          packageTask.Pkg.Dir.ToString(),
 			Outputs:      packageTask.TaskDefinition.Outputs,

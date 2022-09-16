@@ -301,7 +301,7 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 
 // FetchArtifact attempts to retrieve the build artifact with the given hash from the
 // Remote Caching server
-func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string, assertOnly bool) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -325,7 +325,14 @@ func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
 	}
 
-	req, err := retryablehttp.NewRequest(http.MethodGet, requestURL, nil)
+	var httpMethod string
+	if assertOnly {
+		httpMethod = http.MethodHead
+	} else {
+		httpMethod = http.MethodGet
+	}
+
+	req, err := retryablehttp.NewRequest(httpMethod, requestURL, nil)
 	if allowAuth {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}

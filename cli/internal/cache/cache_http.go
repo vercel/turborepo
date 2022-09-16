@@ -24,7 +24,7 @@ import (
 
 type client interface {
 	PutArtifact(hash string, body []byte, duration int, tag string) error
-	FetchArtifact(hash string) (*http.Response, error)
+	FetchArtifact(hash string, assertOnly bool) (*http.Response, error)
 	GetTeamID() string
 }
 
@@ -150,6 +150,16 @@ func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (
 	return hit, files, duration, err
 }
 
+func (cache *httpCache) Assert(key string) (bool, error) {
+	cache.requestLimiter.acquire()
+	defer cache.requestLimiter.release()
+	hit, err := cache.exists(key)
+	if err != nil {
+		return false, fmt.Errorf("failed to verify files from HTTP cache: %w", err)
+	}
+	return hit, err
+}
+
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	var event string
 	if hit {
@@ -166,8 +176,22 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
+func (cache *httpCache) exists(hash string) (bool, error) {
+	resp, err := cache.client.FetchArtifact(hash, true)
+	if err != nil {
+		return false, nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	} else if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
+	}
+	return true, nil
+}
+
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
-	resp, err := cache.client.FetchArtifact(hash)
+	resp, err := cache.client.FetchArtifact(hash, false)
 	if err != nil {
 		return false, nil, 0, err
 	}

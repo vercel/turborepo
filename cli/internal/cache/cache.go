@@ -24,6 +24,7 @@ type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
 	Fetch(target string, hash string, files []string) (bool, []string, int, error)
+	Assert(hash string) (bool, error)
 	// Put caches files for a given hash
 	Put(target string, hash string, duration int, files []string) error
 	Clean(target string)
@@ -269,6 +270,14 @@ func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) 
 		}
 	}
 	return false, files, 0, nil
+}
+
+func (mplex *cacheMultiplexer) Assert(target string) (bool, error) {
+	for _, cache := range mplex.caches {
+		return cache.Assert(target)
+	}
+
+	return false, nil
 }
 
 func (mplex *cacheMultiplexer) Clean(target string) {

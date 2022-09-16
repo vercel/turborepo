@@ -61,6 +61,16 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	return true, nil, meta.Duration, nil
 }
 
+func (f *fsCache) Assert(hash string) (bool, error) {
+	cachedFolder := filepath.Join(f.cacheDirectory, hash)
+
+	if !fs.PathExists(cachedFolder) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 	var event string
 	if hit {
