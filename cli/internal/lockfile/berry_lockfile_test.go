@@ -1,6 +1,7 @@
 package lockfile
 
 import (
+	"bytes"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -55,6 +56,13 @@ func Test_ResolvePackage(t *testing.T) {
 			semver: "^7.12.11",
 			found:  false,
 		},
+		"handles workspace packages": {
+			name:    "eslint-config-custom",
+			semver:  "*",
+			key:     "eslint-config-custom@workspace:packages/eslint-config-custom",
+			version: "0.0.0-use.local",
+			found:   true,
+		},
 	}
 
 	for testName, testCase := range cases {
@@ -79,4 +87,39 @@ func Test_AllDependencies(t *testing.T) {
 		_, _, found := lockfile.ResolvePackage(pkgName, version)
 		assert.Assert(t, found, "expected to find lockfile entry for %s@%s", pkgName, version)
 	}
+}
+
+func Test_StringifyMetadata(t *testing.T) {
+	metadata := BerryLockfileEntry{
+		Version:  "6",
+		CacheKey: 8,
+	}
+	lockfile := map[string]*BerryLockfileEntry{"__metadata": &metadata}
+
+	var b bytes.Buffer
+	err := _writeBerryLockfile(&b, lockfile)
+	assert.Assert(t, err == nil)
+	assert.Equal(t, b.String(), `
+__metadata:
+  version: 6
+  cacheKey: 8
+`)
+}
+
+func Test_BerryRoundtrip(t *testing.T) {
+	content, err := getFixture(t, "berry.lock")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodeBerryLockfile(content)
+	if err != nil {
+		t.Error(err)
+	}
+
+	var b bytes.Buffer
+	if err := lockfile.Encode(&b); err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, b.String(), string(content))
 }
