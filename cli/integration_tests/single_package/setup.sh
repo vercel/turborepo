@@ -1,10 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
-cp -r ${SCRIPT_DIR}/my-pkg/ ${TARGET_DIR}/
-git init ${TARGET_DIR} --quiet
-GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
-npm --prefix=${TARGET_DIR} install --silent
-git ${GIT_ARGS} add .
-git ${GIT_ARGS} commit -m "Initial" --quiet
+cp -a ${SCRIPT_DIR}/my-pkg/. ${TARGET_DIR}/
+${SCRIPT_DIR}/../setup_git.sh ${TARGET_DIR}

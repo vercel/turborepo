@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 DIR=${TESTDIR}
 while [ $(basename $DIR) != "cli" ]; do
