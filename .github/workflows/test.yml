@@ -113,7 +113,7 @@ jobs:
         timeout-minutes: 120
         with:
           command: nextest
-          args: run --release
+          args: run --release --no-fail-fast
 
       - name: Report github status
         if: always() && github.event_name == 'pull_request'
