@@ -90,8 +90,16 @@ build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
 prepublish:
 	make -j3 bench/turbo test-go lint-go
 
+.PHONY snapshot-turbo-cross
+snapshot-turbo-cross:
+	goreleaser release --snapshot --rm-dist -f cross-release.yml
+
+.PHONY snapshot-turbo-darwin
+snapshot-turbo-darwin:
+	goreleaser release --snapshot --rm-dist -f darwin-release.yml
+
 snapshot-turbo: clean build
-	goreleaser release --snapshot --rm-dist -f arm-release.yml
+	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
 publish: clean prepublish build
 	echo "Version: $(TURBO_VERSION)"

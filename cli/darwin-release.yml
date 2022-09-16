@@ -1,0 +1,37 @@
+project_name: turbo
+before:
+  hooks:
+    - make compile-protos
+    - go mod tidy
+
+dist: dist-darwin
+
+builds:
+  - id: turbo
+    main: ./cmd/turbo
+    binary: bin/turbo
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - darwin_arm64
+      - darwin_amd64
+    # overrides:
+    #   - goos: darwin
+    #     goarch: arm64
+    #     env:
+    #       - CC=oa64-clang
+    #       - CXX=oa64-clang++
+    #   - goos: darwin
+    #     goarch: amd64
+    #     goamd64: v1
+    #     env:
+    #       - CC=o64-clang
+    #       - CXX=o64-clang++
