@@ -306,7 +306,11 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	if rs.Opts.runOpts.graphFile != "" || rs.Opts.runOpts.graphDot {
-		visualizer := graphvisualizer.New(r.base.RepoRoot, r.base.UI, engine.TaskGraph)
+		graph := engine.TaskGraph
+		if r.opts.runOpts.singlePackage {
+			graph = filterSinglePackageGraphForDisplay(engine.TaskGraph)
+		}
+		visualizer := graphvisualizer.New(r.base.RepoRoot, r.base.UI, graph)
 
 		if rs.Opts.runOpts.graphDot {
 			visualizer.RenderDotGraph()
@@ -342,10 +346,12 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	} else {
 		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
 		sort.Strings(packagesInScope)
-		if !r.opts.runOpts.singlePackage {
+		if r.opts.runOpts.singlePackage {
+			r.base.UI.Output(fmt.Sprintf("%s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", ")))))
+		} else {
 			r.base.UI.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
+			r.base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		}
-		r.base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 		return r.executeTasks(ctx, g, rs, engine, packageManager, tracker, startAt)
 	}
 	return nil
@@ -406,8 +412,21 @@ func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []strin
 		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
+		var dependencies []string
+		var dependents []string
 		if !isSinglePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
+			dependencies = task.Dependencies
+			dependents = task.Dependents
+		} else {
+			dependencies = make([]string, len(task.Dependencies))
+			for i, dependency := range task.Dependencies {
+				dependencies[i] = util.StripPackageName(dependency)
+			}
+			dependents = make([]string, len(task.Dependents))
+			for i, dependent := range task.Dependents {
+				dependents[i] = util.StripPackageName(dependent)
+			}
 		}
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
@@ -416,13 +435,29 @@ func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []strin
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
 		if err := w.Flush(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// filterSinglePackageGraphForDisplay builds an equivalent graph with package names stripped from tasks.
+// Given that this should only be used in a single-package context, all of the package names are expected
+// to be //. Also, all nodes are always connected to the root node, so we are not concerned with leaving
+// behind any unconnected nodes.
+func filterSinglePackageGraphForDisplay(originalGraph *dag.AcyclicGraph) *dag.AcyclicGraph {
+	graph := &dag.AcyclicGraph{}
+	for _, edge := range originalGraph.Edges() {
+		src := util.StripPackageName(edge.Source().(string))
+		tgt := util.StripPackageName(edge.Target().(string))
+		graph.Add(src)
+		graph.Add(tgt)
+		graph.Connect(dag.BasicEdge(src, tgt))
+	}
+	return graph
 }
 
 func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
@@ -782,14 +817,22 @@ type hashedTask struct {
 }
 
 func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
+	dependencies := make([]string, len(ht.Dependencies))
+	for i, depencency := range ht.Dependencies {
+		dependencies[i] = util.StripPackageName(depencency)
+	}
+	dependents := make([]string, len(ht.Dependents))
+	for i, dependent := range ht.Dependents {
+		dependents[i] = util.StripPackageName(dependent)
+	}
 	return hashedSinglePackageTask{
 		Task:         util.RootTaskTaskName(ht.TaskID),
 		Hash:         ht.Hash,
 		Command:      ht.Command,
 		Outputs:      ht.Outputs,
 		LogFile:      ht.LogFile,
-		Dependencies: ht.Dependencies,
-		Dependents:   ht.Dependents,
+		Dependencies: dependencies,
+		Dependents:   dependents,
 	}
 }
 
