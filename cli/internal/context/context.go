@@ -101,6 +101,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 	return constraint.Check(pkgVersion)
 }
 
+// SinglePackageGraph constructs a Context instance from a single package.
 func SinglePackageGraph(repoRoot turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	packageInfos := make(map[interface{}]*fs.PackageJSON)
 	packageInfos[util.RootPkgName] = rootPackageJSON
@@ -124,11 +125,11 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 	c.RootNode = core.ROOT_NODE_NAME
 
-	if packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON); err != nil {
+	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	if err != nil {
 		return nil, err
-	} else {
-		c.PackageManager = packageManager
 	}
+	c.PackageManager = packageManager
 
 	lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
 	if err != nil {
