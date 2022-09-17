@@ -15,6 +15,12 @@ func restoreDirectory(anchor turbopath.AbsoluteSystemPath, header *tar.Header, r
 	if err != nil {
 		return "", err
 	}
+
+	// We need to traverse `processedName` from base to root split at
+	// `os.Separator` to make sure we don't end up following a symlink
+	// outside of the restore path.
+
+	// Create the directory.
 	if err := safeMkdirAll(anchor, processedName, header.Mode); err != nil {
 		return "", err
 	}
@@ -23,6 +29,7 @@ func restoreDirectory(anchor turbopath.AbsoluteSystemPath, header *tar.Header, r
 }
 
 // safeMkdirAll creates all directories, assuming that the leaf node is a directory.
+// FIXME: Recheck the symlink cache before creating a directory.
 func safeMkdirAll(anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
 	// Iterate through path segments by os.Separator, appending them onto the anchor.
 	// Check to see if that path segment is a symlink with a target outside of anchor.
