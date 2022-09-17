@@ -10,10 +10,6 @@ import (
 
 // restoreRegular restores a file.
 func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
-	// We need to traverse `header.Name` from base to root split at
-	// `os.Separator` to make sure we don't end up following a symlink
-	// outside of the restore path.
-
 	// Assuming this was a `turbo`-created input, we currently have an AnchoredUnixPath.
 	// Assuming this is malicious input we don't really care if we do the wrong thing.
 	processedName, err := canonicalizeName(header.Name)
@@ -21,9 +17,14 @@ func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 		return "", err
 	}
 
+	// We need to traverse `processedName` from base to root split at
+	// `os.Separator` to make sure we don't end up following a symlink
+	// outside of the restore path.
 	if err := safeMkdirFile(anchor, processedName, header.Mode); err != nil {
 		return "", err
 	}
+
+	// Create the file.
 	if f, err := os.OpenFile(processedName.RestoreAnchor(anchor).ToString(), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(header.Mode)); err != nil {
 		return "", err
 	} else if _, err := io.Copy(f, reader); err != nil {

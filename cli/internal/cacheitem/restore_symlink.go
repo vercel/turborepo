@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -30,19 +29,12 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	//
 	// Given all of that, our best option is to restore link targets _verbatim_.
 	// No modification, no slash conversion.
-
-	wellFormed, windowsSafe := checkName(header.Name)
-
-	if !wellFormed {
-		return "", errNameMalformed
+	processedName, err := canonicalizeName(header.Name)
+	if err != nil {
+		return "", err
 	}
 
-	if runtime.GOOS == "windows" && !windowsSafe {
-		return "", errNameWindowsUnsafe
-	}
-
-	processedName := turbopath.AnchoredSystemPath(header.Name)
-
+	// Create the symlink.
 	symlinkErr := os.Symlink(header.Linkname, processedName.RestoreAnchor(anchor).ToString())
 	if symlinkErr != nil {
 		return "", symlinkErr
@@ -51,10 +43,13 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	return processedName, nil
 }
 
+// topologicalSortLinks ensures that targets of symlinks are created in advance
+// of the things that link to them. It does this by topologically sorting all
+// of the symlinks. This also enables us to ensure we do not create cycles.
 func topologicalSortLinks(anchor turbopath.AbsoluteSystemPath, symlinks map[string]*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	restored := make([]turbopath.AnchoredSystemPath, 0)
 
-	// TODO: canonicalizeLinkname()
+	// FIXME: use canonical link names for the graph.
 
 	var g dag.AcyclicGraph
 	for _, header := range symlinks {
@@ -99,6 +94,8 @@ func topologicalSortLinks(anchor turbopath.AbsoluteSystemPath, symlinks map[stri
 	return restored, nil
 }
 
+// canonicalizeLinkname determines (lexically) what the resolved path on the
+// system will be when linkname is restored verbatim.
 func canonicalizeLinkname(anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, linkname string) string {
 	// We don't know _anything_ about linkname. It could be any of:
 	//

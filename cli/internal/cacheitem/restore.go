@@ -36,15 +36,14 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 	tr := tar.NewReader(gzr)
 
 	// On first attempt to restore it's possible that a link target doesn't exist.
-	// Save them and come back to them.
+	// Save them and topsort them.
 	symlinks := make(map[string]*tar.Header)
 
 	restored := make([]turbopath.AnchoredSystemPath, 0)
 	for {
 		header, trErr := tr.Next()
 		if trErr == io.EOF {
-			// The end, time to restore the missing links.
-			// Sneakily, these have already all passed through validateEntry.
+			// The end, time to restore any missing links.
 			symlinksRestored, symlinksErr := topologicalSortLinks(anchor, symlinks, tr)
 			restored = append(restored, symlinksRestored...)
 			if symlinksErr != nil {
