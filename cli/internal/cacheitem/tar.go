@@ -85,9 +85,7 @@ func canonicalTarName(fullPath turbopath.AnchoredUnixPath, isDir bool) string {
 		if !strings.HasSuffix(nameString, "/") {
 			nameString += "/"
 		}
-	} else {
-		// For normal files ensure it does not end in a slash.
-		strings.TrimSuffix(fullPath.ToString(), "/")
 	}
+
 	return nameString
 }

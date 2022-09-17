@@ -49,6 +49,11 @@ func (p AnchoredSystemPath) Move(anchor AnchoredSystemPath) AnchoredSystemPath {
 	return AnchoredSystemPath(filepath.Join(anchor.ToString(), p.ToString()))
 }
 
+// Dir returns filepath.Dir for the path.
+func (p AnchoredSystemPath) Dir() AnchoredSystemPath {
+	return AnchoredSystemPath(filepath.Dir(p.ToString()))
+}
+
 // Join appends relative path segments to this AnchoredSystemPath.
 func (p AnchoredSystemPath) Join(additional ...RelativeSystemPath) AnchoredSystemPath {
 	cast := RelativeSystemPathArray(additional)
