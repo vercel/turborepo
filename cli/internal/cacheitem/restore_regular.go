@@ -1,0 +1,40 @@
+package cacheitem
+
+import (
+	"archive/tar"
+	"io"
+	"os"
+
+	"github.com/vercel/turborepo/cli/internal/turbopath"
+)
+
+// restoreRegular restores a file.
+func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+	// We need to traverse `header.Name` from base to root split at
+	// `os.Separator` to make sure we don't end up following a symlink
+	// outside of the restore path.
+
+	// Assuming this was a `turbo`-created input, we currently have an AnchoredUnixPath.
+	// Assuming this is malicious input we don't really care if we do the wrong thing.
+	processedName, err := canonicalizeName(header.Name)
+	if err != nil {
+		return "", err
+	}
+
+	if err := safeMkdirFile(anchor, processedName, header.Mode); err != nil {
+		return "", err
+	}
+	if f, err := os.OpenFile(processedName.RestoreAnchor(anchor).ToString(), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(header.Mode)); err != nil {
+		return "", err
+	} else if _, err := io.Copy(f, reader); err != nil {
+		return "", err
+	} else if err := f.Close(); err != nil {
+		return "", err
+	}
+	return processedName, nil
+}
+
+// safeMkdirAll creates all directories, assuming that the leaf node is a file.
+func safeMkdirFile(anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
+	return safeMkdirAll(anchor, processedName.Dir(), mode)
+}
