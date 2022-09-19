@@ -230,6 +230,7 @@ func requireGitCmd(t *testing.T, repoRoot turbopath.AbsolutePath, args ...string
 func TestGetPackageDeps(t *testing.T) {
 	// Directory structure:
 	// <root>/
+	//   new-root-file <- new file not added to git
 	//   my-pkg/
 	//     committed-file
 	//     deleted-file
@@ -239,32 +240,57 @@ func TestGetPackageDeps(t *testing.T) {
 
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
 	myPkgDir := repoRoot.Join("my-pkg")
+
+	// create the dir first
+	err := myPkgDir.MkdirAll()
+	assert.NilError(t, err, "CreateDir")
+
+	// create file 1
 	committedFilePath := myPkgDir.Join("committed-file")
-	err := committedFilePath.EnsureDir()
-	assert.NilError(t, err, "EnsureDir")
 	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
+
+	// create file 2
 	deletedFilePath := myPkgDir.Join("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
+
+	// create file 3
 	nestedPath := myPkgDir.Join("dir", "nested-file")
 	assert.NilError(t, nestedPath.EnsureDir(), "EnsureDir")
 	assert.NilError(t, nestedPath.WriteFile([]byte("nested"), 0644), "WriteFile")
+
+	// create a package.json
+	packageJSONPath := myPkgDir.Join("package.json")
+	err = packageJSONPath.WriteFile([]byte("{}"), 0644)
+	assert.NilError(t, err, "WriteFile")
+
+	// set up git repo and commit all
 	requireGitCmd(t, repoRoot, "init", ".")
 	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
 	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
 	requireGitCmd(t, repoRoot, "add", ".")
 	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
+
+	// remove a file
 	err = deletedFilePath.Remove()
 	assert.NilError(t, err, "Remove")
+
+	// create another untracked file in git
 	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
 	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
+	assert.NilError(t, err, "WriteFile")
+
+	// create an untracked file in git up a level
+	rootFilePath := repoRoot.Join("new-root-file")
+	err = rootFilePath.WriteFile([]byte("new-root bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	tests := []struct {
 		opts     *PackageDepsOptions
 		expected map[turbopath.AnchoredUnixPath]string
 	}{
+		// base case. when inputs aren't specified, all files hashes are computed
 		{
 			opts: &PackageDepsOptions{
 				PackagePath: "my-pkg",
@@ -272,18 +298,22 @@ func TestGetPackageDeps(t *testing.T) {
 			expected: map[turbopath.AnchoredUnixPath]string{
 				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
 				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
+		// with inputs, only the specified inputs are hashed
 		{
 			opts: &PackageDepsOptions{
 				PackagePath:   "my-pkg",
 				InputPatterns: []string{"uncommitted-file"},
 			},
 			expected: map[turbopath.AnchoredUnixPath]string{
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
 			},
 		},
+		// inputs with glob pattern also works
 		{
 			opts: &PackageDepsOptions{
 				PackagePath:   "my-pkg",
@@ -292,9 +322,25 @@ func TestGetPackageDeps(t *testing.T) {
 			expected: map[turbopath.AnchoredUnixPath]string{
 				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
 				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
 			},
 		},
+		// inputs with traversal work
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"../**/*-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"../new-root-file": "8906ddcdd634706188bd8ef1c98ac07b9be3425e",
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
+				"dir/nested-file":  "bfe53d766e64d78f80050b73cd1c88095bc70abb",
+			},
+		},
+		// inputs with another glob pattern works
 		{
 			opts: &PackageDepsOptions{
 				PackagePath:   "my-pkg",
@@ -302,6 +348,20 @@ func TestGetPackageDeps(t *testing.T) {
 			},
 			expected: map[turbopath.AnchoredUnixPath]string{
 				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
+				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+			},
+		},
+		// inputs with another glob pattern + traversal work
+		{
+			opts: &PackageDepsOptions{
+				PackagePath:   "my-pkg",
+				InputPatterns: []string{"../**/{new-root,uncommitted,committed}-file"},
+			},
+			expected: map[turbopath.AnchoredUnixPath]string{
+				"../new-root-file": "8906ddcdd634706188bd8ef1c98ac07b9be3425e",
+				"committed-file":   "3a29e62ea9ba15c4a4009d1f605d391cdd262033",
+				"package.json":     "9e26dfeeb6e641a33dae4961196235bdb965b21b",
 				"uncommitted-file": "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
 			},
 		},

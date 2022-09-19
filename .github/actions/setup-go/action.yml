@@ -1,0 +1,27 @@
+name: "Turborepo Go Setup"
+description: "Sets Go up for CI"
+inputs:
+  github-token:
+    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+        cache: true
+        cache-dependency-path: cli/go.sum
+
+    - name: Set Up Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        version: "3.x"
+        repo-token: ${{ inputs.github-token }}
+
+    - name: Set Up GRPC protobuf
+      shell: bash
+      run: |
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0

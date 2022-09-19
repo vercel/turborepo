@@ -30,6 +30,7 @@ module.exports = {
         green: colors.green,
         red: colors.red,
         yellow: colors.yellow,
+        "pink-gradient-start": "rgba(255, 30, 86, 1)",
       },
       screens: {
         sm: "640px",

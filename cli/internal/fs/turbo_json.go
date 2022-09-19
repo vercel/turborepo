@@ -12,10 +12,19 @@ import (
 	"muzzammil.xyz/jsonc"
 )
 
-// TurboJSON is the root turborepo configuration
-type TurboJSON struct {
+const (
+	configFile                   = "turbo.json"
+	envPipelineDelimiter         = "$"
+	topologicalPipelineDelimiter = "^"
+)
+
+var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+
+type rawTurboJSON struct {
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
+	// Global env
+	GlobalEnv []string `json:"globalEnv,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline Pipeline
@@ -23,55 +32,12 @@ type TurboJSON struct {
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
 
-const configFile = "turbo.json"
-
-// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
-func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
-	// If the configFile exists, we use that
-	// If pkg.Turbo exists, we warn about running the migration
-	// Use pkg.Turbo if the configFile doesn't exist
-	// If neither exists, it's a fatal error
-	turboJSONPath := rootPath.Join(configFile)
-
-	if !turboJSONPath.FileExists() {
-		if rootPackageJSON.LegacyTurboConfig == nil {
-			// TODO: suggestion on how to create one
-			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
-		}
-		log.Printf("[WARNING] Turbo configuration now lives in \"%s\". Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile, configFile)
-		return rootPackageJSON.LegacyTurboConfig, nil
-	}
-
-	turboJSON, err := readTurboJSON(turboJSONPath)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", configFile, err)
-	}
-
-	if rootPackageJSON.LegacyTurboConfig != nil {
-		log.Printf("[WARNING] Ignoring legacy \"turbo\" key in package.json, using %s instead. Consider deleting the \"turbo\" key from package.json\n", configFile)
-		rootPackageJSON.LegacyTurboConfig = nil
-	}
-
-	return turboJSON, nil
-}
-
-// readTurboJSON reads the configFile in to a struct
-func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
-	file, err := path.Open()
-	if err != nil {
-		return nil, err
-	}
-	var turboJSON *TurboJSON
-	data, err := ioutil.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-	err = jsonc.Unmarshal(data, &turboJSON)
-	if err != nil {
-		println("error unmarshalling", err.Error())
-		return nil, err
-	}
-	return turboJSON, nil
+// TurboJSON is the root turborepo configuration
+type TurboJSON struct {
+	GlobalDeps         []string
+	GlobalEnv          []string
+	Pipeline           Pipeline
+	RemoteCacheOptions RemoteCacheOptions
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
@@ -86,10 +52,79 @@ type pipelineJSON struct {
 	DependsOn  []string            `json:"dependsOn,omitempty"`
 	Inputs     []string            `json:"inputs,omitempty"`
 	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
+	Env        []string            `json:"env,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
 type Pipeline map[string]TaskDefinition
+
+// TaskDefinition is a representation of the configFile pipeline for further computation.
+type TaskDefinition struct {
+	Outputs                 []string
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
+	OutputMode              util.TaskOutputMode
+}
+
+// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
+func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+
+	turboJSONPath := rootPath.Join(configFile)
+
+	// Check if turbo key in package.json exists
+	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
+
+	// If the configFile exists, use that
+	if turboJSONPath.FileExists() {
+		turboJSON, err := readTurboJSON(turboJSONPath)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", configFile, err)
+		}
+
+		// If pkg.Turbo exists, log a warning and delete it from the representation
+		// TODO: turn off this warning eventually
+		if hasLegacyConfig {
+			log.Printf("[WARNING] Ignoring \"turbo\" key in package.json, using %s instead.", configFile)
+			rootPackageJSON.LegacyTurboConfig = nil
+		}
+
+		return turboJSON, nil
+	}
+
+	// Use pkg.Turbo if the configFile doesn't exist and we want the fallback feature
+	// TODO: turn this fallback off eventually
+	if hasLegacyConfig {
+		log.Printf("[DEPRECATED] \"turbo\" in package.json is deprecated. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
+		return rootPackageJSON.LegacyTurboConfig, nil
+	}
+
+	// If there's no turbo.json and no turbo key in package.json, return an error.
+	return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+}
+
+// readTurboJSON reads the configFile in to a struct
+func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
+	file, err := path.Open()
+	if err != nil {
+		return nil, err
+	}
+	var turboJSON *TurboJSON
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	err = jsonc.Unmarshal(data, &turboJSON)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return turboJSON, nil
+}
 
 // GetTaskDefinition returns a TaskDefinition from a serialized definition in configFile
 func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
@@ -118,24 +153,6 @@ func (pc Pipeline) HasTask(task string) bool {
 	return false
 }
 
-// TaskDefinition is a representation of the configFile pipeline for further computation.
-type TaskDefinition struct {
-	Outputs                 []string
-	ShouldCache             bool
-	EnvVarDependencies      []string
-	TopologicalDependencies []string
-	TaskDependencies        []string
-	Inputs                  []string
-	OutputMode              util.TaskOutputMode
-}
-
-const (
-	envPipelineDelimiter         = "$"
-	topologicalPipelineDelimiter = "^"
-)
-
-var defaultOutputs = []string{"dist/**/*", "build/**/*"}
-
 // UnmarshalJSON deserializes JSON into a TaskDefinition
 func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	rawPipeline := &pipelineJSON{}
@@ -157,19 +174,73 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	} else {
 		c.ShouldCache = *rawPipeline.Cache
 	}
-	c.EnvVarDependencies = []string{}
+
+	envVarDependencies := make(util.Set)
 	c.TopologicalDependencies = []string{}
 	c.TaskDependencies = []string{}
+
 	for _, dependency := range rawPipeline.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
-			c.EnvVarDependencies = append(c.EnvVarDependencies, strings.TrimPrefix(dependency, envPipelineDelimiter))
+			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
 		} else {
 			c.TaskDependencies = append(c.TaskDependencies, dependency)
 		}
 	}
+
+	// Append env key into EnvVarDependencies
+	for _, value := range rawPipeline.Env {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			// Hard error to help people specify this correctly during migration.
+			// TODO: Remove this error after we have run summary.
+			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"$\"", value)
+		}
+
+		envVarDependencies.Add(value)
+	}
+
+	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	c.Inputs = rawPipeline.Inputs
 	c.OutputMode = rawPipeline.OutputMode
+	return nil
+}
+
+// UnmarshalJSON deserializes TurboJSON objects into struct
+func (c *TurboJSON) UnmarshalJSON(data []byte) error {
+	raw := &rawTurboJSON{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	envVarDependencies := make(util.Set)
+	globalFileDependencies := make(util.Set)
+
+	for _, value := range raw.GlobalEnv {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			// Hard error to help people specify this correctly during migration.
+			// TODO: Remove this error after we have run summary.
+			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
+		}
+
+		envVarDependencies.Add(value)
+	}
+
+	for _, value := range raw.GlobalDependencies {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
+		} else {
+			globalFileDependencies.Add(value)
+		}
+	}
+
+	// turn the set into an array and assign to the TurboJSON struct fields.
+	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
+	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
+
+	// copy these over, we don't need any changes here.
+	c.Pipeline = raw.Pipeline
+	c.RemoteCacheOptions = raw.RemoteCacheOptions
+
 	return nil
 }
