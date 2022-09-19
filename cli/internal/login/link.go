@@ -234,7 +234,11 @@ func promptSetup(location string) (bool, error) {
 }
 
 func addTurboToGitignore() error {
-	fs.EnsureDir(".gitignore")
+	err := fs.EnsureDir(".gitignore")
+	if err != nil {
+		return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+	}
+
 	gitignoreBytes, err := os.ReadFile(".gitignore")
 	if err != nil {
 		return fmt.Errorf("could not find or update .gitignore.\n%w", err)
