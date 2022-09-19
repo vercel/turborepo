@@ -23,7 +23,7 @@ Unlike a single-package repository, you'll need to consider how to name your wor
 
     ```json
     {
-      "name": "monorepo",
+      "name": "my-monorepo",
       "version": "1.0.0",
       "workspaces": [
         "docs",
@@ -40,7 +40,7 @@ Unlike a single-package repository, you'll need to consider how to name your wor
 
     ```json
     {
-      "name": "monorepo",
+      "name": "my-monorepo",
       "version": "1.0.0",
       "workspaces": [
         "docs",
@@ -67,19 +67,19 @@ Unlike a single-package repository, you'll need to consider how to name your wor
 </Tabs>
 
 ```
-monorepo/
-├─ docs/
-├─ apps/
-│  ├─ api/
-│  ├─ mobile/
-├─ packages/
-│  ├─ tsconfig/
-│  ├─ config/
-├─ sdk/
+my-monorepo
+├─ docs
+├─ apps
+│  ├─ api
+│  ├─ mobile
+├─ packages
+│  ├─ tsconfig
+│  ├─ shared-utils
+├─ sdk
 ```
 
-In the example above, all directories inside `monorepo/apps/` and `monorepo/packages/` are workspaces, and the `monorepo/docs` directory itself is also a workspace. `monorepo/sdk/` is _not_ a workspace, as it is not included in the workspace configuration.
+In the example above, all directories inside `my-monorepo/apps/` and `my-monorepo/packages/` are workspaces, and the `my-monorepo/docs` directory itself is also a workspace. `my-monorepo/sdk/` is _not_ a workspace, as it is not included in the workspace configuration.
 
 ## Managing workspaces
 
-When you move, delete, or rename your workspaces, you must ensure that all folders linked within your `package.json` should match. Anytime you change your workspace configuration, provide all the dependencies of the workspace that are updated. Re-run your package manager's install command to check your configuration. If there are problems after that, you may have to delete your `node_modules` folder and re-run an install.
+When you move, delete, or rename your workspaces, you must ensure that all folders linked within your `package.json` should match. Any time you change your workspace configuration, provide all the dependencies of the workspace that are updated. Re-run your package manager's `install` command to check your configuration. If there are problems after that, you may have to delete each `node_modules` folder and re-run an install.

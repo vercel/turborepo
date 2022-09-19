@@ -11,7 +11,7 @@ Some alternatives are:
 
 ## Understanding Changesets
 
-We recommend taking a look at the changesets docs. Here's our recommended reading order:
+We recommend taking a look at the Changesets docs. Here's our recommended reading order:
 
 1. [Why use changesets?](https://github.com/changesets/changesets/blob/main/docs/intro-to-using-changesets.md) - an intro that takes you through the fundamentals.
 1. [Installation instructions](https://github.com/changesets/changesets/blob/main/packages/cli/README.md)
@@ -20,7 +20,7 @@ We recommend taking a look at the changesets docs. Here's our recommended readin
 
 ## Using Changesets with Turborepo
 
-Once you've started using changesets, you'll gain access to three useful commands:
+Once you've started using Changesets, you'll gain access to three useful commands:
 
 ```bash
 # Add a new changeset
@@ -46,5 +46,9 @@ Our recommendation is to add a `publish-packages` script into your root `package
   }
 }
 ```
+
+<Callout>
+  We recommend `publish-packages` so that it doesn't conflict with npm's built-in `publish` script.
+</Callout>
 
 This means that when you run `publish-packages`, your monorepo gets built, linted, tested and published - and you benefit from all of Turborepo's speedups.

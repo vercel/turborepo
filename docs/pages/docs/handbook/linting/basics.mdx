@@ -33,7 +33,7 @@ Then, inside **each workspace that needs to be linted**, add a `lint` script. We
 
 This pattern has two benefits:
 
-- [**Parallelization**](/docs/core-concepts/running-tasks): the lint tasks will be parallelized across all cores
+- [**Parallelization**](/docs/core-concepts/running-tasks): the lint tasks will be run concurrently, speeding them up
 - [**Caching**](/docs/core-concepts/caching): `lint` tasks will only be re-run on workspaces that have changed
 
 This means you can lint your entire repo using one command:
@@ -48,5 +48,5 @@ Sharing configuration across a monorepo helps keep the development experience co
 
 So far, we've built guides for sharing config in:
 
-- [ESLint](/docs/handbook/linting/eslint)
 - [TypeScript](/docs/handbook/linting/typescript)
+- [ESLint](/docs/handbook/linting/eslint)

@@ -9,11 +9,11 @@ Monorepos let you share code across applications without friction. To do that, y
 The word 'package' has a double meaning when it comes to monorepos. It can refer to either of these:
 
 1. A set of files you download from a registry into your `node_modules`, via a package manager like `npm`.
-2. A workspace containing code that can be shared between applications, usually inside `/packages`.
+2. A workspace containing code that can be shared between applications - by convention usually inside `/packages`.
 
-This dual meaning can be very confusing to folks new to the monorepo scene. You're likely very familiar with `1`, but not so familiar with `2`.
+This dual meaning can be very confusing to folks new to the monorepo scene. You're likely very familiar with [package installation](/docs/handbook/package-installation), but not so familiar with [workspaces](/docs/handbook/workspaces).
 
-The fact is that they're very similar. A package is just a piece of shared code. Except that `1` lives in your `node_modules`, and `2` lives in a workspace - likely in your `/packages` folder.
+The fact is that they're very similar. A package is just a piece of shared code. Except that _installed packages_ live in your `node_modules`, and _local packages_ lives in a workspace - likely in your `/packages` folder.
 
 ## Anatomy of a package
 

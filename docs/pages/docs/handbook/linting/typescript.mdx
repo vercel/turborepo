@@ -30,7 +30,7 @@ packages
 
 ### Our `tsconfig` package
 
-Inside `packages/tsconfig`, we have a few `*.json` files which represent different ways you might want to configure TypeScript. They each look like this:
+Inside `packages/tsconfig`, we have a few `json` files which represent different ways you might want to configure TypeScript. They each look like this:
 
 ```json filename="packages/tsconfig/base.json"
 {
@@ -55,20 +55,15 @@ Inside `packages/tsconfig`, we have a few `*.json` files which represent differe
 }
 ```
 
-Inside `package.json`, we enumerate all of these files using `files`: an alternative to [`main`](/docs/handbook/sharing-code/basics#anatomy-of-a-package):
+Inside `package.json`, we simply name our package:
 
 ```json filename="packages/tsconfig/package.json"
 {
-  "name": "tsconfig",
-  "files": [
-    "base.json",
-    "nextjs.json",
-    "react-library.json"
-  ]
+  "name": "tsconfig"
 }
 ```
 
-This lets us import from this package by, in theory:
+The other `json` files in the repository can be accessed via a simple import:
 
 ```ts
 import baseJson from 'tsconfig/base.json';

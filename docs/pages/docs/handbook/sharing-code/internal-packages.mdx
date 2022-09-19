@@ -4,7 +4,7 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 # Internal Packages
 
-Internal packages are [packages](/docs/handbook/sharing-code/basics) which are only intended to be used _inside_ your monorepo. They're extremely useful for sharing code between apps in closed-source repositories.
+Internal packages are [packages](/docs/handbook/sharing-code/basics) which are only intended to be used _inside_ your monorepo. They're extremely useful for sharing code between apps in closed-source monorepos.
 
 Internal packages are quick to create, and can be turned into [external packages](/docs/handbook/publishing-packages/basics) if you end up wanting to publish them to `npm`.
 
@@ -242,11 +242,13 @@ We are now able to add any amount of code into our `math-helpers` package, and u
 
 This pattern is extremely powerful for creating pieces of code that can be easily shared between teams.
 
+### Quick Reference
+
 #### Quick reference - creating a new internal package
 
 1. Create a new folder in `packages/<folder>`
-1. Add a `package.json`, with `name` and `types` pointing at `src/index.ts` (or `src/index.tsx`).
-1. Add `src/index.tsx`, with at least one named export.
+1. Add a `package.json`, with `name` and `types` pointing at `src/index.ts` (or `src/index.tsx`)
+1. Add `src/index.tsx`, with at least one named export
 1. [Install your packages](/docs/handbook/package-installation) from root
 
 #### Quick reference - importing an internal package

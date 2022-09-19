@@ -69,11 +69,11 @@ Because of Turborepo's [caching](/docs/core-concepts/caching), this also means t
 
 ## Running tests in watch mode
 
-In Turborepo, 'watch' tasks behave differently to normal tasks. When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/docs/core-concepts/caching) with Turborepo.
+When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/docs/core-concepts/caching) with Turborepo.
 
-But when you run your tests in 'watch' mode, the process never exits. This makes a watch task more like a [development task](/docs/handbook/dev).
+But when you run your tests in watched mode, the process never exits. This makes a watch task more like a [development task](/docs/handbook/dev).
 
-Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in 'watch' mode.
+Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode.
 
 Here's an example:
 

@@ -56,7 +56,7 @@ export const FundamentalsArea = () => {
         feature={{
           Icon: ShareIcon,
           description:
-            "Learn how to share code easily using either internal packages or external ones.",
+            "Learn how to share code easily using either internal or external packages.",
           name: "Sharing Code",
         }}
         href="/docs/handbook/sharing-code/basics"

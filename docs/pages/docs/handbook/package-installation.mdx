@@ -52,32 +52,32 @@ You can add, remove and upgrade packages from within your monorepo using your pa
 
     **Install a package in a workspace**
     ```bash
-    npm install <package> -w=<workspace>
+    npm install <package> --workspace=<workspace>
     ```
 
     Example:
     ```bash
-    npm install react -w=web
+    npm install react --workspace=web
     ```
 
     **Remove a package from a workspace**
     ```bash
-    npm uninstall <package> -w=<workspace>
+    npm uninstall <package> --workspace=<workspace>
     ```
 
     Example:
     ```bash
-    npm uninstall react -w=web
+    npm uninstall react --workspace=web
     ```
 
     **Upgrade a package in a workspace**
     ```bash
-    npm update <package> -w=<workspace>
+    npm update <package> --workspace=<workspace>
     ```
 
     Example:
     ```bash
-    npm update react -w=web
+    npm update react --workspace=web
     ```
 
   </Tab>
@@ -138,18 +138,18 @@ You can add, remove and upgrade packages from within your monorepo using your pa
 
     **Upgrade a package in a workspace**
      ```bash
-    pnpm up <package> --filter <workspace>
+    pnpm update <package> --filter <workspace>
     ```
 
     Example:
     ```bash
-    pnpm up react --filter web
+    pnpm update react --filter web
     ```
 
   </Tab>
 </Tabs>
 
-## Handling mis-matched package versions
+## Handling mismatched package versions
 
 As your monorepo grows, you may end up with different versions of packages in different workspaces.
 
