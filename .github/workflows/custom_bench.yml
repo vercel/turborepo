@@ -44,7 +44,7 @@ jobs:
 
       - name: Run cargo bench
         uses: actions-rs/cargo@v1
-        timeout-minutes: 90
+        timeout-minutes: 120
         env:
           TURBOPACK_BENCH_BUNDLERS: all
           TURBOPACK_BENCH_COUNTS: ${{ github.event.inputs.counts }}
