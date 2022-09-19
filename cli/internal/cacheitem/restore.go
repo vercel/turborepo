@@ -37,14 +37,14 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 
 	// On first attempt to restore it's possible that a link target doesn't exist.
 	// Save them and topsort them.
-	symlinks := make(map[string]*tar.Header)
+	var symlinks []*tar.Header
 
 	restored := make([]turbopath.AnchoredSystemPath, 0)
 	for {
 		header, trErr := tr.Next()
 		if trErr == io.EOF {
 			// The end, time to restore any missing links.
-			symlinksRestored, symlinksErr := topologicalSortLinks(anchor, symlinks, tr)
+			symlinksRestored, symlinksErr := topologicallyRestoreSymlinks(anchor, symlinks, tr)
 			restored = append(restored, symlinksRestored...)
 			if symlinksErr != nil {
 				return restored, symlinksErr
@@ -62,9 +62,9 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 		// Attempt to place the file on disk.
 		file, restoreErr := restoreEntry(anchor, header, tr)
 		if restoreErr != nil {
-			if errors.Is(restoreErr, errDelayedSymlink) {
-				// TODO: Links get one shot to be valid, then they're DAG'd and delayed.
-				symlinks[header.Name] = header
+			if errors.Is(restoreErr, errMissingSymlinkTarget) {
+				// Links get one shot to be valid, then they're accumulated, DAG'd, and restored on delay.
+				symlinks = append(symlinks, header)
 				continue
 			}
 			return restored, restoreErr
@@ -86,8 +86,7 @@ func restoreEntry(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reade
 	case tar.TypeReg:
 		return restoreRegular(anchor, header, reader)
 	case tar.TypeSymlink:
-		// These are simply delayed to the end.
-		return "", errDelayedSymlink
+		return restoreSymlink(anchor, header, reader)
 	default:
 		return "", errUnsupportedFileType
 	}
