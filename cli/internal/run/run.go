@@ -187,9 +187,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return err
 	}
-	// This technically could be one flag, but we plan on removing
-	// the daemon opt-in flag at some point once it stabilizes
-	if r.opts.runOpts.daemonOptIn && !r.opts.runOpts.noDaemon {
+	if ui.IsCI && !r.opts.runOpts.noDaemon {
+		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+	} else if !r.opts.runOpts.noDaemon {
 		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
 			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
@@ -434,10 +434,9 @@ type runOpts struct {
 	dryRun     bool
 	dryRunJSON bool
 	// Graph flags
-	graphDot    bool
-	graphFile   string
-	noDaemon    bool
-	daemonOptIn bool
+	graphDot  bool
+	graphFile string
+	noDaemon  bool
 }
 
 var (
@@ -470,7 +469,8 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
 	flags.BoolVar(&opts.only, "only", false, _onlyHelp)
 	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
-	flags.BoolVar(&opts.daemonOptIn, "experimental-use-daemon", false, "Use the experimental turbo daemon")
+	// This is a no-op flag, we don't need it anymore
+	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
 	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
 	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
 		panic(err)
