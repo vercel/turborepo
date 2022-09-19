@@ -61,7 +61,7 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	return true, nil, meta.Duration, nil
 }
 
-func (f *fsCache) Assert(hash string) (bool, error) {
+func (f *fsCache) Exists(hash string) (bool, error) {
 	cachedFolder := filepath.Join(f.cacheDirectory, hash)
 
 	if !fs.PathExists(cachedFolder) {

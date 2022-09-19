@@ -28,7 +28,7 @@ func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []
 	return false, nil, 0, nil
 }
 
-func (tc *testCache) Assert(hash string) (bool, error) {
+func (tc *testCache) Exists(hash string) (bool, error) {
 	if tc.disabledErr != nil {
 		return false, tc.disabledErr
 	}

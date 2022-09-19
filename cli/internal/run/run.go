@@ -779,7 +779,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		}
 		sort.Strings(stringDescendents)
 
-		hit, err := turboCache.Assert(hash)
+		hit, err := turboCache.Exists(hash)
 		if err != nil {
 			return err
 		}

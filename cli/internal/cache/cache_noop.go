@@ -12,7 +12,7 @@ func (c *noopCache) Put(target string, key string, duration int, files []string)
 func (c *noopCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
 	return false, nil, 0, nil
 }
-func (c *noopCache) Assert(key string) (bool, error) {
+func (c *noopCache) Exists(key string) (bool, error) {
 	return false, nil
 }
 

@@ -150,7 +150,7 @@ func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (
 	return hit, files, duration, err
 }
 
-func (cache *httpCache) Assert(key string) (bool, error) {
+func (cache *httpCache) Exists(key string) (bool, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, err := cache.exists(key)
