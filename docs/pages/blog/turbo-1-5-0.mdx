@@ -1,0 +1,148 @@
+---
+title: Turborepo 1.5
+date: 2022/09/19
+description: Turborepo 1.4 has new examples, automatically includes environment variables, and more!
+tag: web development
+ogImage: /images/blog/turbo-1-4-0/og-image.png
+---
+
+# Turborepo 1.5
+
+import { Authors } from '../../components/Authors'
+import Callout from '../../components/Callout'
+
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Monday, September 19th, 2022</div>
+
+<Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+
+Turborepo 1.5 brings:
+
+- [**The Monorepo Handbook**](#the-monorepo-handbook): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
+- [**No need to run**](#run-no-longer-needed): `turbo run <task>` can now be shortened to `turbo <task>`
+- [**Prune now supported on pnpm, yarn and npm**](#prune-now-supported-on-npm-pnpm-and-yarn): Pruning your monorepo is now supported in all major package managers.
+- [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
+- [**Changes to `package.json` hashing**](#changes-to-packagejson-hashing): We've improved how we hash `package.json` when running tasks.
+
+Update today by running `npm install turbo@latest`.
+
+## The Monorepo Handbook
+
+Setting up a monorepo for the first time often means navigating a lot of new concepts. You'll need to understand workspaces, package installation, sharing code and dependency management - and a lot more.
+
+This often meant that folks who wanted to set up a monorepo from scratch had to piece information together from different documentation sites. First `pnpm`, then `tsup`, then back to `changesets`, then back to Turborepo for dessert.
+
+We want to fill this gap with [the Monorepo Handbook](/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
+
+- Installing Packages
+- Linting
+- Development Tasks
+- Building Apps
+- Publishing Packages
+
+{/* TODO - link these */}
+
+## `run` no longer needed
+
+You can now run tasks with the Turborepo CLI using `turbo <task>`.
+
+```diff
+- turbo run build
++ turbo build
+
+
+- turbo run lint build test
++ turbo lint build test
+```
+
+If your task name conflicts with a built-in `turbo` subcommand, we'll run our subcommand instead. That means you shouldn't name your tasks things like `prune`, `run`, or `login` - since those are built-in subcommands.
+
+`turbo run <task>` will continue to work, and there are no plans to deprecate it.
+
+## Prune now supported on `npm`, `pnpm` and `yarn`
+
+We're delighted to announce that `turbo prune --scope=<package-name>` is now supported in all major package managers.
+
+`turbo prune` lets you create a subset of your monorepo, focused on deploying a single application.
+
+Let's say that you have a monoreopo like this:
+
+```
+monorepo
+├─ apps
+│  ├─ api
+│  ├─ mobile
+├─ packages
+│  ├─ shared-utils
+│  ├─ tsconfig
+```
+
+If you want to deploy only `apps/api`, you can run:
+
+```bash
+turbo prune --scope="api"
+```
+
+You'd get an output that looks like this:
+
+```
+Generating pruned monorepo for api in /my-turborepo/out
+ - Added api
+ - Added shared-utils
+ - Added tsconfig
+```
+
+And the `/out` directory would look like this:
+
+```
+out
+├─ apps
+│  ├─ api
+├─ packages
+│  ├─ shared-utils
+│  ├─ tsconfig
+```
+
+Not only would `mobile` be removed, but **all of its dependencies would be removed from the root lockfile**. This means that you can create a streamlined version of your monorepo that only installs the dependencies it needs.
+
+### Deploying to Docker
+
+This is particularly useful for deploying to Docker. Without pruning your monorepo, changes which _don't affect your deployed application_ would cause it to re-deploy. Pruning your monorepo before copying it to your Docker image ensures that Docker Layer Caching won't be thrown off by unrelated dependencies.
+
+## Environment variables in `turbo.json`
+
+We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These allow environment variables to be configured _separately_ from tasks:
+
+```diff filename="turbo.json"
+{
+  "globalDependencies": [
+-   "$DATABASE_URL"
+  ]
++ "globalEnv": [
++   "DATABASE_URL"
++ ],
+  "pipeline": {
+    "build": {
+      "dependsOn": [
+-       "$BUILD_ENV"
+      ],
++     "env": [
++       "BUILD_ENV"
++     ]
+    }
+  }
+}
+```
+
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read.
+
+To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod env-key`.
+
+You can also upgrade the `eslint-config-turbo` package to `latest` if you want to validate your turbo.json.
+
+## Changes to `package.json` hashing
+
+The `package.json` file in each workspace is now _always_ considered an input for tasks in that workspace. This means that if you change the _definition_ for a task in `package.json`, we want to invalidate any caches from the previous definition.
+
+This also counts for the `package.json` in the root. Changes to the root `package.json` will invalidate tasks in the root workspace.
+
+This helps make Turborepo's cache a bit smarter, and less likely to trip up when task definitions change.
