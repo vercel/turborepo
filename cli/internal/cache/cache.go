@@ -24,12 +24,17 @@ type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
 	Fetch(target string, hash string, files []string) (bool, []string, int, error)
-	Exists(hash string) (bool, error)
+	Exists(hash string) (CacheState, error)
 	// Put caches files for a given hash
 	Put(target string, hash string, duration int, files []string) error
 	Clean(target string)
 	CleanAll()
 	Shutdown()
+}
+
+type CacheState struct {
+	Local  bool `json:"local"`
+	Remote bool `json:"remote"`
 }
 
 const cacheEventHit = "HIT"
@@ -272,12 +277,19 @@ func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) 
 	return false, files, 0, nil
 }
 
-func (mplex *cacheMultiplexer) Exists(target string) (bool, error) {
+func (mplex *cacheMultiplexer) Exists(target string) (CacheState, error) {
+	syncCacheState := CacheState{}
 	for _, cache := range mplex.caches {
-		return cache.Exists(target)
+		cacheState, _ := cache.Exists(target)
+		if cacheState.Local == true {
+			syncCacheState.Local = cacheState.Local
+		}
+		if cacheState.Remote == true {
+			syncCacheState.Remote = cacheState.Remote
+		}
 	}
 
-	return false, nil
+	return syncCacheState, nil
 }
 
 func (mplex *cacheMultiplexer) Clean(target string) {

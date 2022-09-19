@@ -348,7 +348,8 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
-				fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached\t=\t%s\t${RESET}", strconv.FormatBool(task.Cached)))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
+				fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 				fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
@@ -705,17 +706,17 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 }
 
 type hashedTask struct {
-	TaskID       string   `json:"taskId"`
-	Task         string   `json:"task"`
-	Package      string   `json:"package"`
-	Hash         string   `json:"hash"`
-	Cached       bool     `json:"cached"`
-	Command      string   `json:"command"`
-	Outputs      []string `json:"outputs"`
-	LogFile      string   `json:"logFile"`
-	Dir          string   `json:"directory"`
-	Dependencies []string `json:"dependencies"`
-	Dependents   []string `json:"dependents"`
+	TaskID       string           `json:"taskId"`
+	Task         string           `json:"task"`
+	Package      string           `json:"package"`
+	Hash         string           `json:"hash"`
+	CacheState   cache.CacheState `json:"cacheState"`
+	Command      string           `json:"command"`
+	Outputs      []string         `json:"outputs"`
+	LogFile      string           `json:"logFile"`
+	Dir          string           `json:"directory"`
+	Dependencies []string         `json:"dependencies"`
+	Dependents   []string         `json:"dependents"`
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
@@ -773,7 +774,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		}
 		sort.Strings(stringDescendents)
 
-		hit, err := turboCache.Exists(hash)
+		cacheEntry, err := turboCache.Exists(hash)
 		if err != nil {
 			return err
 		}
@@ -783,7 +784,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 			Task:         packageTask.Task,
 			Package:      packageTask.PackageName,
 			Hash:         hash,
-			Cached:       hit,
+			CacheState:   cacheEntry,
 			Command:      command,
 			Dir:          packageTask.Pkg.Dir.ToString(),
 			Outputs:      packageTask.TaskDefinition.Outputs,
@@ -791,6 +792,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 			Dependencies: stringAncestors,
 			Dependents:   stringDescendents,
 		})
+
 		return nil
 	}), core.ExecOpts{
 		Concurrency: 1,

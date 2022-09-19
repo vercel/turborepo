@@ -12,8 +12,8 @@ func (c *noopCache) Put(target string, key string, duration int, files []string)
 func (c *noopCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
 	return false, nil, 0, nil
 }
-func (c *noopCache) Exists(key string) (bool, error) {
-	return false, nil
+func (c *noopCache) Exists(key string) (CacheState, error) {
+	return CacheState{}, nil
 }
 
 func (c *noopCache) Clean(target string) {}
