@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task          = build                  
-    Hash          = 9f3c4fb1ea7d561d       
+    Hash          = e491d0044f4b9b90       
     Directory     =                        
     Command       = echo 'building' > foo  
     Outputs       = foo                    
@@ -21,7 +21,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "9f3c4fb1ea7d561d",
+        "hash": "e491d0044f4b9b90",
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"

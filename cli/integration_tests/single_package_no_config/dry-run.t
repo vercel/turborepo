@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task          = build                  
-    Hash          = 3e7a2ac81b9d11be       
+    Hash          = c207d64157b1635a       
     Directory     =                        
     Command       = echo 'building'        
     Outputs       =                        
@@ -21,7 +21,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "3e7a2ac81b9d11be",
+        "hash": "c207d64157b1635a",
         "command": "echo 'building'",
         "outputs": null,
         "logFile": ".turbo/turbo-build.log",
