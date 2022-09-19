@@ -29,3 +29,7 @@ jobs:
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
 
+      - name: Integration Tests
+        if: matrix.os != 'windows-latest'
+        run: pnpm -- turbo run integration-tests --filter=cli
+
