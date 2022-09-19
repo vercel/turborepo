@@ -44,8 +44,9 @@ func RunWithArgs(args []string, turboVersion string) int {
 	signalWatcher := signals.NewWatcher()
 	helper := cmdutil.NewHelper(turboVersion)
 	root := getCmd(helper, signalWatcher)
+	resolvedArgs := resolveArgs(root, args)
 	defer helper.Cleanup(root.Flags())
-	root.SetArgs(args)
+	root.SetArgs(resolvedArgs)
 
 	doneCh := make(chan struct{})
 	var execErr error
@@ -71,6 +72,29 @@ func RunWithArgs(args []string, turboVersion string) int {
 		// We caught a signal, which already called the close handlers
 		return 1
 	}
+}
+
+const _defaultCmd string = "run"
+
+// resolveArgs adds a default command to the supplied arguments if none exists.
+func resolveArgs(root *cobra.Command, args []string) []string {
+	for _, arg := range args {
+		if arg == "--help" || arg == "--version" {
+			return args
+		}
+	}
+	cmd, _, err := root.Traverse(args)
+	if err != nil {
+		// The command is going to error, but defer to cobra
+		// to handle it
+		return args
+	} else if cmd.Name() == root.Name() {
+		// We resolved to the root, and this is not help or version,
+		// so prepend our default command
+		return append([]string{_defaultCmd}, args...)
+	}
+	// We resolved to something other than the root command, no need for a default
+	return args
 }
 
 // getCmd returns the root cobra command
