@@ -5,29 +5,19 @@ const path = require("path");
 
 // Map to node os and arch names.
 const nodeOsLookup = {
-  android: "android",
   darwin: "darwin",
-  freebsd: "freebsd",
   linux: "linux",
   windows: "win32",
 };
 
 const nodeArchLookup = {
-  386: "ia32",
   amd64: "x64",
-  arm: "arm",
   arm64: "arm64",
-  mips64le: "mipsel",
-  ppc64le: "ppc64",
 };
 
 const humanizedArchLookup = {
-  386: "32",
   amd64: "64",
-  arm: "arm",
   arm64: "arm64",
-  mips64le: "mips64le",
-  ppc64le: "ppc64le",
 };
 
 const template = require("./template/template.package.json");
