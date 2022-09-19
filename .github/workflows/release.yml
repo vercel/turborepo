@@ -7,26 +7,31 @@ on:
   workflow_dispatch:
     inputs:
       increment:
-        description: 'SemVer Increment'
+        description: "SemVer Increment"
         required: true
-        default: 'prerelease'
+        default: "prerelease"
         type: choice
         options:
-        - prerelease
-        - prepatch
-        - preminor
-        - premajor
-        - patch
-        - minor
-        - major
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+          - patch
+          - minor
+          - major
       identifier:
-        description: 'npm Tag'
+        description: "npm Tag"
         required: true
-        default: 'canary'
+        default: "canary"
         type: choice
         options:
-        - canary
-        - latest
+          - canary
+          - latest
+
+# Plan:
+# 1. verification step -> lint, test
+# 2. in parallel, build artifacts
+# 3. Download artifacts, run publish process, including npm. No building / verification here
 jobs:
   build:
     runs-on: macos-latest

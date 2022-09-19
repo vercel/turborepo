@@ -183,6 +183,15 @@ jobs:
           cache: true
           cache-dependency-path: cli/go.sum
 
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
       - name: Download Cross-compiled Artifacts
         uses: actions/download-artifact@v3
         with:
