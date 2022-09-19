@@ -98,7 +98,8 @@ snapshot-turbo-cross:
 snapshot-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-release.yml
 
-snapshot-turbo: clean build
+.PHONY: snapshot-turbo
+snapshot-turbo: clean
 	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
 publish: clean prepublish build
