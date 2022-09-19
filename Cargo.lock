@@ -97,9 +97,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.61"
+version = "1.0.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "508b352bb5c066aac251f6daf6b36eccd03e8a88e8081cd44959ea277a3af9a8"
+checksum = "98161a4e3e2184da77bb14f02184cdd111e83bbbcc9979dfee3c44b9a85f5602"
 
 [[package]]
 name = "arrayvec"
@@ -490,9 +490,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f725f340c3854e3cb3ab736dc21f0cca183303acea3b3ffec30f141503ac8eb"
+checksum = "bfd4d1b31faaa3a89d7934dbded3111da0d2ef28e3ebccdb4f0179f5929d1ef1"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -5246,7 +5246,9 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cargo-lock",
+ "chrono",
  "clap 3.2.17",
  "inquire",
  "owo-colors",
@@ -5254,4 +5256,5 @@ dependencies = [
  "serde",
  "serde_json",
  "tabled",
+ "walkdir",
 ]

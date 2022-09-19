@@ -16,6 +16,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_PROFILE_RELEASE_LTO: true
   RUST_BACKTRACE: 1
+  NODE_OPTIONS: '--max-old-space-size=32768'
 
 jobs:
   bench:
