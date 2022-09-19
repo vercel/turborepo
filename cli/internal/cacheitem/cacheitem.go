@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	errDelayedSymlink      = errors.New("symlink restoration is delayed")
-	errCycleDetected       = errors.New("links in the cache are cyclic")
-	errTraversal           = errors.New("tar attempts to write outside of directory")
-	errNameMalformed       = errors.New("file name is malformed")
-	errNameWindowsUnsafe   = errors.New("file name is not Windows-safe")
-	errUnsupportedFileType = errors.New("attempted to restore unsupported file type")
+	errMissingSymlinkTarget = errors.New("symlink restoration is delayed")
+	errCycleDetected        = errors.New("links in the cache are cyclic")
+	errTraversal            = errors.New("tar attempts to write outside of directory")
+	errNameMalformed        = errors.New("file name is malformed")
+	errNameWindowsUnsafe    = errors.New("file name is not Windows-safe")
+	errUnsupportedFileType  = errors.New("attempted to restore unsupported file type")
 )
 
 // CacheItem is a `tar` utility with a little bit extra.

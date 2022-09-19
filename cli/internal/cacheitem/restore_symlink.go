@@ -9,7 +9,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
-// restoreSymlink restores a symlink
+// restoreSymlink restores a symlink and errors if the target is missing.
 func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
 	// We don't know _anything_ about linkname. It could be any of:
 	//
@@ -29,9 +29,33 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	//
 	// Given all of that, our best option is to restore link targets _verbatim_.
 	// No modification, no slash conversion.
-	processedName, err := canonicalizeName(header.Name)
-	if err != nil {
-		return "", err
+	processedName, canonicalizeNameErr := canonicalizeName(header.Name)
+	if canonicalizeNameErr != nil {
+		return "", canonicalizeNameErr
+	}
+
+	processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
+
+	// Check to see if the target exists.
+	if _, err := os.Lstat(processedLinkname); err != nil {
+		return "", errMissingSymlinkTarget
+	}
+
+	// Create the symlink.
+	// Explicitly uses the _original_ header.Linkname as the target.
+	symlinkErr := os.Symlink(header.Linkname, processedName.RestoreAnchor(anchor).ToString())
+	if symlinkErr != nil {
+		return "", symlinkErr
+	}
+
+	return processedName, nil
+}
+
+// restoreSymlinkMissingTarget restores a symlink and does not error if the target is missing.
+func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+	processedName, canonicalizeNameErr := canonicalizeName(header.Name)
+	if canonicalizeNameErr != nil {
+		return "", canonicalizeNameErr
 	}
 
 	// Create the symlink.
@@ -43,20 +67,24 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	return processedName, nil
 }
 
-// topologicalSortLinks ensures that targets of symlinks are created in advance
+// topologicallyRestoreSymlinks ensures that targets of symlinks are created in advance
 // of the things that link to them. It does this by topologically sorting all
 // of the symlinks. This also enables us to ensure we do not create cycles.
-func topologicalSortLinks(anchor turbopath.AbsoluteSystemPath, symlinks map[string]*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
+func topologicallyRestoreSymlinks(anchor turbopath.AbsoluteSystemPath, symlinks []*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	restored := make([]turbopath.AnchoredSystemPath, 0)
-
-	// FIXME: use canonical link names for the graph.
+	lookup := make(map[turbopath.AnchoredSystemPath]*tar.Header)
 
 	var g dag.AcyclicGraph
 	for _, header := range symlinks {
-		g.Add(header.Name)
-	}
-	for key, header := range symlinks {
-		g.Connect(dag.BasicEdge(key, header.Linkname))
+		processedName, err := canonicalizeName(header.Name)
+		processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
+		if err != nil {
+			return nil, err
+		}
+		g.Add(processedName)
+		g.Add(processedLinkname)
+		g.Connect(dag.BasicEdge(processedName, processedLinkname))
+		lookup[processedName] = header
 	}
 
 	cycles := g.Cycles()
@@ -72,12 +100,12 @@ func topologicalSortLinks(anchor turbopath.AbsoluteSystemPath, symlinks map[stri
 	}
 
 	walkFunc := func(vertex dag.Vertex, depth int) error {
-		header, exists := symlinks[vertex.(string)]
+		header, exists := lookup[vertex.(turbopath.AnchoredSystemPath)]
 		if !exists {
 			return nil
 		}
 
-		file, restoreErr := restoreSymlink(anchor, header, tr)
+		file, restoreErr := restoreSymlinkMissingTarget(anchor, header, tr)
 		if restoreErr != nil {
 			return restoreErr
 		}
