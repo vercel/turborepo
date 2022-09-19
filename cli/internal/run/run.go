@@ -611,7 +611,7 @@ func (r *run) logWarning(prefix string, err error) {
 	r.base.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 }
 
-func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	apiClient := r.base.APIClient
 	var analyticsSink analytics.Sink
 	if apiClient.IsLinked() {
@@ -621,10 +621,14 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		analyticsSink = analytics.NullSink
 	}
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
-	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	return analyticsClient
+}
+
+func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient analytics.Client) (cache.Cache, error) {
+	apiClient := r.base.APIClient
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	turboCache, err := cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
+	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
@@ -632,6 +636,13 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 			r.logWarning("Remote Caching is unavailable", err)
 		})
 	})
+}
+
+func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+	analyticsClient := r.initAnalyticsClient(ctx)
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+
+	turboCache, err := r.initCache(ctx, rs, analyticsClient)
 	if err != nil {
 		if errors.Is(err, cache.ErrNoCachesEnabled) {
 			r.logWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
@@ -708,27 +719,10 @@ type hashedTask struct {
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
-	apiClient := r.base.APIClient
-	var analyticsSink analytics.Sink
-	if apiClient.IsLinked() {
-		analyticsSink = apiClient
-	} else {
-		r.opts.cacheOpts.SkipRemote = true
-		analyticsSink = analytics.NullSink
-	}
-	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
+	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-
-	// Theoretically this is overkill, but bias towards not spamming the console
-	once := &sync.Once{}
-	turboCache, err := cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
-		// Currently the HTTP Cache is the only one that can be disabled.
-		// With a cache system refactor, we might consider giving names to the caches so
-		// we can accurately report them here.
-		once.Do(func() {
-			r.logWarning("Remote Caching is unavailable", err)
-		})
-	})
+	turboCache, err := r.initCache(ctx, rs, analyticsClient)
+	defer turboCache.Shutdown()
 
 	if err != nil {
 		if errors.Is(err, cache.ErrNoCachesEnabled) {
