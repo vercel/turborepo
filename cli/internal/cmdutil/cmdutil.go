@@ -11,7 +11,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
-	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/client"
@@ -25,11 +24,6 @@ const (
 	// _envLogLevel is the environment log level
 	_envLogLevel = "TURBO_LOG_LEVEL"
 )
-
-// isCI returns true if running in a CI/CD environment
-func isCI() bool {
-	return !isatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("CI") != ""
-}
 
 // Helper is a struct used to hold configuration values passed via flag, env vars,
 // config files, etc. It is not intended for direct use by turbo commands, it drives
@@ -153,7 +147,7 @@ func NewHelper(turboVersion string) *Helper {
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
 func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
-	ui := h.getUI(flags)
+	terminal := h.getUI(flags)
 	logger, err := h.getLogger()
 	if err != nil {
 		return nil, err
@@ -176,7 +170,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 		return nil, err
 	}
 	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
-	if remoteConfig.Token == "" && isCI() {
+	if remoteConfig.Token == "" && ui.IsCI {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
 		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
 		if vercelArtifactsToken != "" {
@@ -193,7 +187,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 		h.clientOpts,
 	)
 	return &CmdBase{
-		UI:           ui,
+		UI:           terminal,
 		Logger:       logger,
 		RepoRoot:     repoRoot,
 		APIClient:    apiClient,
