@@ -10,9 +10,6 @@ builds:
   - id: turbo
     main: ./cmd/turbo
     binary: bin/turbo
-    hooks:
-      pre:
-        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
     flags:
       - -trimpath
     ldflags:

@@ -195,5 +195,14 @@ jobs:
           name: turbo-snapshot-darwin
           path: cli/dist-darwin
 
+      - name: Combine Artifacts
+        run: cd cli && mkdir -p dist-combined && cp -a dist-cross/. dist-combined/ && cp -a dist-darwin/. dist-combined/
+
       - name: Combined Snapshot
         run: cd cli && make snapshot-turbo
+
+      - name: Upload snapshot
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-snapshot-combined
+          path: cli/dist
