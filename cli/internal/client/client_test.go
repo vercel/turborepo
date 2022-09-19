@@ -145,7 +145,7 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 	}
 	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	// Test Put Artifact
-	resp, err := apiClient.FetchArtifact("hash", false)
+	resp, err := apiClient.FetchArtifact("hash")
 	cd := &util.CacheDisabledError{}
 	if !errors.As(err, &cd) {
 		t.Errorf("expected cache disabled error, got %v", err)

@@ -301,7 +301,22 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 
 // FetchArtifact attempts to retrieve the build artifact with the given hash from the
 // Remote Caching server
-func (c *ApiClient) FetchArtifact(hash string, assertOnly bool) (*http.Response, error) {
+func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
+	return c.getArtifact(hash, http.MethodGet)
+}
+
+func (c *ApiClient) ArtifactExists(hash string) (*http.Response, error) {
+	return c.getArtifact(hash, http.MethodHead)
+}
+
+// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// Remote Caching server
+func (c *ApiClient) getArtifact(hash string, httpMethod string) (*http.Response, error) {
+
+	if(httpMethod != http.MethodHead && httpMethod != http.MethodGet ) {
+		return nil, fmt.Errorf("invalid httpMethod %v, expected GET or HEAD", httpMethod)
+	}
+
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -323,13 +338,6 @@ func (c *ApiClient) FetchArtifact(hash string, assertOnly bool) (*http.Response,
 		requestURL = latestRequestURL
 		headers := resp.Header.Get("Access-Control-Allow-Headers")
 		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
-	}
-
-	var httpMethod string
-	if assertOnly {
-		httpMethod = http.MethodHead
-	} else {
-		httpMethod = http.MethodGet
 	}
 
 	req, err := retryablehttp.NewRequest(httpMethod, requestURL, nil)

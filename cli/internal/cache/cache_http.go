@@ -24,7 +24,8 @@ import (
 
 type client interface {
 	PutArtifact(hash string, body []byte, duration int, tag string) error
-	FetchArtifact(hash string, assertOnly bool) (*http.Response, error)
+	FetchArtifact(hash string) (*http.Response, error)
+	ArtifactExists(hash string) (*http.Response, error)
 	GetTeamID() string
 }
 
@@ -177,7 +178,7 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (cache *httpCache) exists(hash string) (bool, error) {
-	resp, err := cache.client.FetchArtifact(hash, true)
+	resp, err := cache.client.ArtifactExists(hash)
 	if err != nil {
 		return false, nil
 	}
@@ -191,7 +192,7 @@ func (cache *httpCache) exists(hash string) (bool, error) {
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
-	resp, err := cache.client.FetchArtifact(hash, false)
+	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
 	}
