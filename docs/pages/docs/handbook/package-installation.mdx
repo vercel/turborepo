@@ -4,13 +4,18 @@ import { Tabs, Tab } from "../../../components/Tabs";
 
 # Package Installation
 
-A package manager (like `npm`) handles two things for you: installing packages and [managing workspaces](/docs/handbook/workspaces).
+A package manager (like `npm`) handles two things for you: [managing workspaces](/docs/handbook/workspaces) and installing packages.
 
-Turborepo is compatible with three package managers:
+Turborepo is compatible with four package managers:
 
 - [npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces#description)
-- [Yarn 1](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
 - [pnpm](https://pnpm.io/workspaces)
+- [Yarn 1](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
+- Yarn >=2 (docs coming soon)
+
+You should use whichever you feel most comfortable with - but **if you're a monorepo beginner, we recommend npm**.
+
+If you're **comfortable with monorepos, we recommend pnpm**. It's faster and offers some useful CLI options like `--filter`.
 
 ## Installing packages
 
@@ -38,10 +43,6 @@ When you first clone or create your monorepo, you'll need to:
 </Tabs>
 
 You'll now see `node_modules` folders appear in the root of your repository, and in each workspace.
-
-<Callout>
-  Ensure that you've got your [workspaces](/docs/handbook/workspaces) set up correctly. If you ran `npx create-turbo` this will already be handled for you.
-</Callout>
 
 ## Adding/removing/upgrading packages
 
@@ -148,33 +149,3 @@ You can add, remove and upgrade packages from within your monorepo using your pa
 
   </Tab>
 </Tabs>
-
-## Handling mismatched package versions
-
-As your monorepo grows, you may end up with different versions of packages in different workspaces.
-
-For instance, `app` may use `react@18.0.0`, but `web` may use `react@17.0.0`. This is especially true when you've just [migrated from a multi-repo setup](/docs/handbook/migrating-to-a-monorepo).
-
-Mis-matched dependencies in different repositories can mean that code runs unexpectedly. React, for instance, will error if there is more than one version installed.
-
-#### `@manypkg/cli`
-
-Our recommended method for handling this problem is with [`@manypkg/cli`](https://www.npmjs.com/package/@manypkg/cli) - a CLI which can ensure that your dependencies match across your repositories.
-
-Here's a quick example. At the root of your `package.json`, add a `postinstall` script.
-
-```json filename="package.json"
-{
-  "scripts": {
-    // This will check your dependencies match
-    // after each installation
-    "postinstall": "manypkg check"
-  },
-  "dependencies": {
-    // Make sure you install @manypkg/cli
-    "@manypkg/cli": "latest"
-  }
-}
-```
-
-You can also run `manypkg fix` to automatically update them throughout your repository.

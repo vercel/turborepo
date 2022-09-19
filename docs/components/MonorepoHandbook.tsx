@@ -1,10 +1,10 @@
 import {
-  BookmarkIcon,
-  BriefcaseIcon,
+  BanIcon,
   ChatAlt2Icon,
   CloudDownloadIcon,
   CloudUploadIcon,
   CodeIcon,
+  CubeIcon,
   LibraryIcon,
   PencilAltIcon,
   ShareIcon,
@@ -13,7 +13,6 @@ import {
 } from "@heroicons/react/outline";
 import React from "react";
 import { DetailedFeatureLink } from "./Feature";
-import { GitHubIcon } from "./Icons";
 
 const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -26,6 +25,14 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => {
 export const FundamentalsArea = () => {
   return (
     <Wrapper>
+      <DetailedFeatureLink
+        feature={{
+          Icon: CubeIcon,
+          description: `Understand how a monorepo compares to a polyrepo, and what problems it solves.`,
+          name: "What is a Monorepo?",
+        }}
+        href="/docs/handbook/what-is-a-monorepo"
+      ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
           Icon: CloudDownloadIcon,
@@ -60,6 +67,15 @@ export const FundamentalsArea = () => {
           name: "Sharing Code",
         }}
         href="/docs/handbook/sharing-code/basics"
+      ></DetailedFeatureLink>
+      <DetailedFeatureLink
+        feature={{
+          Icon: BanIcon,
+          description:
+            "Learn the common monorepo pain points, and how to fix them.",
+          name: "Troubleshooting",
+        }}
+        href="/docs/handbook/troubleshooting"
       ></DetailedFeatureLink>
     </Wrapper>
   );
