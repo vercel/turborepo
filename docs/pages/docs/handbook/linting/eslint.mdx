@@ -94,7 +94,7 @@ In our `web` app, we first need to add `eslint-config-custom` as a dependency.
   </Tab>
 </Tabs>
 
-We can then import the config like this:
+We can add `custom` to our `extends` array, due to convention ESLint then looks for a package called `eslint-config-custom` - and it finds our workspace.
 
 ```js filename="apps/web/.eslintrc.js"
 module.exports = {
@@ -102,8 +102,6 @@ module.exports = {
   extends: ["custom"],
 };
 ```
-
-By adding `custom` to our `extends` array, we're telling ESLint to look for a package called `eslint-config-custom` - and it finds our workspace.
 
 ### Summary
 
