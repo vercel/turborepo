@@ -62,51 +62,9 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 We're delighted to announce that `turbo prune --scope=<package-name>` is now supported in all major package managers.
 
-`turbo prune` lets you create a subset of your monorepo, focused on deploying a single application.
+As part of the handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/handbook/deploying-with-docker).
 
-Let's say that you have a monoreopo like this:
-
-```
-monorepo
-├─ apps
-│  ├─ api
-│  └─ mobile
-└─ packages
-   ├─ shared-utils
-   └─ tsconfig
-```
-
-If you want to deploy only `apps/api`, you can run:
-
-```bash
-turbo prune --scope="api"
-```
-
-You'd get an output that looks like this:
-
-```
-Generating pruned monorepo for api in /my-turborepo/out
- - Added api
- - Added shared-utils
- - Added tsconfig
-```
-
-And the `/out` directory would look like this:
-
-```
-out
-├─ apps
-│  └─ api
-└─ packages
-   ├─ shared-utils
-   └─ tsconfig
-```
-
-Not only would `mobile` be removed, but **all of its dependencies would be removed from the root lockfile**. This means that you can create a streamlined version of your monorepo that only installs the dependencies it needs.
-
-### Deploying to Docker
-
-This is particularly useful for deploying to Docker. Without pruning your monorepo, changes which _don't affect your deployed application_ would cause it to re-deploy. Pruning your monorepo before copying it to your Docker image ensures that Docker Layer Caching won't be thrown off by unrelated dependencies.
+Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
 
 ## Environment variables in `turbo.json`
 
