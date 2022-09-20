@@ -19,7 +19,7 @@ Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well a
 
 - [**The Monorepo Handbook**](#the-monorepo-handbook): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
 - [**Drop the `run`**](#drop-the-run): `turbo run <task>` can now be shortened to `turbo <task>`
-- [**Prune now supported on pnpm, yarn and npm**](#prune-now-supported-on-npm-pnpm-and-yarn): Pruning your monorepo is now supported in all major package managers.
+- [**Prune now supported on pnpm**](#prune-now-supported-on-pnpm): Pruning your monorepo is now supported in `pnpm` and `yarn`, with `npm` support coming soon.
 - [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
 - [**Changes to `package.json` hashing**](#changes-to-packagejson-hashing): We've improved how we hash `package.json` when running tasks.
 
@@ -58,9 +58,9 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 `turbo run <task>` will continue to work, and there are no plans to deprecate it.
 
-## Prune now supported on `npm`, `pnpm` and `yarn`
+## Prune now supported on `pnpm`
 
-We're delighted to announce that `turbo prune --scope=<package-name>` is now supported in all major package managers.
+We're delighted to announce that `turbo prune --scope=<package-name>` is now supported in `pnpm`.
 
 As part of the handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/handbook/deploying-with-docker).
 
