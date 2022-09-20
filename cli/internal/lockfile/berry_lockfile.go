@@ -202,10 +202,19 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		}
 	}
 
+	// berry only includes a cache key in the lockfile if there are entries with a checksum
+	cacheKey := -1
+	for _, entry := range prunedPackages {
+		if entry.Checksum != "" {
+			cacheKey = l.cacheKey
+			break
+		}
+	}
+
 	return &BerryLockfile{
 		packages:    prunedPackages,
 		version:     l.version,
-		cacheKey:    l.cacheKey,
+		cacheKey:    cacheKey,
 		descriptors: prunedDescriptors,
 		patches:     patches,
 	}, nil
