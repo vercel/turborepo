@@ -69,7 +69,7 @@ func checkPath(originalAnchor turbopath.AbsoluteSystemPath, accumulatedAnchor tu
 
 	// Getting an error here means we failed to stat the path.
 	// Assume that means we're safe and continue.
-	if err == nil {
+	if err != nil {
 		return combinedPath, nil
 	}
 
