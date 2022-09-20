@@ -270,7 +270,17 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
-	filesToBeCached, err := globby.GlobFiles(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs, _emptyIgnore)
+	negatedGlobs := make([]string, 0)
+	positiveGlobs := make([]string, 0)
+	for _, glob := range tc.repoRelativeGlobs {
+		if glob[0] == '!' {
+			negatedGlobs = append(negatedGlobs, glob)
+		} else {
+			positiveGlobs = append(positiveGlobs, glob)
+		}
+	}
+
+	filesToBeCached, err := globby.GlobFiles(tc.rc.repoRoot.ToStringDuringMigration(), positiveGlobs, negatedGlobs)
 	if err != nil {
 		return err
 	}
@@ -307,7 +317,13 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := make([]string, len(hashableOutputs))
 	for index, output := range hashableOutputs {
-		repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
+		// If this is a negated glob, we move the ! to the beginning of the output
+		if output[0] == '!' {
+			root := "!" + pt.Pkg.Dir.ToStringDuringMigration()
+			repoRelativeGlobs[index] = filepath.Join(root, output[1:])
+		} else {
+			repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
+		}
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode
