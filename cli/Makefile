@@ -111,12 +111,8 @@ snapshot-turbo-darwin:
 snapshot-turbo: clean
 	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
-.PHONY: flurb
-flurb:
-	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
-
 .PHONY: stage-release
-stage-release:
+stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 	cat $(CLI_DIR)/../version.txt
