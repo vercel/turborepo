@@ -37,8 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.TURBOBOT }}
+        # with:
+        #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -53,8 +53,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.TURBOBOT }}
+        # with:
+        #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -88,8 +88,8 @@ jobs:
       image: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.TURBOBOT }}
+        # with:
+        #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -121,8 +121,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.TURBOBOT }}
+        # with:
+        #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -177,7 +177,7 @@ jobs:
       - name: Combine Artifacts
         run: cd cli && mkdir -p dist-combined && cp -a dist-cross/. dist-combined/ && cp -a dist-darwin/. dist-combined/
 
-      - name: Release
-        run: cd cli && make publish
-        env:
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      # - name: Release
+      #   run: cd cli && make publish
+      #   env:
+      #     GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
