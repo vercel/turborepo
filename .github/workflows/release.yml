@@ -75,6 +75,8 @@ jobs:
           cat version.txt
       - name: Build Artifacts
         run: cd cli && make publish-turbo-darwin
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -110,6 +112,8 @@ jobs:
           cat version.txt
       - name: Build Artifacts
         run: cd cli && make publish-turbo-cross
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -176,6 +180,8 @@ jobs:
 
       - name: Combine Artifacts
         run: cd cli && mkdir -p dist-combined && cp -a dist-cross/. dist-combined/ && cp -a dist-darwin/. dist-combined/
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       # - name: Release
       #   run: cd cli && make publish
