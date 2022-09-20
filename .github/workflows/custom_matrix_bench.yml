@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       count:
-        description: 'Modules count'
-        default: '10000'
+        description: "Modules count"
+        default: "10000"
         required: true
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_PROFILE_RELEASE_LTO: true
   RUST_BACKTRACE: 1
-  NODE_OPTIONS: '--max-old-space-size=32768'
+  NODE_OPTIONS: "--max-old-space-size=32768"
 
 jobs:
   bench:
@@ -44,7 +44,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v3
         with:
-          cache: 'yarn'
+          cache: "yarn"
           node-version: 16
 
       - name: install node.js dependencies

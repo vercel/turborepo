@@ -63,7 +63,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v3
         with:
-          cache: 'yarn'
+          cache: "yarn"
           node-version: 16
 
       - name: Start Redis
@@ -120,7 +120,7 @@ jobs:
         uses: ouzi-dev/commit-status-updater@v1.0.4
         with:
           name: Test / test - ${{ matrix.os.name }} (pull_request)
-          status: '${{ job.status }}'
+          status: "${{ job.status }}"
           url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
 
   test-bench:
@@ -187,7 +187,7 @@ jobs:
         uses: actions-rs/cargo@v1
         timeout-minutes: 120
         env:
-          TURBOPACK_BENCH_COUNTS: '100'
+          TURBOPACK_BENCH_COUNTS: "100"
         with:
           command: test
           args: --benches --release
@@ -197,5 +197,5 @@ jobs:
         uses: ouzi-dev/commit-status-updater@v1.0.4
         with:
           name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
-          status: '${{ job.status }}'
+          status: "${{ job.status }}"
           url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}

@@ -9,13 +9,12 @@
   ],
   "devDependencies": {
     "@taplo/cli": "^0.4.2",
-    "@typescript-eslint/eslint-plugin": "^5.30.7",
-    "@typescript-eslint/parser": "^5.30.7",
     "eslint": "^8.20.0",
+    "eslint-config-next": "^12.3.1",
     "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-import": "^2.26.0",
     "husky": "^8.0.1",
     "lint-staged": "^13.0.3",
+    "next": "^12.3.1",
     "node-gyp": "^9.1.0",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.7.1",
@@ -47,14 +46,7 @@
     "format:prettier": "prettier --config ./package.json -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
-    "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.yaml",
+    "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.js",
     "postinstall": "husky install"
-  },
-  "prettier": {
-    "printWidth": 80,
-    "semi": false,
-    "singleQuote": true,
-    "trailingComma": "all",
-    "arrowParens": "always"
   }
 }

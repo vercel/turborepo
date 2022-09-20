@@ -4,19 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       filter:
-        description: 'Filter'
-        default: '(bench_startup|bench_hydration|bench_simple_file_change|bench_restart)/Turbopack'
+        description: "Filter"
+        default: "(bench_startup|bench_hydration|bench_simple_file_change|bench_restart)/Turbopack"
         required: true
       counts:
-        description: 'Modules counts'
-        default: '100,1000'
+        description: "Modules counts"
+        default: "100,1000"
         required: true
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_PROFILE_RELEASE_LTO: true
   RUST_BACKTRACE: 1
-  NODE_OPTIONS: '--max-old-space-size=32768'
+  NODE_OPTIONS: "--max-old-space-size=32768"
 
 jobs:
   bench:
@@ -29,7 +29,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v3
         with:
-          cache: 'yarn'
+          cache: "yarn"
           node-version: 16
 
       - name: install node.js dependencies
