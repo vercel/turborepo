@@ -3,6 +3,7 @@ package cacheitem
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -95,12 +96,16 @@ func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFil
 }
 
 func TestOpen(t *testing.T) {
+	type wantErr struct {
+		unix    error
+		windows error
+	}
 	tests := []struct {
 		name      string
 		tarFiles  []tarFile
 		want      []turbopath.AnchoredSystemPath
 		wantFiles []diskFile
-		wantErr   bool
+		wantErr   wantErr
 	}{
 		{
 			name: "hello world",
@@ -133,6 +138,227 @@ func TestOpen(t *testing.T) {
 			},
 			want: []turbopath.AnchoredSystemPath{"target", "source"},
 		},
+		{
+			name: "pathological symlinks",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "one",
+						Linkname: "two",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "two",
+						Linkname: "three",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "three",
+						Linkname: "real",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "real",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "real",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "one",
+					Linkname: "two",
+					FileMode: 0 | os.ModeSymlink,
+				},
+				{
+					Name:     "two",
+					Linkname: "three",
+					FileMode: 0 | os.ModeSymlink,
+				},
+				{
+					Name:     "three",
+					Linkname: "real",
+					FileMode: 0 | os.ModeSymlink,
+				},
+				{
+					Name:     "real",
+					FileMode: 0,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"real", "three", "two", "one"},
+		},
+		{
+			name: "symlink cycle",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "one",
+						Linkname: "two",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "two",
+						Linkname: "three",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "three",
+						Linkname: "one",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+			},
+			wantFiles: []diskFile{},
+			want:      []turbopath.AnchoredSystemPath{},
+			wantErr: wantErr{
+				unix:    errCycleDetected,
+				windows: errCycleDetected,
+			},
+		},
+		{
+			name: "symlink clobber",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "one",
+						Linkname: "two",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one",
+						Linkname: "three",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one",
+						Linkname: "real",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "real",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "real",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "one",
+					Linkname: "real",
+					FileMode: 0 | os.ModeSymlink,
+				},
+				{
+					Name:     "real",
+					FileMode: 0,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"real", "one"},
+		},
+		{
+			name: "symlink traversal",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "escape",
+						Linkname: "../",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "escape/file",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "file",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "escape",
+					Linkname: "../",
+					FileMode: 0 | os.ModeSymlink,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"escape"},
+			wantErr: wantErr{
+				unix:    errTraversal,
+				windows: errTraversal,
+			},
+		},
+		{
+			name: "name traversal",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "../escape",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "file",
+				},
+			},
+			wantFiles: []diskFile{},
+			want:      []turbopath.AnchoredSystemPath{},
+			wantErr: wantErr{
+				unix:    errNameMalformed,
+				windows: errNameMalformed,
+			},
+		},
+		{
+			name: "windows unsafe",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "back\\slash\\file",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "file",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "back\\slash\\file",
+					FileMode: 0,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"back\\slash\\file"},
+			wantErr: wantErr{
+				unix:    nil,
+				windows: errNameWindowsUnsafe,
+			},
+		},
+		{
+			name: "fifo (and others) unsupported",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "fifo",
+						Typeflag: tar.TypeFifo,
+					},
+				},
+			},
+			wantFiles: []diskFile{},
+			want:      []turbopath.AnchoredSystemPath{},
+			wantErr: wantErr{
+				unix:    errUnsupportedFileType,
+				windows: errUnsupportedFileType,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,7 +370,19 @@ func TestOpen(t *testing.T) {
 			defer func() { _ = archive.Close() }()
 
 			restoreOutput, restoreErr := archive.Restore(anchor)
-			assert.NilError(t, restoreErr, "Restore")
+			var desiredErr error
+			if runtime.GOOS == "windows" {
+				desiredErr = tt.wantErr.windows
+			} else {
+				desiredErr = tt.wantErr.unix
+			}
+			if desiredErr != nil {
+				if !errors.Is(restoreErr, desiredErr) {
+					t.Errorf("wanted err: %v, got err: %v", tt.wantErr, restoreErr)
+				}
+			} else {
+				assert.NilError(t, restoreErr, "Restore")
+			}
 
 			if !reflect.DeepEqual(restoreOutput, tt.want) {
 				t.Errorf("Restore() = %v, want %v", restoreOutput, tt.want)

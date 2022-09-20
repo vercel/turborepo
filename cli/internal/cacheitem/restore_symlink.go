@@ -72,19 +72,20 @@ func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *ta
 // of the symlinks. This also enables us to ensure we do not create cycles.
 func topologicallyRestoreSymlinks(anchor turbopath.AbsoluteSystemPath, symlinks []*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	restored := make([]turbopath.AnchoredSystemPath, 0)
-	lookup := make(map[turbopath.AnchoredSystemPath]*tar.Header)
+	lookup := make(map[string]*tar.Header)
 
 	var g dag.AcyclicGraph
 	for _, header := range symlinks {
 		processedName, err := canonicalizeName(header.Name)
+		processedSourcename := canonicalizeLinkname(anchor, processedName, processedName.ToString())
 		processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
 		if err != nil {
 			return nil, err
 		}
-		g.Add(processedName)
+		g.Add(processedSourcename)
 		g.Add(processedLinkname)
-		g.Connect(dag.BasicEdge(processedName, processedLinkname))
-		lookup[processedName] = header
+		g.Connect(dag.BasicEdge(processedLinkname, processedSourcename))
+		lookup[processedSourcename] = header
 	}
 
 	cycles := g.Cycles()
@@ -100,7 +101,11 @@ func topologicallyRestoreSymlinks(anchor turbopath.AbsoluteSystemPath, symlinks 
 	}
 
 	walkFunc := func(vertex dag.Vertex, depth int) error {
-		header, exists := lookup[vertex.(turbopath.AnchoredSystemPath)]
+		key, ok := vertex.(string)
+		if !ok {
+			return nil
+		}
+		header, exists := lookup[key]
 		if !exists {
 			return nil
 		}
