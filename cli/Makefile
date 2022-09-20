@@ -89,7 +89,7 @@ build: install
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
-	make -j3 bench/turbo test-go lint-go
+	make -j3 bench/turbo test-go
 
 .PHONY: publish-turbo-cross
 publish-turbo-cross: prepublish
