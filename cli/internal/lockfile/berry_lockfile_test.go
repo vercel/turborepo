@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
-func getBerryLockfile(t *testing.T) *BerryLockfile {
-	content, err := getFixture(t, "berry.lock")
+func getBerryLockfile(t *testing.T, filename string) *BerryLockfile {
+	content, err := getFixture(t, filename)
 	if err != nil {
 		t.Error(err)
 	}
@@ -20,13 +21,13 @@ func getBerryLockfile(t *testing.T) *BerryLockfile {
 }
 
 func Test_DecodingBerryLockfile(t *testing.T) {
-	lockfile := getBerryLockfile(t)
+	lockfile := getBerryLockfile(t, "berry.lock")
 	assert.Equal(t, lockfile.version, 6)
 	assert.Equal(t, lockfile.cacheKey, 8)
 }
 
 func Test_ResolvePackage(t *testing.T) {
-	lockfile := getBerryLockfile(t)
+	lockfile := getBerryLockfile(t, "berry.lock")
 
 	type Case struct {
 		name    string
@@ -76,7 +77,7 @@ func Test_ResolvePackage(t *testing.T) {
 }
 
 func Test_AllDependencies(t *testing.T) {
-	lockfile := getBerryLockfile(t)
+	lockfile := getBerryLockfile(t, "berry.lock")
 
 	key, _, found := lockfile.ResolvePackage("react-dom", "18.2.0")
 	assert.Assert(t, found, "expected to find react-dom")
@@ -90,7 +91,7 @@ func Test_AllDependencies(t *testing.T) {
 }
 
 func Test_BerryPatchList(t *testing.T) {
-	lockfile := getBerryLockfile(t)
+	lockfile := getBerryLockfile(t, "berry.lock")
 
 	var locator _Locator
 	if err := locator.parseLocator("resolve@npm:2.0.0-next.4"); err != nil {
@@ -172,4 +173,35 @@ func Test_PatchPathExtraction(t *testing.T) {
 		assert.Equal(t, isPatch, testCase.isPatch, locator)
 		assert.Equal(t, patchPath, testCase.patchPath, locator)
 	}
+}
+
+func Test_BerryPruneDescriptors(t *testing.T) {
+	lockfile := getBerryLockfile(t, "minimal-berry.lock")
+	prunedLockfile, err := lockfile.Subgraph([]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/a")}, []string{"lodash@npm:4.17.21"})
+	if err != nil {
+		t.Error(err)
+	}
+	lockfileA := prunedLockfile.(*BerryLockfile)
+
+	prunedLockfile, err = lockfile.Subgraph([]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/b")}, []string{"lodash@npm:4.17.21"})
+	if err != nil {
+		t.Error(err)
+	}
+	lockfileB := prunedLockfile.(*BerryLockfile)
+
+	lodashIdent := _Ident{name: "lodash"}
+	lodashA := _Descriptor{lodashIdent, "npm:^4.17.0"}
+	lodashB := _Descriptor{lodashIdent, "npm:^4.17.1"}
+
+	lodashEntryA, hasLodashA := lockfileA.descriptors[lodashA]
+	lodashEntryB, hasLodashB := lockfileB.descriptors[lodashB]
+
+	assert.Assert(t, hasLodashA, "Expected lockfile a to have descriptor used by a")
+	assert.Assert(t, hasLodashB, "Expected lockfile b to have descriptor used by b")
+	assert.DeepEqual(t, lodashEntryA.reference, lodashEntryB.reference)
+
+	_, lockfileAHasB := lockfileA.descriptors[lodashB]
+	_, lockfileBHasA := lockfileB.descriptors[lodashA]
+	assert.Assert(t, !lockfileAHasB, "Expected lockfile a not to have descriptor used by b")
+	assert.Assert(t, !lockfileBHasA, "Expected lockfile b not to have descriptor used by a")
 }
