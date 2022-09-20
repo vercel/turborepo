@@ -119,6 +119,38 @@ func TestPutCachingDisabled(t *testing.T) {
 	}
 }
 
+func TestExists(t *testing.T) {
+	caches := []Cache{
+		newEnabledCache(),
+	}
+
+	mplex := &cacheMultiplexer{
+		caches: caches,
+	}
+
+	cacheState, err := mplex.Exists("some-hash")
+	if err != nil {
+		t.Errorf("got error verifying files: %v", err)
+	}
+	if cacheState.Local {
+		t.Error("did not expect has to exist")
+	}
+
+	err = mplex.Put("unused-target", "some-hash", 5, []string{"a-file"})
+	if err != nil {
+		// don't leak the cache removal
+		t.Errorf("Put got error %v, want <nil>", err)
+	}
+
+	cacheState, err = mplex.Exists("some-hash")
+	if err != nil {
+		t.Errorf("got error verifying files: %v", err)
+	}
+	if !cacheState.Local {
+		t.Error("failed to find previously stored files")
+	}
+}
+
 type fakeClient struct{}
 
 // FetchArtifact implements client
