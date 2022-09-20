@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"syscall"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -269,6 +270,82 @@ func TestOpen(t *testing.T) {
 			},
 			want: []turbopath.AnchoredSystemPath{"real", "three", "two", "one"},
 		},
+		{
+			name: "place file at dir location",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "folder-not-file/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "folder-not-file/subfile",
+						Typeflag: tar.TypeReg,
+						Mode:     0755,
+					},
+					Body: "subfile",
+				},
+				{
+					Header: &tar.Header{
+						Name:     "folder-not-file",
+						Typeflag: tar.TypeReg,
+						Mode:     0755,
+					},
+					Body: "this shouldn't work",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "folder-not-file",
+					FileMode: 0 | os.ModeDir,
+				},
+				{
+					Name:     "folder-not-file/subfile",
+					FileMode: 0,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"folder-not-file/", "folder-not-file/subfile"},
+			wantErr: wantErr{
+				unix:    syscall.EISDIR,
+				windows: syscall.EISDIR,
+			},
+		},
+		// {
+		// 	name: "missing symlink with file at subdir",
+		// 	tarFiles: []tarFile{
+		// 		{
+		// 			Header: &tar.Header{
+		// 				Name:     "one",
+		// 				Linkname: "two",
+		// 				Typeflag: tar.TypeSymlink,
+		// 				Mode:     0755,
+		// 			},
+		// 		},
+		// 		{
+		// 			Header: &tar.Header{
+		// 				Name:     "one/file",
+		// 				Typeflag: tar.TypeReg,
+		// 				Mode:     0755,
+		// 			},
+		// 			Body: "file",
+		// 		},
+		// 	},
+		// 	wantFiles: []diskFile{
+		// 		{
+		// 			Name:     "one",
+		// 			Linkname: "two",
+		// 			FileMode: 0 | os.ModeSymlink,
+		// 		},
+		// 	},
+		// 	want: []turbopath.AnchoredSystemPath{"one"},
+		// 	wantErr: wantErr{
+		// 		unix:    os.ErrExist,
+		// 		windows: os.ErrExist,
+		// 	},
+		// },
 		{
 			name: "symlink cycle",
 			tarFiles: []tarFile{
