@@ -1,3 +1,4 @@
+// Package cacheitem is an abstraction over the creation and restoration of a cache
 package cacheitem
 
 import (
