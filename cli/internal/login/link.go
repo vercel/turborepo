@@ -242,9 +242,8 @@ func (l *link) addTurboToGitignore() error {
 		err := gitignorePath.WriteFile([]byte(".turbo\n"), 0644)
 		if err != nil {
 			return fmt.Errorf("could not create .gitignore.\n%w", err)
-		} else {
-			return nil
 		}
+		return nil
 	}
 
 	gitignoreBytes, err := gitignorePath.ReadFile()
