@@ -87,7 +87,8 @@ build: install
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
 
-prepublish:
+.PHONY: prepublish
+prepublish: compile-protos cmd/turbo/version.go
 	make -j3 bench/turbo test-go lint-go
 
 .PHONY: publish-turbo-cross
@@ -95,7 +96,7 @@ publish-turbo-cross: prepublish
 	goreleaser release --rm-dist -f cross-release.yml
 
 .PHONY: publish-turbo-darwin
-publish-turbo-cross: prepublish
+publish-turbo-darwin: prepublish
 	goreleaser release --rm-dist -f darwin-release.yml
 
 .PHONY: snapshot-turbo-cross
