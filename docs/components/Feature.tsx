@@ -53,7 +53,7 @@ export const DetailedFeatureLink = (props: {
 
 export default function Feature(props: FeatureProps) {
   const { feature, detailed = false } = props;
-  const { Icon, name, description } = feature;
+  const { Icon, name } = feature;
 
   if (detailed) {
     return (
