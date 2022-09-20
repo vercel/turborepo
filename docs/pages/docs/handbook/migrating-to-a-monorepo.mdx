@@ -32,12 +32,12 @@ The best way to organise them in a monorepo would be like so:
 my-monorepo
 ├─ apps
 │  ├─ app
-│  │  ├─ package.json
+│  │  └─ package.json
 │  ├─ docs
-│  │  ├─ package.json
-│  ├─ web
-│  │  ├─ package.json
-├─ package.json
+│  │  └─ package.json
+│  └─ web
+│     └─ package.json
+└─ package.json
 ```
 
 To start sharing code, you could use the [internal package](/docs/handbook/sharing-code/internal-packages) pattern, resulting in a new `packages` folder:
@@ -46,15 +46,15 @@ To start sharing code, you could use the [internal package](/docs/handbook/shari
 my-monorepo
 ├─ apps
 │  ├─ app
-│  │  ├─ package.json
+│  │  └─ package.json
 │  ├─ docs
-│  │  ├─ package.json
-│  ├─ web
-│  │  ├─ package.json
+│  │  └─ package.json
+│  └─ web
+│     └─ package.json
 ├─ packages
-│  ├─ shared
-│  │  ├─ package.json
-├─ package.json
+│  └─ shared
+│     └─ package.json
+└─ package.json
 ```
 
 <Callout type="idea">
@@ -71,6 +71,6 @@ Now your workspaces are set up, you'll need to figure out how you're going run y
 
 1. How to [configure tasks](/docs/core-concepts/running-tasks) with Turborepo.
 1. How to set up your [development tasks](/docs/handbook/dev)
-1. How to set up [linting](/docs/handbook/linting/basics)
+1. How to set up [linting](/docs/handbook/linting)
 1. How to [build your application](/docs/handbook/building-your-app)
 1. How to set up [testing](/docs/handbook/testing)

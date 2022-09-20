@@ -66,7 +66,7 @@ export const FundamentalsArea = () => {
             "Learn how to share code easily using either internal or external packages.",
           name: "Sharing Code",
         }}
-        href="/docs/handbook/sharing-code/basics"
+        href="/docs/handbook/sharing-code"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
@@ -108,7 +108,7 @@ export const TasksArea = () => {
             "Learn how to share linting configs and co-ordinate tasks across your repo.",
           name: "Linting",
         }}
-        href="/docs/handbook/linting/basics"
+        href="/docs/handbook/linting"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
@@ -125,7 +125,7 @@ export const TasksArea = () => {
             "Bundle, version and publish packages to npm from your monorepo.",
           name: "Publishing Packages",
         }}
-        href="/docs/handbook/publishing-packages/basics"
+        href="/docs/handbook/publishing-packages"
       ></DetailedFeatureLink>
       {/* <DetailedFeatureLink
         feature={{

@@ -12,14 +12,14 @@ Let's imagine a monorepo like this:
 apps
 ├─ docs
 │  ├─ package.json
-│  ├─ .eslintrc.js
-├─ web
-│  ├─ package.json
-│  ├─ .eslintrc.js
+│  └─ .eslintrc.js
+└─ web
+   ├─ package.json
+   └─ .eslintrc.js
 packages
-├─ eslint-config-custom
-│  ├─ index.js
-│  ├─ package.json
+└─ eslint-config-custom
+   ├─ index.js
+   └─ package.json
 ```
 
 We've got a package called `eslint-config-custom`, and two applications, each with their own `.eslintrc.js`.
@@ -56,7 +56,7 @@ The `package.json` looks like this:
 }
 ```
 
-Two things are notable here. First, the `main` field points to `index.js`. This allows files to easily [import this config](/docs/handbook/sharing-code/basics#anatomy-of-a-package).
+Two things are notable here. First, the `main` field points to `index.js`. This allows files to easily [import this config](/docs/handbook/sharing-code#anatomy-of-a-package).
 
 Secondly, the ESLint dependencies are all listed here. This is useful - it means we don't need to re-specify the dependencies inside the apps which import `eslint-config-custom`.
 
@@ -111,7 +111,7 @@ This setup ships by default when you [create a new monorepo](/docs/getting-start
 
 ## Setting up a `lint` task
 
-We recommend following the setup in the [`basics`](/docs/handbook/linting/basics#running-tasks) section, with one alteration.
+We recommend following the setup in the [`basics`](/docs/handbook/linting#running-tasks) section, with one alteration.
 
 Each `package.json` script should look like this:
 
