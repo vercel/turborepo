@@ -59,9 +59,11 @@ type BerryLockfile struct {
 	cacheKey int
 	// Mapping descriptors (lodash@npm:^4.17.21) to their resolutions (lodash@npm:4.17.21)
 	descriptors map[_Descriptor]_Locator
+	// Mapping regular package locators to patched package locators
+	patches map[_Locator]_Locator
 }
 
-// BerryDependencyMetaEntry
+// BerryDependencyMetaEntry Structure for holding if a package is optional or not
 type BerryDependencyMetaEntry struct {
 	Optional bool `yaml:"optional,omitempty"`
 }
@@ -105,8 +107,24 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 }
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (l *BerryLockfile) Subgraph(_ []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
+func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	prunedPackages := make(map[_Locator]*BerryLockfileEntry, len(packages))
+
+	// add root workspace
+	for locator, pkg := range l.packages {
+		if locator.reference == "workspace:." {
+			prunedPackages[locator] = pkg
+		}
+	}
+	// add workspaces
+	for _, workspacePackage := range workspacePackages {
+		expectedReference := fmt.Sprintf("workspace:%s", workspacePackage.ToString())
+		for locator, pkg := range l.packages {
+			if locator.reference == expectedReference {
+				prunedPackages[locator] = pkg
+			}
+		}
+	}
 	for _, key := range packages {
 		var locator _Locator
 		if err := locator.parseLocator(key); err != nil {
@@ -118,15 +136,28 @@ func (l *BerryLockfile) Subgraph(_ []turbopath.AnchoredSystemPath, packages []st
 		if ok {
 			prunedPackages[locator] = entry
 		}
+		// If a package has a patch it should be included in the subgraph
+		patchLocator, ok := l.patches[locator]
+		if ok {
+			prunedPackages[patchLocator] = l.packages[patchLocator]
+		}
+	}
+
+	prunedDescriptors := make(map[_Descriptor]_Locator, len(prunedPackages))
+	for includedLocator := range prunedPackages {
+		for descriptor, locator := range l.descriptors {
+			if includedLocator == locator {
+				prunedDescriptors[descriptor] = locator
+			}
+		}
 	}
 
 	return &BerryLockfile{
-		packages: prunedPackages,
-		version:  l.version,
-		cacheKey: l.cacheKey,
-		// TODO we probably need to prune this by checking all of the descriptors used
-		// in the pruned entries
-		descriptors: l.descriptors,
+		packages:    prunedPackages,
+		version:     l.version,
+		cacheKey:    l.cacheKey,
+		descriptors: prunedDescriptors,
+		patches:     l.patches,
 	}, nil
 }
 
@@ -181,7 +212,21 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 
 // Patches return a list of patches used in the lockfile
 func (l *BerryLockfile) Patches() []turbopath.AnchoredUnixPath {
-	return nil
+	patches := []turbopath.AnchoredUnixPath{}
+
+	for _, patchLocator := range l.patches {
+		patchPath, isPatch := patchLocator.patchPath()
+
+		if isPatch && !strings.HasPrefix(patchPath, "~") && !_builtinRegexp.MatchString(patchPath) {
+			patches = append(patches, turbopath.AnchoredUnixPath(patchPath))
+		}
+	}
+
+	if len(patches) == 0 {
+		return nil
+	}
+
+	return patches
 }
 
 // DecodeBerryLockfile Takes the contents of a berry lockfile and returns a struct representation
@@ -205,11 +250,19 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 
 	locatorToPackage := map[_Locator]*BerryLockfileEntry{}
 	descriptorToLocator := map[_Descriptor]_Locator{}
+	// A map from packages to their patch entries
+	patches := map[_Locator]_Locator{}
 
 	for key, data := range packages {
 		var locator _Locator
 		if err := locator.parseLocator(data.Resolution); err != nil {
 			return nil, errors.Wrap(err, "unable to parse entry")
+		}
+
+		if _, isPatch := locator.patchPath(); isPatch {
+			// A patch will have the same identifier and version allowing us to construct the non-patch entry
+			originalLocator := _Locator{locator._Ident, fmt.Sprintf("npm:%s", data.Version)}
+			patches[originalLocator] = locator
 		}
 
 		// Before storing cacheKey set it to -1 so we know it's invalid
@@ -224,6 +277,7 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 				return nil, errors.Wrap(err, "Bad entry key found")
 			}
 
+			// Before lockfile version 6 descriptors could be missing the npm protocol
 			if version <= 6 && descriptor.versionRange != "*" {
 				_, err := semver.NewConstraint(descriptor.versionRange)
 				if err == nil || _tagRegex.MatchString(descriptor.versionRange) {
@@ -240,6 +294,7 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 		version:     version,
 		cacheKey:    metadata.CacheKey,
 		descriptors: descriptorToLocator,
+		patches:     patches,
 	}
 	return &lockfile, nil
 }
@@ -283,6 +338,24 @@ func (l *_Locator) asString() string {
 		return fmt.Sprintf("%s@%s", l.name, l.reference)
 	}
 	return fmt.Sprintf("@%s/%s@%s", l.scope, l.name, l.reference)
+}
+
+var _builtinRegexp = regexp.MustCompile("^builtin<([^>]+)>$")
+
+func (l *_Locator) patchPath() (string, bool) {
+	if strings.HasPrefix(l.reference, "patch:") {
+		patchFileIndex := strings.Index(l.reference, "#")
+		paramIndex := strings.LastIndex(l.reference, "::")
+		if patchFileIndex == -1 || paramIndex == -1 {
+			// Better error handling
+			panic("Unable to extract patch file path from lockfile entry")
+		}
+		patchPath := strings.TrimPrefix(l.reference[patchFileIndex+1:paramIndex], "./")
+
+		return patchPath, true
+	}
+
+	return "", false
 }
 
 var _descriptorRegexp = regexp.MustCompile("^(?:@([^/]+?)/)?([^/]+?)(?:@(.+))?$")

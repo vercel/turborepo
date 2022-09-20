@@ -89,6 +89,21 @@ func Test_AllDependencies(t *testing.T) {
 	}
 }
 
+func Test_BerryPatchList(t *testing.T) {
+	lockfile := getBerryLockfile(t)
+
+	var locator _Locator
+	if err := locator.parseLocator("resolve@npm:2.0.0-next.4"); err != nil {
+		t.Error(err)
+	}
+
+	patchLocator, ok := lockfile.patches[locator]
+	assert.Assert(t, ok, "Expected to find patch locator")
+	patch, ok := lockfile.packages[patchLocator]
+	assert.Assert(t, ok, "Expected to find patch")
+	assert.Equal(t, patch.Version, "2.0.0-next.4")
+}
+
 func Test_StringifyMetadata(t *testing.T) {
 	metadata := BerryLockfileEntry{
 		Version:  "6",
@@ -122,4 +137,39 @@ func Test_BerryRoundtrip(t *testing.T) {
 	}
 
 	assert.Equal(t, b.String(), string(content))
+}
+
+func Test_PatchPathExtraction(t *testing.T) {
+	type Case struct {
+		locator   string
+		patchPath string
+		isPatch   bool
+	}
+	cases := []Case{
+		{
+			locator:   "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::version=4.17.21&hash=2c6e9e&locator=berry-patch%40workspace%3A.",
+			patchPath: ".yarn/patches/lodash-npm-4.17.21-6382451519.patch",
+			isPatch:   true,
+		},
+		{
+			locator: "lodash@npm:4.17.21",
+			isPatch: false,
+		},
+		{
+			locator:   "resolve@patch:resolve@npm%3A2.0.0-next.4#~builtin<compat/resolve>::version=2.0.0-next.4&hash=07638b",
+			patchPath: "~builtin<compat/resolve>",
+			isPatch:   true,
+		},
+	}
+
+	for _, testCase := range cases {
+		var locator _Locator
+		err := locator.parseLocator(testCase.locator)
+		if err != nil {
+			t.Error(err)
+		}
+		patchPath, isPatch := locator.patchPath()
+		assert.Equal(t, isPatch, testCase.isPatch, locator)
+		assert.Equal(t, patchPath, testCase.patchPath, locator)
+	}
 }
