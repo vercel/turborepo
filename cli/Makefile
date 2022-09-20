@@ -7,7 +7,7 @@ else
 	UNAME := $(shell uname -s)
 endif
 
-USE_CGO = 0
+USE_CGO = 1
 ifeq ($(UNAME), Darwin)
 	USE_CGO = 1
 endif
