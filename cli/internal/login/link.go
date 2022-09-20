@@ -238,9 +238,13 @@ func promptSetup(location string) (bool, error) {
 func (l *link) addTurboToGitignore() error {
 	gitignorePath := l.base.RepoRoot.Join(".gitignore")
 
-	err := gitignorePath.EnsureDir()
-	if err != nil {
-		return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+	if !gitignorePath.FileExists() {
+		err := gitignorePath.WriteFile([]byte(".turbo\n"), 0644)
+		if err != nil {
+			return fmt.Errorf("could not create .gitignore.\n%w", err)
+		} else {
+			return nil
+		}
 	}
 
 	gitignoreBytes, err := gitignorePath.ReadFile()
