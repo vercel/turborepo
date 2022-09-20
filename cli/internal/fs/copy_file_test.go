@@ -134,6 +134,9 @@ func TestRecursiveCopy(t *testing.T) {
 
 	err = RecursiveCopy(src.Path(), dst.Path())
 	assert.NilError(t, err, "RecursiveCopy")
+	// For ensure multiple times copy will not broken
+	err = RecursiveCopy(src.Path(), dst.Path())
+	assert.NilError(t, err, "RecursiveCopy")
 
 	dstAPath := filepath.Join(dst.Path(), "child", "a")
 	assertFileMatches(t, aPath, dstAPath)
