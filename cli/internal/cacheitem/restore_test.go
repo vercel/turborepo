@@ -139,6 +139,82 @@ func TestOpen(t *testing.T) {
 			want: []turbopath.AnchoredSystemPath{"target", "source"},
 		},
 		{
+			name: "nested file",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "folder/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "folder/file",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "file",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "folder",
+					FileMode: 0 | os.ModeDir | 0755,
+				},
+				{
+					Name:     "folder/file",
+					FileMode: 0,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"folder/", "folder/file"},
+		},
+		{
+			name: "nested file",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "folder/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "folder/symlink",
+						Linkname: "../",
+						Typeflag: tar.TypeSymlink,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "folder/symlink/folder-sibling",
+						Typeflag: tar.TypeReg,
+					},
+					Body: "folder-sibling",
+				},
+			},
+			wantFiles: []diskFile{
+				{
+					Name:     "folder",
+					FileMode: 0 | os.ModeDir | 0755,
+				},
+				{
+					Name:     "folder/symlink",
+					FileMode: 0 | os.ModeSymlink,
+					Linkname: "../",
+				},
+				{
+					Name:     "folder/symlink/folder-sibling",
+					FileMode: 0,
+				},
+				{
+					Name:     "folder-sibling",
+					FileMode: 0,
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"folder/", "folder/symlink", "folder/symlink/folder-sibling"},
+		},
+		{
 			name: "pathological symlinks",
 			tarFiles: []tarFile{
 				{
