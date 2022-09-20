@@ -29,8 +29,6 @@ type _void struct{}
 // Full Definition at https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-core/sources/Manifest.ts
 // Only a subset of full definition are written to the lockfile
 type BerryLockfileEntry struct {
-	// TODO figure out ordering for these
-	// resolved version for the particular entry based on the provided semver revision
 	Version      string `yaml:"version"`
 	LanguageName string `yaml:"languageName,omitempty"`
 
@@ -54,7 +52,6 @@ type BerryLockfileEntry struct {
 // BerryLockfile representation of berry lockfile
 type BerryLockfile struct {
 	packages map[_Locator]*BerryLockfileEntry
-	// might be numbers?
 	version  int
 	cacheKey int
 	// Mapping descriptors (lodash@npm:^4.17.21) to their resolutions (lodash@npm:4.17.21)
@@ -75,7 +72,7 @@ func (l *BerryLockfile) ResolvePackage(name string, version string) (string, str
 	for _, key := range berryPossibleKeys(name, version) {
 		if locator, ok := l.descriptors[key]; ok {
 			entry := l.packages[locator]
-			return locator.asString(), entry.Version, true
+			return locator.String(), entry.Version, true
 		}
 	}
 
@@ -110,13 +107,12 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	prunedPackages := make(map[_Locator]*BerryLockfileEntry, len(packages))
 
-	// add root workspace
+	// add workspace package entries
 	for locator, pkg := range l.packages {
 		if locator.reference == "workspace:." {
 			prunedPackages[locator] = pkg
 		}
 	}
-	// add workspaces
 	for _, workspacePackage := range workspacePackages {
 		expectedReference := fmt.Sprintf("workspace:%s", workspacePackage.ToString())
 		for locator, pkg := range l.packages {
@@ -125,6 +121,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 			}
 		}
 	}
+
 	for _, key := range packages {
 		var locator _Locator
 		if err := locator.parseLocator(key); err != nil {
@@ -143,6 +140,8 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		}
 	}
 
+	// TODO make this more strict so we only include descriptors that are used to identify a locator
+	// currently we just take all descriptors that resolve to used locators
 	prunedDescriptors := make(map[_Descriptor]_Locator, len(prunedPackages))
 	for includedLocator := range prunedPackages {
 		for descriptor, locator := range l.descriptors {
@@ -185,7 +184,7 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 		sortedDescriptors := make([]string, len(descriptors))
 		i := 0
 		for descriptor := range descriptors {
-			sortedDescriptors[i] = descriptor.asString()
+			sortedDescriptors[i] = descriptor.String()
 			i++
 		}
 		sort.Strings(sortedDescriptors)
@@ -194,7 +193,7 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 
 		entry, ok := l.packages[locator]
 		if !ok {
-			panic(fmt.Sprintf("Unable to find entry for %s", locator.asString()))
+			return fmt.Errorf("Unable to find entry for %s", locator)
 		}
 
 		lockfile[key] = entry
@@ -333,7 +332,7 @@ func (l *_Locator) parseLocator(data string) error {
 	return nil
 }
 
-func (l *_Locator) asString() string {
+func (l *_Locator) String() string {
 	if l.scope == "" {
 		return fmt.Sprintf("%s@%s", l.name, l.reference)
 	}
@@ -373,7 +372,7 @@ func (d *_Descriptor) parseDescriptor(data string) error {
 	return nil
 }
 
-func (d *_Descriptor) asString() string {
+func (d *_Descriptor) String() string {
 	if d.scope == "" {
 		return fmt.Sprintf("%s@%s", d.name, d.versionRange)
 	}
