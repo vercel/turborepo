@@ -2,9 +2,11 @@ package lockfile
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"testing"
 
+	"github.com/andybalholm/crlf"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"gotest.tools/v3/assert"
@@ -23,7 +25,12 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if !lockfilePath.FileExists() {
 		return nil, errors.Errorf("unable to find 'testdata/%s'", name)
 	}
-	return os.ReadFile(lockfilePath.ToStringDuringMigration())
+	file, err := lockfilePath.Open()
+	if err != nil {
+		t.Error(err)
+	}
+
+	return io.ReadAll(crlf.NewReader(file))
 }
 
 func Test_Roundtrip(t *testing.T) {

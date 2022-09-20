@@ -49,6 +49,23 @@ type BerryLockfileEntry struct {
 	CacheKey int `yaml:"cacheKey,omitempty"`
 }
 
+// Return a list of descriptors that this entry possibly uses
+func (b *BerryLockfileEntry) possibleDescriptors() []_Descriptor {
+	descriptors := []_Descriptor{}
+	addDescriptor := func(name, version string) {
+		descriptors = append(descriptors, berryPossibleKeys(name, version)...)
+	}
+
+	for dep, version := range b.Dependencies {
+		addDescriptor(dep, version)
+	}
+	for dep, version := range b.PeerDependencies {
+		addDescriptor(dep, version)
+	}
+
+	return descriptors
+}
+
 // BerryLockfile representation of berry lockfile
 type BerryLockfile struct {
 	packages map[_Locator]*BerryLockfileEntry
@@ -106,11 +123,19 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
 func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	prunedPackages := make(map[_Locator]*BerryLockfileEntry, len(packages))
+	prunedDescriptors := make(map[_Descriptor]_Locator, len(prunedPackages))
+	patches := make(map[_Locator]_Locator, len(l.patches))
+	reverseLookup := l.locatorToDescriptors()
 
 	// add workspace package entries
 	for locator, pkg := range l.packages {
 		if locator.reference == "workspace:." {
 			prunedPackages[locator] = pkg
+			descriptor := _Descriptor{locator._Ident, locator.reference}
+			prunedDescriptors[descriptor] = locator
+			for desc := range reverseLookup[locator] {
+				prunedDescriptors[desc] = locator
+			}
 		}
 	}
 	for _, workspacePackage := range workspacePackages {
@@ -118,6 +143,8 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		for locator, pkg := range l.packages {
 			if locator.reference == expectedReference {
 				prunedPackages[locator] = pkg
+				descriptor := _Descriptor{locator._Ident, locator.reference}
+				prunedDescriptors[descriptor] = locator
 			}
 		}
 	}
@@ -136,17 +163,41 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		// If a package has a patch it should be included in the subgraph
 		patchLocator, ok := l.patches[locator]
 		if ok {
+			patches[locator] = patchLocator
 			prunedPackages[patchLocator] = l.packages[patchLocator]
 		}
 	}
 
-	// TODO make this more strict so we only include descriptors that are used to identify a locator
-	// currently we just take all descriptors that resolve to used locators
-	prunedDescriptors := make(map[_Descriptor]_Locator, len(prunedPackages))
-	for includedLocator := range prunedPackages {
-		for descriptor, locator := range l.descriptors {
-			if includedLocator == locator {
-				prunedDescriptors[descriptor] = locator
+	for _, entry := range prunedPackages {
+		for _, desc := range entry.possibleDescriptors() {
+			locator, ok := l.descriptors[desc]
+			if ok {
+				prunedDescriptors[desc] = locator
+			}
+		}
+	}
+
+	// For each patch we find all descriptors for the primary package and patched package
+	for primaryLocator, patchLocator := range patches {
+		primaryDescriptors := reverseLookup[primaryLocator]
+		patchDescriptors := reverseLookup[patchLocator]
+
+		// For each patch descriptor we extract the primary descriptor that each patch descriptor targets
+		// and check if that descriptor is present in the pruned map and add it if it is present
+		for patch := range patchDescriptors {
+			primaryVersion, _ := patch.primaryVersion()
+			primaryDescriptor := _Descriptor{patch._Ident, fmt.Sprintf("npm:%s", primaryVersion)}
+			_, isPresent := primaryDescriptors[primaryDescriptor]
+			if !isPresent {
+				panic(fmt.Sprintf("Unable to find primary descriptor %s", &primaryDescriptor))
+			}
+
+			_, ok := prunedDescriptors[primaryDescriptor]
+			if ok {
+				if !ok {
+					panic(fmt.Sprintf("Unable to find patch for %s", &patchLocator))
+				}
+				prunedDescriptors[patch] = patchLocator
 			}
 		}
 	}
@@ -156,22 +207,14 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		version:     l.version,
 		cacheKey:    l.cacheKey,
 		descriptors: prunedDescriptors,
-		patches:     l.patches,
+		patches:     patches,
 	}, nil
 }
 
 // Encode encode the lockfile representation and write it to the given writer
 func (l *BerryLockfile) Encode(w io.Writer) error {
 	// Map all resolved packages to the descriptors that match them
-	reverseLookup := make(map[_Locator]map[_Descriptor]_void, len(l.packages))
-	for descriptor, locator := range l.descriptors {
-		descriptors, ok := reverseLookup[locator]
-		if !ok {
-			reverseLookup[locator] = map[_Descriptor]_void{descriptor: {}}
-		} else {
-			descriptors[descriptor] = _void{}
-		}
-	}
+	reverseLookup := l.locatorToDescriptors()
 
 	lockfile := make(map[string]*BerryLockfileEntry, len(l.packages))
 
@@ -193,7 +236,7 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 
 		entry, ok := l.packages[locator]
 		if !ok {
-			return fmt.Errorf("Unable to find entry for %s", locator)
+			return fmt.Errorf("Unable to find entry for %s", &locator)
 		}
 
 		lockfile[key] = entry
@@ -207,6 +250,21 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 	}
 
 	return _writeBerryLockfile(w, lockfile)
+}
+
+// Invert the descriptor to locator map
+func (l *BerryLockfile) locatorToDescriptors() map[_Locator]map[_Descriptor]_void {
+	reverseLookup := make(map[_Locator]map[_Descriptor]_void, len(l.packages))
+	for descriptor, locator := range l.descriptors {
+		descriptors, ok := reverseLookup[locator]
+		if !ok {
+			reverseLookup[locator] = map[_Descriptor]_void{descriptor: {}}
+		} else {
+			descriptors[descriptor] = _void{}
+		}
+	}
+
+	return reverseLookup
 }
 
 // Patches return a list of patches used in the lockfile
@@ -318,6 +376,13 @@ type _Descriptor struct {
 	versionRange string
 }
 
+func (i _Ident) String() string {
+	if i.scope == "" {
+		return i.name
+	}
+	return fmt.Sprintf("@%s/%s", i.scope, i.name)
+}
+
 var _locatorRegexp = regexp.MustCompile("^(?:@([^/]+?)/)?([^/]+?)(?:@(.+))$")
 
 func (l *_Locator) parseLocator(data string) error {
@@ -370,6 +435,20 @@ func (d *_Descriptor) parseDescriptor(data string) error {
 	d.versionRange = matches[3]
 
 	return nil
+}
+
+// If the descriptor is for a patch it will return the primary descriptor that it patches
+func (d *_Descriptor) primaryVersion() (string, bool) {
+	if !strings.HasPrefix(d.versionRange, "patch:") {
+		return "", false
+	}
+	patchFileIndex := strings.Index(d.versionRange, "#")
+	versionRangeIndex := strings.Index(d.versionRange, "@")
+	if patchFileIndex < 0 || versionRangeIndex < 0 {
+		panic("Patch reference is missing required markers")
+	}
+
+	return d.versionRange[versionRangeIndex+1 : patchFileIndex], true
 }
 
 func (d *_Descriptor) String() string {

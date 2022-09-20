@@ -177,13 +177,25 @@ func Test_PatchPathExtraction(t *testing.T) {
 
 func Test_BerryPruneDescriptors(t *testing.T) {
 	lockfile := getBerryLockfile(t, "minimal-berry.lock")
-	prunedLockfile, err := lockfile.Subgraph([]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/a")}, []string{"lodash@npm:4.17.21"})
+	prunedLockfile, err := lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{
+			turbopath.AnchoredSystemPath("packages/a"),
+			turbopath.AnchoredSystemPath("packages/c"),
+		},
+		[]string{"lodash@npm:4.17.21"},
+	)
 	if err != nil {
 		t.Error(err)
 	}
 	lockfileA := prunedLockfile.(*BerryLockfile)
 
-	prunedLockfile, err = lockfile.Subgraph([]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/b")}, []string{"lodash@npm:4.17.21"})
+	prunedLockfile, err = lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{
+			turbopath.AnchoredSystemPath("packages/b"),
+			turbopath.AnchoredSystemPath("packages/c"),
+		},
+		[]string{"lodash@npm:4.17.21"},
+	)
 	if err != nil {
 		t.Error(err)
 	}
@@ -191,7 +203,7 @@ func Test_BerryPruneDescriptors(t *testing.T) {
 
 	lodashIdent := _Ident{name: "lodash"}
 	lodashA := _Descriptor{lodashIdent, "npm:^4.17.0"}
-	lodashB := _Descriptor{lodashIdent, "npm:^4.17.1"}
+	lodashB := _Descriptor{lodashIdent, "npm:^3.0.0 || ^4.0.0"}
 
 	lodashEntryA, hasLodashA := lockfileA.descriptors[lodashA]
 	lodashEntryB, hasLodashB := lockfileB.descriptors[lodashB]
