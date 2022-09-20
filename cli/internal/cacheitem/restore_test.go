@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,15 +15,21 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-type tarFiles []struct {
+type tarFile struct {
 	Body string
 	*tar.Header
+}
+
+type diskFile struct {
+	Name     string
+	Linkname string
+	fs.FileMode
 }
 
 // This function is used specifically to generate tar files that Turborepo would
 // rarely or never encounter without malicious or pathological inputs. We use it
 // to make sure that we respond well in these scenarios during restore attempts.
-func generateTar(t *testing.T, files tarFiles) turbopath.AbsoluteSystemPath {
+func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	t.Helper()
 	testDir := t.TempDir()
 	testArchivePath := filepath.Join(testDir, "out.tar.gz")
@@ -57,7 +64,7 @@ func generateTar(t *testing.T, files tarFiles) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(testArchivePath)
 }
 
-func generateRestorePoint(t *testing.T) turbopath.AbsoluteSystemPath {
+func generateAnchor(t *testing.T) turbopath.AbsoluteSystemPath {
 	t.Helper()
 	testDir := t.TempDir()
 	anchorPoint := filepath.Join(testDir, "anchor")
@@ -68,16 +75,36 @@ func generateRestorePoint(t *testing.T) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(anchorPoint)
 }
 
+func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFile diskFile) {
+	t.Helper()
+	// If we have gotten here we can assume this to be true.
+	processedName := turbopath.AnchoredSystemPath(diskFile.Name)
+	fullName := processedName.RestoreAnchor(anchor)
+	fileInfo, err := os.Lstat(fullName.ToString())
+	assert.NilError(t, err, "Lstat")
+
+	assert.Equal(t, fileInfo.Mode()&diskFile.FileMode, diskFile.FileMode, "File has the expected mode.")
+
+	if diskFile.FileMode&os.ModeSymlink != 0 {
+		linkname, err := os.Readlink(fullName.ToString())
+		assert.NilError(t, err, "Readlink")
+
+		// We restore Linkname verbatim.
+		assert.Equal(t, linkname, diskFile.Linkname, "Link target matches.")
+	}
+}
+
 func TestOpen(t *testing.T) {
 	tests := []struct {
-		name     string
-		tarFiles tarFiles
-		want     []turbopath.AnchoredSystemPath
-		wantErr  bool
+		name      string
+		tarFiles  []tarFile
+		want      []turbopath.AnchoredSystemPath
+		wantFiles []diskFile
+		wantErr   bool
 	}{
 		{
 			name: "hello world",
-			tarFiles: tarFiles{
+			tarFiles: []tarFile{
 				{
 					Header: &tar.Header{
 						Name:     "target",
@@ -93,23 +120,39 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
+			wantFiles: []diskFile{
+				{
+					Name:     "source",
+					Linkname: "target",
+					FileMode: 0 | os.ModeSymlink,
+				},
+				{
+					Name:     "target",
+					FileMode: 0,
+				},
+			},
 			want: []turbopath.AnchoredSystemPath{"target", "source"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			archivePath := generateTar(t, tt.tarFiles)
-			restorePoint := generateRestorePoint(t)
+			anchor := generateAnchor(t)
 
 			archive, err := Open(archivePath)
 			assert.NilError(t, err, "Open")
 			defer func() { _ = archive.Close() }()
 
-			restoreOutput, restoreErr := archive.Restore(restorePoint)
+			restoreOutput, restoreErr := archive.Restore(anchor)
 			assert.NilError(t, restoreErr, "Restore")
 
 			if !reflect.DeepEqual(restoreOutput, tt.want) {
 				t.Errorf("Restore() = %v, want %v", restoreOutput, tt.want)
+			}
+
+			// Check files on disk.
+			for _, diskFile := range tt.wantFiles {
+				assertFileExists(t, anchor, diskFile)
 			}
 		})
 	}
