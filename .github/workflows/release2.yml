@@ -1,0 +1,54 @@
+name: Stage Release
+
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: "SemVer Increment"
+        required: true
+        default: "prerelease"
+        type: choice
+        options:
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+          - patch
+          - minor
+          - major
+      identifier:
+        description: "npm Tag"
+        required: true
+        default: "canary"
+        type: choice
+        options:
+          - canary
+          - latest
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        # with:
+        #   token: ${{ secrets.TURBOBOT }}
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - name: Version
+        run: |
+          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+          cat version.txt
+      - name: Stage Commit
+        run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git rev-parse HEAD)" >> $GITHUB_ENV
+      - name: Show Stage Commit
+        run: echo "${{ env.STAGE_BRANCH }}"
+# TODO:
+# - branch off of main with version bump commit
+# - smoke test
+# - go build resulting commit in two separate jobs
+# - combine built artifacts, push to repositories
+# - merge commit back into main
