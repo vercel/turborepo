@@ -42,7 +42,7 @@ export const QuickStartArea = () => {
       <DetailedFeatureLink
         feature={{
           Icon: LightBulbIcon,
-          description: `Understand the problems Turborepo solves before diving in.`,
+          description: `Understand why monorepos don't scale - and why Turborepo is the solution.`,
           name: "Why Turborepo?",
         }}
         href="/docs/core-concepts/why-turborepo"
