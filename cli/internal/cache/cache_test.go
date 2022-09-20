@@ -28,15 +28,15 @@ func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []
 	return false, nil, 0, nil
 }
 
-func (tc *testCache) Exists(hash string) (bool, error) {
+func (tc *testCache) Exists(hash string) (CacheState, error) {
 	if tc.disabledErr != nil {
-		return false, tc.disabledErr
+		return CacheState{}, nil
 	}
 	_, ok := tc.entries[hash]
 	if ok {
-		return true, nil
+		return CacheState{Local: true}, nil
 	}
-	return false, nil
+	return CacheState{}, nil
 }
 
 func (tc *testCache) Put(target string, hash string, duration int, files []string) error {
@@ -122,7 +122,11 @@ func TestPutCachingDisabled(t *testing.T) {
 type fakeClient struct{}
 
 // FetchArtifact implements client
-func (*fakeClient) FetchArtifact(hash string, assertOnly bool) (*http.Response, error) {
+func (*fakeClient) FetchArtifact(hash string) (*http.Response, error) {
+	panic("unimplemented")
+}
+
+func (*fakeClient) ArtifactExists(hash string) (*http.Response, error) {
 	panic("unimplemented")
 }
 

@@ -313,7 +313,7 @@ func (c *ApiClient) ArtifactExists(hash string) (*http.Response, error) {
 // Remote Caching server
 func (c *ApiClient) getArtifact(hash string, httpMethod string) (*http.Response, error) {
 
-	if(httpMethod != http.MethodHead && httpMethod != http.MethodGet ) {
+	if httpMethod != http.MethodHead && httpMethod != http.MethodGet {
 		return nil, fmt.Errorf("invalid httpMethod %v, expected GET or HEAD", httpMethod)
 	}
 

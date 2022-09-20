@@ -21,7 +21,11 @@ func (sr *errorResp) PutArtifact(hash string, body []byte, duration int, tag str
 	return sr.err
 }
 
-func (sr *errorResp) FetchArtifact(hash string, assertOnly bool) (*http.Response, error) {
+func (sr *errorResp) FetchArtifact(hash string) (*http.Response, error) {
+	return nil, sr.err
+}
+
+func (sr *errorResp) ArtifactExists(hash string) (*http.Response, error) {
 	return nil, sr.err
 }
 
