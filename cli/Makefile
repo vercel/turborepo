@@ -115,6 +115,8 @@ snapshot-turbo: clean
 stage-release:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
+	cat $(CLI_DIR)/../version.txt
+	git diff -- $(CLI_DIR)/../version.txt
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
