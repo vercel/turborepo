@@ -18,7 +18,7 @@ import Callout from '../../components/Callout'
 Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well as bringing big improvements to `turbo prune`:
 
 - [**The Monorepo Handbook**](#the-monorepo-handbook): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
-- [**No need to run**](#run-no-longer-needed): `turbo run <task>` can now be shortened to `turbo <task>`
+- [**Drop the `run`**](#drop-the-run): `turbo run <task>` can now be shortened to `turbo <task>`
 - [**Prune now supported on pnpm, yarn and npm**](#prune-now-supported-on-npm-pnpm-and-yarn): Pruning your monorepo is now supported in all major package managers.
 - [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
 - [**Changes to `package.json` hashing**](#changes-to-packagejson-hashing): We've improved how we hash `package.json` when running tasks.
@@ -33,15 +33,13 @@ This often meant that folks who wanted to set up a monorepo from scratch had to 
 
 We want to fill this gap with [the Monorepo Handbook](/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
 
-- Installing Packages
-- Linting
-- Development Tasks
-- Building Apps
-- Publishing Packages
+- [Installing Packages](/docs/handbook/package-installation)
+- [Linting](/docs/handbook/linting)
+- [Development Tasks](/docs/handbook/dev)
+- [Building Apps](/docs/handbook/building-your-app)
+- [Publishing Packages](/docs/handbook/publishing-packages)
 
-{/* TODO - link these */}
-
-## `run` no longer needed
+## Drop the `run`
 
 You can now run tasks with the Turborepo CLI using `turbo <task>`.
 
@@ -70,10 +68,10 @@ Let's say that you have a monoreopo like this:
 monorepo
 ├─ apps
 │  ├─ api
-│  ├─ mobile
-├─ packages
-│  ├─ shared-utils
-│  ├─ tsconfig
+│  └─ mobile
+└─ packages
+   ├─ shared-utils
+   └─ tsconfig
 ```
 
 If you want to deploy only `apps/api`, you can run:
@@ -96,10 +94,10 @@ And the `/out` directory would look like this:
 ```
 out
 ├─ apps
-│  ├─ api
-├─ packages
-│  ├─ shared-utils
-│  ├─ tsconfig
+│  └─ api
+└─ packages
+   ├─ shared-utils
+   └─ tsconfig
 ```
 
 Not only would `mobile` be removed, but **all of its dependencies would be removed from the root lockfile**. This means that you can create a streamlined version of your monorepo that only installs the dependencies it needs.
@@ -133,11 +131,13 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 }
 ```
 
-`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read.
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
 
 To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod env-key`.
 
 You can also upgrade the `eslint-config-turbo` package to `latest` if you want to validate your turbo.json.
+
+This work builds on the [automatic env variable detection](/blog/turbo-1-4-0) we added in 1.4.0.
 
 ## Changes to `package.json` hashing
 
