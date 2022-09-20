@@ -18,16 +18,8 @@ builds:
     env:
       - CGO_ENABLED=0
     targets:
-      - android_arm64
-      - freebsd_amd64
-      - freebsd_arm64
-      - linux_386
       - linux_amd64
-      - linux_arm
       - linux_arm64
-      - linux_mips64le
-      - linux_ppc64le
-      - windows_386
       - windows_amd64
       - windows_arm64
   - id: turbo-cgo
@@ -56,7 +48,6 @@ archives:
     wrap_in_directory: true
     replacements:
       amd64: 64
-      386: 32
     format: tar.gz
     format_overrides:
       - goos: windows
@@ -69,7 +60,6 @@ archives:
     wrap_in_directory: true
     replacements:
       amd64: 64
-      386: 32
     format: tar.gz
     files:
       - LICENSE
