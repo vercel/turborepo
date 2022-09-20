@@ -111,12 +111,17 @@ snapshot-turbo-darwin:
 snapshot-turbo: clean
 	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
+.PHONY: flurb
+flurb:
+	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
+
 .PHONY: stage-release
 stage-release:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 	cat $(CLI_DIR)/../version.txt
 	git diff -- $(CLI_DIR)/../version.txt
+	git status
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
