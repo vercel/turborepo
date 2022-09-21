@@ -21,7 +21,7 @@ const (
 	topologicalPipelineDelimiter = "^"
 )
 
-var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+var defaultOutputs = TaskOutputs{Inclusions: []string{"dist/**/*", "build/**/*"}, Exclusions: []string{}}
 
 type rawTurboJSON struct {
 	// Global root filesystem dependencies
@@ -63,7 +63,7 @@ type Pipeline map[string]TaskDefinition
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	Outputs                 []string
+	Outputs                 TaskOutputs
 	ShouldCache             bool
 	EnvVarDependencies      []string
 	TopologicalDependencies []string
@@ -113,6 +113,12 @@ func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 		}
 	}
 	return turboJSON, nil
+}
+
+// TaskOutputs represents the patterns for including and excluding files from outputs
+type TaskOutputs struct {
+	Inclusions []string
+	Exclusions []string
 }
 
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
@@ -211,11 +217,24 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
 	if rawPipeline.Outputs != nil {
-		c.Outputs = *rawPipeline.Outputs
+		Inclusions := make([]string, 0)
+		Exclusions := make([]string, 0)
+		for _, glob := range *rawPipeline.Outputs {
+			if glob[0] == '!' {
+				Exclusions = append(Exclusions, glob[1:])
+			} else {
+				Inclusions = append(Inclusions, glob)
+			}
+		}
+		c.Outputs = TaskOutputs{
+			Inclusions,
+			Exclusions,
+		}
 	} else {
 		c.Outputs = defaultOutputs
 	}
-	sort.Strings(c.Outputs)
+	sort.Strings(c.Outputs.Inclusions)
+	sort.Strings(c.Outputs.Exclusions)
 	if rawPipeline.Cache == nil {
 		c.ShouldCache = true
 	} else {

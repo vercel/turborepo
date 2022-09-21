@@ -129,11 +129,10 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-<<<<<<< HEAD
-			Outputs:                 []string{".next/**", "dist/**"},
-=======
-			Outputs:                 []string{"dist/**", ".next/**", "!dist/assets/**"},
->>>>>>> f9ba2ff7 (Adding tests for negative patterns)
+			Outputs: TaskOutputs{
+				Inclusions: []string{"dist/**", ".next/**"},
+				Exclusions: []string{"!dist/assets/**"},
+			},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},

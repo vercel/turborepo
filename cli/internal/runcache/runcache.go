@@ -140,7 +140,7 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 // and controls access to the task's outputs
 type TaskCache struct {
 	rc                *RunCache
-	repoRelativeGlobs []string
+	repoRelativeGlobs fs.TaskOutputs
 	hash              string
 	pt                *nodes.PackageTask
 	taskOutputMode    util.TaskOutputMode
@@ -163,11 +163,11 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs
 	}
-	hasChangedOutputs := len(changedOutputGlobs) > 0
+	hasChangedOutputs := len(changedOutputGlobs.Inclusions)+len(changedOutputGlobs.Exclusions) > 0
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O
-		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, changedOutputGlobs)
+		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, []string{})
 		if err != nil {
 			return false, err
 		} else if !hit {
@@ -268,17 +268,7 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
-	negativeGlobs := make([]string, 0)
-	positiveGlobs := make([]string, 0)
-	for _, glob := range tc.repoRelativeGlobs {
-		if glob[0] == '!' {
-			negativeGlobs = append(negativeGlobs, glob[1:])
-		} else {
-			positiveGlobs = append(positiveGlobs, glob)
-		}
-	}
-
-	filesToBeCached, err := globby.GlobFiles(tc.rc.repoRoot.ToStringDuringMigration(), positiveGlobs, negativeGlobs)
+	filesToBeCached, err := globby.GlobFiles(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs.Inclusions, tc.repoRelativeGlobs.Exclusions)
 	if err != nil {
 		return err
 	}
@@ -313,15 +303,12 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.UntypedJoin(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
-	repoRelativeGlobs := make([]string, len(hashableOutputs))
-	for index, output := range hashableOutputs {
-		// If this is a negated glob, we move the ! to the beginning of the output
-		if output[0] == '!' {
-			root := "!" + pt.Pkg.Dir.ToStringDuringMigration()
-			repoRelativeGlobs[index] = filepath.Join(root, output[1:])
-		} else {
-			repoRelativeGlobs[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
-		}
+
+	for index, glob := range hashableOutputs.Inclusions {
+		hashableOutputs.Inclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), glob)
+	}
+	for index, glob := range hashableOutputs.Exclusions {
+		hashableOutputs.Exclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), glob)
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode
@@ -331,7 +318,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 
 	return TaskCache{
 		rc:                rc,
-		repoRelativeGlobs: repoRelativeGlobs,
+		repoRelativeGlobs: hashableOutputs,
 		hash:              hash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,

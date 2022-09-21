@@ -1,6 +1,8 @@
 package runcache
 
-import "context"
+import (
+	"context"
+)
 
 // OutputWatcher instances are responsible for tracking changes to task outputs
 type OutputWatcher interface {
