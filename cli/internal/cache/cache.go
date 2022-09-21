@@ -282,7 +282,7 @@ func (mplex *cacheMultiplexer) Exists(target string) (CacheState, error) {
 	for _, cache := range mplex.caches {
 		cacheState, err := cache.Exists(target)
 		if err != nil {
-			return cacheState, err
+			return syncCacheState, err
 		}
 		if cacheState.Local == true {
 			syncCacheState.Local = syncCacheState.Local || cacheState.Local
