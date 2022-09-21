@@ -245,7 +245,7 @@ func validateOutput(t *testing.T, actual Pipeline, expected map[string]TaskDefin
 
 }
 
-func getTestDir(t *testing.T, testName string) turbopath.AbsolutePath {
+func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
 	defaultCwd, err := os.Getwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)

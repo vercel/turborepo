@@ -50,14 +50,14 @@ var (
 
 // Event is the backend-independent information about a file change
 type Event struct {
-	Path      turbopath.AbsolutePath
+	Path      turbopath.AbsoluteSystemPath
 	EventType FileEvent
 }
 
 // Backend is the interface that describes what an underlying filesystem watching backend
 // must provide.
 type Backend interface {
-	AddRoot(root turbopath.AbsolutePath, excludePatterns ...string) error
+	AddRoot(root turbopath.AbsoluteSystemPath, excludePatterns ...string) error
 	Events() <-chan Event
 	Errors() <-chan error
 	Close() error
@@ -71,7 +71,7 @@ type FileWatcher struct {
 	backend Backend
 
 	logger         hclog.Logger
-	repoRoot       turbopath.AbsolutePath
+	repoRoot       turbopath.AbsoluteSystemPath
 	excludePattern string
 
 	clientsMu sync.RWMutex
@@ -80,7 +80,7 @@ type FileWatcher struct {
 }
 
 // New returns a new FileWatcher instance
-func New(logger hclog.Logger, repoRoot turbopath.AbsolutePath, backend Backend) *FileWatcher {
+func New(logger hclog.Logger, repoRoot turbopath.AbsoluteSystemPath, backend Backend) *FileWatcher {
 	excludes := make([]string, len(_ignores))
 	for i, ignore := range _ignores {
 		excludes[i] = filepath.ToSlash(repoRoot.UnsafeJoin(ignore).ToString() + "/**")
@@ -116,7 +116,7 @@ func (fw *FileWatcher) Start() error {
 // fired for existing files when AddRoot is called, only for subsequent changes.
 // NOTE: if it appears helpful, we could change this behavior so that we provide a stream of initial
 // events.
-func (fw *FileWatcher) AddRoot(root turbopath.AbsolutePath, excludePatterns ...string) error {
+func (fw *FileWatcher) AddRoot(root turbopath.AbsoluteSystemPath, excludePatterns ...string) error {
 	return fw.backend.AddRoot(root, excludePatterns...)
 }
 

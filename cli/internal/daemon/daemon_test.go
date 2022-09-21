@@ -94,7 +94,7 @@ func newTestRPCServer() *testRPCServer {
 	}
 }
 
-func waitForFile(t *testing.T, filename turbopath.AbsolutePath, timeout time.Duration) {
+func waitForFile(t *testing.T, filename turbopath.AbsoluteSystemPath, timeout time.Duration) {
 	t.Helper()
 	deadline := time.After(timeout)
 outer:

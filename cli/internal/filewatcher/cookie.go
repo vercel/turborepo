@@ -28,16 +28,16 @@ var (
 // CookieJar is used for tracking roundtrips through the filesystem watching API
 type CookieJar struct {
 	timeout time.Duration
-	dir     turbopath.AbsolutePath
+	dir     turbopath.AbsoluteSystemPath
 	serial  uint64
 	mu      sync.Mutex
-	cookies map[turbopath.AbsolutePath]chan error
+	cookies map[turbopath.AbsoluteSystemPath]chan error
 	closed  bool
 }
 
 // NewCookieJar returns a new instance of a CookieJar. There should only ever be a single
 // instance live per cookieDir, since they expect to have full control over that directory.
-func NewCookieJar(cookieDir turbopath.AbsolutePath, timeout time.Duration) (*CookieJar, error) {
+func NewCookieJar(cookieDir turbopath.AbsoluteSystemPath, timeout time.Duration) (*CookieJar, error) {
 	if err := cookieDir.RemoveAll(); err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func NewCookieJar(cookieDir turbopath.AbsolutePath, timeout time.Duration) (*Coo
 	return &CookieJar{
 		timeout: timeout,
 		dir:     cookieDir,
-		cookies: make(map[turbopath.AbsolutePath]chan error),
+		cookies: make(map[turbopath.AbsoluteSystemPath]chan error),
 	}, nil
 }
 
@@ -83,7 +83,7 @@ func (cj *CookieJar) OnFileWatchError(err error) {
 	cj.mu.Lock()
 	defer cj.mu.Unlock()
 	cj.removeAllCookiesWithError(err)
-	cj.cookies = make(map[turbopath.AbsolutePath]chan error)
+	cj.cookies = make(map[turbopath.AbsoluteSystemPath]chan error)
 }
 
 // OnFileWatchEvent determines if the specified event is relevant
@@ -134,7 +134,7 @@ func (cj *CookieJar) WaitForCookie() error {
 	}
 }
 
-func (cj *CookieJar) notifyCookie(cookie turbopath.AbsolutePath, err error) {
+func (cj *CookieJar) notifyCookie(cookie turbopath.AbsoluteSystemPath, err error) {
 	cj.mu.Lock()
 	ch, ok := cj.cookies[cookie]
 	// delete is a no-op if the key doesn't exist
@@ -148,7 +148,7 @@ func (cj *CookieJar) notifyCookie(cookie turbopath.AbsolutePath, err error) {
 	}
 }
 
-func touchCookieFile(cookie turbopath.AbsolutePath) error {
+func touchCookieFile(cookie turbopath.AbsoluteSystemPath) error {
 	f, err := cookie.OpenFile(os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0700)
 	if err != nil {
 		return err

@@ -796,7 +796,7 @@ type execContext struct {
 	packageManager *packagemanager.PackageManager
 	processes      *process.Manager
 	taskHashes     *taskhash.Tracker
-	repoRoot       turbopath.AbsolutePath
+	repoRoot       turbopath.AbsoluteSystemPath
 }
 
 func (e *execContext) logError(log hclog.Logger, prefix string, err error) {

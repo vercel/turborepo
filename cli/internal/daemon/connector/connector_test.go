@@ -33,11 +33,11 @@ func testBin() string {
 	return "node"
 }
 
-func getUnixSocket(dir turbopath.AbsolutePath) turbopath.AbsolutePath {
+func getUnixSocket(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	return dir.UnsafeJoin("turbod-test.sock")
 }
 
-func getPidFile(dir turbopath.AbsolutePath) turbopath.AbsolutePath {
+func getPidFile(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	return dir.UnsafeJoin("turbod-test.pid")
 }
 
@@ -158,7 +158,7 @@ type mockServer struct {
 	turbodprotocol.UnimplementedTurbodServer
 	helloErr     error
 	shutdownResp *turbodprotocol.ShutdownResponse
-	pidFile      turbopath.AbsolutePath
+	pidFile      turbopath.AbsoluteSystemPath
 }
 
 // Simulates server exiting by cleaning up the pid file

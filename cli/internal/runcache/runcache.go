@@ -23,7 +23,7 @@ import (
 )
 
 // LogReplayer is a function that is responsible for replaying the contents of a given log file
-type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile turbopath.AbsolutePath)
+type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile turbopath.AbsoluteSystemPath)
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
@@ -108,14 +108,14 @@ type RunCache struct {
 	cache                  cache.Cache
 	readsDisabled          bool
 	writesDisabled         bool
-	repoRoot               turbopath.AbsolutePath
+	repoRoot               turbopath.AbsoluteSystemPath
 	logReplayer            LogReplayer
 	outputWatcher          OutputWatcher
 	colorCache             *colorcache.ColorCache
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
-func New(cache cache.Cache, repoRoot turbopath.AbsolutePath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
+func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
 	rc := &RunCache{
 		taskOutputModeOverride: opts.TaskOutputModeOverride,
 		cache:                  cache,
@@ -144,7 +144,7 @@ type TaskCache struct {
 	pt                *nodes.PackageTask
 	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
-	LogFileName       turbopath.AbsolutePath
+	LogFileName       turbopath.AbsoluteSystemPath
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
@@ -326,7 +326,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 }
 
 // defaultLogReplayer will try to replay logs back to the given Ui instance
-func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopath.AbsolutePath) {
+func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopath.AbsoluteSystemPath) {
 	logger.Debug("start replaying logs")
 	f, err := logFileName.Open()
 	if err != nil {

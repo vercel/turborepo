@@ -11,35 +11,35 @@ import (
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
-func CheckedToAbsolutePath(s string) (turbopath.AbsolutePath, error) {
+func CheckedToAbsolutePath(s string) (turbopath.AbsoluteSystemPath, error) {
 	if filepath.IsAbs(s) {
-		return turbopath.AbsolutePath(s), nil
+		return turbopath.AbsoluteSystemPath(s), nil
 	}
 	return "", fmt.Errorf("%v is not an absolute path", s)
 }
 
 // ResolveUnknownPath returns unknown if it is an absolute path, otherwise, it
 // assumes unknown is a path relative to the given root.
-func ResolveUnknownPath(root turbopath.AbsolutePath, unknown string) turbopath.AbsolutePath {
+func ResolveUnknownPath(root turbopath.AbsoluteSystemPath, unknown string) turbopath.AbsoluteSystemPath {
 	if filepath.IsAbs(unknown) {
-		return turbopath.AbsolutePath(unknown)
+		return turbopath.AbsoluteSystemPath(unknown)
 	}
 	return root.UnsafeJoin(unknown)
 }
 
-func UnsafeToAbsolutePath(s string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(s)
+func UnsafeToAbsolutePath(s string) turbopath.AbsoluteSystemPath {
+	return turbopath.AbsoluteSystemPath(s)
 }
 
 // AbsolutePathFromUpstream is used to mark return values from APIs that we
 // expect to give us absolute paths. No checking is performed.
 // Prefer to use this over a cast to maintain the search-ability of interfaces
 // into and out of the turbopath.AbsolutePath type.
-func AbsolutePathFromUpstream(s string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(s)
+func AbsolutePathFromUpstream(s string) turbopath.AbsoluteSystemPath {
+	return turbopath.AbsoluteSystemPath(s)
 }
 
-func GetCwd() (turbopath.AbsolutePath, error) {
+func GetCwd() (turbopath.AbsoluteSystemPath, error) {
 	cwdRaw, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("invalid working directory: %w", err)
@@ -90,20 +90,20 @@ func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 
 // TempDir returns the absolute path of a directory with the given name
 // under the system's default temp directory location
-func TempDir(subDir string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(os.TempDir()).UnsafeJoin(subDir)
+func TempDir(subDir string) turbopath.AbsoluteSystemPath {
+	return turbopath.AbsoluteSystemPath(os.TempDir()).UnsafeJoin(subDir)
 }
 
 // GetTurboDataDir returns a directory outside of the repo
 // where turbo can store data files related to turbo.
-func GetTurboDataDir() turbopath.AbsolutePath {
+func GetTurboDataDir() turbopath.AbsoluteSystemPath {
 	dataHome := AbsolutePathFromUpstream(xdg.DataHome)
 	return dataHome.UnsafeJoin("turborepo")
 }
 
 // GetUserConfigDir returns the platform-specific common location
 // for configuration files that belong to a user.
-func GetUserConfigDir() turbopath.AbsolutePath {
+func GetUserConfigDir() turbopath.AbsoluteSystemPath {
 	configHome := AbsolutePathFromUpstream(xdg.ConfigHome)
 	return configHome.UnsafeJoin("turborepo")
 }

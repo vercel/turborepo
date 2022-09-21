@@ -43,9 +43,9 @@ type Opts struct {
 type Client struct {
 	turbodprotocol.TurbodClient
 	*grpc.ClientConn
-	SockPath turbopath.AbsolutePath
-	PidPath  turbopath.AbsolutePath
-	LogPath  turbopath.AbsolutePath
+	SockPath turbopath.AbsoluteSystemPath
+	PidPath  turbopath.AbsoluteSystemPath
+	LogPath  turbopath.AbsoluteSystemPath
 }
 
 // Connector instances are used to create a connection to turbo's daemon process
@@ -54,18 +54,18 @@ type Connector struct {
 	Logger       hclog.Logger
 	Bin          string
 	Opts         Opts
-	SockPath     turbopath.AbsolutePath
-	PidPath      turbopath.AbsolutePath
-	LogPath      turbopath.AbsolutePath
+	SockPath     turbopath.AbsoluteSystemPath
+	PidPath      turbopath.AbsoluteSystemPath
+	LogPath      turbopath.AbsoluteSystemPath
 	TurboVersion string
 }
 
 // ConnectionError is returned in the error case from connect. It wraps the underlying
 // cause and adds a message with the relevant files for the user to check.
 type ConnectionError struct {
-	SockPath turbopath.AbsolutePath
-	PidPath  turbopath.AbsolutePath
-	LogPath  turbopath.AbsolutePath
+	SockPath turbopath.AbsoluteSystemPath
+	PidPath  turbopath.AbsoluteSystemPath
+	LogPath  turbopath.AbsoluteSystemPath
 	cause    error
 }
 

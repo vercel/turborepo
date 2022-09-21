@@ -64,7 +64,7 @@ func expectNoFilesystemEvent(t *testing.T, ch <-chan Event) {
 	}
 }
 
-func expectWatching(t *testing.T, c *testClient, dirs []turbopath.AbsolutePath) {
+func expectWatching(t *testing.T, c *testClient, dirs []turbopath.AbsoluteSystemPath) {
 	t.Helper()
 	now := time.Now()
 	filename := fmt.Sprintf("test-%v", now.UnixMilli())
@@ -113,7 +113,7 @@ func TestFileWatching(t *testing.T) {
 		notify: ch,
 	}
 	fw.AddClient(c)
-	expectedWatching := []turbopath.AbsolutePath{
+	expectedWatching := []turbopath.AbsoluteSystemPath{
 		repoRoot,
 		repoRoot.UnsafeJoin("parent"),
 		repoRoot.UnsafeJoin("parent", "child"),

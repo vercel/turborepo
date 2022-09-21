@@ -10,7 +10,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setup(t *testing.T, repoRoot turbopath.AbsolutePath) {
+func setup(t *testing.T, repoRoot turbopath.AbsoluteSystemPath) {
 	// Directory layout:
 	// <repoRoot>/
 	//   my-pkg/

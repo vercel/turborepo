@@ -16,7 +16,7 @@ import (
 
 // GraphVisualizer requirements
 type GraphVisualizer struct {
-	repoRoot  turbopath.AbsolutePath
+	repoRoot  turbopath.AbsoluteSystemPath
 	ui        cli.Ui
 	TaskGraph *dag.AcyclicGraph
 }
@@ -28,7 +28,7 @@ func hasGraphViz() bool {
 }
 
 // New creates an instance of ColorCache with helpers for adding colors to task outputs
-func New(repoRoot turbopath.AbsolutePath, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
+func New(repoRoot turbopath.AbsoluteSystemPath, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
 	return &GraphVisualizer{
 		repoRoot:  repoRoot,
 		ui:        ui,

@@ -106,7 +106,7 @@ func TestGetPackageManager(t *testing.T) {
 	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
-		projectDirectory turbopath.AbsolutePath
+		projectDirectory turbopath.AbsoluteSystemPath
 		pkg              *fs.PackageJSON
 		want             string
 		wantErr          bool
@@ -217,7 +217,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath turbopath.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     []string
 		wantErr  bool
 	}
@@ -226,7 +226,7 @@ func Test_GetWorkspaces(t *testing.T) {
 
 	repoRoot, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
-	rootPath := map[string]turbopath.AbsolutePath{
+	rootPath := map[string]turbopath.AbsoluteSystemPath{
 		"nodejs-npm":   repoRoot.UnsafeJoin("../../../examples/basic"),
 		"nodejs-berry": repoRoot.UnsafeJoin("../../../examples/basic"),
 		"nodejs-yarn":  repoRoot.UnsafeJoin("../../../examples/basic"),
@@ -308,7 +308,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath turbopath.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     []string
 		wantErr  bool
 	}
@@ -358,7 +358,7 @@ func Test_CanPrune(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath turbopath.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     bool
 		wantErr  bool
 	}

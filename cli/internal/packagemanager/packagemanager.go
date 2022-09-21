@@ -47,19 +47,19 @@ type PackageManager struct {
 	ArgSeparator []string
 
 	// Return the list of workspace glob
-	getWorkspaceGlobs func(rootpath turbopath.AbsolutePath) ([]string, error)
+	getWorkspaceGlobs func(rootpath turbopath.AbsoluteSystemPath) ([]string, error)
 
 	// Return the list of workspace ignore globs
-	getWorkspaceIgnores func(pm PackageManager, rootpath turbopath.AbsolutePath) ([]string, error)
+	getWorkspaceIgnores func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error)
 
 	// Detect if Turbo knows how to produce a pruned workspace for the project
-	canPrune func(cwd turbopath.AbsolutePath) (bool, error)
+	canPrune func(cwd turbopath.AbsoluteSystemPath) (bool, error)
 
 	// Test a manager and version tuple to see if it is the Package Manager.
 	Matches func(manager string, version string) (bool, error)
 
 	// Detect if the project is using the Package Manager by inspecting the system.
-	detect func(projectDirectory turbopath.AbsolutePath, packageManager *PackageManager) (bool, error)
+	detect func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error)
 
 	// Read a lockfile for a given package manager
 	readLockfile func(contents []byte) (lockfile.Lockfile, error)
@@ -89,7 +89,7 @@ func ParsePackageManagerString(packageManager string) (manager string, version s
 }
 
 // GetPackageManager attempts all methods for identifying the package manager in use.
-func GetPackageManager(projectDirectory turbopath.AbsolutePath, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
+func GetPackageManager(projectDirectory turbopath.AbsoluteSystemPath, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
 	result, _ := readPackageManager(pkg)
 	if result != nil {
 		return result, nil
@@ -118,7 +118,7 @@ func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, er
 }
 
 // detectPackageManager attempts to detect the package manager by inspecting the project directory state.
-func detectPackageManager(projectDirectory turbopath.AbsolutePath) (packageManager *PackageManager, err error) {
+func detectPackageManager(projectDirectory turbopath.AbsoluteSystemPath) (packageManager *PackageManager, err error) {
 	for _, packageManager := range packageManagers {
 		isResponsible, err := packageManager.detect(projectDirectory, &packageManager)
 		if err != nil {
@@ -133,7 +133,7 @@ func detectPackageManager(projectDirectory turbopath.AbsolutePath) (packageManag
 }
 
 // GetWorkspaces returns the list of package.json files for the current repository.
-func (pm PackageManager) GetWorkspaces(rootpath turbopath.AbsolutePath) ([]string, error) {
+func (pm PackageManager) GetWorkspaces(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 	globs, err := pm.getWorkspaceGlobs(rootpath)
 	if err != nil {
 		return nil, err
@@ -158,12 +158,12 @@ func (pm PackageManager) GetWorkspaces(rootpath turbopath.AbsolutePath) ([]strin
 }
 
 // GetWorkspaceIgnores returns an array of globs not to search for workspaces.
-func (pm PackageManager) GetWorkspaceIgnores(rootpath turbopath.AbsolutePath) ([]string, error) {
+func (pm PackageManager) GetWorkspaceIgnores(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 	return pm.getWorkspaceIgnores(pm, rootpath)
 }
 
 // CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
-func (pm PackageManager) CanPrune(projectDirectory turbopath.AbsolutePath) (bool, error) {
+func (pm PackageManager) CanPrune(projectDirectory turbopath.AbsoluteSystemPath) (bool, error) {
 	if pm.canPrune != nil {
 		return pm.canPrune(projectDirectory)
 	}
@@ -171,7 +171,7 @@ func (pm PackageManager) CanPrune(projectDirectory turbopath.AbsolutePath) (bool
 }
 
 // ReadLockfile will read the applicable lockfile into memory
-func (pm PackageManager) ReadLockfile(cacheDir turbopath.AbsolutePath, projectDirectory turbopath.AbsolutePath) (lockfile.Lockfile, error) {
+func (pm PackageManager) ReadLockfile(cacheDir turbopath.AbsoluteSystemPath, projectDirectory turbopath.AbsoluteSystemPath) (lockfile.Lockfile, error) {
 	if pm.readLockfile == nil {
 		return nil, nil
 	}

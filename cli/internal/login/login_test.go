@@ -55,7 +55,7 @@ func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.Ve
 }
 
 type testResult struct {
-	repoRoot            turbopath.AbsolutePath
+	repoRoot            turbopath.AbsoluteSystemPath
 	userConfig          *config.UserConfig
 	repoConfig          *config.RepoConfig
 	clientErr           error

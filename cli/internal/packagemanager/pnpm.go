@@ -32,7 +32,7 @@ var nodejsPnpm = PackageManager{
 	ArgSeparator:               nil,
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
-	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
+	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		bytes, err := ioutil.ReadFile(rootpath.UnsafeJoin("pnpm-workspace.yaml").ToStringDuringMigration())
 		if err != nil {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
@@ -49,7 +49,7 @@ var nodejsPnpm = PackageManager{
 		return pnpmWorkspaces.Packages, nil
 	},
 
-	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsolutePath) ([]string, error) {
+	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		// Matches upstream values:
 		// function: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L27
 		// key code: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L30
@@ -77,14 +77,14 @@ var nodejsPnpm = PackageManager{
 		return c.Check(v), nil
 	},
 
-	detect: func(projectDirectory turbopath.AbsolutePath, packageManager *PackageManager) (bool, error) {
+	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
 		specfileExists := projectDirectory.UnsafeJoin(packageManager.Specfile).FileExists()
 		lockfileExists := projectDirectory.UnsafeJoin(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
 	},
 
-	canPrune: func(cwd turbopath.AbsolutePath) (bool, error) {
+	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
 	},
 

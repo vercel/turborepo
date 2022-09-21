@@ -70,7 +70,7 @@ type TaskDefinition struct {
 }
 
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
-func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 
 	turboJSONPath := rootPath.UnsafeJoin(configFile)
 
@@ -106,7 +106,7 @@ func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJS
 }
 
 // readTurboJSON reads the configFile in to a struct
-func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
+func readTurboJSON(path turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 	file, err := path.Open()
 	if err != nil {
 		return nil, err
