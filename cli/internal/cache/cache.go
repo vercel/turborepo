@@ -32,6 +32,8 @@ type Cache interface {
 	Shutdown()
 }
 
+// CacheState holds whether artifacts exists for a given hash on local
+// and/or remote caching server
 type CacheState struct {
 	Local  bool `json:"local"`
 	Remote bool `json:"remote"`

@@ -305,6 +305,8 @@ func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 	return c.getArtifact(hash, http.MethodGet)
 }
 
+// ArtifactExists attempts to determine if the build artifact with the given hash
+// exists in the Remote Caching server
 func (c *ApiClient) ArtifactExists(hash string) (*http.Response, error) {
 	return c.getArtifact(hash, http.MethodHead)
 }
