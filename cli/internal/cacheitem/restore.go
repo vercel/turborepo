@@ -5,16 +5,16 @@ import (
 	"compress/gzip"
 	"errors"
 	"io"
-	"os"
 	"runtime"
 	"strings"
 
+	"github.com/moby/sys/sequential"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // Open returns an existing CacheItem at the specified path.
 func Open(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
-	handle, err := os.Open(path.ToString())
+	handle, err := sequential.Open(path.ToString())
 	if err != nil {
 		return nil, err
 	}
