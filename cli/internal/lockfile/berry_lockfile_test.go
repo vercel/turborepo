@@ -105,6 +105,21 @@ func Test_BerryPatchList(t *testing.T) {
 	assert.Equal(t, patch.Version, "2.0.0-next.4")
 }
 
+func Test_PackageExtensions(t *testing.T) {
+	lockfile := getBerryLockfile(t, "berry.lock")
+
+	expectedExtensions := map[_Descriptor]_void{}
+	for _, extension := range []string{"@babel/types@npm:^7.8.3", "lodash@npm:4.17.21"} {
+		var extensionDescriptor _Descriptor
+		if err := extensionDescriptor.parseDescriptor(extension); err != nil {
+			t.Error(err)
+		}
+		expectedExtensions[extensionDescriptor] = _void{}
+	}
+
+	assert.DeepEqual(t, lockfile.packageExtensions, expectedExtensions)
+}
+
 func Test_StringifyMetadata(t *testing.T) {
 	metadata := BerryLockfileEntry{
 		Version:  "6",

@@ -75,6 +75,8 @@ type BerryLockfile struct {
 	descriptors map[_Descriptor]_Locator
 	// Mapping regular package locators to patched package locators
 	patches map[_Locator]_Locator
+	// Descriptors that are only used by package extensions
+	packageExtensions map[_Descriptor]_void
 }
 
 // BerryDependencyMetaEntry Structure for holding if a package is optional or not
@@ -202,6 +204,15 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		}
 	}
 
+	// Add any descriptors used by package extensions
+	for descriptor := range l.packageExtensions {
+		locator := l.descriptors[descriptor]
+		_, ok := prunedPackages[locator]
+		if ok {
+			prunedDescriptors[descriptor] = locator
+		}
+	}
+
 	// berry only includes a cache key in the lockfile if there are entries with a checksum
 	cacheKey := -1
 	for _, entry := range prunedPackages {
@@ -212,11 +223,12 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 	}
 
 	return &BerryLockfile{
-		packages:    prunedPackages,
-		version:     l.version,
-		cacheKey:    cacheKey,
-		descriptors: prunedDescriptors,
-		patches:     patches,
+		packages:          prunedPackages,
+		version:           l.version,
+		cacheKey:          cacheKey,
+		descriptors:       prunedDescriptors,
+		patches:           patches,
+		packageExtensions: l.packageExtensions,
 	}, nil
 }
 
@@ -355,12 +367,27 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 		}
 	}
 
+	// Build up list of all descriptors in the file
+	packageExtensions := make(map[_Descriptor]_void, len(descriptorToLocator))
+	for descriptor := range descriptorToLocator {
+		if descriptor.protocol() == "npm" {
+			packageExtensions[descriptor] = _void{}
+		}
+	}
+	// Remove any that are found in the lockfile entries
+	for _, entry := range packages {
+		for _, descriptor := range entry.possibleDescriptors() {
+			delete(packageExtensions, descriptor)
+		}
+	}
+
 	lockfile := BerryLockfile{
-		packages:    locatorToPackage,
-		version:     version,
-		cacheKey:    metadata.CacheKey,
-		descriptors: descriptorToLocator,
-		patches:     patches,
+		packages:          locatorToPackage,
+		version:           version,
+		cacheKey:          metadata.CacheKey,
+		descriptors:       descriptorToLocator,
+		patches:           patches,
+		packageExtensions: packageExtensions,
 	}
 	return &lockfile, nil
 }
@@ -382,6 +409,7 @@ type _Locator struct {
 type _Descriptor struct {
 	_Ident
 	// Version range e.g. ^1.0.0
+	// Can be prefixed with the protocol e.g. npm, workspace, patch,
 	versionRange string
 }
 
@@ -458,6 +486,14 @@ func (d *_Descriptor) primaryVersion() (string, bool) {
 	}
 
 	return d.versionRange[versionRangeIndex+1 : patchFileIndex], true
+}
+
+// Returns the protocol of the descriptor
+func (d *_Descriptor) protocol() string {
+	if index := strings.Index(d.versionRange, ":"); index > 0 {
+		return d.versionRange[:index]
+	}
+	return ""
 }
 
 func (d *_Descriptor) String() string {
