@@ -182,13 +182,15 @@ func (cache *httpCache) exists(hash string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	defer resp.Body.Close()
+
+	defer func() { err = resp.Body.Close() }()
+
 	if resp.StatusCode == http.StatusNotFound {
 		return false, nil
 	} else if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
 	}
-	return true, nil
+	return true, err
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
