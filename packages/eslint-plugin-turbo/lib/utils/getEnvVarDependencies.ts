@@ -1,5 +1,5 @@
 import findTurboConfig from "./findTurboConfig";
-import type { TurboConfig } from "../types";
+import type { Schema } from "turbo-types";
 
 function findDependsOnEnvVars({
   dependencies,
@@ -18,7 +18,7 @@ function getEnvVarDependencies({
   turboConfig,
 }: {
   cwd: string;
-  turboConfig?: TurboConfig;
+  turboConfig?: Schema;
 }): Set<string> | null {
   const turboJsonContent = turboConfig || findTurboConfig({ cwd });
   if (!turboJsonContent) {

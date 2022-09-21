@@ -1,5 +1,4 @@
 /* This file generates the `schema.json` file. */
-
 export interface Schema {
   /** @default https://turborepo.org/schema.json */
   $schema?: string;
