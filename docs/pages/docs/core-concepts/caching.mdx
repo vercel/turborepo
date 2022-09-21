@@ -189,7 +189,7 @@ Otherwise, you could ship a cached build with the wrong environment variables!
 You can control `turbo`'s caching behavior based on
 the values of environment variables:
 
-- Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-workspace-task basis.
+- Including environment variables in a `env` in your `pipeline` definition will impact the cache fingerprint on a per-task or per-workspace-task basis.
 - The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```jsonc
@@ -197,22 +197,20 @@ the values of environment variables:
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": [
-        "^build",
-        // env vars will impact hashes of all "build" tasks
-        "$SOME_ENV_VAR",
-      ],
+      "dependsOn": ["^build"],
+      // env vars will impact hashes of all "build" tasks
+      "env": ["SOME_ENV_VAR"],
       "outputs": ["dist/**"]
     },
 
     // override settings for the "build" task for the "web" app
     "web#build": {
-      "dependsOn": [
-        "^build",
+      "dependsOn": ["^build"],
+      "env": [
         // env vars that will impact the hash of "build" task for only "web" app
-        "$STRIPE_SECRET_KEY",
-        "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-        "$NEXT_PUBLIC_ANALYTICS_ID",
+        "STRIPE_SECRET_KEY",
+        "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "NEXT_PUBLIC_ANALYTICS_ID"
       ],
       "outputs": [".next/**"],
     },
@@ -220,38 +218,38 @@ the values of environment variables:
 }
 ```
 
+<Callout type="info">
+  Declaring environment variables in the `dependsOn` config with a `$` prefix is deprecated.
+</Callout>
+
 To alter the cache for _all_ tasks, you can declare environment variables in the
-`globalDependencies` array:
+`globalEnv` array:
 
 ```diff
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": [
-        "^build",
-        // env vars will impact hashes of all "build" tasks
-        "$SOME_ENV_VAR",
-      ],
+      "dependsOn": ["^build"],
+      // env vars will impact hashes of all "build" tasks
+      "env": ["SOME_ENV_VAR"],
       "outputs": ["dist/**"]
     },
 
     // override settings for the "build" task for the "web" app
     "web#build": {
-      "dependsOn": [
-        "^build",
+      "dependsOn": ["^build"],
+      "env": [
         // env vars that will impact the hash of "build" task for only "web" app
-        "$STRIPE_SECRET_KEY",
-        "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-        "$NEXT_PUBLIC_ANALYTICS_ID",
+        "STRIPE_SECRET_KEY",
+        "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "NEXT_PUBLIC_ANALYTICS_ID"
       ],
       "outputs": [".next/**"],
     },
   },
-+  "globalDependencies": [
-+    "$GITHUB_TOKEN",// env var that will impact the hashes of all tasks,
-+    "tsconfig.json", // file contents will impact the hashes of all tasks,
-+    ".env.*", // glob file contents will impact the hashes of all tasks,
++  "globalEnv": [
++    "GITHUB_TOKEN" // env var that will impact the hashes of all tasks,
 +  ]
 }
 ```
@@ -268,9 +266,9 @@ To help ensure correct caching across environments Turborepo 1.4+ will automatic
 {
   "pipeline": {
     "build": {
-      "dependsOn": [
-        "^build"
--       "$NEXT_PUBLIC_EXAMPLE_ENV_VAR"
+      "dependsOn": ["^build"],
+      "env": [
+-       "NEXT_PUBLIC_EXAMPLE_ENV_VAR"
       ]
     }
   }
