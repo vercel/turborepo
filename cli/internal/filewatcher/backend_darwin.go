@@ -117,7 +117,7 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsolutePath, excludePatter
 				// back to the path we were provided since that's what the caller will
 				// expect in terms of event paths.
 				watchRootRelativePath := eventPath[len(realRoot):]
-				processedEventPath := someRoot.Join(watchRootRelativePath)
+				processedEventPath := someRoot.UnsafeJoin(watchRootRelativePath)
 
 				// 3. Compare the event to all exclude patterns, short-circuit if we know
 				// we are not watching this file.
@@ -147,7 +147,7 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsolutePath, excludePatter
 }
 
 func waitForCookie(root turbopath.AbsolutePath, events <-chan []fsevents.Event, timeout time.Duration) error {
-	cookiePath := root.Join(".turbo-cookie")
+	cookiePath := root.UnsafeJoin(".turbo-cookie")
 	if err := cookiePath.WriteFile([]byte("cookie"), 0755); err != nil {
 		return err
 	}

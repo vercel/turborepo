@@ -123,7 +123,7 @@ func AddUserConfigFlags(flags *pflag.FlagSet) {
 // DefaultUserConfigPath returns the default platform-dependent place that
 // we store the user-specific configuration.
 func DefaultUserConfigPath() turbopath.AbsolutePath {
-	return fs.GetUserConfigDir().Join("config.json")
+	return fs.GetUserConfigDir().UnsafeJoin("config.json")
 }
 
 const (
@@ -167,5 +167,5 @@ func AddRepoConfigFlags(flags *pflag.FlagSet) {
 
 // GetRepoConfigPath reads the user-specific configuration values
 func GetRepoConfigPath(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
-	return repoRoot.Join(".turbo", "config.json")
+	return repoRoot.UnsafeJoin(".turbo", "config.json")
 }

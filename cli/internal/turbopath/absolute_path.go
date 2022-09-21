@@ -59,7 +59,7 @@ func (ap AbsolutePath) ToStringDuringMigration() string {
 	return ap.asString()
 }
 
-func (ap AbsolutePath) Join(args ...string) AbsolutePath {
+func (ap AbsolutePath) UnsafeJoin(args ...string) AbsolutePath {
 	return AbsolutePath(filepath.Join(ap.asString(), filepath.Join(args...)))
 }
 func (ap AbsolutePath) asString() string {

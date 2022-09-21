@@ -21,27 +21,27 @@ func setup(t *testing.T, repoRoot turbopath.AbsolutePath) {
 	//         child-file
 	//     .next/
 	//       next-file
-	distPath := repoRoot.Join("my-pkg", "dist")
-	childFilePath := distPath.Join("distChild", "child-file")
+	distPath := repoRoot.UnsafeJoin("my-pkg", "dist")
+	childFilePath := distPath.UnsafeJoin("distChild", "child-file")
 	err := childFilePath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
 	f, err := childFilePath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
 	assert.NilError(t, err, "Close")
-	distFilePath := repoRoot.Join("my-pkg", "dist", "dist-file")
+	distFilePath := repoRoot.UnsafeJoin("my-pkg", "dist", "dist-file")
 	f, err = distFilePath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
 	assert.NilError(t, err, "Close")
-	nextFilePath := repoRoot.Join("my-pkg", ".next", "next-file")
+	nextFilePath := repoRoot.UnsafeJoin("my-pkg", ".next", "next-file")
 	err = nextFilePath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
 	f, err = nextFilePath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
 	assert.NilError(t, err, "Close")
-	irrelevantPath := repoRoot.Join("my-pkg", "irrelevant")
+	irrelevantPath := repoRoot.UnsafeJoin("my-pkg", "irrelevant")
 	f, err = irrelevantPath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
@@ -81,7 +81,7 @@ func TestTrackOutputs(t *testing.T) {
 	// Make an irrelevant change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", "irrelevant"),
+		Path:      repoRoot.UnsafeJoin("my-pkg", "irrelevant"),
 	})
 
 	changed, err = globWatcher.GetChangedGlobs(hash, globs)
@@ -91,7 +91,7 @@ func TestTrackOutputs(t *testing.T) {
 	// Make a relevant change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", "dist", "foo"),
+		Path:      repoRoot.UnsafeJoin("my-pkg", "dist", "foo"),
 	})
 
 	changed, err = globWatcher.GetChangedGlobs(hash, globs)
@@ -103,7 +103,7 @@ func TestTrackOutputs(t *testing.T) {
 	// Change a file matching the other glob
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", ".next", "foo"),
+		Path:      repoRoot.UnsafeJoin("my-pkg", ".next", "foo"),
 	})
 	// We should no longer be watching anything, since both globs have
 	// registered changes
@@ -139,14 +139,14 @@ func TestWatchSingleFile(t *testing.T) {
 	// A change to an irrelevant file
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", ".next", "foo"),
+		Path:      repoRoot.UnsafeJoin("my-pkg", ".next", "foo"),
 	})
 	assert.Equal(t, 1, len(globWatcher.hashGlobs))
 
 	// Change the watched file
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", ".next", "next-file"),
+		Path:      repoRoot.UnsafeJoin("my-pkg", ".next", "next-file"),
 	})
 	assert.Equal(t, 0, len(globWatcher.hashGlobs))
 }

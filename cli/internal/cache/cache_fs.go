@@ -86,7 +86,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				statedFile := fs.LstatCachedFile{Path: f.repoRoot.Join(file)}
+				statedFile := fs.LstatCachedFile{Path: f.repoRoot.UnsafeJoin(file)}
 				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)

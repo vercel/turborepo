@@ -264,14 +264,14 @@ func TestParseConfig(t *testing.T) {
 		},
 		{
 			"absolute cache dir",
-			[]string{"foo", "--continue", "--cache-dir=" + defaultCwd.Join("bar").ToString()},
+			[]string{"foo", "--continue", "--cache-dir=" + defaultCwd.UnsafeJoin("bar").ToString()},
 			&Opts{
 				runOpts: runOpts{
 					continueOnError: true,
 					concurrency:     10,
 				},
 				cacheOpts: cache.Opts{
-					OverrideDir: defaultCwd.Join("bar").ToString(),
+					OverrideDir: defaultCwd.UnsafeJoin("bar").ToString(),
 					Workers:     10,
 				},
 				runcacheOpts: runcache.Opts{},

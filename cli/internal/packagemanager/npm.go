@@ -17,7 +17,7 @@ var nodejsNpm = PackageManager{
 	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json"))
+		pkg, err := fs.ReadPackageJSON(rootpath.UnsafeJoin("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -42,8 +42,8 @@ var nodejsNpm = PackageManager{
 	},
 
 	detect: func(projectDirectory turbopath.AbsolutePath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.Join(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
+		specfileExists := projectDirectory.UnsafeJoin(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.UnsafeJoin(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
 	},

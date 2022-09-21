@@ -21,7 +21,7 @@ var nodejsBerry = PackageManager{
 	PackageDir: "node_modules",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json"))
+		pkg, err := fs.ReadPackageJSON(rootpath.UnsafeJoin("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -72,8 +72,8 @@ var nodejsBerry = PackageManager{
 	// Detect for berry needs to identify which version of yarn is running on the system.
 	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
 	detect: func(projectDirectory turbopath.AbsolutePath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.Join(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
+		specfileExists := projectDirectory.UnsafeJoin(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.UnsafeJoin(packageManager.Lockfile).FileExists()
 
 		// Short-circuit, definitely not Yarn.
 		if !specfileExists || !lockfileExists {

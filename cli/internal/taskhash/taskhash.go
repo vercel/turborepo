@@ -101,12 +101,12 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
-	ignore, err := safeCompileIgnoreFile(rootPath.Join(".gitignore").ToString())
+	ignore, err := safeCompileIgnoreFile(rootPath.UnsafeJoin(".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
+	ignorePkg, err := safeCompileIgnoreFile(rootPath.UnsafeJoin(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		includePattern = "{" + strings.Join(inputs, ",") + "}"
 	}
 
-	pathPrefix := rootPath.Join(pkg.Dir.ToStringDuringMigration()).ToString()
+	pathPrefix := rootPath.UnsafeJoin(pkg.Dir.ToStringDuringMigration()).ToString()
 	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)

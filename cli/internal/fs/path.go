@@ -24,7 +24,7 @@ func ResolveUnknownPath(root turbopath.AbsolutePath, unknown string) turbopath.A
 	if filepath.IsAbs(unknown) {
 		return turbopath.AbsolutePath(unknown)
 	}
-	return root.Join(unknown)
+	return root.UnsafeJoin(unknown)
 }
 
 func UnsafeToAbsolutePath(s string) turbopath.AbsolutePath {
@@ -91,19 +91,19 @@ func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 // TempDir returns the absolute path of a directory with the given name
 // under the system's default temp directory location
 func TempDir(subDir string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(os.TempDir()).Join(subDir)
+	return turbopath.AbsolutePath(os.TempDir()).UnsafeJoin(subDir)
 }
 
 // GetTurboDataDir returns a directory outside of the repo
 // where turbo can store data files related to turbo.
 func GetTurboDataDir() turbopath.AbsolutePath {
 	dataHome := AbsolutePathFromUpstream(xdg.DataHome)
-	return dataHome.Join("turborepo")
+	return dataHome.UnsafeJoin("turborepo")
 }
 
 // GetUserConfigDir returns the platform-specific common location
 // for configuration files that belong to a user.
 func GetUserConfigDir() turbopath.AbsolutePath {
 	configHome := AbsolutePathFromUpstream(xdg.ConfigHome)
-	return configHome.Join("turborepo")
+	return configHome.UnsafeJoin("turborepo")
 }

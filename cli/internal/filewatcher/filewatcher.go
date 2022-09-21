@@ -83,7 +83,7 @@ type FileWatcher struct {
 func New(logger hclog.Logger, repoRoot turbopath.AbsolutePath, backend Backend) *FileWatcher {
 	excludes := make([]string, len(_ignores))
 	for i, ignore := range _ignores {
-		excludes[i] = filepath.ToSlash(repoRoot.Join(ignore).ToString() + "/**")
+		excludes[i] = filepath.ToSlash(repoRoot.UnsafeJoin(ignore).ToString() + "/**")
 	}
 	excludePattern := "{" + strings.Join(excludes, ",") + "}"
 	return &FileWatcher{

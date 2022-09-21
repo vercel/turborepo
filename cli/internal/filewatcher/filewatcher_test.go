@@ -69,7 +69,7 @@ func expectWatching(t *testing.T, c *testClient, dirs []turbopath.AbsolutePath) 
 	now := time.Now()
 	filename := fmt.Sprintf("test-%v", now.UnixMilli())
 	for _, dir := range dirs {
-		file := dir.Join(filename)
+		file := dir.UnsafeJoin(filename)
 		err := file.WriteFile([]byte("hello"), 0755)
 		assert.NilError(t, err, "WriteFile")
 		expectFilesystemEvent(t, c.notify, Event{
@@ -83,13 +83,13 @@ func TestFileWatching(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
-	err := repoRoot.Join(".git").MkdirAll()
+	err := repoRoot.UnsafeJoin(".git").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
-	err = repoRoot.Join("node_modules", "some-dep").MkdirAll()
+	err = repoRoot.UnsafeJoin("node_modules", "some-dep").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
-	err = repoRoot.Join("parent", "child").MkdirAll()
+	err = repoRoot.UnsafeJoin("parent", "child").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
-	err = repoRoot.Join("parent", "sibling").MkdirAll()
+	err = repoRoot.UnsafeJoin("parent", "sibling").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 
 	// Directory layout:
@@ -115,13 +115,13 @@ func TestFileWatching(t *testing.T) {
 	fw.AddClient(c)
 	expectedWatching := []turbopath.AbsolutePath{
 		repoRoot,
-		repoRoot.Join("parent"),
-		repoRoot.Join("parent", "child"),
-		repoRoot.Join("parent", "sibling"),
+		repoRoot.UnsafeJoin("parent"),
+		repoRoot.UnsafeJoin("parent", "child"),
+		repoRoot.UnsafeJoin("parent", "sibling"),
 	}
 	expectWatching(t, c, expectedWatching)
 
-	fooPath := repoRoot.Join("parent", "child", "foo")
+	fooPath := repoRoot.UnsafeJoin("parent", "child", "foo")
 	err = fooPath.WriteFile([]byte("hello"), 0644)
 	assert.NilError(t, err, "WriteFile")
 	expectFilesystemEvent(t, ch, Event{
@@ -129,23 +129,23 @@ func TestFileWatching(t *testing.T) {
 		Path:      fooPath,
 	})
 
-	deepPath := repoRoot.Join("parent", "sibling", "deep", "path")
+	deepPath := repoRoot.UnsafeJoin("parent", "sibling", "deep", "path")
 	err = deepPath.MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 	// We'll catch an event for "deep", but not "deep/path" since
 	// we don't have a recursive watch
 	expectFilesystemEvent(t, ch, Event{
-		Path:      repoRoot.Join("parent", "sibling", "deep"),
+		Path:      repoRoot.UnsafeJoin("parent", "sibling", "deep"),
 		EventType: FileAdded,
 	})
 	expectFilesystemEvent(t, ch, Event{
-		Path:      repoRoot.Join("parent", "sibling", "deep", "path"),
+		Path:      repoRoot.UnsafeJoin("parent", "sibling", "deep", "path"),
 		EventType: FileAdded,
 	})
-	expectedWatching = append(expectedWatching, deepPath, repoRoot.Join("parent", "sibling", "deep"))
+	expectedWatching = append(expectedWatching, deepPath, repoRoot.UnsafeJoin("parent", "sibling", "deep"))
 	expectWatching(t, c, expectedWatching)
 
-	gitFilePath := repoRoot.Join(".git", "git-file")
+	gitFilePath := repoRoot.UnsafeJoin(".git", "git-file")
 	err = gitFilePath.WriteFile([]byte("nope"), 0644)
 	assert.NilError(t, err, "WriteFile")
 	expectNoFilesystemEvent(t, ch)

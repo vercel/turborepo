@@ -107,7 +107,7 @@ func (cj *CookieJar) WaitForCookie() error {
 	// block sending it.
 	ch := make(chan error, 1)
 	serial := atomic.AddUint64(&cj.serial, 1)
-	cookiePath := cj.dir.Join(fmt.Sprintf("%v.cookie", serial))
+	cookiePath := cj.dir.UnsafeJoin(fmt.Sprintf("%v.cookie", serial))
 	cj.mu.Lock()
 	if cj.closed {
 		cj.mu.Unlock()
