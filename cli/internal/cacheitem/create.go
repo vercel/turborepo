@@ -5,8 +5,8 @@ import (
 	"compress/gzip"
 	"crypto/sha512"
 	"io"
-	"io/fs"
 	"os"
+	"time"
 
 	"github.com/moby/sys/sequential"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -67,7 +67,7 @@ func (ci *CacheItem) addFile(cacheAnchor turbopath.AnchoredSystemPath, fsAnchor 
 
 	// Determine if we need to populate the additional link argument to tar.FileInfoHeader.
 	var link string
-	if fileInfo.Mode()&fs.ModeSymlink != 0 {
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
 		linkTarget, readlinkErr := os.Readlink(sourcePath.ToString())
 		if readlinkErr != nil {
 			return readlinkErr
@@ -84,6 +84,18 @@ func (ci *CacheItem) addFile(cacheAnchor turbopath.AnchoredSystemPath, fsAnchor 
 	if headerErr != nil {
 		return headerErr
 	}
+
+	// Throw an error if trying to create a cache that contains a type we don't support.
+	if (header.Typeflag != tar.TypeReg) && (header.Typeflag != tar.TypeDir) && (header.Typeflag != tar.TypeSymlink) {
+		return errUnsupportedFileType
+	}
+
+	// Consistent creation.
+	header.Uid = 0
+	header.Gid = 0
+	header.AccessTime = time.Unix(0, 0)
+	header.ModTime = time.Unix(0, 0)
+	header.ChangeTime = time.Unix(0, 0)
 
 	// Always write the header.
 	if err := ci.tw.WriteHeader(header); err != nil {
