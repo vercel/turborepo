@@ -66,7 +66,7 @@ export function migratePipeline(pipeline: Pipeline) {
 
 export function migrateGlobal(config: Schema) {
   const { deps: globalDependencies, env } = migrateDependencies({
-    env: config.env,
+    env: config.globalEnv,
     deps: config.globalDependencies,
   });
   const migratedConfig = { ...config };
@@ -76,9 +76,9 @@ export function migrateGlobal(config: Schema) {
     delete migratedConfig.globalDependencies;
   }
   if (env && env.length) {
-    migratedConfig.env = env;
+    migratedConfig.globalEnv = env;
   } else {
-    delete migratedConfig.env;
+    delete migratedConfig.globalEnv;
   }
 
   return migratedConfig;

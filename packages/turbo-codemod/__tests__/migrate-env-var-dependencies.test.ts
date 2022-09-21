@@ -177,10 +177,10 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "env": Array [
+          "globalDependencies": Array [],
+          "globalEnv": Array [
             "GLOBAL_ENV_KEY",
           ],
-          "globalDependencies": Array [],
           "pipeline": Object {
             "build": Object {
               "dependsOn": Array [
@@ -265,10 +265,10 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "env": Array [
+          "globalDependencies": Array [],
+          "globalEnv": Array [
             "GLOBAL_ENV_KEY",
           ],
-          "globalDependencies": Array [],
           "pipeline": Object {
             "build": Object {
               "dependsOn": Array [
@@ -316,10 +316,10 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "env": Array [
+          "globalDependencies": Array [],
+          "globalEnv": Array [
             "GLOBAL_ENV_KEY",
           ],
-          "globalDependencies": Array [],
           "pipeline": Object {
             "build": Object {
               "dependsOn": Array [

@@ -25,7 +25,7 @@ export interface Schema {
    *
    * @default []
    */
-  env?: string[];
+  globalEnv?: string[];
 
   /**
    * An object representing the task dependency graph of your project. turbo interprets
