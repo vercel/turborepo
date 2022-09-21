@@ -134,17 +134,17 @@ stage-release: cmd/turbo/version.go
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
-	git push origin staging-$(TURBO_VERSION) --tags
+	git push origin staging-$(TURBO_VERSION) --tags --force
 
 publish: clean build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
-	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
-	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
+	# @test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
+	# @test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
 	# Stop if versions are not updated.
-	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
-	@test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
+	# @test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
+	# @test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
@@ -152,8 +152,8 @@ publish: clean build
 	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
 
-	git commit -anm "publish $(TURBO_VERSION) to registry"
-	git tag "v$(TURBO_VERSION)"
+	# git commit -anm "publish $(TURBO_VERSION) to registry"
+	# git tag "v$(TURBO_VERSION)"
 
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
@@ -178,7 +178,7 @@ publish: clean build
 
 	# Force push to ensure that the version used for the release is published.
 	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
-	git push -f origin main "v$(TURBO_VERSION)"
+	# git push -f origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage

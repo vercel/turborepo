@@ -6,27 +6,29 @@ env:
 on:
   workflow_dispatch:
     inputs:
-      increment:
-        description: "SemVer Increment"
-        required: true
-        default: "prerelease"
-        type: choice
-        options:
-          - prerelease
-          - prepatch
-          - preminor
-          - premajor
-          - patch
-          - minor
-          - major
-      identifier:
-        description: "npm Tag"
-        required: true
-        default: "canary"
-        type: choice
-        options:
-          - canary
-          - latest
+      release_branch:
+        description: "Git reference to commit to run release from"
+      # increment:
+      #   description: "SemVer Increment"
+      #   required: true
+      #   default: "prerelease"
+      #   type: choice
+      #   options:
+      #     - prerelease
+      #     - prepatch
+      #     - preminor
+      #     - premajor
+      #     - patch
+      #     - minor
+      #     - major
+      # identifier:
+      #   description: "npm Tag"
+      #   required: true
+      #   default: "canary"
+      #   type: choice
+      #   options:
+      #     - canary
+      #     - latest
 
 # Plan:
 # 1. verification step -> lint, test
@@ -37,7 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        # with:
+        with:
+          ref: "{{ inputs.release_branch }}"
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -53,7 +56,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
-        # with:
+        with:
+          ref: "{{ inputs.release_branch }}"
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -69,10 +73,10 @@ jobs:
           install-only: true
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-          cat version.txt
+      # - name: Version
+      #   run: |
+      #     ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+      #     cat version.txt
       - name: Build Artifacts
         run: cd cli && make publish-turbo-darwin
         env:
@@ -90,7 +94,8 @@ jobs:
       image: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
     steps:
       - uses: actions/checkout@v3
-        # with:
+        with:
+          ref: "{{ inputs.release_branch }}"
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -106,10 +111,10 @@ jobs:
           install-only: true
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-          cat version.txt
+      # - name: Version
+      #   run: |
+      #     ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+      #     cat version.txt
       - name: Build Artifacts
         run: cd cli && make publish-turbo-cross
         env:
@@ -125,7 +130,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        # with:
+        with:
+          ref: "{{ inputs.release_branch }}"
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -161,10 +167,10 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-          cat version.txt
+      # - name: Version
+      #   run: |
+      #     ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+      #     cat version.txt
 
       - name: Download Cross-compiled Artifacts
         uses: actions/download-artifact@v3
@@ -183,6 +189,11 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
+      - name: Merge Back To Main
+        run: |
+          git checkout main
+          git merge "{{ inputs.release_branch }}"
+          git push origin main
       # - name: Release
       #   run: cd cli && make publish
       #   env:
