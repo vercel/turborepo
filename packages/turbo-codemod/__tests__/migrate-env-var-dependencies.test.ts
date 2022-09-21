@@ -116,7 +116,7 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
-          "MY_ENV",
+          "$MY_ENV",
         ]
       `);
       expect(pipeline?.dependsOn).toMatchInlineSnapshot(`
@@ -137,7 +137,7 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
-          "MY_ENV",
+          "$MY_ENV",
           "SUPER_COOL",
         ]
       `);
@@ -159,6 +159,7 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
+          "$MY_ENV",
           "MY_ENV",
         ]
       `);
@@ -294,7 +295,7 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
-                "MY_ENV",
+                "$MY_ENV",
                 "SUPER_COOL",
               ],
               "outputs": Array [
@@ -345,6 +346,7 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
+                "$MY_ENV",
                 "MY_ENV",
               ],
               "outputs": Array [
