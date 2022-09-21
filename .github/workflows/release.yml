@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: "{{ inputs.release_branch }}"
+          ref: ${{ inputs.release_branch }}
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: "{{ inputs.release_branch }}"
+          ref: ${{ inputs.release_branch }}
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -95,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: "{{ inputs.release_branch }}"
+          ref: "${{ inputs.release_branch }}"
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -131,7 +131,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: "{{ inputs.release_branch }}"
+          ref: "${{ inputs.release_branch }}"
         #   token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
@@ -192,7 +192,7 @@ jobs:
       - name: Merge Back To Main
         run: |
           git checkout main
-          git merge "{{ inputs.release_branch }}"
+          git merge "${{ inputs.release_branch }}"
           git push origin main
       # - name: Release
       #   run: cd cli && make publish
