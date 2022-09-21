@@ -22,7 +22,7 @@ type tarFile struct {
 	*tar.Header
 }
 
-type diskFile struct {
+type restoreFile struct {
 	Name     string
 	Linkname string
 	fs.FileMode
@@ -77,7 +77,7 @@ func generateAnchor(t *testing.T) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(anchorPoint)
 }
 
-func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFile diskFile) {
+func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFile restoreFile) {
 	t.Helper()
 	// If we have gotten here we can assume this to be true.
 	processedName := turbopath.AnchoredSystemPath(diskFile.Name)
@@ -105,7 +105,7 @@ func TestOpen(t *testing.T) {
 		name      string
 		tarFiles  []tarFile
 		want      []turbopath.AnchoredSystemPath
-		wantFiles []diskFile
+		wantFiles []restoreFile
 		wantErr   wantErr
 	}{
 		{
@@ -126,7 +126,7 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "source",
 					Linkname: "target",
@@ -157,7 +157,7 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "folder",
 					FileMode: 0 | os.ModeDir | 0755,
@@ -194,7 +194,7 @@ func TestOpen(t *testing.T) {
 					Body: "folder-sibling",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "folder",
 					FileMode: 0 | os.ModeDir | 0755,
@@ -247,7 +247,7 @@ func TestOpen(t *testing.T) {
 					Body: "real",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "one",
 					Linkname: "two",
@@ -297,7 +297,7 @@ func TestOpen(t *testing.T) {
 					Body: "this shouldn't work",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "folder-not-file",
 					FileMode: 0 | os.ModeDir,
@@ -371,7 +371,7 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
-			wantFiles: []diskFile{},
+			wantFiles: []restoreFile{},
 			want:      []turbopath.AnchoredSystemPath{},
 			wantErr: wantErr{
 				unix:    errCycleDetected,
@@ -410,7 +410,7 @@ func TestOpen(t *testing.T) {
 					Body: "real",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "one",
 					Linkname: "real",
@@ -441,7 +441,7 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "escape",
 					Linkname: "../",
@@ -465,7 +465,7 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []diskFile{},
+			wantFiles: []restoreFile{},
 			want:      []turbopath.AnchoredSystemPath{},
 			wantErr: wantErr{
 				unix:    errNameMalformed,
@@ -483,7 +483,7 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []diskFile{
+			wantFiles: []restoreFile{
 				{
 					Name:     "back\\slash\\file",
 					FileMode: 0,
@@ -505,7 +505,7 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
-			wantFiles: []diskFile{},
+			wantFiles: []restoreFile{},
 			want:      []turbopath.AnchoredSystemPath{},
 			wantErr: wantErr{
 				unix:    errUnsupportedFileType,
