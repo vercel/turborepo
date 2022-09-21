@@ -181,7 +181,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	for _, dependency := range rawPipeline.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
-			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use npx @turbo/codemod.\n", dependency)
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
@@ -229,7 +229,7 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 
 	for _, value := range raw.GlobalDependencies {
 		if strings.HasPrefix(value, envPipelineDelimiter) {
-			log.Printf("[DEPRECATED] Declaring an environment variable in \"globalDependencies\" is deprecated, found %s. Use the \"globalEnv\" key or use npx @turbo/codemod.\n", value)
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"globalDependencies\" is deprecated, found %s. Use the \"globalEnv\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", value)
 			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
 		} else {
 			globalFileDependencies.Add(value)
