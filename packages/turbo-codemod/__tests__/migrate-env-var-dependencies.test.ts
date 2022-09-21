@@ -4,9 +4,9 @@ import {
   migratePipeline,
   migrateConfig,
 } from "../src/transforms/migrate-env-var-dependencies";
-import { TurboConfig } from "../src/types";
+import type { Schema } from "turbo-types";
 
-const getTestTurboConfig = (override: TurboConfig = {}): TurboConfig => {
+const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
   const config = {
     $schema: "./docs/public/schema.json",
     globalDependencies: ["$GLOBAL_ENV_KEY"],
@@ -79,7 +79,7 @@ describe("migrate-env-var-dependencies", () => {
   describe("migratePipeline", () => {
     it("migrates pipeline with env var dependencies", async () => {
       const config = getTestTurboConfig();
-      const { build } = config?.pipeline ?? {};
+      const { build } = config.pipeline;
       const pipeline = migratePipeline(build);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
@@ -97,7 +97,7 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates pipeline with no env var dependencies", async () => {
       const config = getTestTurboConfig();
-      const { test } = config?.pipeline ?? {};
+      const { test } = config.pipeline;
       const pipeline = migratePipeline(test);
       expect(pipeline.env).toBeUndefined();
       expect(pipeline?.dependsOn).toMatchInlineSnapshot(`
@@ -111,7 +111,7 @@ describe("migrate-env-var-dependencies", () => {
       const config = getTestTurboConfig({
         pipeline: { test: { env: ["$MY_ENV"], dependsOn: ["^build"] } },
       });
-      const { test } = config?.pipeline ?? {};
+      const { test } = config.pipeline;
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
@@ -132,7 +132,7 @@ describe("migrate-env-var-dependencies", () => {
           test: { env: ["$MY_ENV"], dependsOn: ["^build", "$SUPER_COOL"] },
         },
       });
-      const { test } = config?.pipeline ?? {};
+      const { test } = config.pipeline;
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
@@ -154,7 +154,7 @@ describe("migrate-env-var-dependencies", () => {
           test: { env: ["$MY_ENV"], dependsOn: ["^build", "$MY_ENV"] },
         },
       });
-      const { test } = config?.pipeline ?? {};
+      const { test } = config.pipeline;
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`

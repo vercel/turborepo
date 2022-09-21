@@ -1,13 +1,14 @@
 import fs from "fs-extra";
 import path from "path";
-import { Flags, Pipeline, TurboConfig } from "../types";
+import { Flags } from "../types";
+import type { Schema, Pipeline } from "turbo-types";
 import chalk from "chalk";
 import { skip, ok, error } from "../logger";
 
-export function hasLegacyEnvVarDependencies(config: TurboConfig) {
+export function hasLegacyEnvVarDependencies(config: Schema) {
   const dependsOn = [
     config.globalDependencies,
-    Object.values(config.pipeline ?? []).flatMap(
+    Object.values(config.pipeline).flatMap(
       (pipeline) => pipeline.dependsOn ?? []
     ),
   ].flat();
@@ -61,7 +62,7 @@ export function migratePipeline(pipeline: Pipeline) {
   return migratedPipeline;
 }
 
-export function migrateGlobal(config: TurboConfig) {
+export function migrateGlobal(config: Schema) {
   const { deps: globalDependencies, env } = migrateDependencies({
     env: config.env,
     deps: config.globalDependencies,
@@ -81,19 +82,17 @@ export function migrateGlobal(config: TurboConfig) {
   return migratedConfig;
 }
 
-export function migrateConfig(config: TurboConfig) {
+export function migrateConfig(config: Schema) {
   let migratedConfig = migrateGlobal(config);
-  if (config.pipeline) {
-    Object.keys(config.pipeline).forEach((pipelineKey) => {
-      if (migratedConfig.pipeline && config.pipeline?.[pipelineKey]) {
-        const pipeline = migratedConfig.pipeline?.[pipelineKey];
-        migratedConfig.pipeline[pipelineKey] = {
-          ...pipeline,
-          ...migratePipeline(pipeline),
-        };
-      }
-    });
-  }
+  Object.keys(config.pipeline).forEach((pipelineKey) => {
+    if (migratedConfig.pipeline && config.pipeline?.[pipelineKey]) {
+      const pipeline = migratedConfig.pipeline?.[pipelineKey];
+      migratedConfig.pipeline[pipelineKey] = {
+        ...pipeline,
+        ...migratePipeline(pipeline),
+      };
+    }
+  });
   return migratedConfig;
 }
 

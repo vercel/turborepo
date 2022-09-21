@@ -4,15 +4,13 @@ export interface Schema {
   $schema?: string;
 
   /**
-   * A list of globs and environment variables for implicit global hash dependencies.
-   * Environment variables should be prefixed with $ (e.g. $GITHUB_TOKEN).
+   * A list of globs for implicit global hash dependencies.
    *
-   * Any other entry without this prefix, will be considered filesystem glob. The
-   * contents of these files will be included in the global hashing algorithm and affect
-   * the hashes of all tasks.
+   * The contents of these files will be included in the global hashing
+   * algorithm and affect the hashes of all tasks.
    *
-   * This is useful for busting the cache based on .env files (not in Git), environment
-   * variables, or any root level file that impacts package tasks (but are not represented
+   * This is useful for busting the cache based on .env files (not in Git),
+   * or any root level file that impacts package tasks (but are not represented
    * in the traditional dependency graph
    *
    * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)).
@@ -20,6 +18,14 @@ export interface Schema {
    * @default []
    */
   globalDependencies?: string[];
+
+  /**
+   * A list of environment variables, prefixed with $ (e.g. $GITHUB_TOKEN),
+   * for implicit global hash dependencies.
+   *
+   * @default []
+   */
+  env?: string[];
 
   /**
    * An object representing the task dependency graph of your project. turbo interprets
@@ -57,12 +63,16 @@ export interface Pipeline {
    * package level (e.g. "a package's test and lint commands depend on build being
    * completed first").
    *
-   * Prefixing an item in dependsOn with a $ tells turbo that this pipeline task depends
-   * the value of that environment variable.
-   *
    * @default []
    */
   dependsOn?: string[];
+
+  /**
+   * A list of environment variables, prefixed with $ (e.g. $GITHUB_TOKEN), that this task depends on.
+   *
+   * @default []
+   */
+  env?: string[];
 
   /**
    * The set of glob patterns of a task's cacheable filesystem outputs.
