@@ -73,41 +73,39 @@ func fileExists(filename string) bool {
 }
 
 func (p AbsoluteSystemPath) ToStringDuringMigration() string {
-	return p.asString()
+	return p.ToString()
 }
 
 func (p AbsoluteSystemPath) UnsafeJoin(args ...string) AbsoluteSystemPath {
-	return AbsoluteSystemPath(filepath.Join(p.asString(), filepath.Join(args...)))
+	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(args...)))
 }
-func (p AbsoluteSystemPath) asString() string {
-	return string(p)
-}
+
 func (p AbsoluteSystemPath) Dir() AbsoluteSystemPath {
-	return AbsoluteSystemPath(filepath.Dir(p.asString()))
+	return AbsoluteSystemPath(filepath.Dir(p.ToString()))
 }
 
 // MkdirAll implements os.MkdirAll(p, DirPermissions|0644)
 func (p AbsoluteSystemPath) MkdirAll() error {
-	return os.MkdirAll(p.asString(), dirPermissions|0644)
+	return os.MkdirAll(p.ToString(), dirPermissions|0644)
 }
 
 // Open implements os.Open(p) for an absolute path
 func (p AbsoluteSystemPath) Open() (*os.File, error) {
-	return os.Open(p.asString())
+	return os.Open(p.ToString())
 }
 
 // OpenFile implements os.OpenFile for an absolute path
 func (p AbsoluteSystemPath) OpenFile(flags int, mode os.FileMode) (*os.File, error) {
-	return os.OpenFile(p.asString(), flags, mode)
+	return os.OpenFile(p.ToString(), flags, mode)
 }
 
 func (p AbsoluteSystemPath) FileExists() bool {
-	return fileExists(p.asString())
+	return fileExists(p.ToString())
 }
 
 // Lstat implements os.Lstat for absolute path
 func (p AbsoluteSystemPath) Lstat() (os.FileInfo, error) {
-	return os.Lstat(p.asString())
+	return os.Lstat(p.ToString())
 }
 
 // DirExists returns true if this path points to a directory
@@ -119,78 +117,78 @@ func (p AbsoluteSystemPath) DirExists() bool {
 // ContainsPath returns true if this absolute path is a parent of the
 // argument.
 func (p AbsoluteSystemPath) ContainsPath(other AbsoluteSystemPath) (bool, error) {
-	return dirContainsPath(p.asString(), other.asString())
+	return dirContainsPath(p.ToString(), other.ToString())
 }
 
 // ReadFile reads the contents of the specified file
 func (p AbsoluteSystemPath) ReadFile() ([]byte, error) {
-	return ioutil.ReadFile(p.asString())
+	return ioutil.ReadFile(p.ToString())
 }
 
 // WriteFile writes the contents of the specified file
 func (p AbsoluteSystemPath) WriteFile(contents []byte, mode os.FileMode) error {
-	return ioutil.WriteFile(p.asString(), contents, mode)
+	return ioutil.WriteFile(p.ToString(), contents, mode)
 }
 
 // EnsureDir ensures that the directory containing this file exists
 func (p AbsoluteSystemPath) EnsureDir() error {
-	return ensureDir(p.asString())
+	return ensureDir(p.ToString())
 }
 
 // Create is the AbsolutePath wrapper for os.Create
 func (p AbsoluteSystemPath) Create() (*os.File, error) {
-	return os.Create(p.asString())
+	return os.Create(p.ToString())
 }
 
 // Ext implements filepath.Ext(p) for an absolute path
 func (p AbsoluteSystemPath) Ext() string {
-	return filepath.Ext(p.asString())
+	return filepath.Ext(p.ToString())
 }
 
 // RelativePathString returns the relative path from this AbsolutePath to another absolute path in string form as a string
 func (p AbsoluteSystemPath) RelativePathString(path string) (string, error) {
-	return filepath.Rel(p.asString(), path)
+	return filepath.Rel(p.ToString(), path)
 }
 
 // PathTo returns the relative path between two absolute paths
 // This should likely eventually return an AnchoredSystemPath
 func (p AbsoluteSystemPath) PathTo(other AbsoluteSystemPath) (string, error) {
-	return p.RelativePathString(other.asString())
+	return p.RelativePathString(other.ToString())
 }
 
 // Symlink implements os.Symlink(target, p) for absolute path
 func (p AbsoluteSystemPath) Symlink(target string) error {
-	return os.Symlink(target, p.asString())
+	return os.Symlink(target, p.ToString())
 }
 
 // Readlink implements os.Readlink(p) for an absolute path
 func (p AbsoluteSystemPath) Readlink() (string, error) {
-	return os.Readlink(p.asString())
+	return os.Readlink(p.ToString())
 }
 
 // Remove removes the file or (empty) directory at the given path
 func (p AbsoluteSystemPath) Remove() error {
-	return os.Remove(p.asString())
+	return os.Remove(p.ToString())
 }
 
 // RemoveAll implements os.RemoveAll for absolute paths.
 func (p AbsoluteSystemPath) RemoveAll() error {
-	return os.RemoveAll(p.asString())
+	return os.RemoveAll(p.ToString())
 }
 
 // Base implements filepath.Base for an absolute path
 func (p AbsoluteSystemPath) Base() string {
-	return filepath.Base(p.asString())
+	return filepath.Base(p.ToString())
 }
 
 // Rename implements os.Rename(p, dest) for absolute paths
 func (p AbsoluteSystemPath) Rename(dest AbsoluteSystemPath) error {
-	return os.Rename(p.asString(), dest.asString())
+	return os.Rename(p.ToString(), dest.ToString())
 }
 
 // EvalSymlinks implements filepath.EvalSymlinks for absolute path
 func (p AbsoluteSystemPath) EvalSymlinks() (AbsoluteSystemPath, error) {
-	result, err := filepath.EvalSymlinks(p.asString())
+	result, err := filepath.EvalSymlinks(p.ToString())
 	if err != nil {
 		return "", err
 	}
