@@ -192,12 +192,13 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
+      - name: Release
+        run: cd cli && make publish
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
       - name: Merge Back To Main
         run: |
           git checkout main
           git merge "${{ inputs.release_branch }}"
           git push origin main
-      # - name: Release
-      #   run: cd cli && make publish
-      #   env:
-      #     GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
