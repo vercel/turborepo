@@ -38,6 +38,10 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
       - name: Version
         run: |
           ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
