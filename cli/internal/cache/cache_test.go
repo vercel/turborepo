@@ -133,7 +133,7 @@ func TestExists(t *testing.T) {
 		t.Errorf("got error verifying files: %v", err)
 	}
 	if cacheState.Local {
-		t.Error("did not expect has to exist")
+		t.Error("did not expect file to exist")
 	}
 
 	err = mplex.Put("unused-target", "some-hash", 5, []string{"a-file"})
