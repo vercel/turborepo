@@ -178,13 +178,13 @@ jobs:
       - name: Download Cross-compiled Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: turbo-snapshot-cross
+          name: turbo-artifacts-cross
           path: cli/dist-cross
 
       - name: Download Darwin Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: turbo-snapshot-darwin
+          name: turbo-artifacts-darwin
           path: cli/dist-darwin
 
       - name: Combine Artifacts
