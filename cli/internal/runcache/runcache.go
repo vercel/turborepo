@@ -270,17 +270,17 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
-	negatedGlobs := make([]string, 0)
+	negativeGlobs := make([]string, 0)
 	positiveGlobs := make([]string, 0)
 	for _, glob := range tc.repoRelativeGlobs {
 		if glob[0] == '!' {
-			negatedGlobs = append(negatedGlobs, glob)
+			negativeGlobs = append(negativeGlobs, glob[1:])
 		} else {
 			positiveGlobs = append(positiveGlobs, glob)
 		}
 	}
 
-	filesToBeCached, err := globby.GlobFiles(tc.rc.repoRoot.ToStringDuringMigration(), positiveGlobs, negatedGlobs)
+	filesToBeCached, err := globby.GlobFiles(tc.rc.repoRoot.ToStringDuringMigration(), positiveGlobs, negativeGlobs)
 	if err != nil {
 		return err
 	}
