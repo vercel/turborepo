@@ -143,7 +143,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		}
 	}
 	for _, workspacePackage := range workspacePackages {
-		expectedReference := fmt.Sprintf("workspace:%s", workspacePackage.ToString())
+		expectedReference := fmt.Sprintf("workspace:%s", workspacePackage.ToUnixPath().ToString())
 		for locator, pkg := range l.packages {
 			if locator.reference == expectedReference {
 				prunedPackages[locator] = pkg
