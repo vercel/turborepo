@@ -17,7 +17,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - uses: Swatinem/rust-cache@v1
         with:
@@ -52,7 +53,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - uses: Swatinem/rust-cache@v1
         with:
@@ -111,7 +113,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Install cargo rustfmt
         run: rustup component add rustfmt
@@ -121,6 +124,7 @@ jobs:
         with:
           command: fmt
           args: --check
+
       - name: Setup node
         uses: actions/setup-node@v3
         with:
