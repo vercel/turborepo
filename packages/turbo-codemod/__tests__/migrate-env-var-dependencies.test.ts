@@ -84,8 +84,8 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
-          "$TASK_ENV_KEY",
-          "$ANOTHER_ENV_KEY",
+          "TASK_ENV_KEY",
+          "ANOTHER_ENV_KEY",
         ]
       `);
       expect(pipeline?.dependsOn).toMatchInlineSnapshot(`
@@ -116,7 +116,7 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
-          "$MY_ENV",
+          "MY_ENV",
         ]
       `);
       expect(pipeline?.dependsOn).toMatchInlineSnapshot(`
@@ -137,8 +137,8 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
-          "$MY_ENV",
-          "$SUPER_COOL",
+          "MY_ENV",
+          "SUPER_COOL",
         ]
       `);
       expect(pipeline?.dependsOn).toMatchInlineSnapshot(`
@@ -159,7 +159,7 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toHaveProperty("env");
       expect(pipeline?.env).toMatchInlineSnapshot(`
         Array [
-          "$MY_ENV",
+          "MY_ENV",
         ]
       `);
       expect(pipeline?.dependsOn).toMatchInlineSnapshot(`
@@ -178,7 +178,7 @@ describe("migrate-env-var-dependencies", () => {
         Object {
           "$schema": "./docs/public/schema.json",
           "env": Array [
-            "$GLOBAL_ENV_KEY",
+            "GLOBAL_ENV_KEY",
           ],
           "globalDependencies": Array [],
           "pipeline": Object {
@@ -187,8 +187,8 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
-                "$TASK_ENV_KEY",
-                "$ANOTHER_ENV_KEY",
+                "TASK_ENV_KEY",
+                "ANOTHER_ENV_KEY",
               ],
               "outputs": Array [
                 "dist/**/*",
@@ -266,7 +266,7 @@ describe("migrate-env-var-dependencies", () => {
         Object {
           "$schema": "./docs/public/schema.json",
           "env": Array [
-            "$GLOBAL_ENV_KEY",
+            "GLOBAL_ENV_KEY",
           ],
           "globalDependencies": Array [],
           "pipeline": Object {
@@ -275,8 +275,8 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
-                "$TASK_ENV_KEY",
-                "$ANOTHER_ENV_KEY",
+                "TASK_ENV_KEY",
+                "ANOTHER_ENV_KEY",
               ],
               "outputs": Array [
                 "dist/**/*",
@@ -294,8 +294,8 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
-                "$MY_ENV",
-                "$SUPER_COOL",
+                "MY_ENV",
+                "SUPER_COOL",
               ],
               "outputs": Array [
                 "coverage/**/*",
@@ -317,7 +317,7 @@ describe("migrate-env-var-dependencies", () => {
         Object {
           "$schema": "./docs/public/schema.json",
           "env": Array [
-            "$GLOBAL_ENV_KEY",
+            "GLOBAL_ENV_KEY",
           ],
           "globalDependencies": Array [],
           "pipeline": Object {
@@ -326,8 +326,8 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
-                "$TASK_ENV_KEY",
-                "$ANOTHER_ENV_KEY",
+                "TASK_ENV_KEY",
+                "ANOTHER_ENV_KEY",
               ],
               "outputs": Array [
                 "dist/**/*",
@@ -345,7 +345,7 @@ describe("migrate-env-var-dependencies", () => {
                 "^build",
               ],
               "env": Array [
-                "$MY_ENV",
+                "MY_ENV",
               ],
               "outputs": Array [
                 "coverage/**/*",

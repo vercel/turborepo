@@ -23,11 +23,13 @@ export function migrateDependencies({
   env?: string[];
   deps?: string[];
 }) {
-  const envDeps: Set<string> = new Set(env);
+  const envDeps: Set<string> = new Set(
+    env?.map((e) => (e.startsWith("$") ? e.slice(1) : e))
+  );
   const otherDeps: string[] = [];
   deps?.forEach((dep) => {
     if (dep?.startsWith("$")) {
-      envDeps.add(dep);
+      envDeps.add(dep.slice(1));
     } else {
       otherDeps.push(dep);
     }
