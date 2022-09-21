@@ -94,7 +94,7 @@ func (c *Connector) wrapConnectionError(err error) error {
 // lockFile returns a pointer to where a lockfile should be.
 // lockfile.New does not perform IO and the only error it produces
 // is in the case a non-absolute path was provided. We're guaranteeing an
-// turbopath.AbsolutePath, so an error here is an indication of a bug and
+// turbopath.AbsoluteSystemPath, so an error here is an indication of a bug and
 // we should crash.
 func (c *Connector) lockFile() lockfile.Lockfile {
 	lockFile, err := lockfile.New(c.PidPath.ToString())

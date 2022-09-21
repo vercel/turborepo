@@ -34,7 +34,7 @@ func UnsafeToAbsolutePath(s string) turbopath.AbsoluteSystemPath {
 // AbsolutePathFromUpstream is used to mark return values from APIs that we
 // expect to give us absolute paths. No checking is performed.
 // Prefer to use this over a cast to maintain the search-ability of interfaces
-// into and out of the turbopath.AbsolutePath type.
+// into and out of the turbopath.AbsoluteSystemPath type.
 func AbsolutePathFromUpstream(s string) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(s)
 }

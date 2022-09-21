@@ -865,7 +865,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 
 	cmd := exec.Command(e.packageManager.Command, argsactual...)
 	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
-	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsolutePath to
+	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsoluteSystemPath to
 	// AbsoluteSystemPath
 	cmd.Dir = e.repoRoot.UnsafeJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)

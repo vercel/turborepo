@@ -135,7 +135,7 @@ func (p AbsoluteSystemPath) EnsureDir() error {
 	return ensureDir(p.ToString())
 }
 
-// Create is the AbsolutePath wrapper for os.Create
+// Create is the AbsoluteSystemPath wrapper for os.Create
 func (p AbsoluteSystemPath) Create() (*os.File, error) {
 	return os.Create(p.ToString())
 }
@@ -145,7 +145,7 @@ func (p AbsoluteSystemPath) Ext() string {
 	return filepath.Ext(p.ToString())
 }
 
-// RelativePathString returns the relative path from this AbsolutePath to another absolute path in string form as a string
+// RelativePathString returns the relative path from this AbsoluteSystemPath to another absolute path in string form as a string
 func (p AbsoluteSystemPath) RelativePathString(path string) (string, error) {
 	return filepath.Rel(p.ToString(), path)
 }
