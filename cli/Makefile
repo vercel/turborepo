@@ -147,10 +147,10 @@ publish: clean build
 	# @test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
-	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	# cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
+	# cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
+	# # cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
+	# cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
+	# cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
 
 	# git commit -anm "publish $(TURBO_VERSION) to registry"
 	# git tag "v$(TURBO_VERSION)"
