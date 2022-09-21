@@ -189,7 +189,7 @@ Otherwise, you could ship a cached build with the wrong environment variables!
 You can control `turbo`'s caching behavior based on
 the values of environment variables:
 
-- Including environment variables in a `env` in your `pipeline` definition will impact the cache fingerprint on a per-task or per-workspace-task basis.
+- Including environment variables in the `env` key in your `pipeline` definition will impact the cache fingerprint on a per-task or per-workspace-task basis.
 - The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```jsonc
