@@ -260,8 +260,6 @@ func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
 	return fwc, nil
 }
 
-var _emptyIgnore []string
-
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
 func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
