@@ -284,12 +284,8 @@ func (mplex *cacheMultiplexer) Exists(target string) (CacheState, error) {
 		if err != nil {
 			return syncCacheState, err
 		}
-		if cacheState.Local == true {
-			syncCacheState.Local = syncCacheState.Local || cacheState.Local
-		}
-		if cacheState.Remote == true {
-			syncCacheState.Remote = syncCacheState.Remote || cacheState.Remote
-		}
+		syncCacheState.Local = syncCacheState.Local || cacheState.Local
+		syncCacheState.Remote = syncCacheState.Remote || cacheState.Remote
 	}
 
 	return syncCacheState, nil
