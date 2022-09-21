@@ -190,10 +190,6 @@ jobs:
           description: Testing...
           url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
 
-      - name: Install nextest
-        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-        shell: bash
-
       - name: Run cargo test on benchmarks
         uses: actions-rs/cargo@v1
         timeout-minutes: 120
