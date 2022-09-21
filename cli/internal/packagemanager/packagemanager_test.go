@@ -227,11 +227,11 @@ func Test_GetWorkspaces(t *testing.T) {
 	repoRoot, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
 	rootPath := map[string]turbopath.AbsoluteSystemPath{
-		"nodejs-npm":   repoRoot.UnsafeJoin("../../../examples/basic"),
-		"nodejs-berry": repoRoot.UnsafeJoin("../../../examples/basic"),
-		"nodejs-yarn":  repoRoot.UnsafeJoin("../../../examples/basic"),
-		"nodejs-pnpm":  repoRoot.UnsafeJoin("../../../examples/with-pnpm"),
-		"nodejs-pnpm6": repoRoot.UnsafeJoin("../../../examples/with-pnpm"),
+		"nodejs-npm":   repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-berry": repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-yarn":  repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-pnpm":  repoRoot.UntypedJoin("../../../examples/with-pnpm"),
+		"nodejs-pnpm6": repoRoot.UntypedJoin("../../../examples/with-pnpm"),
 	}
 
 	want := map[string][]string{
@@ -328,7 +328,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.UnsafeJoin("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("../../../examples/basic"),
 			want:     want[packageManager.Name],
 			wantErr:  false,
 		}
@@ -383,7 +383,7 @@ func Test_CanPrune(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.UnsafeJoin("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("../../../examples/basic"),
 			want:     wants[packageManager.Name].want,
 			wantErr:  wants[packageManager.Name].wantErr,
 		}

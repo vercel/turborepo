@@ -175,7 +175,7 @@ func (pm PackageManager) ReadLockfile(cacheDir turbopath.AbsoluteSystemPath, pro
 	if pm.readLockfile == nil {
 		return nil, nil
 	}
-	contents, err := os.ReadFile(string(projectDirectory.UnsafeJoin(pm.Lockfile)))
+	contents, err := os.ReadFile(string(projectDirectory.UntypedJoin(pm.Lockfile)))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
 	}

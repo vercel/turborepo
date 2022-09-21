@@ -28,7 +28,7 @@ type PackageDepsOptions struct {
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
-	pkgPath := rootPath.UnsafeJoin(p.PackagePath.ToStringDuringMigration())
+	pkgPath := rootPath.UntypedJoin(p.PackagePath.ToStringDuringMigration())
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
 
@@ -55,7 +55,7 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 		// Prepend the package path to each of the input patterns.
 		prefixedInputPatterns := make([]string, len(calculatedInputs))
 		for index, pattern := range calculatedInputs {
-			rerooted, err := rootPath.PathTo(pkgPath.UnsafeJoin(pattern))
+			rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern))
 			if err != nil {
 				return nil, err
 			}

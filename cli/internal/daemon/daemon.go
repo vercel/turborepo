@@ -44,7 +44,7 @@ func getRepoHash(repoRoot turbopath.AbsoluteSystemPath) string {
 func getDaemonFileRoot(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	tempDir := fs.TempDir("turbod")
 	hexHash := getRepoHash(repoRoot)
-	return tempDir.UnsafeJoin(hexHash)
+	return tempDir.UntypedJoin(hexHash)
 }
 
 func getLogFilePath(repoRoot turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystemPath, error) {
@@ -52,18 +52,18 @@ func getLogFilePath(repoRoot turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSy
 	base := repoRoot.Base()
 	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
 
-	logsDir := fs.GetTurboDataDir().UnsafeJoin("logs")
-	return logsDir.UnsafeJoin(logFilename), nil
+	logsDir := fs.GetTurboDataDir().UntypedJoin("logs")
+	return logsDir.UntypedJoin(logFilename), nil
 }
 
 func getUnixSocket(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	root := getDaemonFileRoot(repoRoot)
-	return root.UnsafeJoin("turbod.sock")
+	return root.UntypedJoin("turbod.sock")
 }
 
 func getPidFile(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	root := getDaemonFileRoot(repoRoot)
-	return root.UnsafeJoin("turbod.pid")
+	return root.UntypedJoin("turbod.pid")
 }
 
 // logError logs an error and outputs it to the UI.

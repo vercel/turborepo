@@ -64,7 +64,7 @@ var _defaultCookieTimeout = 500 * time.Millisecond
 
 // New returns a new instance of Server
 func New(serverName string, logger hclog.Logger, repoRoot turbopath.AbsoluteSystemPath, turboVersion string, logFilePath turbopath.AbsoluteSystemPath) (*Server, error) {
-	cookieDir := fs.GetTurboDataDir().UnsafeJoin("cookies", serverName)
+	cookieDir := fs.GetTurboDataDir().UntypedJoin("cookies", serverName)
 	cookieJar, err := filewatcher.NewCookieJar(cookieDir, _defaultCookieTimeout)
 	if err != nil {
 		return nil, err

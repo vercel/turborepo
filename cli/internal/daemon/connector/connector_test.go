@@ -34,11 +34,11 @@ func testBin() string {
 }
 
 func getUnixSocket(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
-	return dir.UnsafeJoin("turbod-test.sock")
+	return dir.UntypedJoin("turbod-test.sock")
 }
 
 func getPidFile(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
-	return dir.UnsafeJoin("turbod-test.pid")
+	return dir.UntypedJoin("turbod-test.pid")
 }
 
 func TestConnectFailsWithoutGrpcServer(t *testing.T) {

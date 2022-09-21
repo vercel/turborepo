@@ -10,7 +10,7 @@ import (
 )
 
 func TestReadRepoConfigWhenMissing(t *testing.T) {
-	testDir := fs.AbsolutePathFromUpstream(t.TempDir()).UnsafeJoin("config.json")
+	testDir := fs.AbsolutePathFromUpstream(t.TempDir()).UntypedJoin("config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
@@ -24,7 +24,7 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 }
 
 func TestRepoConfigIncludesDefaults(t *testing.T) {
-	testConfigFile := fs.AbsolutePathFromUpstream(t.TempDir()).UnsafeJoin("turborepo", "config.json")
+	testConfigFile := fs.AbsolutePathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
@@ -49,7 +49,7 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 
 func TestWriteRepoConfig(t *testing.T) {
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
-	testConfigFile := repoRoot.UnsafeJoin(".turbo", "config.json")
+	testConfigFile := repoRoot.UntypedJoin(".turbo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
@@ -80,7 +80,7 @@ func TestWriteRepoConfig(t *testing.T) {
 }
 
 func TestWriteUserConfig(t *testing.T) {
-	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).UnsafeJoin("turborepo", "config.json")
+	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddUserConfigFlags(flags)
 	// Non-existent config file should get empty values
@@ -108,7 +108,7 @@ func TestWriteUserConfig(t *testing.T) {
 }
 
 func TestUserConfigFlags(t *testing.T) {
-	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).UnsafeJoin("turborepo", "config.json")
+	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddUserConfigFlags(flags)
 

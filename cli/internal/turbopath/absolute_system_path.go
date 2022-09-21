@@ -76,7 +76,7 @@ func (p AbsoluteSystemPath) ToStringDuringMigration() string {
 	return p.ToString()
 }
 
-func (p AbsoluteSystemPath) UnsafeJoin(args ...string) AbsoluteSystemPath {
+func (p AbsoluteSystemPath) UntypedJoin(args ...string) AbsoluteSystemPath {
 	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(args...)))
 }
 

@@ -96,7 +96,7 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 	config.AddRepoConfigFlags(flags)
 	assert.NilError(t, flags.Set("login", "login-url"))
 	assert.NilError(t, flags.Set("api", "api-url"))
-	userConfigPath := fs.AbsolutePathFromUpstream(t.TempDir()).UnsafeJoin("turborepo")
+	userConfigPath := fs.AbsolutePathFromUpstream(t.TempDir()).UntypedJoin("turborepo")
 	userConfig, err := config.ReadUserConfigFile(userConfigPath, flags)
 	if err != nil {
 		t.Fatalf("setting up user config: %v", err)

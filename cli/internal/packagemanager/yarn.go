@@ -22,7 +22,7 @@ var nodejsYarn = PackageManager{
 	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(rootpath.UnsafeJoin("package.json"))
+		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -78,8 +78,8 @@ var nodejsYarn = PackageManager{
 
 	// Detect for yarn needs to identify which version of yarn is running on the system.
 	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UnsafeJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UnsafeJoin(packageManager.Lockfile).FileExists()
+		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
 
 		// Short-circuit, definitely not Yarn.
 		if !specfileExists || !lockfileExists {

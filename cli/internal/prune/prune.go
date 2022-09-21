@@ -83,7 +83,7 @@ type prune struct {
 // Prune creates a smaller monorepo with only the required workspaces
 func (p *prune) prune(opts *opts) error {
 	cacheDir := cache.DefaultLocation(p.base.RepoRoot)
-	rootPackageJSONPath := p.base.RepoRoot.UnsafeJoin("package.json")
+	rootPackageJSONPath := p.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
@@ -97,10 +97,10 @@ func (p *prune) prune(opts *opts) error {
 	if !scopeIsValid {
 		return errors.Errorf("invalid scope: package %v not found", opts.scope)
 	}
-	outDir := p.base.RepoRoot.UnsafeJoin(opts.outputDir)
+	outDir := p.base.RepoRoot.UntypedJoin(opts.outputDir)
 	fullDir := outDir
 	if opts.docker {
-		fullDir = fullDir.UnsafeJoin("full")
+		fullDir = fullDir.UntypedJoin("full")
 	}
 
 	p.base.Logger.Trace("target", "value", target.Name)
@@ -120,13 +120,13 @@ func (p *prune) prune(opts *opts) error {
 
 	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
 
-	packageJSONPath := outDir.UnsafeJoin("package.json")
+	packageJSONPath := outDir.UntypedJoin("package.json")
 	if err := packageJSONPath.EnsureDir(); err != nil {
 		return errors.Wrap(err, "could not create output directory")
 	}
-	if workspacePath := ctx.PackageManager.WorkspaceConfigurationPath; workspacePath != "" && p.base.RepoRoot.UnsafeJoin(workspacePath).FileExists() {
-		workspaceFile := fs.LstatCachedFile{Path: p.base.RepoRoot.UnsafeJoin(workspacePath)}
-		if err := fs.CopyFile(&workspaceFile, outDir.UnsafeJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+	if workspacePath := ctx.PackageManager.WorkspaceConfigurationPath; workspacePath != "" && p.base.RepoRoot.UntypedJoin(workspacePath).FileExists() {
+		workspaceFile := fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(workspacePath)}
+		if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
 		}
 	}
@@ -146,7 +146,7 @@ func (p *prune) prune(opts *opts) error {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		targetDir := fullDir.UnsafeJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
+		targetDir := fullDir.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
 		if err := targetDir.EnsureDir(); err != nil {
 			return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
 		}
@@ -154,7 +154,7 @@ func (p *prune) prune(opts *opts) error {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
 		if opts.docker {
-			jsonDir := outDir.UnsafeJoin("json", ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
+			jsonDir := outDir.UntypedJoin("json", ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
@@ -169,23 +169,23 @@ func (p *prune) prune(opts *opts) error {
 	}
 	p.base.Logger.Trace("new workspaces", "value", workspaces)
 	if fs.FileExists(".gitignore") {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UnsafeJoin(".gitignore")}, fullDir.UnsafeJoin(".gitignore").ToStringDuringMigration()); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".gitignore")}, fullDir.UntypedJoin(".gitignore").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root .gitignore")
 		}
 	}
 
 	if fs.FileExists("turbo.json") {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UnsafeJoin("turbo.json")}, fullDir.UnsafeJoin("turbo.json").ToStringDuringMigration()); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("turbo.json")}, fullDir.UntypedJoin("turbo.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root turbo.json")
 		}
 	}
 
-	if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UnsafeJoin("package.json")}, fullDir.UnsafeJoin("package.json").ToStringDuringMigration()); err != nil {
+	if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("package.json")}, fullDir.UntypedJoin("package.json").ToStringDuringMigration()); err != nil {
 		return errors.Wrap(err, "failed to copy root package.json")
 	}
 
 	if opts.docker {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UnsafeJoin("package.json")}, outDir.UnsafeJoin("json", "package.json").ToStringDuringMigration()); err != nil {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("package.json")}, outDir.UntypedJoin("json", "package.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root package.json")
 		}
 	}
@@ -198,15 +198,15 @@ func (p *prune) prune(opts *opts) error {
 	if patches := lockfile.Patches(); patches != nil {
 		for _, patch := range patches {
 			if err := fs.CopyFile(
-				&fs.LstatCachedFile{Path: p.base.RepoRoot.UnsafeJoin(patch.ToString())},
-				fullDir.UnsafeJoin(patch.ToString()).ToStringDuringMigration(),
+				&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(patch.ToString())},
+				fullDir.UntypedJoin(patch.ToString()).ToStringDuringMigration(),
 			); err != nil {
 				return errors.Wrap(err, "Failed copying patch file")
 			}
 		}
 	}
 
-	lockfilePath := outDir.UnsafeJoin(ctx.PackageManager.Lockfile)
+	lockfilePath := outDir.UntypedJoin(ctx.PackageManager.Lockfile)
 	lockfileFile, err := lockfilePath.Create()
 	if err != nil {
 		return errors.Wrap(err, "Failed to create lockfile")

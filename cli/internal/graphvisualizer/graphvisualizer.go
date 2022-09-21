@@ -58,12 +58,12 @@ func (g *GraphVisualizer) RenderDotGraph() {
 // GenerateGraphFile saves a visualization of the TaskGraph to a file (or renders a DotGraph as a fallback))
 func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 	graphString := g.generateDotString()
-	outputFilename := g.repoRoot.UnsafeJoin(outputName)
+	outputFilename := g.repoRoot.UntypedJoin(outputName)
 	ext := outputFilename.Ext()
 	// use .jpg as default extension if none is provided
 	if ext == "" {
 		ext = ".jpg"
-		outputFilename = g.repoRoot.UnsafeJoin(outputName + ext)
+		outputFilename = g.repoRoot.UntypedJoin(outputName + ext)
 	}
 	if ext == ".html" {
 		f, err := outputFilename.Create()

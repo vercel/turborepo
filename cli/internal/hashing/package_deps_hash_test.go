@@ -239,29 +239,29 @@ func TestGetPackageDeps(t *testing.T) {
 	//       nested-file
 
 	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
-	myPkgDir := repoRoot.UnsafeJoin("my-pkg")
+	myPkgDir := repoRoot.UntypedJoin("my-pkg")
 
 	// create the dir first
 	err := myPkgDir.MkdirAll()
 	assert.NilError(t, err, "CreateDir")
 
 	// create file 1
-	committedFilePath := myPkgDir.UnsafeJoin("committed-file")
+	committedFilePath := myPkgDir.UntypedJoin("committed-file")
 	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create file 2
-	deletedFilePath := myPkgDir.UnsafeJoin("deleted-file")
+	deletedFilePath := myPkgDir.UntypedJoin("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create file 3
-	nestedPath := myPkgDir.UnsafeJoin("dir", "nested-file")
+	nestedPath := myPkgDir.UntypedJoin("dir", "nested-file")
 	assert.NilError(t, nestedPath.EnsureDir(), "EnsureDir")
 	assert.NilError(t, nestedPath.WriteFile([]byte("nested"), 0644), "WriteFile")
 
 	// create a package.json
-	packageJSONPath := myPkgDir.UnsafeJoin("package.json")
+	packageJSONPath := myPkgDir.UntypedJoin("package.json")
 	err = packageJSONPath.WriteFile([]byte("{}"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
@@ -277,12 +277,12 @@ func TestGetPackageDeps(t *testing.T) {
 	assert.NilError(t, err, "Remove")
 
 	// create another untracked file in git
-	uncommittedFilePath := myPkgDir.UnsafeJoin("uncommitted-file")
+	uncommittedFilePath := myPkgDir.UntypedJoin("uncommitted-file")
 	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create an untracked file in git up a level
-	rootFilePath := repoRoot.UnsafeJoin("new-root-file")
+	rootFilePath := repoRoot.UntypedJoin("new-root-file")
 	err = rootFilePath.WriteFile([]byte("new-root bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 

@@ -33,7 +33,7 @@ var nodejsPnpm = PackageManager{
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
-		bytes, err := ioutil.ReadFile(rootpath.UnsafeJoin("pnpm-workspace.yaml").ToStringDuringMigration())
+		bytes, err := ioutil.ReadFile(rootpath.UntypedJoin("pnpm-workspace.yaml").ToStringDuringMigration())
 		if err != nil {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
 		}
@@ -78,8 +78,8 @@ var nodejsPnpm = PackageManager{
 	},
 
 	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UnsafeJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UnsafeJoin(packageManager.Lockfile).FileExists()
+		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
 	},

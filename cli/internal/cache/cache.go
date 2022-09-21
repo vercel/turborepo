@@ -43,7 +43,7 @@ type CacheEvent struct {
 
 // DefaultLocation returns the default filesystem cache location, given a repo root
 func DefaultLocation(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
-	return repoRoot.UnsafeJoin("node_modules", ".cache", "turbo")
+	return repoRoot.UntypedJoin("node_modules", ".cache", "turbo")
 }
 
 // OnCacheRemoved defines a callback that the cache system calls if a particular cache

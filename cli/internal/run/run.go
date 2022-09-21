@@ -172,7 +172,7 @@ type run struct {
 
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
-	packageJSONPath := r.base.RepoRoot.UnsafeJoin("package.json")
+	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
@@ -867,7 +867,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
 	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsoluteSystemPath to
 	// AbsoluteSystemPath
-	cmd.Dir = e.repoRoot.UnsafeJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
+	cmd.Dir = e.repoRoot.UntypedJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 

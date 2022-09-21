@@ -196,12 +196,12 @@ func TestRestoreTar(t *testing.T) {
 	}
 
 	// Verify file contents
-	extraFile := root.UnsafeJoin("extra-file")
+	extraFile := root.UntypedJoin("extra-file")
 	contents, err := extraFile.ReadFile()
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, contents, []byte("extra-file-contents"))
 
-	someFile := root.UnsafeJoin("my-pkg", "some-file")
+	someFile := root.UntypedJoin("my-pkg", "some-file")
 	contents, err = someFile.ReadFile()
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, contents, []byte("some-file-contents"))
@@ -210,14 +210,14 @@ func TestRestoreTar(t *testing.T) {
 func TestRestoreInvalidTar(t *testing.T) {
 	root := fs.AbsolutePathFromUpstream(t.TempDir())
 	expectedContents := []byte("important-data")
-	someFile := root.UnsafeJoin("some-file")
+	someFile := root.UntypedJoin("some-file")
 	err := someFile.WriteFile(expectedContents, 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	tar := makeInvalidTar(t)
 	// use a child directory so that blindly untarring will squash the file
 	// that we just wrote above.
-	repoRoot := root.UnsafeJoin("repo")
+	repoRoot := root.UntypedJoin("repo")
 	_, err = restoreTar(repoRoot, tar)
 	if err == nil {
 		t.Error("expected error untarring invalid tar")

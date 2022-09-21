@@ -72,7 +72,7 @@ type TaskDefinition struct {
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 
-	turboJSONPath := rootPath.UnsafeJoin(configFile)
+	turboJSONPath := rootPath.UntypedJoin(configFile)
 
 	// Check if turbo key in package.json exists
 	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
