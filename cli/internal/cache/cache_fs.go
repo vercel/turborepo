@@ -61,14 +61,14 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	return true, nil, meta.Duration, nil
 }
 
-func (f *fsCache) Exists(hash string) (CacheState, error) {
+func (f *fsCache) Exists(hash string) (State, error) {
 	cachedFolder := filepath.Join(f.cacheDirectory, hash)
 
 	if !fs.PathExists(cachedFolder) {
-		return CacheState{Local: false}, nil
+		return State{Local: false}, nil
 	}
 
-	return CacheState{Local: true}, nil
+	return State{Local: true}, nil
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
