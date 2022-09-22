@@ -13,6 +13,7 @@ import {
 } from "@heroicons/react/outline";
 import React from "react";
 import { DetailedFeatureLink } from "./Feature";
+import { DockerIcon } from "./Icons";
 
 const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -120,6 +121,15 @@ export const TasksArea = () => {
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
+          Icon: DockerIcon,
+          description:
+            "Make use of Turborepo's prune command to keep your Docker deploys fast.",
+          name: "Deploying to Docker",
+        }}
+        href="/docs/handbook/deploying-to-docker"
+      ></DetailedFeatureLink>
+      <DetailedFeatureLink
+        feature={{
           Icon: CloudUploadIcon,
           description:
             "Bundle, version and publish packages to npm from your monorepo.",
@@ -127,15 +137,6 @@ export const TasksArea = () => {
         }}
         href="/docs/handbook/publishing-packages"
       ></DetailedFeatureLink>
-      {/* <DetailedFeatureLink
-        feature={{
-          Icon: BookmarkIcon,
-          description:
-            "Set up code generators to scaffold new apps and packages from the CLI.",
-          name: "Code Generation",
-        }}
-        href="/docs/handbook/code-generators"
-      ></DetailedFeatureLink> */}
     </Wrapper>
   );
 };
