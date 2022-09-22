@@ -706,17 +706,17 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 }
 
 type hashedTask struct {
-	TaskID       string      `json:"taskId"`
-	Task         string      `json:"task"`
-	Package      string      `json:"package"`
-	Hash         string      `json:"hash"`
-	CacheState   cache.State `json:"cacheState"`
-	Command      string      `json:"command"`
-	Outputs      []string    `json:"outputs"`
-	LogFile      string      `json:"logFile"`
-	Dir          string      `json:"directory"`
-	Dependencies []string    `json:"dependencies"`
-	Dependents   []string    `json:"dependents"`
+	TaskID       string           `json:"taskId"`
+	Task         string           `json:"task"`
+	Package      string           `json:"package"`
+	Hash         string           `json:"hash"`
+	CacheState   cache.ItemStatus `json:"cacheState"`
+	Command      string           `json:"command"`
+	Outputs      []string         `json:"outputs"`
+	LogFile      string           `json:"logFile"`
+	Dir          string           `json:"directory"`
+	Dependencies []string         `json:"dependencies"`
+	Dependents   []string         `json:"dependents"`
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {

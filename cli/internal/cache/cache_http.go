@@ -151,14 +151,14 @@ func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (
 	return hit, files, duration, err
 }
 
-func (cache *httpCache) Exists(key string) (State, error) {
+func (cache *httpCache) Exists(key string) (ItemStatus, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, err := cache.exists(key)
 	if err != nil {
-		return State{}, fmt.Errorf("failed to verify files from HTTP cache: %w", err)
+		return ItemStatus{}, fmt.Errorf("failed to verify files from HTTP cache: %w", err)
 	}
-	return State{Remote: hit}, err
+	return ItemStatus{Remote: hit}, err
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {

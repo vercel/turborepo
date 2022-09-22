@@ -28,15 +28,15 @@ func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []
 	return false, nil, 0, nil
 }
 
-func (tc *testCache) Exists(hash string) (State, error) {
+func (tc *testCache) Exists(hash string) (ItemStatus, error) {
 	if tc.disabledErr != nil {
-		return State{}, nil
+		return ItemStatus{}, nil
 	}
 	_, ok := tc.entries[hash]
 	if ok {
-		return State{Local: true}, nil
+		return ItemStatus{Local: true}, nil
 	}
-	return State{}, nil
+	return ItemStatus{}, nil
 }
 
 func (tc *testCache) Put(target string, hash string, duration int, files []string) error {
