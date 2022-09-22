@@ -78,7 +78,7 @@ func TestCreate(t *testing.T) {
 					Path: turbopath.AnchoredSystemPath("hello world.txt"),
 				},
 			},
-			want: "6abf8eaf63e6e943c02562c002336342fad89502dce42b71eeee22e7318aa2884bb14a4ac55f2acc0bc75f55626cec50d3f1552810b9bbe2dbc39e2d656a73e2",
+			want: "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
 		},
 		{
 			name: "links",
@@ -102,7 +102,7 @@ func TestCreate(t *testing.T) {
 					Path: turbopath.AnchoredSystemPath("real"),
 				},
 			},
-			want: "e197b0a937d48d4358dc842063569a30d77c6de99bb3a48fe771afc71b1013ccde20437b86d6a5ac6906f24f41c712a8dba17e0bca82265f45477e2779d1b913",
+			want: "048053cbfe2b8dc316c9ce99d0d12f3902c2d4512e323f40a2775b777383eabb00e12488189b569285af09571810b0a34b144f9cec3bb88f1452f7c0e29e95aa",
 		},
 		{
 			name: "subdirectory",
@@ -115,7 +115,7 @@ func TestCreate(t *testing.T) {
 					Path: turbopath.AnchoredSystemPath("parent/child"),
 				},
 			},
-			want: "d3f21380181e0ceef216d13a7d61faac2efc97e81fed2c0ed8540dffbaf85797d494dfff12c6781dbeff95c8771babeb9d0c86c847e089dfd9fbf231e5d4275c",
+			want: "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
 		},
 		{
 			name: "unsupported types error",
