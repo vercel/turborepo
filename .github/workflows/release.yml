@@ -149,6 +149,7 @@ jobs:
           token: ${{ secrets.TURBOBOT }}
           commit-message: Merge release commit
           author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+          base: main
           branch: ${{ inputs.release_branch }}
           delete-branch: true
           title: "Merge release commit"
