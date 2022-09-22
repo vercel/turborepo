@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"sort"
 	"strings"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -202,6 +203,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
+	sort.Strings(c.EnvVarDependencies)
 	c.Inputs = rawPipeline.Inputs
 	c.OutputMode = rawPipeline.OutputMode
 	return nil
@@ -238,6 +240,7 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 
 	// turn the set into an array and assign to the TurboJSON struct fields.
 	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
+	sort.Strings(c.GlobalEnv)
 	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
 
 	// copy these over, we don't need any changes here.
