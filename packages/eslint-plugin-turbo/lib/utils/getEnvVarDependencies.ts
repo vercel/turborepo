@@ -7,7 +7,13 @@ function findDependsOnEnvVars({
   dependencies?: Array<string>;
 }) {
   if (dependencies) {
-    return dependencies.filter((dep) => dep.startsWith("$"));
+    return (
+      dependencies
+        // filter for dep env vars
+        .filter((dep) => dep.startsWith("$"))
+        // remove leading $
+        .map((envVar) => envVar.slice(1, envVar.length))
+    );
   }
 
   return [];
@@ -24,23 +30,30 @@ function getEnvVarDependencies({
   if (!turboJsonContent) {
     return null;
   }
-  const { globalDependencies, pipeline = {} } = turboJsonContent;
+  const {
+    globalDependencies,
+    globalEnv = [],
+    pipeline = {},
+  } = turboJsonContent;
 
-  const allEnvVars: Array<string> = findDependsOnEnvVars({
-    dependencies: globalDependencies,
-  });
-  Object.values(pipeline).forEach(({ dependsOn }) => {
+  const allEnvVars: Array<string> = [
+    ...findDependsOnEnvVars({
+      dependencies: globalDependencies,
+    }),
+    ...globalEnv,
+  ];
+
+  Object.values(pipeline).forEach(({ env, dependsOn }) => {
     if (dependsOn) {
       allEnvVars.push(...findDependsOnEnvVars({ dependencies: dependsOn }));
     }
+
+    if (env) {
+      allEnvVars.push(...env);
+    }
   });
 
-  // remove leading $
-  const envVarSet = new Set(
-    allEnvVars.map((envVar) => envVar.slice(1, envVar.length))
-  );
-
-  return envVarSet;
+  return new Set(allEnvVars);
 }
 
 export default getEnvVarDependencies;
