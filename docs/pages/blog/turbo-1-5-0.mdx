@@ -93,7 +93,7 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 
 `globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
 
-To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod env-key`.
+To help migrate from the previous syntax, we've prepared a codemod. You can run ``npx @turbo/codemod migrate-env-var-dependencies``.
 
 You can also upgrade the `eslint-config-turbo` package to `latest` if you want to validate your turbo.json.
 
