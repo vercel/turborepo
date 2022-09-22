@@ -34,6 +34,11 @@ const TURBO_TEAM = {
     twitterUsername: "mehulkar",
     picture: "/images/people/mehulkar.jpeg",
   },
+  mattpocock: {
+    name: "Matt Pocock",
+    twitterUsername: "mattpocockuk",
+    picture: "/images/people/mattpocock.jpeg",
+  },
 };
 
 export type Author = keyof typeof TURBO_TEAM;
