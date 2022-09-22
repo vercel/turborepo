@@ -25,12 +25,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
       - uses: ./.github/actions/setup-node
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: |
-          git fetch origin ${GITHUB_BASE_REF:-HEAD^1}
-          BASE_SHA=$(git rev-parse ${GITHUB_BASE_REF:-HEAD^1})
-          pnpm -- turbo run test  --filter=...[${BASE_SHA}] --filter=!cli --color
+          pnpm -- turbo run test  --filter=...[${{ github.event.pull_request.base.sha }}] --filter=!cli --color
