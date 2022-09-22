@@ -550,10 +550,11 @@ function runSmokeTests<T>(
     }
   );
 
-  if (["yarn", "pnpm6", "pnpm"].includes(npmClient)) {
+  if (["yarn", "pnpm6", "pnpm", "berry"].includes(npmClient)) {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
-    const installArgs = ["--frozen-lockfile"];
+    const installArgs =
+      npmClient === "berry" ? ["--immutable"] : ["--frozen-lockfile"];
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {

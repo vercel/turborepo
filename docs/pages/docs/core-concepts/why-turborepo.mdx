@@ -2,9 +2,13 @@
 
 ## The problem
 
+![](../../../public/images/docs/why-turborepo-problem.png)
+
 Monorepos have many advantages - but **they struggle to scale**. Each workspace has its own test suite, its own linting and its own build process. A single monorepo might have **hundreds of tasks to execute**.
 
 ## The solution
+
+![](../../../public/images/docs/why-turborepo-solution.png)
 
 **Turborepo solves your monorepo's scaling problem**. Our remote cache stores the result of all your tasks, meaning that **your CI never needs to do the same work twice**.
 
@@ -14,6 +18,6 @@ Turborepo can be **adopted incrementally**. It uses the `package.json` scripts y
 
 ## What turborepo is not
 
-Turborepo **doesn't handle package installation**. Tools like `npm`, `pnpm` or `yarn` already do that brilliantly. But they run tasks inefficiently, meaning slow CI builds.
+Turborepo **doesn't handle [package installation](/docs/handbook/package-installation)**. Tools like `npm`, `pnpm` or `yarn` already do that brilliantly. But they run tasks inefficiently, meaning slow CI builds.
 
 We recommend that **Turborepo runs your tasks**, and your favorite package manager installs your packages.
