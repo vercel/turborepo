@@ -43,12 +43,6 @@ func (p AnchoredSystemPath) RestoreAnchor(anchor AbsoluteSystemPath) AbsoluteSys
 	return AbsoluteSystemPath(filepath.Join(anchor.ToString(), p.ToString()))
 }
 
-// Move takes the current anchor and makes it descendant from a second anchor.
-// Approximates `mv (self) anchor`
-func (p AnchoredSystemPath) Move(anchor AnchoredSystemPath) AnchoredSystemPath {
-	return AnchoredSystemPath(filepath.Join(anchor.ToString(), p.ToString()))
-}
-
 // Dir returns filepath.Dir for the path.
 func (p AnchoredSystemPath) Dir() AnchoredSystemPath {
 	return AnchoredSystemPath(filepath.Dir(p.ToString()))

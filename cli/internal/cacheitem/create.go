@@ -41,21 +41,14 @@ func (ci *CacheItem) init() {
 	})
 }
 
-// AddMetadata adds a file which is not part of the cache to the `tar`.
-// The contents of this file should not contain user input.
-func (ci *CacheItem) AddMetadata(anchor turbopath.AbsoluteSystemPath, path turbopath.AnchoredSystemPath) error {
-	ci.init()
-	return ci.addFile(turbopath.AnchoredSystemPath("metadata"), anchor, path)
-}
-
 // AddFile adds a user-cached item to the tar.
 func (ci *CacheItem) AddFile(anchor turbopath.AbsoluteSystemPath, path turbopath.AnchoredSystemPath) error {
 	ci.init()
-	return ci.addFile(turbopath.AnchoredSystemPath("cache"), anchor, path)
+	return ci.addFile(anchor, path)
 }
 
 // addFile is the actual interface to the tar file.
-func (ci *CacheItem) addFile(cacheAnchor turbopath.AnchoredSystemPath, fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
+func (ci *CacheItem) addFile(fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
 	// Calculate the fully-qualified path to the file to read it.
 	sourcePath := filePath.RestoreAnchor(fsAnchor)
 
@@ -75,8 +68,8 @@ func (ci *CacheItem) addFile(cacheAnchor turbopath.AnchoredSystemPath, fsAnchor 
 		link = linkTarget
 	}
 
-	// Reanchor the file within the cache and normalize.
-	cacheDestinationName := filePath.Move(cacheAnchor).ToUnixPath()
+	// Normalize the path within the cache.
+	cacheDestinationName := filePath.ToUnixPath()
 
 	// Generate the the header.
 	// We do not use header generation from stdlib because it can throw an error.
