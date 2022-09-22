@@ -23,7 +23,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if !lockfilePath.FileExists() {
 		return nil, errors.Errorf("unable to find 'testdata/%s'", name)
 	}
-	return os.ReadFile(lockfilePath.ToStringDuringMigration())
+	return os.ReadFile(lockfilePath.ToString())
 }
 
 func Test_Roundtrip(t *testing.T) {
