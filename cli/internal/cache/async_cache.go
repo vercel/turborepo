@@ -52,6 +52,10 @@ func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []s
 	return c.realCache.Fetch(target, key, files)
 }
 
+func (c *asyncCache) Exists(key string) (ItemStatus, error) {
+	return c.realCache.Exists(key)
+}
+
 func (c *asyncCache) Clean(target string) {
 	c.realCache.Clean(target)
 }

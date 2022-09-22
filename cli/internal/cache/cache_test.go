@@ -28,6 +28,17 @@ func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []
 	return false, nil, 0, nil
 }
 
+func (tc *testCache) Exists(hash string) (ItemStatus, error) {
+	if tc.disabledErr != nil {
+		return ItemStatus{}, nil
+	}
+	_, ok := tc.entries[hash]
+	if ok {
+		return ItemStatus{Local: true}, nil
+	}
+	return ItemStatus{}, nil
+}
+
 func (tc *testCache) Put(target string, hash string, duration int, files []string) error {
 	if tc.disabledErr != nil {
 		return tc.disabledErr
@@ -108,10 +119,46 @@ func TestPutCachingDisabled(t *testing.T) {
 	}
 }
 
+func TestExists(t *testing.T) {
+	caches := []Cache{
+		newEnabledCache(),
+	}
+
+	mplex := &cacheMultiplexer{
+		caches: caches,
+	}
+
+	itemStatus, err := mplex.Exists("some-hash")
+	if err != nil {
+		t.Errorf("got error verifying files: %v", err)
+	}
+	if itemStatus.Local {
+		t.Error("did not expect file to exist")
+	}
+
+	err = mplex.Put("unused-target", "some-hash", 5, []string{"a-file"})
+	if err != nil {
+		// don't leak the cache removal
+		t.Errorf("Put got error %v, want <nil>", err)
+	}
+
+	itemStatus, err = mplex.Exists("some-hash")
+	if err != nil {
+		t.Errorf("got error verifying files: %v", err)
+	}
+	if !itemStatus.Local {
+		t.Error("failed to find previously stored files")
+	}
+}
+
 type fakeClient struct{}
 
 // FetchArtifact implements client
 func (*fakeClient) FetchArtifact(hash string) (*http.Response, error) {
+	panic("unimplemented")
+}
+
+func (*fakeClient) ArtifactExists(hash string) (*http.Response, error) {
 	panic("unimplemented")
 }
 
