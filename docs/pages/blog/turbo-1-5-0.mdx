@@ -62,7 +62,7 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 We're delighted to announce that [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
 
-You can use `turbo prune` to create a pruned version of your monorepo - including dependencies in your lockfile.
+You can use `turbo prune` to create a pruned subset of your monorepo with a dedicated lockfile--with the correct dependencies needed for a given target application and its dependencies. This is especially useful for using efficiently using Turborepo within a Docker image.
 
 As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/handbook/deploying-with-docker).
 
