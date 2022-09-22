@@ -24,20 +24,33 @@ function getEnvVarDependencies({
   if (!turboJsonContent) {
     return null;
   }
-  const { globalDependencies, pipeline = {} } = turboJsonContent;
+  const {
+    globalDependencies,
+    globalEnv = [],
+    pipeline = {},
+  } = turboJsonContent;
 
-  const allEnvVars: Array<string> = findDependsOnEnvVars({
-    dependencies: globalDependencies,
-  });
-  Object.values(pipeline).forEach(({ dependsOn }) => {
+  const allEnvVars: Array<string> = [
+    ...findDependsOnEnvVars({
+      dependencies: globalDependencies,
+    }),
+    ...globalEnv,
+  ];
+  Object.values(pipeline).forEach(({ env, dependsOn }) => {
     if (dependsOn) {
       allEnvVars.push(...findDependsOnEnvVars({ dependencies: dependsOn }));
     }
+
+    if (env) {
+      allEnvVars.push(...env);
+    }
   });
 
-  // remove leading $
+  // remove leading $, but only for the vars, that are prefixed (from deprecated `dependsOn`)
   const envVarSet = new Set(
-    allEnvVars.map((envVar) => envVar.slice(1, envVar.length))
+    allEnvVars.map((envVar) =>
+      envVar.startsWith("$") ? envVar.slice(1, envVar.length) : envVar
+    )
   );
 
   return envVarSet;

@@ -9,6 +9,7 @@ const ruleTester = new RuleTester({
 const getTestTurboConfig = () => {
   return {
     $schema: "./docs/public/schema.json",
+    globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY"],
     globalDependencies: ["$GLOBAL_ENV_KEY"],
     pipeline: {
       test: {
@@ -23,6 +24,7 @@ const getTestTurboConfig = () => {
       },
       build: {
         outputs: ["dist/**/*", ".next/**/*"],
+        env: ["NEW_STYLE_ENV_KEY"],
         dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
       },
     },
@@ -31,6 +33,24 @@ const getTestTurboConfig = () => {
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
+    {
+      code: `
+        const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
+      `,
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
+    {
+      code: `
+        const { NEW_STYLE_ENV_KEY, TASK_ENV_KEY } = process.env;
+      `,
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
+    {
+      code: `
+        const { NEW_STYLE_GLOBAL_ENV_KEY, TASK_ENV_KEY } = process.env;
+      `,
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
     {
       code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
