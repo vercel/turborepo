@@ -19,7 +19,7 @@ Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well a
 
 - [**The Monorepo Handbook**](#the-monorepo-handbook): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
 - [**Drop the `run`**](#drop-the-run): `turbo run <task>` can now be shortened to `turbo <task>`
-- [**Prune now supported on pnpm**](#prune-now-supported-on-pnpm): Pruning your monorepo is now supported in `pnpm` and `yarn`, with `npm` support coming soon.
+- [**`turbo prune` now supports pnpm**](#prune-now-supported-on-pnpm): Pruning your monorepo is now supported in `pnpm`.
 - [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
 - [**Changes to `package.json` hashing**](#changes-to-packagejson-hashing): We've improved how we hash `package.json` when running tasks.
 
@@ -93,9 +93,7 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 
 `globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
 
-To help migrate from the previous syntax, we've prepared a codemod. You can run ``npx @turbo/codemod migrate-env-var-dependencies``.
-
-You can also upgrade the `eslint-config-turbo` package to `latest` if you want to validate your turbo.json.
+To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod migrate-env-var-dependencies`.
 
 This work builds on the [automatic env variable detection](/blog/turbo-1-4-0) we added in 1.4.0.
 
