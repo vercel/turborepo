@@ -14,12 +14,13 @@ const help = `
   Usage:
     $ npx @turbo/codemod <transform> <path> <...options>
 
-  If <dir> is not provided up front you will be prompted for it.
+  If <path> is not provided up front you will be prompted for it.
 
   Options:
     --force             Bypass Git safety checks and forcibly run codemods
     --dry               Dry run (no changes are made to files)
     --print             Print transformed files to your terminal
+    --list              List all codemods
     --help, -h          Show this help message
     --version, -v       Show the version of this script
 `;
@@ -28,10 +29,17 @@ const TRANSFORMER_INQUIRER_CHOICES = [
   {
     name: "add-package-manager: Set the `packageManager` key in root `package.json` file",
     value: "add-package-manager",
+    introducedIn: "1.1.0",
   },
   {
     name: 'create-turbo-config: Create the `turbo.json` file from an existing "turbo" key in `package.json`',
     value: "create-turbo-config",
+    introducedIn: "1.1.0",
+  },
+  {
+    name: 'migrate-env-var-dependencies: Migrate environment variable dependencies from "dependsOn" to "env" in `turbo.json`',
+    value: "migrate-env-var-dependencies",
+    introducedIn: "1.5.0",
   },
 ];
 
@@ -58,6 +66,7 @@ async function run() {
     booleanDefault: undefined,
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
+      list: { type: "boolean", default: false },
       force: { type: "boolean", default: false },
       dry: { type: "boolean", default: false },
       print: { type: "boolean", default: false },
@@ -68,6 +77,7 @@ async function run() {
 
   if (cli.flags.help) cli.showHelp();
   if (cli.flags.version) cli.showVersion();
+  if (cli.flags.list) listTransforms();
 
   // check git status
   if (!cli.flags.dry) {
@@ -151,6 +161,15 @@ async function notifyUpdate(): Promise<void> {
   } catch (_e: any) {
     // ignore error
   }
+}
+
+function listTransforms(): void {
+  console.log(
+    TRANSFORMER_INQUIRER_CHOICES.map((x) => `- ${chalk.cyan(x.value)}`).join(
+      "\n"
+    )
+  );
+  process.exit(1);
 }
 
 function expandFilePathsIfNeeded(filesBeforeExpansion: string[]) {
