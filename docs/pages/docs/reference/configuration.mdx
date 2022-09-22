@@ -29,8 +29,8 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
   "globalDependencies": [
     ".env", // contents will impact hashes of all tasks
     "tsconfig.json", // contents will impact hashes of all tasks
-    "$GITHUB_TOKEN"// value will impact the hashes of all tasks
-  ]
+  ],
+  "globalEnv": ["GITHUB_TOKEN"] // value will impact the hashes of all tasks
 }
 ```
 
@@ -64,7 +64,7 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
 
 `type: string[]`
 
-The list of tasks and environment variables that this task depends on.
+The list of tasks this task depends on.
 
 Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline task depends on the workspace's topological dependencies completing the task with the `^` prefix first (e.g. "a workspace's `build` tasks should only run once all of its `dependencies` and `devDependencies` have completed their own `build` commands").
 
@@ -72,7 +72,12 @@ Items in `dependsOn` without `^` prefix, express the relationships between tasks
 
 Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends on the value of that environment variable.
 
-**Example: Basics**
+<Callout type="info">
+  Using `$` to declare environment variables in the `dependsOn` config is deprecated. Use the
+  `env` key instead.
+</Callout>
+
+**Example**
 
 ```jsonc
 {
@@ -99,29 +104,31 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 }
 ```
 
-**Example: Environment Variables and Tasks**
+### `env`
+
+`type: string[]`
+
+The list of environment variables a task depends on.
+
+**Example**
 
 ```jsonc
 {
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": [
-        "^build",
-        "$SOMETHING_ELSE" // value will impact the hashes of all build tasks
-      ],
+      "dependsOn": ["^build"],
+      "env": ["SOMETHING_ELSE"], // value will impact the hashes of all build tasks
       "outputs": ["dist/**", ".next/**"]
     },
     "web#build": {
-      "dependsOn": [
-        "^build",
-        "$STRIPE_SECRET_KEY", // value will impact hash of only web's build task
-      ],
+      "dependsOn": ["^build"],
+      "env": ["STRIPE_SECRET_KEY"], // value will impact hash of only web's build task
       "outputs": [".next/**"]
     }
   },
-  "globalDependencies": [
-    "$GITHUB_TOKEN"// value will impact the hashes of all tasks
+  "globalEnv": [
+    "GITHUB_TOKEN"// value will impact the hashes of all tasks
   ]
 }
 ```
