@@ -68,7 +68,7 @@ export interface Pipeline {
   dependsOn?: string[];
 
   /**
-   * A list of environment variables, prefixed with $ (e.g. $GITHUB_TOKEN), that this task depends on.
+   * A list of environment variables, **not** prefixed with $ (e.g. $GITHUB_TOKEN), that this task depends on.
    *
    * @default []
    */
