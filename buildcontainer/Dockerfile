@@ -1,6 +1,5 @@
 ARG BASE_IMAGE
-FROM ${BASE_IMAGE} AS osx-cross-base
-ENV OSX_CROSS_PATH=/osxcross
+FROM ${BASE_IMAGE}
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install deps
@@ -51,54 +50,7 @@ RUN \
     tar -xvf llvm-mingw-20220906-ucrt-ubuntu-18.04-${MINGW_ARCH}.tar.xz && \
     ln -s llvm-mingw-20220906-ucrt-ubuntu-18.04-${MINGW_ARCH} llvm-mingw
 
-FROM osx-cross-base AS osx-cross
-ARG OSX_CROSS_COMMIT
-ARG OSX_SDK
-ARG OSX_SDK_SUM
-ARG OSX_VERSION_MIN
-
-WORKDIR "${OSX_CROSS_PATH}"
-
-COPY patches /patches
-
-RUN \
-    git clone https://github.com/tpoechtrager/osxcross.git . \
- && git config user.name "John Doe" \
- && git config user.email johndoe@example.com \
- && git checkout -q "${OSX_CROSS_COMMIT}" \
- && git am < /patches/libcxx.patch \
- && rm -rf ./.git
-
-# install osxcross:
-COPY tars/${OSX_SDK}.tar.xz "${OSX_CROSS_PATH}/tarballs/${OSX_SDK}.tar.xz"
-
-RUN \
-    echo "${OSX_SDK_SUM}" "${OSX_CROSS_PATH}/tarballs/${OSX_SDK}.tar.xz" | sha256sum -c - \
- && apt-get update \
- && apt-get install --no-install-recommends -y -q \
-        autotools-dev \
-        libxml2-dev \
-        lzma-dev \
-        libssl-dev \
-        zlib1g-dev \
-        libmpc-dev \
-        libmpfr-dev \
-        libgmp-dev \
-        llvm-dev \
-        uuid-dev \
-        binutils-multiarch-dev \
- && apt -y autoremove \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
- && UNATTENDED=1 OSX_VERSION_MIN=${OSX_VERSION_MIN} ./build.sh
-
-FROM osx-cross-base AS final
 ARG MAINTAINER
 ARG GIT_REPO
 LABEL maintainer=${MAINTAINER}
 LABEL "org.opencontainers.image.source"=${GIT_REPO}
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-COPY --from=osx-cross "${OSX_CROSS_PATH}/target" "${OSX_CROSS_PATH}/target"
-ENV PATH=${OSX_CROSS_PATH}/target/bin:$PATH
