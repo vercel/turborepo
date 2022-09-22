@@ -11,6 +11,12 @@ import (
 // AbsoluteSystemPath is a root-relative path using system separators.
 type AbsoluteSystemPath string
 
+// _dirPermissions are the default permission bits we apply to directories.
+const _dirPermissions = os.ModeDir | 0775
+
+// _nonRelativeSentinel is the leading sentinel that indicates traversal.
+const _nonRelativeSentinel = ".." + string(filepath.Separator)
+
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.
 func (p AbsoluteSystemPath) ToString() string {
@@ -29,67 +35,29 @@ func (p AbsoluteSystemPath) Join(additional ...RelativeSystemPath) AbsoluteSyste
 	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(cast.ToStringArray()...)))
 }
 
-// dirPermissions are the default permission bits we apply to directories.
-const dirPermissions = os.ModeDir | 0775
-
-// ensureDir ensures that the directory of the given file has been created.
-func ensureDir(filename string) error {
-	dir := filepath.Dir(filename)
-	err := os.MkdirAll(dir, dirPermissions)
-	if err != nil && fileExists(dir) {
-		// It looks like this is a file and not a directory. Attempt to remove it; this can
-		// happen in some cases if you change a rule from outputting a file to a directory.
-		log.Printf("Attempting to remove file %s; a subdirectory is required", dir)
-		if err2 := os.Remove(dir); err2 == nil {
-			err = os.MkdirAll(dir, dirPermissions)
-		} else {
-			return err
-		}
-	}
-	return err
-}
-
-var nonRelativeSentinel string = ".." + string(filepath.Separator)
-
-// dirContainsPath returns true if the path 'target' is contained within 'dir'
-// Expects both paths to be absolute and does not verify that either path exists.
-func dirContainsPath(dir string, target string) (bool, error) {
-	// In Go, filepath.Rel can return a path that starts with "../" or equivalent.
-	// Checking filesystem-level contains can get extremely complicated
-	// (see https://github.com/golang/dep/blob/f13583b555deaa6742f141a9c1185af947720d60/internal/fs/fs.go#L33)
-	// As a compromise, rely on the stdlib to generate a relative path and then check
-	// if the first step is "../".
-	rel, err := filepath.Rel(dir, target)
-	if err != nil {
-		return false, err
-	}
-	return !strings.HasPrefix(rel, nonRelativeSentinel), nil
-}
-
-// fileExists returns true if the given path exists and is a file.
-func fileExists(filename string) bool {
-	info, err := os.Lstat(filename)
-	return err == nil && !info.IsDir()
-}
-
+// ToStringDuringMigration returns a string representation of this path.
+// These instances should eventually be removed.
 func (p AbsoluteSystemPath) ToStringDuringMigration() string {
 	return p.ToString()
 }
 
+// UntypedJoin is a Join that does not constrain the type of the arguments.
+// This enables you to pass in strings, but does not protect you from garbage in.
 func (p AbsoluteSystemPath) UntypedJoin(args ...string) AbsoluteSystemPath {
 	return AbsoluteSystemPath(filepath.Join(p.ToString(), filepath.Join(args...)))
 }
 
+// Dir implements filepath.Dir() for an AbsoluteSystemPath
 func (p AbsoluteSystemPath) Dir() AbsoluteSystemPath {
 	return AbsoluteSystemPath(filepath.Dir(p.ToString()))
 }
 
 // MkdirAll implements os.MkdirAll(p, DirPermissions|0644)
 func (p AbsoluteSystemPath) MkdirAll() error {
-	return os.MkdirAll(p.ToString(), dirPermissions|0644)
+	return os.MkdirAll(p.ToString(), _dirPermissions|0644)
 }
 
-// Open implements os.Open(p) for an absolute path
+// Open implements os.Open(p) for an AbsoluteSystemPath
 func (p AbsoluteSystemPath) Open() (*os.File, error) {
 	return os.Open(p.ToString())
 }
@@ -99,8 +67,10 @@ func (p AbsoluteSystemPath) OpenFile(flags int, mode os.FileMode) (*os.File, err
 	return os.OpenFile(p.ToString(), flags, mode)
 }
 
+// FileExists returns true if the given path exists and is a file.
 func (p AbsoluteSystemPath) FileExists() bool {
-	return fileExists(p.ToString())
+	info, err := os.Lstat(p.ToString())
+	return err == nil && !info.IsDir()
 }
 
 // Lstat implements os.Lstat for absolute path
@@ -117,7 +87,16 @@ func (p AbsoluteSystemPath) DirExists() bool {
 // ContainsPath returns true if this absolute path is a parent of the
 // argument.
 func (p AbsoluteSystemPath) ContainsPath(other AbsoluteSystemPath) (bool, error) {
-	return dirContainsPath(p.ToString(), other.ToString())
+	// In Go, filepath.Rel can return a path that starts with "../" or equivalent.
+	// Checking filesystem-level contains can get extremely complicated
+	// (see https://github.com/golang/dep/blob/f13583b555deaa6742f141a9c1185af947720d60/internal/fs/fs.go#L33)
+	// As a compromise, rely on the stdlib to generate a relative path and then check
+	// if the first step is "../".
+	rel, err := filepath.Rel(p.ToString(), other.ToString())
+	if err != nil {
+		return false, err
+	}
+	return !strings.HasPrefix(rel, _nonRelativeSentinel), nil
 }
 
 // ReadFile reads the contents of the specified file
@@ -132,7 +111,19 @@ func (p AbsoluteSystemPath) WriteFile(contents []byte, mode os.FileMode) error {
 
 // EnsureDir ensures that the directory containing this file exists
 func (p AbsoluteSystemPath) EnsureDir() error {
-	return ensureDir(p.ToString())
+	dir := p.Dir()
+	err := os.MkdirAll(dir.ToString(), _dirPermissions)
+	if err != nil && dir.FileExists() {
+		// It looks like this is a file and not a directory. Attempt to remove it; this can
+		// happen in some cases if you change a rule from outputting a file to a directory.
+		log.Printf("Attempting to remove file %s; a subdirectory is required", dir)
+		if err2 := dir.Remove(); err2 == nil {
+			err = os.MkdirAll(dir.ToString(), _dirPermissions)
+		} else {
+			return err
+		}
+	}
+	return err
 }
 
 // Create is the AbsoluteSystemPath wrapper for os.Create
