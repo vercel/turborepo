@@ -13,8 +13,8 @@ import (
 )
 
 func TestCopyFile(t *testing.T) {
-	srcFilePath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "src"))
-	destFilePath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	srcFilePath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "src"))
+	destFilePath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "dest"))
 	from := &LstatCachedFile{Path: srcFilePath}
 
 	// The src file doesn't exist, will error.
@@ -36,9 +36,9 @@ func TestCopyFile(t *testing.T) {
 	assert.NilError(t, err, "src exists dest does not, should not error.")
 
 	// Now test for symlinks.
-	symlinkSrcPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "symlink"))
-	symlinkTargetPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "target"))
-	symlinkDestPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	symlinkSrcPath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "symlink"))
+	symlinkTargetPath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "target"))
+	symlinkDestPath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "dest"))
 	fromSymlink := &LstatCachedFile{Path: symlinkSrcPath}
 
 	// Create the symlink target.
@@ -88,7 +88,7 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	assert.NilError(t, err, "Create")
 	err = srcFile.Chmod(readonlyMode)
 	assert.NilError(t, err, "Chmod")
-	err = CopyFile(&LstatCachedFile{Path: turbopath.AbsolutePath(srcFilePath)}, dstFilePath)
+	err = CopyFile(&LstatCachedFile{Path: turbopath.AbsoluteSystemPath(srcFilePath)}, dstFilePath)
 	assert.NilError(t, err, "CopyOrLinkFile")
 	info, err := os.Lstat(dstFilePath)
 	assert.NilError(t, err, "Lstat")

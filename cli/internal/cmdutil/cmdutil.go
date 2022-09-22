@@ -45,7 +45,7 @@ type Helper struct {
 	// UserConfigPath is the path to where we expect to find
 	// a user-specific config file, if one is present. Public
 	// to allow overrides in tests
-	UserConfigPath turbopath.AbsolutePath
+	UserConfigPath turbopath.AbsoluteSystemPath
 
 	cleanupsMu sync.Mutex
 	cleanups   []io.Closer
@@ -202,7 +202,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 type CmdBase struct {
 	UI           cli.Ui
 	Logger       hclog.Logger
-	RepoRoot     turbopath.AbsolutePath
+	RepoRoot     turbopath.AbsoluteSystemPath
 	APIClient    *client.ApiClient
 	RepoConfig   *config.RepoConfig
 	UserConfig   *config.UserConfig

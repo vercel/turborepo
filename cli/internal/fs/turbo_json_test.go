@@ -14,7 +14,7 @@ import (
 func Test_ReadTurboConfig(t *testing.T) {
 	testDir := getTestDir(t, "correct")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -72,7 +72,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 func Test_ReadTurboConfig_Legacy(t *testing.T) {
 	testDir := getTestDir(t, "legacy-only")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -103,7 +103,7 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 	testDir := getTestDir(t, "both")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -138,7 +138,7 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-1")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -155,7 +155,7 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-2")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -172,7 +172,7 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "invalid-global-env")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -189,7 +189,7 @@ func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "legacy-env")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -245,17 +245,17 @@ func validateOutput(t *testing.T, actual Pipeline, expected map[string]TaskDefin
 
 }
 
-func getTestDir(t *testing.T, testName string) turbopath.AbsolutePath {
+func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
 	defaultCwd, err := os.Getwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	cwd, err := CheckedToAbsolutePath(defaultCwd)
+	cwd, err := CheckedToAbsoluteSystemPath(defaultCwd)
 	if err != nil {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}
 
-	return cwd.Join("testdata", testName)
+	return cwd.UntypedJoin("testdata", testName)
 }
 
 func sortedArray(arr []string) []string {

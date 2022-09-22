@@ -20,11 +20,11 @@ import (
 type fsCache struct {
 	cacheDirectory string
 	recorder       analytics.Recorder
-	repoRoot       turbopath.AbsolutePath
+	repoRoot       turbopath.AbsoluteSystemPath
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) (*fsCache, error) {
+func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) (*fsCache, error) {
 	cacheDir := opts.ResolveCacheDir(repoRoot)
 	if err := cacheDir.MkdirAll(); err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				statedFile := fs.LstatCachedFile{Path: f.repoRoot.Join(file)}
+				statedFile := fs.LstatCachedFile{Path: f.repoRoot.UntypedJoin(file)}
 				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)

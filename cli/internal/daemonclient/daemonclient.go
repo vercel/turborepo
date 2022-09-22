@@ -17,10 +17,10 @@ type DaemonClient struct {
 
 // Status provides details about the daemon's status
 type Status struct {
-	UptimeMs uint64                 `json:"uptimeMs"`
-	LogFile  turbopath.AbsolutePath `json:"logFile"`
-	PidFile  turbopath.AbsolutePath `json:"pidFile"`
-	SockFile turbopath.AbsolutePath `json:"sockFile"`
+	UptimeMs uint64                       `json:"uptimeMs"`
+	LogFile  turbopath.AbsoluteSystemPath `json:"logFile"`
+	PidFile  turbopath.AbsoluteSystemPath `json:"pidFile"`
+	SockFile turbopath.AbsoluteSystemPath `json:"sockFile"`
 }
 
 // New creates a new instance of a DaemonClient.

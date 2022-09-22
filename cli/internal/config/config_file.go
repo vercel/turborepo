@@ -13,7 +13,7 @@ import (
 // RepoConfig is a configuration object for the logged-in turborepo.com user
 type RepoConfig struct {
 	repoViper *viper.Viper
-	path      turbopath.AbsolutePath
+	path      turbopath.AbsoluteSystemPath
 }
 
 // LoginURL returns the configured URL for authenticating the user
@@ -62,7 +62,7 @@ func (rc *RepoConfig) Delete() error {
 // for Turborepo.
 type UserConfig struct {
 	userViper *viper.Viper
-	path      turbopath.AbsolutePath
+	path      turbopath.AbsoluteSystemPath
 }
 
 // Token returns the Bearer token for this user if it exists
@@ -97,7 +97,7 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsolutePath, flags *pflag.FlagSet) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
@@ -122,8 +122,8 @@ func AddUserConfigFlags(flags *pflag.FlagSet) {
 
 // DefaultUserConfigPath returns the default platform-dependent place that
 // we store the user-specific configuration.
-func DefaultUserConfigPath() turbopath.AbsolutePath {
-	return fs.GetUserConfigDir().Join("config.json")
+func DefaultUserConfigPath() turbopath.AbsoluteSystemPath {
+	return fs.GetUserConfigDir().UntypedJoin("config.json")
 }
 
 const (
@@ -135,7 +135,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsolutePath, flags *pflag.FlagSet) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -166,6 +166,6 @@ func AddRepoConfigFlags(flags *pflag.FlagSet) {
 }
 
 // GetRepoConfigPath reads the user-specific configuration values
-func GetRepoConfigPath(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
-	return repoRoot.Join(".turbo", "config.json")
+func GetRepoConfigPath(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return repoRoot.UntypedJoin(".turbo", "config.json")
 }

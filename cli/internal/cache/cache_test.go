@@ -222,7 +222,7 @@ func (nullRecorder) LogEvent(analytics.EventPayload) {}
 
 func TestNew(t *testing.T) {
 	// Test will bomb if this fails, no need to specially handle the error
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	type args struct {
 		opts           Opts
 		recorder       analytics.Recorder
