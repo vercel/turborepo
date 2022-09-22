@@ -25,6 +25,10 @@ func (sr *errorResp) FetchArtifact(hash string) (*http.Response, error) {
 	return nil, sr.err
 }
 
+func (sr *errorResp) ArtifactExists(hash string) (*http.Response, error) {
+	return nil, sr.err
+}
+
 func (sr *errorResp) GetTeamID() string {
 	return ""
 }
