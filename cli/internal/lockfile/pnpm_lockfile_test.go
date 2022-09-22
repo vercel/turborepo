@@ -15,7 +15,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	cwd, err := fs.CheckedToAbsolutePath(defaultCwd)
+	cwd, err := fs.CheckedToAbsoluteSystemPath(defaultCwd)
 	if err != nil {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}

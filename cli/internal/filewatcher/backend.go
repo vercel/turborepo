@@ -108,7 +108,7 @@ func (f *fsNotifyBackend) watchRecursively(root turbopath.AbsoluteSystemPath, ex
 		}
 		if addMode == synthesizeEvents {
 			f.events <- Event{
-				Path:      fs.AbsolutePathFromUpstream(name),
+				Path:      fs.AbsoluteSystemPathFromUpstream(name),
 				EventType: FileAdded,
 			}
 		}
@@ -131,7 +131,7 @@ outer:
 				break outer
 			}
 			eventType := toFileEvent(ev.Op)
-			path := fs.AbsolutePathFromUpstream(ev.Name)
+			path := fs.AbsoluteSystemPathFromUpstream(ev.Name)
 			if eventType == FileAdded {
 				if err := f.onFileAdded(path); err != nil {
 					f.errors <- err

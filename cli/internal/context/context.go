@@ -154,7 +154,7 @@ func WithGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.Packag
 		// until all parsing is complete
 		parseJSONWaitGroup := &errgroup.Group{}
 		for _, workspace := range workspaces {
-			pkgJSONPath := fs.UnsafeToAbsolutePath(workspace)
+			pkgJSONPath := fs.UnsafeToAbsoluteSystemPath(workspace)
 			parseJSONWaitGroup.Go(func() error {
 				return c.parsePackageJSON(repoRoot, pkgJSONPath)
 			})

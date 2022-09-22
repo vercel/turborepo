@@ -68,7 +68,7 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsoluteSystemPath, exclude
 	if err != nil {
 		return err
 	}
-	root := fs.AbsolutePathFromUpstream(realRoot)
+	root := fs.AbsoluteSystemPathFromUpstream(realRoot)
 	dev, err := fsevents.DeviceForPath(root.ToString())
 	if err != nil {
 		return err

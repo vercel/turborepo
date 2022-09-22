@@ -170,7 +170,7 @@ func makeInvalidTar(t *testing.T) *bytes.Buffer {
 }
 
 func TestRestoreTar(t *testing.T) {
-	root := fs.AbsolutePathFromUpstream(t.TempDir())
+	root := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	tar := makeValidTar(t)
 
@@ -208,7 +208,7 @@ func TestRestoreTar(t *testing.T) {
 }
 
 func TestRestoreInvalidTar(t *testing.T) {
-	root := fs.AbsolutePathFromUpstream(t.TempDir())
+	root := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	expectedContents := []byte("important-data")
 	someFile := root.UntypedJoin("some-file")
 	err := someFile.WriteFile(expectedContents, 0644)

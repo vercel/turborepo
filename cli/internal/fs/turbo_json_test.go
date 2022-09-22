@@ -250,7 +250,7 @@ func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	cwd, err := CheckedToAbsolutePath(defaultCwd)
+	cwd, err := CheckedToAbsoluteSystemPath(defaultCwd)
 	if err != nil {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}

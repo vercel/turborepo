@@ -35,7 +35,7 @@ func testBin() string {
 }
 
 func TestPidFileLock(t *testing.T) {
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	pidPath := getPidFile(repoRoot)
 	// the lockfile library handles removing pids from dead owners
@@ -113,7 +113,7 @@ outer:
 func TestDaemonLifecycle(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -153,7 +153,7 @@ func TestDaemonLifecycle(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -175,7 +175,7 @@ func TestTimeout(t *testing.T) {
 func TestCaughtSignal(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()
@@ -222,7 +222,7 @@ func TestCaughtSignal(t *testing.T) {
 func TestCleanupOnPanic(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	ts := newTestRPCServer()
 	watcher := signals.NewWatcher()

@@ -238,7 +238,7 @@ func TestGetPackageDeps(t *testing.T) {
 	//     dir/
 	//       nested-file
 
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	myPkgDir := repoRoot.UntypedJoin("my-pkg")
 
 	// create the dir first

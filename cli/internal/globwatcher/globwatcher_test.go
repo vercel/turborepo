@@ -60,7 +60,7 @@ func TestTrackOutputs(t *testing.T) {
 	logger := hclog.Default()
 
 	repoRootRaw := t.TempDir()
-	repoRoot := fs.AbsolutePathFromUpstream(repoRootRaw)
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(repoRootRaw)
 
 	setup(t, repoRoot)
 
@@ -121,7 +121,7 @@ func TestTrackOutputs(t *testing.T) {
 func TestWatchSingleFile(t *testing.T) {
 	logger := hclog.Default()
 
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	setup(t, repoRoot)
 

@@ -47,7 +47,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	// failures, followed by ErrTooManyAttempts
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -68,7 +68,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 func TestKillDeadServerNoPid(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -87,7 +87,7 @@ func TestKillDeadServerNoPid(t *testing.T) {
 func TestKillDeadServerNoProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -115,7 +115,7 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 func TestKillDeadServerWithProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -179,7 +179,7 @@ func (s *mockServer) Hello(ctx context.Context, req *turbodprotocol.HelloRequest
 func TestKillLiveServer(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)

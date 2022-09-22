@@ -82,7 +82,7 @@ func expectWatching(t *testing.T, c *testClient, dirs []turbopath.AbsoluteSystem
 func TestFileWatching(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	err := repoRoot.UntypedJoin(".git").MkdirAll()
 	assert.NilError(t, err, "MkdirAll")
 	err = repoRoot.UntypedJoin("node_modules", "some-dep").MkdirAll()
