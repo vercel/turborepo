@@ -7,7 +7,13 @@ function findDependsOnEnvVars({
   dependencies?: Array<string>;
 }) {
   if (dependencies) {
-    return dependencies.filter((dep) => dep.startsWith("$"));
+    return (
+      dependencies
+        // filter for dep env vars
+        .filter((dep) => dep.startsWith("$"))
+        // remove leading $
+        .map((envVar) => envVar.slice(1, envVar.length))
+    );
   }
 
   return [];
@@ -36,6 +42,7 @@ function getEnvVarDependencies({
     }),
     ...globalEnv,
   ];
+
   Object.values(pipeline).forEach(({ env, dependsOn }) => {
     if (dependsOn) {
       allEnvVars.push(...findDependsOnEnvVars({ dependencies: dependsOn }));
@@ -46,14 +53,7 @@ function getEnvVarDependencies({
     }
   });
 
-  // remove leading $, but only for the vars, that are prefixed (from deprecated `dependsOn`)
-  const envVarSet = new Set(
-    allEnvVars.map((envVar) =>
-      envVar.startsWith("$") ? envVar.slice(1, envVar.length) : envVar
-    )
-  );
-
-  return envVarSet;
+  return new Set(allEnvVars);
 }
 
 export default getEnvVarDependencies;

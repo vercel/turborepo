@@ -9,7 +9,7 @@ const ruleTester = new RuleTester({
 const getTestTurboConfig = () => {
   return {
     $schema: "./docs/public/schema.json",
-    globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY"],
+    globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY", "$NEW_STYLE_GLOBAL_ENV_KEY"],
     globalDependencies: ["$GLOBAL_ENV_KEY"],
     pipeline: {
       test: {
@@ -48,6 +48,12 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     {
       code: `
         const { NEW_STYLE_GLOBAL_ENV_KEY, TASK_ENV_KEY } = process.env;
+      `,
+      options: [{ turboConfig: getTestTurboConfig() }],
+    },
+    {
+      code: `
+        const val = process.env["$NEW_STYLE_GLOBAL_ENV_KEY"];
       `,
       options: [{ turboConfig: getTestTurboConfig() }],
     },
