@@ -151,9 +151,8 @@ jobs:
           author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
           branch: ${{ inputs.release_branch }}
           delete-branch: true
-          title: '[Example] Update report'
+          title: "Merge release commit"
           body: |
             Merge release commit for ${{ inputs.release_branch }}
-          reviewers: [${{ github.actor }}, "@gsoltis"]
+          reviewers: ["${{ github.actor }}", "@gsoltis"]
           draft: false
-
