@@ -146,10 +146,16 @@ func (p *prune) prune(opts *opts) error {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		targetDir := fullDir.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
-		if err := targetDir.EnsureDir(); err != nil {
-			return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
+		originalDir := p.base.RepoRoot.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
+		info, err := originalDir.Lstat()
+		if err != nil {
+			return errors.Wrapf(err, "failed to lstat %s", originalDir)
 		}
+		targetDir := fullDir.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
+		if err = targetDir.MkdirAllMode(info.Mode()); err != nil {
+			return errors.Wrapf(err, "failed to create folder %s for %v", targetDir, internalDep)
+		}
+
 		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
