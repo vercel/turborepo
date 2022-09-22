@@ -4,6 +4,7 @@ import { getWorkspaceImplementation } from "../getWorkspaceImplementation";
 import { getPackageManagerVersion } from "../getPackageManagerVersion";
 import fs from "fs-extra";
 import chalk from "chalk";
+import { skip, ok, error } from "../logger";
 
 export default function addPackageManager(files: string[], flags: Flags) {
   if (files.length === 1) {
@@ -74,14 +75,4 @@ export default function addPackageManager(files: string[], flags: Flags) {
     console.log(chalk.yellow(`${unmodifiedCount} unmodified`));
     console.log(chalk.green(`${modifiedCount} modified`));
   }
-}
-
-function skip(...args: any[]) {
-  console.log(chalk.yellow.inverse(` SKIP `), ...args);
-}
-function error(...args: any[]) {
-  console.log(chalk.red.inverse(` ERROR `), ...args);
-}
-function ok(...args: any[]) {
-  console.log(chalk.green.inverse(` OK `), ...args);
 }
