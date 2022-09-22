@@ -30,4 +30,4 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - run: pnpm -- turbo run test  --filter=...[${GITHUB_BASE_REF:-HEAD^1}] --filter=!cli --color
+      - run: git fetch ${GITHUB_BASE_REF:-HEAD^1} && pnpm -- turbo run test  --filter=...[${GITHUB_BASE_REF:-HEAD^1}] --filter=!cli --color
