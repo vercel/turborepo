@@ -10,11 +10,12 @@ import {
   LightningBoltIcon,
   RefreshIcon,
 } from "@heroicons/react/outline";
+import { IconType } from "../components/Icons";
 
 export type Feature = {
   name: string;
   description: React.ReactNode;
-  Icon: (props: ComponentProps<"svg">) => JSX.Element;
+  Icon: IconType;
   page: "all" | "home" | "docs";
 };
 
