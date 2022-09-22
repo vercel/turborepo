@@ -20,8 +20,8 @@ var nodejsBerry = PackageManager{
 	Lockfile:   "yarn.lock",
 	PackageDir: "node_modules",
 
-	getWorkspaceGlobs: func(rootpath turbopath.AbsolutePath) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(rootpath.Join("package.json"))
+	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
+		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
@@ -31,7 +31,7 @@ var nodejsBerry = PackageManager{
 		return pkg.Workspaces, nil
 	},
 
-	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsolutePath) ([]string, error) {
+	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		// Matches upstream values:
 		// Key code: https://github.com/yarnpkg/berry/blob/8e0c4b897b0881878a1f901230ea49b7c8113fbe/packages/yarnpkg-core/sources/Workspace.ts#L64-L70
 		return []string{
@@ -41,7 +41,7 @@ var nodejsBerry = PackageManager{
 		}, nil
 	},
 
-	canPrune: func(cwd turbopath.AbsolutePath) (bool, error) {
+	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		if isNMLinker, err := util.IsNMLinker(cwd.ToStringDuringMigration()); err != nil {
 			return false, errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
 		} else if !isNMLinker {
@@ -71,9 +71,9 @@ var nodejsBerry = PackageManager{
 
 	// Detect for berry needs to identify which version of yarn is running on the system.
 	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
-	detect: func(projectDirectory turbopath.AbsolutePath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.Join(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.Join(packageManager.Lockfile).FileExists()
+	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
+		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
+		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
 
 		// Short-circuit, definitely not Yarn.
 		if !specfileExists || !lockfileExists {

@@ -62,13 +62,13 @@ var (
 
 // AddRoot starts watching a new directory hierarchy. Events matching the provided excludePatterns
 // will not be forwarded.
-func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsolutePath, excludePatterns ...string) error {
+func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsoluteSystemPath, excludePatterns ...string) error {
 	// We need to resolve the real path to the hierarchy that we are going to watch
 	realRoot, err := realpath.Realpath(someRoot.ToString())
 	if err != nil {
 		return err
 	}
-	root := fs.AbsolutePathFromUpstream(realRoot)
+	root := fs.AbsoluteSystemPathFromUpstream(realRoot)
 	dev, err := fsevents.DeviceForPath(root.ToString())
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsolutePath, excludePatter
 				// back to the path we were provided since that's what the caller will
 				// expect in terms of event paths.
 				watchRootRelativePath := eventPath[len(realRoot):]
-				processedEventPath := someRoot.Join(watchRootRelativePath)
+				processedEventPath := someRoot.UntypedJoin(watchRootRelativePath)
 
 				// 3. Compare the event to all exclude patterns, short-circuit if we know
 				// we are not watching this file.
@@ -146,8 +146,8 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsolutePath, excludePatter
 	return nil
 }
 
-func waitForCookie(root turbopath.AbsolutePath, events <-chan []fsevents.Event, timeout time.Duration) error {
-	cookiePath := root.Join(".turbo-cookie")
+func waitForCookie(root turbopath.AbsoluteSystemPath, events <-chan []fsevents.Event, timeout time.Duration) error {
+	cookiePath := root.UntypedJoin(".turbo-cookie")
 	if err := cookiePath.WriteFile([]byte("cookie"), 0755); err != nil {
 		return err
 	}

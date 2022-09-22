@@ -2,7 +2,7 @@ package login
 
 import (
 	"fmt"
-	"os/exec"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -198,10 +198,8 @@ func (l *link) run() error {
 	}
 
 	if l.modifyGitIgnore {
-		fs.EnsureDir(".gitignore")
-		_, gitIgnoreErr := exec.Command("sh", "-c", "grep -qxF '.turbo' .gitignore || echo '.turbo' >> .gitignore").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("could find or update .gitignore.\n%w", gitIgnoreErr)
+		if err := l.addTurboToGitignore(); err != nil {
+			return err
 		}
 	}
 
@@ -235,6 +233,54 @@ func promptSetup(location string) (bool, error) {
 		return false, err
 	}
 	return shouldSetup, nil
+}
+
+func (l *link) addTurboToGitignore() error {
+	gitignorePath := l.base.RepoRoot.Join(".gitignore")
+
+	if !gitignorePath.FileExists() {
+		err := gitignorePath.WriteFile([]byte(".turbo\n"), 0644)
+		if err != nil {
+			return fmt.Errorf("could not create .gitignore.\n%w", err)
+		}
+		return nil
+	}
+
+	gitignoreBytes, err := gitignorePath.ReadFile()
+	if err != nil {
+		return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+	}
+
+	hasTurbo := false
+	gitignoreContents := string(gitignoreBytes)
+	gitignoreLines := strings.Split(gitignoreContents, "\n")
+
+	for _, line := range gitignoreLines {
+		if strings.TrimSpace(line) == ".turbo" {
+			hasTurbo = true
+			break
+		}
+	}
+
+	if !hasTurbo {
+		gitignore, err := gitignorePath.OpenFile(os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+		}
+
+		// if the file doesn't end in a newline, we add one
+		if !strings.HasSuffix(gitignoreContents, "\n") {
+			if _, err := gitignore.WriteString("\n"); err != nil {
+				return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+			}
+		}
+
+		if _, err := gitignore.WriteString(".turbo\n"); err != nil {
+			return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+		}
+	}
+
+	return nil
 }
 
 func promptTeam(teams []string) (string, error) {

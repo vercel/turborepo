@@ -15,7 +15,7 @@ import (
 // 'mode' is the mode of the destination file.
 func RecursiveCopy(from string, to string) error {
 	// Verified all callers are passing in absolute paths for from (and to)
-	statedFrom := LstatCachedFile{Path: UnsafeToAbsolutePath(from)}
+	statedFrom := LstatCachedFile{Path: UnsafeToAbsoluteSystemPath(from)}
 	fromType, err := statedFrom.GetType()
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func RecursiveCopy(from string, to string) error {
 				return os.MkdirAll(dest, DirPermissions)
 			}
 			// name is absolute, (originates from godirwalk)
-			return CopyFile(&LstatCachedFile{Path: UnsafeToAbsolutePath(name), fileType: &fileType}, dest)
+			return CopyFile(&LstatCachedFile{Path: UnsafeToAbsoluteSystemPath(name), fileType: &fileType}, dest)
 		})
 	}
 	return CopyFile(&statedFrom, to)

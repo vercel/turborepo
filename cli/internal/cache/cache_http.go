@@ -35,7 +35,7 @@ type httpCache struct {
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
-	repoRoot       turbopath.AbsolutePath
+	repoRoot       turbopath.AbsoluteSystemPath
 }
 
 type limiter chan struct{}
@@ -251,7 +251,7 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 // restored. In the future, these should likely be repo-relative system paths
 // so that they are suitable for being fed into cache.Put for other caches.
 // For now, I think this is working because windows also accepts /-delimited paths.
-func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error) {
+func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]string, error) {
 	files := []string{}
 	missingLinks := []*tar.Header{}
 	gzr, err := gzip.NewReader(reader)
@@ -278,7 +278,7 @@ func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error)
 		// hdr.Name is always a posix-style path
 		// TODO: files should eventually be repo-relative system paths
 		files = append(files, hdr.Name)
-		filename := root.Join(hdr.Name)
+		filename := root.UntypedJoin(hdr.Name)
 		if isChild, err := root.ContainsPath(filename); err != nil {
 			return nil, err
 		} else if !isChild {
@@ -316,16 +316,16 @@ func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error)
 
 var errNonexistentLinkTarget = errors.New("the link target does not exist")
 
-func restoreSymlink(root turbopath.AbsolutePath, hdr *tar.Header, allowNonexistentTargets bool) error {
+func restoreSymlink(root turbopath.AbsoluteSystemPath, hdr *tar.Header, allowNonexistentTargets bool) error {
 	// Note that hdr.Linkname is really the link target
 	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
-	linkFilename := root.Join(hdr.Name)
+	linkFilename := root.UntypedJoin(hdr.Name)
 	if err := linkFilename.EnsureDir(); err != nil {
 		return err
 	}
 
 	// TODO: check if this is an absolute path, or if we even care
-	linkTarget := linkFilename.Dir().Join(relativeLinkTarget)
+	linkTarget := linkFilename.Dir().UntypedJoin(relativeLinkTarget)
 	if _, err := linkTarget.Lstat(); err != nil {
 		if os.IsNotExist(err) {
 			if !allowNonexistentTargets {
@@ -356,7 +356,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,

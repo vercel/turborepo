@@ -50,8 +50,8 @@ type CacheEvent struct {
 }
 
 // DefaultLocation returns the default filesystem cache location, given a repo root
-func DefaultLocation(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
-	return repoRoot.Join("node_modules", ".cache", "turbo")
+func DefaultLocation(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return repoRoot.UntypedJoin("node_modules", ".cache", "turbo")
 }
 
 // OnCacheRemoved defines a callback that the cache system calls if a particular cache
@@ -74,7 +74,7 @@ type Opts struct {
 
 // ResolveCacheDir calculates the location turbo should use to cache artifacts,
 // based on the options supplied by the user.
-func (o *Opts) ResolveCacheDir(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
+func (o *Opts) ResolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	if o.OverrideDir != "" {
 		return fs.ResolveUnknownPath(repoRoot, o.OverrideDir)
 	}
@@ -93,7 +93,7 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 }
 
 // New creates a new cache
-func New(opts Opts, repoRoot turbopath.AbsolutePath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	c, err := newSyncCache(opts, repoRoot, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
@@ -105,7 +105,7 @@ func New(opts Opts, repoRoot turbopath.AbsolutePath, client client, recorder ana
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, repoRoot turbopath.AbsolutePath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
