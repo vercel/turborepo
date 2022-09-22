@@ -23,6 +23,35 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 	}
 }
 
+func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
+	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
+
+	teamID := "some-id"
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamId":"%v"}`, teamID)), 0644), "WriteFile")
+	slug := "my-team-slug"
+	assert.NilError(t, flags.Set("team", slug), "flags.Set")
+	apiURL := "http://my-login-url"
+	assert.NilError(t, flags.Set("api", apiURL), "flags.Set")
+
+	config, err := ReadRepoConfigFile(testConfigFile, flags)
+	if err != nil {
+		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
+	}
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.TeamID != "" {
+		t.Errorf("TeamID got %v, want <empty string>", remoteConfig.TeamID)
+	}
+	if remoteConfig.TeamSlug != slug {
+		t.Errorf("TeamSlug got %v, want %v", remoteConfig.TeamSlug, slug)
+	}
+	if remoteConfig.APIURL != apiURL {
+		t.Errorf("APIURL got %v, want %v", remoteConfig.APIURL, apiURL)
+	}
+}
+
 func TestRepoConfigIncludesDefaults(t *testing.T) {
 	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
