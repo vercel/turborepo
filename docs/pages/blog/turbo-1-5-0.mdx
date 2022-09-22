@@ -19,7 +19,7 @@ Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well a
 
 - [**The Monorepo Handbook**](#the-monorepo-handbook): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
 - [**Drop the `run`**](#drop-the-run): `turbo run <task>` can now be shortened to `turbo <task>`
-- [**`turbo prune` now supports pnpm**](#prune-now-supported-on-pnpm): Pruning your monorepo is now supported in `pnpm`.
+- [**`turbo prune` now supports pnpm and yarn berry**](#prune-now-supported-on-pnpm-and-yarnberry): Pruning your monorepo is now supported in `pnpm` and `yarn@berry`.
 - [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
 - [**Changes to `package.json` hashing**](#changes-to-packagejson-hashing): We've improved how we hash `package.json` when running tasks.
 
@@ -58,9 +58,11 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 `turbo run <task>` will continue to work, and there are no plans to deprecate it.
 
-## Prune now supported on `pnpm`
+## Prune now supported on `pnpm` and `yarn@berry`
 
-We're delighted to announce that `turbo prune --scope=<package-name>` is now supported in `pnpm`.
+We're delighted to announce that `turbo prune --scope=<package-name>` is now supported in `pnpm` and `yarn@berry`.
+
+You can use `turbo prune` to create a pruned version of your monorepo - including dependencies in your lockfile.
 
 As part of the handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/handbook/deploying-with-docker).
 
