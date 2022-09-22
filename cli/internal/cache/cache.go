@@ -282,12 +282,12 @@ func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) 
 func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {
 	syncCacheState := ItemStatus{}
 	for _, cache := range mplex.caches {
-		cacheState, err := cache.Exists(target)
+		itemStatus, err := cache.Exists(target)
 		if err != nil {
 			return syncCacheState, err
 		}
-		syncCacheState.Local = syncCacheState.Local || cacheState.Local
-		syncCacheState.Remote = syncCacheState.Remote || cacheState.Remote
+		syncCacheState.Local = syncCacheState.Local || itemStatus.Local
+		syncCacheState.Remote = syncCacheState.Remote || itemStatus.Remote
 	}
 
 	return syncCacheState, nil

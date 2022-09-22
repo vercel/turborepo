@@ -774,7 +774,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		}
 		sort.Strings(stringDescendents)
 
-		cacheState, err := turboCache.Exists(hash)
+		itemStatus, err := turboCache.Exists(hash)
 		if err != nil {
 			return err
 		}
@@ -784,7 +784,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 			Task:         packageTask.Task,
 			Package:      packageTask.PackageName,
 			Hash:         hash,
-			CacheState:   cacheState,
+			CacheState:   itemStatus,
 			Command:      command,
 			Dir:          packageTask.Pkg.Dir.ToString(),
 			Outputs:      packageTask.TaskDefinition.Outputs,

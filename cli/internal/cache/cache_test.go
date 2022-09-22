@@ -128,11 +128,11 @@ func TestExists(t *testing.T) {
 		caches: caches,
 	}
 
-	cacheState, err := mplex.Exists("some-hash")
+	itemStatus, err := mplex.Exists("some-hash")
 	if err != nil {
 		t.Errorf("got error verifying files: %v", err)
 	}
-	if cacheState.Local {
+	if itemStatus.Local {
 		t.Error("did not expect file to exist")
 	}
 
@@ -142,11 +142,11 @@ func TestExists(t *testing.T) {
 		t.Errorf("Put got error %v, want <nil>", err)
 	}
 
-	cacheState, err = mplex.Exists("some-hash")
+	itemStatus, err = mplex.Exists("some-hash")
 	if err != nil {
 		t.Errorf("got error verifying files: %v", err)
 	}
-	if !cacheState.Local {
+	if !itemStatus.Local {
 		t.Error("failed to find previously stored files")
 	}
 }
