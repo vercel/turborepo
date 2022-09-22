@@ -1,0 +1,17 @@
+# Saving time on CI
+
+Running continuous integration servers to lint or deploy your apps can be slow and expensive. Any chance to save CI time can help you build and iterate faster.
+
+## Cancel unnecessary builds
+
+When your app gets deployed from a CI, it usually performs these steps:
+
+1. It [installs your `node_modules`](/docs/handbook/package-installation)
+2. It runs `build` on your app
+3. It runs `deploy` on the built code - whether that's sending it to the web, app store, or server.
+
+**Install, build, deploy**. Using Turborepo's [caching](/docs/core-concepts/caching), we can save time on the build step.
+
+But Turborepo doesn't cache your `node_modules` or deploy your application - so how can we save time on steps 1 and 3?
+
+### `npx turbo-ignore`
