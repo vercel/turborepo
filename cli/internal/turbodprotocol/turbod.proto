@@ -33,6 +33,7 @@ message StatusResponse {
 message NotifyOutputsWrittenRequest {
   repeated string output_globs = 1;
   string hash = 2;
+  repeated string excluded_output_globs = 3;
 }
 
 message NotifyOutputsWrittenResponse {}
@@ -40,10 +41,12 @@ message NotifyOutputsWrittenResponse {}
 message GetChangedOutputsRequest {
   repeated string output_globs = 1;
   string hash = 2;
+  repeated string excluded_output_globs = 3;
 }
 
 message GetChangedOutputsResponse {
   repeated string changed_output_globs = 1;
+  repeated string changed_excluded_output_globs = 2;
 }
 
 message DaemonStatus {

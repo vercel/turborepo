@@ -40,7 +40,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{"dist/**", "!dist/assets/**", ".next/**"},
+			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**", ".next/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -48,7 +48,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"lint": {
-			Outputs:                 []string{},
+			Outputs:                 TaskOutputs{Inclusions: []string{}, Exclusions: []string{}},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{"MY_VAR"},
 			TaskDependencies:        []string{},
@@ -64,7 +64,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.FullTaskOutput,
 		},
 		"publish": {
-			Outputs:                 []string{"dist/**"},
+			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}, Exclusions: []string{}},
 			EnvVarDependencies:      []string{},
 			TopologicalDependencies: []string{"build", "publish"},
 			TaskDependencies:        []string{"admin#lint", "build"},
@@ -98,7 +98,11 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
+<<<<<<< HEAD
 			Outputs:                 []string{"build/**/*", "dist/**/*"},
+=======
+			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**/*", "build/**/*"}, Exclusions: []string{}},
+>>>>>>> 3e4da5e9 (Propagated changes to OutputWatcher, involved additions to Protobuf.)
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -129,10 +133,14 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
+<<<<<<< HEAD
 			Outputs: TaskOutputs{
 				Inclusions: []string{"dist/**", ".next/**"},
 				Exclusions: []string{"!dist/assets/**"},
 			},
+=======
+			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**", ".next/**"}, Exclusions: []string{"dist/assets/**"}},
+>>>>>>> 3e4da5e9 (Propagated changes to OutputWatcher, involved additions to Protobuf.)
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},

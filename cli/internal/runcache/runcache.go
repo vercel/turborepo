@@ -167,7 +167,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O
-		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, []string{})
+		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		if err != nil {
 			return false, err
 		} else if !hit {
