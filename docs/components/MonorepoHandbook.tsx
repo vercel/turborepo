@@ -124,9 +124,9 @@ export const TasksArea = () => {
           Icon: DockerIcon,
           description:
             "Make use of Turborepo's prune command to keep your Docker deploys fast.",
-          name: "Deploying to Docker",
+          name: "Deploying with Docker",
         }}
-        href="/docs/handbook/deploying-to-docker"
+        href="/docs/handbook/deploying-with-docker"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
