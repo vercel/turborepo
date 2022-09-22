@@ -2,7 +2,6 @@ package turbopath
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +115,6 @@ func (p AbsoluteSystemPath) EnsureDir() error {
 	if err != nil && dir.FileExists() {
 		// It looks like this is a file and not a directory. Attempt to remove it; this can
 		// happen in some cases if you change a rule from outputting a file to a directory.
-		log.Printf("Attempting to remove file %s; a subdirectory is required", dir)
 		if err2 := dir.Remove(); err2 == nil {
 			err = os.MkdirAll(dir.ToString(), _dirPermissions)
 		} else {
