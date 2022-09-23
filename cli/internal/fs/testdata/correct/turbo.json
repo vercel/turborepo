@@ -31,19 +31,26 @@
         "dist/**"
       ],
       "inputs": [
-         /* 
-          mocked test comment 
+         /*
+          mocked test comment
          */
         "build/**/*"
       ],
       "dependsOn": [
          /* mocked test comment */"^publish",
+        "^build",
         "build",
         "admin#lint"
       ],
       "cache": false
     }
   },
+  "globalDependencies": [
+    "some-file",
+    "../another-dir/**",
+    "$GLOBAL_ENV_VAR"
+  ],
+  "globlaEnv": ["SOME_VAR", "ANOTHER_VAR"],
   "remoteCache": {
     "teamId": "team_id",
     "signature": true
