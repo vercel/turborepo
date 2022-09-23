@@ -121,10 +121,14 @@ func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration
 		return err
 	}
 
-	WriteCacheMetaFile(f.cacheDirectory.UntypedJoin(hash+"-meta.json"), &CacheMetadata{
+	writeErr := WriteCacheMetaFile(f.cacheDirectory.UntypedJoin(hash+"-meta.json"), &CacheMetadata{
 		Duration: duration,
 		Hash:     hash,
 	})
+
+	if writeErr != nil {
+		return writeErr
+	}
 
 	return nil
 }

@@ -76,7 +76,7 @@ func (c *asyncCache) Shutdown() {
 // run implements the actual async logic.
 func (c *asyncCache) run() {
 	for r := range c.requests {
-		c.realCache.Put(r.anchor, r.key, r.duration, r.files)
+		_ = c.realCache.Put(r.anchor, r.key, r.duration, r.files)
 	}
 	c.wg.Done()
 }
