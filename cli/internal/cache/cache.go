@@ -7,14 +7,12 @@ package cache
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -132,7 +130,6 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	}
 
 	if useHTTPCache {
-		fmt.Println(ui.Dim("• Remote computation caching enabled"))
 		implementation := newHTTPCache(opts, client, recorder, repoRoot)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
