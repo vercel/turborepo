@@ -71,7 +71,7 @@ func GetCmd(helper *cmdutil.Helper) *cobra.Command {
 }
 
 func logError(logger hclog.Logger, ui cli.Ui, err error) {
-	logger.Error("error", err)
+	logger.Error(fmt.Sprintf("error: %v", err))
 	pref := color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 	ui.Error(fmt.Sprintf("%s%s", pref, color.RedString(" %v", err)))
 }

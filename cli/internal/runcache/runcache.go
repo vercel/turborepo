@@ -279,7 +279,7 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 	for index, value := range filesToBeCached {
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
 		if err != nil {
-			logger.Error("error", err)
+			logger.Error(fmt.Sprintf("error: %v", err))
 			terminal.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
 			continue
 		}
