@@ -107,13 +107,9 @@ manifest-push:
 
 .PHONY: turbo-cross-%
 turbo-cross-%:
-	@echo "building for $(@:turbo-cross-%=%)"
-	docker build \
-		--platform=linux/$(@:turbo-cross-%=%) \
-		--build-arg BASE_IMAGE=$(IMAGE_NAME) \
-		--build-arg GIT_REPO=$(GIT_REPO) \
-		-t $(TURBO_IMAGE_NAME)-$(@:turbo-cross-%=%) \
-		-f Dockerfile.turbo .
+	# Currently, we don't layer any customizations
+	@echo "tagging $(IMAGE_NAME)-$(@:turbo-cross-%=%) to $(TURBO_IMAGE_NAME)-$(@:turbo-cross-%=%)"
+	docker tag $(IMAGE_NAME)-$(@:turbo-cross-%=%) $(TURBO_IMAGE_NAME)-$(@:turbo-cross-%=%)
 
 .PHONY: turbo-cross
 turbo-cross: $(patsubst %, turbo-cross-%,$(SUBIMAGES))

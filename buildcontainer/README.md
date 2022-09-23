@@ -2,10 +2,9 @@
 
 This directory has been forked from https://github.com/goreleaser/goreleaser-cross, and modified to fit Turborepo's needs.
 
-**[Please ensure you have read and understood the Xcode license
-terms before continuing.](https://www.apple.com/legal/sla/docs/xcode.pdf)**
+The License has been preserved from the source, and OSX SDKs have been removed.
 
-Original README:
+Original README follows:
 
 # goreleaser-cross
 
