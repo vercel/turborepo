@@ -58,6 +58,8 @@ func Test_Mkdir(t *testing.T) {
 			assert.NilError(t, err, "%s: Create", testName)
 			err = file.Chmod(testCase.mode)
 			assert.NilError(t, err, "%s: Chmod", testName)
+			err = file.Close()
+			assert.NilError(t, err, "%s: Close", testName)
 		}
 
 		testPath := AbsoluteSystemPath(path)
