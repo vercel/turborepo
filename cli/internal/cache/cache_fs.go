@@ -36,7 +36,7 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
-func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
 
 	// If it's not in the cache bail now
@@ -46,10 +46,10 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 	}
 
 	// Otherwise, copy it into position
-	err := fs.RecursiveCopy(cachedFolder.ToStringDuringMigration(), target)
+	err := fs.RecursiveCopy(cachedFolder.ToStringDuringMigration(), anchor.ToStringDuringMigration())
 	if err != nil {
 		// TODO: what event to log here?
-		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
+		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", anchor, err)
 	}
 
 	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
@@ -86,7 +86,7 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 	f.recorder.LogEvent(payload)
 }
 
-func (f *fsCache) Put(target, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	g := new(errgroup.Group)
 
 	numDigesters := runtime.NumCPU()
@@ -95,7 +95,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []turbopath.Ancho
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				statedFile := fs.LstatCachedFile{Path: file.RestoreAnchor(f.repoRoot)}
+				statedFile := fs.LstatCachedFile{Path: file.RestoreAnchor(anchor)}
 				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
@@ -131,7 +131,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []turbopath.Ancho
 	return nil
 }
 
-func (f *fsCache) Clean(target string) {
+func (f *fsCache) Clean(anchor turbopath.AbsoluteSystemPath) {
 	fmt.Println("Not implemented yet")
 }
 

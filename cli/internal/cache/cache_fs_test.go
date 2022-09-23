@@ -85,7 +85,7 @@ func TestPut(t *testing.T) {
 
 	hash := "the-hash"
 	duration := 0
-	err = cache.Put("unused", hash, duration, files)
+	err = cache.Put(src, hash, duration, files)
 	assert.NilError(t, err, "Put")
 
 	// Verify that we got the files that we're expecting
@@ -206,7 +206,7 @@ func TestFetch(t *testing.T) {
 
 	outputDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	dstOutputPath := "some-package"
-	hit, files, _, err := cache.Fetch(outputDir.ToStringDuringMigration(), "the-hash", []string{})
+	hit, files, _, err := cache.Fetch(outputDir, "the-hash", []string{})
 	assert.NilError(t, err, "Fetch")
 	if !hit {
 		t.Error("Fetch got false, want true")

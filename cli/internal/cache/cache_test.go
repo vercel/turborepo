@@ -17,7 +17,7 @@ type testCache struct {
 	entries     map[string][]turbopath.AnchoredSystemPath
 }
 
-func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (tc *testCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	if tc.disabledErr != nil {
 		return false, nil, 0, tc.disabledErr
 	}
@@ -40,7 +40,7 @@ func (tc *testCache) Exists(hash string) (ItemStatus, error) {
 	return ItemStatus{}, nil
 }
 
-func (tc *testCache) Put(target string, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (tc *testCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	if tc.disabledErr != nil {
 		return tc.disabledErr
 	}
@@ -48,9 +48,9 @@ func (tc *testCache) Put(target string, hash string, duration int, files []turbo
 	return nil
 }
 
-func (tc *testCache) Clean(target string) {}
-func (tc *testCache) CleanAll()           {}
-func (tc *testCache) Shutdown()           {}
+func (tc *testCache) Clean(anchor turbopath.AbsoluteSystemPath) {}
+func (tc *testCache) CleanAll()                                 {}
+func (tc *testCache) Shutdown()                                 {}
 
 func newEnabledCache() *testCache {
 	return &testCache{

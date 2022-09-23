@@ -22,7 +22,7 @@ type asyncCache struct {
 
 // A cacheRequest models an incoming cache request on our queue.
 type cacheRequest struct {
-	target   string
+	anchor   turbopath.AbsoluteSystemPath
 	key      string
 	duration int
 	files    []turbopath.AnchoredSystemPath
@@ -40,9 +40,9 @@ func newAsyncCache(realCache Cache, opts Opts) Cache {
 	return c
 }
 
-func (c *asyncCache) Put(target string, key string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (c *asyncCache) Put(anchor turbopath.AbsoluteSystemPath, key string, duration int, files []turbopath.AnchoredSystemPath) error {
 	c.requests <- cacheRequest{
-		target:   target,
+		anchor:   anchor,
 		key:      key,
 		files:    files,
 		duration: duration,
@@ -50,16 +50,16 @@ func (c *asyncCache) Put(target string, key string, duration int, files []turbop
 	return nil
 }
 
-func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
-	return c.realCache.Fetch(target, key, files)
+func (c *asyncCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+	return c.realCache.Fetch(anchor, key, files)
 }
 
 func (c *asyncCache) Exists(key string) (ItemStatus, error) {
 	return c.realCache.Exists(key)
 }
 
-func (c *asyncCache) Clean(target string) {
-	c.realCache.Clean(target)
+func (c *asyncCache) Clean(anchor turbopath.AbsoluteSystemPath) {
+	c.realCache.Clean(anchor)
 }
 
 func (c *asyncCache) CleanAll() {
@@ -76,7 +76,7 @@ func (c *asyncCache) Shutdown() {
 // run implements the actual async logic.
 func (c *asyncCache) run() {
 	for r := range c.requests {
-		c.realCache.Put(r.target, r.key, r.duration, r.files)
+		c.realCache.Put(r.anchor, r.key, r.duration, r.files)
 	}
 	c.wg.Done()
 }
