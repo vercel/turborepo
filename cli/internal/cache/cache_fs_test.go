@@ -16,35 +16,6 @@ type dummyRecorder struct{}
 
 func (dr *dummyRecorder) LogEvent(payload analytics.EventPayload) {}
 
-type testingUtil interface {
-	Helper()
-	Cleanup(f func())
-}
-
-// subdirForTest creates a sub directory of `cwd` and registers it for
-// deletion by the testing framework at the end of the test.
-// Some cache code currently assumes relative paths from `cwd`, so it is not
-// yet feasible to use temp directories.
-func subdirForTest(t *testing.T) string {
-	var tt interface{} = t
-	if tu, ok := tt.(testingUtil); ok {
-		tu.Helper()
-	}
-	cwd, err := fs.GetCwd()
-	assert.NilError(t, err, "cwd")
-	dir, err := os.MkdirTemp(cwd.ToString(), "turbo-test")
-	assert.NilError(t, err, "MkdirTemp")
-	deleteOnFinish(t, dir)
-	return filepath.Base(dir)
-}
-
-func deleteOnFinish(t *testing.T, dir string) {
-	var tt interface{} = t
-	if tu, ok := tt.(testingUtil); ok {
-		tu.Cleanup(func() { _ = os.RemoveAll(dir) })
-	}
-}
-
 func TestPut(t *testing.T) {
 	// Set up a test source and cache directory
 	// The "source" directory simulates a package
@@ -61,41 +32,41 @@ func TestPut(t *testing.T) {
 	//
 	// <dst>/the-hash/<src>/...
 
-	src := subdirForTest(t)
-	childDir := filepath.Join(src, "child")
-	err := os.Mkdir(childDir, os.ModeDir|0777)
+	src := turbopath.AbsoluteSystemPath(t.TempDir())
+	childDir := src.UntypedJoin("child")
+	err := childDir.MkdirAll()
 	assert.NilError(t, err, "Mkdir")
-	aPath := filepath.Join(childDir, "a")
-	aFile, err := os.Create(aPath)
+	aPath := childDir.UntypedJoin("a")
+	aFile, err := aPath.Create()
 	assert.NilError(t, err, "Create")
 	_, err = aFile.WriteString("hello")
 	assert.NilError(t, err, "WriteString")
 	assert.NilError(t, aFile.Close(), "Close")
 
-	bPath := filepath.Join(src, "b")
-	bFile, err := os.Create(bPath)
+	bPath := src.UntypedJoin("b")
+	bFile, err := bPath.Create()
 	assert.NilError(t, err, "Create")
 	_, err = bFile.WriteString("bFile")
 	assert.NilError(t, err, "WriteString")
 	assert.NilError(t, bFile.Close(), "Close")
 
-	srcLinkPath := filepath.Join(childDir, "link")
+	srcLinkPath := childDir.UntypedJoin("link")
 	linkTarget := filepath.FromSlash("../b")
-	assert.NilError(t, os.Symlink(linkTarget, srcLinkPath), "Symlink")
+	assert.NilError(t, srcLinkPath.Symlink(linkTarget), "Symlink")
 
-	srcBrokenLinkPath := filepath.Join(childDir, "broken")
-	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
-	circlePath := filepath.Join(childDir, "circle")
-	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
+	srcBrokenLinkPath := childDir.Join("broken")
+	assert.NilError(t, srcBrokenLinkPath.Symlink("missing"), "Symlink")
+	circlePath := childDir.Join("circle")
+	assert.NilError(t, circlePath.Symlink(filepath.FromSlash("../child")), "Symlink")
 
 	files := []string{
-		filepath.Join(src, filepath.FromSlash("/")),            // src
-		filepath.Join(src, filepath.FromSlash("child/")),       // childDir
-		filepath.Join(src, filepath.FromSlash("child/a")),      // aPath,
-		filepath.Join(src, "b"),                                // bPath,
-		filepath.Join(src, filepath.FromSlash("child/link")),   // srcLinkPath,
-		filepath.Join(src, filepath.FromSlash("child/broken")), // srcBrokenLinkPath,
-		filepath.Join(src, filepath.FromSlash("child/circle")), // circlePath
+		src.UntypedJoin(filepath.FromSlash("/")).ToStringDuringMigration(),            // src
+		src.UntypedJoin(filepath.FromSlash("child/")).ToStringDuringMigration(),       // childDir
+		src.UntypedJoin(filepath.FromSlash("child/a")).ToStringDuringMigration(),      // aPath,
+		src.UntypedJoin("b").ToStringDuringMigration(),                                // bPath,
+		src.UntypedJoin(filepath.FromSlash("child/link")).ToStringDuringMigration(),   // srcLinkPath,
+		src.UntypedJoin(filepath.FromSlash("child/broken")).ToStringDuringMigration(), // srcBrokenLinkPath,
+		src.UntypedJoin(filepath.FromSlash("child/circle")).ToStringDuringMigration(), // circlePath
 	}
 
 	dst := turbopath.AbsoluteSystemPath(t.TempDir())
@@ -120,27 +91,27 @@ func TestPut(t *testing.T) {
 	// Verify that we got the files that we're expecting
 	dstCachePath := dst.UntypedJoin(hash)
 
-	dstAPath := dstCachePath.UntypedJoin(src, "child", "a")
-	assertFileMatches(t, aPath, dstAPath.ToStringDuringMigration())
+	dstAPath := dstCachePath.UntypedJoin("child", "a")
+	assertFileMatches(t, aPath.ToStringDuringMigration(), dstAPath.ToStringDuringMigration())
 
-	dstBPath := dstCachePath.UntypedJoin(src, "b")
-	assertFileMatches(t, bPath, dstBPath.ToStringDuringMigration())
+	dstBPath := dstCachePath.UntypedJoin("b")
+	assertFileMatches(t, bPath.ToStringDuringMigration(), dstBPath.ToStringDuringMigration())
 
-	dstLinkPath := dstCachePath.UntypedJoin(src, "child", "link")
+	dstLinkPath := dstCachePath.UntypedJoin("child", "link")
 	target, err := dstLinkPath.Readlink()
 	assert.NilError(t, err, "Readlink")
 	if target != linkTarget {
 		t.Errorf("Readlink got %v, want %v", target, linkTarget)
 	}
 
-	dstBrokenLinkPath := dstCachePath.UntypedJoin(src, "child", "broken")
+	dstBrokenLinkPath := dstCachePath.UntypedJoin("child", "broken")
 	target, err = dstBrokenLinkPath.Readlink()
 	assert.NilError(t, err, "Readlink")
 	if target != "missing" {
 		t.Errorf("Readlink got %v, want missing", target)
 	}
 
-	dstCirclePath := dstCachePath.UntypedJoin(src, "child", "circle")
+	dstCirclePath := dstCachePath.UntypedJoin("child", "circle")
 	circleLinkDest, err := dstCirclePath.Readlink()
 	assert.NilError(t, err, "Readlink")
 	expectedCircleLinkDest := filepath.FromSlash("../child")
@@ -234,7 +205,6 @@ func TestFetch(t *testing.T) {
 	}
 
 	dstOutputPath := "some-package"
-	deleteOnFinish(t, dstOutputPath)
 	hit, files, _, err := cache.Fetch(cwd.ToStringDuringMigration(), "the-hash", []string{})
 	assert.NilError(t, err, "Fetch")
 	if !hit {
