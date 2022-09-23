@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 	"runtime"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -18,7 +17,7 @@ import (
 
 // fsCache is a local filesystem cache
 type fsCache struct {
-	cacheDirectory string
+	cacheDirectory turbopath.AbsoluteSystemPath
 	recorder       analytics.Recorder
 	repoRoot       turbopath.AbsoluteSystemPath
 }
@@ -30,7 +29,7 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 		return nil, err
 	}
 	return &fsCache{
-		cacheDirectory: cacheDir.ToStringDuringMigration(),
+		cacheDirectory: cacheDir,
 		recorder:       recorder,
 		repoRoot:       repoRoot,
 	}, nil
@@ -38,22 +37,22 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
 func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []string, int, error) {
-	cachedFolder := filepath.Join(f.cacheDirectory, hash)
+	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
 
 	// If it's not in the cache bail now
-	if !fs.PathExists(cachedFolder) {
+	if !cachedFolder.DirExists() {
 		f.logFetch(false, hash, 0)
 		return false, nil, 0, nil
 	}
 
 	// Otherwise, copy it into position
-	err := fs.RecursiveCopy(cachedFolder, target)
+	err := fs.RecursiveCopy(cachedFolder.ToStringDuringMigration(), target)
 	if err != nil {
 		// TODO: what event to log here?
 		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", target, err)
 	}
 
-	meta, err := ReadCacheMetaFile(filepath.Join(f.cacheDirectory, hash+"-meta.json"))
+	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
 	if err != nil {
 		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
 	}
@@ -62,9 +61,9 @@ func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool,
 }
 
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {
-	cachedFolder := filepath.Join(f.cacheDirectory, hash)
+	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
 
-	if !fs.PathExists(cachedFolder) {
+	if cachedFolder.Exists() {
 		return ItemStatus{Local: false}, nil
 	}
 
@@ -102,11 +101,11 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
 				}
 				if !fromType.IsDir() {
-					if err := fs.EnsureDir(filepath.Join(f.cacheDirectory, hash, file)); err != nil {
+					if err := f.cacheDirectory.UntypedJoin(hash, file).EnsureDir(); err != nil {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyFile(&statedFile, filepath.Join(f.cacheDirectory, hash, file)); err != nil {
+					if err := fs.CopyFile(&statedFile, f.cacheDirectory.UntypedJoin(hash, file).ToStringDuringMigration()); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}
@@ -124,7 +123,7 @@ func (f *fsCache) Put(target, hash string, duration int, files []string) error {
 		return err
 	}
 
-	WriteCacheMetaFile(filepath.Join(f.cacheDirectory, hash+"-meta.json"), &CacheMetadata{
+	WriteCacheMetaFile(f.cacheDirectory.UntypedJoin(hash+"-meta.json").ToString(), &CacheMetadata{
 		Duration: duration,
 		Hash:     hash,
 	})
@@ -163,8 +162,8 @@ func WriteCacheMetaFile(path string, config *CacheMetadata) error {
 }
 
 // ReadCacheMetaFile reads cache metadata file at a path
-func ReadCacheMetaFile(path string) (*CacheMetadata, error) {
-	jsonBytes, readFileErr := ioutil.ReadFile(path)
+func ReadCacheMetaFile(path turbopath.AbsoluteSystemPath) (*CacheMetadata, error) {
+	jsonBytes, readFileErr := path.ReadFile()
 	if readFileErr != nil {
 		return nil, readFileErr
 	}

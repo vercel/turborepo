@@ -8,6 +8,7 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
@@ -97,7 +98,7 @@ func TestPut(t *testing.T) {
 		filepath.Join(src, filepath.FromSlash("child/circle")), // circlePath
 	}
 
-	dst := subdirForTest(t)
+	dst := turbopath.AbsoluteSystemPath(t.TempDir())
 	dr := &dummyRecorder{}
 
 	defaultCwd, err := fs.GetCwd()
@@ -117,30 +118,30 @@ func TestPut(t *testing.T) {
 	assert.NilError(t, err, "Put")
 
 	// Verify that we got the files that we're expecting
-	dstCachePath := filepath.Join(dst, hash)
+	dstCachePath := dst.UntypedJoin(hash)
 
-	dstAPath := filepath.Join(dstCachePath, src, "child", "a")
-	assertFileMatches(t, aPath, dstAPath)
+	dstAPath := dstCachePath.UntypedJoin(src, "child", "a")
+	assertFileMatches(t, aPath, dstAPath.ToStringDuringMigration())
 
-	dstBPath := filepath.Join(dstCachePath, src, "b")
-	assertFileMatches(t, bPath, dstBPath)
+	dstBPath := dstCachePath.UntypedJoin(src, "b")
+	assertFileMatches(t, bPath, dstBPath.ToStringDuringMigration())
 
-	dstLinkPath := filepath.Join(dstCachePath, src, "child", "link")
-	target, err := os.Readlink(dstLinkPath)
+	dstLinkPath := dstCachePath.UntypedJoin(src, "child", "link")
+	target, err := dstLinkPath.Readlink()
 	assert.NilError(t, err, "Readlink")
 	if target != linkTarget {
 		t.Errorf("Readlink got %v, want %v", target, linkTarget)
 	}
 
-	dstBrokenLinkPath := filepath.Join(dstCachePath, src, "child", "broken")
-	target, err = os.Readlink(dstBrokenLinkPath)
+	dstBrokenLinkPath := dstCachePath.UntypedJoin(src, "child", "broken")
+	target, err = dstBrokenLinkPath.Readlink()
 	assert.NilError(t, err, "Readlink")
 	if target != "missing" {
 		t.Errorf("Readlink got %v, want missing", target)
 	}
 
-	dstCirclePath := filepath.Join(dstCachePath, src, "child", "circle")
-	circleLinkDest, err := os.Readlink(dstCirclePath)
+	dstCirclePath := dstCachePath.UntypedJoin(src, "child", "circle")
+	circleLinkDest, err := dstCirclePath.Readlink()
 	assert.NilError(t, err, "Readlink")
 	expectedCircleLinkDest := filepath.FromSlash("../child")
 	if circleLinkDest != expectedCircleLinkDest {
@@ -184,39 +185,39 @@ func TestFetch(t *testing.T) {
 
 	cwd, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
-	cacheDir := subdirForTest(t)
-	src := filepath.Join(cacheDir, "the-hash", "some-package")
-	err = os.MkdirAll(src, os.ModeDir|0777)
+	cacheDir := turbopath.AbsoluteSystemPath(t.TempDir())
+	src := cacheDir.UntypedJoin("the-hash", "some-package")
+	err = src.MkdirAll()
 	assert.NilError(t, err, "mkdirAll")
 
-	childDir := filepath.Join(src, "child")
-	err = os.Mkdir(childDir, os.ModeDir|0777)
+	childDir := src.UntypedJoin("child")
+	err = childDir.MkdirAll()
 	assert.NilError(t, err, "Mkdir")
-	aPath := filepath.Join(childDir, "a")
-	aFile, err := os.Create(aPath)
+	aPath := childDir.UntypedJoin("a")
+	aFile, err := aPath.Create()
 	assert.NilError(t, err, "Create")
 	_, err = aFile.WriteString("hello")
 	assert.NilError(t, err, "WriteString")
 	assert.NilError(t, aFile.Close(), "Close")
 
-	bPath := filepath.Join(src, "b")
-	bFile, err := os.Create(bPath)
+	bPath := src.UntypedJoin("b")
+	bFile, err := bPath.Create()
 	assert.NilError(t, err, "Create")
 	_, err = bFile.WriteString("bFile")
 	assert.NilError(t, err, "WriteString")
 	assert.NilError(t, bFile.Close(), "Close")
 
-	srcLinkPath := filepath.Join(childDir, "link")
+	srcLinkPath := childDir.UntypedJoin("link")
 	linkTarget := filepath.FromSlash("../b")
-	assert.NilError(t, os.Symlink(linkTarget, srcLinkPath), "Symlink")
+	assert.NilError(t, srcLinkPath.Symlink(linkTarget), "Symlink")
 
-	srcBrokenLinkPath := filepath.Join(childDir, "broken")
-	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
-	circlePath := filepath.Join(childDir, "circle")
-	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
+	srcBrokenLinkPath := childDir.UntypedJoin("broken")
+	assert.NilError(t, srcBrokenLinkPath.Symlink("missing"), "Symlink")
+	circlePath := childDir.Join("circle")
+	assert.NilError(t, circlePath.Symlink(filepath.FromSlash("../child")), "Symlink")
 
-	metadataPath := filepath.Join(cacheDir, "the-hash-meta.json")
-	err = ioutil.WriteFile(metadataPath, []byte(`{"hash":"the-hash","duration":0}`), 0777)
+	metadataPath := cacheDir.UntypedJoin("the-hash-meta.json")
+	err = metadataPath.WriteFile([]byte(`{"hash":"the-hash","duration":0}`), 0777)
 	assert.NilError(t, err, "WriteFile")
 
 	dr := &dummyRecorder{}
@@ -247,10 +248,10 @@ func TestFetch(t *testing.T) {
 	t.Logf("files %v", files)
 
 	dstAPath := filepath.Join(dstOutputPath, "child", "a")
-	assertFileMatches(t, aPath, dstAPath)
+	assertFileMatches(t, aPath.ToStringDuringMigration(), dstAPath)
 
 	dstBPath := filepath.Join(dstOutputPath, "b")
-	assertFileMatches(t, bPath, dstBPath)
+	assertFileMatches(t, bPath.ToStringDuringMigration(), dstBPath)
 
 	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
 	target, err := os.Readlink(dstLinkPath)
