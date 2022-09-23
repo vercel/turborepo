@@ -63,7 +63,7 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {
 	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
 
-	if cachedFolder.Exists() {
+	if cachedFolder.DirExists() {
 		return ItemStatus{Local: false}, nil
 	}
 
