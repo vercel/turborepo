@@ -170,6 +170,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	} else {
 		c.Outputs = defaultOutputs
 	}
+	sort.Strings(c.Outputs)
 	if rawPipeline.Cache == nil {
 		c.ShouldCache = true
 	} else {
@@ -190,6 +191,8 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 			c.TaskDependencies = append(c.TaskDependencies, dependency)
 		}
 	}
+	sort.Strings(c.TaskDependencies)
+	sort.Strings(c.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
 	for _, value := range rawPipeline.Env {
@@ -204,6 +207,8 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	sort.Strings(c.EnvVarDependencies)
+	// Note that we don't require Inputs to be sorted, we're going to
+	// hash the resulting files and sort that instead
 	c.Inputs = rawPipeline.Inputs
 	c.OutputMode = rawPipeline.OutputMode
 	return nil
@@ -242,6 +247,7 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
 	sort.Strings(c.GlobalEnv)
 	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
+	sort.Strings(c.GlobalDeps)
 
 	// copy these over, we don't need any changes here.
 	c.Pipeline = raw.Pipeline
