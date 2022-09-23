@@ -73,7 +73,7 @@ type TaskDefinition struct {
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
-func LoadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
 	var turboJSON *TurboJSON
 	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
 	if !includeSynthesizedFromRootPackageJSON && err != nil {

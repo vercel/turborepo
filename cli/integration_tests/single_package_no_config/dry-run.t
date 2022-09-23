@@ -7,14 +7,15 @@ Check
   
   Tasks to Run
   build
-    Task          = build                  
-    Hash          = c207d64157b1635a       
-    Directory     =                        
-    Command       = echo 'building'        
-    Outputs       =                        
-    Log File      = .turbo/turbo-build.log 
-    Dependencies  =                        
-    Dependendents =                        
+    Task            = build                  
+    Hash            = c207d64157b1635a       
+    Cached (Local)  = false                  
+    Cached (Remote) = false                  
+    Command         = echo 'building'        
+    Outputs         =                        
+    Log File        = .turbo/turbo-build.log 
+    Dependencies    =                        
+    Dependendents   =                        
 
   $ ${TURBO} run build --dry=json --single-package
   {

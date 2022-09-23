@@ -7,23 +7,25 @@ Check
   
   Tasks to Run
   build
-    Task          = build                  
-    Hash          = 6218abb18f5176f5       
-    Directory     =                        
-    Command       = echo 'building' > foo  
-    Outputs       = foo                    
-    Log File      = .turbo/turbo-build.log 
-    Dependencies  =                        
-    Dependendents = test                   
+    Task            = build                  
+    Hash            = 6218abb18f5176f5       
+    Cached (Local)  = false                  
+    Cached (Remote) = false                  
+    Command         = echo 'building' > foo  
+    Outputs         = foo                    
+    Log File        = .turbo/turbo-build.log 
+    Dependencies    =                        
+    Dependendents   = test                   
   test
-    Task          = test                                         
-    Hash          = de6f1fc6a43f96b9                             
-    Directory     =                                              
-    Command       = [[ ( -f foo ) && $(cat foo) == 'building' ]] 
-    Outputs       =                                              
-    Log File      = .turbo/turbo-test.log                        
-    Dependencies  = build                                        
-    Dependendents =                                              
+    Task            = test                                         
+    Hash            = de6f1fc6a43f96b9                             
+    Cached (Local)  = false                                        
+    Cached (Remote) = false                                        
+    Command         = [[ ( -f foo ) && $(cat foo) == 'building' ]] 
+    Outputs         =                                              
+    Log File        = .turbo/turbo-test.log                        
+    Dependencies    = build                                        
+    Dependendents   =                                              
 
   $ ${TURBO} run test --dry=json --single-package
   {

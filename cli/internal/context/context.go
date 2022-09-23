@@ -102,7 +102,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 }
 
 // SinglePackageGraph constructs a Context instance from a single package.
-func SinglePackageGraph(repoRoot turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
+func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	packageInfos := make(map[interface{}]*fs.PackageJSON)
 	packageInfos[util.RootPkgName] = rootPackageJSON
 	c := &Context{
