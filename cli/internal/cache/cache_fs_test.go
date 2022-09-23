@@ -154,11 +154,11 @@ func TestFetch(t *testing.T) {
 	//
 	// "some-package"/...
 
-	cwd, err := fs.GetCwd()
-	assert.NilError(t, err, "GetCwd")
+	// cwd, err := fs.GetCwd()
+	// assert.NilError(t, err, "GetCwd")
 	cacheDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	src := cacheDir.UntypedJoin("the-hash", "some-package")
-	err = src.MkdirAll()
+	err := src.MkdirAll()
 	assert.NilError(t, err, "mkdirAll")
 
 	childDir := src.UntypedJoin("child")
@@ -204,8 +204,9 @@ func TestFetch(t *testing.T) {
 		repoRoot:       defaultCwd,
 	}
 
+	outputDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	dstOutputPath := "some-package"
-	hit, files, _, err := cache.Fetch(cwd.ToStringDuringMigration(), "the-hash", []string{})
+	hit, files, _, err := cache.Fetch(outputDir.ToStringDuringMigration(), "the-hash", []string{})
 	assert.NilError(t, err, "Fetch")
 	if !hit {
 		t.Error("Fetch got false, want true")
@@ -217,13 +218,13 @@ func TestFetch(t *testing.T) {
 	}
 	t.Logf("files %v", files)
 
-	dstAPath := filepath.Join(dstOutputPath, "child", "a")
+	dstAPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "a")
 	assertFileMatches(t, aPath.ToStringDuringMigration(), dstAPath)
 
-	dstBPath := filepath.Join(dstOutputPath, "b")
+	dstBPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "b")
 	assertFileMatches(t, bPath.ToStringDuringMigration(), dstBPath)
 
-	dstLinkPath := filepath.Join(dstOutputPath, "child", "link")
+	dstLinkPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "link")
 	target, err := os.Readlink(dstLinkPath)
 	assert.NilError(t, err, "Readlink")
 	if target != linkTarget {
@@ -231,14 +232,14 @@ func TestFetch(t *testing.T) {
 	}
 
 	// We currently don't restore broken symlinks. This is probably a bug
-	dstBrokenLinkPath := filepath.Join(dstOutputPath, "child", "broken")
+	dstBrokenLinkPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "broken")
 	_, err = os.Readlink(dstBrokenLinkPath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 
 	// Currently, on restore, we convert symlink-to-directory to empty-directory
 	// This is very likely not ideal behavior, but leaving this test here to verify
 	// that it is what we expect at this point in time.
-	dstCirclePath := filepath.Join(dstOutputPath, "child", "circle")
+	dstCirclePath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "circle")
 	circleStat, err := os.Lstat(dstCirclePath)
 	assert.NilError(t, err, "Lstat")
 	assert.Equal(t, circleStat.IsDir(), true)
