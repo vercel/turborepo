@@ -6,7 +6,6 @@ package cache
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"runtime"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
@@ -123,7 +122,7 @@ func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration
 		return err
 	}
 
-	WriteCacheMetaFile(f.cacheDirectory.UntypedJoin(hash+"-meta.json").ToString(), &CacheMetadata{
+	WriteCacheMetaFile(f.cacheDirectory.UntypedJoin(hash+"-meta.json"), &CacheMetadata{
 		Duration: duration,
 		Hash:     hash,
 	})
@@ -149,12 +148,12 @@ type CacheMetadata struct {
 }
 
 // WriteCacheMetaFile writes cache metadata file at a path
-func WriteCacheMetaFile(path string, config *CacheMetadata) error {
+func WriteCacheMetaFile(path turbopath.AbsoluteSystemPath, config *CacheMetadata) error {
 	jsonBytes, marshalErr := json.Marshal(config)
 	if marshalErr != nil {
 		return marshalErr
 	}
-	writeFilErr := ioutil.WriteFile(path, jsonBytes, 0644)
+	writeFilErr := path.WriteFile(jsonBytes, 0644)
 	if writeFilErr != nil {
 		return writeFilErr
 	}
