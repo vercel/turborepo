@@ -30,7 +30,6 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 	return &fsCache{
 		cacheDirectory: cacheDir,
 		recorder:       recorder,
-		repoRoot:       repoRoot,
 	}, nil
 }
 

@@ -358,7 +358,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
@@ -370,6 +370,5 @@ func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoo
 			teamId:  client.GetTeamID(),
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
-		repoRoot: repoRoot,
 	}
 }

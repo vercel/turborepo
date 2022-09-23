@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
@@ -72,15 +71,9 @@ func TestPut(t *testing.T) {
 	dst := turbopath.AbsoluteSystemPath(t.TempDir())
 	dr := &dummyRecorder{}
 
-	defaultCwd, err := fs.GetCwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-
 	cache := &fsCache{
 		cacheDirectory: dst,
 		recorder:       dr,
-		repoRoot:       defaultCwd,
 	}
 
 	hash := "the-hash"
@@ -193,15 +186,9 @@ func TestFetch(t *testing.T) {
 
 	dr := &dummyRecorder{}
 
-	defaultCwd, err := fs.GetCwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-
 	cache := &fsCache{
 		cacheDirectory: cacheDir,
 		recorder:       dr,
-		repoRoot:       defaultCwd,
 	}
 
 	outputDir := turbopath.AbsoluteSystemPath(t.TempDir())
