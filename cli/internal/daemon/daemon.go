@@ -68,7 +68,7 @@ func getPidFile(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemP
 
 // logError logs an error and outputs it to the UI.
 func (d *daemon) logError(err error) {
-	d.logger.Error("error", err)
+	d.logger.Error(fmt.Sprintf("error %v", err))
 }
 
 // we're only appending, and we're creating the file if it doesn't exist.
