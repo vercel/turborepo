@@ -24,6 +24,7 @@ func RecursiveCopy(from string, to string) error {
 	if fromType.IsDir() {
 		return WalkMode(statedFrom.Path.ToStringDuringMigration(), func(name string, isDir bool, fileType os.FileMode) error {
 			dest := filepath.Join(to, name[len(statedFrom.Path.ToString()):])
+			// name is absolute, (originates from godirwalk)
 			src := LstatCachedFile{Path: UnsafeToAbsoluteSystemPath(name), fileType: &fileType}
 			if isDir {
 				mode, err := src.GetMode()
@@ -32,7 +33,6 @@ func RecursiveCopy(from string, to string) error {
 				}
 				return os.MkdirAll(dest, mode)
 			}
-			// name is absolute, (originates from godirwalk)
 			return CopyFile(&src, dest)
 		})
 	}

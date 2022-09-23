@@ -146,13 +146,13 @@ func (p *prune) prune(opts *opts) error {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		originalDir := p.base.RepoRoot.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
+		originalDir := ctx.PackageInfos[internalDep].Dir.RestoreAnchor(p.base.RepoRoot)
 		info, err := originalDir.Lstat()
 		if err != nil {
 			return errors.Wrapf(err, "failed to lstat %s", originalDir)
 		}
-		targetDir := fullDir.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
-		if err = targetDir.MkdirAllMode(info.Mode()); err != nil {
+		targetDir := ctx.PackageInfos[internalDep].Dir.RestoreAnchor(fullDir)
+		if err := targetDir.MkdirAllMode(info.Mode()); err != nil {
 			return errors.Wrapf(err, "failed to create folder %s for %v", targetDir, internalDep)
 		}
 

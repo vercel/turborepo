@@ -136,12 +136,12 @@ func (p AbsoluteSystemPath) MkdirAllMode(mode os.FileMode) error {
 			return os.Chmod(p.ToString(), mode)
 		} else {
 			// Path exists as file, remove it
-			if err = p.Remove(); err != nil {
+			if err := p.Remove(); err != nil {
 				return err
 			}
 		}
 	}
-	if err = os.MkdirAll(p.ToString(), mode); err != nil {
+	if err := os.MkdirAll(p.ToString(), mode); err != nil {
 		return err
 	}
 	// This is necessary only when umask results in creating a directory with permissions different than the one passed by the user
