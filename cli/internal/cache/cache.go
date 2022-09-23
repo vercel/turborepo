@@ -274,7 +274,6 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 		}
 	}
 
-	// FIXES BUG
 	return false, nil, 0, nil
 }
 
