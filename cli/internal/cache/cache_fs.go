@@ -36,7 +36,7 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
-func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []string, int, error) {
+func (f *fsCache) Fetch(target, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
 
 	// If it's not in the cache bail now

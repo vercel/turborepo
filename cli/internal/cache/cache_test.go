@@ -17,7 +17,7 @@ type testCache struct {
 	entries     map[string][]turbopath.AnchoredSystemPath
 }
 
-func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []string, int, error) {
+func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	if tc.disabledErr != nil {
 		return false, nil, 0, tc.disabledErr
 	}

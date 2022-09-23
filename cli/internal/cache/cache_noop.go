@@ -11,7 +11,7 @@ func newNoopCache() *noopCache {
 func (c *noopCache) Put(target string, key string, duration int, files []turbopath.AnchoredSystemPath) error {
 	return nil
 }
-func (c *noopCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
+func (c *noopCache) Fetch(target string, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	return false, nil, 0, nil
 }
 func (c *noopCache) Exists(key string) (ItemStatus, error) {

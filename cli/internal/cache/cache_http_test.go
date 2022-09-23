@@ -189,7 +189,10 @@ func TestRestoreTar(t *testing.T) {
 	assert.NilError(t, err, "readTar")
 
 	expectedSet := util.SetFromStrings(expectedFiles)
-	gotSet := util.SetFromStrings(files)
+	gotSet := util.SetFromStrings(nil)
+	for _, file := range files {
+		gotSet.Add(file.ToString())
+	}
 	extraFiles := gotSet.Difference(expectedSet)
 	if extraFiles.Len() > 0 {
 		t.Errorf("got extra files: %v", extraFiles.UnsafeListOfStrings())

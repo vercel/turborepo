@@ -21,7 +21,7 @@ import (
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(target string, hash string, files []string) (bool, []string, int, error)
+	Fetch(target string, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error)
 	Exists(hash string) (ItemStatus, error)
 	// Put caches files for a given hash
 	Put(target string, hash string, duration int, files []turbopath.AnchoredSystemPath) error
@@ -241,7 +241,7 @@ func (mplex *cacheMultiplexer) removeCache(removal *cacheRemoval) {
 	}
 }
 
-func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) (bool, []string, int, error) {
+func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	// Make a shallow copy of the caches, since storeUntil can call removeCache
 	mplex.mu.RLock()
 	caches := make([]Cache, len(mplex.caches))
@@ -273,7 +273,9 @@ func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) 
 			return ok, actualFiles, duration, err
 		}
 	}
-	return false, files, 0, nil
+
+	// FIXES BUG
+	return false, nil, 0, nil
 }
 
 func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {

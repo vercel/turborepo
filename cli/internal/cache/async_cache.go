@@ -50,7 +50,7 @@ func (c *asyncCache) Put(target string, key string, duration int, files []turbop
 	return nil
 }
 
-func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {
+func (c *asyncCache) Fetch(target string, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	return c.realCache.Fetch(target, key, files)
 }
 

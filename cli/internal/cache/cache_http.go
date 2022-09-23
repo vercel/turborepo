@@ -140,7 +140,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.Anc
 	return err
 }
 
-func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, int, error) {
+func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
@@ -194,7 +194,7 @@ func (cache *httpCache) exists(hash string) (bool, error) {
 	return true, err
 }
 
-func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
+func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
@@ -252,8 +252,8 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 // restored. In the future, these should likely be repo-relative system paths
 // so that they are suitable for being fed into cache.Put for other caches.
 // For now, I think this is working because windows also accepts /-delimited paths.
-func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]string, error) {
-	files := []string{}
+func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
+	files := []turbopath.AnchoredSystemPath{}
 	missingLinks := []*tar.Header{}
 	gzr, err := gzip.NewReader(reader)
 	if err != nil {
@@ -277,9 +277,10 @@ func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]string, 
 			return nil, err
 		}
 		// hdr.Name is always a posix-style path
-		// TODO: files should eventually be repo-relative system paths
-		files = append(files, hdr.Name)
-		filename := root.UntypedJoin(hdr.Name)
+		// FIXME: THIS IS A BUG.
+		restoredName := turbopath.AnchoredUnixPath(hdr.Name)
+		files = append(files, restoredName.ToSystemPath())
+		filename := restoredName.ToSystemPath().RestoreAnchor(root)
 		if isChild, err := root.ContainsPath(filename); err != nil {
 			return nil, err
 		} else if !isChild {

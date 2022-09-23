@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/colorcache"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -274,7 +275,7 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 		return err
 	}
 
-	relativePaths := make([]string, len(filesToBeCached))
+	relativePaths := make([]turbopath.AnchoredSystemPath, len(filesToBeCached))
 
 	for index, value := range filesToBeCached {
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
@@ -283,7 +284,7 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 			terminal.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
 			continue
 		}
-		relativePaths[index] = relativePath
+		relativePaths[index] = fs.UnsafeToAnchoredSystemPath(relativePath)
 	}
 
 	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir.ToStringDuringMigration(), tc.hash, duration, relativePaths); err != nil {
