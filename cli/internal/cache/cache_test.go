@@ -8,12 +8,13 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type testCache struct {
 	disabledErr *util.CacheDisabledError
-	entries     map[string][]string
+	entries     map[string][]turbopath.AnchoredSystemPath
 }
 
 func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []string, int, error) {
@@ -39,7 +40,7 @@ func (tc *testCache) Exists(hash string) (ItemStatus, error) {
 	return ItemStatus{}, nil
 }
 
-func (tc *testCache) Put(target string, hash string, duration int, files []string) error {
+func (tc *testCache) Put(target string, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	if tc.disabledErr != nil {
 		return tc.disabledErr
 	}
@@ -53,7 +54,7 @@ func (tc *testCache) Shutdown()           {}
 
 func newEnabledCache() *testCache {
 	return &testCache{
-		entries: make(map[string][]string),
+		entries: make(map[string][]turbopath.AnchoredSystemPath),
 	}
 }
 
@@ -82,7 +83,7 @@ func TestPutCachingDisabled(t *testing.T) {
 		},
 	}
 
-	err := mplex.Put("unused-target", "some-hash", 5, []string{"a-file"})
+	err := mplex.Put("unused-target", "some-hash", 5, []turbopath.AnchoredSystemPath{"a-file"})
 	if err != nil {
 		// don't leak the cache removal
 		t.Errorf("Put got error %v, want <nil>", err)
@@ -136,7 +137,7 @@ func TestExists(t *testing.T) {
 		t.Error("did not expect file to exist")
 	}
 
-	err = mplex.Put("unused-target", "some-hash", 5, []string{"a-file"})
+	err = mplex.Put("unused-target", "some-hash", 5, []turbopath.AnchoredSystemPath{"a-file"})
 	if err != nil {
 		// don't leak the cache removal
 		t.Errorf("Put got error %v, want <nil>", err)

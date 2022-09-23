@@ -86,26 +86,26 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 	f.recorder.LogEvent(payload)
 }
 
-func (f *fsCache) Put(target, hash string, duration int, files []string) error {
+func (f *fsCache) Put(target, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	g := new(errgroup.Group)
 
 	numDigesters := runtime.NumCPU()
-	fileQueue := make(chan string, numDigesters)
+	fileQueue := make(chan turbopath.AnchoredSystemPath, numDigesters)
 
 	for i := 0; i < numDigesters; i++ {
 		g.Go(func() error {
 			for file := range fileQueue {
-				statedFile := fs.LstatCachedFile{Path: f.repoRoot.UntypedJoin(file)}
+				statedFile := fs.LstatCachedFile{Path: file.RestoreAnchor(f.repoRoot)}
 				fromType, err := statedFile.GetType()
 				if err != nil {
 					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
 				}
 				if !fromType.IsDir() {
-					if err := f.cacheDirectory.UntypedJoin(hash, file).EnsureDir(); err != nil {
+					if err := f.cacheDirectory.UntypedJoin(hash, file.ToStringDuringMigration()).EnsureDir(); err != nil {
 						return fmt.Errorf("error ensuring directory file from cache: %w", err)
 					}
 
-					if err := fs.CopyFile(&statedFile, f.cacheDirectory.UntypedJoin(hash, file).ToStringDuringMigration()); err != nil {
+					if err := fs.CopyFile(&statedFile, f.cacheDirectory.UntypedJoin(hash, file.ToStringDuringMigration()).ToStringDuringMigration()); err != nil {
 						return fmt.Errorf("error copying file from cache: %w", err)
 					}
 				}

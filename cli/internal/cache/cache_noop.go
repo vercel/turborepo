@@ -1,12 +1,14 @@
 package cache
 
+import "github.com/vercel/turborepo/cli/internal/turbopath"
+
 type noopCache struct{}
 
 func newNoopCache() *noopCache {
 	return &noopCache{}
 }
 
-func (c *noopCache) Put(target string, key string, duration int, files []string) error {
+func (c *noopCache) Put(target string, key string, duration int, files []turbopath.AnchoredSystemPath) error {
 	return nil
 }
 func (c *noopCache) Fetch(target string, key string, files []string) (bool, []string, int, error) {

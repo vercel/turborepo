@@ -24,7 +24,7 @@ type Cache interface {
 	Fetch(target string, hash string, files []string) (bool, []string, int, error)
 	Exists(hash string) (ItemStatus, error)
 	// Put caches files for a given hash
-	Put(target string, hash string, duration int, files []string) error
+	Put(target string, hash string, duration int, files []turbopath.AnchoredSystemPath) error
 	Clean(target string)
 	CleanAll()
 	Shutdown()
@@ -172,7 +172,7 @@ type cacheMultiplexer struct {
 	onCacheRemoved OnCacheRemoved
 }
 
-func (mplex *cacheMultiplexer) Put(target string, key string, duration int, files []string) error {
+func (mplex *cacheMultiplexer) Put(target string, key string, duration int, files []turbopath.AnchoredSystemPath) error {
 	return mplex.storeUntil(target, key, duration, files, len(mplex.caches))
 }
 
@@ -184,7 +184,7 @@ type cacheRemoval struct {
 // storeUntil stores artifacts into higher priority caches than the given one.
 // Used after artifact retrieval to ensure we have them in eg. the directory cache after
 // downloading from the RPC cache.
-func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, files []string, stopAt int) error {
+func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, files []turbopath.AnchoredSystemPath, stopAt int) error {
 	// Attempt to store on all caches simultaneously.
 	toRemove := make([]*cacheRemoval, stopAt)
 	g := &errgroup.Group{}

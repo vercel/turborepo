@@ -54,7 +54,7 @@ var mtime = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 // nobody is the usual uid / gid of the 'nobody' user.
 const nobody = 65534
 
-func (cache *httpCache) Put(target, hash string, duration int, files []string) error {
+func (cache *httpCache) Put(target, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
@@ -80,7 +80,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 }
 
 // write writes a series of files into the given Writer.
-func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
+func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
 	defer w.Close()
 	gzw := gzip.NewWriter(w)
 	defer gzw.Close()
@@ -95,14 +95,15 @@ func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
 	}
 }
 
-func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error {
-	info, err := os.Lstat(repoRelativePath)
+func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.AnchoredSystemPath) error {
+	absoluteFilePath := repoRelativePath.RestoreAnchor(cache.repoRoot)
+	info, err := absoluteFilePath.Lstat()
 	if err != nil {
 		return err
 	}
 	target := ""
 	if info.Mode()&os.ModeSymlink != 0 {
-		target, err = os.Readlink(repoRelativePath)
+		target, err = absoluteFilePath.Readlink()
 		if err != nil {
 			return err
 		}
@@ -112,7 +113,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 		return err
 	}
 	// Ensure posix path for filename written in header.
-	hdr.Name = filepath.ToSlash(repoRelativePath)
+	hdr.Name = repoRelativePath.ToUnixPath().ToString()
 	// Zero out all timestamps.
 	hdr.ModTime = mtime
 	hdr.AccessTime = mtime
@@ -127,7 +128,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 	} else if info.IsDir() || target != "" {
 		return nil // nothing to write
 	}
-	f, err := os.Open(repoRelativePath)
+	f, err := absoluteFilePath.Open()
 	if err != nil {
 		return err
 	}

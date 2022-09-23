@@ -59,14 +59,14 @@ func TestPut(t *testing.T) {
 	circlePath := childDir.Join("circle")
 	assert.NilError(t, circlePath.Symlink(filepath.FromSlash("../child")), "Symlink")
 
-	files := []string{
-		src.UntypedJoin(filepath.FromSlash("/")).ToStringDuringMigration(),            // src
-		src.UntypedJoin(filepath.FromSlash("child/")).ToStringDuringMigration(),       // childDir
-		src.UntypedJoin(filepath.FromSlash("child/a")).ToStringDuringMigration(),      // aPath,
-		src.UntypedJoin("b").ToStringDuringMigration(),                                // bPath,
-		src.UntypedJoin(filepath.FromSlash("child/link")).ToStringDuringMigration(),   // srcLinkPath,
-		src.UntypedJoin(filepath.FromSlash("child/broken")).ToStringDuringMigration(), // srcBrokenLinkPath,
-		src.UntypedJoin(filepath.FromSlash("child/circle")).ToStringDuringMigration(), // circlePath
+	files := []turbopath.AnchoredSystemPath{
+		turbopath.AnchoredUnixPath(".").ToSystemPath(),            // src
+		turbopath.AnchoredUnixPath("child/").ToSystemPath(),       // childDir
+		turbopath.AnchoredUnixPath("child/a").ToSystemPath(),      // aPath,
+		turbopath.AnchoredUnixPath("b").ToSystemPath(),            // bPath,
+		turbopath.AnchoredUnixPath("child/link").ToSystemPath(),   // srcLinkPath,
+		turbopath.AnchoredUnixPath("child/broken").ToSystemPath(), // srcBrokenLinkPath,
+		turbopath.AnchoredUnixPath("child/circle").ToSystemPath(), // circlePath
 	}
 
 	dst := turbopath.AbsoluteSystemPath(t.TempDir())

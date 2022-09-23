@@ -5,6 +5,8 @@ package cache
 
 import (
 	"sync"
+
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 // An asyncCache is a wrapper around a Cache interface that handles incoming
@@ -23,7 +25,7 @@ type cacheRequest struct {
 	target   string
 	key      string
 	duration int
-	files    []string
+	files    []turbopath.AnchoredSystemPath
 }
 
 func newAsyncCache(realCache Cache, opts Opts) Cache {
@@ -38,7 +40,7 @@ func newAsyncCache(realCache Cache, opts Opts) Cache {
 	return c
 }
 
-func (c *asyncCache) Put(target string, key string, duration int, files []string) error {
+func (c *asyncCache) Put(target string, key string, duration int, files []turbopath.AnchoredSystemPath) error {
 	c.requests <- cacheRequest{
 		target:   target,
 		key:      key,
