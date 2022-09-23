@@ -149,8 +149,19 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet)
 	if err := repoViper.BindPFlag("loginurl", flags.Lookup("login")); err != nil {
 		return nil, err
 	}
+	if err := repoViper.BindPFlag("apiurl", flags.Lookup("api")); err != nil {
+		return nil, err
+	}
+	if err := repoViper.BindPFlag("teamslug", flags.Lookup("team")); err != nil {
+		return nil, err
+	}
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
+	}
+	// If team was set via commandline, don't read the teamId from the config file, as it
+	// won't necessarily match.
+	if flags.Changed("team") {
+		repoViper.Set("teamid", "")
 	}
 	return &RepoConfig{
 		repoViper: repoViper,
