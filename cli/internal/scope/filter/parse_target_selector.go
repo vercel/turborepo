@@ -39,7 +39,7 @@ var errCantMatchDependencies = errors.New("cannot use match dependencies without
 var targetSelectorRegex = regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]+\})?((?:\.{3})?\[[^\]]+\])?$`)
 
 // ParseTargetSelector is a function that returns pnpm compatible --filter command line flags
-func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, error) {
+func ParseTargetSelector(rawSelector string, prefix string) (*TargetSelector, error) {
 	exclude := false
 	firstChar := rawSelector[0]
 	selector := rawSelector
@@ -69,7 +69,7 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 
 	if len(matches) == 0 {
 		if isSelectorByLocation(selector) {
-			return TargetSelector{
+			return &TargetSelector{
 				exclude:             exclude,
 				includeDependencies: includeDependencies,
 				includeDependents:   includeDependents,
@@ -77,7 +77,7 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 				raw:                 rawSelector,
 			}, nil
 		}
-		return TargetSelector{
+		return &TargetSelector{
 			exclude:             exclude,
 			excludeSelf:         excludeSelf,
 			includeDependencies: includeDependencies,
@@ -104,7 +104,7 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 			fromRef = matches[0][3]
 			if strings.HasPrefix(fromRef, "...") {
 				if parentDir == "" && namePattern == "" {
-					return TargetSelector{}, errCantMatchDependencies
+					return &TargetSelector{}, errCantMatchDependencies
 				}
 				preAddDepdencies = true
 				fromRef = fromRef[3:]
@@ -119,7 +119,7 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 		}
 	}
 
-	return TargetSelector{
+	return &TargetSelector{
 		fromRef:             fromRef,
 		toRefOverride:       toRefOverride,
 		exclude:             exclude,

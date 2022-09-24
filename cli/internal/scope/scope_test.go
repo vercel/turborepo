@@ -27,6 +27,7 @@ func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUnt
 func TestResolvePackages(t *testing.T) {
 	tui := ui.Default()
 	logger := hclog.Default()
+	// Dependency graph:
 	//
 	// app0 -
 	//        \
@@ -40,6 +41,18 @@ func TestResolvePackages(t *testing.T) {
 	//              /
 	//     app2-a <
 	//
+	// Filesystem layout:
+	//
+	// app/
+	//   app0
+	//   app1
+	//   app2
+	//   app2-a
+	// libs/
+	//   libA
+	//   libB
+	//   libC
+	//   libD
 	graph := dag.AcyclicGraph{}
 	graph.Add("app0")
 	graph.Add("app1")
@@ -58,28 +71,36 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	workspaceInfos := internalGraph.WorkspaceInfos{
 		"app0": {
-			Dir: turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
+			Name: "app0",
 		},
 		"app1": {
-			Dir: turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
+			Name: "app1",
 		},
 		"app2": {
-			Dir: turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
+			Name: "app2",
 		},
 		"app2-a": {
-			Dir: turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
+			Name: "app2-a",
 		},
 		"libA": {
-			Dir: turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
+			Name: "libA",
 		},
 		"libB": {
-			Dir: turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
+			Name: "libB",
 		},
 		"libC": {
-			Dir: turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
+			Name: "libC",
 		},
 		"libD": {
-			Dir: turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+			Name: "libD",
 		},
 	}
 	packageNames := []string{}
@@ -99,6 +120,7 @@ func TestResolvePackages(t *testing.T) {
 		includeDependencies bool
 		includeDependents   bool
 		lockfile            string
+		inferPkgPath        string
 	}{
 		{
 			name:                "Just scope and dependencies",
@@ -254,6 +276,40 @@ func TestResolvePackages(t *testing.T) {
 			expected: []string{"app2", "app2-a"},
 			since:    "dummy",
 		},
+		{
+			name:         "Infer app2 from directory",
+			inferPkgPath: "app/app2",
+			expected:     []string{"app2"},
+		},
+		{
+			name:         "Infer app2 from a subdirectory",
+			inferPkgPath: "app/app2/src",
+			expected:     []string{"app2"},
+		},
+		{
+			name:         "Infer from a directory with no packages",
+			inferPkgPath: "wrong",
+			expected:     []string{},
+		},
+		{
+			name:         "Infer from a parent directory",
+			inferPkgPath: "app",
+			expected:     []string{"app0", "app1", "app2", "app2-a"},
+		},
+		{
+			name:         "library change, no scope, inferred libs",
+			changed:      []string{"libs/libA/src/index.ts"},
+			expected:     []string{"libA"},
+			since:        "dummy",
+			inferPkgPath: "libs",
+		},
+		{
+			name:         "library change, no scope, inferred app",
+			changed:      []string{"libs/libA/src/index.ts"},
+			expected:     []string{},
+			since:        "dummy",
+			inferPkgPath: "app",
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("test #%v %v", i, tc.name), func(t *testing.T) {
@@ -272,8 +328,9 @@ func TestResolvePackages(t *testing.T) {
 					IncludeDependencies: tc.includeDependencies,
 					SkipDependents:      !tc.includeDependents,
 				},
-				IgnorePatterns:    []string{tc.ignore},
-				GlobalDepPatterns: tc.globalDeps,
+				IgnorePatterns:       []string{tc.ignore},
+				GlobalDepPatterns:    tc.globalDeps,
+				PackageInferenceRoot: tc.inferPkgPath,
 			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
 				WorkspaceNames: packageNames,

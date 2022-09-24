@@ -7,9 +7,10 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/graph"
-	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turborepo/cli/internal/doublestar"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type SelectedPackages struct {
@@ -21,10 +22,24 @@ type SelectedPackages struct {
 // packages that have changed in a particular range of git refs.
 type PackagesChangedInRange = func(fromRef string, toRef string) (util.Set, error)
 
+// PackageInference holds the information we have inferred from the working-directory
+// (really --infer-filter-root flag) about which packages are of interest.
+type PackageInference struct {
+	// PackageName, if set, means that we have determined that filters without a package-specifier
+	// should get this package name
+	PackageName string
+	// DirectoryRoot is used to infer a "parentDir" for the filter in the event that we haven't
+	// identified a specific package. If the filter already contains a parentDir, this acts as
+	// a prefix. If the filter does not contain a parentDir, we consider this to be a glob for
+	// all subdirectories
+	DirectoryRoot turbopath.AbsoluteSystemPath
+}
+
 type Resolver struct {
 	Graph                  *dag.AcyclicGraph
 	WorkspaceInfos         graph.WorkspaceInfos
 	Cwd                    string
+	Inference              *PackageInference
 	PackagesChangedInRange PackagesChangedInRange
 }
 
@@ -37,16 +52,62 @@ func (r *Resolver) GetPackagesFromPatterns(patterns []string) (util.Set, error) 
 		if err != nil {
 			return nil, err
 		}
-		selectors = append(selectors, &selector)
+		selectors = append(selectors, selector)
 	}
-	selected, err := r.GetFilteredPackages(selectors)
+	selected, err := r.getFilteredPackages(selectors)
 	if err != nil {
 		return nil, err
 	}
 	return selected.pkgs, nil
 }
 
-func (r *Resolver) GetFilteredPackages(selectors []*TargetSelector) (*SelectedPackages, error) {
+func (pi *PackageInference) apply(selector *TargetSelector) error {
+	if selector.namePattern != "" {
+		// The selector references a package name, don't apply inference
+		return nil
+	}
+	if pi.PackageName != "" {
+		selector.namePattern = pi.PackageName
+	}
+	if selector.parentDir != "" {
+		parentDir := pi.DirectoryRoot.UntypedJoin(selector.parentDir).ToStringDuringMigration()
+		selector.parentDir = parentDir
+	} else if pi.PackageName == "" {
+		// The user didn't set a parent directory and we didn't find a single package,
+		// so use the directory we inferred and select all subdirectories
+		selector.parentDir = pi.DirectoryRoot.UntypedJoin("**").ToStringDuringMigration()
+	}
+	return nil
+}
+
+func (r *Resolver) applyInference(selectors []*TargetSelector) ([]*TargetSelector, error) {
+	if r.Inference == nil {
+		return selectors, nil
+	}
+	results := make([]*TargetSelector, len(selectors))
+	for i, selector := range selectors {
+		if err := r.Inference.apply(selector); err != nil {
+			return nil, err
+		}
+		results[i] = selector
+	}
+	// If there are existing patterns, use inference on those. If there are no
+	// patterns, but there is a directory supplied, synthesize a selector
+	if len(results) == 0 {
+		selector := &TargetSelector{}
+		if err := r.Inference.apply(selector); err != nil {
+			return nil, err
+		}
+		results = append(results, selector)
+	}
+	return results, nil
+}
+
+func (r *Resolver) getFilteredPackages(selectors []*TargetSelector) (*SelectedPackages, error) {
+	selectors, err := r.applyInference(selectors)
+	if err != nil {
+		return nil, err
+	}
 	prodPackageSelectors := []*TargetSelector{}
 	allPackageSelectors := []*TargetSelector{}
 	for _, selector := range selectors {

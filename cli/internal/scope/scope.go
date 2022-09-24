@@ -52,6 +52,8 @@ type Opts struct {
 	GlobalDepPatterns []string
 	// Patterns are the filter patterns supplied to --filter on the commandline
 	FilterPatterns []string
+
+	PackageInferenceRoot string
 }
 
 var (
@@ -71,6 +73,7 @@ func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) {
 	opts.FilterPatterns = args.Command.Run.Filter
 	opts.IgnorePatterns = args.Command.Run.Ignore
 	opts.GlobalDepPatterns = args.Command.Run.GlobalDeps
+	flags.StringVar(&opts.PackageInferenceRoot, "infer-filter-root", "", "Use the given monorepo-relative path as the basis for inferring tasks")
 	addLegacyFlagsFromArgs(&opts.LegacyFilter, args)
 }
 
@@ -114,16 +117,21 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // the selected tasks. Returns the selected packages and whether or not the selected
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
+	inferenceBase, err := calculateInference(cwd, opts.PackageInferenceRoot, ctx.PackageInfos)
+	if err != nil {
+		return nil, false, err
+	}
 	filterResolver := &scope_filter.Resolver{
 		Graph:                  &ctx.WorkspaceGraph,
 		WorkspaceInfos:         ctx.WorkspaceInfos,
 		Cwd:                    cwd,
-		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManager),
+		Inference:              inferenceBase,
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos, ctx.PackageManager),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
 	filterPatterns = append(filterPatterns, legacyFilterPatterns...)
-	isAllPackages := len(filterPatterns) == 0
+	isAllPackages := len(filterPatterns) == 0 && opts.PackageInferenceRoot == ""
 	filteredPkgs, err := filterResolver.GetPackagesFromPatterns(filterPatterns)
 	if err != nil {
 		return nil, false, err
@@ -137,6 +145,43 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 	}
 	filteredPkgs.Delete(ctx.RootNode)
 	return filteredPkgs, isAllPackages, nil
+}
+
+func calculateInference(rawRepoRoot string, rawPkgInferenceDir string, packageInfos map[interface{}]*fs.PackageJSON) (*scope_filter.PackageInference, error) {
+	if rawPkgInferenceDir == "" {
+		// No inference specified, no need to calculate anything
+		return nil, nil
+	}
+	repoRoot := turbopath.AbsoluteSystemPathFromUpstream(rawRepoRoot)
+	pkgInferencePath := fs.ResolveUnknownPath(repoRoot, rawPkgInferenceDir)
+	for _, pkgInfo := range packageInfos {
+		pkgPath := pkgInfo.Dir.RestoreAnchor(repoRoot)
+		inferredPathIsBelow, err := pkgPath.ContainsPath(pkgInferencePath)
+		if err != nil {
+			return nil, err
+		}
+		if inferredPathIsBelow {
+			// set both. The user might have set a parent directory filter,
+			// in which case we *should* fail to find any packages, but we should
+			// do so in a consistent manner
+			return &scope_filter.PackageInference{
+				PackageName:   pkgInfo.Name,
+				DirectoryRoot: pkgInferencePath,
+			}, nil
+		}
+		inferredPathIsBetweenRootAndPkg, err := pkgInferencePath.ContainsPath(pkgPath)
+		if err != nil {
+			return nil, err
+		}
+		if inferredPathIsBetweenRootAndPkg {
+			// we've found *some* package below our inference directory. We can stop now and conclude
+			// that we're looking for all packages in a subdirectory
+			break
+		}
+	}
+	return &scope_filter.PackageInference{
+		DirectoryRoot: pkgInferencePath,
+	}, nil
 }
 
 func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.WorkspaceInfos, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
