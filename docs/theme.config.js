@@ -8,7 +8,7 @@ const theme = {
     link: "https://github.com/vercel/turborepo",
   },
   docsRepositoryBase:
-    "https://github.com/vercel/turborepo/blob/main/docs/pages",
+    "https://github.com/vercel/turborepo/blob/main/docs",
   titleSuffix: " | Turborepo",
   unstable_flexsearch: true,
   unstable_staticImage: true,
