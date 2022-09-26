@@ -33,6 +33,11 @@ func UnsafeToAbsoluteSystemPath(s string) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(s)
 }
 
+// UnsafeToAnchoredSystemPath directly converts a string to an AbsoluteSystemPath
+func UnsafeToAnchoredSystemPath(s string) turbopath.AnchoredSystemPath {
+	return turbopath.AnchoredSystemPath(s)
+}
+
 // AbsoluteSystemPathFromUpstream is used to mark return values from APIs that we
 // expect to give us absolute paths. No checking is performed.
 // Prefer to use this over a cast to maintain the search-ability of interfaces

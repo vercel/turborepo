@@ -66,21 +66,27 @@ func (p AbsoluteSystemPath) OpenFile(flags int, mode os.FileMode) (*os.File, err
 	return os.OpenFile(p.ToString(), flags, mode)
 }
 
-// FileExists returns true if the given path exists and is a file.
-func (p AbsoluteSystemPath) FileExists() bool {
-	info, err := os.Lstat(p.ToString())
-	return err == nil && !info.IsDir()
-}
-
 // Lstat implements os.Lstat for absolute path
 func (p AbsoluteSystemPath) Lstat() (os.FileInfo, error) {
 	return os.Lstat(p.ToString())
 }
 
-// DirExists returns true if this path points to a directory
+// Exists returns true if the given path exists.
+func (p AbsoluteSystemPath) Exists() bool {
+	_, err := p.Lstat()
+	return err == nil
+}
+
+// DirExists returns true if the given path exists and is a directory.
 func (p AbsoluteSystemPath) DirExists() bool {
 	info, err := p.Lstat()
 	return err == nil && info.IsDir()
+}
+
+// FileExists returns true if the given path exists and is a file.
+func (p AbsoluteSystemPath) FileExists() bool {
+	info, err := os.Lstat(p.ToString())
+	return err == nil && !info.IsDir()
 }
 
 // ContainsPath returns true if this absolute path is a parent of the

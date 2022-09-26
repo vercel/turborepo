@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"gotest.tools/v3/assert"
 )
@@ -178,18 +179,24 @@ func TestRestoreTar(t *testing.T) {
 
 	tar := makeValidTar(t)
 
-	expectedFiles := []string{
-		"extra-file",
-		"my-pkg/",
-		"my-pkg/some-file",
-		"my-pkg/link-to-extra-file",
-		"my-pkg/broken-link",
+	expectedFiles := []turbopath.AnchoredSystemPath{
+		turbopath.AnchoredUnixPath("extra-file").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/some-file").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/link-to-extra-file").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/broken-link").ToSystemPath(),
 	}
 	files, err := restoreTar(root, tar)
 	assert.NilError(t, err, "readTar")
 
-	expectedSet := util.SetFromStrings(expectedFiles)
-	gotSet := util.SetFromStrings(files)
+	expectedSet := make(util.Set)
+	for _, file := range expectedFiles {
+		expectedSet.Add(file.ToString())
+	}
+	gotSet := make(util.Set)
+	for _, file := range files {
+		gotSet.Add(file.ToString())
+	}
 	extraFiles := gotSet.Difference(expectedSet)
 	if extraFiles.Len() > 0 {
 		t.Errorf("got extra files: %v", extraFiles.UnsafeListOfStrings())

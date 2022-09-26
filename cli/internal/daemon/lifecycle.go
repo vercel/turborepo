@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -92,7 +93,7 @@ type lifecycle struct {
 
 // logError logs an error and outputs it to the UI.
 func (l *lifecycle) logError(err error) {
-	l.base.Logger.Error("error", err)
+	l.base.Logger.Error(fmt.Sprintf("error: %v", err))
 	l.base.UI.Error(err.Error())
 }
 

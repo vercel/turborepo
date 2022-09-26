@@ -7,14 +7,12 @@ package cache
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -23,11 +21,11 @@ import (
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(target string, hash string, files []string) (bool, []string, int, error)
+	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error)
 	Exists(hash string) (ItemStatus, error)
 	// Put caches files for a given hash
-	Put(target string, hash string, duration int, files []string) error
-	Clean(target string)
+	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
+	Clean(anchor turbopath.AbsoluteSystemPath)
 	CleanAll()
 	Shutdown()
 }
@@ -132,8 +130,7 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	}
 
 	if useHTTPCache {
-		fmt.Println(ui.Dim("• Remote computation caching enabled"))
-		implementation := newHTTPCache(opts, client, recorder, repoRoot)
+		implementation := newHTTPCache(opts, client, recorder)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
 
@@ -175,8 +172,8 @@ type cacheMultiplexer struct {
 	onCacheRemoved OnCacheRemoved
 }
 
-func (mplex *cacheMultiplexer) Put(target string, key string, duration int, files []string) error {
-	return mplex.storeUntil(target, key, duration, files, len(mplex.caches))
+func (mplex *cacheMultiplexer) Put(anchor turbopath.AbsoluteSystemPath, key string, duration int, files []turbopath.AnchoredSystemPath) error {
+	return mplex.storeUntil(anchor, key, duration, files, len(mplex.caches))
 }
 
 type cacheRemoval struct {
@@ -187,7 +184,7 @@ type cacheRemoval struct {
 // storeUntil stores artifacts into higher priority caches than the given one.
 // Used after artifact retrieval to ensure we have them in eg. the directory cache after
 // downloading from the RPC cache.
-func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration int, files []string, stopAt int) error {
+func (mplex *cacheMultiplexer) storeUntil(anchor turbopath.AbsoluteSystemPath, key string, duration int, files []turbopath.AnchoredSystemPath, stopAt int) error {
 	// Attempt to store on all caches simultaneously.
 	toRemove := make([]*cacheRemoval, stopAt)
 	g := &errgroup.Group{}
@@ -199,7 +196,7 @@ func (mplex *cacheMultiplexer) storeUntil(target string, key string, duration in
 		c := cache
 		i := i
 		g.Go(func() error {
-			err := c.Put(target, key, duration, files)
+			err := c.Put(anchor, key, duration, files)
 			if err != nil {
 				cd := &util.CacheDisabledError{}
 				if errors.As(err, &cd) {
@@ -244,7 +241,7 @@ func (mplex *cacheMultiplexer) removeCache(removal *cacheRemoval) {
 	}
 }
 
-func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) (bool, []string, int, error) {
+func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	// Make a shallow copy of the caches, since storeUntil can call removeCache
 	mplex.mu.RLock()
 	caches := make([]Cache, len(mplex.caches))
@@ -254,7 +251,7 @@ func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) 
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
-		ok, actualFiles, duration, err := cache.Fetch(target, key, files)
+		ok, actualFiles, duration, err := cache.Fetch(anchor, key, files)
 		if err != nil {
 			cd := &util.CacheDisabledError{}
 			if errors.As(err, &cd) {
@@ -272,11 +269,12 @@ func (mplex *cacheMultiplexer) Fetch(target string, key string, files []string) 
 			// Store this into other caches. We can ignore errors here because we know
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
-			_ = mplex.storeUntil(target, key, duration, actualFiles, i)
+			_ = mplex.storeUntil(anchor, key, duration, actualFiles, i)
 			return ok, actualFiles, duration, err
 		}
 	}
-	return false, files, 0, nil
+
+	return false, nil, 0, nil
 }
 
 func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {
@@ -293,9 +291,9 @@ func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {
 	return syncCacheState, nil
 }
 
-func (mplex *cacheMultiplexer) Clean(target string) {
+func (mplex *cacheMultiplexer) Clean(anchor turbopath.AbsoluteSystemPath) {
 	for _, cache := range mplex.caches {
-		cache.Clean(target)
+		cache.Clean(anchor)
 	}
 }
 
