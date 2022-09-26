@@ -39,7 +39,9 @@ export default function Callout({
   icon: ReactElement;
 }) {
   return (
-    <div className={`${THEMES[type].classes} flex rounded-lg callout mt-6`}>
+    <div
+      className={`${THEMES[type].classes} flex rounded-lg callout mt-6 overflow-x-scroll`}
+    >
       <div
         className="py-2 pl-3 pr-2 text-xl select-none"
         style={{
