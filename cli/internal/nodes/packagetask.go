@@ -27,7 +27,10 @@ func (pt *PackageTask) Command() (string, bool) {
 }
 
 // OutputPrefix returns the prefix to be used for logging and ui for this task
-func (pt *PackageTask) OutputPrefix() string {
+func (pt *PackageTask) OutputPrefix(isSinglePackage bool) string {
+	if isSinglePackage {
+		return pt.Task
+	}
 	return fmt.Sprintf("%v:%v", pt.PackageName, pt.Task)
 }
 
