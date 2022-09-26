@@ -135,6 +135,8 @@ func TestRecursiveCopy(t *testing.T) {
 	err = RecursiveCopy(src.Path(), dst.Path())
 	assert.NilError(t, err, "RecursiveCopy")
 
+	dstChildDir := filepath.Join(dst.Path(), "child")
+	assertDirMatches(t, childDir, dstChildDir)
 	dstAPath := filepath.Join(dst.Path(), "child", "a")
 	assertFileMatches(t, aPath, dstAPath)
 	dstBPath := filepath.Join(dst.Path(), "b")
@@ -170,6 +172,15 @@ func assertFileMatches(t *testing.T, orig string, copy string) {
 	copyBytes, err := ioutil.ReadFile(copy)
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, origBytes, copyBytes)
+	origStat, err := os.Lstat(orig)
+	assert.NilError(t, err, "Lstat")
+	copyStat, err := os.Lstat(copy)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, origStat.Mode(), copyStat.Mode())
+}
+
+func assertDirMatches(t *testing.T, orig string, copy string) {
+	t.Helper()
 	origStat, err := os.Lstat(orig)
 	assert.NilError(t, err, "Lstat")
 	copyStat, err := os.Lstat(copy)
