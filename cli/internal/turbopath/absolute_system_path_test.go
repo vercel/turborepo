@@ -2,6 +2,7 @@ package turbopath
 
 import (
 	"os"
+	"runtime"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -69,6 +70,15 @@ func Test_Mkdir(t *testing.T) {
 		stat, err := testPath.Lstat()
 		assert.NilError(t, err, "%s: Lstat", testName)
 		assert.Assert(t, stat.IsDir(), testName)
-		assert.Equal(t, stat.Mode(), testCase.expectedMode, testName)
+
+		assert.Assert(t, stat.IsDir(), testName)
+
+		if runtime.GOOS == "windows" {
+			// For windows os.Chmod will only change the writable bit so that's all we check
+			assert.Equal(t, stat.Mode().Perm(), testCase.expectedMode.Perm()&0200, testName)
+		} else {
+			assert.Equal(t, stat.Mode(), testCase.expectedMode, testName)
+		}
+
 	}
 }
