@@ -1,24 +1,23 @@
 // Adapted from https://github.com/thought-machine/please
 // Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
+// Package cache implements our cache abstraction.
 package cache
 
 import (
 	"encoding/json"
 	"fmt"
-	"runtime"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/cacheitem"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"golang.org/x/sync/errgroup"
 )
 
 // fsCache is a local filesystem cache
 type fsCache struct {
 	cacheDirectory turbopath.AbsoluteSystemPath
 	recorder       analytics.Recorder
-	repoRoot       turbopath.AbsoluteSystemPath
 }
 
 // newFsCache creates a new filesystem cache
@@ -35,19 +34,23 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
 func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
-	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
+	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.gz")
 
 	// If it's not in the cache bail now
-	if !cachedFolder.DirExists() {
+	if !cachePath.FileExists() {
 		f.logFetch(false, hash, 0)
 		return false, nil, 0, nil
 	}
 
-	// Otherwise, copy it into position
-	err := fs.RecursiveCopy(cachedFolder.ToStringDuringMigration(), anchor.ToStringDuringMigration())
-	if err != nil {
-		// TODO: what event to log here?
-		return false, nil, 0, fmt.Errorf("error moving artifact from cache into %v: %w", anchor, err)
+	cacheItem, openErr := cacheitem.Open(cachePath)
+	defer func() { _ = cacheItem.Close() }()
+	if openErr != nil {
+		return false, nil, 0, openErr
+	}
+
+	restoredFiles, restoreErr := cacheItem.Restore(anchor)
+	if restoreErr != nil {
+		return false, nil, 0, restoreErr
 	}
 
 	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
@@ -55,13 +58,13 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
 	}
 	f.logFetch(true, hash, meta.Duration)
-	return true, nil, meta.Duration, nil
+	return true, restoredFiles, meta.Duration, nil
 }
 
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {
-	cachedFolder := f.cacheDirectory.UntypedJoin(hash)
+	cachePath := f.cacheDirectory.UntypedJoin(hash + "tar.gz")
 
-	if !cachedFolder.DirExists() {
+	if !cachePath.FileExists() {
 		return ItemStatus{Local: false}, nil
 	}
 
@@ -85,40 +88,19 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
-	g := new(errgroup.Group)
+	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.gz")
+	cacheItem, err := cacheitem.Create(cachePath)
+	defer func() { _ = cacheItem.Close() }()
 
-	numDigesters := runtime.NumCPU()
-	fileQueue := make(chan turbopath.AnchoredSystemPath, numDigesters)
-
-	for i := 0; i < numDigesters; i++ {
-		g.Go(func() error {
-			for file := range fileQueue {
-				statedFile := fs.LstatCachedFile{Path: file.RestoreAnchor(anchor)}
-				fromType, err := statedFile.GetType()
-				if err != nil {
-					return fmt.Errorf("error stat'ing cache source %v: %v", file, err)
-				}
-				if !fromType.IsDir() {
-					if err := f.cacheDirectory.UntypedJoin(hash, file.ToStringDuringMigration()).EnsureDir(); err != nil {
-						return fmt.Errorf("error ensuring directory file from cache: %w", err)
-					}
-
-					if err := fs.CopyFile(&statedFile, f.cacheDirectory.UntypedJoin(hash, file.ToStringDuringMigration()).ToStringDuringMigration()); err != nil {
-						return fmt.Errorf("error copying file from cache: %w", err)
-					}
-				}
-			}
-			return nil
-		})
+	if err != nil {
+		return err
 	}
 
 	for _, file := range files {
-		fileQueue <- file
-	}
-	close(fileQueue)
-
-	if err := g.Wait(); err != nil {
-		return err
+		err := cacheItem.AddFile(anchor, file)
+		if err != nil {
+			return err
+		}
 	}
 
 	writeErr := WriteCacheMetaFile(f.cacheDirectory.UntypedJoin(hash+"-meta.json"), &CacheMetadata{
@@ -141,7 +123,7 @@ func (f *fsCache) CleanAll() {
 	fmt.Println("Not implemented yet")
 }
 
-func (cache *fsCache) Shutdown() {}
+func (f *fsCache) Shutdown() {}
 
 // CacheMetadata stores duration and hash information for a cache entry so that aggregate Time Saved calculations
 // can be made from artifacts from various caches
