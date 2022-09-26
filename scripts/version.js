@@ -6,7 +6,6 @@ const semver = require("semver");
 
 // These values come from the invocation of release.
 const increment = process.argv[2];
-const identifier = process.argv[3];
 
 // Now we get the current version of the package.
 const versionFilePath = path.join(__dirname, "..", "version.txt");
@@ -14,7 +13,8 @@ const versionFileContents = fs.readFileSync(versionFilePath, "utf-8");
 const [currentVersion] = versionFileContents.split("\n");
 
 // Now that we know current state, figure out what the target state is.
-// The `identifier` is unused unless the increment is `pre____`.
+// If we're doing a "pre" release, set the identifier to canary
+const identifier = increment.startsWith("pre") ? "canary" : "latest";
 const newVersion = semver.inc(currentVersion, increment, identifier);
 
 // Parse the output semver identifer to identify which npm tag to publish to.

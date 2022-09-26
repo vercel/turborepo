@@ -21,7 +21,7 @@ var ErrClosed = errors.New("glob watching is closed")
 // have changed, that hash is no longer tracked.
 type GlobWatcher struct {
 	logger       hclog.Logger
-	repoRoot     turbopath.AbsolutePath
+	repoRoot     turbopath.AbsoluteSystemPath
 	cookieWaiter filewatcher.CookieWaiter
 
 	mu         sync.RWMutex // protects field below
@@ -32,7 +32,7 @@ type GlobWatcher struct {
 }
 
 // New returns a new GlobWatcher instance
-func New(logger hclog.Logger, repoRoot turbopath.AbsolutePath, cookieWaiter filewatcher.CookieWaiter) *GlobWatcher {
+func New(logger hclog.Logger, repoRoot turbopath.AbsoluteSystemPath, cookieWaiter filewatcher.CookieWaiter) *GlobWatcher {
 	return &GlobWatcher{
 		logger:       logger,
 		repoRoot:     repoRoot,

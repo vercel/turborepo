@@ -13,8 +13,8 @@ import (
 )
 
 func TestCopyFile(t *testing.T) {
-	srcFilePath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "src"))
-	destFilePath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	srcFilePath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "src"))
+	destFilePath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "dest"))
 	from := &LstatCachedFile{Path: srcFilePath}
 
 	// The src file doesn't exist, will error.
@@ -36,9 +36,9 @@ func TestCopyFile(t *testing.T) {
 	assert.NilError(t, err, "src exists dest does not, should not error.")
 
 	// Now test for symlinks.
-	symlinkSrcPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "symlink"))
-	symlinkTargetPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "target"))
-	symlinkDestPath := turbopath.AbsolutePath(filepath.Join(t.TempDir(), "dest"))
+	symlinkSrcPath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "symlink"))
+	symlinkTargetPath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "target"))
+	symlinkDestPath := turbopath.AbsoluteSystemPath(filepath.Join(t.TempDir(), "dest"))
 	fromSymlink := &LstatCachedFile{Path: symlinkSrcPath}
 
 	// Create the symlink target.
@@ -88,7 +88,7 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	assert.NilError(t, err, "Create")
 	err = srcFile.Chmod(readonlyMode)
 	assert.NilError(t, err, "Chmod")
-	err = CopyFile(&LstatCachedFile{Path: turbopath.AbsolutePath(srcFilePath)}, dstFilePath)
+	err = CopyFile(&LstatCachedFile{Path: turbopath.AbsoluteSystemPath(srcFilePath)}, dstFilePath)
 	assert.NilError(t, err, "CopyOrLinkFile")
 	info, err := os.Lstat(dstFilePath)
 	assert.NilError(t, err, "Lstat")
@@ -138,6 +138,8 @@ func TestRecursiveCopy(t *testing.T) {
 	err = RecursiveCopy(src.Path(), dst.Path())
 	assert.NilError(t, err, "RecursiveCopy")
 
+	dstChildDir := filepath.Join(dst.Path(), "child")
+	assertDirMatches(t, childDir, dstChildDir)
 	dstAPath := filepath.Join(dst.Path(), "child", "a")
 	assertFileMatches(t, aPath, dstAPath)
 	dstBPath := filepath.Join(dst.Path(), "b")
@@ -173,6 +175,15 @@ func assertFileMatches(t *testing.T, orig string, copy string) {
 	copyBytes, err := ioutil.ReadFile(copy)
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, origBytes, copyBytes)
+	origStat, err := os.Lstat(orig)
+	assert.NilError(t, err, "Lstat")
+	copyStat, err := os.Lstat(copy)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, origStat.Mode(), copyStat.Mode())
+}
+
+func assertDirMatches(t *testing.T, orig string, copy string) {
+	t.Helper()
 	origStat, err := os.Lstat(orig)
 	assert.NilError(t, err, "Lstat")
 	copyStat, err := os.Lstat(copy)

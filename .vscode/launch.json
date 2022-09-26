@@ -103,6 +103,15 @@
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}",
       "args": ["run", "build", "--force"]
+    },
+    {
+      "name": "Testbed",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/cli/testbed",
+      "args": ["run", "build", "--single-package"]
     }
   ]
 }

@@ -25,6 +25,7 @@ import (
 type client interface {
 	PutArtifact(hash string, body []byte, duration int, tag string) error
 	FetchArtifact(hash string) (*http.Response, error)
+	ArtifactExists(hash string) (*http.Response, error)
 	GetTeamID() string
 }
 
@@ -34,7 +35,7 @@ type httpCache struct {
 	requestLimiter limiter
 	recorder       analytics.Recorder
 	signerVerifier *ArtifactSignatureAuthentication
-	repoRoot       turbopath.AbsolutePath
+	repoRoot       turbopath.AbsoluteSystemPath
 }
 
 type limiter chan struct{}
@@ -53,7 +54,7 @@ var mtime = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 // nobody is the usual uid / gid of the 'nobody' user.
 const nobody = 65534
 
-func (cache *httpCache) Put(target, hash string, duration int, files []string) error {
+func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
@@ -79,7 +80,7 @@ func (cache *httpCache) Put(target, hash string, duration int, files []string) e
 }
 
 // write writes a series of files into the given Writer.
-func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
+func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
 	defer w.Close()
 	gzw := gzip.NewWriter(w)
 	defer gzw.Close()
@@ -94,14 +95,15 @@ func (cache *httpCache) write(w io.WriteCloser, hash string, files []string) {
 	}
 }
 
-func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error {
-	info, err := os.Lstat(repoRelativePath)
+func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.AnchoredSystemPath) error {
+	absoluteFilePath := repoRelativePath.RestoreAnchor(cache.repoRoot)
+	info, err := absoluteFilePath.Lstat()
 	if err != nil {
 		return err
 	}
 	target := ""
 	if info.Mode()&os.ModeSymlink != 0 {
-		target, err = os.Readlink(repoRelativePath)
+		target, err = absoluteFilePath.Readlink()
 		if err != nil {
 			return err
 		}
@@ -111,7 +113,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 		return err
 	}
 	// Ensure posix path for filename written in header.
-	hdr.Name = filepath.ToSlash(repoRelativePath)
+	hdr.Name = repoRelativePath.ToUnixPath().ToString()
 	// Zero out all timestamps.
 	hdr.ModTime = mtime
 	hdr.AccessTime = mtime
@@ -126,7 +128,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 	} else if info.IsDir() || target != "" {
 		return nil // nothing to write
 	}
-	f, err := os.Open(repoRelativePath)
+	f, err := absoluteFilePath.Open()
 	if err != nil {
 		return err
 	}
@@ -138,7 +140,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath string) error
 	return err
 }
 
-func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (bool, []string, int, error) {
+func (cache *httpCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
@@ -148,6 +150,16 @@ func (cache *httpCache) Fetch(target, key string, _unusedOutputGlobs []string) (
 	}
 	cache.logFetch(hit, key, duration)
 	return hit, files, duration, err
+}
+
+func (cache *httpCache) Exists(key string) (ItemStatus, error) {
+	cache.requestLimiter.acquire()
+	defer cache.requestLimiter.release()
+	hit, err := cache.exists(key)
+	if err != nil {
+		return ItemStatus{}, fmt.Errorf("failed to verify files from HTTP cache: %w", err)
+	}
+	return ItemStatus{Remote: hit}, err
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
@@ -166,7 +178,23 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
-func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
+func (cache *httpCache) exists(hash string) (bool, error) {
+	resp, err := cache.client.ArtifactExists(hash)
+	if err != nil {
+		return false, nil
+	}
+
+	defer func() { err = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	} else if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
+	}
+	return true, err
+}
+
+func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
 		return false, nil, 0, err
@@ -224,8 +252,8 @@ func (cache *httpCache) retrieve(hash string) (bool, []string, int, error) {
 // restored. In the future, these should likely be repo-relative system paths
 // so that they are suitable for being fed into cache.Put for other caches.
 // For now, I think this is working because windows also accepts /-delimited paths.
-func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error) {
-	files := []string{}
+func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
+	files := []turbopath.AnchoredSystemPath{}
 	missingLinks := []*tar.Header{}
 	gzr, err := gzip.NewReader(reader)
 	if err != nil {
@@ -249,9 +277,10 @@ func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error)
 			return nil, err
 		}
 		// hdr.Name is always a posix-style path
-		// TODO: files should eventually be repo-relative system paths
-		files = append(files, hdr.Name)
-		filename := root.Join(hdr.Name)
+		// FIXME: THIS IS A BUG.
+		restoredName := turbopath.AnchoredUnixPath(hdr.Name)
+		files = append(files, restoredName.ToSystemPath())
+		filename := restoredName.ToSystemPath().RestoreAnchor(root)
 		if isChild, err := root.ContainsPath(filename); err != nil {
 			return nil, err
 		} else if !isChild {
@@ -289,16 +318,16 @@ func restoreTar(root turbopath.AbsolutePath, reader io.Reader) ([]string, error)
 
 var errNonexistentLinkTarget = errors.New("the link target does not exist")
 
-func restoreSymlink(root turbopath.AbsolutePath, hdr *tar.Header, allowNonexistentTargets bool) error {
+func restoreSymlink(root turbopath.AbsoluteSystemPath, hdr *tar.Header, allowNonexistentTargets bool) error {
 	// Note that hdr.Linkname is really the link target
 	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
-	linkFilename := root.Join(hdr.Name)
+	linkFilename := root.UntypedJoin(hdr.Name)
 	if err := linkFilename.EnsureDir(); err != nil {
 		return err
 	}
 
 	// TODO: check if this is an absolute path, or if we even care
-	linkTarget := linkFilename.Dir().Join(relativeLinkTarget)
+	linkTarget := linkFilename.Dir().UntypedJoin(relativeLinkTarget)
 	if _, err := linkTarget.Lstat(); err != nil {
 		if os.IsNotExist(err) {
 			if !allowNonexistentTargets {
@@ -319,7 +348,7 @@ func restoreSymlink(root turbopath.AbsolutePath, hdr *tar.Header, allowNonexiste
 	return nil
 }
 
-func (cache *httpCache) Clean(target string) {
+func (cache *httpCache) Clean(anchor turbopath.AbsoluteSystemPath) {
 	// Not possible; this implementation can only clean for a hash.
 }
 
@@ -329,7 +358,7 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsolutePath) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
@@ -341,6 +370,5 @@ func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoo
 			teamId:  client.GetTeamID(),
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
-		repoRoot: repoRoot,
 	}
 }

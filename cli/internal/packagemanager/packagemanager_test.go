@@ -106,7 +106,7 @@ func TestGetPackageManager(t *testing.T) {
 	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
-		projectDirectory turbopath.AbsolutePath
+		projectDirectory turbopath.AbsoluteSystemPath
 		pkg              *fs.PackageJSON
 		want             string
 		wantErr          bool
@@ -217,7 +217,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath turbopath.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     []string
 		wantErr  bool
 	}
@@ -226,12 +226,12 @@ func Test_GetWorkspaces(t *testing.T) {
 
 	repoRoot, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
-	rootPath := map[string]turbopath.AbsolutePath{
-		"nodejs-npm":   repoRoot.Join("../../../examples/basic"),
-		"nodejs-berry": repoRoot.Join("../../../examples/basic"),
-		"nodejs-yarn":  repoRoot.Join("../../../examples/basic"),
-		"nodejs-pnpm":  repoRoot.Join("../../../examples/with-pnpm"),
-		"nodejs-pnpm6": repoRoot.Join("../../../examples/with-pnpm"),
+	rootPath := map[string]turbopath.AbsoluteSystemPath{
+		"nodejs-npm":   repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-berry": repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-yarn":  repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-pnpm":  repoRoot.UntypedJoin("../../../examples/with-pnpm"),
+		"nodejs-pnpm6": repoRoot.UntypedJoin("../../../examples/with-pnpm"),
 	}
 
 	want := map[string][]string{
@@ -308,7 +308,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath turbopath.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     []string
 		wantErr  bool
 	}
@@ -328,7 +328,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.Join("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("../../../examples/basic"),
 			want:     want[packageManager.Name],
 			wantErr:  false,
 		}
@@ -358,7 +358,7 @@ func Test_CanPrune(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath turbopath.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     bool
 		wantErr  bool
 	}
@@ -383,7 +383,7 @@ func Test_CanPrune(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.Join("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("../../../examples/basic"),
 			want:     wants[packageManager.Name].want,
 			wantErr:  wants[packageManager.Name].wantErr,
 		}

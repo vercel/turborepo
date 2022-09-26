@@ -217,7 +217,7 @@ func Test_getTraversePath(t *testing.T) {
 	}
 }
 
-func requireGitCmd(t *testing.T, repoRoot turbopath.AbsolutePath, args ...string) {
+func requireGitCmd(t *testing.T, repoRoot turbopath.AbsoluteSystemPath, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoRoot.ToString()
@@ -238,30 +238,30 @@ func TestGetPackageDeps(t *testing.T) {
 	//     dir/
 	//       nested-file
 
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
-	myPkgDir := repoRoot.Join("my-pkg")
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	myPkgDir := repoRoot.UntypedJoin("my-pkg")
 
 	// create the dir first
 	err := myPkgDir.MkdirAll()
 	assert.NilError(t, err, "CreateDir")
 
 	// create file 1
-	committedFilePath := myPkgDir.Join("committed-file")
+	committedFilePath := myPkgDir.UntypedJoin("committed-file")
 	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create file 2
-	deletedFilePath := myPkgDir.Join("deleted-file")
+	deletedFilePath := myPkgDir.UntypedJoin("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create file 3
-	nestedPath := myPkgDir.Join("dir", "nested-file")
+	nestedPath := myPkgDir.UntypedJoin("dir", "nested-file")
 	assert.NilError(t, nestedPath.EnsureDir(), "EnsureDir")
 	assert.NilError(t, nestedPath.WriteFile([]byte("nested"), 0644), "WriteFile")
 
 	// create a package.json
-	packageJSONPath := myPkgDir.Join("package.json")
+	packageJSONPath := myPkgDir.UntypedJoin("package.json")
 	err = packageJSONPath.WriteFile([]byte("{}"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
@@ -277,12 +277,12 @@ func TestGetPackageDeps(t *testing.T) {
 	assert.NilError(t, err, "Remove")
 
 	// create another untracked file in git
-	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
+	uncommittedFilePath := myPkgDir.UntypedJoin("uncommitted-file")
 	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create an untracked file in git up a level
-	rootFilePath := repoRoot.Join("new-root-file")
+	rootFilePath := repoRoot.UntypedJoin("new-root-file")
 	err = rootFilePath.WriteFile([]byte("new-root bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 

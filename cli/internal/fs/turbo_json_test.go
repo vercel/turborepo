@@ -2,6 +2,7 @@ package fs
 
 import (
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -11,10 +12,20 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
+func assertIsSorted(t *testing.T, arr []string, msg string) {
+	t.Helper()
+	copied := make([]string, len(arr))
+	copy(copied, arr)
+	sort.Strings(copied)
+	if !reflect.DeepEqual(arr, copied) {
+		t.Errorf("Expected sorted, got %v: %v", arr, msg)
+	}
+}
+
 func Test_ReadTurboConfig(t *testing.T) {
 	testDir := getTestDir(t, "correct")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -29,7 +40,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{"dist/**", ".next/**"},
+			Outputs:                 []string{".next/**", "dist/**"},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -55,15 +66,15 @@ func Test_ReadTurboConfig(t *testing.T) {
 		"publish": {
 			Outputs:                 []string{"dist/**"},
 			EnvVarDependencies:      []string{},
-			TopologicalDependencies: []string{"publish"},
-			TaskDependencies:        []string{"build", "admin#lint"},
+			TopologicalDependencies: []string{"build", "publish"},
+			TaskDependencies:        []string{"admin#lint", "build"},
 			ShouldCache:             false,
 			Inputs:                  []string{"build/**/*"},
 			OutputMode:              util.FullTaskOutput,
 		},
 	}
 
-	validateOutput(t, turboJSON.Pipeline, pipelineExpected)
+	validateOutput(t, turboJSON, pipelineExpected)
 
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
@@ -72,7 +83,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 func Test_ReadTurboConfig_Legacy(t *testing.T) {
 	testDir := getTestDir(t, "legacy-only")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -87,7 +98,7 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{"dist/**/*", "build/**/*"},
+			Outputs:                 []string{"build/**/*", "dist/**/*"},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -96,14 +107,14 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 		},
 	}
 
-	validateOutput(t, turboJSON.Pipeline, pipelineExpected)
+	validateOutput(t, turboJSON, pipelineExpected)
 	assert.Empty(t, turboJSON.RemoteCacheOptions)
 }
 
 func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 	testDir := getTestDir(t, "both")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -118,7 +129,7 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{"dist/**", ".next/**"},
+			Outputs:                 []string{".next/**", "dist/**"},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -127,7 +138,7 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 		},
 	}
 
-	validateOutput(t, turboJSON.Pipeline, pipelineExpected)
+	validateOutput(t, turboJSON, pipelineExpected)
 
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
@@ -138,7 +149,7 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-1")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -155,7 +166,7 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-2")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -172,7 +183,7 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "invalid-global-env")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -189,7 +200,7 @@ func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "legacy-env")
 
-	packageJSONPath := testDir.Join("package.json")
+	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
@@ -220,7 +231,15 @@ func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 }
 
 // Helpers
-func validateOutput(t *testing.T, actual Pipeline, expected map[string]TaskDefinition) {
+func validateOutput(t *testing.T, turboJSON *TurboJSON, expectedPipeline map[string]TaskDefinition) {
+	t.Helper()
+	assertIsSorted(t, turboJSON.GlobalDeps, "Global Deps")
+	assertIsSorted(t, turboJSON.GlobalEnv, "Global Env")
+	validatePipeline(t, turboJSON.Pipeline, expectedPipeline)
+}
+
+func validatePipeline(t *testing.T, actual Pipeline, expected map[string]TaskDefinition) {
+	t.Helper()
 	// check top level keys
 	if len(actual) != len(expected) {
 		expectedKeys := []string{}
@@ -240,22 +259,26 @@ func validateOutput(t *testing.T, actual Pipeline, expected map[string]TaskDefin
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
+		assertIsSorted(t, actualTaskDefinition.Outputs, "Task outputs")
+		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
+		assertIsSorted(t, actualTaskDefinition.TopologicalDependencies, "Topo deps")
+		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
 		assert.EqualValuesf(t, expectedTaskDefinition, actualTaskDefinition, "task definition mismatch for %v", taskName)
 	}
 
 }
 
-func getTestDir(t *testing.T, testName string) turbopath.AbsolutePath {
+func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
 	defaultCwd, err := os.Getwd()
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	cwd, err := CheckedToAbsolutePath(defaultCwd)
+	cwd, err := CheckedToAbsoluteSystemPath(defaultCwd)
 	if err != nil {
 		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
 	}
 
-	return cwd.Join("testdata", testName)
+	return cwd.UntypedJoin("testdata", testName)
 }
 
 func sortedArray(arr []string) []string {

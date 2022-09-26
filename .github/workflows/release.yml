@@ -7,26 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       increment:
-        description: 'SemVer Increment'
+        description: "SemVer Increment"
         required: true
-        default: 'prerelease'
+        default: "prerelease"
         type: choice
         options:
-        - prerelease
-        - prepatch
-        - preminor
-        - premajor
-        - patch
-        - minor
-        - major
-      identifier:
-        description: 'npm Tag'
-        required: true
-        default: 'canary'
-        type: choice
-        options:
-        - canary
-        - latest
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+          - patch
+          - minor
+          - major
 jobs:
   build:
     runs-on: macos-latest
@@ -70,7 +62,7 @@ jobs:
 
       - name: Version
         run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
+          ./scripts/version.js ${{ inputs.increment }}
           cat version.txt
 
       - name: Release

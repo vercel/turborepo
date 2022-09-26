@@ -15,15 +15,25 @@ After [installing the `turbo`](../getting-started) package (or cloning a starter
 Options can be passed to `turbo` in different ways. Options that require a value can be passed with an equals sign:
 
 ```sh
---<option>=<value>
---<option>="<value with a space>"
+--opt=<value>
+--opt="<value with a space>"
+```
+
+They can also be passed with a space between:
+
+```sh
+--opt value
+--opt "value with a space"
 ```
 
 Boolean options can be enabled as follows:
 
 ```sh
---no<option>
---<option>=false
+# To pass true
+--opt
+
+# To pass false
+--opt=false
 ```
 
 ## Global Arguments
