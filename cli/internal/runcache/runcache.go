@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
 	"github.com/vercel/turborepo/cli/internal/colorcache"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -166,7 +167,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O
-		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot.ToString(), tc.hash, changedOutputGlobs)
+		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, changedOutputGlobs)
 		if err != nil {
 			return false, err
 		} else if !hit {
@@ -274,19 +275,19 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 		return err
 	}
 
-	relativePaths := make([]string, len(filesToBeCached))
+	relativePaths := make([]turbopath.AnchoredSystemPath, len(filesToBeCached))
 
 	for index, value := range filesToBeCached {
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
 		if err != nil {
-			logger.Error("error", err)
+			logger.Error(fmt.Sprintf("error: %v", err))
 			terminal.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
 			continue
 		}
-		relativePaths[index] = relativePath
+		relativePaths[index] = fs.UnsafeToAnchoredSystemPath(relativePath)
 	}
 
-	if err = tc.rc.cache.Put(tc.pt.Pkg.Dir.ToStringDuringMigration(), tc.hash, duration, relativePaths); err != nil {
+	if err = tc.rc.cache.Put(tc.rc.repoRoot, tc.hash, duration, relativePaths); err != nil {
 		return err
 	}
 	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)

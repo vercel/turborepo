@@ -1090,7 +1090,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 			return nil
 		}
 		tracer(TargetBuildFailed, err)
-		targetLogger.Error("Error: command finished with error: %w", err)
+		targetLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !e.rs.Opts.runOpts.continueOnError {
 			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			e.processes.Close()
