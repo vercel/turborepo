@@ -130,6 +130,30 @@ func (p AbsoluteSystemPath) EnsureDir() error {
 	return err
 }
 
+// MkdirAllMode Create directory at path and all necessary parents ensuring that path has the correct mode set
+func (p AbsoluteSystemPath) MkdirAllMode(mode os.FileMode) error {
+	info, err := p.Lstat()
+	if err == nil {
+		if info.IsDir() && info.Mode() == mode {
+			// Dir exists with the correct mode
+			return nil
+		} else if info.IsDir() {
+			// Dir exists with incorrect mode
+			return os.Chmod(p.ToString(), mode)
+		} else {
+			// Path exists as file, remove it
+			if err := p.Remove(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := os.MkdirAll(p.ToString(), mode); err != nil {
+		return err
+	}
+	// This is necessary only when umask results in creating a directory with permissions different than the one passed by the user
+	return os.Chmod(p.ToString(), mode)
+}
+
 // Create is the AbsoluteSystemPath wrapper for os.Create
 func (p AbsoluteSystemPath) Create() (*os.File, error) {
 	return os.Create(p.ToString())
