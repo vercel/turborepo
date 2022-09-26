@@ -147,8 +147,6 @@ func TestFetch(t *testing.T) {
 	//
 	// "some-package"/...
 
-	// cwd, err := fs.GetCwd()
-	// assert.NilError(t, err, "GetCwd")
 	cacheDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	src := cacheDir.UntypedJoin("the-hash", "some-package")
 	err := src.MkdirAll()
