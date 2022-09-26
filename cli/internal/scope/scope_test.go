@@ -57,28 +57,28 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	packagesInfos := map[interface{}]*fs.PackageJSON{
 		"app0": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app0")),
+			Dir: turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
 		},
 		"app1": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app1")),
+			Dir: turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
 		},
 		"app2": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app2")),
+			Dir: turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
 		},
 		"app2-a": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("app/app2-a")),
+			Dir: turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
 		},
 		"libA": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libA")),
+			Dir: turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
 		},
 		"libB": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libB")),
+			Dir: turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
 		},
 		"libC": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libC")),
+			Dir: turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
 		},
 		"libD": {
-			Dir: turbopath.AnchoredSystemPath(filepath.FromSlash("libs/libD")),
+			Dir: turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
 		},
 	}
 	packageNames := []string{}

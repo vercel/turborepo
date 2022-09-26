@@ -1,7 +1,6 @@
 package taskhash
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,12 +18,9 @@ func Test_manuallyHashPackage(t *testing.T) {
 		"pkgignoreme",
 		"pkgignorethisdir/",
 	}, "\n")
-	root, err := os.MkdirTemp("", "turbo-manual-file-hashing-")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	root := t.TempDir()
 	repoRoot := turbopath.AbsoluteSystemPathFromUpstream(root)
-	pkgName := turbopath.AnchoredSystemPath("libA")
+	pkgName := turbopath.AnchoredUnixPath("libA").ToSystemPath()
 	type fileHash struct {
 		contents string
 		hash     string
@@ -42,7 +38,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		"libA/pkgignorethisdir/file":  {"anything", ""},
 	}
 
-	rootIgnoreFile, err := os.Create(repoRoot.Join(".gitignore").ToString())
+	rootIgnoreFile, err := repoRoot.Join(".gitignore").Create()
 	if err != nil {
 		t.Fatalf("failed to create .gitignore: %v", err)
 	}
@@ -52,11 +48,11 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 	rootIgnoreFile.Close()
 	pkgIgnoreFilename := pkgName.RestoreAnchor(repoRoot).Join(".gitignore")
-	err = fs.EnsureDir(pkgIgnoreFilename.ToString())
+	err = pkgIgnoreFilename.EnsureDir()
 	if err != nil {
 		t.Fatalf("failed to ensure directories for %v: %v", pkgIgnoreFilename, err)
 	}
-	pkgIgnoreFile, err := os.Create(pkgIgnoreFilename.ToString())
+	pkgIgnoreFile, err := pkgIgnoreFilename.Create()
 	if err != nil {
 		t.Fatalf("failed to create libA/.gitignore: %v", err)
 	}
@@ -67,11 +63,11 @@ func Test_manuallyHashPackage(t *testing.T) {
 	pkgIgnoreFile.Close()
 	for path, spec := range files {
 		filename := path.ToSystemPath().RestoreAnchor(repoRoot)
-		err = fs.EnsureDir(filename.ToString())
+		err = filename.EnsureDir()
 		if err != nil {
 			t.Fatalf("failed to ensure directories for %v: %v", filename, err)
 		}
-		f, err := os.Create(filename.ToString())
+		f, err := filename.Create()
 		if err != nil {
 			t.Fatalf("failed to create file: %v: %v", filename, err)
 		}
@@ -87,7 +83,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
 	}
-	hashes, err := manuallyHashPackage(pkg, []string{}, turbopath.AbsoluteSystemPath(repoRoot.ToString()))
+	hashes, err := manuallyHashPackage(pkg, []string{}, repoRoot)
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -113,7 +109,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, turbopath.AbsoluteSystemPath(repoRoot.ToString()))
+	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, repoRoot)
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
