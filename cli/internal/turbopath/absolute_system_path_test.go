@@ -75,7 +75,7 @@ func Test_Mkdir(t *testing.T) {
 
 		if runtime.GOOS == "windows" {
 			// For windows os.Chmod will only change the writable bit so that's all we check
-			assert.Equal(t, stat.Mode().Perm(), testCase.expectedMode.Perm()&0200, testName)
+			assert.Equal(t, stat.Mode().Perm()&0200, testCase.expectedMode.Perm()&0200, testName)
 		} else {
 			assert.Equal(t, stat.Mode(), testCase.expectedMode, testName)
 		}
