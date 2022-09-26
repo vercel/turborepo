@@ -283,14 +283,13 @@ func Test_matchScopedPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	rootPath := fs.AbsoluteSystemPathFromUpstream(root)
 
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  rootPath.UntypedJoin("packages", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/bar").ToSystemPath(),
 	}
 	r := &Resolver{
 		Graph:        graph,
@@ -313,19 +312,18 @@ func Test_matchExactPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	rootPath := fs.AbsoluteSystemPathFromUpstream(root)
 
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  rootPath.UntypedJoin("packages", "@foo", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/@foo/bar").ToSystemPath(),
 	}
 	graph.Add("bar")
 	packageJSONs["bar"] = &fs.PackageJSON{
 		Name: "bar",
-		Dir:  rootPath.UntypedJoin("packages", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/bar").ToSystemPath(),
 	}
 	r := &Resolver{
 		Graph:        graph,
@@ -348,18 +346,18 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	rootPath := fs.AbsoluteSystemPathFromUpstream(root)
+
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  rootPath.UntypedJoin("packages", "@foo", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/@foo/bar").ToSystemPath(),
 	}
 	graph.Add("@types/bar")
 	packageJSONs["@types/bar"] = &fs.PackageJSON{
 		Name: "@types/bar",
-		Dir:  rootPath.UntypedJoin("packages", "@types", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/@types/bar").ToSystemPath(),
 	}
 	r := &Resolver{
 		Graph:        graph,
