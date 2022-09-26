@@ -17,7 +17,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-gatedio v0.5.0
-	github.com/hashicorp/go-hclog v1.2.1
+	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/go-retryablehttp v0.6.8
 	github.com/iseki0/go-yarnlock v0.0.2-0.20220905015017-a2a90751cdfa
 	github.com/karrick/godirwalk v1.16.1
