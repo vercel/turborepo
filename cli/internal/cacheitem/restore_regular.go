@@ -37,5 +37,5 @@ func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 
 // safeMkdirAll creates all directories, assuming that the leaf node is a file.
 func safeMkdirFile(anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
-	return safeMkdirAll(anchor, processedName.Dir(), mode)
+	return safeMkdirAll(anchor, processedName.Dir(), 0755)
 }
