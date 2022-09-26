@@ -20,22 +20,22 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}, "\n")
 	root := t.TempDir()
 	repoRoot := turbopath.AbsoluteSystemPathFromUpstream(root)
-	pkgName := turbopath.AnchoredUnixPath("libA").ToSystemPath()
+	pkgName := turbopath.AnchoredUnixPath("child-dir/libA").ToSystemPath()
 	type fileHash struct {
 		contents string
 		hash     string
 	}
 	files := map[turbopath.AnchoredUnixPath]fileHash{
-		"top-level-file":              {"top-level-file-contents", ""},
-		"other-dir/other-dir-file":    {"other-dir-file-contents", ""},
-		"ignoreme":                    {"anything", ""},
-		"libA/some-file":              {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
-		"libA/some-dir/other-file":    {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
-		"libA/some-dir/another-one":   {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
-		"libA/ignoreme":               {"anything", ""},
-		"libA/ignorethisdir/anything": {"anything", ""},
-		"libA/pkgignoreme":            {"anything", ""},
-		"libA/pkgignorethisdir/file":  {"anything", ""},
+		"top-level-file":                        {"top-level-file-contents", ""},
+		"other-dir/other-dir-file":              {"other-dir-file-contents", ""},
+		"ignoreme":                              {"anything", ""},
+		"child-dir/libA/some-file":              {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		"child-dir/libA/some-dir/other-file":    {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		"child-dir/libA/some-dir/another-one":   {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		"child-dir/libA/ignoreme":               {"anything", ""},
+		"child-dir/libA/ignorethisdir/anything": {"anything", ""},
+		"child-dir/libA/pkgignoreme":            {"anything", ""},
+		"child-dir/libA/pkgignorethisdir/file":  {"anything", ""},
 	}
 
 	rootIgnoreFile, err := repoRoot.Join(".gitignore").Create()
@@ -78,7 +78,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		f.Close()
 	}
 	// now that we've created the repo, expect our .gitignore file too
-	files[turbopath.AnchoredUnixPath("libA/.gitignore")] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
+	files[turbopath.AnchoredUnixPath("child-dir/libA/.gitignore")] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
 
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
@@ -87,15 +87,15 @@ func Test_manuallyHashPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
-	prefix := pkgName + "/"
-	prefixLen := len(prefix)
+
 	count := 0
 	for path, spec := range files {
-		if strings.HasPrefix(path.ToString(), prefix.ToString()) {
-			got, ok := hashes[turbopath.AnchoredUnixPath(path[prefixLen:])]
+		if path.ToSystemPath().HasPrefix(pkgName) {
+			relPath, _ := path.RelativeTo(pkgName.ToUnixPath())
+			got, ok := hashes[relPath]
 			if !ok {
 				if spec.hash != "" {
-					t.Errorf("did not find hash for %v, but wanted one %v", path, prefixLen)
+					t.Errorf("did not find hash for %v, but wanted one", path)
 				}
 			} else if got != spec.hash {
 				t.Errorf("hash of %v, got %v want %v", path, got, spec.hash)
@@ -114,9 +114,10 @@ func Test_manuallyHashPackage(t *testing.T) {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
 	for path, spec := range files {
-		if strings.HasPrefix(path.ToString(), prefix.ToString()) {
+		if path.ToSystemPath().HasPrefix(pkgName) {
 			shouldInclude := strings.HasSuffix(path.ToString(), "file")
-			got, ok := justFileHashes[turbopath.AnchoredUnixPath(path[prefixLen:])]
+			relPath, _ := path.RelativeTo(pkgName.ToUnixPath())
+			got, ok := justFileHashes[relPath]
 			if !ok && shouldInclude {
 				if spec.hash != "" {
 					t.Errorf("did not find hash for %v, but wanted one", path)
