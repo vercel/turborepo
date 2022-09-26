@@ -92,7 +92,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 	for path, spec := range files {
 		if path.ToSystemPath().HasPrefix(pkgName) {
 			relPath, _ := path.RelativeTo(pkgName.ToUnixPath())
-			got, ok := hashes[relPath]
+			got, ok := hashes[relPath.ToUnixPath()]
 			if !ok {
 				if spec.hash != "" {
 					t.Errorf("did not find hash for %v, but wanted one", path)
@@ -117,7 +117,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		if path.ToSystemPath().HasPrefix(pkgName) {
 			shouldInclude := strings.HasSuffix(path.ToString(), "file")
 			relPath, _ := path.RelativeTo(pkgName.ToUnixPath())
-			got, ok := justFileHashes[relPath]
+			got, ok := justFileHashes[relPath.ToUnixPath()]
 			if !ok && shouldInclude {
 				if spec.hash != "" {
 					t.Errorf("did not find hash for %v, but wanted one", path)
