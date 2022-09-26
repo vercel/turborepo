@@ -5014,6 +5014,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
+ "turbopack-json",
  "turbopack-static",
  "url",
 ]
@@ -5147,6 +5148,20 @@ dependencies = [
  "base16",
  "md4",
  "twox-hash",
+]
+
+[[package]]
+name = "turbopack-json"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack-core",
+ "turbopack-ecmascript",
 ]
 
 [[package]]
