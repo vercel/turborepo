@@ -88,7 +88,7 @@ func (p *prune) prune(opts *opts) error {
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	ctx, err := context.New(context.WithGraph(p.base.RepoRoot, rootPackageJSON, cacheDir))
+	ctx, err := context.BuildPackageGraph(p.base.RepoRoot, rootPackageJSON, cacheDir)
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
@@ -146,10 +146,16 @@ func (p *prune) prune(opts *opts) error {
 			continue
 		}
 		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		targetDir := fullDir.UntypedJoin(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration())
-		if err := targetDir.EnsureDir(); err != nil {
-			return errors.Wrapf(err, "failed to create folder %v for %v", targetDir, internalDep)
+		originalDir := ctx.PackageInfos[internalDep].Dir.RestoreAnchor(p.base.RepoRoot)
+		info, err := originalDir.Lstat()
+		if err != nil {
+			return errors.Wrapf(err, "failed to lstat %s", originalDir)
 		}
+		targetDir := ctx.PackageInfos[internalDep].Dir.RestoreAnchor(fullDir)
+		if err := targetDir.MkdirAllMode(info.Mode()); err != nil {
+			return errors.Wrapf(err, "failed to create folder %s for %v", targetDir, internalDep)
+		}
+
 		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}

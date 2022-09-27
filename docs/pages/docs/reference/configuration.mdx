@@ -14,8 +14,8 @@ You can configure the behavior of `turbo` by adding a `turbo.json` file in your 
 
 `type: string[]`
 
-A list of globs and environment variables for implicit global hash dependencies. Environment variables should be prefixed with `$` (e.g. `$GITHUB_TOKEN`). Any other entry without this prefix, will be considered filesystem glob. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
-This is useful for busting the cache based on `.env` files (not in Git), environment variables, or any root level file that impacts workspace tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
+A list of file globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
+This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts workspace tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
 
 **Example**
 
@@ -29,7 +29,25 @@ This is useful for busting the cache based on `.env` files (not in Git), environ
   "globalDependencies": [
     ".env", // contents will impact hashes of all tasks
     "tsconfig.json", // contents will impact hashes of all tasks
-  ],
+  ]
+}
+```
+
+## `globalEnv`
+
+`type: string[]`
+
+A list of environment variables for implicit global hash dependencies. The contents of these environment variables will be included in the global hashing algorithm and affect the hashes of all tasks.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ... omitted for brevity
+  },
+
   "globalEnv": ["GITHUB_TOKEN"] // value will impact the hashes of all tasks
 }
 ```

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"muzzammil.xyz/jsonc"
@@ -70,6 +72,49 @@ type TaskDefinition struct {
 	OutputMode              util.TaskOutputMode
 }
 
+// LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
+func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+	var turboJSON *TurboJSON
+	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
+	if !includeSynthesizedFromRootPackageJSON && err != nil {
+		// There was an error, and we don't have any chance of recovering
+		// because we aren't synthesizing anything
+		return nil, err
+	} else if !includeSynthesizedFromRootPackageJSON {
+		// We're not synthesizing anything and there was no error, we're done
+		return turboFromFiles, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		// turbo.json doesn't exist, but we're going try to synthesize something
+		turboJSON = &TurboJSON{
+			Pipeline: make(Pipeline),
+		}
+	} else if err != nil {
+		// some other happened, we can't recover
+		return nil, err
+	} else {
+		// we're synthesizing, but we have a starting point
+		// Note: this will have to change to support task inference in a monorepo
+		// for now, we're going to error on any "root" tasks and turn non-root tasks into root tasks
+		pipeline := make(Pipeline)
+		for taskID, taskDefinition := range turboFromFiles.Pipeline {
+			if util.IsPackageTask(taskID) {
+				return nil, fmt.Errorf("Package tasks (<package>#<task>) are not allowed in single-package repositories: found %v", taskID)
+			}
+			pipeline[util.RootTaskID(taskID)] = taskDefinition
+		}
+		turboJSON = turboFromFiles
+		turboJSON.Pipeline = pipeline
+	}
+
+	for scriptName := range rootPackageJSON.Scripts {
+		if !turboJSON.Pipeline.HasTask(scriptName) {
+			taskName := util.RootTaskID(scriptName)
+			turboJSON.Pipeline[taskName] = TaskDefinition{}
+		}
+	}
+	return turboJSON, nil
+}
+
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 
@@ -103,7 +148,7 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	}
 
 	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct
