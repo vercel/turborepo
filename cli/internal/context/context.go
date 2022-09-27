@@ -204,7 +204,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	}
 	if c.Lockfile != nil {
 		pkg.TransitiveDeps = []string{}
-		c.resolveDepGraph(&lockfileWg, ".", pkg.UnresolvedExternalDeps, depSet, seen, pkg)
+		c.resolveDepGraph(&lockfileWg, pkg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
 		for _, v := range depSet.ToSlice() {
@@ -277,7 +277,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 	pkg.TransitiveDeps = []string{}
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
-	c.resolveDepGraph(&lockfileWg, pkg.Name, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
+	c.resolveDepGraph(&lockfileWg, pkg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
 	lockfileWg.Wait()
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
@@ -325,7 +325,7 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	return nil
 }
 
-func (c *Context) resolveDepGraph(wg *sync.WaitGroup, workspace string, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
+func (c *Context) resolveDepGraph(wg *sync.WaitGroup, workspace *fs.PackageJSON, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
 	if c.Lockfile == nil {
 		return
 	}
@@ -334,7 +334,7 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, workspace string, unresolv
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
 
-			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(workspace, directDepName, unresolvedVersion)
+			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(workspace.Dir.ToUnixPath(), directDepName, unresolvedVersion)
 			if seen.Contains(key) {
 				return
 			}

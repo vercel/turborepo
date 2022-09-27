@@ -127,8 +127,8 @@ func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
 }
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (p *PnpmLockfile) ResolvePackage(workspace string, name string, version string) (string, string, bool) {
-	resolvedVersion, ok := p.resolveSpecifier(workspace, name, version)
+func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (string, string, bool) {
+	resolvedVersion, ok := p.resolveSpecifier(workspacePath, name, version)
 	if !ok {
 		return "", "", false
 	}
@@ -255,13 +255,18 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 	return patches
 }
 
-func (p *PnpmLockfile) resolveSpecifier(workspace string, name string, specifier string) (string, bool) {
+func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool) {
 	// Check if the specifier is already a resolved version
 	_, ok := p.Packages[formatPnpmKey(name, specifier)]
 	if ok {
 		return specifier, true
 	}
-	importer, ok := p.Importers[workspace]
+	pnpmWorkspacePath := workspacePath.ToString()
+	if pnpmWorkspacePath == "" {
+		// For pnpm, the root is named "."
+		pnpmWorkspacePath = "."
+	}
+	importer, ok := p.Importers[pnpmWorkspacePath]
 	if !ok {
 		return "", false
 	}
@@ -281,7 +286,7 @@ func (p *PnpmLockfile) resolveSpecifier(workspace string, name string, specifier
 	if resolvedVersion, ok := importer.OptionalDependencies[name]; ok {
 		return resolvedVersion, true
 	}
-	panic(fmt.Sprintf("Unable to find resolved version for %s@%s in %s", name, specifier, workspace))
+	panic(fmt.Sprintf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath))
 }
 
 func formatPnpmKey(name string, version string) string {
