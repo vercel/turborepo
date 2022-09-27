@@ -268,7 +268,7 @@ func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath
 	}
 	importer, ok := p.Importers[pnpmWorkspacePath]
 	if !ok {
-		return "", false
+		panic(fmt.Sprintf("resolving dependency for unknown workspace at %v", workspacePath))
 	}
 	foundSpecifier, ok := importer.Specifiers[name]
 	if !ok {
