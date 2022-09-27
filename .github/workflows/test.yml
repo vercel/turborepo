@@ -141,8 +141,9 @@ jobs:
             nextest: linux
           - name: macos-latest
             nextest: mac
-          - name: windows-latest
-            nextest: windows-tar
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows-latest
+          #   nextest: windows-tar
     runs-on: ${{ matrix.os.name }}
     name: test-bench - ${{ matrix.os.name }}
 
