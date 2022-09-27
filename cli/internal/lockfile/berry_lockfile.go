@@ -89,7 +89,7 @@ type BerryDependencyMetaEntry struct {
 var _ Lockfile = (*BerryLockfile)(nil)
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (l *BerryLockfile) ResolvePackage(name string, version string) (string, string, bool) {
+func (l *BerryLockfile) ResolvePackage(_workspace turbopath.AnchoredUnixPath, name string, version string) (string, string, bool) {
 	for _, key := range berryPossibleKeys(name, version) {
 		if locator, ok := l.descriptors[key]; ok {
 			entry := l.packages[locator]

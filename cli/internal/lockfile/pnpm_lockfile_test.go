@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
@@ -62,21 +63,24 @@ func Test_SpecifierResolution(t *testing.T) {
 	}
 
 	type Case struct {
-		pkg       string
-		specifier string
-		version   string
-		found     bool
+		workspacePath turbopath.AnchoredUnixPath
+		pkg           string
+		specifier     string
+		version       string
+		found         bool
 	}
 
 	cases := []Case{
-		{pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
-		{pkg: "typescript", specifier: "^4.5.3", version: "4.8.3", found: true},
-		{pkg: "lodash", specifier: "bad-tag", version: "", found: false},
-		{pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
+		{workspacePath: "apps/docs", pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
+		{workspacePath: "apps/web", pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
+		{workspacePath: "apps/web", pkg: "typescript", specifier: "^4.5.3", version: "4.8.3", found: true},
+		{workspacePath: "apps/web", pkg: "lodash", specifier: "bad-tag", version: "", found: false},
+		{workspacePath: "apps/web", pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
+		{workspacePath: "", pkg: "turbo", specifier: "latest", version: "1.4.6", found: true},
 	}
 
 	for _, testCase := range cases {
-		actualVersion, actualFound := lockfile.resolveSpecifier(testCase.pkg, testCase.specifier)
+		actualVersion, actualFound := lockfile.resolveSpecifier(testCase.workspacePath, testCase.pkg, testCase.specifier)
 		assert.Equal(t, actualFound, testCase.found, "%s@%s", testCase.pkg, testCase.version)
 		assert.Equal(t, actualVersion, testCase.version, "%s@%s", testCase.pkg, testCase.version)
 	}
