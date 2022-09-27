@@ -95,7 +95,7 @@ func (g *GlobWatcher) WatchGlobs(hash string, globs fs.TaskOutputs) error {
 
 // GetChangedGlobs returns the subset of the given candidates that we are not currently
 // tracking as "unchanged".
-func (g *GlobWatcher) GetChangedGlobs(hash string, candidates fs.TaskOutputs) (fs.TaskOutputs, error) {
+func (g *GlobWatcher) GetChangedGlobs(hash string, candidates []string) ([]string, error) {
 	if g.isClosed() {
 		// If filewatching has crashed, return all candidates as changed.
 		return candidates, nil
@@ -106,7 +106,7 @@ func (g *GlobWatcher) GetChangedGlobs(hash string, candidates fs.TaskOutputs) (f
 	// same output directories, however we are relying on task
 	// execution dependencies to prevent that.
 	if err := g.cookieWaiter.WaitForCookie(); err != nil {
-		return fs.TaskOutputs{}, err
+		return nil, err
 	}
 	// hashGlobs tracks all of the unchanged globs for a given hash
 	// If hashGlobs doesn't have our hash, either everything has changed,
@@ -118,16 +118,10 @@ func (g *GlobWatcher) GetChangedGlobs(hash string, candidates fs.TaskOutputs) (f
 	if !ok {
 		return candidates, nil
 	}
-	allInclusionGlobs := util.SetFromStrings(candidates.Inclusions)
-	allExclusionGlobs := util.SetFromStrings(candidates.Exclusions)
-	inclusionDiff := allInclusionGlobs.Difference(globsToCheck.Inclusions)
-	exclusionDiff := allExclusionGlobs.Difference(globsToCheck.Exclusions)
-	outputs := fs.TaskOutputs{
-		Inclusions: inclusionDiff.UnsafeListOfStrings(),
-		Exclusions: exclusionDiff.UnsafeListOfStrings(),
-	}
+	allGlobs := util.SetFromStrings(candidates)
+	diff := allGlobs.Difference(globsToCheck.Inclusions)
 
-	return outputs, nil
+	return diff.UnsafeListOfStrings(), nil
 }
 
 // OnFileWatchEvent implements FileWatchClient.OnFileWatchEvent

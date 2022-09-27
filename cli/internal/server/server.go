@@ -151,18 +151,13 @@ func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.N
 
 // GetChangedOutputs implements the GetChangedOutputs rpc from turbo.proto
 func (s *Server) GetChangedOutputs(ctx context.Context, req *turbodprotocol.GetChangedOutputsRequest) (*turbodprotocol.GetChangedOutputsResponse, error) {
-	outputs := fs.TaskOutputs{
-		Inclusions: req.OutputGlobs,
-		Exclusions: req.OutputExclusionGlobs,
-	}
 
-	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, outputs)
+	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, req.OutputGlobs)
 	if err != nil {
 		return nil, err
 	}
 	return &turbodprotocol.GetChangedOutputsResponse{
-		ChangedOutputGlobs:         changedGlobs.Inclusions,
-		ChangedExcludedOutputGlobs: changedGlobs.Exclusions,
+		ChangedOutputGlobs: changedGlobs,
 	}, nil
 }
 

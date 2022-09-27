@@ -32,21 +32,16 @@ func New(client *connector.Client) *DaemonClient {
 }
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
-func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs) (fs.TaskOutputs, error) {
+func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, error) {
 	resp, err := d.client.GetChangedOutputs(ctx, &turbodprotocol.GetChangedOutputsRequest{
-		Hash:                 hash,
-		OutputGlobs:          repoRelativeOutputGlobs.Inclusions,
-		OutputExclusionGlobs: repoRelativeOutputGlobs.Exclusions,
+		Hash:        hash,
+		OutputGlobs: repoRelativeOutputGlobs,
 	})
 	if err != nil {
-		return fs.TaskOutputs{}, err
-	}
-	outputs := fs.TaskOutputs{
-		Inclusions: resp.ChangedOutputGlobs,
-		Exclusions: resp.ChangedExcludedOutputGlobs,
+		return nil, err
 	}
 
-	return outputs, nil
+	return resp.ChangedOutputGlobs, nil
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten

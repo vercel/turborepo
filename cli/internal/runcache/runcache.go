@@ -157,16 +157,17 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 		}
 		return false, nil
 	}
-	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs)
+	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
 	if err != nil {
 		logger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
-		changedOutputGlobs = tc.repoRelativeGlobs
+		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
 	}
-	hasChangedOutputs := len(changedOutputGlobs.Inclusions) > 0
+	hasChangedOutputs := len(changedOutputGlobs) > 0
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
-		// future to avoid doing unnecessary file I/O
+		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
+		// globs as well.
 		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		if err != nil {
 			return false, err

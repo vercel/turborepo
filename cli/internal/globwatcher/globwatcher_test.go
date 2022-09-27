@@ -78,10 +78,9 @@ func TestTrackOutputs(t *testing.T) {
 	err := globWatcher.WatchGlobs(hash, globs)
 	assert.NilError(t, err, "WatchGlobs")
 
-	changed, err := globWatcher.GetChangedGlobs(hash, globs)
+	changed, err := globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
-	assert.Equal(t, 0, len(changed.Inclusions), "Expected no changed paths")
-	assert.Equal(t, 0, len(changed.Exclusions), "Expected no changed paths")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make an irrelevant change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
@@ -89,10 +88,9 @@ func TestTrackOutputs(t *testing.T) {
 		Path:      repoRoot.UntypedJoin("my-pkg", "irrelevant"),
 	})
 
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
-	assert.Equal(t, 0, len(changed.Inclusions), "Expected no changed paths")
-	assert.Equal(t, 0, len(changed.Exclusions), "Expected no changed paths")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make an excluded change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
@@ -100,10 +98,9 @@ func TestTrackOutputs(t *testing.T) {
 		Path:      repoRoot.Join("my-pkg", ".next", "cache", "foo"),
 	})
 
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
-	assert.Equal(t, 0, len(changed.Inclusions), "Expected no changed paths")
-	assert.Equal(t, 0, len(changed.Exclusions), "Expected no changed paths")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make a relevant change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
@@ -111,11 +108,11 @@ func TestTrackOutputs(t *testing.T) {
 		Path:      repoRoot.UntypedJoin("my-pkg", "dist", "foo"),
 	})
 
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
-	assert.Equal(t, 1, len(changed.Inclusions), "Expected one changed path remaining")
+	assert.Equal(t, 1, len(changed), "Expected one changed path remaining")
 	expected := "my-pkg/dist/**"
-	assert.Equal(t, expected, changed.Inclusions[0], "Expected dist glob to have changed")
+	assert.Equal(t, expected, changed[0], "Expected dist glob to have changed")
 
 	// Change a file matching the other glob
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
@@ -130,9 +127,9 @@ func TestTrackOutputs(t *testing.T) {
 
 	// Both globs have changed, we should have stopped tracking
 	// this hash
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
-	assert.DeepEqual(t, globs, changed)
+	assert.DeepEqual(t, globs.Inclusions, changed)
 }
 
 func TestWatchSingleFile(t *testing.T) {
