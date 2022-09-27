@@ -9,17 +9,20 @@ import (
 
 // PackageJSON represents NodeJS package.json
 type PackageJSON struct {
-	Name                   string                       `json:"name,omitempty"`
-	Version                string                       `json:"version,omitempty"`
-	Scripts                map[string]string            `json:"scripts,omitempty"`
-	Dependencies           map[string]string            `json:"dependencies,omitempty"`
-	DevDependencies        map[string]string            `json:"devDependencies,omitempty"`
-	OptionalDependencies   map[string]string            `json:"optionalDependencies,omitempty"`
-	PeerDependencies       map[string]string            `json:"peerDependencies,omitempty"`
-	PackageManager         string                       `json:"packageManager,omitempty"`
-	Os                     []string                     `json:"os,omitempty"`
-	Workspaces             Workspaces                   `json:"workspaces,omitempty"`
-	Private                bool                         `json:"private,omitempty"`
+	Name                 string            `json:"name,omitempty"`
+	Version              string            `json:"version,omitempty"`
+	Scripts              map[string]string `json:"scripts,omitempty"`
+	Dependencies         map[string]string `json:"dependencies,omitempty"`
+	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
+	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
+	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
+	PackageManager       string            `json:"packageManager,omitempty"`
+	Os                   []string          `json:"os,omitempty"`
+	Workspaces           Workspaces        `json:"workspaces,omitempty"`
+	Private              bool              `json:"private,omitempty"`
+	// Exact JSON object stored in package.json including unknown fields
+	RawJSON *map[string]interface{}
+
 	PackageJSONPath        turbopath.AnchoredSystemPath // relative path from repo root to the package.json file
 	Dir                    turbopath.AnchoredSystemPath // relative path from repo root to the package
 	InternalDeps           []string
@@ -57,9 +60,21 @@ func ReadPackageJSON(path turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	packageJSON := &PackageJSON{}
-	if err := json.Unmarshal(b, packageJSON); err != nil {
+	return UnmarshalPackageJSON(b)
+}
+
+// UnmarshalPackageJSON decodes a byte slice into a PackageJSON struct
+func UnmarshalPackageJSON(data []byte) (*PackageJSON, error) {
+	var rawJSON map[string]interface{}
+	if err := json.Unmarshal(data, &rawJSON); err != nil {
 		return nil, err
 	}
-	return packageJSON, nil
+
+	pkgJSON := &PackageJSON{}
+	if err := json.Unmarshal(data, &pkgJSON); err != nil {
+		return nil, err
+	}
+	pkgJSON.RawJSON = &rawJSON
+
+	return pkgJSON, nil
 }
