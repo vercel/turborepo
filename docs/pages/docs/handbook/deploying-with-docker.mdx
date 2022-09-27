@@ -45,7 +45,7 @@ EXPOSE 8080
 CMD [ "node", "apps/docs/server.js" ]
 ```
 
-This will copy the root `package.json` and the and the root lockfile to the docker image. Then, it'll install dependencies, copy the app source and start the app.
+This will copy the root `package.json` and the root lockfile to the docker image. Then, it'll install dependencies, copy the app source and start the app.
 
 You should also create a `.dockerignore` file to prevent node_modules from being copied in with the app's source.
 
