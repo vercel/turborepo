@@ -24,12 +24,6 @@ func (p AnchoredUnixPath) ToUnixPath() AnchoredUnixPath {
 	return p
 }
 
-// RelativeTo calculates the relative path between two `AnchoredUnixPath`s.
-func (p AnchoredUnixPath) RelativeTo(basePath AnchoredUnixPath) (AnchoredSystemPath, error) {
-	processed, err := filepath.Rel(basePath.ToString(), p.ToString())
-	return AnchoredSystemPath(processed), err
-}
-
 // Join appends relative path segments to this RelativeUnixPath.
 func (p AnchoredUnixPath) Join(additional ...RelativeUnixPath) AnchoredUnixPath {
 	cast := RelativeUnixPathArray(additional)

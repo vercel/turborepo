@@ -3,6 +3,7 @@ package turbopath
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // AnchoredSystemPath is a path stemming from a specified root using system separators.
@@ -64,5 +65,6 @@ func (p AnchoredSystemPath) HasPrefix(prefix AnchoredSystemPath) bool {
 
 	// otherPath is definitely shorter than p.
 	// We need to confirm that p[len(otherPath)] is a system separator.
-	return os.IsPathSeparator(p[prefixLen])
+
+	return strings.HasPrefix(p.ToString(), prefix.ToString()) && os.IsPathSeparator(p[prefixLen])
 }

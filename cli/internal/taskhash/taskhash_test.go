@@ -90,8 +90,9 @@ func Test_manuallyHashPackage(t *testing.T) {
 
 	count := 0
 	for path, spec := range files {
-		if path.ToSystemPath().HasPrefix(pkgName) {
-			relPath, _ := path.RelativeTo(pkgName.ToUnixPath())
+		systemPath := path.ToSystemPath()
+		if systemPath.HasPrefix(pkgName) {
+			relPath := systemPath[len(pkgName)+1:]
 			got, ok := hashes[relPath.ToUnixPath()]
 			if !ok {
 				if spec.hash != "" {
@@ -114,9 +115,10 @@ func Test_manuallyHashPackage(t *testing.T) {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
 	for path, spec := range files {
-		if path.ToSystemPath().HasPrefix(pkgName) {
-			shouldInclude := strings.HasSuffix(path.ToString(), "file")
-			relPath, _ := path.RelativeTo(pkgName.ToUnixPath())
+		systemPath := path.ToSystemPath()
+		if systemPath.HasPrefix(pkgName) {
+			shouldInclude := strings.HasSuffix(systemPath.ToString(), "file")
+			relPath := systemPath[len(pkgName)+1:]
 			got, ok := justFileHashes[relPath.ToUnixPath()]
 			if !ok && shouldInclude {
 				if spec.hash != "" {
