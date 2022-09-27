@@ -67,7 +67,7 @@ func Test_ResolvePackage(t *testing.T) {
 	}
 
 	for testName, testCase := range cases {
-		key, version, found := lockfile.ResolvePackage(testCase.name, testCase.semver)
+		key, version, found := lockfile.ResolvePackage("some-pkg", testCase.name, testCase.semver)
 		if testCase.found {
 			assert.Equal(t, key, testCase.key, testName)
 			assert.Equal(t, version, testCase.version, testName)
@@ -79,13 +79,13 @@ func Test_ResolvePackage(t *testing.T) {
 func Test_AllDependencies(t *testing.T) {
 	lockfile := getBerryLockfile(t, "berry.lock")
 
-	key, _, found := lockfile.ResolvePackage("react-dom", "18.2.0")
+	key, _, found := lockfile.ResolvePackage("some-pkg", "react-dom", "18.2.0")
 	assert.Assert(t, found, "expected to find react-dom")
 	deps, found := lockfile.AllDependencies(key)
 	assert.Assert(t, found, "expected lockfile key for react-dom to be present")
 	assert.Equal(t, len(deps), 3, "expected to find all react-dom direct dependencies")
 	for pkgName, version := range deps {
-		_, _, found := lockfile.ResolvePackage(pkgName, version)
+		_, _, found := lockfile.ResolvePackage("some-pkg", pkgName, version)
 		assert.Assert(t, found, "expected to find lockfile entry for %s@%s", pkgName, version)
 	}
 }

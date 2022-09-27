@@ -62,6 +62,7 @@ func Test_SpecifierResolution(t *testing.T) {
 	}
 
 	type Case struct {
+		workspace string
 		pkg       string
 		specifier string
 		version   string
@@ -69,14 +70,15 @@ func Test_SpecifierResolution(t *testing.T) {
 	}
 
 	cases := []Case{
-		{pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
-		{pkg: "typescript", specifier: "^4.5.3", version: "4.8.3", found: true},
-		{pkg: "lodash", specifier: "bad-tag", version: "", found: false},
-		{pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
+		{workspace: "apps/docs", pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
+		{workspace: "apps/web", pkg: "next", specifier: "12.2.5", version: "12.2.5_ir3quccc6i62x6qn6jjhyjjiey", found: true},
+		{workspace: "apps/web", pkg: "typescript", specifier: "^4.5.3", version: "4.8.3", found: true},
+		{workspace: "apps/web", pkg: "lodash", specifier: "bad-tag", version: "", found: false},
+		{workspace: "apps/web", pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
 	}
 
 	for _, testCase := range cases {
-		actualVersion, actualFound := lockfile.resolveSpecifier(testCase.pkg, testCase.specifier)
+		actualVersion, actualFound := lockfile.resolveSpecifier(testCase.workspace, testCase.pkg, testCase.specifier)
 		assert.Equal(t, actualFound, testCase.found, "%s@%s", testCase.pkg, testCase.version)
 		assert.Equal(t, actualVersion, testCase.version, "%s@%s", testCase.pkg, testCase.version)
 	}
