@@ -194,8 +194,8 @@ func Test_BerryPruneDescriptors(t *testing.T) {
 	lockfile := getBerryLockfile(t, "minimal-berry.lock")
 	prunedLockfile, err := lockfile.Subgraph(
 		[]turbopath.AnchoredSystemPath{
-			turbopath.AnchoredSystemPath("packages/a"),
-			turbopath.AnchoredSystemPath("packages/c"),
+			turbopath.AnchoredUnixPath("packages/a").ToSystemPath(),
+			turbopath.AnchoredUnixPath("packages/c").ToSystemPath(),
 		},
 		[]string{"lodash@npm:4.17.21"},
 	)
@@ -206,8 +206,8 @@ func Test_BerryPruneDescriptors(t *testing.T) {
 
 	prunedLockfile, err = lockfile.Subgraph(
 		[]turbopath.AnchoredSystemPath{
-			turbopath.AnchoredSystemPath("packages/b"),
-			turbopath.AnchoredSystemPath("packages/c"),
+			turbopath.AnchoredUnixPath("packages/b").ToSystemPath(),
+			turbopath.AnchoredUnixPath("packages/c").ToSystemPath(),
 		},
 		[]string{"lodash@npm:4.17.21"},
 	)

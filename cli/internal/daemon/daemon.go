@@ -102,7 +102,7 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			defer func() { _ = logFile.Close() }()
 			logger := hclog.New(&hclog.LoggerOptions{
 				Output: io.MultiWriter(logFile, os.Stdout),
-				Level:  hclog.Debug,
+				Level:  hclog.Info,
 				Color:  hclog.ColorOff,
 				Name:   "turbod",
 			})

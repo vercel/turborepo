@@ -120,7 +120,7 @@ func (g *GlobWatcher) GetChangedGlobs(hash string, candidates []string) ([]strin
 func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 	// At this point, we don't care what the Op is, any Op represents a change
 	// that should invalidate matching globs
-	g.logger.Debug(fmt.Sprintf("Got fsnotify event %v", ev))
+	g.logger.Trace(fmt.Sprintf("Got fsnotify event %v", ev))
 	absolutePath := ev.Path
 	repoRelativePath, err := g.repoRoot.RelativePathString(absolutePath.ToStringDuringMigration())
 	if err != nil {
