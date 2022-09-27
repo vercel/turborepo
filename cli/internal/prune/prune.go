@@ -129,6 +129,14 @@ func (p *prune) prune(opts *opts) error {
 		if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
 		}
+		if err := fs.CopyFile(&workspaceFile, fullDir.UntypedJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
+		}
+		if opts.docker {
+			if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin("json", ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+				return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
+			}
+		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
 	targets := []interface{}{opts.scope}
