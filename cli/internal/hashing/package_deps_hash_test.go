@@ -48,8 +48,8 @@ func TestSpecialCharacters(t *testing.T) {
 	}
 
 	fixturePath := getFixture(1)
-	newlinePath := turbopath.AnchoredSystemPath("new\nline")
-	quotePath := turbopath.AnchoredSystemPath("\"quote\"")
+	newlinePath := turbopath.AnchoredUnixPath("new\nline").ToSystemPath()
+	quotePath := turbopath.AnchoredUnixPath("\"quote\"").ToSystemPath()
 	newline := newlinePath.RestoreAnchor(fixturePath)
 	quote := quotePath.RestoreAnchor(fixturePath)
 
@@ -83,7 +83,7 @@ func TestSpecialCharacters(t *testing.T) {
 			name:     "Quotes",
 			rootPath: fixturePath,
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath(quotePath),
+				quotePath,
 			},
 			want: map[turbopath.AnchoredUnixPath]string{
 				quotePath.ToUnixPath(): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -93,7 +93,7 @@ func TestSpecialCharacters(t *testing.T) {
 			name:     "Newlines",
 			rootPath: fixturePath,
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath(newlinePath),
+				newlinePath,
 			},
 			want: map[turbopath.AnchoredUnixPath]string{
 				newlinePath.ToUnixPath(): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -138,9 +138,9 @@ func Test_gitHashObject(t *testing.T) {
 			name:     "Absolute paths come back relative to rootPath",
 			rootPath: fixturePath.Join("child"),
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath(filepath.Join("..", "root.json")),
-				turbopath.AnchoredSystemPath("child.json"),
-				turbopath.AnchoredSystemPath(filepath.Join("grandchild", "grandchild.json")),
+				turbopath.AnchoredUnixPath("../root.json").ToSystemPath(),
+				turbopath.AnchoredUnixPath("child.json").ToSystemPath(),
+				turbopath.AnchoredUnixPath("grandchild/grandchild.json").ToSystemPath(),
 			},
 			want: map[turbopath.AnchoredUnixPath]string{
 				"../root.json":               "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -152,7 +152,7 @@ func Test_gitHashObject(t *testing.T) {
 			name:     "Traverse outside of the repo",
 			rootPath: fixturePath.Join(traversePath.ToSystemPath(), ".."),
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath("null.json"),
+				turbopath.AnchoredUnixPath("null.json").ToSystemPath(),
 			},
 			want:    nil,
 			wantErr: true,
@@ -161,7 +161,7 @@ func Test_gitHashObject(t *testing.T) {
 			name:     "Nonexistent file",
 			rootPath: fixturePath,
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath("nonexistent.json"),
+				turbopath.AnchoredUnixPath("nonexistent.json").ToSystemPath(),
 			},
 			want:    nil,
 			wantErr: true,
@@ -198,7 +198,7 @@ func Test_getTraversePath(t *testing.T) {
 		},
 		{
 			name:     "Traverse out of git repo",
-			rootPath: fixturePath.Join("..", "..", "..", ".."),
+			rootPath: fixturePath.UntypedJoin("..", "..", "..", ".."),
 			want:     "",
 			wantErr:  true,
 		},

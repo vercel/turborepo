@@ -319,8 +319,8 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		"nodejs-npm":   {"**/node_modules/**"},
 		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
 		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
-		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**"},
-		"nodejs-pnpm6": {"**/node_modules/**", "**/bower_components/**"},
+		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**", "packages/skip"},
+		"nodejs-pnpm6": {"**/node_modules/**", "**/bower_components/**", "packages/skip"},
 	}
 
 	tests := make([]test, len(packageManagers))
@@ -328,7 +328,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.UntypedJoin("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("fixtures"),
 			want:     want[packageManager.Name],
 			wantErr:  false,
 		}
