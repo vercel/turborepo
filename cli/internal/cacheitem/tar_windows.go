@@ -1,8 +1,16 @@
+//go:build windows
+// +build windows
+
 // Adapted from https://github.com/moby/moby/blob/924edb948c2731df3b77697a8fcc85da3f6eef57/pkg/archive/archive_windows.go
 // Copyright Docker, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 package cacheitem
+
+import (
+	"archive/tar"
+	"os"
+)
 
 // chmodTarEntry is used to adjust the file permissions used in tar header based
 // on the platform the archival is done.

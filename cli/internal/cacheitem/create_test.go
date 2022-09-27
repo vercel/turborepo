@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"os"
-	"runtime"
-	"syscall"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -51,17 +49,6 @@ func createSymlink(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefini
 	symlinkErr := path.Symlink(fileDefinition.Linkname)
 	assert.NilError(t, symlinkErr, "Symlink")
 	return symlinkErr
-}
-func createFifo(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefinition createFileDefinition) error {
-	t.Helper()
-	path := fileDefinition.Path.RestoreAnchor(anchor)
-	if runtime.GOOS != "windows" {
-		fifoErr := syscall.Mknod(path.ToString(), syscall.S_IFIFO|0666, 0)
-		assert.NilError(t, fifoErr, "FIFO")
-		return fifoErr
-	}
-
-	return errUnsupportedFileType
 }
 
 func TestCreate(t *testing.T) {

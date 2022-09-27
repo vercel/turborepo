@@ -1,3 +1,6 @@
+//go:build darwin || linux
+// +build darwin linux
+
 // Adapted from https://github.com/moby/moby/blob/924edb948c2731df3b77697a8fcc85da3f6eef57/pkg/archive/archive_unix.go
 // Copyright Docker, Inc.
 // SPDX-License-Identifier: Apache-2.0
