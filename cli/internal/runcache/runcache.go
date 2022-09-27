@@ -163,7 +163,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs
 	}
-	hasChangedOutputs := len(changedOutputGlobs.Inclusions)+len(changedOutputGlobs.Exclusions) > 0
+	hasChangedOutputs := len(changedOutputGlobs.Inclusions) > 0
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O
@@ -260,6 +260,8 @@ func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
 	return fwc, nil
 }
 
+var _emptyIgnore []string
+
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
 func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
@@ -302,13 +304,13 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 // to this run and the given PackageTask
 func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.UntypedJoin(pt.RepoRelativeLogFile())
-	hashableOutputs := pt.HashableOutputs()
+	repoRelativeGlobs := pt.HashableOutputs()
 
-	for index, glob := range hashableOutputs.Inclusions {
-		hashableOutputs.Inclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), glob)
+	for index, output := range repoRelativeGlobs.Inclusions {
+		repoRelativeGlobs.Inclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
 	}
-	for index, glob := range hashableOutputs.Exclusions {
-		hashableOutputs.Exclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), glob)
+	for index, output := range repoRelativeGlobs.Exclusions {
+		repoRelativeGlobs.Exclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode
@@ -318,7 +320,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 
 	return TaskCache{
 		rc:                rc,
-		repoRelativeGlobs: hashableOutputs,
+		repoRelativeGlobs: repoRelativeGlobs,
 		hash:              hash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,

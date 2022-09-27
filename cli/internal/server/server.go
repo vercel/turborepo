@@ -137,7 +137,12 @@ func (s *Server) Register(grpcServer GRPCServer) {
 
 // NotifyOutputsWritten implements the NotifyOutputsWritten rpc from turbo.proto
 func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.NotifyOutputsWrittenRequest) (*turbodprotocol.NotifyOutputsWrittenResponse, error) {
-	err := s.globWatcher.WatchGlobs(req.Hash, req.OutputGlobs)
+	outputs := fs.TaskOutputs{
+		Inclusions: req.OutputGlobs,
+		Exclusions: req.OutputExclusionGlobs,
+	}
+
+	err := s.globWatcher.WatchGlobs(req.Hash, outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -146,12 +151,18 @@ func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.N
 
 // GetChangedOutputs implements the GetChangedOutputs rpc from turbo.proto
 func (s *Server) GetChangedOutputs(ctx context.Context, req *turbodprotocol.GetChangedOutputsRequest) (*turbodprotocol.GetChangedOutputsResponse, error) {
-	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, req.OutputGlobs)
+	outputs := fs.TaskOutputs{
+		Inclusions: req.OutputGlobs,
+		Exclusions: req.OutputExclusionGlobs,
+	}
+
+	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, outputs)
 	if err != nil {
 		return nil, err
 	}
 	return &turbodprotocol.GetChangedOutputsResponse{
-		ChangedOutputGlobs: changedGlobs,
+		ChangedOutputGlobs:         changedGlobs.Inclusions,
+		ChangedExcludedOutputGlobs: changedGlobs.Exclusions,
 	}, nil
 }
 

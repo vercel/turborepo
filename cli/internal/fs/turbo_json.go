@@ -220,12 +220,13 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 		Inclusions := make([]string, 0)
 		Exclusions := make([]string, 0)
 		for _, glob := range *rawPipeline.Outputs {
-			if glob[0] == '!' {
+			if strings.HasPrefix(glob, "!") {
 				Exclusions = append(Exclusions, glob[1:])
 			} else {
 				Inclusions = append(Inclusions, glob)
 			}
 		}
+
 		c.Outputs = TaskOutputs{
 			Inclusions,
 			Exclusions,

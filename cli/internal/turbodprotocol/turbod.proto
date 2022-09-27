@@ -33,7 +33,7 @@ message StatusResponse {
 message NotifyOutputsWrittenRequest {
   repeated string output_globs = 1;
   string hash = 2;
-  repeated string excluded_output_globs = 3;
+  repeated string output_exclusion_globs = 3;
 }
 
 message NotifyOutputsWrittenResponse {}
@@ -41,7 +41,7 @@ message NotifyOutputsWrittenResponse {}
 message GetChangedOutputsRequest {
   repeated string output_globs = 1;
   string hash = 2;
-  repeated string excluded_output_globs = 3;
+  repeated string output_exclusion_globs = 3;
 }
 
 message GetChangedOutputsResponse {

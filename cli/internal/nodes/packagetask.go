@@ -43,9 +43,11 @@ func (pt *PackageTask) RepoRelativeLogFile() string {
 // HashableOutputs returns the package-relative globs for files to be considered outputs
 // of this task
 func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
-	taskOutputs := fs.TaskOutputs{Inclusions: []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}, Exclusions: []string{}}
-	taskOutputs.Inclusions = append(taskOutputs.Inclusions, pt.TaskDefinition.Outputs.Inclusions...)
-	taskOutputs.Exclusions = append(taskOutputs.Exclusions, pt.TaskDefinition.Outputs.Exclusions...)
+	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
+	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
 
-	return taskOutputs
+	return fs.TaskOutputs{
+		Inclusions: inclusionOutputs,
+		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
+	}
 }
