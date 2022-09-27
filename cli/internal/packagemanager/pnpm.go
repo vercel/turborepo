@@ -2,7 +2,7 @@ package packagemanager
 
 import (
 	"fmt"
-	"io/ioutil"
+	"strings"
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/lockfile"
@@ -14,6 +14,18 @@ import (
 // in pnpm-workspace.yaml
 type PnpmWorkspaces struct {
 	Packages []string `yaml:"packages,omitempty"`
+}
+
+func readWorkspacePackages(workspaceFile turbopath.AbsoluteSystemPath) ([]string, error) {
+	bytes, err := workspaceFile.ReadFile()
+	if err != nil {
+		return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
+	}
+	var pnpmWorkspaces PnpmWorkspaces
+	if err := yaml.Unmarshal(bytes, &pnpmWorkspaces); err != nil {
+		return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
+	}
+	return pnpmWorkspaces.Packages, nil
 }
 
 var nodejsPnpm = PackageManager{
@@ -33,20 +45,22 @@ var nodejsPnpm = PackageManager{
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
-		bytes, err := ioutil.ReadFile(rootpath.UntypedJoin("pnpm-workspace.yaml").ToStringDuringMigration())
+		pkgGlobs, err := readWorkspacePackages(rootpath.UntypedJoin("pnpm-workspace.yaml"))
 		if err != nil {
-			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
-		}
-		var pnpmWorkspaces PnpmWorkspaces
-		if err := yaml.Unmarshal(bytes, &pnpmWorkspaces); err != nil {
-			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
+			return nil, err
 		}
 
-		if len(pnpmWorkspaces.Packages) == 0 {
+		if len(pkgGlobs) == 0 {
 			return nil, fmt.Errorf("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml")
 		}
 
-		return pnpmWorkspaces.Packages, nil
+		filteredPkgGlobs := []string{}
+		for _, pkgGlob := range pkgGlobs {
+			if !strings.HasPrefix(pkgGlob, "!") {
+				filteredPkgGlobs = append(filteredPkgGlobs, pkgGlob)
+			}
+		}
+		return filteredPkgGlobs, nil
 	},
 
 	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
@@ -54,10 +68,20 @@ var nodejsPnpm = PackageManager{
 		// function: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L27
 		// key code: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L30
 		// call site: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-workspace-packages/src/index.ts#L32-L39
-		return []string{
+		ignores := []string{
 			"**/node_modules/**",
 			"**/bower_components/**",
-		}, nil
+		}
+		pkgGlobs, err := readWorkspacePackages(rootpath.UntypedJoin("pnpm-workspace.yaml"))
+		if err != nil {
+			return nil, err
+		}
+		for _, pkgGlob := range pkgGlobs {
+			if strings.HasPrefix(pkgGlob, "!") {
+				ignores = append(ignores, pkgGlob[1:])
+			}
+		}
+		return ignores, nil
 	},
 
 	Matches: func(manager string, version string) (bool, error) {
