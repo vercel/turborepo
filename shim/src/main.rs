@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use std::{
 };
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version, about, long_about = None, ignore_errors = true)]
 struct Args {
     /// Current working directory
     #[clap(long, value_parser)]
@@ -64,7 +64,8 @@ fn find_config_file_in_ancestor_path(
     Some(current_dir.join(config_file))
 }
 
-/// Finds local turbo path given the package.json path
+/// Finds local turbo path given the package.json path. We assume that the node_modules directory
+/// is at the same level as the package.json file.
 ///
 /// # Arguments
 ///
@@ -86,7 +87,7 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
     if dev_dependencies_has_turbo || dependencies_has_turbo {
         let mut local_turbo_path = package_json_path
             .parent()
-            .expect("Unexpected file system error occurred")
+            .ok_or_else(|| anyhow!("An unexpected file system error occurred"))?
             .join("node_modules");
         local_turbo_path.push(".bin");
         local_turbo_path.push("turbo");
@@ -95,6 +96,39 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
     } else {
         Ok(None)
     }
+}
+
+/// Attempts to run local turbo by finding nearest package.json,
+/// then finding local turbo installation, then running installation if exists.
+/// If at any point this fails, return an error and let main run global turbo.
+/// If successful, return the exit code of local turbo.
+///
+/// # Arguments
+///
+/// * `current_dir`: Current working directory as defined by the --cwd flag
+///
+/// returns: Result<i32, Error>
+///
+fn try_run_local_turbo(current_dir: PathBuf) -> Result<i32> {
+    let package_json_path = find_config_file_in_ancestor_path(current_dir, "package.json")
+        .ok_or_else(|| anyhow!("No package.json found in ancestor path"))?;
+    let local_turbo_path = find_local_turbo_path(&package_json_path)?
+        .ok_or_else(|| anyhow!("No local turbo installation found in package.json"))?;
+
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    if !local_turbo_path.try_exists()? {
+        return Err(anyhow!("No local turbo installation found in node_modules"));
+    }
+
+    let output = Command::new(local_turbo_path)
+        .args(&args)
+        .output()
+        .expect("Failed to execute turbo");
+
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
+
+    Ok(output.status.code().unwrap_or(2))
 }
 
 #[derive(Debug, Deserialize)]
@@ -111,26 +145,9 @@ fn main() -> Result<()> {
     } else {
         env::current_dir()?
     };
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
 
-    let turbo_path = if let Some(package_json_path) =
-        find_config_file_in_ancestor_path(current_dir, "package.json")
-    {
-        find_local_turbo_path(&package_json_path)?
-    } else {
-        None
-    };
-
-    let exit_code = if let Some(turbo_path) = turbo_path {
-        let output = Command::new(turbo_path)
-            .args(&args)
-            .output()
-            .expect("Failed to execute turbo");
-        io::stdout().write_all(&output.stdout).unwrap();
-        io::stderr().write_all(&output.stderr).unwrap();
-
-        output.status.code().unwrap_or(2)
-    } else {
+    let exit_code = try_run_local_turbo(current_dir).unwrap_or_else(|_| {
+        let args = env::args().skip(1).collect();
         match run_turbo(args) {
             Ok(exit_code) => exit_code,
             Err(e) => {
@@ -138,7 +155,7 @@ fn main() -> Result<()> {
                 2
             }
         }
-    };
+    });
 
-    process::exit(exit_code);
+    process::exit(exit_code)
 }
