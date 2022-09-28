@@ -1843,12 +1843,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
-
-[[package]]
 name = "json_comments"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2288,9 +2282,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures",
- "json",
  "mime",
  "serde",
+ "serde_json",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -2313,7 +2307,6 @@ dependencies = [
  "criterion",
  "fs_extra",
  "futures",
- "json",
  "lazy_static",
  "mime",
  "next-core",
@@ -2321,6 +2314,7 @@ dependencies = [
  "portpicker",
  "regex",
  "serde",
+ "serde_json",
  "tempfile",
  "test-generator",
  "tokio",
@@ -2359,9 +2353,9 @@ dependencies = [
  "anyhow",
  "clap 3.2.17",
  "console-subscriber",
- "json",
  "owo-colors",
  "serde",
+ "serde_json",
  "tokio",
  "turbo-malloc",
  "turbo-tasks",
@@ -3310,10 +3304,11 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.83"
+version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38dd04e3c8279e75b31ef29dbdceebfe5ad89f4d0937213c53f7d49d01b3d5a7"
+checksum = "e55a28e3aaef9d5ce0506d0a14dbba8054ddc7e499ef522dd8b26859ec9d4a44"
 dependencies = [
+ "indexmap",
  "itoa 1.0.3",
  "ryu",
  "serde",
@@ -4922,6 +4917,7 @@ dependencies = [
  "mopa",
  "once_cell",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "turbo-tasks-build",
@@ -4952,12 +4948,12 @@ dependencies = [
  "concurrent-queue",
  "futures",
  "futures-retry",
- "json",
  "lazy_static",
  "mime",
  "notify",
  "rstest",
  "serde",
+ "serde_json",
  "sha2",
  "tokio",
  "turbo-tasks",
@@ -5023,7 +5019,6 @@ dependencies = [
  "criterion",
  "difference",
  "futures",
- "json",
  "lazy_static",
  "num-bigint",
  "rand",
@@ -5074,7 +5069,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "json",
  "lazy_static",
  "patricia_tree",
  "rand",
@@ -5098,7 +5092,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 3.2.17",
- "json",
+ "serde_json",
  "tempfile",
 ]
 
@@ -5149,7 +5143,6 @@ dependencies = [
  "criterion",
  "difference",
  "indexmap",
- "json",
  "lazy_static",
  "num-bigint",
  "rand",
