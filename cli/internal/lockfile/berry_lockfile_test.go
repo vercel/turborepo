@@ -23,7 +23,7 @@ func getBerryLockfile(t *testing.T, filename string) *BerryLockfile {
 func Test_DecodingBerryLockfile(t *testing.T) {
 	lockfile := getBerryLockfile(t, "berry.lock")
 	assert.Equal(t, lockfile.version, 6)
-	assert.Equal(t, lockfile.cacheKey, 8)
+	assert.Equal(t, lockfile.cacheKey, "8c0")
 }
 
 func Test_ResolvePackage(t *testing.T) {
@@ -123,7 +123,7 @@ func Test_PackageExtensions(t *testing.T) {
 func Test_StringifyMetadata(t *testing.T) {
 	metadata := BerryLockfileEntry{
 		Version:  "6",
-		CacheKey: 8,
+		CacheKey: "8c0",
 	}
 	lockfile := map[string]*BerryLockfileEntry{"__metadata": &metadata}
 
@@ -133,7 +133,7 @@ func Test_StringifyMetadata(t *testing.T) {
 	assert.Equal(t, b.String(), `
 __metadata:
   version: 6
-  cacheKey: 8
+  cacheKey: 8c0
 `)
 }
 

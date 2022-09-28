@@ -47,7 +47,7 @@ type BerryLockfileEntry struct {
 	Conditions string `yaml:"conditions,omitempty"`
 
 	// Only used for metadata entry
-	CacheKey int `yaml:"cacheKey,omitempty"`
+	CacheKey string `yaml:"cacheKey,omitempty"`
 }
 
 // Return a list of descriptors that this entry possibly uses
@@ -71,7 +71,7 @@ func (b *BerryLockfileEntry) possibleDescriptors() []_Descriptor {
 type BerryLockfile struct {
 	packages map[_Locator]*BerryLockfileEntry
 	version  int
-	cacheKey int
+	cacheKey string
 	// Mapping descriptors (lodash@npm:^4.17.21) to their resolutions (lodash@npm:4.17.21)
 	descriptors map[_Descriptor]_Locator
 	// Mapping regular package locators to patched package locators
@@ -216,7 +216,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 	}
 
 	// berry only includes a cache key in the lockfile if there are entries with a checksum
-	cacheKey := -1
+	cacheKey := ""
 	for _, entry := range prunedPackages {
 		if entry.Checksum != "" {
 			cacheKey = l.cacheKey
@@ -351,8 +351,8 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 			patches[originalLocator] = locator
 		}
 
-		// Before storing cacheKey set it to -1 so we know it's invalid
-		data.CacheKey = -1
+		// Before storing cacheKey set it to "" so we know it's invalid
+		data.CacheKey = ""
 
 		locatorToPackage[locator] = data
 
@@ -636,8 +636,8 @@ func _stringifyEntry(entry BerryLockfileEntry, indentLevel int) string {
 	if entry.LinkType != "" {
 		addLine("linkType", _wrapString(entry.LinkType), true)
 	}
-	if entry.CacheKey >= 0 {
-		addLine("cacheKey", fmt.Sprintf("%d", entry.CacheKey), true)
+	if entry.CacheKey != "" {
+		addLine("cacheKey", _wrapString(entry.CacheKey), true)
 	}
 
 	return strings.Join(lines, "\n")
