@@ -138,7 +138,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"target", "source"},
+			want: turbopath.AnchoredUnixPathArray{"target", "source"}.ToSystemPathArray(),
 		},
 		{
 			name: "nested file",
@@ -168,7 +168,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"folder/", "folder/file"},
+			want: turbopath.AnchoredUnixPathArray{"folder/", "folder/file"}.ToSystemPathArray(),
 		},
 		{
 			name: "nested file",
@@ -215,7 +215,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"folder/", "folder/symlink", "folder/symlink/folder-sibling"},
+			want: turbopath.AnchoredUnixPathArray{"folder/", "folder/symlink", "folder/symlink/folder-sibling"}.ToSystemPathArray(),
 		},
 		{
 			name: "pathological symlinks",
@@ -274,7 +274,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0 | 0755,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"real", "three", "two", "one"},
+			want: turbopath.AnchoredUnixPathArray{"real", "three", "two", "one"}.ToSystemPathArray(),
 		},
 		{
 			name: "place file at dir location",
@@ -313,7 +313,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"folder-not-file/", "folder-not-file/subfile"},
+			want: turbopath.AnchoredUnixPathArray{"folder-not-file/", "folder-not-file/subfile"}.ToSystemPathArray(),
 			wantErr: wantErr{
 				unix:    syscall.EISDIR,
 				windows: syscall.EISDIR,
@@ -346,7 +346,7 @@ func TestOpen(t *testing.T) {
 		// 			FileMode: 0 | os.ModeSymlink | 0777,
 		// 		},
 		// 	},
-		// 	want: []turbopath.AnchoredSystemPath{"one"},
+		// 	[]want: turbopath.AnchoredUnixPathArray{"one"}.ToSystemPathArray(),
 		// 	wantErr: wantErr{
 		// 		unix:    os.ErrExist,
 		// 		windows: os.ErrExist,
@@ -434,7 +434,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0755,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"real", "one"},
+			want: turbopath.AnchoredUnixPathArray{"real", "one"}.ToSystemPathArray(),
 		},
 		{
 			name: "symlink traversal",
@@ -462,7 +462,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"escape"},
+			want: turbopath.AnchoredUnixPathArray{"escape"}.ToSystemPathArray(),
 			wantErr: wantErr{
 				unix:    errTraversal,
 				windows: errTraversal,
@@ -503,7 +503,7 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"back\\slash\\file"},
+			want: turbopath.AnchoredUnixPathArray{"back\\slash\\file"}.ToSystemPathArray(),
 			wantErr: wantErr{
 				unix:    nil,
 				windows: errNameWindowsUnsafe,
