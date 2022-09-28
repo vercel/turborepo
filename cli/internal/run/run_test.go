@@ -306,7 +306,7 @@ func Test_dontSquashTasks(t *testing.T) {
 
 	pipeline := map[string]fs.TaskDefinition{
 		"build": {
-			Outputs:          fs.TaskOutputs{Inclusions: []string{}, Exclusions: []string{}},
+			Outputs:          fs.TaskOutputs{},
 			TaskDependencies: []string{"generate"},
 		},
 		"generate": {

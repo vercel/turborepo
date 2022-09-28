@@ -48,7 +48,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"lint": {
-			Outputs:                 TaskOutputs{Inclusions: []string{}, Exclusions: []string{}},
+			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{"MY_VAR"},
 			TaskDependencies:        []string{},
@@ -64,7 +64,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.FullTaskOutput,
 		},
 		"publish": {
-			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}, Exclusions: []string{}},
+			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 			EnvVarDependencies:      []string{},
 			TopologicalDependencies: []string{"build", "publish"},
 			TaskDependencies:        []string{"admin#lint", "build"},

@@ -217,19 +217,19 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
 	if rawPipeline.Outputs != nil {
-		Inclusions := make([]string, 0)
-		Exclusions := make([]string, 0)
+		var inclusions []string
+		var exclusions []string
 		for _, glob := range *rawPipeline.Outputs {
 			if strings.HasPrefix(glob, "!") {
-				Exclusions = append(Exclusions, glob[1:])
+				exclusions = append(exclusions, glob[1:])
 			} else {
-				Inclusions = append(Inclusions, glob)
+				inclusions = append(inclusions, glob)
 			}
 		}
 
 		c.Outputs = TaskOutputs{
-			Inclusions,
-			Exclusions,
+			Inclusions: inclusions,
+			Exclusions: exclusions,
 		}
 	} else {
 		c.Outputs = defaultOutputs

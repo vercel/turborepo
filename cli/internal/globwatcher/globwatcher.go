@@ -17,7 +17,7 @@ import (
 // ErrClosed is returned when attempting to get changed globs after glob watching has closed
 var ErrClosed = errors.New("glob watching is closed")
 
-type Globs struct {
+type globs struct {
 	Inclusions util.Set
 	Exclusions util.Set
 }
@@ -31,7 +31,7 @@ type GlobWatcher struct {
 	cookieWaiter filewatcher.CookieWaiter
 
 	mu         sync.RWMutex // protects field below
-	hashGlobs  map[string]Globs
+	hashGlobs  map[string]globs
 	globStatus map[string]util.Set // glob -> hashes where this glob hasn't changed
 
 	closed bool
@@ -43,7 +43,7 @@ func New(logger hclog.Logger, repoRoot turbopath.AbsoluteSystemPath, cookieWaite
 		logger:       logger,
 		repoRoot:     repoRoot,
 		cookieWaiter: cookieWaiter,
-		hashGlobs:    make(map[string]Globs),
+		hashGlobs:    make(map[string]globs),
 		globStatus:   make(map[string]util.Set),
 	}
 }
@@ -63,7 +63,7 @@ func (g *GlobWatcher) isClosed() bool {
 // WatchGlobs registers the given set of globs to be watched for changes and grouped
 // under the given hash. This method pairs with GetChangedGlobs to determine which globs
 // out of a set of candidates have changed since WatchGlobs was called for the same hash.
-func (g *GlobWatcher) WatchGlobs(hash string, globs fs.TaskOutputs) error {
+func (g *GlobWatcher) WatchGlobs(hash string, globsToWatch fs.TaskOutputs) error {
 	if g.isClosed() {
 		return ErrClosed
 	}
@@ -77,12 +77,12 @@ func (g *GlobWatcher) WatchGlobs(hash string, globs fs.TaskOutputs) error {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.hashGlobs[hash] = Globs{
-		Inclusions: util.SetFromStrings(globs.Inclusions),
-		Exclusions: util.SetFromStrings(globs.Exclusions),
+	g.hashGlobs[hash] = globs{
+		Inclusions: util.SetFromStrings(globsToWatch.Inclusions),
+		Exclusions: util.SetFromStrings(globsToWatch.Exclusions),
 	}
 
-	for _, glob := range globs.Inclusions {
+	for _, glob := range globsToWatch.Inclusions {
 		existing, ok := g.globStatus[glob]
 		if !ok {
 			existing = make(util.Set)
@@ -158,8 +158,13 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 			for hashUntyped := range hashStatus {
 				hash := hashUntyped.(string)
 				hashGlobs, ok := g.hashGlobs[hash]
-				isExcluded := false
 
+				if !ok {
+					g.logger.Warn(fmt.Sprintf("failed to find hash %v referenced from glob %v", hash, glob))
+					continue
+				}
+
+				isExcluded := false
 				// Check if we've excluded this path by going through exclusion globs
 				for exclusionGlob := range hashGlobs.Exclusions {
 					matches, err := doublestar.Match(exclusionGlob.(string), filepath.ToSlash(repoRelativePath))
@@ -171,9 +176,9 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 					if matches {
 						isExcluded = true
 						break
-					} else {
-						allExcluded = false
 					}
+
+					allExcluded = false
 				}
 
 				// If we have excluded this path, then we skip it
@@ -181,10 +186,6 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 					continue
 				}
 
-				if !ok {
-					g.logger.Warn(fmt.Sprintf("failed to find hash %v referenced from glob %v", hash, glob))
-					continue
-				}
 				hashGlobs.Inclusions.Delete(glob)
 				// If we've deleted the last glob for a hash, delete the whole hash entry
 				if hashGlobs.Inclusions.Len() == 0 {
