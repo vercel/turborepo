@@ -85,7 +85,8 @@ func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFil
 	fileInfo, err := os.Lstat(fullName.ToString())
 	assert.NilError(t, err, "Lstat")
 
-	assert.Equal(t, fileInfo.Mode()&diskFile.FileMode, diskFile.FileMode, "File has the expected mode.")
+	assert.Equal(t, fileInfo.Mode()&fs.ModePerm, diskFile.FileMode&fs.ModePerm, "File has the expected permissions.")
+	assert.Equal(t, fileInfo.Mode()|fs.ModePerm, diskFile.FileMode|fs.ModePerm, "File has the expected mode.")
 
 	if diskFile.FileMode&os.ModeSymlink != 0 {
 		linkname, err := os.Readlink(fullName.ToString())
@@ -331,11 +332,11 @@ func TestOpen(t *testing.T) {
 				unix: []restoreFile{
 					{
 						Name:     "folder-not-file",
-						FileMode: 0 | os.ModeDir,
+						FileMode: 0 | os.ModeDir | 0755,
 					},
 					{
 						Name:     "folder-not-file/subfile",
-						FileMode: 0,
+						FileMode: 0755,
 					},
 				},
 			},
