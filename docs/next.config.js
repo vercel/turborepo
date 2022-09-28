@@ -11,6 +11,16 @@ module.exports = withNextra({
     legacyBrowsers: false,
     images: { allowFutureImage: true },
   },
+  rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/sitemap.xml",
+          destination: "https://crawled-sitemap.vercel.sh/turbo-sitemap.xml",
+        },
+      ],
+    };
+  },
   async redirects() {
     return [
       {
