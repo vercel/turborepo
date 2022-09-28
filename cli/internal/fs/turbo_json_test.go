@@ -214,16 +214,16 @@ func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	}
 
 	pipeline := turboJSON.Pipeline
-	assert.EqualValues(t, sortedArray(pipeline["task1"].EnvVarDependencies), sortedArray([]string{"A"}))
-	assert.EqualValues(t, sortedArray(pipeline["task2"].EnvVarDependencies), sortedArray([]string{"A"}))
-	assert.EqualValues(t, sortedArray(pipeline["task3"].EnvVarDependencies), sortedArray([]string{"A"}))
-	assert.EqualValues(t, sortedArray(pipeline["task4"].EnvVarDependencies), sortedArray([]string{"A", "B"}))
-	assert.EqualValues(t, sortedArray(pipeline["task6"].EnvVarDependencies), sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
-	assert.EqualValues(t, sortedArray(pipeline["task7"].EnvVarDependencies), sortedArray([]string{"A", "B", "C"}))
-	assert.EqualValues(t, sortedArray(pipeline["task8"].EnvVarDependencies), sortedArray([]string{"A", "B", "C"}))
-	assert.EqualValues(t, sortedArray(pipeline["task9"].EnvVarDependencies), sortedArray([]string{"A"}))
-	assert.EqualValues(t, sortedArray(pipeline["task10"].EnvVarDependencies), sortedArray([]string{"A"}))
-	assert.EqualValues(t, sortedArray(pipeline["task11"].EnvVarDependencies), sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, pipeline["task1"].EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task2"].EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task3"].EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task4"].EnvVarDependencies, sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, pipeline["task6"].EnvVarDependencies, sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
+	assert.EqualValues(t, pipeline["task7"].EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, pipeline["task8"].EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, pipeline["task9"].EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task10"].EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task11"].EnvVarDependencies, sortedArray([]string{"A", "B"}))
 
 	// check global env vars also
 	assert.EqualValues(t, sortedArray([]string{"FOO", "BAR", "BAZ", "QUX"}), sortedArray(turboJSON.GlobalEnv))
