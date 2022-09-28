@@ -216,7 +216,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 	}
 
 	// berry only includes a cache key in the lockfile if there are entries with a checksum
-	cacheKey := "-1"
+	cacheKey := ""
 	for _, entry := range prunedPackages {
 		if entry.Checksum != "" {
 			cacheKey = l.cacheKey
@@ -351,8 +351,8 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 			patches[originalLocator] = locator
 		}
 
-		// Before storing cacheKey set it to -1 so we know it's invalid
-		data.CacheKey = "-1"
+		// Before storing cacheKey set it to "" so we know it's invalid
+		data.CacheKey = ""
 
 		locatorToPackage[locator] = data
 
@@ -636,7 +636,7 @@ func _stringifyEntry(entry BerryLockfileEntry, indentLevel int) string {
 	if entry.LinkType != "" {
 		addLine("linkType", _wrapString(entry.LinkType), true)
 	}
-	if entry.CacheKey != "-1" {
+	if entry.CacheKey != "" {
 		addLine("cacheKey", _wrapString(entry.CacheKey), true)
 	}
 
