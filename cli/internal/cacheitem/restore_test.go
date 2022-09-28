@@ -123,6 +123,7 @@ func TestOpen(t *testing.T) {
 						Name:     "source",
 						Linkname: "target",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 			},
@@ -130,7 +131,7 @@ func TestOpen(t *testing.T) {
 				{
 					Name:     "source",
 					Linkname: "target",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Name:     "target",
@@ -184,6 +185,7 @@ func TestOpen(t *testing.T) {
 						Name:     "folder/symlink",
 						Linkname: "../",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -201,7 +203,7 @@ func TestOpen(t *testing.T) {
 				},
 				{
 					Name:     "folder/symlink",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 					Linkname: "../",
 				},
 				{
@@ -223,6 +225,7 @@ func TestOpen(t *testing.T) {
 						Name:     "one",
 						Linkname: "two",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -230,6 +233,7 @@ func TestOpen(t *testing.T) {
 						Name:     "two",
 						Linkname: "three",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -237,12 +241,14 @@ func TestOpen(t *testing.T) {
 						Name:     "three",
 						Linkname: "real",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
 					Header: &tar.Header{
 						Name:     "real",
 						Typeflag: tar.TypeReg,
+						Mode:     0755,
 					},
 					Body: "real",
 				},
@@ -251,21 +257,21 @@ func TestOpen(t *testing.T) {
 				{
 					Name:     "one",
 					Linkname: "two",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Name:     "two",
 					Linkname: "three",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Name:     "three",
 					Linkname: "real",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Name:     "real",
-					FileMode: 0,
+					FileMode: 0 | 0755,
 				},
 			},
 			want: []turbopath.AnchoredSystemPath{"real", "three", "two", "one"},
@@ -321,7 +327,7 @@ func TestOpen(t *testing.T) {
 		// 				Name:     "one",
 		// 				Linkname: "two",
 		// 				Typeflag: tar.TypeSymlink,
-		// 				Mode:     0755,
+		// 				Mode:     0777,
 		// 			},
 		// 		},
 		// 		{
@@ -337,7 +343,7 @@ func TestOpen(t *testing.T) {
 		// 		{
 		// 			Name:     "one",
 		// 			Linkname: "two",
-		// 			FileMode: 0 | os.ModeSymlink,
+		// 			FileMode: 0 | os.ModeSymlink | 0777,
 		// 		},
 		// 	},
 		// 	want: []turbopath.AnchoredSystemPath{"one"},
@@ -354,6 +360,7 @@ func TestOpen(t *testing.T) {
 						Name:     "one",
 						Linkname: "two",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -361,6 +368,7 @@ func TestOpen(t *testing.T) {
 						Name:     "two",
 						Linkname: "three",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -368,6 +376,7 @@ func TestOpen(t *testing.T) {
 						Name:     "three",
 						Linkname: "one",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 			},
@@ -386,6 +395,7 @@ func TestOpen(t *testing.T) {
 						Name:     "one",
 						Linkname: "two",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -393,6 +403,7 @@ func TestOpen(t *testing.T) {
 						Name:     "one",
 						Linkname: "three",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -400,12 +411,14 @@ func TestOpen(t *testing.T) {
 						Name:     "one",
 						Linkname: "real",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
 					Header: &tar.Header{
 						Name:     "real",
 						Typeflag: tar.TypeReg,
+						Mode:     0755,
 					},
 					Body: "real",
 				},
@@ -414,11 +427,11 @@ func TestOpen(t *testing.T) {
 				{
 					Name:     "one",
 					Linkname: "real",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Name:     "real",
-					FileMode: 0,
+					FileMode: 0755,
 				},
 			},
 			want: []turbopath.AnchoredSystemPath{"real", "one"},
@@ -431,6 +444,7 @@ func TestOpen(t *testing.T) {
 						Name:     "escape",
 						Linkname: "../",
 						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
 					},
 				},
 				{
@@ -445,7 +459,7 @@ func TestOpen(t *testing.T) {
 				{
 					Name:     "escape",
 					Linkname: "../",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 			},
 			want: []turbopath.AnchoredSystemPath{"escape"},
