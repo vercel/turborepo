@@ -23,7 +23,7 @@ type tarFile struct {
 }
 
 type restoreFile struct {
-	Name     string
+	Name     turbopath.AnchoredSystemPath
 	Linkname string
 	fs.FileMode
 }
@@ -105,11 +105,15 @@ func TestOpen(t *testing.T) {
 		unix    []turbopath.AnchoredSystemPath
 		windows []turbopath.AnchoredSystemPath
 	}
+	type wantFiles struct {
+		unix    []restoreFile
+		windows []restoreFile
+	}
 	tests := []struct {
 		name       string
 		tarFiles   []tarFile
 		wantOutput wantOutput
-		wantFiles  []restoreFile
+		wantFiles  wantFiles
 		wantErr    wantErr
 	}{
 		{
@@ -131,15 +135,17 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "source",
-					Linkname: "target",
-					FileMode: 0 | os.ModeSymlink | 0777,
-				},
-				{
-					Name:     "target",
-					FileMode: 0,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "source",
+						Linkname: "target",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
+					{
+						Name:     "target",
+						FileMode: 0,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -164,14 +170,16 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "folder",
-					FileMode: 0 | os.ModeDir | 0755,
-				},
-				{
-					Name:     "folder/file",
-					FileMode: 0,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "folder",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "folder/file",
+						FileMode: 0,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -204,23 +212,25 @@ func TestOpen(t *testing.T) {
 					Body: "folder-sibling",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "folder",
-					FileMode: 0 | os.ModeDir | 0755,
-				},
-				{
-					Name:     "folder/symlink",
-					FileMode: 0 | os.ModeSymlink | 0777,
-					Linkname: "../",
-				},
-				{
-					Name:     "folder/symlink/folder-sibling",
-					FileMode: 0,
-				},
-				{
-					Name:     "folder-sibling",
-					FileMode: 0,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "folder",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "folder/symlink",
+						FileMode: 0 | os.ModeSymlink | 0777,
+						Linkname: "../",
+					},
+					{
+						Name:     "folder/symlink/folder-sibling",
+						FileMode: 0,
+					},
+					{
+						Name:     "folder-sibling",
+						FileMode: 0,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -263,25 +273,27 @@ func TestOpen(t *testing.T) {
 					Body: "real",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "one",
-					Linkname: "two",
-					FileMode: 0 | os.ModeSymlink | 0777,
-				},
-				{
-					Name:     "two",
-					Linkname: "three",
-					FileMode: 0 | os.ModeSymlink | 0777,
-				},
-				{
-					Name:     "three",
-					Linkname: "real",
-					FileMode: 0 | os.ModeSymlink | 0777,
-				},
-				{
-					Name:     "real",
-					FileMode: 0 | 0755,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "one",
+						Linkname: "two",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
+					{
+						Name:     "two",
+						Linkname: "three",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
+					{
+						Name:     "three",
+						Linkname: "real",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
+					{
+						Name:     "real",
+						FileMode: 0 | 0755,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -315,14 +327,16 @@ func TestOpen(t *testing.T) {
 					Body: "this shouldn't work",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "folder-not-file",
-					FileMode: 0 | os.ModeDir,
-				},
-				{
-					Name:     "folder-not-file/subfile",
-					FileMode: 0,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "folder-not-file",
+						FileMode: 0 | os.ModeDir,
+					},
+					{
+						Name:     "folder-not-file/subfile",
+						FileMode: 0,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -353,15 +367,17 @@ func TestOpen(t *testing.T) {
 		// 			Body: "file",
 		// 		},
 		// 	},
-		// 	wantFiles: []diskFile{
-		// 		{
-		// 			Name:     "one",
-		// 			Linkname: "two",
-		// 			FileMode: 0 | os.ModeSymlink | 0777,
+		// 	wantFiles: wantFiles{
+		// 		unix: []restoreFile{
+		// 			{
+		// 				Name:     "one",
+		// 				Linkname: "two",
+		// 				FileMode: 0 | os.ModeSymlink | 0777,
+		// 			},
 		// 		},
 		// 	},
-		//	wantOutput: wantOutput{
-		// 		unix: turbopath.AnchoredUnixPathArray{"one"}.ToSystemPathArray(),
+		// 	wantOutput: wantOutput{
+		// 		unix:    turbopath.AnchoredUnixPathArray{"one"}.ToSystemPathArray(),
 		// 		windows: nil,
 		// 	},
 		// 	wantErr: wantErr{
@@ -397,7 +413,9 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
-			wantFiles: []restoreFile{},
+			wantFiles: wantFiles{
+				unix: []restoreFile{},
+			},
 			wantOutput: wantOutput{
 				unix: []turbopath.AnchoredSystemPath{},
 			},
@@ -442,15 +460,17 @@ func TestOpen(t *testing.T) {
 					Body: "real",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "one",
-					Linkname: "real",
-					FileMode: 0 | os.ModeSymlink | 0777,
-				},
-				{
-					Name:     "real",
-					FileMode: 0755,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "one",
+						Linkname: "real",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
+					{
+						Name:     "real",
+						FileMode: 0755,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -476,11 +496,13 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "escape",
-					Linkname: "../",
-					FileMode: 0 | os.ModeSymlink | 0777,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "escape",
+						Linkname: "../",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
 				},
 			},
 			wantOutput: wantOutput{
@@ -502,7 +524,9 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []restoreFile{},
+			wantFiles: wantFiles{
+				unix: []restoreFile{},
+			},
 			wantOutput: wantOutput{
 				unix: []turbopath.AnchoredSystemPath{},
 			},
@@ -522,11 +546,14 @@ func TestOpen(t *testing.T) {
 					Body: "file",
 				},
 			},
-			wantFiles: []restoreFile{
-				{
-					Name:     "back\\slash\\file",
-					FileMode: 0,
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "back\\slash\\file",
+						FileMode: 0,
+					},
 				},
+				windows: []restoreFile{},
 			},
 			wantOutput: wantOutput{
 				unix:    turbopath.AnchoredUnixPathArray{"back\\slash\\file"}.ToSystemPathArray(),
@@ -547,7 +574,9 @@ func TestOpen(t *testing.T) {
 					},
 				},
 			},
-			wantFiles: []restoreFile{},
+			wantFiles: wantFiles{
+				unix: []restoreFile{},
+			},
 			wantOutput: wantOutput{
 				unix: []turbopath.AnchoredSystemPath{},
 			},
@@ -581,17 +610,21 @@ func TestOpen(t *testing.T) {
 				assert.NilError(t, restoreErr, "Restore")
 			}
 
-			comparison := tt.wantOutput.unix
+			outputComparison := tt.wantOutput.unix
 			if runtime.GOOS == "windows" && tt.wantOutput.windows != nil {
-				comparison = tt.wantOutput.windows
+				outputComparison = tt.wantOutput.windows
 			}
 
-			if !reflect.DeepEqual(restoreOutput, comparison) {
-				t.Errorf("Restore() = %v, want %v", restoreOutput, comparison)
+			if !reflect.DeepEqual(restoreOutput, outputComparison) {
+				t.Errorf("Restore() = %v, want %v", restoreOutput, outputComparison)
 			}
 
 			// Check files on disk.
-			for _, diskFile := range tt.wantFiles {
+			filesComparison := tt.wantFiles.unix
+			if runtime.GOOS == "windows" && tt.wantFiles.windows != nil {
+				filesComparison = tt.wantFiles.windows
+			}
+			for _, diskFile := range filesComparison {
 				assertFileExists(t, anchor, diskFile)
 			}
 		})
