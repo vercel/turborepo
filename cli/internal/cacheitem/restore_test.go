@@ -101,12 +101,16 @@ func TestOpen(t *testing.T) {
 		unix    error
 		windows error
 	}
+	type wantOutput struct {
+		unix    []turbopath.AnchoredSystemPath
+		windows []turbopath.AnchoredSystemPath
+	}
 	tests := []struct {
-		name      string
-		tarFiles  []tarFile
-		want      []turbopath.AnchoredSystemPath
-		wantFiles []restoreFile
-		wantErr   wantErr
+		name       string
+		tarFiles   []tarFile
+		wantOutput wantOutput
+		wantFiles  []restoreFile
+		wantErr    wantErr
 	}{
 		{
 			name: "hello world",
@@ -138,7 +142,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"target", "source"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"target", "source"}.ToSystemPathArray(),
+			},
 		},
 		{
 			name: "nested file",
@@ -168,7 +174,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"folder/", "folder/file"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"folder/", "folder/file"}.ToSystemPathArray(),
+			},
 		},
 		{
 			name: "nested file",
@@ -215,7 +223,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"folder/", "folder/symlink", "folder/symlink/folder-sibling"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"folder/", "folder/symlink", "folder/symlink/folder-sibling"}.ToSystemPathArray(),
+			},
 		},
 		{
 			name: "pathological symlinks",
@@ -274,7 +284,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0 | 0755,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"real", "three", "two", "one"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"real", "three", "two", "one"}.ToSystemPathArray(),
+			},
 		},
 		{
 			name: "place file at dir location",
@@ -313,7 +325,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"folder-not-file/", "folder-not-file/subfile"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"folder-not-file/", "folder-not-file/subfile"}.ToSystemPathArray(),
+			},
 			wantErr: wantErr{
 				unix:    syscall.EISDIR,
 				windows: syscall.EISDIR,
@@ -346,7 +360,10 @@ func TestOpen(t *testing.T) {
 		// 			FileMode: 0 | os.ModeSymlink | 0777,
 		// 		},
 		// 	},
-		// 	[]want: turbopath.AnchoredUnixPathArray{"one"}.ToSystemPathArray(),
+		//	wantOutput: wantOutput{
+		// 		unix: turbopath.AnchoredUnixPathArray{"one"}.ToSystemPathArray(),
+		// 		windows: nil,
+		// 	},
 		// 	wantErr: wantErr{
 		// 		unix:    os.ErrExist,
 		// 		windows: os.ErrExist,
@@ -381,7 +398,9 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantFiles: []restoreFile{},
-			want:      []turbopath.AnchoredSystemPath{},
+			wantOutput: wantOutput{
+				unix: []turbopath.AnchoredSystemPath{},
+			},
 			wantErr: wantErr{
 				unix:    errCycleDetected,
 				windows: errCycleDetected,
@@ -434,7 +453,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0755,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"real", "one"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"real", "one"}.ToSystemPathArray(),
+			},
 		},
 		{
 			name: "symlink traversal",
@@ -462,7 +483,9 @@ func TestOpen(t *testing.T) {
 					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"escape"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{"escape"}.ToSystemPathArray(),
+			},
 			wantErr: wantErr{
 				unix:    errTraversal,
 				windows: errTraversal,
@@ -480,7 +503,9 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantFiles: []restoreFile{},
-			want:      []turbopath.AnchoredSystemPath{},
+			wantOutput: wantOutput{
+				unix: []turbopath.AnchoredSystemPath{},
+			},
 			wantErr: wantErr{
 				unix:    errNameMalformed,
 				windows: errNameMalformed,
@@ -503,7 +528,10 @@ func TestOpen(t *testing.T) {
 					FileMode: 0,
 				},
 			},
-			want: turbopath.AnchoredUnixPathArray{"back\\slash\\file"}.ToSystemPathArray(),
+			wantOutput: wantOutput{
+				unix:    turbopath.AnchoredUnixPathArray{"back\\slash\\file"}.ToSystemPathArray(),
+				windows: turbopath.AnchoredUnixPathArray{}.ToSystemPathArray(),
+			},
 			wantErr: wantErr{
 				unix:    nil,
 				windows: errNameWindowsUnsafe,
@@ -520,7 +548,9 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantFiles: []restoreFile{},
-			want:      []turbopath.AnchoredSystemPath{},
+			wantOutput: wantOutput{
+				unix: []turbopath.AnchoredSystemPath{},
+			},
 			wantErr: wantErr{
 				unix:    errUnsupportedFileType,
 				windows: errUnsupportedFileType,
@@ -551,8 +581,13 @@ func TestOpen(t *testing.T) {
 				assert.NilError(t, restoreErr, "Restore")
 			}
 
-			if !reflect.DeepEqual(restoreOutput, tt.want) {
-				t.Errorf("Restore() = %v, want %v", restoreOutput, tt.want)
+			comparison := tt.wantOutput.unix
+			if runtime.GOOS == "windows" && tt.wantOutput.windows != nil {
+				comparison = tt.wantOutput.windows
+			}
+
+			if !reflect.DeepEqual(restoreOutput, comparison) {
+				t.Errorf("Restore() = %v, want %v", restoreOutput, comparison)
 			}
 
 			// Check files on disk.
@@ -724,7 +759,7 @@ func Test_checkName(t *testing.T) {
 		t.Run(fmt.Sprintf("Path: \"%v\"", tt.path), func(t *testing.T) {
 			wellFormed, windowsSafe := checkName(tt.path)
 			if wellFormed != tt.wellFormed || windowsSafe != tt.windowsSafe {
-				t.Errorf("\nwant: checkName(\"%v\") wellFormed = %v, windowsSafe %v\ngot:  checkName(\"%v\") wellFormed = %v, windowsSafe %v", tt.path, tt.wellFormed, tt.windowsSafe, tt.path, wellFormed, windowsSafe)
+				t.Errorf("\nwantOutput: checkName(\"%v\") wellFormed = %v, windowsSafe %v\ngot:  checkName(\"%v\") wellFormed = %v, windowsSafe %v", tt.path, tt.wellFormed, tt.windowsSafe, tt.path, wellFormed, windowsSafe)
 			}
 		})
 	}
