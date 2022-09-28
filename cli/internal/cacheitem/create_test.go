@@ -151,6 +151,7 @@ func TestCreate(t *testing.T) {
 
 			cacheItem, cacheCreateErr := Create(archivePath)
 			assert.NilError(t, cacheCreateErr, "Cache Create")
+			defer func() { _ = cacheItem.Close() }()
 
 			for _, file := range tt.files {
 				createErr := createEntry(t, inputDir, file)
@@ -177,6 +178,7 @@ func TestCreate(t *testing.T) {
 			openedCacheItem, openedCacheItemErr := Open(archivePath)
 			assert.NilError(t, openedCacheItemErr, "Cache Open")
 			snapshotTwo := hex.EncodeToString(openedCacheItem.GetSha())
+			defer func() { _ = openedCacheItem.Close() }()
 
 			switch runtime.GOOS {
 			case "darwin":
