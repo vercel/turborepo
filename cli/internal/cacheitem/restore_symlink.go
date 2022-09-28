@@ -67,7 +67,12 @@ func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *ta
 	}
 
 	// Create the symlink.
+	// This does not support file names with `\` in them in a cross-platform manner.
 	symlinkFrom := processedName.RestoreAnchor(anchor)
+
+	// Windows:
+	// - This converts `/` into `\`.
+	// - There is no way to create a link target to something non-existent.
 	symlinkErr := symlinkFrom.Symlink(header.Linkname)
 	if symlinkErr != nil {
 		return "", symlinkErr
