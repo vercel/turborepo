@@ -33,14 +33,14 @@ func createEntry(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefiniti
 func createDir(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefinition createFileDefinition) error {
 	t.Helper()
 	path := fileDefinition.Path.RestoreAnchor(anchor)
-	mkdirAllErr := path.MkdirAll()
+	mkdirAllErr := path.MkdirAllMode(fileDefinition.FileMode & 0777)
 	assert.NilError(t, mkdirAllErr, "MkdirAll")
 	return mkdirAllErr
 }
 func createFile(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefinition createFileDefinition) error {
 	t.Helper()
 	path := fileDefinition.Path.RestoreAnchor(anchor)
-	writeErr := path.WriteFile([]byte("file contents"), 0666)
+	writeErr := path.WriteFile([]byte("file contents"), fileDefinition.FileMode&0777)
 	assert.NilError(t, writeErr, "WriteFile")
 	return writeErr
 }
@@ -49,6 +49,8 @@ func createSymlink(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefini
 	path := fileDefinition.Path.RestoreAnchor(anchor)
 	symlinkErr := path.Symlink(fileDefinition.Linkname)
 	assert.NilError(t, symlinkErr, "Symlink")
+	lchmodErr := path.Lchmod(fileDefinition.FileMode & 0777)
+	assert.NilError(t, lchmodErr, "Lchmod")
 	return symlinkErr
 }
 
@@ -64,7 +66,8 @@ func TestCreate(t *testing.T) {
 			name: "hello world",
 			files: []createFileDefinition{
 				{
-					Path: turbopath.AnchoredSystemPath("hello world.txt"),
+					Path:     turbopath.AnchoredSystemPath("hello world.txt"),
+					FileMode: 0 | 0644,
 				},
 			},
 			wantUnix:    "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
@@ -76,23 +79,24 @@ func TestCreate(t *testing.T) {
 				{
 					Path:     turbopath.AnchoredSystemPath("one"),
 					Linkname: "two",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Path:     turbopath.AnchoredSystemPath("two"),
 					Linkname: "three",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
 					Path:     turbopath.AnchoredSystemPath("three"),
 					Linkname: "real",
-					FileMode: 0 | os.ModeSymlink,
+					FileMode: 0 | os.ModeSymlink | 0777,
 				},
 				{
-					Path: turbopath.AnchoredSystemPath("real"),
+					Path:     turbopath.AnchoredSystemPath("real"),
+					FileMode: 0 | 0644,
 				},
 			},
-			wantUnix:    "048053cbfe2b8dc316c9ce99d0d12f3902c2d4512e323f40a2775b777383eabb00e12488189b569285af09571810b0a34b144f9cec3bb88f1452f7c0e29e95aa",
+			wantUnix:    "3ef6504edc2865b89afe7aa07c181425c79a7f4193786792bc56a58c70cfc9cf4b8486f8af868c58894ba05ea2133893ad6a0de5d1f488cd0c5ad2ca8fc96204",
 			wantWindows: "59201a55277cf9182d3513110eae0391c3881e441fcb9ec7a22d4d1e7e4c640568b29fa1ece502791ab15a1415a21e861a36c5b93c9544d675e71f0d3a613909",
 		},
 		{
@@ -100,10 +104,11 @@ func TestCreate(t *testing.T) {
 			files: []createFileDefinition{
 				{
 					Path:     turbopath.AnchoredSystemPath("parent"),
-					FileMode: 0 | os.ModeDir,
+					FileMode: 0 | os.ModeDir | 0755,
 				},
 				{
-					Path: turbopath.AnchoredSystemPath("parent/child"),
+					Path:     turbopath.AnchoredSystemPath("parent/child"),
+					FileMode: 0 | 0644,
 				},
 			},
 			// These are the same because the privileges for directories by default end up being 0755 on both.
@@ -115,7 +120,7 @@ func TestCreate(t *testing.T) {
 			files: []createFileDefinition{
 				{
 					Path:     turbopath.AnchoredSystemPath("fifo"),
-					FileMode: 0 | os.ModeNamedPipe,
+					FileMode: 0 | os.ModeNamedPipe | 0644,
 				},
 			},
 			wantErr: errUnsupportedFileType,

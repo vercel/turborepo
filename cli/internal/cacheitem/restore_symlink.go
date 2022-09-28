@@ -2,6 +2,7 @@ package cacheitem
 
 import (
 	"archive/tar"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -43,9 +44,16 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 
 	// Create the symlink.
 	// Explicitly uses the _original_ header.Linkname as the target.
-	symlinkErr := os.Symlink(header.Linkname, processedName.RestoreAnchor(anchor).ToString())
+	symlinkFrom := processedName.RestoreAnchor(anchor)
+	symlinkErr := symlinkFrom.Symlink(header.Linkname)
 	if symlinkErr != nil {
 		return "", symlinkErr
+	}
+
+	// Darwin allows you to change the permissions of a symlink.
+	lchmodErr := symlinkFrom.Lchmod(fs.FileMode(header.Mode))
+	if lchmodErr != nil {
+		return "", lchmodErr
 	}
 
 	return processedName, nil
