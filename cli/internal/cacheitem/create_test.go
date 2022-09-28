@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -53,10 +54,11 @@ func createSymlink(t *testing.T, anchor turbopath.AbsoluteSystemPath, fileDefini
 
 func TestCreate(t *testing.T) {
 	tests := []struct {
-		name    string
-		files   []createFileDefinition
-		want    string
-		wantErr error
+		name        string
+		files       []createFileDefinition
+		wantUnix    string
+		wantWindows string
+		wantErr     error
 	}{
 		{
 			name: "hello world",
@@ -65,7 +67,8 @@ func TestCreate(t *testing.T) {
 					Path: turbopath.AnchoredSystemPath("hello world.txt"),
 				},
 			},
-			want: "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
+			wantUnix:    "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
+			wantWindows: "37a271d277c299cfe130ccfdb98af6e5909ade7a640a126d1495a57af1b1aed0676eedd2f0c918a9dfc04145051f52c783e7e6c0eb9aaa32af8238b47aed16bf",
 		},
 		{
 			name: "links",
@@ -89,7 +92,8 @@ func TestCreate(t *testing.T) {
 					Path: turbopath.AnchoredSystemPath("real"),
 				},
 			},
-			want: "048053cbfe2b8dc316c9ce99d0d12f3902c2d4512e323f40a2775b777383eabb00e12488189b569285af09571810b0a34b144f9cec3bb88f1452f7c0e29e95aa",
+			wantUnix:    "048053cbfe2b8dc316c9ce99d0d12f3902c2d4512e323f40a2775b777383eabb00e12488189b569285af09571810b0a34b144f9cec3bb88f1452f7c0e29e95aa",
+			wantWindows: "59201a55277cf9182d3513110eae0391c3881e441fcb9ec7a22d4d1e7e4c640568b29fa1ece502791ab15a1415a21e861a36c5b93c9544d675e71f0d3a613909",
 		},
 		{
 			name: "subdirectory",
@@ -102,7 +106,9 @@ func TestCreate(t *testing.T) {
 					Path: turbopath.AnchoredSystemPath("parent/child"),
 				},
 			},
-			want: "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
+			// These are the same because the privileges for directories by default end up being 0755 on both.
+			wantUnix:    "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
+			wantWindows: "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
 		},
 		{
 			name: "unsupported types error",
@@ -150,7 +156,11 @@ func TestCreate(t *testing.T) {
 			assert.NilError(t, openedCacheItemErr, "Cache Open")
 			snapshotTwo := hex.EncodeToString(openedCacheItem.GetSha())
 
-			assert.Equal(t, snapshot, tt.want, "Got expected hash.")
+			if runtime.GOOS == "windows" {
+				assert.Equal(t, snapshot, tt.wantWindows, "Got expected hash.")
+			} else {
+				assert.Equal(t, snapshot, tt.wantUnix, "Got expected hash.")
+			}
 			assert.Equal(t, snapshot, snapshotTwo, "Reopened snapshot matches.")
 		})
 	}
