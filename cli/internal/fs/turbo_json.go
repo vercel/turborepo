@@ -21,7 +21,7 @@ const (
 	topologicalPipelineDelimiter = "^"
 )
 
-var defaultOutputs = TaskOutputs{Inclusions: []string{"dist/**/*", "build/**/*"}, Exclusions: []string{}}
+var defaultOutputs = TaskOutputs{Inclusions: []string{"dist/**/*", "build/**/*"}}
 
 type rawTurboJSON struct {
 	// Global root filesystem dependencies
