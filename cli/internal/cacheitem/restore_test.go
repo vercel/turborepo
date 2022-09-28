@@ -233,6 +233,25 @@ func TestOpen(t *testing.T) {
 						FileMode: 0,
 					},
 				},
+				windows: []restoreFile{
+					{
+						Name:     "folder",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "folder/symlink",
+						FileMode: 0 | os.ModeSymlink | 0777,
+						Linkname: "..\\",
+					},
+					{
+						Name:     "folder/symlink/folder-sibling",
+						FileMode: 0,
+					},
+					{
+						Name:     "folder-sibling",
+						FileMode: 0,
+					},
+				},
 			},
 			wantOutput: wantOutput{
 				unix: turbopath.AnchoredUnixPathArray{"folder/", "folder/symlink", "folder/symlink/folder-sibling"}.ToSystemPathArray(),
@@ -502,6 +521,13 @@ func TestOpen(t *testing.T) {
 					{
 						Name:     "escape",
 						Linkname: "../",
+						FileMode: 0 | os.ModeSymlink | 0777,
+					},
+				},
+				windows: []restoreFile{
+					{
+						Name:     "escape",
+						Linkname: "..\\",
 						FileMode: 0 | os.ModeSymlink | 0777,
 					},
 				},
