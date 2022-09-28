@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::env::current_exe;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,7 +15,7 @@ use std::{
 };
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, ignore_errors = true)]
+#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true)]
 struct Args {
     /// Current working directory
     #[clap(long, value_parser)]
@@ -25,7 +26,15 @@ extern "C" {
     pub fn nativeRunWithArgs(argc: c_int, argv: *mut *mut c_char) -> c_int;
 }
 
-fn run_turbo(args: Vec<String>) -> Result<i32> {
+/// Runs the turbo in the current binary
+///
+/// # Arguments
+///
+/// * `args`: Arguments for turbo
+///
+/// returns: Result<i32, Error>
+///
+fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     let mut args = args
         .into_iter()
         .map(|s| {
@@ -111,19 +120,27 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
 ///
 fn try_run_local_turbo(current_dir: PathBuf) -> Result<i32> {
     let package_json_path = find_config_file_in_ancestor_path(current_dir, "package.json")
-        .ok_or_else(|| anyhow!("No package.json found in ancestor path"))?;
+        .ok_or_else(|| anyhow!("No package.json found in ancestor path."))?;
     let local_turbo_path = find_local_turbo_path(&package_json_path)?
-        .ok_or_else(|| anyhow!("No local turbo installation found in package.json"))?;
+        .ok_or_else(|| anyhow!("No local turbo installation found in package.json."))?;
 
     let args = env::args().skip(1).collect::<Vec<_>>();
     if !local_turbo_path.try_exists()? {
-        return Err(anyhow!("No local turbo installation found in node_modules"));
+        return Err(anyhow!(
+            "No local turbo installation found in node_modules."
+        ));
+    }
+
+    if local_turbo_path == current_exe()? {
+        return Err(anyhow!(
+            "Local turbo is current turbo. Running current turbo."
+        ));
     }
 
     let output = Command::new(local_turbo_path)
         .args(&args)
         .output()
-        .expect("Failed to execute turbo");
+        .expect("Failed to execute turbo.");
 
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
@@ -140,6 +157,7 @@ struct PackageJson {
 
 fn main() -> Result<()> {
     let clap_args = Args::parse();
+
     let current_dir = if let Some(cwd) = clap_args.cwd {
         cwd.into()
     } else {
@@ -148,7 +166,7 @@ fn main() -> Result<()> {
 
     let exit_code = try_run_local_turbo(current_dir).unwrap_or_else(|_| {
         let args = env::args().skip(1).collect();
-        match run_turbo(args) {
+        match run_current_turbo(args) {
             Ok(exit_code) => exit_code,
             Err(e) => {
                 println!("failed {:?}", e);
