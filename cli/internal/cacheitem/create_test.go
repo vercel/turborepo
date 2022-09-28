@@ -58,6 +58,7 @@ func TestCreate(t *testing.T) {
 	tests := []struct {
 		name        string
 		files       []createFileDefinition
+		wantDarwin  string
 		wantUnix    string
 		wantWindows string
 		wantErr     error
@@ -70,6 +71,7 @@ func TestCreate(t *testing.T) {
 					FileMode: 0 | 0644,
 				},
 			},
+			wantDarwin:  "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
 			wantUnix:    "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
 			wantWindows: "37a271d277c299cfe130ccfdb98af6e5909ade7a640a126d1495a57af1b1aed0676eedd2f0c918a9dfc04145051f52c783e7e6c0eb9aaa32af8238b47aed16bf",
 		},
@@ -96,6 +98,7 @@ func TestCreate(t *testing.T) {
 					FileMode: 0 | 0644,
 				},
 			},
+			wantDarwin:  "3ef6504edc2865b89afe7aa07c181425c79a7f4193786792bc56a58c70cfc9cf4b8486f8af868c58894ba05ea2133893ad6a0de5d1f488cd0c5ad2ca8fc96204",
 			wantUnix:    "3ef6504edc2865b89afe7aa07c181425c79a7f4193786792bc56a58c70cfc9cf4b8486f8af868c58894ba05ea2133893ad6a0de5d1f488cd0c5ad2ca8fc96204",
 			wantWindows: "59201a55277cf9182d3513110eae0391c3881e441fcb9ec7a22d4d1e7e4c640568b29fa1ece502791ab15a1415a21e861a36c5b93c9544d675e71f0d3a613909",
 		},
@@ -112,8 +115,22 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			// These are the same because the privileges for directories by default end up being 0755 on both.
+			wantDarwin:  "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
 			wantUnix:    "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
 			wantWindows: "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
+		},
+		{
+			name: "symlink permissions",
+			files: []createFileDefinition{
+				{
+					Path:     turbopath.AnchoredSystemPath("one"),
+					Linkname: "two",
+					FileMode: 0 | os.ModeSymlink | 0644,
+				},
+			},
+			wantDarwin:  "70bcf2ca3437520f4283797a93311bde0b8b8e13abd03bd7409eead9c1526a84306ca57d8a10a8027ffa64c53a134ceaddda664df87bdbeded3c05a1e98d8688",
+			wantUnix:    "c07abb37f1bcf96e1edf5e1c45d58186475d1451eb0cc0fb906a7cef013800d5005855be1998da067c67a6f8a27c7187d7eeafd2a50ad93f8088d9f44e2202e7",
+			wantWindows: "59201a55277cf9182d3513110eae0391c3881e441fcb9ec7a22d4d1e7e4c640568b29fa1ece502791ab15a1415a21e861a36c5b93c9544d675e71f0d3a613909",
 		},
 		{
 			name: "unsupported types error",
@@ -161,9 +178,12 @@ func TestCreate(t *testing.T) {
 			assert.NilError(t, openedCacheItemErr, "Cache Open")
 			snapshotTwo := hex.EncodeToString(openedCacheItem.GetSha())
 
-			if runtime.GOOS == "windows" {
+			switch runtime.GOOS {
+			case "darwin":
+				assert.Equal(t, snapshot, tt.wantDarwin, "Got expected hash.")
+			case "windows":
 				assert.Equal(t, snapshot, tt.wantWindows, "Got expected hash.")
-			} else {
+			default:
 				assert.Equal(t, snapshot, tt.wantUnix, "Got expected hash.")
 			}
 			assert.Equal(t, snapshot, snapshotTwo, "Reopened snapshot matches.")
