@@ -85,7 +85,9 @@ func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFil
 	fileInfo, err := os.Lstat(fullName.ToString())
 	assert.NilError(t, err, "Lstat")
 
-	assert.Equal(t, fileInfo.Mode()&fs.ModePerm, diskFile.FileMode&fs.ModePerm, "File has the expected permissions.")
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, fileInfo.Mode()&fs.ModePerm, diskFile.FileMode&fs.ModePerm, "File has the expected permissions: "+processedName)
+	}
 	assert.Equal(t, fileInfo.Mode()|fs.ModePerm, diskFile.FileMode|fs.ModePerm, "File has the expected mode.")
 
 	if diskFile.FileMode&os.ModeSymlink != 0 {
