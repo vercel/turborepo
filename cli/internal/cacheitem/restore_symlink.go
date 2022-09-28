@@ -67,9 +67,16 @@ func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *ta
 	}
 
 	// Create the symlink.
-	symlinkErr := os.Symlink(header.Linkname, processedName.RestoreAnchor(anchor).ToString())
+	symlinkFrom := processedName.RestoreAnchor(anchor)
+	symlinkErr := symlinkFrom.Symlink(header.Linkname)
 	if symlinkErr != nil {
 		return "", symlinkErr
+	}
+
+	// Darwin allows you to change the permissions of a symlink.
+	lchmodErr := symlinkFrom.Lchmod(fs.FileMode(header.Mode))
+	if lchmodErr != nil {
+		return "", lchmodErr
 	}
 
 	return processedName, nil
