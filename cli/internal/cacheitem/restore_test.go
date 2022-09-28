@@ -126,6 +126,7 @@ func TestOpen(t *testing.T) {
 					Header: &tar.Header{
 						Name:     "target",
 						Typeflag: tar.TypeReg,
+						Mode:     0644,
 					},
 					Body: "target",
 				},
@@ -147,7 +148,7 @@ func TestOpen(t *testing.T) {
 					},
 					{
 						Name:     "target",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 				},
 			},
@@ -169,6 +170,7 @@ func TestOpen(t *testing.T) {
 					Header: &tar.Header{
 						Name:     "folder/file",
 						Typeflag: tar.TypeReg,
+						Mode:     0644,
 					},
 					Body: "file",
 				},
@@ -181,7 +183,7 @@ func TestOpen(t *testing.T) {
 					},
 					{
 						Name:     "folder/file",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 				},
 			},
@@ -211,6 +213,7 @@ func TestOpen(t *testing.T) {
 					Header: &tar.Header{
 						Name:     "folder/symlink/folder-sibling",
 						Typeflag: tar.TypeReg,
+						Mode:     0644,
 					},
 					Body: "folder-sibling",
 				},
@@ -228,11 +231,11 @@ func TestOpen(t *testing.T) {
 					},
 					{
 						Name:     "folder/symlink/folder-sibling",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 					{
 						Name:     "folder-sibling",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 				},
 				windows: []restoreFile{
@@ -247,11 +250,11 @@ func TestOpen(t *testing.T) {
 					},
 					{
 						Name:     "folder/symlink/folder-sibling",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 					{
 						Name:     "folder-sibling",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 				},
 			},
@@ -514,6 +517,7 @@ func TestOpen(t *testing.T) {
 					Header: &tar.Header{
 						Name:     "escape/file",
 						Typeflag: tar.TypeReg,
+						Mode:     0644,
 					},
 					Body: "file",
 				},
@@ -549,6 +553,7 @@ func TestOpen(t *testing.T) {
 					Header: &tar.Header{
 						Name:     "../escape",
 						Typeflag: tar.TypeReg,
+						Mode:     0644,
 					},
 					Body: "file",
 				},
@@ -571,6 +576,7 @@ func TestOpen(t *testing.T) {
 					Header: &tar.Header{
 						Name:     "back\\slash\\file",
 						Typeflag: tar.TypeReg,
+						Mode:     0644,
 					},
 					Body: "file",
 				},
@@ -579,7 +585,7 @@ func TestOpen(t *testing.T) {
 				unix: []restoreFile{
 					{
 						Name:     "back\\slash\\file",
-						FileMode: 0,
+						FileMode: 0644,
 					},
 				},
 				windows: []restoreFile{},
