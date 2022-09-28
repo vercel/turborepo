@@ -40,6 +40,7 @@ importers:
       globby: 11.1.0
       ngraph.generators: ^19.3.0
       shelljs: ^0.8.4
+      tar: 6.1.11
       uvu: ^0.5.3
     devDependencies:
       copy-template-dir: 1.4.0
@@ -51,6 +52,7 @@ importers:
       globby: 11.1.0
       ngraph.generators: 19.3.1
       shelljs: 0.8.5
+      tar: 6.1.11
       uvu: 0.5.6
 
   docs:
@@ -2612,6 +2614,11 @@ packages:
       fsevents: 2.3.2
     dev: true
 
+  /chownr/2.0.0:
+    resolution: {integrity: sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ==}
+    engines: {node: '>=10'}
+    dev: true
+
   /ci-info/3.4.0:
     resolution: {integrity: sha512-t5QdPT5jq3o262DOQ8zA6E1tlH2upmUc4Hlvrbx1pGYJuiiHl7O7rvVNI+l8HTVhd/q3Qc9vqimkNk5yiXsAug==}
     dev: true
@@ -4378,6 +4385,13 @@ packages:
       graceful-fs: 4.2.10
       jsonfile: 6.1.0
       universalify: 2.0.0
+    dev: true
+
+  /fs-minipass/2.1.0:
+    resolution: {integrity: sha512-V/JgOLFCS+R6Vcq0slCuaeWEdNC3ouDlJMNIsacH2VtALiu9mV4LPrHc5cDl8k5aw6J8jwgWWpiTo5RYhmIzvg==}
+    engines: {node: '>= 8'}
+    dependencies:
+      minipass: 3.3.4
     dev: true
 
   /fs.realpath/1.0.0:
@@ -6710,6 +6724,21 @@ packages:
   /minimist/1.2.6:
     resolution: {integrity: sha512-Jsjnk4bw3YJqYzbdyBiNsPWHPfO++UGG749Cxs6peCu5Xg4nrena6OVxOYxrQTqww0Jmwt+Ref8rggumkTLz9Q==}
 
+  /minipass/3.3.4:
+    resolution: {integrity: sha512-I9WPbWHCGu8W+6k1ZiGpPu0GkoKBeorkfKNuAFBNS1HNFJvke82sxvI5bzcCNpWPorkOO5QQ+zomzzwRxejXiw==}
+    engines: {node: '>=8'}
+    dependencies:
+      yallist: 4.0.0
+    dev: true
+
+  /minizlib/2.1.2:
+    resolution: {integrity: sha512-bAxsR8BVfj60DWXHE3u30oHzfl4G7khkSuPW+qvpd7jFRHm7dLxOjUk1EHACJ/hxLY8phGJ0YhYHZo7jil7Qdg==}
+    engines: {node: '>= 8'}
+    dependencies:
+      minipass: 3.3.4
+      yallist: 4.0.0
+    dev: true
+
   /mixin-deep/1.3.2:
     resolution: {integrity: sha512-WRoDn//mXBiJ1H40rqa3vH0toePwSsGb45iInWlTySa+Uu4k3tYUSxa2v1KqAiLtvlrSzaExqS1gtk96A9zvEA==}
     engines: {node: '>=0.10.0'}
@@ -6723,6 +6752,12 @@ packages:
     hasBin: true
     dependencies:
       minimist: 1.2.6
+
+  /mkdirp/1.0.4:
+    resolution: {integrity: sha512-vVqVZQyf3WLx2Shd0qJ9xuvqgAyKPLAiqITEtqW0oIUjzo3PePDd6fW9iFz30ef7Ysp/oiWqbhszeGWW2T6Gzw==}
+    engines: {node: '>=10'}
+    hasBin: true
+    dev: true
 
   /mri/1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -8499,6 +8534,18 @@ packages:
       resolve: 1.22.1
     transitivePeerDependencies:
       - ts-node
+    dev: true
+
+  /tar/6.1.11:
+    resolution: {integrity: sha512-an/KZQzQUkZCkuoAA64hM92X0Urb6VpRhAFllDzz44U2mcD5scmT3zBc4VgVpkugF580+DQn8eAFSyoQt0tznA==}
+    engines: {node: '>= 10'}
+    dependencies:
+      chownr: 2.0.0
+      fs-minipass: 2.1.0
+      minipass: 3.3.4
+      minizlib: 2.1.2
+      mkdirp: 1.0.4
+      yallist: 4.0.0
     dev: true
 
   /terminal-link/2.1.1:
