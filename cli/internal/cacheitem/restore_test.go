@@ -85,9 +85,7 @@ func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFil
 	fileInfo, err := os.Lstat(fullName.ToString())
 	assert.NilError(t, err, "Lstat")
 
-	if runtime.GOOS != "windows" {
-		assert.Equal(t, fileInfo.Mode()&fs.ModePerm, diskFile.FileMode&fs.ModePerm, "File has the expected permissions: "+processedName)
-	}
+	assert.Equal(t, fileInfo.Mode()&fs.ModePerm, diskFile.FileMode&fs.ModePerm, "File has the expected permissions: "+processedName)
 	assert.Equal(t, fileInfo.Mode()|fs.ModePerm, diskFile.FileMode|fs.ModePerm, "File has the expected mode.")
 
 	if diskFile.FileMode&os.ModeSymlink != 0 {
@@ -151,6 +149,17 @@ func TestOpen(t *testing.T) {
 						FileMode: 0644,
 					},
 				},
+				windows: []restoreFile{
+					{
+						Name:     "source",
+						Linkname: "target",
+						FileMode: 0 | os.ModeSymlink | 0666,
+					},
+					{
+						Name:     "target",
+						FileMode: 0666,
+					},
+				},
 			},
 			wantOutput: wantOutput{
 				unix: turbopath.AnchoredUnixPathArray{"target", "source"}.ToSystemPathArray(),
@@ -184,6 +193,16 @@ func TestOpen(t *testing.T) {
 					{
 						Name:     "folder/file",
 						FileMode: 0644,
+					},
+				},
+				windows: []restoreFile{
+					{
+						Name:     "folder",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "folder/file",
+						FileMode: 0666,
 					},
 				},
 			},
@@ -241,20 +260,20 @@ func TestOpen(t *testing.T) {
 				windows: []restoreFile{
 					{
 						Name:     "folder",
-						FileMode: 0 | os.ModeDir | 0755,
+						FileMode: 0 | os.ModeDir | 0777,
 					},
 					{
 						Name:     "folder/symlink",
-						FileMode: 0 | os.ModeSymlink | 0777,
+						FileMode: 0 | os.ModeSymlink | 0666,
 						Linkname: "..\\",
 					},
 					{
 						Name:     "folder/symlink/folder-sibling",
-						FileMode: 0644,
+						FileMode: 0666,
 					},
 					{
 						Name:     "folder-sibling",
-						FileMode: 0644,
+						FileMode: 0666,
 					},
 				},
 			},
@@ -320,6 +339,27 @@ func TestOpen(t *testing.T) {
 						FileMode: 0 | 0755,
 					},
 				},
+				windows: []restoreFile{
+					{
+						Name:     "one",
+						Linkname: "two",
+						FileMode: 0 | os.ModeSymlink | 0666,
+					},
+					{
+						Name:     "two",
+						Linkname: "three",
+						FileMode: 0 | os.ModeSymlink | 0666,
+					},
+					{
+						Name:     "three",
+						Linkname: "real",
+						FileMode: 0 | os.ModeSymlink | 0666,
+					},
+					{
+						Name:     "real",
+						FileMode: 0 | 0666,
+					},
+				},
 			},
 			wantOutput: wantOutput{
 				unix: turbopath.AnchoredUnixPathArray{"real", "three", "two", "one"}.ToSystemPathArray(),
@@ -361,6 +401,16 @@ func TestOpen(t *testing.T) {
 					{
 						Name:     "folder-not-file/subfile",
 						FileMode: 0755,
+					},
+				},
+				windows: []restoreFile{
+					{
+						Name:     "folder-not-file",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "folder-not-file/subfile",
+						FileMode: 0666,
 					},
 				},
 			},
@@ -497,6 +547,17 @@ func TestOpen(t *testing.T) {
 						FileMode: 0755,
 					},
 				},
+				windows: []restoreFile{
+					{
+						Name:     "one",
+						Linkname: "real",
+						FileMode: 0 | os.ModeSymlink | 0666,
+					},
+					{
+						Name:     "real",
+						FileMode: 0666,
+					},
+				},
 			},
 			wantOutput: wantOutput{
 				unix: turbopath.AnchoredUnixPathArray{"real", "one"}.ToSystemPathArray(),
@@ -534,7 +595,7 @@ func TestOpen(t *testing.T) {
 					{
 						Name:     "escape",
 						Linkname: "..\\",
-						FileMode: 0 | os.ModeSymlink | 0777,
+						FileMode: 0 | os.ModeSymlink | 0666,
 					},
 				},
 			},
