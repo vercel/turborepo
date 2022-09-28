@@ -445,4 +445,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://n8n.io",
     pinned: true,
   },
+  {
+    caption: "React Flow",
+    image: "/images/logos/reactflow.svg",
+    infoLink: "https://reactflow.dev",
+    pinned: true,
+  },
 ];
