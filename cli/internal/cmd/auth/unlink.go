@@ -18,7 +18,7 @@ func UnlinkCmd(helper *cmdutil.Helper) *cobra.Command {
 				return err
 			}
 			if err := base.RepoConfig.Delete(); err != nil {
-				base.LogError("could not unlink. Something went wrong: %w", true, err)
+				base.LogError("could not unlink. Something went wrong: %w", err)
 				return err
 			}
 

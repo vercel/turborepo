@@ -20,7 +20,7 @@ func BinCmd(helper *cmdutil.Helper) *cobra.Command {
 			}
 			path, err := os.Executable()
 			if err != nil {
-				base.LogError("could not get path to turbo binary: %w", true, err)
+				base.LogError("could not get path to turbo binary: %w", err)
 				return err
 			}
 
