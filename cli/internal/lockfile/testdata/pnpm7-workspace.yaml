@@ -39,7 +39,7 @@ importers:
       next: 12.2.5_ir3quccc6i62x6qn6jjhyjjiey
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      ui: link:../../packages/ui
+      ui: file:packages/ui
       underscore: 1.13.4_3pbfs36izefyn2uycmknwkvuuy
     devDependencies:
       '@babel/core': 7.19.1
@@ -50,6 +50,9 @@ importers:
       next-transpile-modules: 9.0.0
       tsconfig: link:../../packages/tsconfig
       typescript: 4.8.3
+    dependenciesMeta:
+      ui:
+        injected: true
 
   apps/web:
     specifiers:
@@ -2444,3 +2447,9 @@ packages:
 
   /yallist/4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
+
+  file:packages/ui:
+    resolution: {directory: packages/ui, type: directory}
+    name: ui
+    version: 0.0.0
+    dev: false
