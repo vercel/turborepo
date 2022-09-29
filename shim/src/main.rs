@@ -1,3 +1,6 @@
+mod package_manager;
+mod paths;
+
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use serde::Deserialize;
