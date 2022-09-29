@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"reflect"
-	"sync"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
@@ -33,7 +32,6 @@ type CacheItem struct {
 	Anchor turbopath.AbsoluteSystemPath
 
 	// For creation.
-	once   sync.Once
 	sha    hash.Hash
 	tw     *tar.Writer
 	gzw    *gzip.Writer

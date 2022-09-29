@@ -19,36 +19,31 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 		return nil, err
 	}
 
-	return &CacheItem{
+	result := &CacheItem{
 		Path:   path,
 		handle: handle,
-	}, nil
+	}
+
+	result.init()
+	return result, nil
 }
 
 // init prepares the CacheItem for writing.
 // Wires all the writers end-to-end:
 // tar.Writer -> gzip.Writer -> io.MultiWriter -> (file & sha)
 func (ci *CacheItem) init() {
-	ci.once.Do(func() {
-		sha := sha512.New()
-		mw := io.MultiWriter(sha, ci.handle)
-		gzw := gzip.NewWriter(mw)
-		tw := tar.NewWriter(gzw)
+	sha := sha512.New()
+	mw := io.MultiWriter(sha, ci.handle)
+	gzw := gzip.NewWriter(mw)
+	tw := tar.NewWriter(gzw)
 
-		ci.tw = tw
-		ci.gzw = gzw
-		ci.sha = sha
-	})
+	ci.tw = tw
+	ci.gzw = gzw
+	ci.sha = sha
 }
 
 // AddFile adds a user-cached item to the tar.
-func (ci *CacheItem) AddFile(anchor turbopath.AbsoluteSystemPath, path turbopath.AnchoredSystemPath) error {
-	ci.init()
-	return ci.addFile(anchor, path)
-}
-
-// addFile is the actual interface to the tar file.
-func (ci *CacheItem) addFile(fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
+func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
 	// Calculate the fully-qualified path to the file to read it.
 	sourcePath := filePath.RestoreAnchor(fsAnchor)
 
