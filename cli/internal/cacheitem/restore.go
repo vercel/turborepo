@@ -124,18 +124,25 @@ func checkName(name string) (bool, bool) {
 	wellFormed := true
 	windowsSafe := true
 
+	// Name is:
+	// - "."
+	// - ".."
+	if wellFormed && (name == "." || name == "..") {
+		wellFormed = false
+	}
+
 	// Name starts with:
 	// - `/`
 	// - `./`
 	// - `../`
-	if strings.HasPrefix(name, "/") || strings.HasPrefix(name, "./") || strings.HasPrefix(name, "../") {
+	if wellFormed && (strings.HasPrefix(name, "/") || strings.HasPrefix(name, "./") || strings.HasPrefix(name, "../")) {
 		wellFormed = false
 	}
 
 	// Name ends in:
 	// - `/.`
 	// - `/..`
-	if strings.HasSuffix(name, "/.") || strings.HasSuffix(name, "/..") {
+	if wellFormed && (strings.HasSuffix(name, "/.") || strings.HasSuffix(name, "/..")) {
 		wellFormed = false
 	}
 
@@ -143,7 +150,7 @@ func checkName(name string) (bool, bool) {
 	// - `//`
 	// - `/./`
 	// - `/../`
-	if strings.Contains(name, "//") || strings.Contains(name, "/./") || strings.Contains(name, "/../") {
+	if wellFormed && (strings.Contains(name, "//") || strings.Contains(name, "/./") || strings.Contains(name, "/../")) {
 		wellFormed = false
 	}
 

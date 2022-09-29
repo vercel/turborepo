@@ -741,6 +741,16 @@ func Test_checkName(t *testing.T) {
 		},
 		// Bad prefix
 		{
+			path:        ".",
+			wellFormed:  false,
+			windowsSafe: true,
+		},
+		{
+			path:        "..",
+			wellFormed:  false,
+			windowsSafe: true,
+		},
+		{
 			path:        "/",
 			wellFormed:  false,
 			windowsSafe: true,
