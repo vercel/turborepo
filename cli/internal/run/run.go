@@ -740,9 +740,9 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 
 	useHTTPCache := !rs.Opts.cacheOpts.SkipRemote
 	if useHTTPCache {
-		r.logInfo("• Remote computation caching enabled")
+		r.logInfo("• Remote caching enabled")
 	} else {
-		r.logInfo("• Remote computation caching disabled")
+		r.logInfo("• Remote caching disabled")
 	}
 
 	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
