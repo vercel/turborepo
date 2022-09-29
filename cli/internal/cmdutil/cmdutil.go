@@ -236,5 +236,5 @@ func (b *CmdBase) LogWarning(prefix string, err error) {
 // LogInfo logs an message and outputs it to the UI.
 func (b *CmdBase) LogInfo(msg string) {
 	b.Logger.Info(msg)
-	b.UI.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.WhiteString(" %v", msg)))
+	b.UI.Info(fmt.Sprintf("%s%s", ui.InfoPrefix, color.WhiteString(" %v", msg)))
 }

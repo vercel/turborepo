@@ -24,7 +24,9 @@ var gray = color.New(color.Faint)
 var bold = color.New(color.Bold)
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
-var INFO_PREFIX = color.New(color.Bold, color.FgWhite, color.ReverseVideo).Sprint(" INFO ")
+
+// InfoPrefix is a colored string for warning level log messages
+var InfoPrefix = color.New(color.Bold, color.FgWhite, color.ReverseVideo).Sprint(" INFO ")
 
 var ansiRegex = regexp.MustCompile(ansiEscapeStr)
 
