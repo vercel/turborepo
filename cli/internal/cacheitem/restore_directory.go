@@ -51,7 +51,7 @@ func safeMkdirAll(anchor turbopath.AbsoluteSystemPath, processedName turbopath.A
 	// on the Join of anchor and processedName.
 	//
 	// This could _still_ error, but we don't care.
-	return os.MkdirAll(processedName.RestoreAnchor(anchor).ToString(), os.FileMode(mode))
+	return processedName.RestoreAnchor(anchor).MkdirAll(os.FileMode(mode))
 }
 
 // checkPath ensures that the resolved path (if restoring symlinks).
@@ -65,7 +65,7 @@ func checkPath(originalAnchor turbopath.AbsoluteSystemPath, accumulatedAnchor tu
 
 	// Find out if this portion of the path is a symlink.
 	combinedPath := accumulatedAnchor.Join(segment)
-	fileInfo, err := os.Lstat(combinedPath.ToString())
+	fileInfo, err := combinedPath.Lstat()
 
 	// Getting an error here means we failed to stat the path.
 	// Assume that means we're safe and continue.
@@ -86,7 +86,7 @@ func checkPath(originalAnchor turbopath.AbsoluteSystemPath, accumulatedAnchor tu
 	// different place.
 
 	// 1. Get the target.
-	linkTarget, readLinkErr := os.Readlink(combinedPath.ToString())
+	linkTarget, readLinkErr := combinedPath.Readlink()
 	if readLinkErr != nil {
 		return "", readLinkErr
 	}
