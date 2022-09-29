@@ -149,8 +149,8 @@ func TestCreate(t *testing.T) {
 			archivePath := turbopath.AnchoredSystemPath("out.tar.gz").RestoreAnchor(archiveDir)
 
 			cacheItem, cacheCreateErr := Create(archivePath)
+			defer func() { assert.NilError(t, cacheItem.Close(), "Close") }()
 			assert.NilError(t, cacheCreateErr, "Cache Create")
-			defer func() { _ = cacheItem.Close() }()
 
 			for _, file := range tt.files {
 				createErr := createEntry(t, inputDir, file)
@@ -172,12 +172,17 @@ func TestCreate(t *testing.T) {
 			// We actually only need to compare the generated SHA.
 			// That ensures we got the same output. (Effectively snapshots.)
 			// This must be called after `Close` because both `tar` and `gzip` have footers.
-			snapshot := hex.EncodeToString(cacheItem.GetSha())
+			shaOne, shaOneErr := cacheItem.GetSha()
+			assert.NilError(t, shaOneErr, "GetSha")
+			snapshot := hex.EncodeToString(shaOne)
 
 			openedCacheItem, openedCacheItemErr := Open(archivePath)
+			defer func() { assert.NilError(t, openedCacheItem.Close(), "Close") }()
 			assert.NilError(t, openedCacheItemErr, "Cache Open")
-			snapshotTwo := hex.EncodeToString(openedCacheItem.GetSha())
-			defer func() { _ = openedCacheItem.Close() }()
+
+			shaTwo, shaTwoErr := openedCacheItem.GetSha()
+			snapshotTwo := hex.EncodeToString(shaTwo)
+			assert.NilError(t, shaTwoErr, "GetSha")
 
 			switch runtime.GOOS {
 			case "darwin":

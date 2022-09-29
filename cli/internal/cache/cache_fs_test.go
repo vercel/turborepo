@@ -86,7 +86,7 @@ func TestPut(t *testing.T) {
 	// Attempting to satisfy our beliefs that the change is viable with
 	// as few changes to the tests as possible.
 	cacheItem, openErr := cacheitem.Open(dst.UntypedJoin(hash + ".tar.gz"))
-	defer func() { _ = cacheItem.Close() }()
+	defer func() { assert.NilError(t, cacheItem.Close(), "Close") }()
 	assert.NilError(t, openErr, "Open")
 
 	_, restoreErr := cacheItem.Restore(dstCachePath)
