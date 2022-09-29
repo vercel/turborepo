@@ -220,3 +220,20 @@ func (b *CmdBase) LogError(format string, args ...interface{}) {
 	b.Logger.Error("error", err)
 	b.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
+
+// LogWarning logs an error and outputs it to the UI.
+func (b *CmdBase) LogWarning(prefix string, err error) {
+	b.Logger.Warn(prefix, "warning", err)
+
+	if prefix != "" {
+		prefix = " " + prefix + ": "
+	}
+
+	b.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
+}
+
+// LogInfo logs an message and outputs it to the UI.
+func (b *CmdBase) LogInfo(msg string) {
+	b.Logger.Info(msg)
+	b.UI.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.WhiteString(" %v", msg)))
+}

@@ -9,12 +9,11 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
+	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -93,8 +92,9 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 }
 
 // New creates a new cache
-func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, logger hclog.Logger, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	c, err := newSyncCache(opts, repoRoot, client, recorder, logger, onCacheRemoved)
+func New(opts Opts, base *cmdutil.CmdBase, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+
+	c, err := newSyncCache(opts, base, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, record
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, logger hclog.Logger, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, base *cmdutil.CmdBase, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
@@ -124,7 +124,7 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	cacheImplementations := make([]Cache, 0, 2)
 
 	if useFsCache {
-		implementation, err := newFsCache(opts, recorder, repoRoot)
+		implementation, err := newFsCache(opts, recorder, base.RepoRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -132,11 +132,11 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	}
 
 	if useHTTPCache {
-		logger.Info(ui.Dim("• Remote computation caching enabled"))
+		base.LogInfo("• Remote computation caching enabled")
 		implementation := newHTTPCache(opts, client, recorder)
 		cacheImplementations = append(cacheImplementations, implementation)
 	} else {
-		logger.Info(ui.Dim("• Remote computation caching disabled"))
+		base.LogInfo("• Remote computation caching disabled")
 	}
 
 	if useNoopCache {
