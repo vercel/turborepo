@@ -5,6 +5,7 @@ Setup
 Check
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
+   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache bypass, force executing c207d64157b1635a
   build: 
   build: > build
@@ -19,6 +20,7 @@ Check
 Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
+   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache bypass, force executing c207d64157b1635a
   build: 
   build: > build

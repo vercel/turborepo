@@ -5,6 +5,7 @@ Setup
 Check
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
+   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing e491d0044f4b9b90
   build: 
   build: > build
@@ -18,6 +19,7 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
+   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output e491d0044f4b9b90
   build: 
   build: > build

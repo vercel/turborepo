@@ -5,6 +5,7 @@ Setup
 Check
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
+   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing 6218abb18f5176f5
   build: 
   build: > build
@@ -23,6 +24,7 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
+   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output 6218abb18f5176f5
   build: 
   build: > build
