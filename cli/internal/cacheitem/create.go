@@ -19,13 +19,13 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 		return nil, err
 	}
 
-	result := &CacheItem{
+	cacheItem := &CacheItem{
 		Path:   path,
 		handle: handle,
 	}
 
-	result.init()
-	return result, nil
+	cacheItem.init()
+	return cacheItem, nil
 }
 
 // init prepares the CacheItem for writing.
@@ -44,6 +44,11 @@ func (ci *CacheItem) init() {
 
 // AddFile adds a user-cached item to the tar.
 func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
+	// Write after close detection.
+	if ci.err != nil {
+		return ci.err
+	}
+
 	// Calculate the fully-qualified path to the file to read it.
 	sourcePath := filePath.RestoreAnchor(fsAnchor)
 

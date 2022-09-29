@@ -688,8 +688,8 @@ func TestOpen(t *testing.T) {
 			anchor := generateAnchor(t)
 
 			archive, err := Open(archivePath)
+			defer func() { assert.NilError(t, archive.Close(), "Close") }()
 			assert.NilError(t, err, "Open")
-			defer func() { _ = archive.Close() }()
 
 			restoreOutput, restoreErr := archive.Restore(anchor)
 			var desiredErr error

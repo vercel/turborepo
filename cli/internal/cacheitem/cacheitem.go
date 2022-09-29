@@ -8,7 +8,6 @@ import (
 	"errors"
 	"hash"
 	"io"
-	"log"
 	"os"
 	"reflect"
 
@@ -22,6 +21,7 @@ var (
 	errNameMalformed        = errors.New("file name is malformed")
 	errNameWindowsUnsafe    = errors.New("file name is not Windows-safe")
 	errUnsupportedFileType  = errors.New("attempted to restore unsupported file type")
+	errWriteAfterClose      = errors.New("write after close")
 )
 
 // CacheItem is a `tar` utility with a little bit extra.
@@ -36,10 +36,20 @@ type CacheItem struct {
 	tw     *tar.Writer
 	gzw    *gzip.Writer
 	handle *os.File
+
+	// sticky error.
+	err error
 }
 
 // Close any open pipes
 func (ci *CacheItem) Close() error {
+	if ci.err == errWriteAfterClose {
+		return nil
+	}
+	if ci.err != nil {
+		return ci.err
+	}
+
 	// Close from the beginning of the pipe to the end.
 	closers := []io.Closer{ci.tw, ci.gzw, ci.handle}
 
@@ -53,22 +63,25 @@ func (ci *CacheItem) Close() error {
 		}
 	}
 
+	// Pencils down. No more writing.
+	ci.err = errWriteAfterClose
+
 	return nil
 }
 
 // GetSha returns the SHA-512 hash for the CacheItem.
-func (ci *CacheItem) GetSha() []byte {
+func (ci *CacheItem) GetSha() ([]byte, error) {
 	if ci.sha != nil {
-		return ci.sha.Sum(nil)
+		return ci.sha.Sum(nil), nil
 	}
 
 	sha := sha512.New()
 	if _, err := io.Copy(sha, ci.handle); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Don't mutate the sha until it will return the correct value.
 	ci.sha = sha
 
-	return ci.sha.Sum(nil)
+	return ci.sha.Sum(nil), nil
 }
