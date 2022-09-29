@@ -72,7 +72,7 @@ func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *ta
 
 	// Windows:
 	// - This converts `/` into `\`.
-	// - There is no way to create a link target to something non-existent.
+	// - There is no way to create a link target to a non-existent directory.
 	symlinkErr := symlinkFrom.Symlink(header.Linkname)
 	if symlinkErr != nil {
 		return "", symlinkErr
