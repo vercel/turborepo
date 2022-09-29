@@ -186,6 +186,19 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 		return nil, err
 	}
 
+	for _, importer := range importers {
+		for dependency, meta := range importer.DependenciesMeta {
+			if meta.Injected {
+				resolution, ok := importer.Dependencies[dependency]
+				entry, entryOk := p.Packages[resolution]
+				if !ok || !entryOk {
+					return nil, fmt.Errorf("Unable to find package entry for %s in original lockfile", resolution)
+				}
+				lockfilePackages[resolution] = entry
+			}
+		}
+	}
+
 	lockfile := PnpmLockfile{
 		Version:                   p.Version,
 		Importers:                 importers,
