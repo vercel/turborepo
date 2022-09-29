@@ -1,3 +1,18 @@
+# ♦️How to run KOSMO-FRONTEND:
+Make sure:
+- node version >= 16
+- npm version >= 8
+Do:
+- `sudo npm install —legacy-peer-deps`
+- Might need to Ctrl + p > Developer: Reload Window to get rid of errors on vscode
+- In root, `npm run dev` which actually run `npx turbo run dev --filter=kosmo-frontend`
+
+What changed:
+- name in kosmo-frontend package.json, changed to “kosmo-frontend”
+- add const withTM = require("next-transpile-modules")(["ui"]); to next.config.js
+- add dependencies in kosmo-frontend package.json ( “ui”: “*”)
+
+
 # Turborepo Docker starter
 
 This is an official Docker starter Turborepo.
