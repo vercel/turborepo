@@ -127,8 +127,8 @@ func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
 }
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (p *PnpmLockfile) ResolvePackage(name string, version string) (string, string, bool) {
-	resolvedVersion, ok := p.resolveSpecifier(name, version)
+func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (string, string, bool) {
+	resolvedVersion, ok := p.resolveSpecifier(workspacePath, name, version)
 	if !ok {
 		return "", "", false
 	}
@@ -255,30 +255,38 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 	return patches
 }
 
-func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, bool) {
+func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool) {
 	// Check if the specifier is already a resolved version
 	_, ok := p.Packages[formatPnpmKey(name, specifier)]
 	if ok {
 		return specifier, true
 	}
-	for workspacePkg, importer := range p.Importers {
-		for pkgName, pkgSpecifier := range importer.Specifiers {
-			if name == pkgName && specifier == pkgSpecifier {
-				if resolvedVersion, ok := importer.Dependencies[name]; ok {
-					return resolvedVersion, true
-				}
-				if resolvedVersion, ok := importer.DevDependencies[name]; ok {
-					return resolvedVersion, true
-				}
-				if resolvedVersion, ok := importer.OptionalDependencies[name]; ok {
-					return resolvedVersion, true
-				}
-
-				panic(fmt.Sprintf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePkg))
-			}
-		}
+	pnpmWorkspacePath := workspacePath.ToString()
+	if pnpmWorkspacePath == "" {
+		// For pnpm, the root is named "."
+		pnpmWorkspacePath = "."
 	}
-	return "", false
+	importer, ok := p.Importers[pnpmWorkspacePath]
+	if !ok {
+		panic(fmt.Sprintf("resolving dependency for unknown workspace at %v", workspacePath))
+	}
+	foundSpecifier, ok := importer.Specifiers[name]
+	if !ok {
+		return "", false
+	}
+	if foundSpecifier != specifier {
+		return "", false
+	}
+	if resolvedVersion, ok := importer.Dependencies[name]; ok {
+		return resolvedVersion, true
+	}
+	if resolvedVersion, ok := importer.DevDependencies[name]; ok {
+		return resolvedVersion, true
+	}
+	if resolvedVersion, ok := importer.OptionalDependencies[name]; ok {
+		return resolvedVersion, true
+	}
+	panic(fmt.Sprintf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath))
 }
 
 func formatPnpmKey(name string, version string) string {

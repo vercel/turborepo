@@ -2,12 +2,10 @@ package packagemanager
 
 import (
 	"fmt"
-	"io/ioutil"
 
 	"github.com/Masterminds/semver"
 	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"gopkg.in/yaml.v3"
 )
 
 // Pnpm6Workspaces is a representation of workspace package globs found
@@ -26,33 +24,9 @@ var nodejsPnpm6 = PackageManager{
 	ArgSeparator:               []string{"--"},
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
-	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
-		bytes, err := ioutil.ReadFile(rootpath.UntypedJoin("pnpm-workspace.yaml").ToStringDuringMigration())
-		if err != nil {
-			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
-		}
-		var pnpmWorkspaces PnpmWorkspaces
-		if err := yaml.Unmarshal(bytes, &pnpmWorkspaces); err != nil {
-			return nil, fmt.Errorf("pnpm-workspace.yaml: %w", err)
-		}
+	getWorkspaceGlobs: getPnpmWorkspaceGlobs,
 
-		if len(pnpmWorkspaces.Packages) == 0 {
-			return nil, fmt.Errorf("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml")
-		}
-
-		return pnpmWorkspaces.Packages, nil
-	},
-
-	getWorkspaceIgnores: func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
-		// Matches upstream values:
-		// function: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L27
-		// key code: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L30
-		// call site: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-workspace-packages/src/index.ts#L32-L39
-		return []string{
-			"**/node_modules/**",
-			"**/bower_components/**",
-		}, nil
-	},
+	getWorkspaceIgnores: getPnpmWorkspaceIgnores,
 
 	Matches: func(manager string, version string) (bool, error) {
 		if manager != "pnpm" {

@@ -23,7 +23,7 @@ func getBerryLockfile(t *testing.T, filename string) *BerryLockfile {
 func Test_DecodingBerryLockfile(t *testing.T) {
 	lockfile := getBerryLockfile(t, "berry.lock")
 	assert.Equal(t, lockfile.version, 6)
-	assert.Equal(t, lockfile.cacheKey, 8)
+	assert.Equal(t, lockfile.cacheKey, "8c0")
 }
 
 func Test_ResolvePackage(t *testing.T) {
@@ -67,7 +67,7 @@ func Test_ResolvePackage(t *testing.T) {
 	}
 
 	for testName, testCase := range cases {
-		key, version, found := lockfile.ResolvePackage(testCase.name, testCase.semver)
+		key, version, found := lockfile.ResolvePackage("some-pkg", testCase.name, testCase.semver)
 		if testCase.found {
 			assert.Equal(t, key, testCase.key, testName)
 			assert.Equal(t, version, testCase.version, testName)
@@ -79,13 +79,13 @@ func Test_ResolvePackage(t *testing.T) {
 func Test_AllDependencies(t *testing.T) {
 	lockfile := getBerryLockfile(t, "berry.lock")
 
-	key, _, found := lockfile.ResolvePackage("react-dom", "18.2.0")
+	key, _, found := lockfile.ResolvePackage("some-pkg", "react-dom", "18.2.0")
 	assert.Assert(t, found, "expected to find react-dom")
 	deps, found := lockfile.AllDependencies(key)
 	assert.Assert(t, found, "expected lockfile key for react-dom to be present")
 	assert.Equal(t, len(deps), 3, "expected to find all react-dom direct dependencies")
 	for pkgName, version := range deps {
-		_, _, found := lockfile.ResolvePackage(pkgName, version)
+		_, _, found := lockfile.ResolvePackage("some-pkg", pkgName, version)
 		assert.Assert(t, found, "expected to find lockfile entry for %s@%s", pkgName, version)
 	}
 }
@@ -123,7 +123,7 @@ func Test_PackageExtensions(t *testing.T) {
 func Test_StringifyMetadata(t *testing.T) {
 	metadata := BerryLockfileEntry{
 		Version:  "6",
-		CacheKey: 8,
+		CacheKey: "8c0",
 	}
 	lockfile := map[string]*BerryLockfileEntry{"__metadata": &metadata}
 
@@ -133,7 +133,7 @@ func Test_StringifyMetadata(t *testing.T) {
 	assert.Equal(t, b.String(), `
 __metadata:
   version: 6
-  cacheKey: 8
+  cacheKey: 8c0
 `)
 }
 

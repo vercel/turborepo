@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
+	"github.com/vercel/turborepo/cli/internal/tarpatch"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
@@ -108,7 +109,7 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.Anc
 			return err
 		}
 	}
-	hdr, err := tar.FileInfoHeader(info, filepath.ToSlash(target))
+	hdr, err := tarpatch.FileInfoHeader(repoRelativePath.ToUnixPath(), info, filepath.ToSlash(target))
 	if err != nil {
 		return err
 	}
