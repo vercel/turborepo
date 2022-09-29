@@ -93,7 +93,6 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 
 // New creates a new cache
 func New(opts Opts, base *cmdutil.CmdBase, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-
 	c, err := newSyncCache(opts, base, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
