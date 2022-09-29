@@ -93,6 +93,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
 	var opts *Opts
 	var flags *pflag.FlagSet
+
 	cmd := &cobra.Command{
 		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
 		Short:                 "Run tasks across projects in your monorepo",
@@ -119,6 +120,7 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			return nil
 		},
 	}
+
 	flags = cmd.Flags()
 	opts = optsFromFlags(flags)
 	return cmd
@@ -200,7 +202,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	} else if !r.opts.runOpts.noDaemon {
 		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
-			r.logWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
 		} else {
 			defer func() { _ = turbodClient.Close() }()
 			r.base.Logger.Debug("running in daemon mode")
@@ -221,7 +223,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot.ToStringDuringMigration())
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
-			r.logWarning("", err)
+			r.base.LogWarning("", err)
 		} else {
 			return errors.Wrap(err, "failed to create SCM")
 		}
@@ -699,17 +701,6 @@ func getDefaultOptions() *Opts {
 	}
 }
 
-// logError logs an error and outputs it to the UI.
-func (r *run) logWarning(prefix string, err error) {
-	r.base.Logger.Warn(prefix, "warning", err)
-
-	if prefix != "" {
-		prefix = " " + prefix + ": "
-	}
-
-	r.base.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
-}
-
 func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	apiClient := r.base.APIClient
 	var analyticsSink analytics.Sink
@@ -727,12 +718,13 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	apiClient := r.base.APIClient
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
+
 	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
 		once.Do(func() {
-			r.logWarning("Remote Caching is unavailable", err)
+			r.base.LogWarning("Remote Caching is unavailable", err)
 		})
 	})
 }
@@ -741,10 +733,17 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 
+	useHTTPCache := !rs.Opts.cacheOpts.SkipRemote
+	if useHTTPCache {
+		r.base.LogInfo("• Remote caching enabled")
+	} else {
+		r.base.LogInfo("• Remote caching disabled")
+	}
+
 	turboCache, err := r.initCache(ctx, rs, analyticsClient)
 	if err != nil {
 		if errors.Is(err, cache.ErrNoCachesEnabled) {
-			r.logWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+			r.base.LogWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
 		} else {
 			return errors.Wrap(err, "failed to set up caching")
 		}
@@ -856,7 +855,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 
 	if err != nil {
 		if errors.Is(err, cache.ErrNoCachesEnabled) {
-			r.logWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
+			r.base.LogWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
 		} else {
 			return nil, errors.Wrap(err, "failed to set up caching")
 		}
