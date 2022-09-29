@@ -33,10 +33,10 @@ type restoreFile struct {
 // to make sure that we respond well in these scenarios during restore attempts.
 func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	t.Helper()
-	testDir := t.TempDir()
-	testArchivePath := filepath.Join(testDir, "out.tar.gz")
+	testDir := turbopath.AbsoluteSystemPath(t.TempDir())
+	testArchivePath := testDir.UntypedJoin("out.tar.gz")
 
-	handle, handleCreateErr := os.Create(testArchivePath)
+	handle, handleCreateErr := testArchivePath.Create()
 	assert.NilError(t, handleCreateErr, "os.Create")
 
 	gzw := gzip.NewWriter(handle)
@@ -63,18 +63,18 @@ func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	handleCloseErr := handle.Close()
 	assert.NilError(t, handleCloseErr, "handle.Close")
 
-	return turbopath.AbsoluteSystemPath(testArchivePath)
+	return testArchivePath
 }
 
 func generateAnchor(t *testing.T) turbopath.AbsoluteSystemPath {
 	t.Helper()
-	testDir := t.TempDir()
-	anchorPoint := filepath.Join(testDir, "anchor")
+	testDir := turbopath.AbsoluteSystemPath(t.TempDir())
+	anchorPoint := testDir.UntypedJoin("anchor")
 
-	mkdirErr := os.Mkdir(anchorPoint, 0777)
+	mkdirErr := anchorPoint.Mkdir(0777)
 	assert.NilError(t, mkdirErr, "Mkdir")
 
-	return turbopath.AbsoluteSystemPath(anchorPoint)
+	return anchorPoint
 }
 
 func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFile restoreFile) {
@@ -82,14 +82,14 @@ func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFil
 	// If we have gotten here we can assume this to be true.
 	processedName := turbopath.AnchoredSystemPath(diskFile.Name)
 	fullName := processedName.RestoreAnchor(anchor)
-	fileInfo, err := os.Lstat(fullName.ToString())
+	fileInfo, err := fullName.Lstat()
 	assert.NilError(t, err, "Lstat")
 
 	assert.Equal(t, fileInfo.Mode()&fs.ModePerm, diskFile.FileMode&fs.ModePerm, "File has the expected permissions: "+processedName)
 	assert.Equal(t, fileInfo.Mode()|fs.ModePerm, diskFile.FileMode|fs.ModePerm, "File has the expected mode.")
 
 	if diskFile.FileMode&os.ModeSymlink != 0 {
-		linkname, err := os.Readlink(fullName.ToString())
+		linkname, err := fullName.Readlink()
 		assert.NilError(t, err, "Readlink")
 
 		// We restore Linkname verbatim.

@@ -14,7 +14,7 @@ import (
 
 // Create makes a new CacheItem at the specified path.
 func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
-	handle, err := os.Create(path.ToString())
+	handle, err := path.Create()
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (ci *CacheItem) addFile(fsAnchor turbopath.AbsoluteSystemPath, filePath tur
 	sourcePath := filePath.RestoreAnchor(fsAnchor)
 
 	// We grab the FileInfo which tar.FileInfoHeader accepts.
-	fileInfo, lstatErr := os.Lstat(sourcePath.ToString())
+	fileInfo, lstatErr := sourcePath.Lstat()
 	if lstatErr != nil {
 		return lstatErr
 	}
@@ -61,7 +61,7 @@ func (ci *CacheItem) addFile(fsAnchor turbopath.AbsoluteSystemPath, filePath tur
 	// Determine if we need to populate the additional link argument to tar.FileInfoHeader.
 	var link string
 	if fileInfo.Mode()&os.ModeSymlink != 0 {
-		linkTarget, readlinkErr := os.Readlink(sourcePath.ToString())
+		linkTarget, readlinkErr := sourcePath.Readlink()
 		if readlinkErr != nil {
 			return readlinkErr
 		}

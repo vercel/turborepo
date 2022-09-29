@@ -51,6 +51,11 @@ func (p AbsoluteSystemPath) Dir() AbsoluteSystemPath {
 	return AbsoluteSystemPath(filepath.Dir(p.ToString()))
 }
 
+// Mkdir implements os.Mkdir(p, perm)
+func (p AbsoluteSystemPath) Mkdir(perm os.FileMode) error {
+	return os.Mkdir(p.ToString(), perm)
+}
+
 // MkdirAll implements os.MkdirAll(p, perm)
 func (p AbsoluteSystemPath) MkdirAll(perm os.FileMode) error {
 	return os.MkdirAll(p.ToString(), perm)

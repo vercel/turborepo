@@ -25,7 +25,7 @@ func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	}
 
 	// Create the file.
-	if f, err := os.OpenFile(processedName.RestoreAnchor(anchor).ToString(), os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(header.Mode)); err != nil {
+	if f, err := processedName.RestoreAnchor(anchor).OpenFile(os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(header.Mode)); err != nil {
 		return "", err
 	} else if _, err := io.Copy(f, reader); err != nil {
 		return "", err
