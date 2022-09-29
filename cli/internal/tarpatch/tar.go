@@ -2,6 +2,7 @@
 // Copyright Docker, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package tarpatch addresses an issue with stdlib throwing an error in some environments.
 package tarpatch
 
 import (
