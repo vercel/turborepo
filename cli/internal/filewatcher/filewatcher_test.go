@@ -83,13 +83,13 @@ func TestFileWatching(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
 	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
-	err := repoRoot.UntypedJoin(".git").MkdirAll()
+	err := repoRoot.UntypedJoin(".git").MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
-	err = repoRoot.UntypedJoin("node_modules", "some-dep").MkdirAll()
+	err = repoRoot.UntypedJoin("node_modules", "some-dep").MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
-	err = repoRoot.UntypedJoin("parent", "child").MkdirAll()
+	err = repoRoot.UntypedJoin("parent", "child").MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
-	err = repoRoot.UntypedJoin("parent", "sibling").MkdirAll()
+	err = repoRoot.UntypedJoin("parent", "sibling").MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
 
 	// Directory layout:
@@ -130,7 +130,7 @@ func TestFileWatching(t *testing.T) {
 	})
 
 	deepPath := repoRoot.UntypedJoin("parent", "sibling", "deep", "path")
-	err = deepPath.MkdirAll()
+	err = deepPath.MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
 	// We'll catch an event for "deep", but not "deep/path" since
 	// we don't have a recursive watch

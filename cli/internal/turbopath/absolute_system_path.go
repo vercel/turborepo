@@ -51,9 +51,9 @@ func (p AbsoluteSystemPath) Dir() AbsoluteSystemPath {
 	return AbsoluteSystemPath(filepath.Dir(p.ToString()))
 }
 
-// MkdirAll implements os.MkdirAll(p, DirPermissions|0755)
-func (p AbsoluteSystemPath) MkdirAll() error {
-	return os.MkdirAll(p.ToString(), _dirPermissions|0755)
+// MkdirAll implements os.MkdirAll(p, perm)
+func (p AbsoluteSystemPath) MkdirAll(perm os.FileMode) error {
+	return os.MkdirAll(p.ToString(), perm)
 }
 
 // Open implements os.Open(p) for an AbsoluteSystemPath

@@ -32,7 +32,7 @@ func TestPut(t *testing.T) {
 
 	src := turbopath.AbsoluteSystemPath(t.TempDir())
 	childDir := src.UntypedJoin("child")
-	err := childDir.MkdirAll()
+	err := childDir.MkdirAll(0775)
 	assert.NilError(t, err, "Mkdir")
 	aPath := childDir.UntypedJoin("a")
 	aFile, err := aPath.Create()
@@ -158,11 +158,11 @@ func TestFetch(t *testing.T) {
 	cacheDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	hash := "the-hash"
 	src := cacheDir.UntypedJoin(hash, "some-package")
-	err := src.MkdirAll()
+	err := src.MkdirAll(0775)
 	assert.NilError(t, err, "mkdirAll")
 
 	childDir := src.UntypedJoin("child")
-	err = childDir.MkdirAll()
+	err = childDir.MkdirAll(0775)
 	assert.NilError(t, err, "Mkdir")
 	aPath := childDir.UntypedJoin("a")
 	aFile, err := aPath.Create()
