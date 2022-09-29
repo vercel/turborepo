@@ -147,8 +147,12 @@ func NewHelper(turboVersion string) *Helper {
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
 func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
+	// terminal is for color/no-color output
 	terminal := h.getUI(flags)
+
+	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
+
 	if err != nil {
 		return nil, err
 	}

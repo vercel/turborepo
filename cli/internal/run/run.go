@@ -93,6 +93,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
 	var opts *Opts
 	var flags *pflag.FlagSet
+
 	cmd := &cobra.Command{
 		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
 		Short:                 "Run tasks across projects in your monorepo",
@@ -119,6 +120,7 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			return nil
 		},
 	}
+
 	flags = cmd.Flags()
 	opts = optsFromFlags(flags)
 	return cmd
@@ -727,7 +729,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	apiClient := r.base.APIClient
 	// Theoretically this is overkill, but bias towards not spamming the console
 	once := &sync.Once{}
-	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
+	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, r.base.UI, func(_cache cache.Cache, err error) {
 		// Currently the HTTP Cache is the only one that can be disabled.
 		// With a cache system refactor, we might consider giving names to the caches so
 		// we can accurately report them here.
