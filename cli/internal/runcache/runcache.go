@@ -306,7 +306,10 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.UntypedJoin(pt.RepoRelativeLogFile())
 	hashableOutputs := pt.HashableOutputs()
-	repoRelativeGlobs := fs.TaskOutputs{}
+	repoRelativeGlobs := fs.TaskOutputs{
+		Inclusions: make([]string, len(hashableOutputs.Inclusions)),
+		Exclusions: make([]string, len(hashableOutputs.Exclusions)),
+	}
 
 	for index, output := range hashableOutputs.Inclusions {
 		repoRelativeGlobs.Inclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
