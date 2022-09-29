@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -197,17 +198,19 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return err
 	}
-	if ui.IsCI && !r.opts.runOpts.noDaemon {
-		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
-	} else if !r.opts.runOpts.noDaemon {
-		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
-		if err != nil {
-			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
-		} else {
-			defer func() { _ = turbodClient.Close() }()
-			r.base.Logger.Debug("running in daemon mode")
-			daemonClient := daemonclient.New(turbodClient)
-			r.opts.runcacheOpts.OutputWatcher = daemonClient
+	if runtime.GOOS != "windows" {
+		if ui.IsCI && !r.opts.runOpts.noDaemon {
+			r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+		} else if !r.opts.runOpts.noDaemon {
+			turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
+			if err != nil {
+				r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+			} else {
+				defer func() { _ = turbodClient.Close() }()
+				r.base.Logger.Debug("running in daemon mode")
+				daemonClient := daemonclient.New(turbodClient)
+				r.opts.runcacheOpts.OutputWatcher = daemonClient
+			}
 		}
 	}
 
