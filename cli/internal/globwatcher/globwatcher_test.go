@@ -132,6 +132,71 @@ func TestTrackOutputs(t *testing.T) {
 	assert.DeepEqual(t, globs.Inclusions, changed)
 }
 
+func TestTrackMultipleHashes(t *testing.T) {
+	logger := hclog.Default()
+
+	repoRootRaw := t.TempDir()
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(repoRootRaw)
+
+	setup(t, repoRoot)
+
+	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
+
+	globs := fs.TaskOutputs{
+		Inclusions: []string{
+			"my-pkg/dist/**",
+			"my-pkg/.next/**",
+		},
+	}
+
+	hash := "the-hash"
+	err := globWatcher.WatchGlobs(hash, globs)
+	assert.NilError(t, err, "WatchGlobs")
+
+	secondGlobs := fs.TaskOutputs{
+		Inclusions: []string{
+			"my-pkg/.next/**",
+		},
+		Exclusions: []string{"my-pkg/.next/cache/**"},
+	}
+
+	secondHash := "the-second-hash"
+	err = globWatcher.WatchGlobs(secondHash, secondGlobs)
+	assert.NilError(t, err, "WatchGlobs")
+
+	changed, err := globWatcher.GetChangedGlobs(hash, globs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	changed, err = globWatcher.GetChangedGlobs(secondHash, secondGlobs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	// Make a change that is excluded in one of the hashes but not in the other
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "cache", "foo"),
+	})
+
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 1, len(changed), "Expected one changed path remaining")
+
+	changed, err = globWatcher.GetChangedGlobs(secondHash, secondGlobs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	assert.Equal(t, 1, len(globWatcher.globStatus["my-pkg/.next/**"]), "Expected to be still watching `my-pkg/.next/**`")
+
+	// Make a change for secondHash
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "bar"),
+	})
+
+	assert.Equal(t, 0, len(globWatcher.globStatus["my-pkg/.next/**"]), "Expected to be no longer watching `my-pkg/.next/**`")
+}
+
 func TestWatchSingleFile(t *testing.T) {
 	logger := hclog.Default()
 

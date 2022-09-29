@@ -151,10 +151,6 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 		// So, we can delete this glob from every hash tracking it as well as stop watching this glob.
 		// To stop watching, we unref each of the directories corresponding to this glob.
 		if matches {
-			// We need to check if at least one hash invalidates this glob. If that is true,
-			// we remove the glob from globStatus.
-			globInvalidatedByHash := false
-
 			for hashUntyped := range hashStatus {
 				hash := hashUntyped.(string)
 				hashGlobs, ok := g.hashGlobs[hash]
@@ -177,8 +173,6 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 						isExcluded = true
 						break
 					}
-
-					globInvalidatedByHash = true
 				}
 
 				// If we have excluded this path, then we skip it
@@ -186,17 +180,19 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 					continue
 				}
 
+				// We delete hash from the globStatus entry
+				g.globStatus[glob].Delete(hash)
+
+				// If we've deleted the last hash for a glob in globStatus, delete the whole glob entry
+				if len(g.globStatus[glob]) == 0 {
+					delete(g.globStatus, glob)
+				}
+
 				hashGlobs.Inclusions.Delete(glob)
 				// If we've deleted the last glob for a hash, delete the whole hash entry
 				if hashGlobs.Inclusions.Len() == 0 {
 					delete(g.hashGlobs, hash)
 				}
-			}
-
-			// If at least one hash did not exclude this glob, and therefore invalidated it,
-			// we remove it from globStatus
-			if globInvalidatedByHash {
-				delete(g.globStatus, glob)
 			}
 		}
 	}
