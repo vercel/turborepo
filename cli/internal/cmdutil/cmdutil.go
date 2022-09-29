@@ -190,6 +190,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 		h.TurboVersion,
 		h.clientOpts,
 	)
+
 	return &CmdBase{
 		UI:           terminal,
 		Logger:       logger,
@@ -215,25 +216,32 @@ type CmdBase struct {
 }
 
 // LogError prints an error to the UI
-func (b *CmdBase) LogError(format string, args ...interface{}) {
+func (b *CmdBase) LogError(format string, shouldPrintToTerminal bool, args ...interface{}) {
 	err := fmt.Errorf(format, args...)
 	b.Logger.Error("error", err)
-	b.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+
+	if shouldPrintToTerminal {
+		b.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+	}
 }
 
 // LogWarning logs an error and outputs it to the UI.
-func (b *CmdBase) LogWarning(prefix string, err error) {
+func (b *CmdBase) LogWarning(prefix string, err error, shouldPrintToTerminal bool) {
 	b.Logger.Warn(prefix, "warning", err)
 
 	if prefix != "" {
 		prefix = " " + prefix + ": "
 	}
 
-	b.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
+	if shouldPrintToTerminal {
+		b.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
+	}
 }
 
 // LogInfo logs an message and outputs it to the UI.
-func (b *CmdBase) LogInfo(msg string) {
+func (b *CmdBase) LogInfo(msg string, shouldPrintToTerminal bool) {
 	b.Logger.Info(msg)
-	b.UI.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.WhiteString(" %v", msg)))
+	if shouldPrintToTerminal {
+		b.UI.Info(fmt.Sprintf("%s%s", ui.INFO_PREFIX, color.WhiteString(" %v", msg)))
+	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
@@ -92,8 +91,8 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 }
 
 // New creates a new cache
-func New(opts Opts, base *cmdutil.CmdBase, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
-	c, err := newSyncCache(opts, base, client, recorder, onCacheRemoved)
+func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+	c, err := newSyncCache(opts, repoRoot, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
 	}
@@ -104,7 +103,7 @@ func New(opts Opts, base *cmdutil.CmdBase, client client, recorder analytics.Rec
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, base *cmdutil.CmdBase, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
@@ -123,7 +122,7 @@ func newSyncCache(opts Opts, base *cmdutil.CmdBase, client client, recorder anal
 	cacheImplementations := make([]Cache, 0, 2)
 
 	if useFsCache {
-		implementation, err := newFsCache(opts, recorder, base.RepoRoot)
+		implementation, err := newFsCache(opts, recorder, repoRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -131,11 +130,8 @@ func newSyncCache(opts Opts, base *cmdutil.CmdBase, client client, recorder anal
 	}
 
 	if useHTTPCache {
-		base.LogInfo("• Remote computation caching enabled")
 		implementation := newHTTPCache(opts, client, recorder)
 		cacheImplementations = append(cacheImplementations, implementation)
-	} else {
-		base.LogInfo("• Remote computation caching disabled")
 	}
 
 	if useNoopCache {

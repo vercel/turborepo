@@ -51,7 +51,7 @@ func NewLoginCommand(helper *cmdutil.Helper) *cobra.Command {
 					} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
 						base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
 					} else {
-						base.LogError("SSO login failed: %v", err)
+						base.LogError("SSO login failed: %v", true, err)
 					}
 					return err
 				}
@@ -61,7 +61,7 @@ func NewLoginCommand(helper *cmdutil.Helper) *cobra.Command {
 					if errors.Is(err, context.Canceled) {
 						base.UI.Info("Canceled. Turborepo not set up.")
 					} else {
-						base.LogError("login failed: %v", err)
+						base.LogError("login failed: %v", true, err)
 					}
 					return err
 				}

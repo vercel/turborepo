@@ -53,7 +53,7 @@ func GetCmd(helper *cmdutil.Helper) *cobra.Command {
 			}
 			if opts.scope == "" {
 				err := errors.New("at least one target must be specified")
-				base.LogError(err.Error())
+				base.LogError(err.Error(), true)
 				return err
 			}
 			p := &prune{

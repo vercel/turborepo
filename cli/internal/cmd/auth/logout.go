@@ -20,7 +20,7 @@ func LogoutCmd(helper *cmdutil.Helper) *cobra.Command {
 				return err
 			}
 			if err := base.UserConfig.Delete(); err != nil && !os.IsNotExist(err) {
-				base.LogError("could not logout. Something went wrong: %w", err)
+				base.LogError("could not logout. Something went wrong: %w", true, err)
 				return err
 			}
 
