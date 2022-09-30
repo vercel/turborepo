@@ -116,8 +116,8 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // ResolvePackages translates specified flags to a set of entry point packages for
 // the selected tasks. Returns the selected packages and whether or not the selected
 // packages represents a default "all packages".
-func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
-	inferenceBase, err := calculateInference(cwd, opts.PackageInferenceRoot, ctx.PackageInfos)
+func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
+	inferenceBase, err := calculateInference(repoRoot, opts.PackageInferenceRoot, ctx.PackageInfos)
 	if err != nil {
 		return nil, false, err
 	}
@@ -147,16 +147,19 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 	return filteredPkgs, isAllPackages, nil
 }
 
-func calculateInference(rawRepoRoot string, rawPkgInferenceDir string, packageInfos map[interface{}]*fs.PackageJSON) (*scope_filter.PackageInference, error) {
+func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos map[interface{}]*fs.PackageJSON) (*scope_filter.PackageInference, error) {
 	if rawPkgInferenceDir == "" {
 		// No inference specified, no need to calculate anything
 		return nil, nil
 	}
-	repoRoot := turbopath.AbsoluteSystemPathFromUpstream(rawRepoRoot)
-	pkgInferencePath := fs.ResolveUnknownPath(repoRoot, rawPkgInferenceDir)
+	pkgInferencePath, err := turbopath.CheckedToRelativeSystemPath(rawPkgInferenceDir)
+	if err != nil {
+		return nil, err
+	}
+	fullInferencePath := repoRoot.Join(pkgInferencePath)
 	for _, pkgInfo := range packageInfos {
 		pkgPath := pkgInfo.Dir.RestoreAnchor(repoRoot)
-		inferredPathIsBelow, err := pkgPath.ContainsPath(pkgInferencePath)
+		inferredPathIsBelow, err := pkgPath.ContainsPath(fullInferencePath)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +172,7 @@ func calculateInference(rawRepoRoot string, rawPkgInferenceDir string, packageIn
 				DirectoryRoot: pkgInferencePath,
 			}, nil
 		}
-		inferredPathIsBetweenRootAndPkg, err := pkgInferencePath.ContainsPath(pkgPath)
+		inferredPathIsBetweenRootAndPkg, err := fullInferencePath.ContainsPath(pkgPath)
 		if err != nil {
 			return nil, err
 		}

@@ -2,7 +2,6 @@ package filter
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -32,7 +31,7 @@ type PackageInference struct {
 	// identified a specific package. If the filter already contains a parentDir, this acts as
 	// a prefix. If the filter does not contain a parentDir, we consider this to be a glob for
 	// all subdirectories
-	DirectoryRoot turbopath.AbsoluteSystemPath
+	DirectoryRoot turbopath.RelativeSystemPath
 }
 
 type Resolver struct {
@@ -48,7 +47,7 @@ type Resolver struct {
 func (r *Resolver) GetPackagesFromPatterns(patterns []string) (util.Set, error) {
 	selectors := []*TargetSelector{}
 	for _, pattern := range patterns {
-		selector, err := ParseTargetSelector(pattern, r.Cwd)
+		selector, err := ParseTargetSelector(pattern)
 		if err != nil {
 			return nil, err
 		}
@@ -70,12 +69,12 @@ func (pi *PackageInference) apply(selector *TargetSelector) error {
 		selector.namePattern = pi.PackageName
 	}
 	if selector.parentDir != "" {
-		parentDir := pi.DirectoryRoot.UntypedJoin(selector.parentDir).ToStringDuringMigration()
+		parentDir := pi.DirectoryRoot.Join(selector.parentDir)
 		selector.parentDir = parentDir
 	} else if pi.PackageName == "" {
 		// The user didn't set a parent directory and we didn't find a single package,
 		// so use the directory we inferred and select all subdirectories
-		selector.parentDir = pi.DirectoryRoot.UntypedJoin("**").ToStringDuringMigration()
+		selector.parentDir = pi.DirectoryRoot.Join("**")
 	}
 	return nil
 }
@@ -265,14 +264,14 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 				if pkgName == util.RootPkgName {
 					// The root package changed, only add it if
 					// the parentDir is equivalent to the root
-					if matches, err := doublestar.PathMatch(parentDir, r.Cwd); err != nil {
+					if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), r.Cwd.ToString()); err != nil {
 						return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", parentDir, r.Cwd, err)
 					} else if matches {
 						entryPackages.Add(pkgName)
 					}
 				} else if pkg, ok := r.WorkspaceInfos[pkgNameStr]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
-				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
+				} else if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
 					entryPackages.Add(pkgName)
@@ -285,11 +284,11 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		// get packages by path
 		selectorWasUsed = true
 		parentDir := selector.parentDir
-		if parentDir == r.Cwd {
+		if parentDir == "." {
 			entryPackages.Add(util.RootPkgName)
 		} else {
-			for name, pkg := range r.WorkspaceInfos {
-				if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
+			for name, pkg := range r.PackageInfos {
+				if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
 					entryPackages.Add(name)
@@ -331,15 +330,12 @@ func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Se
 		return nil, err
 	}
 
-	parentDir := ""
-	if selector.parentDir != "" {
-		parentDir = filepath.Join(r.Cwd, selector.parentDir)
-	}
+	parentDir := selector.parentDir
 	entryPackages := make(util.Set)
 	for name, pkg := range r.WorkspaceInfos {
 		if parentDir == "" {
 			entryPackages.Add(name)
-		} else if matches, err := doublestar.PathMatch(parentDir, pkg.Dir.ToStringDuringMigration()); err != nil {
+		} else if matches, err := doublestar.PathMatch(parentDir.ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 			return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 		} else if matches {
 			entryPackages.Add(name)
