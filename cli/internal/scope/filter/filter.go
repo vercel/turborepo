@@ -84,23 +84,17 @@ func (r *Resolver) applyInference(selectors []*TargetSelector) ([]*TargetSelecto
 	if r.Inference == nil {
 		return selectors, nil
 	}
-	results := make([]*TargetSelector, len(selectors))
-	for i, selector := range selectors {
-		if err := r.Inference.apply(selector); err != nil {
-			return nil, err
-		}
-		results[i] = selector
-	}
 	// If there are existing patterns, use inference on those. If there are no
 	// patterns, but there is a directory supplied, synthesize a selector
-	if len(results) == 0 {
-		selector := &TargetSelector{}
+	if len(selectors) == 0 {
+		selectors = append(selectors, &TargetSelector{})
+	}
+	for _, selector := range selectors {
 		if err := r.Inference.apply(selector); err != nil {
 			return nil, err
 		}
-		results = append(results, selector)
 	}
-	return results, nil
+	return selectors, nil
 }
 
 func (r *Resolver) getFilteredPackages(selectors []*TargetSelector) (*SelectedPackages, error) {
