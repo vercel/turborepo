@@ -193,6 +193,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 		terminal.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		logger.Debug("log file", "path", tc.LogFileName)
+		terminal.Output(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
 		if tc.LogFileName.FileExists() {
 			// The task label is baked into the log file, so we need to grab the underlying Ui
 			// instance in order to not duplicate it
@@ -224,9 +225,8 @@ func (fwc *fileWriterCloser) Close() error {
 	return fwc.file.Close()
 }
 
-// OutputWriter creates a sink suitable for handling the output of the command associated
-// with this task.
-func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
+// OutputWriter creates a sink suitable for handling the output of the command associated with this task.
+func (tc TaskCache) OutputWriter() (io.WriteCloser, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{os.Stdout}, nil
 	}
@@ -238,15 +238,9 @@ func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	prettyTaskPrefix := colorPrefixer(outputPrefix)
+
 	bufWriter := bufio.NewWriter(output)
-	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))); err != nil {
-		// We've already errored, we don't care if there's a further error closing the file we just
-		// failed to write to.
-		_ = output.Close()
-		return nil, err
-	}
+
 	fwc := &fileWriterCloser{
 		file:  output,
 		bufio: bufWriter,

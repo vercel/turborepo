@@ -1043,7 +1043,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(outputPrefix)
+	writer, err := taskCache.OutputWriter()
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		ec.logError(targetLogger, prettyTaskPrefix, err)
