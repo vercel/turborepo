@@ -27,23 +27,6 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	CGO_ENABLED=$(USE_CGO) go build $(GO_FLAGS) ./cmd/turbo
 
-turbo_amd64.exe: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 \
-	CC=/Users/greg/testbed/mmm/llvm-mingw-20220906-ucrt-macos-universal/bin/aarch64-w64-mingw32-gcc \
-	CXX=/Users/greg/testbed/mmm/llvm-mingw-20220906-ucrt-macos-universal/bin/aarch64-w64-mingw32-g++ \
-	GOOS=windows \
-	GOARCH=amd64 \
-	GOAMD64=v1 \
-	go build $(GO_FLAGS) -o turbo_amd64.exe ./cmd/turbo
-
-turbo_arm64.exe: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 \
-	CC=/Users/greg/testbed/mmm/llvm-mingw-20220906-ucrt-macos-universal/bin/aarch64-w64-mingw32-gcc \
-	CXX=/Users/greg/testbed/mmm/llvm-mingw-20220906-ucrt-macos-universal/bin/aarch64-w64-mingw32-g++ \
-	GOOS=windows \
-	GOARCH=arm64 \
-	go build $(GO_FLAGS) -o turbo_arm64.exe ./cmd/turbo
-
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
