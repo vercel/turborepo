@@ -66,21 +66,27 @@ func (p AbsoluteSystemPath) OpenFile(flags int, mode os.FileMode) (*os.File, err
 	return os.OpenFile(p.ToString(), flags, mode)
 }
 
-// FileExists returns true if the given path exists and is a file.
-func (p AbsoluteSystemPath) FileExists() bool {
-	info, err := os.Lstat(p.ToString())
-	return err == nil && !info.IsDir()
-}
-
 // Lstat implements os.Lstat for absolute path
 func (p AbsoluteSystemPath) Lstat() (os.FileInfo, error) {
 	return os.Lstat(p.ToString())
 }
 
-// DirExists returns true if this path points to a directory
+// Exists returns true if the given path exists.
+func (p AbsoluteSystemPath) Exists() bool {
+	_, err := p.Lstat()
+	return err == nil
+}
+
+// DirExists returns true if the given path exists and is a directory.
 func (p AbsoluteSystemPath) DirExists() bool {
 	info, err := p.Lstat()
 	return err == nil && info.IsDir()
+}
+
+// FileExists returns true if the given path exists and is a file.
+func (p AbsoluteSystemPath) FileExists() bool {
+	info, err := os.Lstat(p.ToString())
+	return err == nil && !info.IsDir()
 }
 
 // ContainsPath returns true if this absolute path is a parent of the
@@ -122,6 +128,30 @@ func (p AbsoluteSystemPath) EnsureDir() error {
 		}
 	}
 	return err
+}
+
+// MkdirAllMode Create directory at path and all necessary parents ensuring that path has the correct mode set
+func (p AbsoluteSystemPath) MkdirAllMode(mode os.FileMode) error {
+	info, err := p.Lstat()
+	if err == nil {
+		if info.IsDir() && info.Mode() == mode {
+			// Dir exists with the correct mode
+			return nil
+		} else if info.IsDir() {
+			// Dir exists with incorrect mode
+			return os.Chmod(p.ToString(), mode)
+		} else {
+			// Path exists as file, remove it
+			if err := p.Remove(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := os.MkdirAll(p.ToString(), mode); err != nil {
+		return err
+	}
+	// This is necessary only when umask results in creating a directory with permissions different than the one passed by the user
+	return os.Chmod(p.ToString(), mode)
 }
 
 // Create is the AbsoluteSystemPath wrapper for os.Create

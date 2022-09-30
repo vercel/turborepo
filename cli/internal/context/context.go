@@ -34,21 +34,6 @@ type Context struct {
 	mutex sync.Mutex
 }
 
-// Option is used to configure context
-type Option func(*Context) error
-
-// New initializes run context
-func New(opts ...Option) (*Context, error) {
-	var m Context
-	for _, opt := range opts {
-		if err := opt(&m); err != nil {
-			return nil, err
-		}
-	}
-
-	return &m, nil
-}
-
 // Splits "npm:^1.2.3" and "github:foo/bar.git" into a protocol part and a version part.
 func parseDependencyProtocol(version string) (string, string) {
 	parts := strings.Split(version, ":")
@@ -116,75 +101,90 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 	return constraint.Check(pkgVersion)
 }
 
-// WithGraph attaches information about the package dependency graph to the Context instance being
-// constructed.
-func WithGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsoluteSystemPath) Option {
-	return func(c *Context) error {
-		rootpath := repoRoot.ToStringDuringMigration()
-		c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
-		c.RootNode = core.ROOT_NODE_NAME
-
-		if packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON); err != nil {
-			return err
-		} else {
-			c.PackageManager = packageManager
-		}
-
-		lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
-		if err != nil {
-			return err
-		}
-		c.Lockfile = lockfile
-
-		if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
-			// TODO(Gaspar) was this the intended return error?
-			return fmt.Errorf("could not resolve workspaces: %w", err)
-		}
-
-		// Get the workspaces from the package manager.
-		// workspaces are absolute paths
-		workspaces, err := c.PackageManager.GetWorkspaces(repoRoot)
-
-		if err != nil {
-			return fmt.Errorf("workspace configuration error: %w", err)
-		}
-
-		// We will parse all package.json's simultaneously. We use a
-		// wait group because we cannot fully populate the graph (the next step)
-		// until all parsing is complete
-		parseJSONWaitGroup := &errgroup.Group{}
-		for _, workspace := range workspaces {
-			pkgJSONPath := fs.UnsafeToAbsoluteSystemPath(workspace)
-			parseJSONWaitGroup.Go(func() error {
-				return c.parsePackageJSON(repoRoot, pkgJSONPath)
-			})
-		}
-
-		if err := parseJSONWaitGroup.Wait(); err != nil {
-			return err
-		}
-		populateGraphWaitGroup := &errgroup.Group{}
-		for _, pkg := range c.PackageInfos {
-			pkg := pkg
-			populateGraphWaitGroup.Go(func() error {
-				return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name)
-			})
-		}
-
-		if err := populateGraphWaitGroup.Wait(); err != nil {
-			return err
-		}
-		// Resolve dependencies for the root package. We override the vertexName in the graph
-		// for the root package, since it can have an arbitrary name. We need it to have our
-		// RootPkgName so that we can identify it as the root later on.
-		err = c.populateTopologicGraphForPackageJSON(rootPackageJSON, rootpath, util.RootPkgName)
-		if err != nil {
-			return fmt.Errorf("failed to resolve dependencies for root package: %v", err)
-		}
-		c.PackageInfos[util.RootPkgName] = rootPackageJSON
-
-		return nil
+// SinglePackageGraph constructs a Context instance from a single package.
+func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
+	packageInfos := make(map[interface{}]*fs.PackageJSON)
+	packageInfos[util.RootPkgName] = rootPackageJSON
+	c := &Context{
+		PackageInfos: packageInfos,
+		RootNode:     core.ROOT_NODE_NAME,
 	}
+	c.TopologicalGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
+	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	if err != nil {
+		return nil, err
+	}
+	c.PackageManager = packageManager
+	return c, nil
+}
+
+// BuildPackageGraph constructs a Context instance with information about the package dependency graph
+func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsoluteSystemPath) (*Context, error) {
+	c := &Context{}
+	rootpath := repoRoot.ToStringDuringMigration()
+	c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
+	c.RootNode = core.ROOT_NODE_NAME
+
+	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	if err != nil {
+		return nil, err
+	}
+	c.PackageManager = packageManager
+
+	lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	c.Lockfile = lockfile
+
+	if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
+		// TODO(Gaspar) was this the intended return error?
+		return nil, fmt.Errorf("could not resolve workspaces: %w", err)
+	}
+
+	// Get the workspaces from the package manager.
+	// workspaces are absolute paths
+	workspaces, err := c.PackageManager.GetWorkspaces(repoRoot)
+
+	if err != nil {
+		return nil, fmt.Errorf("workspace configuration error: %w", err)
+	}
+
+	// We will parse all package.json's simultaneously. We use a
+	// wait group because we cannot fully populate the graph (the next step)
+	// until all parsing is complete
+	parseJSONWaitGroup := &errgroup.Group{}
+	for _, workspace := range workspaces {
+		pkgJSONPath := fs.UnsafeToAbsoluteSystemPath(workspace)
+		parseJSONWaitGroup.Go(func() error {
+			return c.parsePackageJSON(repoRoot, pkgJSONPath)
+		})
+	}
+
+	if err := parseJSONWaitGroup.Wait(); err != nil {
+		return nil, err
+	}
+	populateGraphWaitGroup := &errgroup.Group{}
+	for _, pkg := range c.PackageInfos {
+		pkg := pkg
+		populateGraphWaitGroup.Go(func() error {
+			return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name)
+		})
+	}
+
+	if err := populateGraphWaitGroup.Wait(); err != nil {
+		return nil, err
+	}
+	// Resolve dependencies for the root package. We override the vertexName in the graph
+	// for the root package, since it can have an arbitrary name. We need it to have our
+	// RootPkgName so that we can identify it as the root later on.
+	err = c.populateTopologicGraphForPackageJSON(rootPackageJSON, rootpath, util.RootPkgName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
+	}
+	c.PackageInfos[util.RootPkgName] = rootPackageJSON
+
+	return c, nil
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
@@ -204,7 +204,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	}
 	if c.Lockfile != nil {
 		pkg.TransitiveDeps = []string{}
-		c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
+		c.resolveDepGraph(&lockfileWg, pkg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
 		lockfileWg.Wait()
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
 		for _, v := range depSet.ToSlice() {
@@ -277,7 +277,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 	pkg.TransitiveDeps = []string{}
 	seen := mapset.NewSet()
 	var lockfileWg sync.WaitGroup
-	c.resolveDepGraph(&lockfileWg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
+	c.resolveDepGraph(&lockfileWg, pkg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
 	lockfileWg.Wait()
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
@@ -325,7 +325,7 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	return nil
 }
 
-func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
+func (c *Context) resolveDepGraph(wg *sync.WaitGroup, workspace *fs.PackageJSON, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
 	if c.Lockfile == nil {
 		return
 	}
@@ -334,7 +334,7 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 		go func(directDepName, unresolvedVersion string) {
 			defer wg.Done()
 
-			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(directDepName, unresolvedVersion)
+			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(workspace.Dir.ToUnixPath(), directDepName, unresolvedVersion)
 			if seen.Contains(key) {
 				return
 			}
@@ -355,7 +355,7 @@ func (c *Context) resolveDepGraph(wg *sync.WaitGroup, unresolvedDirectDeps map[s
 			}
 
 			if len(allDeps) > 0 {
-				c.resolveDepGraph(wg, allDeps, resolvedDepsSet, seen, pkg)
+				c.resolveDepGraph(wg, workspace, allDeps, resolvedDepsSet, seen, pkg)
 			}
 		}(directDepName, unresolvedVersion)
 	}

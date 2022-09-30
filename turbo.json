@@ -26,13 +26,16 @@
     "schema": {
       "outputs": ["public/schema.json"]
     },
+    "rss": {
+      "outputs": ["public/feed.xml"]
+    },
     "create-turbo#test": {
       "dependsOn": ["create-turbo#build"],
       "outputs": []
     },
     "docs#build": {
       "outputs": [".next/**"],
-      "dependsOn": ["^build", "docs#schema"]
+      "dependsOn": ["^build", "docs#rss", "docs#schema"]
     },
     "cli#e2e": {
       "outputs": [],

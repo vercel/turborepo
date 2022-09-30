@@ -68,7 +68,7 @@ func getPidFile(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemP
 
 // logError logs an error and outputs it to the UI.
 func (d *daemon) logError(err error) {
-	d.logger.Error("error", err)
+	d.logger.Error(fmt.Sprintf("error %v", err))
 }
 
 // we're only appending, and we're creating the file if it doesn't exist.
@@ -102,7 +102,7 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			defer func() { _ = logFile.Close() }()
 			logger := hclog.New(&hclog.LoggerOptions{
 				Output: io.MultiWriter(logFile, os.Stdout),
-				Level:  hclog.Debug,
+				Level:  hclog.Info,
 				Color:  hclog.ColorOff,
 				Name:   "turbod",
 			})

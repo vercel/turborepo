@@ -213,7 +213,7 @@ func (l *link) run() error {
 
 // logError logs an error and outputs it to the UI.
 func (l *link) logError(err error) {
-	l.base.Logger.Error("error", err)
+	l.base.Logger.Error(fmt.Sprintf("error: %v", err))
 	l.base.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 
