@@ -990,7 +990,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	// Create a logger
 	colorPrefixer := e.colorCache.PrefixColor(packageTask.PackageName)
 	prettyTaskPrefix := colorPrefixer("%s: ", outputPrefix)
-	targetUi := &cli.PrefixedUi{
+	targetUI := &cli.PrefixedUi{
 		Ui:           e.ui,
 		OutputPrefix: prettyTaskPrefix,
 		InfoPrefix:   prettyTaskPrefix,
@@ -1017,9 +1017,9 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	}
 	// Cache ---------------------------------------------
 	taskCache := e.runCache.TaskCache(packageTask, hash)
-	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
+	hit, err := taskCache.RestoreOutputs(ctx, targetUI, targetLogger)
 	if err != nil {
-		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
+		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
 		return nil
@@ -1094,10 +1094,10 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 		tracer(TargetBuildFailed, err)
 		targetLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !e.rs.Opts.runOpts.continueOnError {
-			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			targetUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			e.processes.Close()
 		} else {
-			targetUi.Warn("command finished with error, but continuing...")
+			targetUI.Warn("command finished with error, but continuing...")
 		}
 		return err
 	}
@@ -1107,7 +1107,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	if err := closeOutputs(); err != nil {
 		e.logError(targetLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUI, int(duration.Milliseconds())); err != nil {
 			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
