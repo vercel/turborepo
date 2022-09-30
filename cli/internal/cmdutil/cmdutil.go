@@ -230,7 +230,7 @@ func (b *CmdBase) LogWarning(prefix string, err error) {
 		prefix = " " + prefix + ": "
 	}
 
-	b.UI.Error(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
+	b.UI.Warn(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 }
 
 // LogInfo logs an message and outputs it to the UI.
