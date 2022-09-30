@@ -1,16 +1,19 @@
-use crate::paths::AbsolutePath;
+use crate::paths::{AbsolutePath, GlobWalker};
 use anyhow::{anyhow, Result};
+use glob::Pattern;
 use serde::Deserialize;
 use std::fs;
+use std::path::{Path, PathBuf};
+use walkdir::DirEntry;
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspaces {
-    pub packages: Vec<String>,
+    pub packages: Vec<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
 struct PackageJsonWorkspaces {
-    pub workspaces: Vec<String>,
+    pub workspaces: Vec<PathBuf>,
 }
 
 enum PackageManager {
@@ -22,7 +25,7 @@ enum PackageManager {
 }
 
 impl PackageManager {
-    fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<String>> {
+    fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
@@ -46,15 +49,15 @@ impl PackageManager {
         }
     }
 
-    fn get_workspace_ignores(&self, root_path: &AbsolutePath) -> Result<Vec<String>> {
+    fn get_workspace_ignores(&self, root_path: &AbsolutePath) -> Result<Vec<Pattern>> {
         match self {
             PackageManager::Berry => {
                 // Matches upstream values:
                 // Key code: https://github.com/yarnpkg/berry/blob/8e0c4b897b0881878a1f901230ea49b7c8113fbe/packages/yarnpkg-core/sources/Workspace.ts#L64-L70
                 Ok(vec![
-                    "**/node_modules".to_string(),
-                    "**/.git".to_string(),
-                    "**/.yarn".to_string(),
+                    Pattern::new("**/node_modules")?,
+                    Pattern::new("**/.git")?,
+                    Pattern::new("**/.yarn")?,
                 ])
             }
             PackageManager::Npm => {
@@ -62,7 +65,7 @@ impl PackageManager {
                 // function: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L73
                 // key code: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L90-L96
                 // call site: https://github.com/npm/cli/blob/7a858277171813b37d46a032e49db44c8624f78f/lib/workspaces/get-workspaces.js#L14
-                Ok(vec!["**/node_modules/**".to_string()])
+                Ok(vec![Pattern::new("**/node_modules/**")?])
             }
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 // Matches upstream values:
@@ -70,8 +73,8 @@ impl PackageManager {
                 // key code: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L30
                 // call site: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-workspace-packages/src/index.ts#L32-L39
                 Ok(vec![
-                    "**/node_modules/**".to_string(),
-                    "**/bower_components/**".to_string(),
+                    Pattern::new("**/node_modules/**")?,
+                    Pattern::new("**/bower_components/**")?,
                 ])
             }
             PackageManager::Yarn => {
@@ -84,16 +87,73 @@ impl PackageManager {
 
                 let globs = self.get_workspace_globs(root_path)?;
 
-                Ok(globs
+                globs
                     .into_iter()
                     .map(|path| {
-                        format!(
-                            "{}/node_modules/**",
-                            path.strip_suffix("/").unwrap_or_else(|| &path)
+                        let mut path = PathBuf::from(path);
+                        path.push("/node_modules/**");
+                        Pattern::new(
+                            path.to_str()
+                                .ok_or_else(|| anyhow!("Path is invalid unicode"))?,
                         )
+                        .map_err(|e| anyhow!("Error creating pattern: {}", e))
                     })
-                    .collect())
+                    .collect::<Result<Vec<Pattern>>>()
             }
         }
     }
+
+    fn get_workspaces(&self, root_path: &AbsolutePath) -> Result<Vec<DirEntry>> {
+        let globs = self.get_workspace_globs(root_path)?;
+        let just_jsons = globs
+            .into_iter()
+            .map(|mut path| {
+                path.push("package.json");
+                let path_string = path
+                    .to_str()
+                    .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
+
+                Ok(Pattern::new(path_string)?)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let ignores = self.get_workspace_ignores(root_path)?;
+
+        let glob_walker = GlobWalker::new(root_path, just_jsons, ignores);
+
+        glob_walker.collect()
+    }
+}
+
+#[test]
+fn test_get_workspace_globs() {
+    let package_manager = PackageManager::Npm;
+    let globs = package_manager
+        .get_workspace_globs(&Path::new("../examples/basic"))
+        .unwrap();
+
+    assert_eq!(
+        globs,
+        vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
+    );
+}
+
+#[test]
+fn test_get_workspace_ignores() {
+    let package_manager = PackageManager::Npm;
+    let globs = package_manager
+        .get_workspace_ignores(&Path::new("../examples/basic"))
+        .unwrap();
+
+    assert_eq!(globs, vec![Pattern::new("**/node_modules/**").unwrap()]);
+}
+
+#[test]
+fn test_get_workspaces() {
+    let package_manager = PackageManager::Npm;
+    let workspaces = package_manager
+        .get_workspaces(&Path::new("../examples/basic"))
+        .unwrap();
+
+    println!("Workspaces: {:?}", workspaces);
 }

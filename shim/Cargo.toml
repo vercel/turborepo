@@ -10,8 +10,9 @@ assert_cmd = "2.0.4"
 [dependencies]
 anyhow = "1.0.63"
 clap = { version = "3.2.22", features = ["derive"] }
+glob = "0.3.0"
 predicates = "2.1.1"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 serde_yaml = "0.9.13"
-
+walkdir = "2"
