@@ -2,8 +2,12 @@
 ARG GO_VERSION
 
 FROM golang:${GO_VERSION}-bullseye
-LABEL maintainer="Artur Troian <troian dot ap at gmail dot com>"
-LABEL "org.opencontainers.image.source"="https://github.com/goreleaser/goreleaser-cross-base"
+
+# Image metadata
+ARG MAINTAINER
+ARG GIT_REPO
+LABEL maintainer=${MAINTAINER}
+LABEL "org.opencontainers.image.source"=${GIT_REPO}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GORELEASER_VERSION
