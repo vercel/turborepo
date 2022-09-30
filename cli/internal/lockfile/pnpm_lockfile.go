@@ -35,6 +35,20 @@ type ProjectSnapshot struct {
 	PublishDirectory     string                      `yaml:"publishDirectory,omitempty"`
 }
 
+// Will try to find a resolution in any of the dependency fields
+func (p *ProjectSnapshot) findResolution(dependency string) (string, bool) {
+	if resolution, ok := p.Dependencies[dependency]; ok {
+		return resolution, true
+	}
+	if resolution, ok := p.DevDependencies[dependency]; ok {
+		return resolution, true
+	}
+	if resolution, ok := p.OptionalDependencies[dependency]; ok {
+		return resolution, true
+	}
+	return "", false
+}
+
 // PackageSnapshot Snapshot used to represent a package in the packages setion
 type PackageSnapshot struct {
 	Resolution PackageResolution `yaml:"resolution,flow"`
@@ -189,11 +203,15 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 	for _, importer := range importers {
 		for dependency, meta := range importer.DependenciesMeta {
 			if meta.Injected {
-				resolution, ok := importer.Dependencies[dependency]
-				entry, entryOk := p.Packages[resolution]
-				if !ok || !entryOk {
-					return nil, fmt.Errorf("Unable to find package entry for %s in original lockfile", resolution)
+				resolution, ok := importer.findResolution(dependency)
+				if !ok {
+					return nil, fmt.Errorf("Unable to find %s other than reference in dependenciesMeta", dependency)
 				}
+				entry, ok := p.Packages[resolution]
+				if !ok {
+					return nil, fmt.Errorf("Unable to find package entry for %s", resolution)
+				}
+
 				lockfilePackages[resolution] = entry
 			}
 		}
