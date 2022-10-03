@@ -2,16 +2,15 @@ use crate::paths::AbsolutePath;
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::fs;
-use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspaces {
-    pub packages: Vec<PathBuf>,
+    pub packages: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct PackageJsonWorkspaces {
-    pub workspaces: Vec<PathBuf>,
+    pub workspaces: Vec<String>,
 }
 
 pub enum PackageManager {
@@ -41,7 +40,7 @@ impl PackageManager {
     /// ```
     ///
     /// ```
-    pub fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
+    pub fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<String>> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
@@ -80,7 +79,7 @@ mod tests {
 
         assert_eq!(
             globs,
-            vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
+            vec![String::from("apps/*"), String::from("packages/*")]
         );
     }
 }
