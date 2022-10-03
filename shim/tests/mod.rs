@@ -6,7 +6,7 @@ fn test_find_correct_turbo() {
     let mut cmd = Command::cargo_bin("shim").unwrap();
     cmd.assert().append_context("shim", "no arguments").code(1);
 
-    // `shim --cwd ../../examples/basic bin` should print out local turbo binary
+    // `shim --cwd ../../examples/basic bin` should print out current turbo binary
     let mut cmd = Command::cargo_bin("shim").unwrap();
     cmd.args(&["--cwd", "../examples/basic", "bin"])
         .assert()
@@ -15,9 +15,7 @@ fn test_find_correct_turbo() {
             "bin command with cwd flag set to package with local turbo installed",
         )
         .success()
-        .stdout(predicates::str::ends_with(
-            "../examples/basic/node_modules/.bin/turbo\n",
-        ));
+        .stdout(predicates::str::ends_with("shim/target/debug/shim\n"));
 
     // `shim --cwd .. bin` should print out shim binary
     let mut cmd = Command::cargo_bin("shim").unwrap();

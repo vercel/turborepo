@@ -69,9 +69,6 @@ impl PackageManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
-    use std::env::current_exe;
-    use std::ffi::OsStr;
     use std::path::Path;
 
     #[test]
@@ -85,29 +82,5 @@ mod tests {
             globs,
             vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
         );
-    }
-
-    #[test]
-    fn test_get_workspace_ignores() {
-        let package_manager = PackageManager::Npm;
-        let globs = package_manager
-            .get_workspace_ignores(&Path::new("../examples/basic"))
-            .unwrap();
-
-        assert_eq!(globs.is_match("node_modules/foo"), true);
-        assert_eq!(globs.is_match("bar.js"), false);
-    }
-
-    #[test]
-    fn test_get_workspaces() {
-        let package_manager = PackageManager::Npm;
-        let home_path = Path::new("../examples/basic");
-        let workspaces = package_manager.get_workspaces(&home_path).unwrap();
-
-        // This is not ideal, but we can't compare with an expected set of paths because
-        // the paths are absolute and therefore depend on who's running the test.
-        for dir_entry in workspaces {
-            assert_eq!(dir_entry.file_name().unwrap(), OsStr::new("package.json"))
-        }
     }
 }
