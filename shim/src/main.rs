@@ -4,7 +4,7 @@ mod paths;
 use crate::package_manager::PackageManager;
 use crate::paths::AncestorSearch;
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::Path;
 use std::{
     env,
@@ -19,6 +19,13 @@ struct Args {
     /// Current working directory
     #[clap(long, value_parser)]
     cwd: Option<String>,
+    #[clap(subcommand)]
+    commands: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    Run { tasks: Vec<String> },
 }
 
 extern "C" {
@@ -82,17 +89,21 @@ fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
     Ok(true)
 }
 
+fn is_run_command(clap_args: &Args) -> bool {
+    matches!(clap_args.commands, Some(Commands::Run { .. }))
+}
+
 fn main() -> Result<()> {
     let clap_args = Args::parse();
 
-    let current_dir = if let Some(cwd) = clap_args.cwd {
+    let current_dir = if let Some(cwd) = &clap_args.cwd {
         cwd.into()
     } else {
         env::current_dir()?
     };
 
     let mut args: Vec<_> = env::args().skip(1).collect();
-    if is_single_package_mode(&current_dir)? {
+    if is_single_package_mode(&current_dir)? && is_run_command(&clap_args) {
         args.push("--single-package".to_string());
     }
 
