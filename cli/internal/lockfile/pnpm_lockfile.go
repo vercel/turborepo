@@ -222,7 +222,7 @@ func pruneImporters(importers map[string]ProjectSnapshot, workspacePackages []tu
 }
 
 func prunePatches(patches map[string]PatchFile, packages map[string]PackageSnapshot) map[string]PatchFile {
-	if len(patches) < 0 {
+	if len(patches) == 0 {
 		return nil
 	}
 
