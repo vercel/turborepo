@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"bytes"
 	"encoding/json"
 	"sync"
 
@@ -108,7 +109,15 @@ func MarshalPackageJSON(pkgJSON *PackageJSON) ([]byte, error) {
 		}
 	}
 
-	return json.Marshal(fieldsToSerialize)
+	var b bytes.Buffer
+	encoder := json.NewEncoder(&b)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(fieldsToSerialize); err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
 }
 
 func isEmpty(value interface{}) bool {
