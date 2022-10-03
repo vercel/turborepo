@@ -769,13 +769,15 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		return ec.exec(ctx, packageTask, deps)
-	}), core.ExecOpts{
+	execOpts := core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
+	}
+	visitor := g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		return ec.exec(ctx, packageTask, deps)
 	})
+	errs := engine.Execute(visitor, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
