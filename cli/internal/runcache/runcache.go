@@ -25,7 +25,7 @@ import (
 )
 
 // LogReplayer is a function that is responsible for replaying the contents of a given log file
-type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile turbopath.AbsoluteSystemPath)
+type LogReplayer = func(logger hclog.Logger, output *cli.PrefixedUi, logFile turbopath.AbsoluteSystemPath)
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
@@ -346,7 +346,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 }
 
 // defaultLogReplayer will try to replay logs back to the given Ui instance
-func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopath.AbsoluteSystemPath) {
+func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName turbopath.AbsoluteSystemPath) {
 	logger.Debug("start replaying logs")
 	f, err := logFileName.Open()
 	if err != nil {
@@ -356,7 +356,16 @@ func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopat
 	defer func() { _ = f.Close() }()
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
-		output.Output(string(scan.Bytes())) //Writing to Stdout
+		str := string(scan.Bytes())
+		// cli.PrefixedUi won't write empty strings, so blank
+		// lines won't show up in terminal. Rather than replace
+		// this with another struct, we'll turn empty strings into
+		// a single space character.
+		if str == "" {
+			str = " "
+		}
+		// Writing to Stdout
+		output.Output(str)
 	}
 	logger.Debug("finish replaying logs")
 }
