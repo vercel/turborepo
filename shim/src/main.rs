@@ -133,7 +133,7 @@ fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
 ///
 /// returns: Result<i32, Error>
 ///
-fn try_run_local_turbo(current_dir: PathBuf, is_single_package_mode: bool) -> Result<i32> {
+fn try_run_local_turbo(current_dir: PathBuf) -> Result<i32> {
     let package_json_path = AncestorSearch::new(current_dir, "package.json")?
         .next()
         .ok_or_else(|| anyhow!("No package.json found in ancestor path."))?;

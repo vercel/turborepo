@@ -116,8 +116,7 @@ impl PackageManager {
                 let globs = self.get_workspace_globs(root_path)?;
 
                 let mut builder = GlobSetBuilder::new();
-                for glob in globs {
-                    let mut glob_path = PathBuf::from(glob);
+                for mut glob_path in globs {
                     glob_path.push("/node_modules/**");
 
                     builder.add(Glob::new(
