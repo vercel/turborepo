@@ -62,7 +62,7 @@ jobs:
     needs: [smoke-test]
     runs-on: ubuntu-latest
     container:
-      image: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
+      image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
     steps:
       - uses: actions/checkout@v3
         with:
