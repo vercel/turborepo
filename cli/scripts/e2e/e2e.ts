@@ -17,7 +17,7 @@ const basicPipeline = {
     },
     build: {
       dependsOn: ["^build"],
-      outputs: ["dist/**"],
+      outputs: ["dist/**", "!dist/cache/**"],
     },
     "//#build": {
       dependsOn: [],
