@@ -5,7 +5,7 @@ use std::path;
 use std::path::Path;
 use walkdir::{DirEntry, IntoIter, WalkDir};
 
-pub type AbsolutePath = path::Path;
+pub type AbsolutePath = Path;
 
 #[derive(Debug, Clone, PartialEq)]
 struct RelativePath {
@@ -36,30 +36,32 @@ impl Iterator for GlobWalker {
     type Item = Result<DirEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let entry = self.file_walker.next()?;
-
-        if let Ok(entry) = entry {
-            let matches = self
-                .inclusions
-                .iter()
-                .any(|inclusion| inclusion.matches_path(entry.path()));
-
-            if matches {
-                let is_excluded = self
-                    .exclusions
+        loop {
+            let mut entry = self.file_walker.next()?;
+            if let Ok(entry) = entry {
+                //println!("{:?}", entry);
+                let matches = self
+                    .inclusions
                     .iter()
-                    .any(|exclusion| exclusion.matches_path(entry.path()));
+                    .any(|inclusion| inclusion.matches_path(entry.path()));
 
-                if is_excluded {
-                    None
+                if matches {
+                    let is_excluded = self
+                        .exclusions
+                        .iter()
+                        .any(|exclusion| exclusion.matches_path(entry.path()));
+
+                    if is_excluded {
+                        continue;
+                    } else {
+                        return Some(Ok(entry));
+                    }
                 } else {
-                    Some(Ok(entry))
+                    continue;
                 }
             } else {
-                None
+                return Some(entry.map_err(|err| err.into()));
             }
-        } else {
-            Some(entry.map_err(|err| err.into()))
         }
     }
 }

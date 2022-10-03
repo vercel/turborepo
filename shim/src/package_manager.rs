@@ -2,6 +2,7 @@ use crate::paths::{AbsolutePath, GlobWalker};
 use anyhow::{anyhow, Result};
 use glob::Pattern;
 use serde::Deserialize;
+use std::env::current_exe;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::DirEntry;
@@ -119,6 +120,9 @@ impl PackageManager {
 
         let ignores = self.get_workspace_ignores(root_path)?;
 
+        println!("JUST JSONS: {:?}", just_jsons);
+        println!("IGNORES: {:?}", ignores);
+
         let glob_walker = GlobWalker::new(root_path, just_jsons, ignores);
 
         glob_walker.collect()
@@ -150,10 +154,17 @@ fn test_get_workspace_ignores() {
 
 #[test]
 fn test_get_workspaces() {
-    let package_manager = PackageManager::Npm;
-    let workspaces = package_manager
-        .get_workspaces(&Path::new("../examples/basic"))
-        .unwrap();
-
-    println!("Workspaces: {:?}", workspaces);
+    let mut home_path = current_exe().unwrap();
+    home_path.pop();
+    home_path.push("../../../../examples/basic/apps/docs/package.json");
+    println!("{:?}", home_path);
+    let pattern = Pattern::new("apps/*/package.json").unwrap();
+    println!("{}", pattern.matches_path(&home_path));
+    // let package_manager = PackageManager::Npm;
+    // let mut home_path = current_exe().unwrap();
+    // home_path.pop();
+    // home_path.push("../../../../examples/basic");
+    // let workspaces = package_manager.get_workspaces(&home_path).unwrap();
+    //
+    // println!("Workspaces: {:?}", workspaces);
 }
