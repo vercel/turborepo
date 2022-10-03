@@ -32,7 +32,13 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = gzr.Close() }()
+
+	// The `Close` function for compression effectively just returns the singular
+	// error field on the decompressor instance. This is extremely unlikely to be
+	// set without triggering one of the numerous other errors, but we should still
+	// handle that possible edge case.
+	var closeError error
+	defer func() { closeError = gzr.Close() }()
 	tr := tar.NewReader(gzr)
 
 	// On first attempt to restore it's possible that a link target doesn't exist.
@@ -72,7 +78,7 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 		restored = append(restored, file)
 	}
 
-	return restored, nil
+	return restored, closeError
 }
 
 // restoreRegular is the entry point for all things read from the tar.
