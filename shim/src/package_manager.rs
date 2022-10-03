@@ -1,6 +1,5 @@
-use crate::paths::{AbsolutePath, GlobWalker};
+use crate::paths::AbsolutePath;
 use anyhow::{anyhow, Result};
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -16,10 +15,13 @@ struct PackageJsonWorkspaces {
 }
 
 pub enum PackageManager {
+    #[allow(dead_code)]
     Berry,
     Npm,
     Pnpm,
+    #[allow(dead_code)]
     Pnpm6,
+    #[allow(dead_code)]
     Yarn,
 }
 
@@ -61,111 +63,6 @@ impl PackageManager {
                 }
             }
         }
-    }
-
-    /// Returns a `GlobSet` that matches the paths that should be ignored.
-    ///
-    /// # Arguments
-    ///
-    /// * `root_path`:
-    ///
-    /// returns: Result<<unknown>, Error>
-    ///
-    fn get_workspace_ignores(&self, root_path: &AbsolutePath) -> Result<GlobSet> {
-        match self {
-            PackageManager::Berry => {
-                // Matches upstream values:
-                // Key code: https://github.com/yarnpkg/berry/blob/8e0c4b897b0881878a1f901230ea49b7c8113fbe/packages/yarnpkg-core/sources/Workspace.ts#L64-L70
-                let mut builder = GlobSetBuilder::new();
-                builder.add(Glob::new("**/node_modules")?);
-                builder.add(Glob::new("**/.git")?);
-                builder.add(Glob::new("**/.yarn")?);
-
-                Ok(builder.build()?)
-            }
-            PackageManager::Npm => {
-                // Matches upstream values:
-                // function: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L73
-                // key code: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L90-L96
-                // call site: https://github.com/npm/cli/blob/7a858277171813b37d46a032e49db44c8624f78f/lib/workspaces/get-workspaces.js#L14
-
-                let mut builder = GlobSetBuilder::new();
-                builder.add(Glob::new("**/node_modules/**")?);
-
-                Ok(builder.build()?)
-            }
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                // Matches upstream values:
-                // function: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L27
-                // key code: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L30
-                // call site: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-workspace-packages/src/index.ts#L32-L39
-                let mut builder = GlobSetBuilder::new();
-                builder.add(Glob::new("**/node_modules/**")?);
-                builder.add(Glob::new("**/bower_components/**")?);
-
-                Ok(builder.build()?)
-            }
-            PackageManager::Yarn => {
-                // function: https://github.com/yarnpkg/yarn/blob/3119382885ea373d3c13d6a846de743eca8c914b/src/config.js#L799
-
-                // Yarn is unique in ignore patterns handling.
-                // The only time it does globbing is for package.json or yarn.json and it scopes the search to each workspace.
-                // For example: `apps/*/node_modules/**/+(package.json|yarn.json)`
-                // The `extglob` `+(package.json|yarn.json)` (from micromatch) after node_modules/** is redundant.
-
-                let globs = self.get_workspace_globs(root_path)?;
-
-                let mut builder = GlobSetBuilder::new();
-                for mut glob_path in globs {
-                    glob_path.push("/node_modules/**");
-
-                    builder.add(Glob::new(
-                        glob_path
-                            .to_str()
-                            .ok_or_else(|| anyhow!("Path is invalid unicode"))?,
-                    )?);
-                }
-
-                Ok(builder.build()?)
-            }
-        }
-    }
-
-    /// Returns a list of paths of package.json files for the current repository.
-    ///
-    /// # Arguments
-    ///
-    /// * `root_path`: The root path of the repository
-    ///
-    /// returns: Result<Vec<DirEntry, Global>, Error>
-    ///
-    fn get_workspaces(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
-        let workspace_paths = self.get_workspace_globs(root_path)?;
-
-        let mut workspace_globs_builder = GlobSetBuilder::new();
-
-        for mut path in workspace_paths {
-            path.push("package.json");
-            let path_str = path
-                .to_str()
-                .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
-
-            // We need to push on the root for the globbing to work properly
-            let root_str = root_path
-                .to_str()
-                .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
-
-            workspace_globs_builder.add(Glob::new(&format!("{}/{}", root_str, path_str))?);
-        }
-        let workspace_globs = workspace_globs_builder.build()?;
-
-        let ignores = self.get_workspace_ignores(root_path)?;
-
-        let glob_walker = GlobWalker::new(root_path, workspace_globs, ignores);
-
-        glob_walker
-            .map(|dir_entry| dir_entry.map(|e| e.into_path()))
-            .collect()
     }
 }
 
