@@ -17,6 +17,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/colorcache"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
+	"github.com/vercel/turborepo/cli/internal/logstreamer"
 	"github.com/vercel/turborepo/cli/internal/nodes"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
@@ -127,6 +128,7 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 		outputWatcher:          opts.OutputWatcher,
 		colorCache:             colorCache,
 	}
+
 	if rc.logReplayer == nil {
 		rc.logReplayer = defaultLogReplayer
 	}
@@ -148,21 +150,22 @@ type TaskCache struct {
 	LogFileName       turbopath.AbsoluteSystemPath
 }
 
-// RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
-// if successful.
-func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+// RestoreOutputs attempts to restore output for the corresponding task from the cache.
+// Returns true if successful.
+func (tc TaskCache) RestoreOutputs(ctx context.Context, ecUI cli.Ui, progressLogger hclog.Logger, prettyPrefix string) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput {
-			terminal.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
+			ecUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
 	}
 	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
-		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
+		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
+		ecUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
 	}
+
 	hasChangedOutputs := len(changedOutputGlobs) > 0
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
@@ -171,19 +174,22 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		if err != nil {
 			return false, err
-		} else if !hit {
+		}
+
+		// no cache hit, exit
+		if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput {
-				terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
+				ecUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			return false, nil
 		}
+
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
-			logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
-			terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+			ecUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
-		logger.Debug(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+		ecUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
 	switch tc.taskOutputMode {
@@ -191,17 +197,26 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, terminal *cli.PrefixedUi
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		terminal.Output(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
+		ecUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
-		logger.Debug("log file", "path", tc.LogFileName)
+		progressLogger.Debug("log file", "path", tc.LogFileName)
+		ecUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
 		if tc.LogFileName.FileExists() {
-			// The task label is baked into the log file, so we need to grab the underlying Ui
-			// instance in order to not duplicate it
-			tc.rc.logReplayer(logger, terminal.Ui, tc.LogFileName)
+			// Create a logger for replaying
+			replayUI := &cli.PrefixedUi{
+				Ui:           ecUI,
+				OutputPrefix: prettyPrefix,
+				InfoPrefix:   prettyPrefix,
+				ErrorPrefix:  prettyPrefix,
+				WarnPrefix:   prettyPrefix,
+			}
+
+			tc.rc.logReplayer(progressLogger, replayUI, tc.LogFileName)
 		}
 	default:
 		// NoLogs, do not output anything
 	}
+
 	return true, nil
 }
 
@@ -227,7 +242,7 @@ func (fwc *fileWriterCloser) Close() error {
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
-func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
+func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{os.Stdout}, nil
 	}
@@ -235,19 +250,13 @@ func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
 	if err := tc.LogFileName.EnsureDir(); err != nil {
 		return nil, err
 	}
+
 	output, err := tc.LogFileName.Create()
 	if err != nil {
 		return nil, err
 	}
-	colorPrefixer := tc.rc.colorCache.PrefixColor(tc.pt.PackageName)
-	prettyTaskPrefix := colorPrefixer(outputPrefix)
+
 	bufWriter := bufio.NewWriter(output)
-	if _, err := bufWriter.WriteString(fmt.Sprintf("%s: cache hit, replaying output %s\n", prettyTaskPrefix, ui.Dim(tc.hash))); err != nil {
-		// We've already errored, we don't care if there's a further error closing the file we just
-		// failed to write to.
-		_ = output.Close()
-		return nil, err
-	}
 	fwc := &fileWriterCloser{
 		file:  output,
 		bufio: bufWriter,
@@ -256,8 +265,10 @@ func (tc TaskCache) OutputWriter(outputPrefix string) (io.WriteCloser, error) {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
-		fwc.Writer = io.MultiWriter(os.Stdout, bufWriter)
+		stdoutWriter := logstreamer.NewPrettyStdoutWriter(prefix)
+		fwc.Writer = io.MultiWriter(stdoutWriter, bufWriter)
 	}
+
 	return fwc, nil
 }
 

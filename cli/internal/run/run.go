@@ -754,6 +754,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runState:        runState,
@@ -985,20 +986,14 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
 	prettyPrefix := ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
 
-	progressLogger := ec.logger.Named(prefix)
+	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	// Create a logger
-	targetUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
-		OutputPrefix: prettyPrefix,
-		InfoPrefix:   prettyPrefix,
-		ErrorPrefix:  prettyPrefix,
-		WarnPrefix:   prettyPrefix,
-	}
+	targetUI := &cli.BasicUi{}
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
@@ -1019,13 +1014,14 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 	// Cache ---------------------------------------------
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
-	hit, err := taskCache.RestoreOutputs(ctx, targetUI, progressLogger)
+	hit, err := taskCache.RestoreOutputs(ctx, ec.ui, progressLogger, prettyPrefix)
 	if err != nil {
 		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
 		return nil
 	}
+
 	// Setup command execution
 	argsactual := append([]string{"run"}, packageTask.Task)
 	if len(passThroughArgs) > 0 {
@@ -1045,7 +1041,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		ec.logError(progressLogger, prettyPrefix, err)
@@ -1053,6 +1049,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			os.Exit(1)
 		}
 	}
+
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
 	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
@@ -1063,14 +1060,17 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Flush/Reset any error we recorded
 	logStreamerErr.FlushRecord()
 	logStreamerOut.FlushRecord()
+
 	closeOutputs := func() error {
 		var closeErrors []error
+
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
 		}
 		if err := logStreamerErr.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stderr"))
 		}
+
 		if err := writer.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log file"))
 		}
