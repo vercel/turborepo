@@ -46,11 +46,33 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 	var symlinks []*tar.Header
 
 	restored := make([]turbopath.AnchoredSystemPath, 0)
+
+	restorePointErr := anchor.MkdirAll(0755)
+	if restorePointErr != nil {
+		return nil, restorePointErr
+	}
+
+	// We're going to make the following two assumptions here for "fast" path restoration:
+	// - All directories are enumerated in the `tar`.
+	// - The contents of the tar are enumerated depth-first.
+	//
+	// This allows us to avoid:
+	// - Attempts at recursive creation of directories.
+	// - Repetitive `lstat` on restore of a file.
+	//
+	// Violating these assumptions won't cause things to break but we're only going to maintain
+	// an `lstat` cache for the current tree. If you violate these assumptions and the current
+	// cache does not apply for your path, it will clobber and re-start from the common
+	// shared prefix.
+	dirCache := &cachedDirTree{
+		anchorAtDepth: []turbopath.AbsoluteSystemPath{anchor},
+	}
+
 	for {
 		header, trErr := tr.Next()
 		if trErr == io.EOF {
 			// The end, time to restore any missing links.
-			symlinksRestored, symlinksErr := topologicallyRestoreSymlinks(anchor, symlinks, tr)
+			symlinksRestored, symlinksErr := topologicallyRestoreSymlinks(dirCache, anchor, symlinks, tr)
 			restored = append(restored, symlinksRestored...)
 			if symlinksErr != nil {
 				return restored, symlinksErr
@@ -66,7 +88,7 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 		// We can treat this as file metadata + body reader.
 
 		// Attempt to place the file on disk.
-		file, restoreErr := restoreEntry(anchor, header, tr)
+		file, restoreErr := restoreEntry(dirCache, anchor, header, tr)
 		if restoreErr != nil {
 			if errors.Is(restoreErr, errMissingSymlinkTarget) {
 				// Links get one shot to be valid, then they're accumulated, DAG'd, and restored on delay.
@@ -82,17 +104,17 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 }
 
 // restoreRegular is the entry point for all things read from the tar.
-func restoreEntry(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreEntry(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
 	// We're permissive on creation, but restrictive on restoration.
 	// There is no need to prevent the cache creation in any case.
 	// And on restoration, if we fail, we simply run the task.
 	switch header.Typeflag {
 	case tar.TypeDir:
-		return restoreDirectory(anchor, header, reader)
+		return restoreDirectory(dirCache, anchor, header, reader)
 	case tar.TypeReg:
-		return restoreRegular(anchor, header, reader)
+		return restoreRegular(dirCache, anchor, header, reader)
 	case tar.TypeSymlink:
-		return restoreSymlink(anchor, header, reader)
+		return restoreSymlink(dirCache, anchor, header, reader)
 	default:
 		return "", errUnsupportedFileType
 	}
@@ -114,8 +136,11 @@ func canonicalizeName(name string) (turbopath.AnchoredSystemPath, error) {
 		return "", errNameWindowsUnsafe
 	}
 
+	// Directories will have a trailing slash. Remove it.
+	noTrailingSlash := strings.TrimSuffix(name, "/")
+
 	// Okay, we're all set here.
-	return turbopath.AnchoredUnixPath(name).ToSystemPath(), nil
+	return turbopath.AnchoredUnixPath(noTrailingSlash).ToSystemPath(), nil
 }
 
 // checkName returns `wellFormed, windowsSafe` via inspection of separators and traversal

@@ -10,7 +10,7 @@ import (
 )
 
 // restoreDirectory restores a directory.
-func restoreDirectory(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreDirectory(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
 	processedName, err := canonicalizeName(header.Name)
 	if err != nil {
 		return "", err
@@ -21,30 +21,63 @@ func restoreDirectory(anchor turbopath.AbsoluteSystemPath, header *tar.Header, r
 	// outside of the restore path.
 
 	// Create the directory.
-	if err := safeMkdirAll(anchor, processedName, header.Mode); err != nil {
+	if err := safeMkdirAll(dirCache, anchor, processedName, header.Mode); err != nil {
 		return "", err
 	}
 
 	return processedName, nil
 }
 
+type cachedDirTree struct {
+	anchorAtDepth []turbopath.AbsoluteSystemPath
+	prefix        []turbopath.RelativeSystemPath
+}
+
+func (cr *cachedDirTree) getStartingPoint(path turbopath.AnchoredSystemPath) (turbopath.AbsoluteSystemPath, []turbopath.RelativeSystemPath) {
+	pathSegmentStrings := strings.Split(path.ToString(), string(os.PathSeparator))
+	pathSegments := make([]turbopath.RelativeSystemPath, len(pathSegmentStrings))
+	for index, pathSegmentString := range pathSegmentStrings {
+		pathSegments[index] = turbopath.RelativeSystemPath(pathSegmentString)
+	}
+
+	i := 0
+	for i = 0; i < len(cr.prefix) && i < len(pathSegments); i++ {
+		if pathSegments[i] != cr.prefix[i] {
+			break
+		}
+	}
+
+	// 0: root anchor, can't remove it.
+	cr.anchorAtDepth = cr.anchorAtDepth[:i+1]
+
+	// 0: first prefix.
+	cr.prefix = cr.prefix[:i]
+
+	return cr.anchorAtDepth[i], pathSegments[i:]
+}
+
+func (cr *cachedDirTree) Update(anchor turbopath.AbsoluteSystemPath, newSegment turbopath.RelativeSystemPath) {
+	cr.anchorAtDepth = append(cr.anchorAtDepth, anchor)
+	cr.prefix = append(cr.prefix, newSegment)
+}
+
 // safeMkdirAll creates all directories, assuming that the leaf node is a directory.
 // FIXME: Recheck the symlink cache before creating a directory.
-func safeMkdirAll(anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
+func safeMkdirAll(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
 	// Iterate through path segments by os.Separator, appending them onto the anchor.
 	// Check to see if that path segment is a symlink with a target outside of anchor.
-	pathSegments := strings.Split(processedName.ToString(), string(os.PathSeparator))
 
-	calculatedAnchor := anchor
-	var checkPathErr error
+	// Pull the iteration starting point from thie directory cache.
+	calculatedAnchor, pathSegments := dirCache.getStartingPoint(processedName)
 	for _, segment := range pathSegments {
-		calculatedAnchor, checkPathErr = checkPath(anchor, calculatedAnchor, turbopath.RelativeSystemPath(segment))
+		calculatedAnchor, checkPathErr := checkPath(anchor, calculatedAnchor, segment)
 		// We hit an existing directory or absolute path that was invalid.
 		if checkPathErr != nil {
 			return checkPathErr
 		}
 
 		// Otherwise we continue and check the next segment.
+		dirCache.Update(calculatedAnchor, segment)
 	}
 
 	// If we have made it here we know that it is safe to call os.MkdirAll

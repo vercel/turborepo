@@ -11,7 +11,7 @@ import (
 )
 
 // restoreSymlink restores a symlink and errors if the target is missing.
-func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreSymlink(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
 	// We don't know _anything_ about linkname. It could be any of:
 	//
 	// - Absolute Unix Path
@@ -33,6 +33,13 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	processedName, canonicalizeNameErr := canonicalizeName(header.Name)
 	if canonicalizeNameErr != nil {
 		return "", canonicalizeNameErr
+	}
+
+	// We need to traverse `processedName` from base to root split at
+	// `os.Separator` to make sure we don't end up following a symlink
+	// outside of the restore path.
+	if err := safeMkdirFile(dirCache, anchor, processedName, header.Mode); err != nil {
+		return "", err
 	}
 
 	processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
@@ -60,10 +67,17 @@ func restoreSymlink(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 }
 
 // restoreSymlinkMissingTarget restores a symlink and does not error if the target is missing.
-func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreSymlinkMissingTarget(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
 	processedName, canonicalizeNameErr := canonicalizeName(header.Name)
 	if canonicalizeNameErr != nil {
 		return "", canonicalizeNameErr
+	}
+
+	// We need to traverse `processedName` from base to root split at
+	// `os.Separator` to make sure we don't end up following a symlink
+	// outside of the restore path.
+	if err := safeMkdirFile(dirCache, anchor, processedName, header.Mode); err != nil {
+		return "", err
 	}
 
 	// Create the symlink.
@@ -90,7 +104,7 @@ func restoreSymlinkMissingTarget(anchor turbopath.AbsoluteSystemPath, header *ta
 // topologicallyRestoreSymlinks ensures that targets of symlinks are created in advance
 // of the things that link to them. It does this by topologically sorting all
 // of the symlinks. This also enables us to ensure we do not create cycles.
-func topologicallyRestoreSymlinks(anchor turbopath.AbsoluteSystemPath, symlinks []*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
+func topologicallyRestoreSymlinks(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, symlinks []*tar.Header, tr *tar.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	restored := make([]turbopath.AnchoredSystemPath, 0)
 	lookup := make(map[string]*tar.Header)
 
@@ -130,7 +144,7 @@ func topologicallyRestoreSymlinks(anchor turbopath.AbsoluteSystemPath, symlinks 
 			return nil
 		}
 
-		file, restoreErr := restoreSymlinkMissingTarget(anchor, header, tr)
+		file, restoreErr := restoreSymlinkMissingTarget(dirCache, anchor, header, tr)
 		if restoreErr != nil {
 			return restoreErr
 		}
