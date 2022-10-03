@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -198,19 +197,17 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return err
 	}
-	if runtime.GOOS != "windows" {
-		if ui.IsCI && !r.opts.runOpts.noDaemon {
-			r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
-		} else if !r.opts.runOpts.noDaemon {
-			turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
-			if err != nil {
-				r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
-			} else {
-				defer func() { _ = turbodClient.Close() }()
-				r.base.Logger.Debug("running in daemon mode")
-				daemonClient := daemonclient.New(turbodClient)
-				r.opts.runcacheOpts.OutputWatcher = daemonClient
-			}
+	if ui.IsCI && !r.opts.runOpts.noDaemon {
+		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+	} else if !r.opts.runOpts.noDaemon {
+		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
+		if err != nil {
+			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+		} else {
+			defer func() { _ = turbodClient.Close() }()
+			r.base.Logger.Debug("running in daemon mode")
+			daemonClient := daemonclient.New(turbodClient)
+			r.opts.runcacheOpts.OutputWatcher = daemonClient
 		}
 	}
 
@@ -807,17 +804,18 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 }
 
 type hashedTask struct {
-	TaskID       string           `json:"taskId"`
-	Task         string           `json:"task"`
-	Package      string           `json:"package"`
-	Hash         string           `json:"hash"`
-	CacheState   cache.ItemStatus `json:"cacheState"`
-	Command      string           `json:"command"`
-	Outputs      []string         `json:"outputs"`
-	LogFile      string           `json:"logFile"`
-	Dir          string           `json:"directory"`
-	Dependencies []string         `json:"dependencies"`
-	Dependents   []string         `json:"dependents"`
+	TaskID          string           `json:"taskId"`
+	Task            string           `json:"task"`
+	Package         string           `json:"package"`
+	Hash            string           `json:"hash"`
+	CacheState      cache.ItemStatus `json:"cacheState"`
+	Command         string           `json:"command"`
+	Outputs         []string         `json:"outputs"`
+	ExcludedOutputs []string         `json:"excludedOutputs"`
+	LogFile         string           `json:"logFile"`
+	Dir             string           `json:"directory"`
+	Dependencies    []string         `json:"dependencies"`
+	Dependents      []string         `json:"dependents"`
 }
 
 func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
@@ -841,13 +839,14 @@ func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
 }
 
 type hashedSinglePackageTask struct {
-	Task         string   `json:"task"`
-	Hash         string   `json:"hash"`
-	Command      string   `json:"command"`
-	Outputs      []string `json:"outputs"`
-	LogFile      string   `json:"logFile"`
-	Dependencies []string `json:"dependencies"`
-	Dependents   []string `json:"dependents"`
+	Task            string   `json:"task"`
+	Hash            string   `json:"hash"`
+	Command         string   `json:"command"`
+	Outputs         []string `json:"outputs"`
+	ExcludedOutputs []string `json:"excludedOutputs"`
+	LogFile         string   `json:"logFile"`
+	Dependencies    []string `json:"dependencies"`
+	Dependents      []string `json:"dependents"`
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
@@ -911,17 +910,18 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		}
 
 		taskIDs = append(taskIDs, hashedTask{
-			TaskID:       packageTask.TaskID,
-			Task:         packageTask.Task,
-			Package:      packageTask.PackageName,
-			Hash:         hash,
-			CacheState:   itemStatus,
-			Command:      command,
-			Dir:          packageTask.Pkg.Dir.ToString(),
-			Outputs:      packageTask.TaskDefinition.Outputs,
-			LogFile:      packageTask.RepoRelativeLogFile(),
-			Dependencies: stringAncestors,
-			Dependents:   stringDescendents,
+			TaskID:          packageTask.TaskID,
+			Task:            packageTask.Task,
+			Package:         packageTask.PackageName,
+			Hash:            hash,
+			CacheState:      itemStatus,
+			Command:         command,
+			Dir:             packageTask.Pkg.Dir.ToString(),
+			Outputs:         packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs: packageTask.TaskDefinition.Outputs.Exclusions,
+			LogFile:         packageTask.RepoRelativeLogFile(),
+			Dependencies:    stringAncestors,
+			Dependents:      stringDescendents,
 		})
 
 		return nil
