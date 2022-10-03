@@ -1,8 +1,8 @@
 use anyhow::Result;
-use glob::Pattern;
+use globset::GlobSet;
 use std::ffi::OsString;
-use std::path;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, IntoIter, WalkDir};
 
 pub type AbsolutePath = Path;
@@ -14,16 +14,12 @@ struct RelativePath {
 
 pub struct GlobWalker {
     file_walker: IntoIter,
-    inclusions: Vec<Pattern>,
-    exclusions: Vec<Pattern>,
+    inclusions: GlobSet,
+    exclusions: GlobSet,
 }
 
 impl GlobWalker {
-    pub fn new(
-        dir: impl AsRef<Path>,
-        inclusions: Vec<Pattern>,
-        exclusions: Vec<Pattern>,
-    ) -> GlobWalker {
+    pub fn new(dir: impl AsRef<Path>, inclusions: GlobSet, exclusions: GlobSet) -> GlobWalker {
         GlobWalker {
             file_walker: WalkDir::new(dir).into_iter(),
             inclusions,
@@ -37,31 +33,58 @@ impl Iterator for GlobWalker {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let mut entry = self.file_walker.next()?;
-            if let Ok(entry) = entry {
-                //println!("{:?}", entry);
-                let matches = self
-                    .inclusions
-                    .iter()
-                    .any(|inclusion| inclusion.matches_path(entry.path()));
+            let entry = self.file_walker.next()?;
+            match entry {
+                Ok(entry) => {
+                    let matches = self.inclusions.is_match(entry.path());
 
-                if matches {
-                    let is_excluded = self
-                        .exclusions
-                        .iter()
-                        .any(|exclusion| exclusion.matches_path(entry.path()));
+                    if matches {
+                        let is_excluded = self.exclusions.is_match(entry.path());
 
-                    if is_excluded {
-                        continue;
+                        if is_excluded {
+                            continue;
+                        } else {
+                            return Some(Ok(entry));
+                        }
                     } else {
-                        return Some(Ok(entry));
+                        continue;
                     }
-                } else {
-                    continue;
                 }
-            } else {
-                return Some(entry.map_err(|err| err.into()));
+                Err(err) => {
+                    return Some(Err(err.into()));
+                }
             }
         }
+    }
+}
+
+/// An iterator for the ancestor path from a current directory to the root of the file system.
+/// Returns any files with a given name in the ancestor path.
+pub struct AncestorSearch<'a> {
+    current_dir: PathBuf,
+    file_name: &'a str,
+}
+
+impl<'a> AncestorSearch<'a> {
+    pub fn new(current_dir: PathBuf, file_name: &'a str) -> Result<Self> {
+        Ok(Self {
+            current_dir: fs::canonicalize(current_dir)?,
+            file_name,
+        })
+    }
+}
+
+impl<'a> Iterator for AncestorSearch<'a> {
+    type Item = PathBuf;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while fs::metadata(self.current_dir.join(&self.file_name)).is_err() {
+            // Pops off current folder and sets to `current_dir.parent`
+            // if false, `current_dir` has no parent
+            if !self.current_dir.pop() {
+                return None;
+            }
+        }
+        Some(self.current_dir.join(self.file_name))
     }
 }

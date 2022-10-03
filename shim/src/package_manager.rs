@@ -1,11 +1,9 @@
 use crate::paths::{AbsolutePath, GlobWalker};
 use anyhow::{anyhow, Result};
-use glob::Pattern;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
-use std::env::current_exe;
 use std::fs;
-use std::path::{Path, PathBuf};
-use walkdir::DirEntry;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspaces {
@@ -17,7 +15,7 @@ struct PackageJsonWorkspaces {
     pub workspaces: Vec<PathBuf>,
 }
 
-enum PackageManager {
+pub enum PackageManager {
     Berry,
     Npm,
     Pnpm,
@@ -26,7 +24,22 @@ enum PackageManager {
 }
 
 impl PackageManager {
-    fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
+    /// Returns a list of globs for the package workspace.
+    /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
+    /// may need to iterate through these globs and a `GlobSet` doesn't allow that.
+    ///
+    /// # Arguments
+    ///
+    /// * `root_path`:
+    ///
+    /// returns: Result<Vec<PathBuf, Global>, Error>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///
+    /// ```
+    pub fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
@@ -50,33 +63,47 @@ impl PackageManager {
         }
     }
 
-    fn get_workspace_ignores(&self, root_path: &AbsolutePath) -> Result<Vec<Pattern>> {
+    /// Returns a `GlobSet` that matches the paths that should be ignored.
+    ///
+    /// # Arguments
+    ///
+    /// * `root_path`:
+    ///
+    /// returns: Result<<unknown>, Error>
+    ///
+    fn get_workspace_ignores(&self, root_path: &AbsolutePath) -> Result<GlobSet> {
         match self {
             PackageManager::Berry => {
                 // Matches upstream values:
                 // Key code: https://github.com/yarnpkg/berry/blob/8e0c4b897b0881878a1f901230ea49b7c8113fbe/packages/yarnpkg-core/sources/Workspace.ts#L64-L70
-                Ok(vec![
-                    Pattern::new("**/node_modules")?,
-                    Pattern::new("**/.git")?,
-                    Pattern::new("**/.yarn")?,
-                ])
+                let mut builder = GlobSetBuilder::new();
+                builder.add(Glob::new("**/node_modules")?);
+                builder.add(Glob::new("**/.git")?);
+                builder.add(Glob::new("**/.yarn")?);
+
+                Ok(builder.build()?)
             }
             PackageManager::Npm => {
                 // Matches upstream values:
                 // function: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L73
                 // key code: https://github.com/npm/map-workspaces/blob/a46503543982cb35f51cc2d6253d4dcc6bca9b32/lib/index.js#L90-L96
                 // call site: https://github.com/npm/cli/blob/7a858277171813b37d46a032e49db44c8624f78f/lib/workspaces/get-workspaces.js#L14
-                Ok(vec![Pattern::new("**/node_modules/**")?])
+
+                let mut builder = GlobSetBuilder::new();
+                builder.add(Glob::new("**/node_modules/**")?);
+
+                Ok(builder.build()?)
             }
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 // Matches upstream values:
                 // function: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L27
                 // key code: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-packages/src/index.ts#L30
                 // call site: https://github.com/pnpm/pnpm/blob/d99daa902442e0c8ab945143ebaf5cdc691a91eb/packages/find-workspace-packages/src/index.ts#L32-L39
-                Ok(vec![
-                    Pattern::new("**/node_modules/**")?,
-                    Pattern::new("**/bower_components/**")?,
-                ])
+                let mut builder = GlobSetBuilder::new();
+                builder.add(Glob::new("**/node_modules/**")?);
+                builder.add(Glob::new("**/bower_components/**")?);
+
+                Ok(builder.build()?)
             }
             PackageManager::Yarn => {
                 // function: https://github.com/yarnpkg/yarn/blob/3119382885ea373d3c13d6a846de743eca8c914b/src/config.js#L799
@@ -88,83 +115,103 @@ impl PackageManager {
 
                 let globs = self.get_workspace_globs(root_path)?;
 
-                globs
-                    .into_iter()
-                    .map(|path| {
-                        let mut path = PathBuf::from(path);
-                        path.push("/node_modules/**");
-                        Pattern::new(
-                            path.to_str()
-                                .ok_or_else(|| anyhow!("Path is invalid unicode"))?,
-                        )
-                        .map_err(|e| anyhow!("Error creating pattern: {}", e))
-                    })
-                    .collect::<Result<Vec<Pattern>>>()
+                let mut builder = GlobSetBuilder::new();
+                for glob in globs {
+                    let mut glob_path = PathBuf::from(glob);
+                    glob_path.push("/node_modules/**");
+
+                    builder.add(Glob::new(
+                        glob_path
+                            .to_str()
+                            .ok_or_else(|| anyhow!("Path is invalid unicode"))?,
+                    )?);
+                }
+
+                Ok(builder.build()?)
             }
         }
     }
 
-    fn get_workspaces(&self, root_path: &AbsolutePath) -> Result<Vec<DirEntry>> {
-        let globs = self.get_workspace_globs(root_path)?;
-        let just_jsons = globs
-            .into_iter()
-            .map(|mut path| {
-                path.push("package.json");
-                let path_string = path
-                    .to_str()
-                    .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
+    /// Returns a list of paths of package.json files for the current repository.
+    ///
+    /// # Arguments
+    ///
+    /// * `root_path`: The root path of the repository
+    ///
+    /// returns: Result<Vec<DirEntry, Global>, Error>
+    ///
+    fn get_workspaces(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
+        let workspace_paths = self.get_workspace_globs(root_path)?;
 
-                Ok(Pattern::new(path_string)?)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut workspace_globs_builder = GlobSetBuilder::new();
+
+        for mut path in workspace_paths {
+            path.push("package.json");
+            let path_str = path
+                .to_str()
+                .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
+
+            // We need to push on the root for the globbing to work properly
+            let root_str = root_path
+                .to_str()
+                .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
+
+            workspace_globs_builder.add(Glob::new(&format!("{}/{}", root_str, path_str))?);
+        }
+        let workspace_globs = workspace_globs_builder.build()?;
 
         let ignores = self.get_workspace_ignores(root_path)?;
 
-        println!("JUST JSONS: {:?}", just_jsons);
-        println!("IGNORES: {:?}", ignores);
+        let glob_walker = GlobWalker::new(root_path, workspace_globs, ignores);
 
-        let glob_walker = GlobWalker::new(root_path, just_jsons, ignores);
-
-        glob_walker.collect()
+        glob_walker
+            .map(|dir_entry| dir_entry.map(|e| e.into_path()))
+            .collect()
     }
 }
 
-#[test]
-fn test_get_workspace_globs() {
-    let package_manager = PackageManager::Npm;
-    let globs = package_manager
-        .get_workspace_globs(&Path::new("../examples/basic"))
-        .unwrap();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::env::current_exe;
+    use std::ffi::OsStr;
+    use std::path::Path;
 
-    assert_eq!(
-        globs,
-        vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
-    );
-}
+    #[test]
+    fn test_get_workspace_globs() {
+        let package_manager = PackageManager::Npm;
+        let globs = package_manager
+            .get_workspace_globs(&Path::new("../examples/basic"))
+            .unwrap();
 
-#[test]
-fn test_get_workspace_ignores() {
-    let package_manager = PackageManager::Npm;
-    let globs = package_manager
-        .get_workspace_ignores(&Path::new("../examples/basic"))
-        .unwrap();
+        assert_eq!(
+            globs,
+            vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
+        );
+    }
 
-    assert_eq!(globs, vec![Pattern::new("**/node_modules/**").unwrap()]);
-}
+    #[test]
+    fn test_get_workspace_ignores() {
+        let package_manager = PackageManager::Npm;
+        let globs = package_manager
+            .get_workspace_ignores(&Path::new("../examples/basic"))
+            .unwrap();
 
-#[test]
-fn test_get_workspaces() {
-    let mut home_path = current_exe().unwrap();
-    home_path.pop();
-    home_path.push("../../../../examples/basic/apps/docs/package.json");
-    println!("{:?}", home_path);
-    let pattern = Pattern::new("apps/*/package.json").unwrap();
-    println!("{}", pattern.matches_path(&home_path));
-    // let package_manager = PackageManager::Npm;
-    // let mut home_path = current_exe().unwrap();
-    // home_path.pop();
-    // home_path.push("../../../../examples/basic");
-    // let workspaces = package_manager.get_workspaces(&home_path).unwrap();
-    //
-    // println!("Workspaces: {:?}", workspaces);
+        assert_eq!(globs.is_match("node_modules/foo"), true);
+        assert_eq!(globs.is_match("bar.js"), false);
+    }
+
+    #[test]
+    fn test_get_workspaces() {
+        let package_manager = PackageManager::Npm;
+        let home_path = Path::new("../examples/basic");
+        let workspaces = package_manager.get_workspaces(&home_path).unwrap();
+
+        // This is not ideal, but we can't compare with an expected set of paths because
+        // the paths are absolute and therefore depend on who's running the test.
+        for dir_entry in workspaces {
+            assert_eq!(dir_entry.file_name().unwrap(), OsStr::new("package.json"))
+        }
+    }
 }

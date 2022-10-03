@@ -1,6 +1,8 @@
 mod package_manager;
 mod paths;
 
+use crate::package_manager::PackageManager;
+use crate::paths::AncestorSearch;
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use serde::Deserialize;
@@ -52,30 +54,6 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     Ok(exit_code)
 }
 
-/// Starts at `current_dir` and searches up the directory tree for the specified `config_file`.
-///
-/// # Arguments
-///
-/// * `current_dir`: Current directory where we start search
-/// * `config_file`: Name of config file that we are searching for
-///
-/// returns: Result<PathBuf, Error>
-///
-fn find_config_file_in_ancestor_path(
-    mut current_dir: PathBuf,
-    config_file: impl AsRef<Path>,
-) -> Option<PathBuf> {
-    while fs::metadata(current_dir.join(&config_file)).is_err() {
-        // Pops off current folder and sets to `current_dir.parent`
-        // if false, `current_dir` has no parent
-        if !current_dir.pop() {
-            return None;
-        }
-    }
-
-    Some(current_dir.join(config_file))
-}
-
 /// Finds local turbo path given the package.json path. We assume that the node_modules directory
 /// is at the same level as the package.json file.
 ///
@@ -110,6 +88,40 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
     }
 }
 
+/// Checks if we are in single package mode by first seeing if there is a turbo.json
+/// in the ancestor path, and then checking for workspaces.
+///
+/// # Arguments
+///
+/// * `current_dir`: Current working directory
+///
+/// returns: Result<bool, Error>
+///
+fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
+    let has_turbo_json = AncestorSearch::new(current_dir.to_path_buf(), "turbo.json")?
+        .next()
+        .is_some();
+
+    if has_turbo_json {
+        return Ok(false);
+    }
+
+    // We should detect which package manager and then determine workspaces from there,
+    // but detection is not implemented yet and really we're either checking the `package.json`
+    // or the `pnpm-workspace.yaml` file so we can do both.
+    let npm = PackageManager::Npm;
+    if npm.get_workspace_globs(current_dir).is_ok() {
+        return Ok(false);
+    };
+
+    let pnpm = PackageManager::Pnpm;
+    if pnpm.get_workspace_globs(current_dir).is_ok() {
+        return Ok(false);
+    };
+
+    Ok(true)
+}
+
 /// Attempts to run local turbo by finding nearest package.json,
 /// then finding local turbo installation, then running installation if exists.
 /// If at any point this fails, return an error and let main run global turbo.
@@ -121,8 +133,9 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
 ///
 /// returns: Result<i32, Error>
 ///
-fn try_run_local_turbo(current_dir: PathBuf) -> Result<i32> {
-    let package_json_path = find_config_file_in_ancestor_path(current_dir, "package.json")
+fn try_run_local_turbo(current_dir: PathBuf, is_single_package_mode: bool) -> Result<i32> {
+    let package_json_path = AncestorSearch::new(current_dir, "package.json")?
+        .next()
         .ok_or_else(|| anyhow!("No package.json found in ancestor path."))?;
     let local_turbo_path = find_local_turbo_path(&package_json_path)?
         .ok_or_else(|| anyhow!("No local turbo installation found in package.json."))?;
@@ -167,16 +180,18 @@ fn main() -> Result<()> {
         env::current_dir()?
     };
 
-    let exit_code = try_run_local_turbo(current_dir).unwrap_or_else(|_| {
-        let args = env::args().skip(1).collect();
-        match run_current_turbo(args) {
-            Ok(exit_code) => exit_code,
-            Err(e) => {
-                println!("failed {:?}", e);
-                2
-            }
+    let mut args: Vec<_> = env::args().skip(1).collect();
+    if is_single_package_mode(&current_dir)? {
+        args.push("--single-package".to_string());
+    }
+
+    let exit_code = match run_current_turbo(args) {
+        Ok(exit_code) => exit_code,
+        Err(e) => {
+            println!("failed {:?}", e);
+            2
         }
-    });
+    };
 
     process::exit(exit_code)
 }
