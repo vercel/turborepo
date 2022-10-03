@@ -980,22 +980,22 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	outputPrefix := packageTask.OutputPrefix(ec.isSinglePackage)
-	targetLogger := ec.logger.Named(outputPrefix)
+	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
+	prettyPrefix := ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
+
+	targetLogger := ec.logger.Named(prefix)
 	targetLogger.Debug("start")
 
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	// Create a logger
-	colorPrefixer := ec.colorCache.PrefixColor(packageTask.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", outputPrefix)
 	targetUI := &cli.PrefixedUi{
 		Ui:           ec.ui,
-		OutputPrefix: prettyTaskPrefix,
-		InfoPrefix:   prettyTaskPrefix,
-		ErrorPrefix:  prettyTaskPrefix,
-		WarnPrefix:   prettyTaskPrefix,
+		OutputPrefix: prettyPrefix,
+		InfoPrefix:   prettyPrefix,
+		ErrorPrefix:  prettyPrefix,
+		WarnPrefix:   prettyPrefix,
 	}
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
@@ -1043,19 +1043,19 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(outputPrefix)
+	writer, err := taskCache.OutputWriter(prefix)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
-		ec.logError(targetLogger, prettyTaskPrefix, err)
+		ec.logError(targetLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
