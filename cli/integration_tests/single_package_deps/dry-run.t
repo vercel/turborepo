@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task            = build                  
-    Hash            = 6218abb18f5176f5       
+    Hash            = ad0ecb9fac7f41b0       
     Cached (Local)  = false                  
     Cached (Remote) = false                  
     Command         = echo 'building' > foo  
@@ -18,7 +18,7 @@ Check
     Dependendents   = test                   
   test
     Task            = test                                         
-    Hash            = de6f1fc6a43f96b9                             
+    Hash            = ce522d29d583b888                             
     Cached (Local)  = false                                        
     Cached (Remote) = false                                        
     Command         = [[ ( -f foo ) && $(cat foo) == 'building' ]] 
@@ -32,11 +32,12 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "6218abb18f5176f5",
+        "hash": "ad0ecb9fac7f41b0",
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"
         ],
+        "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
         "dependencies": [],
         "dependents": [
@@ -45,9 +46,10 @@ Check
       },
       {
         "task": "test",
-        "hash": "de6f1fc6a43f96b9",
+        "hash": "ce522d29d583b888",
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
-        "outputs": [],
+        "outputs": null,
+        "excludedOutputs": null,
         "logFile": ".turbo/turbo-test.log",
         "dependencies": [
           "build"

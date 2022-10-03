@@ -224,7 +224,7 @@ type taskHashInputs struct {
 	hashOfFiles          string
 	externalDepsHash     string
 	task                 string
-	outputs              []string
+	outputs              fs.TaskOutputs
 	passThruArgs         []string
 	hashableEnvPairs     []string
 	globalHash           string
