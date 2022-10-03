@@ -13,6 +13,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
+// GlobAll returns an array of files and folders that match the specified set of glob patterns.
+// The returned files and folders are absolute paths, assuming that basePath is an absolute path.
+func GlobAll(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
+	fsys := fs.CreateDirFSAtRoot(basePath)
+	fsysRoot := fs.GetDirFSRootPath(fsys)
+	return globAllFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
+}
+
 // GlobFiles returns an array of files that match the specified set of glob patterns.
 // The return files are absolute paths, assuming that basePath is an absolute path.
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
@@ -36,8 +44,18 @@ func checkRelativePath(from string, to string) error {
 	return nil
 }
 
-// globFilesFs searches the specified file system to ensure to enumerate all files to include.
+// globFilesFs searches the specified file system to enumerate all files to include.
 func globFilesFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
+	return globWalkFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns, false)
+}
+
+// globAllFs searches the specified file system to enumerate all files to include.
+func globAllFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
+	return globWalkFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns, true)
+}
+
+// globWalkFs searches the specified file system to enumerate all files and folders to include.
+func globWalkFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns []string, excludePatterns []string, includeDirs bool) ([]string, error) {
 	var processedIncludes []string
 	var processedExcludes []string
 	result := make(util.Set)
@@ -105,7 +123,7 @@ func globFilesFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns
 	excludePattern = filepath.ToSlash(excludePattern)
 
 	err := doublestar.GlobWalk(fsys, includePattern, func(path string, dirEntry iofs.DirEntry) error {
-		if dirEntry.IsDir() {
+		if !includeDirs && dirEntry.IsDir() {
 			return nil
 		}
 
@@ -143,6 +161,10 @@ func globFilesFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns
 	if err != nil {
 		return nil, err
 	}
+
+	// Never actually capture the root folder.
+	// This is a risk because of how we rework the globs.
+	result.Delete(strings.TrimSuffix(basePath, "/"))
 
 	return result.UnsafeListOfStrings(), nil
 }
