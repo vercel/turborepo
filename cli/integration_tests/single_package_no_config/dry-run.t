@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task            = build                  
-    Hash            = fb59965ecbacb932       
+    Hash            = 17e3707692e8bac9       
     Cached (Local)  = false                  
     Cached (Remote) = false                  
     Command         = echo 'building'        
@@ -22,7 +22,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "fb59965ecbacb932",
+        "hash": "17e3707692e8bac9",
         "command": "echo 'building'",
         "outputs": null,
         "excludedOutputs": null,
