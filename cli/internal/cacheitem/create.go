@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/moby/sys/sequential"
+	"github.com/vercel/turborepo/cli/internal/tarpatch"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
@@ -73,7 +74,7 @@ func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath tur
 
 	// Generate the the header.
 	// We do not use header generation from stdlib because it can throw an error.
-	header, headerErr := FileInfoHeader(cacheDestinationName, fileInfo, link)
+	header, headerErr := tarpatch.FileInfoHeader(cacheDestinationName, fileInfo, link)
 	if headerErr != nil {
 		return headerErr
 	}
