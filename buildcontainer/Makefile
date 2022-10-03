@@ -1,20 +1,20 @@
 include .env
 
 REGISTRY           ?= ghcr.io
-TAG_VERSION        ?= $(shell git describe --tags --abbrev=0)
+TAG_VERSION        ?= snapshot
+OWNER              ?= goreleaser
+GIT_REPO           ?= https://github.com/vercel/turborepo
 
 ifeq ($(REGISTRY),)
-	IMAGE_BASE_NAME := goreleaser/goreleaser-cross-base:$(TAG_VERSION)
-	IMAGE_NAME      := goreleaser/goreleaser-cross:$(TAG_VERSION)
+	IMAGE_BASE_NAME  := $(OWNER)/goreleaser-cross-base:$(TAG_VERSION)
+	IMAGE_NAME       := $(OWNER)/goreleaser-cross:$(TAG_VERSION)
+	TURBO_IMAGE_NAME := $(OWNER)/turbo-cross:$(TAG_VERSION)
 else
-	IMAGE_BASE_NAME := $(REGISTRY)/goreleaser/goreleaser-cross-base:$(TAG_VERSION)
-	IMAGE_NAME      := $(REGISTRY)/goreleaser/goreleaser-cross:$(TAG_VERSION)
+	IMAGE_BASE_NAME  := $(REGISTRY)/$(OWNER)/goreleaser-cross-base:$(TAG_VERSION)
+	IMAGE_NAME       := $(REGISTRY)/$(OWNER)/goreleaser-cross:$(TAG_VERSION)
+	TURBO_IMAGE_NAME := $(REGISTRY)/$(OWNER)/turbo-cross:$(TAG_VERSION)
 endif
 
-OSX_SDK            := MacOSX12.0.sdk
-OSX_SDK_SUM        := ac07f28c09e6a3b09a1c01f1535ee71abe8017beaedd09181c8f08936a510ffd
-OSX_VERSION_MIN    := 10.9
-OSX_CROSS_COMMIT   := e59a63461da2cbc20cb0a5bbfc954730e50a5472
 DEBIAN_FRONTEND    := noninteractive
 GORELEASER_VERSION ?= 1.1.0
 TINI_VERSION       ?= v0.19.0
@@ -36,6 +36,8 @@ goreleaser-cross-base-%:
 	@echo "building $(IMAGE_BASE_NAME)-$(@:goreleaser-cross-base-%=%)"
 	$(DOCKER_BUILD) --platform=linux/$(@:goreleaser-cross-base-%=%) -t $(IMAGE_BASE_NAME)-$(@:goreleaser-cross-base-%=%) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
+		--build-arg OWNER=$(OWNER) \
+		--build-arg GIT_REPO=$(GIT_REPO) \
 		--build-arg GORELEASER_VERSION=$(GORELEASER_VERSION) \
 		--build-arg TINI_VERSION=$(TINI_VERSION) \
 		--build-arg COSIGN_VERSION=$(COSIGN_VERSION) \
@@ -45,13 +47,11 @@ goreleaser-cross-base-%:
 
 .PHONY: goreleaser-cross-%
 goreleaser-cross-%:
-	@echo "building $(IMAGE_NAME)-$(@:goreleaser-cross-%=%)"
+	@echo "building $(IMAGE_NAME)-$(@:goreleaser-cross-%=%) on top of $(IMAGE_BASE_NAME)"
 	$(DOCKER_BUILD) --platform=linux/$(@:goreleaser-cross-%=%) -t $(IMAGE_NAME)-$(@:goreleaser-cross-%=%) \
-		--build-arg GO_VERSION=$(GO_VERSION) \
-		--build-arg OSX_SDK=$(OSX_SDK) \
-		--build-arg OSX_SDK_SUM=$(OSX_SDK_SUM) \
-		--build-arg OSX_VERSION_MIN=$(OSX_VERSION_MIN) \
-		--build-arg OSX_CROSS_COMMIT=$(OSX_CROSS_COMMIT) \
+		--build-arg OWNER=$(OWNER) \
+		--build-arg GIT_REPO=$(GIT_REPO) \
+		--build-arg BASE_IMAGE=$(IMAGE_BASE_NAME) \
 		--build-arg DEBIAN_FRONTEND=$(DEBIAN_FRONTEND) \
 		-f Dockerfile .
 
@@ -78,11 +78,13 @@ docker-push: $(patsubst %, docker-push-%,$(SUBIMAGES))
 .PHONY: manifest-create-base
 manifest-create-base:
 	@echo "creating base manifest $(IMAGE_BASE_NAME)"
+	docker manifest rm $(IMAGE_BASE_NAME) 2> /dev/null || true
 	docker manifest create $(IMAGE_BASE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_BASE_NAME)-$(arch))
 
 .PHONY: manifest-create
 manifest-create:
 	@echo "creating manifest $(IMAGE_NAME)"
+	docker manifest rm $(IMAGE_NAME) 2> /dev/null || true
 	docker manifest create $(IMAGE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(IMAGE_NAME)-$(arch))
 
 .PHONY: manifest-push-base
@@ -95,10 +97,29 @@ manifest-push:
 	@echo "pushing manifest $(IMAGE_NAME)"
 	docker manifest push $(IMAGE_NAME)
 
-.PHONY: tags
-tags:
-	@echo $(IMAGE_NAME) $(foreach arch,$(SUBIMAGES), $(IMAGE_NAME)-$(arch))
+.PHONY: turbo-cross-%
+turbo-cross-%:
+	# Currently, we don't layer any customizations
+	@echo "tagging $(IMAGE_NAME)-$(@:turbo-cross-%=%) to $(TURBO_IMAGE_NAME)-$(@:turbo-cross-%=%)"
+	docker tag $(IMAGE_NAME)-$(@:turbo-cross-%=%) $(TURBO_IMAGE_NAME)-$(@:turbo-cross-%=%)
 
-.PHONY: tag
-tag:
-	@echo $(TAG_VERSION)
+.PHONY: turbo-cross
+turbo-cross: $(patsubst %, turbo-cross-%,$(SUBIMAGES))
+
+.PHONY: push-turbo-cross-%
+push-turbo-cross-%: turbo-cross-%
+	docker push $(TURBO_IMAGE_NAME)-$(@:push-turbo-cross-%=%)
+
+.PHONY: push-turbo-cross
+push-turbo-cross: $(patsubst %, push-turbo-cross-%,$(SUBIMAGES))
+
+.PHONY: manifest-create-turbo
+manifest-create-turbo:
+	@echo "creating manifest $(TURBO_IMAGE_NAME)"
+	docker manifest rm $(TURBO_IMAGE_NAME) 2> /dev/null || true
+	docker manifest create $(TURBO_IMAGE_NAME) $(foreach arch,$(SUBIMAGES), --amend $(TURBO_IMAGE_NAME)-$(arch))
+
+.PHONY: manifest-push-turbo
+manifest-push-turbo:
+	@echo "pushing manifest $(TURBO_IMAGE_NAME)"
+	docker manifest push $(TURBO_IMAGE_NAME)

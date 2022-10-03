@@ -14,6 +14,10 @@ import (
 
 func assertIsSorted(t *testing.T, arr []string, msg string) {
 	t.Helper()
+	if arr == nil {
+		return
+	}
+
 	copied := make([]string, len(arr))
 	copy(copied, arr)
 	sort.Strings(copied)
@@ -40,7 +44,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{".next/**", "dist/**"},
+			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -48,7 +52,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"lint": {
-			Outputs:                 []string{},
+			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{"MY_VAR"},
 			TaskDependencies:        []string{},
@@ -57,16 +61,16 @@ func Test_ReadTurboConfig(t *testing.T) {
 		},
 		"dev": {
 			Outputs:                 defaultOutputs,
-			EnvVarDependencies:      []string{},
 			TopologicalDependencies: []string{},
+			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
 			ShouldCache:             false,
 			OutputMode:              util.FullTaskOutput,
 		},
 		"publish": {
-			Outputs:                 []string{"dist/**"},
-			EnvVarDependencies:      []string{},
+			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 			TopologicalDependencies: []string{"build", "publish"},
+			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{"admin#lint", "build"},
 			ShouldCache:             false,
 			Inputs:                  []string{"build/**/*"},
@@ -98,7 +102,7 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{"build/**/*", "dist/**/*"},
+			Outputs:                 TaskOutputs{Inclusions: []string{"build/**/*", "dist/**/*"}},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -129,7 +133,7 @@ func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 []string{".next/**", "dist/**"},
+			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -259,7 +263,8 @@ func validatePipeline(t *testing.T, actual Pipeline, expected map[string]TaskDef
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
-		assertIsSorted(t, actualTaskDefinition.Outputs, "Task outputs")
+		assertIsSorted(t, actualTaskDefinition.Outputs.Inclusions, "Task output inclusions")
+		assertIsSorted(t, actualTaskDefinition.Outputs.Exclusions, "Task output exclusions")
 		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
 		assertIsSorted(t, actualTaskDefinition.TopologicalDependencies, "Topo deps")
 		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
