@@ -23,7 +23,7 @@ type tarFile struct {
 }
 
 type restoreFile struct {
-	Name     turbopath.AnchoredSystemPath
+	Name     turbopath.AnchoredUnixPath
 	Linkname string
 	fs.FileMode
 }
@@ -80,7 +80,7 @@ func generateAnchor(t *testing.T) turbopath.AbsoluteSystemPath {
 func assertFileExists(t *testing.T, anchor turbopath.AbsoluteSystemPath, diskFile restoreFile) {
 	t.Helper()
 	// If we have gotten here we can assume this to be true.
-	processedName := turbopath.AnchoredSystemPath(diskFile.Name)
+	processedName := diskFile.Name.ToSystemPath()
 	fullName := processedName.RestoreAnchor(anchor)
 	fileInfo, err := fullName.Lstat()
 	assert.NilError(t, err, "Lstat")
@@ -117,6 +117,324 @@ func TestOpen(t *testing.T) {
 		wantFiles  wantFiles
 		wantErr    wantErr
 	}{
+		{
+			name: "cache optimized",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "one/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/three/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/three/file-one",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/three/file-two",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/a/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/a/file",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/b/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/b/file",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+			},
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "one",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/three",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/three/file-one",
+						FileMode: 0644,
+					},
+					{
+						Name:     "one/two/three/file-two",
+						FileMode: 0644,
+					},
+					{
+						Name:     "one/two/a",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/a/file",
+						FileMode: 0644,
+					},
+					{
+						Name:     "one/two/b",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/b/file",
+						FileMode: 0644,
+					},
+				},
+				windows: []restoreFile{
+					{
+						Name:     "one",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/three",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/three/file-one",
+						FileMode: 0666,
+					},
+					{
+						Name:     "one/two/three/file-two",
+						FileMode: 0666,
+					},
+					{
+						Name:     "one/two/a",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/a/file",
+						FileMode: 0666,
+					},
+					{
+						Name:     "one/two/b",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/b/file",
+						FileMode: 0666,
+					},
+				},
+			},
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{
+					"one",
+					"one/two",
+					"one/two/three",
+					"one/two/three/file-one",
+					"one/two/three/file-two",
+					"one/two/a",
+					"one/two/a/file",
+					"one/two/b",
+					"one/two/b/file",
+				}.ToSystemPathArray(),
+			},
+		},
+		{
+			name: "pathological cache works",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "one/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/a/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/b/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/three/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/a/file",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/b/file",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/three/file-one",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/three/file-two",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+				},
+			},
+			wantFiles: wantFiles{
+				unix: []restoreFile{
+					{
+						Name:     "one",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/three",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/three/file-one",
+						FileMode: 0644,
+					},
+					{
+						Name:     "one/two/three/file-two",
+						FileMode: 0644,
+					},
+					{
+						Name:     "one/two/a",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/a/file",
+						FileMode: 0644,
+					},
+					{
+						Name:     "one/two/b",
+						FileMode: 0 | os.ModeDir | 0755,
+					},
+					{
+						Name:     "one/two/b/file",
+						FileMode: 0644,
+					},
+				},
+				windows: []restoreFile{
+					{
+						Name:     "one",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/three",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/three/file-one",
+						FileMode: 0666,
+					},
+					{
+						Name:     "one/two/three/file-two",
+						FileMode: 0666,
+					},
+					{
+						Name:     "one/two/a",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/a/file",
+						FileMode: 0666,
+					},
+					{
+						Name:     "one/two/b",
+						FileMode: 0 | os.ModeDir | 0777,
+					},
+					{
+						Name:     "one/two/b/file",
+						FileMode: 0666,
+					},
+				},
+			},
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{
+					"one",
+					"one/two",
+					"one/two/a",
+					"one/two/b",
+					"one/two/three",
+					"one/two/a/file",
+					"one/two/b/file",
+					"one/two/three/file-one",
+					"one/two/three/file-two",
+				}.ToSystemPathArray(),
+			},
+		},
 		{
 			name: "hello world",
 			tarFiles: []tarFile{
@@ -207,11 +525,11 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantOutput: wantOutput{
-				unix: turbopath.AnchoredUnixPathArray{"folder/", "folder/file"}.ToSystemPathArray(),
+				unix: turbopath.AnchoredUnixPathArray{"folder", "folder/file"}.ToSystemPathArray(),
 			},
 		},
 		{
-			name: "nested file",
+			name: "nested symlink",
 			tarFiles: []tarFile{
 				{
 					Header: &tar.Header{
@@ -278,7 +596,7 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantOutput: wantOutput{
-				unix: turbopath.AnchoredUnixPathArray{"folder/", "folder/symlink", "folder/symlink/folder-sibling"}.ToSystemPathArray(),
+				unix: turbopath.AnchoredUnixPathArray{"folder", "folder/symlink", "folder/symlink/folder-sibling"}.ToSystemPathArray(),
 			},
 		},
 		{
@@ -415,7 +733,7 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantOutput: wantOutput{
-				unix: turbopath.AnchoredUnixPathArray{"folder-not-file/", "folder-not-file/subfile"}.ToSystemPathArray(),
+				unix: turbopath.AnchoredUnixPathArray{"folder-not-file", "folder-not-file/subfile"}.ToSystemPathArray(),
 			},
 			wantErr: wantErr{
 				unix:    syscall.EISDIR,
@@ -945,6 +1263,44 @@ func Test_canonicalizeLinkname(t *testing.T) {
 			}
 			if got := canonicalizeLinkname(anchor, tt.processedName, tt.linkname); got != canonical {
 				t.Errorf("canonicalizeLinkname() = %v, want %v", got, canonical)
+			}
+		})
+	}
+}
+
+func Test_canonicalizeName(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileName string
+		want     turbopath.AnchoredSystemPath
+		wantErr  error
+	}{
+		{
+			name:     "hello world",
+			fileName: "test.txt",
+			want:     "test.txt",
+		},
+		{
+			name:     "directory",
+			fileName: "something/",
+			want:     "something",
+		},
+		{
+			name:     "malformed name",
+			fileName: "//",
+			want:     "",
+			wantErr:  errNameMalformed,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := canonicalizeName(tt.fileName)
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("canonicalizeName() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("canonicalizeName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

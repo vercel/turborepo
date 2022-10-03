@@ -9,7 +9,7 @@ import (
 )
 
 // restoreRegular restores a file.
-func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreRegular(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
 	// Assuming this was a `turbo`-created input, we currently have an AnchoredUnixPath.
 	// Assuming this is malicious input we don't really care if we do the wrong thing.
 	processedName, err := canonicalizeName(header.Name)
@@ -20,7 +20,7 @@ func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 	// We need to traverse `processedName` from base to root split at
 	// `os.Separator` to make sure we don't end up following a symlink
 	// outside of the restore path.
-	if err := safeMkdirFile(anchor, processedName, header.Mode); err != nil {
+	if err := safeMkdirFile(dirCache, anchor, processedName, header.Mode); err != nil {
 		return "", err
 	}
 
@@ -36,6 +36,11 @@ func restoreRegular(anchor turbopath.AbsoluteSystemPath, header *tar.Header, rea
 }
 
 // safeMkdirAll creates all directories, assuming that the leaf node is a file.
-func safeMkdirFile(anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
-	return safeMkdirAll(anchor, processedName.Dir(), 0755)
+func safeMkdirFile(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, mode int64) error {
+	isRootFile := processedName.Dir() == "."
+	if !isRootFile {
+		return safeMkdirAll(dirCache, anchor, processedName.Dir(), 0755)
+	}
+
+	return nil
 }

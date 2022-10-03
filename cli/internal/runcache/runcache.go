@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -277,6 +278,11 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 	if err != nil {
 		return err
 	}
+
+	// Because this is coming out of a map filesToBeCached is in no way ordered.
+	// Sorting will put the files in a depth-first order.
+	// This will make restoration as fast as possible.
+	sort.Strings(filesToBeCached)
 
 	relativePaths := make([]turbopath.AnchoredSystemPath, len(filesToBeCached))
 
