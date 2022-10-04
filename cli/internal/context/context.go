@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/vercel/turborepo/cli/internal/core"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/lockfile"
@@ -19,6 +20,24 @@ import (
 	"github.com/pyr-sh/dag"
 	"golang.org/x/sync/errgroup"
 )
+
+// Warning Error type for errors that don't prevent the creation of a functional Context
+type Warnings struct {
+	warns *multierror.Error
+}
+
+var _ error = (*Warnings)(nil)
+
+func (w *Warnings) Error() string {
+	return w.warns.Error()
+}
+
+func (w *Warnings) errorOrNil() error {
+	if w.warns != nil {
+		return w
+	}
+	return nil
+}
 
 // Context of the CLI
 type Context struct {
@@ -125,17 +144,19 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
 	c.RootNode = core.ROOT_NODE_NAME
 
+	var warnings Warnings
+
 	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
 	if err != nil {
 		return nil, err
 	}
 	c.PackageManager = packageManager
 
-	lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot)
-	if err != nil {
-		return nil, err
+	if lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot); err != nil {
+		warnings.warns = multierror.Append(warnings.warns, err)
+	} else {
+		c.Lockfile = lockfile
 	}
-	c.Lockfile = lockfile
 
 	if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
 		// TODO(Gaspar) was this the intended return error?
@@ -184,7 +205,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	c.PackageInfos[util.RootPkgName] = rootPackageJSON
 
-	return c, nil
+	return c, warnings.errorOrNil()
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {

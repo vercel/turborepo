@@ -195,7 +195,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot))
 	}
 	if err != nil {
-		return err
+		var warnings *context.Warnings
+		if errors.As(err, &warnings) {
+			r.base.LogWarning("Issues occurred when constructing package graph. Turbo will function, but some features may not be available", err)
+		} else {
+			return err
+		}
 	}
 	if ui.IsCI && !r.opts.runOpts.noDaemon {
 		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
