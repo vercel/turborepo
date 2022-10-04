@@ -21,10 +21,23 @@ struct Args {
     cwd: Option<String>,
     #[clap(subcommand)]
     commands: Option<Commands>,
+    task: Option<String>,
 }
 
+/// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
+/// we must change these as well to avoid accidentally passing the --single-package
+/// flag into non-build commands.
 #[derive(Subcommand, Debug)]
 enum Commands {
+    Bin,
+    Completion,
+    Daemon,
+    Help,
+    Link,
+    Login,
+    Logout,
+    Prune,
+    Unlink,
     Run { tasks: Vec<String> },
 }
 
@@ -89,13 +102,25 @@ fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
     Ok(true)
 }
 
+/// Checks if either we have an explicit run command, i.e. `turbo run build`
+/// or an implicit run, i.e. `turbo build`, where the command after `turbo` is
+/// not one of the reserved commands like `link`, `login`, `bin`, etc.
+///
+/// # Arguments
+///
+/// * `clap_args`:
+///
+/// returns: bool
+///
 fn is_run_command(clap_args: &Args) -> bool {
-    matches!(clap_args.commands, Some(Commands::Run { .. }))
+    let is_explicit_run = matches!(clap_args.commands, Some(Commands::Run { .. }));
+    let is_implicit_run = clap_args.commands.is_none() && clap_args.task.is_some();
+
+    is_explicit_run || is_implicit_run
 }
 
 fn main() -> Result<()> {
     let clap_args = Args::parse();
-
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         cwd.into()
     } else {
