@@ -130,9 +130,6 @@ func (l *Logstreamer) out(str string) {
 	l.Logger.Print(str)
 }
 
-// LogStreamer.Logger.Writer -> stdtout, file writer
-//
-
 // PrettyStdoutWriter wraps an ioWriter so it can add string
 // prefixes to every message it writes to stdout.
 type PrettyStdoutWriter struct {
