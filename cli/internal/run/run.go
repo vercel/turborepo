@@ -1014,7 +1014,15 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 	// Cache ---------------------------------------------
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
-	hit, err := taskCache.RestoreOutputs(ctx, ec.ui, progressLogger, prettyPrefix)
+	// Create a logger for replaying
+	prefixedUI := &cli.PrefixedUi{
+		Ui:           ec.ui,
+		OutputPrefix: prettyPrefix,
+		InfoPrefix:   prettyPrefix,
+		ErrorPrefix:  prettyPrefix,
+		WarnPrefix:   prettyPrefix,
+	}
+	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 	if err != nil {
 		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {

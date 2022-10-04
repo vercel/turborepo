@@ -152,17 +152,17 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns true if successful.
-func (tc TaskCache) RestoreOutputs(ctx context.Context, ecUI cli.Ui, progressLogger hclog.Logger, prettyPrefix string) (bool, error) {
+func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput {
-			ecUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
+			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
 	}
 	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
-		ecUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
+		prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
 	}
 
@@ -174,22 +174,19 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, ecUI cli.Ui, progressLog
 		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		if err != nil {
 			return false, err
-		}
-
-		// no cache hit, exit
-		if !hit {
+		} else if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput {
-				ecUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
+				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			return false, nil
 		}
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
-			ecUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
-		ecUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
 	switch tc.taskOutputMode {
@@ -197,21 +194,13 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, ecUI cli.Ui, progressLog
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		ecUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
-		ecUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
 		if tc.LogFileName.FileExists() {
-			// Create a logger for replaying
-			replayUI := &cli.PrefixedUi{
-				Ui:           ecUI,
-				OutputPrefix: prettyPrefix,
-				InfoPrefix:   prettyPrefix,
-				ErrorPrefix:  prettyPrefix,
-				WarnPrefix:   prettyPrefix,
-			}
 
-			tc.rc.logReplayer(progressLogger, replayUI, tc.LogFileName)
+			tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
 		}
 	default:
 		// NoLogs, do not output anything
