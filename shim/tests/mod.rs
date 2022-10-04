@@ -6,7 +6,7 @@ fn test_find_correct_turbo() {
     let mut cmd = Command::cargo_bin("shim").unwrap();
     cmd.assert().append_context("shim", "no arguments").code(1);
 
-    // `shim --cwd ../../examples/basic bin` should print out local turbo binary
+    // `shim --cwd ../../examples/basic bin` should print out current turbo binary
     let mut cmd = Command::cargo_bin("shim").unwrap();
     cmd.args(&["--cwd", "../examples/basic", "bin"])
         .assert()
