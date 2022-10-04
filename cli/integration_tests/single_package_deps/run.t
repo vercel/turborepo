@@ -26,15 +26,15 @@ Run a second time, verify caching works because there is a config
   \xe2\x80\xa2 Running test (esc)
    INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output ad0ecb9fac7f41b0
-  build: 
+  build:  
   build: > build
   build: > echo 'building' > foo
-  build: 
+  build:  
   test: cache hit, replaying output ce522d29d583b888
-  test: 
+  test:  
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
-  test: 
+  test:  
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
