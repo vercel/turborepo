@@ -232,8 +232,11 @@ func (fwc *fileWriterCloser) Close() error {
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
 func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
+	// an os.Stdout wrapper that will add prefixes before printing to stdout
+	stdoutWriter := logstreamer.NewPrettyStdoutWriter(prefix)
+
 	if tc.cachingDisabled || tc.rc.writesDisabled {
-		return nopWriteCloser{os.Stdout}, nil
+		return nopWriteCloser{stdoutWriter}, nil
 	}
 	// Setup log file
 	if err := tc.LogFileName.EnsureDir(); err != nil {
@@ -254,7 +257,6 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
-		stdoutWriter := logstreamer.NewPrettyStdoutWriter(prefix)
 		fwc.Writer = io.MultiWriter(stdoutWriter, bufWriter)
 	}
 
