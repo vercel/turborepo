@@ -218,3 +218,23 @@ func (p AbsoluteSystemPath) EvalSymlinks() (AbsoluteSystemPath, error) {
 	}
 	return AbsoluteSystemPath(result), nil
 }
+
+// HasPrefix is strings.HasPrefix for paths, ensuring that it matches on separator boundaries.
+// This does NOT perform Clean in advance.
+func (p AbsoluteSystemPath) HasPrefix(prefix AbsoluteSystemPath) bool {
+	prefixLen := len(prefix)
+	pathLen := len(p)
+
+	if prefixLen > pathLen {
+		// Can't be a prefix if longer.
+		return false
+	} else if prefixLen == pathLen {
+		// Can be a prefix if they're equal, but otherwise no.
+		return p == prefix
+	}
+
+	// otherPath is definitely shorter than p.
+	// We need to confirm that p[len(otherPath)] is a system separator.
+
+	return strings.HasPrefix(p.ToString(), prefix.ToString()) && os.IsPathSeparator(p[prefixLen])
+}

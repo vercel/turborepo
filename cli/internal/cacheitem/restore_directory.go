@@ -126,17 +126,20 @@ func checkPath(originalAnchor turbopath.AbsoluteSystemPath, accumulatedAnchor tu
 
 	// 2. See if the target is absolute.
 	if filepath.IsAbs(linkTarget) {
-		if strings.HasPrefix(linkTarget, originalAnchor.ToString()) {
-			return turbopath.AbsoluteSystemPath(linkTarget), nil
+		absoluteLinkTarget := turbopath.AbsoluteSystemPathFromUpstream(linkTarget)
+		if originalAnchor.HasPrefix(absoluteLinkTarget) {
+			return absoluteLinkTarget, nil
 		}
 		return "", errTraversal
 	}
 
 	// 3. Target is relative (or absolute Windows on a Unix device)
-	computedTarget := filepath.Join(accumulatedAnchor.ToString(), linkTarget)
-	if strings.HasPrefix(computedTarget, originalAnchor.ToString()) {
-		return turbopath.AbsoluteSystemPath(computedTarget), nil
+	relativeLinkTarget := turbopath.RelativeSystemPathFromUpstream(linkTarget)
+	computedTarget := accumulatedAnchor.UntypedJoin(linkTarget)
+	if computedTarget.HasPrefix(originalAnchor) {
+		// Need to recurse and make sure the target doesn't link out.
+		return checkPath(originalAnchor, accumulatedAnchor, relativeLinkTarget)
+	} else {
+		return "", errTraversal
 	}
-
-	return "", errTraversal
 }
