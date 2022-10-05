@@ -26,11 +26,7 @@ jobs:
         with:
           key: test
 
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: "yarn"
-          node-version: 16
+      - uses: ./.github/actions/setup-node
 
       - name: Start Redis
         uses: supercharge/redis-github-action@1.4.0
@@ -39,10 +35,6 @@ jobs:
 
       - name: Set Redis URL
         run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
-
-      - name: install Node.js dependencies
-        run: |
-          yarn install
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin

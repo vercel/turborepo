@@ -26,14 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: "yarn"
-          node-version: 16
-
-      - name: install node.js dependencies
-        run: yarn install
+      - uses: ./.github/actions/setup-node
 
       - uses: Swatinem/rust-cache@v1
         with:

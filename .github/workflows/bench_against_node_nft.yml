@@ -21,14 +21,7 @@ jobs:
         with:
           key: bench_nft
 
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: "yarn"
-          node-version: 16
-
-      - name: install Node.js dependencies
-        run: yarn install
+      - uses: ./.github/actions/setup-node
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin

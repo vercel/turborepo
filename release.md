@@ -2,7 +2,7 @@
 
 ## Release npm packages
 
-We have a simple script to release npm packages from yarn workspaces: `cargo xtask workspace --bump`.
+We have a simple script to release npm packages from pnpm workspaces: `cargo xtask workspace --bump`.
 
 ```text
 ? Select a package to bump
@@ -39,7 +39,7 @@ Once you have finished the bump, the script will do the following things:
 
 -   bump the version you choose in the corresponding package
 -   update dependencies in other packages that depend on the package you choose
--   update `yarn.lock` file
+-   update `pnpm-lock.yaml` file
 -   run `git tag -s pkg@version -m "pkg@version"` for each package
 
 You need to run `git push --follow-tags` to finish the release.

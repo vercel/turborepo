@@ -32,14 +32,7 @@ jobs:
       - name: Fetch the base branch
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
 
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: "yarn"
-          node-version: 16
-
-      - name: install node.js dependencies
-        run: yarn install
+      - uses: ./.github/actions/setup-node
 
       - uses: Swatinem/rust-cache@v1
         with:

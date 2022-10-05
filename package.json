@@ -1,12 +1,6 @@
 {
-  "packageManager": "yarn@3.2.3",
+  "packageManager": "pnpm@7.12.1",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "packages/turbo-tracing-next-plugin/test/with-mongodb-mongoose",
-    "crates/turbopack/tests/node-file-trace",
-    "crates/next-dev/tests"
-  ],
   "devDependencies": {
     "@taplo/cli": "^0.4.2",
     "eslint": "^8.20.0",
@@ -48,5 +42,19 @@
     "format:toml": "taplo format",
     "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.js",
     "postinstall": "husky install"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "@tensorflow/tfjs": {
+        "peerDependencies": {
+          "long": "^5.2.0"
+        }
+      },
+      "@tensorflow/tfjs-node": {
+        "peerDependencies": {
+          "@tensorflow/tfjs-core": "^3.20.0"
+        }
+      }
+    }
   }
 }

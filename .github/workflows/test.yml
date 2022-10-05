@@ -67,12 +67,6 @@ jobs:
         with:
           key: test
 
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: "yarn"
-          node-version: 16
-
       - name: Start Redis
         uses: supercharge/redis-github-action@1.4.0
         with:
@@ -91,16 +85,19 @@ jobs:
           description: Installing Node.js dependencies...
           url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
 
-      - name: Install node dependencies
-        run: |
-          yarn install
+      - uses: ./.github/actions/setup-node
         if: matrix.os.name != 'windows-latest'
 
-      - name: Install node dependencies
+      - name: install Node.js dependencies on Windows without scripts
+        uses: ./.github/actions/setup-node
+        with:
+          disable-scripts: true
+        if: matrix.os.name == 'windows-latest'
+
+      - name: install Node.js dependencies with scripts
         run: |
-          yarn install --mode=skip-build
-          yarn node-gyp install
-          yarn install
+          pnpm node-gyp install
+          pnpm install --force
         if: matrix.os.name == 'windows-latest'
 
       - name: Report progress

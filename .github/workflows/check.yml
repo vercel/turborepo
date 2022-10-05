@@ -125,20 +125,13 @@ jobs:
           command: fmt
           args: --check
 
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: "yarn"
-          node-version: 16
-
-      - name: install Node.js dependencies
-        run: yarn workspaces focus
+      - uses: ./.github/actions/setup-node
 
       - name: Prettier
-        run: yarn prettier -c .
+        run: pnpm exec prettier -c .
 
       - name: toml
-        run: yarn taplo format --check
+        run: pnpm exec taplo format --check
 
       - name: eslint
-        run: yarn lint
+        run: pnpm lint

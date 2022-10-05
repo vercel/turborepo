@@ -12,12 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup node
-        uses: actions/setup-node@v3
+      - uses: ./.github/actions/setup-node
         with:
-          node-version: 16
-          check-latest: true
-          cache: yarn
+          disable-scripts: true
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -29,10 +26,8 @@ jobs:
             target
           key: publish-npm-cargo-cache
 
-      - run: yarn install --mode=skip-build
-
       - name: Build packages
-        run: yarn turbo run build
+        run: pnpm turbo run build
 
       - name: Write NPM_TOKEN
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc
