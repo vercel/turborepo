@@ -3,16 +3,24 @@ title: Turborepo Quickstart
 description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
-import { QuickStartArea, LearnMoreArea } from "../../components/QuickStart";
+import { QuickStartArea, LearnMoreArea, MonoreposArea } from "../../components/QuickStart";
 import { ExamplesArea } from "../../components/ExamplesArea";
 
 # Turborepo Quickstart
 
-Turborepo is a smart **build system for JavaScript/TypeScript monorepos**: codebases containing multiple projects, often using multiple frameworks, in a single, unified code repository.
+Turborepo is a smart **task runner for JavaScript/TypeScript codebases**.
 
-Unlike other build systems, Turborepo is designed to be **incrementally adopted**, so you can add it to most codebases in a few minutes.
+Your codebase's tasks - like `lint`, `build` and `test` - **don't run as fast as they could**. Turborepo uses [smart scheduling](/docs/core-concepts/running-tasks) and [caching](/docs/core-concepts/caching) to turbocharge your local setup and speed up your CI.
+
+Turborepo is designed to be **incrementally adopted**, so you can add it to most codebases in a few minutes.
 
 <QuickStartArea />
+
+## Monorepos
+
+Turborepo works out-of-the-box with monorepo tools like `npm`, `pnpm` and `yarn`. If you've ever felt that your monorepo slowed you down, it might be time for Turborepo.
+
+<MonoreposArea />
 
 ## Features
 
