@@ -123,17 +123,19 @@ func MarshalPackageJSON(pkgJSON *PackageJSON) ([]byte, error) {
 func isEmpty(value interface{}) bool {
 	if value == nil {
 		return true
-	} else if s, ok := value.(string); ok {
+	}
+	switch s := value.(type) {
+	case string:
 		return s == ""
-	} else if s, ok := value.(bool); ok {
+	case bool:
 		return !s
-	} else if s, ok := value.([]string); ok {
+	case []string:
 		return len(s) == 0
-	} else if s, ok := value.(map[string]interface{}); ok {
+	case map[string]interface{}:
 		return len(s) == 0
-	} else if s, ok := value.(Workspaces); ok {
+	case Workspaces:
 		return len(s) == 0
-	} else {
+	default:
 		// Assume any unknown types aren't empty
 		return false
 	}

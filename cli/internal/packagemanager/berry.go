@@ -127,11 +127,11 @@ var nodejsBerry = PackageManager{
 			return fmt.Errorf("Invalid structure for resolutions field in package.json")
 		}
 
-		for dependency, patch := range resolutions {
+		for dependency, untypedPatch := range resolutions {
 			inPatches := false
-			patch, ok := patch.(string)
+			patch, ok := untypedPatch.(string)
 			if !ok {
-				return fmt.Errorf("Expected value of %s in package.json to be a string, got %v", dependency, patch)
+				return fmt.Errorf("Expected value of %s in package.json to be a string, got %v", dependency, untypedPatch)
 			}
 
 			for _, wantedPatch := range patches {
