@@ -162,9 +162,7 @@ func (p *PnpmLockfile) AllDependencies(key string) (map[string]string, bool) {
 		deps[name] = version
 	}
 
-	for name, version := range entry.PeerDependencies {
-		deps[name] = version
-	}
+	// Peer dependencies appear in the Dependencies map resolved
 
 	return deps, true
 }
@@ -194,10 +192,7 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 		OnlyBuiltDependencies:     p.OnlyBuiltDependencies,
 		Overrides:                 p.Overrides,
 		PackageExtensionsChecksum: p.PackageExtensionsChecksum,
-		// TODO only the applicable patches should be copied to the subgraph
-		// before we can implement this we need to be able to prune the pnpm section
-		// of package.json otherwise installation will fail
-		PatchedDependencies: p.PatchedDependencies,
+		PatchedDependencies:       prunePatches(p.PatchedDependencies, lockfilePackages),
 	}
 
 	return &lockfile, nil
@@ -224,6 +219,23 @@ func pruneImporters(importers map[string]ProjectSnapshot, workspacePackages []tu
 	}
 
 	return prunedImporters, nil
+}
+
+func prunePatches(patches map[string]PatchFile, packages map[string]PackageSnapshot) map[string]PatchFile {
+	if len(patches) == 0 {
+		return nil
+	}
+
+	patchPackages := make(map[string]PatchFile, len(patches))
+	for dependency, entry := range patches {
+		dependencyString := fmt.Sprintf("%s_%s", dependency, entry.Hash)
+		_, inPackages := packages[dependencyString]
+		if inPackages {
+			patchPackages[dependency] = entry
+		}
+	}
+
+	return patchPackages
 }
 
 // Encode encode the lockfile representation and write it to the given writer
