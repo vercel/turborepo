@@ -1,5 +1,4 @@
 mod package_manager;
-mod paths;
 
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
@@ -7,14 +6,13 @@ use clap::{Parser, Subcommand};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env::current_exe;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use std::process::Stdio;
 use std::{
     env,
     ffi::CString,
-    fs, io,
+    fs,
     os::raw::{c_char, c_int},
     process,
 };
