@@ -39,7 +39,7 @@ func (c *ColorCache) colorForKey(key string) colorFn {
 		return colorFn
 	}
 	c.index++
-	colorFn = c.TermColors[util.PositiveMod(c.index, 5)] // 5 possible colors
+	colorFn = c.TermColors[util.PositiveMod(c.index, len(c.TermColors))] // 5 possible colors
 	c.Cache[key] = colorFn
 	return colorFn
 }
