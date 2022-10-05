@@ -10,6 +10,7 @@ use std::env::current_exe;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use std::process::Stdio;
 use std::{
     env,
     ffi::CString,
@@ -234,15 +235,14 @@ fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
         return run_current_turbo(args);
     }
 
-    let output = process::Command::new(local_turbo_path)
+    let mut command = process::Command::new(local_turbo_path)
         .args(&args)
-        .output()
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
         .expect("Failed to execute turbo.");
 
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stderr().write_all(&output.stderr).unwrap();
-
-    Ok(output.status.code().unwrap_or(2))
+    Ok(command.wait()?.code().unwrap_or(2))
 }
 
 #[derive(Debug, Deserialize)]
