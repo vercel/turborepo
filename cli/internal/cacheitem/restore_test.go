@@ -926,6 +926,76 @@ func TestOpen(t *testing.T) {
 			},
 		},
 		{
+			name: "Double indirection: file",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "up",
+						Linkname: "../",
+						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "link",
+						Linkname: "up",
+						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "link/outside-file",
+						Typeflag: tar.TypeReg,
+						Mode:     0755,
+					},
+				},
+			},
+			wantErr: wantErr{unix: errTraversal, windows: errTraversal},
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{
+					"up",
+					"link",
+				}.ToSystemPathArray(),
+			},
+		},
+		{
+			name: "Double indirection: folder",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "up",
+						Linkname: "../",
+						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "link",
+						Linkname: "up",
+						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "link/level-one/level-two/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+			},
+			wantErr: wantErr{unix: errTraversal, windows: errTraversal},
+			wantOutput: wantOutput{
+				unix: turbopath.AnchoredUnixPathArray{
+					"up",
+					"link",
+				}.ToSystemPathArray(),
+			},
+		},
+		{
 			name: "name traversal",
 			tarFiles: []tarFile{
 				{
