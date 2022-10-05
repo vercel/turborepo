@@ -47,19 +47,19 @@ export const MonoreposArea = () => {
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
         feature={{
-          Icon: BookOpenIcon,
-          description: `Learn the basics of monorepos before you dive in to Turborepo.`,
-          name: "Read the Monorepo Handbook",
-        }}
-        href="/docs/handbook"
-      ></DetailedFeatureLink>
-      <DetailedFeatureLink
-        feature={{
           Icon: LightBulbIcon,
           description: `Understand why monorepos don't scale - and why Turborepo is the solution.`,
           name: "Why Turborepo?",
         }}
         href="/docs/core-concepts/why-turborepo"
+      ></DetailedFeatureLink>
+      <DetailedFeatureLink
+        feature={{
+          Icon: BookOpenIcon,
+          description: `Learn the basics of monorepos before you dive in to Turborepo.`,
+          name: "Read the Monorepo Handbook",
+        }}
+        href="/docs/handbook"
       ></DetailedFeatureLink>
     </div>
   );
@@ -70,20 +70,20 @@ export const LearnMoreArea = () => {
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
         feature={{
-          Icon: LightningBoltIcon,
-          description: `The way you run your tasks is probably not optimized. Turborepo speeds them up with smart scheduling, minimising idle CPU's.`,
-          name: "Maximum Multitasking",
-        }}
-        href="/docs/core-concepts/running-tasks"
-      ></DetailedFeatureLink>
-      <DetailedFeatureLink
-        feature={{
           Icon: CloudUploadIcon,
           description: `Turborepo remembers the output of any task you run - and can skip work that's already been done.`,
           name: "Never do the same work twice",
         }}
         href="/docs/core-concepts/caching"
       />
+      <DetailedFeatureLink
+        feature={{
+          Icon: LightningBoltIcon,
+          description: `The way you run your tasks is probably not optimized. Turborepo speeds them up with smart scheduling, minimising idle CPU's.`,
+          name: "Maximum Multitasking",
+        }}
+        href="/docs/core-concepts/running-tasks"
+      ></DetailedFeatureLink>
     </div>
   );
 };

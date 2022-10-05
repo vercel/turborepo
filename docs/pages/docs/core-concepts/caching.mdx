@@ -5,16 +5,18 @@ description: Caching allows Turborepo to skip work that's already been done, for
 
 import Callout from "../../../components/Callout";
 
-# Caching
+# Caching Tasks
 
-Turborepo can cache the results and logs of any task in your codebase—meaning you never need to do the same work twice.
+Every JavaScript or TypeScript codebase will need to run `package.json` scripts, like `build`, `test` and `lint`. In Turborepo, we call these **tasks**.
+
+Turborepo can cache the results and logs of your tasks - leading to enormous speedups for slow tasks.
 
 ## Missing the cache
 
 Each task in your codebase has **inputs** and **outputs**.
 
-- A `build` task might have **source files as inputs** and **outputs logs to `stderr` and `stdout` as well as bundled/compiled file(s)**.
-- A `lint` or `test` task might have **source files as inputs** and **outputs logs to `stdout` and `stderr`**.
+- A `build` task might have source files as inputs and outputs logs to `stderr` and `stdout` as well as bundled files.
+- A `lint` or `test` task might have source files as inputs and outputs logs to `stdout` and `stderr`.
 
 Let's say you run a `build` task with Turborepo using `turbo run build`:
 
@@ -254,19 +256,14 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
 }
 ```
 
-<Callout type="idea">
-  It is more common for monorepos to use environment variables in workspaces that contain applications (such as a website) rather than shared packages (such as a UI component library). Thus, to get higher cache hit rates, you should likely only "depend on" environment variables in package-specific tasks in your `turbo.json` configuration.
-</Callout>
-
 ### Automatic environment variable inclusion
 
-To help ensure correct caching across environments Turborepo 1.4+ will automatically infer and include public environment variables when calculating cache keys for apps built with detected frameworks. You can safely omit framework-specific public environment variables from `turbo.json`:
+To help ensure correct caching across environments, Turborepo automatically infers and includes public environment variables when calculating cache keys for apps built with detected frameworks. You can safely omit framework-specific public environment variables from `turbo.json`:
 
 ```diff filename="turbo.json"
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"],
       "env": [
 -       "NEXT_PUBLIC_EXAMPLE_ENV_VAR"
       ]
@@ -304,6 +301,8 @@ Luckily, you only need to be aware of this on other build systems; you don't nee
 about these edge cases when using Turborepo on Vercel.
 
 </Callout>
+
+#### A note on monorepos
 
 The environment variables will only be included in the cache key for tasks in workspaces where that framework is used. In other words, environment variables inferred for Next.js apps will only be included in the cache key for workspaces detected as Next.js apps. Tasks in other workspaces in the monorepo will not be impacted.
 
@@ -385,7 +384,7 @@ Not only does `turbo` cache the output of your tasks, it also records the termin
 
 By now, you're probably wondering how `turbo` decides what constitutes a cache hit vs. miss for a given task. Good question!
 
-First, `turbo` constructs a hash of the current global state of the monorepo:
+First, `turbo` constructs a hash of the current global state of the codebase:
 
 - The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](../reference/configuration#globalDependencies-1)
 - The sorted list environment variable key-value pairs that include `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
