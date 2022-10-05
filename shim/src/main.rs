@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::env::current_exe;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use std::{
     env,
@@ -20,13 +19,13 @@ use std::{
 };
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true)]
+#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true)]
 struct Args {
     /// Current working directory
     #[clap(long, value_parser)]
     cwd: Option<String>,
     #[clap(subcommand)]
-    commands: Option<Commands>,
+    command: Option<Command>,
     task: Option<String>,
 }
 
@@ -34,7 +33,7 @@ struct Args {
 /// we must change these as well to avoid accidentally passing the --single-package
 /// flag into non-build commands.
 #[derive(Subcommand, Debug)]
-enum Commands {
+enum Command {
     Bin,
     Completion,
     Daemon,
@@ -193,8 +192,8 @@ impl RepoState {
 /// returns: bool
 ///
 fn is_run_command(clap_args: &Args) -> bool {
-    let is_explicit_run = matches!(clap_args.commands, Some(Commands::Run { .. }));
-    let is_implicit_run = clap_args.commands.is_none() && clap_args.task.is_some();
+    let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
+    let is_implicit_run = clap_args.command.is_none() && clap_args.task.is_some();
 
     is_explicit_run || is_implicit_run
 }
@@ -224,7 +223,7 @@ fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
         return run_current_turbo(args);
     }
 
-    let output = Command::new(local_turbo_path)
+    let output = process::Command::new(local_turbo_path)
         .args(&args)
         .output()
         .expect("Failed to execute turbo.");
@@ -250,6 +249,10 @@ fn main() -> Result<()> {
         env::current_dir()?
     };
 
+    if clap_args.command.is_none() && clap_args.task.is_none() {
+        process::exit(1);
+    }
+
     let mut args: Vec<_> = env::args().skip(1).collect();
     let repo_state = RepoState::infer(&current_dir)?;
 
@@ -260,7 +263,7 @@ fn main() -> Result<()> {
     let exit_code = match run_correct_turbo(&repo_state.root, args) {
         Ok(exit_code) => exit_code,
         Err(e) => {
-            println!("failed {:?}", e);
+            eprintln!("failed {:?}", e);
             2
         }
     };
