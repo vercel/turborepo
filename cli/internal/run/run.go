@@ -754,6 +754,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runState:        runState,
@@ -769,13 +770,15 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		return ec.exec(ctx, packageTask, deps)
-	}), core.ExecOpts{
+	execOpts := core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
+	}
+	visitor := g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		return ec.exec(ctx, packageTask, deps)
 	})
+	errs := engine.Execute(visitor, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
@@ -980,23 +983,17 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	outputPrefix := packageTask.OutputPrefix(ec.isSinglePackage)
-	targetLogger := ec.logger.Named(outputPrefix)
-	targetLogger.Debug("start")
+	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
+	prettyPrefix := ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
+
+	progressLogger := ec.logger.Named("")
+	progressLogger.Debug("start")
 
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	// Create a logger
-	colorPrefixer := ec.colorCache.PrefixColor(packageTask.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", outputPrefix)
-	targetUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
-		OutputPrefix: prettyTaskPrefix,
-		InfoPrefix:   prettyTaskPrefix,
-		ErrorPrefix:  prettyTaskPrefix,
-		WarnPrefix:   prettyTaskPrefix,
-	}
+	targetUI := &cli.BasicUi{}
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
@@ -1011,19 +1008,28 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	//
 	// bail if the script doesn't exist
 	if _, ok := packageTask.Command(); !ok {
-		targetLogger.Debug("no task in package, skipping")
-		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
+		progressLogger.Debug("no task in package, skipping")
+		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
 	}
 	// Cache ---------------------------------------------
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
-	hit, err := taskCache.RestoreOutputs(ctx, targetUI, targetLogger)
+	// Create a logger for replaying
+	prefixedUI := &cli.PrefixedUi{
+		Ui:           ec.ui,
+		OutputPrefix: prettyPrefix,
+		InfoPrefix:   prettyPrefix,
+		ErrorPrefix:  prettyPrefix,
+		WarnPrefix:   prettyPrefix,
+	}
+	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 	if err != nil {
 		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
 		return nil
 	}
+
 	// Setup command execution
 	argsactual := append([]string{"run"}, packageTask.Task)
 	if len(passThroughArgs) > 0 {
@@ -1043,32 +1049,36 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(outputPrefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
-		ec.logError(targetLogger, prettyTaskPrefix, err)
+		ec.logError(progressLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
+
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
 	logStreamerErr.FlushRecord()
 	logStreamerOut.FlushRecord()
+
 	closeOutputs := func() error {
 		var closeErrors []error
+
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
 		}
 		if err := logStreamerErr.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stderr"))
 		}
+
 		if err := writer.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log file"))
 		}
@@ -1092,7 +1102,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			return nil
 		}
 		tracer(TargetBuildFailed, err)
-		targetLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
+		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.continueOnError {
 			targetUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			ec.processes.Close()
@@ -1105,16 +1115,16 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
-		ec.logError(targetLogger, "", err)
+		ec.logError(progressLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUI, int(duration.Milliseconds())); err != nil {
-			ec.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
+		if err = taskCache.SaveOutputs(ctx, progressLogger, targetUI, int(duration.Milliseconds())); err != nil {
+			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
 
 	// Clean up tracing
 	tracer(TargetBuilt, nil)
-	targetLogger.Debug("done", "status", "complete", "duration", duration)
+	progressLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }
 

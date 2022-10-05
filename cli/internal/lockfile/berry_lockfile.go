@@ -190,7 +190,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		// and check if that descriptor is present in the pruned map and add it if it is present
 		for patch := range patchDescriptors {
 			primaryVersion, _ := patch.primaryVersion()
-			primaryDescriptor := _Descriptor{patch._Ident, fmt.Sprintf("npm:%s", primaryVersion)}
+			primaryDescriptor := _Descriptor{patch._Ident, primaryVersion}
 			_, isPresent := primaryDescriptors[primaryDescriptor]
 			if !isPresent {
 				panic(fmt.Sprintf("Unable to find primary descriptor %s", &primaryDescriptor))
@@ -493,8 +493,13 @@ func (d *_Descriptor) primaryVersion() (string, bool) {
 	if patchFileIndex < 0 || versionRangeIndex < 0 {
 		panic("Patch reference is missing required markers")
 	}
+	// The ':' following npm protocol gets encoded as '%3A' in the patch string
+	version := strings.Replace(d.versionRange[versionRangeIndex+1:patchFileIndex], "%3A", ":", 1)
+	if !strings.HasPrefix(version, "npm:") {
+		version = fmt.Sprintf("npm:%s", version)
+	}
 
-	return d.versionRange[versionRangeIndex+1 : patchFileIndex], true
+	return version, true
 }
 
 // Returns the protocol of the descriptor
