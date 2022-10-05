@@ -21,10 +21,10 @@ Run a second time, verify caching works because there is a config
   \xe2\x80\xa2 Running build (esc)
    INFO  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output d415b27c3e54b6ed
-  build:  
+  build: 
   build: > build
   build: > echo 'building' > foo
-  build:  
+  build: 
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total

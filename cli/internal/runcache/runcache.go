@@ -348,20 +348,18 @@ func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
 		str := string(scan.Bytes())
-		// cli.PrefixedUi won't prefix empty strings, so blank
-		// lines from our logs will just be blank lines instead of prefixed
-		// blank lines. Rather than replace this with more logic, we'll turn
-		// empty strings into a single space character.
-		// Note: that the prefix _already_ has an empty space at the end of it
-		// so we'll end up printing two trailing empty spaces on these blank lines.
-		// Since this is just being printed to stdout, this only really matters for tests.
-		// In the future, we may want to remove the trailing space from the prefix
-		// instead.
+		// cli.PrefixedUi won't prefix empty strings (it'll just print them as empty strings).
+		// So if we have a blank string, we'll just output the string here, instead of passing
+		// it onto the PrefixedUi.
 		if str == "" {
-			str = " "
+			// Just output the prefix if the current line is a blank string
+			// Note: output.OutputPrefix is also a colored prefix already
+			output.Ui.Output(output.OutputPrefix)
+		} else {
+			// Writing to Stdout
+			output.Output(str)
 		}
-		// Writing to Stdout
-		output.Output(str)
+
 	}
 	logger.Debug("finish replaying logs")
 }
