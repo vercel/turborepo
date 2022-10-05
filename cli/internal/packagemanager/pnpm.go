@@ -140,10 +140,10 @@ func pnpmPrunePatches(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixP
 		return fmt.Errorf("Invalid structure for patchedDependencies field in package.json")
 	}
 
-	for dependency, patch := range patchedDependencies {
-		patch, ok := patch.(string)
+	for dependency, untypedPatch := range patchedDependencies {
+		patch, ok := untypedPatch.(string)
 		if !ok {
-			return fmt.Errorf("Expected only strings in patchedDependencies. Got %v", patch)
+			return fmt.Errorf("Expected only strings in patchedDependencies. Got %v", untypedPatch)
 		}
 
 		inPatches := false
