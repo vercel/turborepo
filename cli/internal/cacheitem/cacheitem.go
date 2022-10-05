@@ -9,7 +9,6 @@ import (
 	"hash"
 	"io"
 	"os"
-	"reflect"
 
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
@@ -21,7 +20,6 @@ var (
 	errNameMalformed        = errors.New("file name is malformed")
 	errNameWindowsUnsafe    = errors.New("file name is not Windows-safe")
 	errUnsupportedFileType  = errors.New("attempted to restore unsupported file type")
-	errWriteAfterClose      = errors.New("write after close")
 )
 
 // CacheItem is a `tar` utility with a little bit extra.
@@ -36,35 +34,27 @@ type CacheItem struct {
 	tw     *tar.Writer
 	gzw    *gzip.Writer
 	handle *os.File
-
-	// sticky error.
-	err error
 }
 
 // Close any open pipes
 func (ci *CacheItem) Close() error {
-	if ci.err == errWriteAfterClose {
-		return nil
-	}
-	if ci.err != nil {
-		return ci.err
-	}
-
-	// Close from the beginning of the pipe to the end.
-	closers := []io.Closer{ci.tw, ci.gzw, ci.handle}
-
-	for _, closer := range closers {
-		// Skip the things which may not exist in this particular instance.
-		if reflect.ValueOf(closer).IsZero() {
-			continue
-		}
-		if err := closer.Close(); err != nil {
+	if ci.tw != nil {
+		if err := ci.tw.Close(); err != nil {
 			return err
 		}
 	}
 
-	// Pencils down. No more writing.
-	ci.err = errWriteAfterClose
+	if ci.gzw != nil {
+		if err := ci.gzw.Close(); err != nil {
+			return err
+		}
+	}
+
+	if ci.handle != nil {
+		if err := ci.handle.Close(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

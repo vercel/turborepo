@@ -45,11 +45,6 @@ func (ci *CacheItem) init() {
 
 // AddFile adds a user-cached item to the tar.
 func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath turbopath.AnchoredSystemPath) error {
-	// Write after close detection.
-	if ci.err != nil {
-		return ci.err
-	}
-
 	// Calculate the fully-qualified path to the file to read it.
 	sourcePath := filePath.RestoreAnchor(fsAnchor)
 
@@ -101,7 +96,6 @@ func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath tur
 		// Windows has a distinct "sequential read" opening mode.
 		// We use a library that will switch to this mode for Windows.
 		sourceFile, sourceErr := sequential.Open(sourcePath.ToString())
-		defer func() { _ = sourceFile.Close() }()
 		if sourceErr != nil {
 			return sourceErr
 		}
@@ -109,6 +103,8 @@ func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath tur
 		if _, err := io.Copy(ci.tw, sourceFile); err != nil {
 			return err
 		}
+
+		return sourceFile.Close()
 	}
 
 	return nil

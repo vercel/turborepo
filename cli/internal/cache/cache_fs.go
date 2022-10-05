@@ -35,9 +35,6 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 // Fetch returns true if items are cached. It moves them into position as a side effect.
 func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.gz")
-	var deferredErr error
-	var deferredDuration int
-	var deferredOk = true
 
 	// If it's not in the cache bail now
 	if !cachePath.FileExists() {
@@ -46,28 +43,30 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 	}
 
 	cacheItem, openErr := cacheitem.Open(cachePath)
-	defer func() {
-		deferredErr = cacheItem.Close()
-		deferredDuration = 0
-		deferredOk = false
-	}()
 	if openErr != nil {
 		return false, nil, 0, openErr
 	}
 
 	restoredFiles, restoreErr := cacheItem.Restore(anchor)
 	if restoreErr != nil {
+		_ = cacheItem.Close()
 		return false, nil, 0, restoreErr
 	}
 
 	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
 	if err != nil {
+		_ = cacheItem.Close()
 		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
 	}
 	f.logFetch(true, hash, meta.Duration)
 
 	// Wait to see what happens with close.
-	return deferredOk, restoredFiles, deferredDuration, deferredErr
+	closeErr := cacheItem.Close()
+	if closeErr != nil {
+		return false, restoredFiles, 0, closeErr
+	} else {
+		return true, restoredFiles, meta.Duration, nil
+	}
 }
 
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {
@@ -97,11 +96,8 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
-	var deferredErr error
 	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.gz")
 	cacheItem, err := cacheitem.Create(cachePath)
-	defer func() { deferredErr = cacheItem.Close() }()
-
 	if err != nil {
 		return err
 	}
@@ -109,6 +105,7 @@ func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration
 	for _, file := range files {
 		err := cacheItem.AddFile(anchor, file)
 		if err != nil {
+			_ = cacheItem.Close()
 			return err
 		}
 	}
@@ -119,10 +116,11 @@ func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration
 	})
 
 	if writeErr != nil {
+		_ = cacheItem.Close()
 		return writeErr
 	}
 
-	return deferredErr
+	return cacheItem.Close()
 }
 
 func (f *fsCache) Clean(anchor turbopath.AbsoluteSystemPath) {
