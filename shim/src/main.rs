@@ -1,5 +1,7 @@
+mod ffi;
 mod package_manager;
 
+use crate::ffi::nativeRunWithArgs;
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
@@ -18,11 +20,44 @@ use std::{
 };
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true)]
+#[clap(author, version, about = "Turbocharge your monorepo", long_about = None, disable_help_subcommand = true)]
 struct Args {
-    /// Current working directory
+    /// Override the endpoint for API calls
+    #[clap(long, value_parser)]
+    api: Option<String>,
+    /// Force color usage in the terminal
+    #[clap(long, value_parser)]
+    color: bool,
+    /// Specify a file to save a cpu profile
+    #[clap(long, value_parser)]
+    cpuprofile: Option<String>,
+    /// The directory in which to run turbo
     #[clap(long, value_parser)]
     cwd: Option<String>,
+    /// Specify a file to save a pprof heap profile
+    #[clap(long, value_parser)]
+    heap: Option<String>,
+    /// Override the login endpoint
+    #[clap(long, value_parser)]
+    login: Option<String>,
+    /// Suppress color usage in the terminal
+    #[clap(long, value_parser)]
+    no_color: bool,
+    /// When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+    #[clap(long, value_parser)]
+    preflight: bool,
+    /// Set the team slug for API calls
+    #[clap(long, value_parser)]
+    team: Option<String>,
+    /// Set the auth token for API calls
+    #[clap(long, value_parser)]
+    token: Option<String>,
+    /// Specify a file to save a pprof trace
+    #[clap(long, value_parser)]
+    trace: Option<String>,
+    /// verbosity
+    #[clap(short, long, value_parser)]
+    verbosity: Option<u8>,
     #[clap(subcommand)]
     command: Option<Command>,
     task: Option<String>,
@@ -33,16 +68,26 @@ struct Args {
 /// flag into non-build commands.
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Get the path to the Turbo binary
     Bin,
+    /// Generate the autocompletion script for the specified shell
     Completion,
+    /// Runs the Turborepo background daemon
     Daemon,
+    /// Help about any command
     Help,
+    /// Link your local directory to a Vercel organization and enable remote caching.
     Link,
+    /// Login to your Vercel account
     Login,
+    /// Logout to your Vercel account
     Logout,
+    /// Prepare a subset of your monorepo.
     Prune,
-    Unlink,
+    /// Run tasks across projects in your monorepo
     Run { tasks: Vec<String> },
+    /// Unlink the current directory from your Vercel organization and disable Remote Caching
+    Unlink,
 }
 
 #[derive(Debug)]
@@ -55,10 +100,6 @@ struct RepoState {
 enum RepoMode {
     SinglePackage,
     MultiPackage,
-}
-
-extern "C" {
-    pub fn nativeRunWithArgs(argc: c_int, argv: *mut *mut c_char) -> c_int;
 }
 
 /// Runs the turbo in the current binary
@@ -81,7 +122,7 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     let argc: c_int = args.len() as c_int;
     let argv = args.as_mut_ptr();
     let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
-    Ok(exit_code)
+    Ok(exit_code.try_into().unwrap())
 }
 
 /// Finds local turbo path given the package.json path. We assume that the node_modules directory
