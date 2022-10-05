@@ -110,6 +110,13 @@ fn find_local_turbo_path(repo_root: &Path) -> Result<Option<PathBuf>> {
         local_turbo_path.push(".bin");
         local_turbo_path.push("turbo");
 
+        fs::metadata(&local_turbo_path).map_err(|_| {
+            anyhow!(
+                "Could not find binary in {}.",
+                local_turbo_path.to_string_lossy()
+            )
+        })?;
+
         Ok(Some(local_turbo_path))
     } else {
         Ok(None)

@@ -75,8 +75,8 @@ impl PackageManager {
         let mut exclusions = Vec::new();
 
         for glob in globs {
-            if glob.starts_with("!") {
-                exclusions.push(PathBuf::from(glob[1..].to_string()));
+            if let Some(exclusion) = glob.strip_prefix('!') {
+                exclusions.push(PathBuf::from(exclusion.to_string()));
             } else {
                 inclusions.push(PathBuf::from(glob));
             }
