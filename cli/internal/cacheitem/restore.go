@@ -140,7 +140,7 @@ func canonicalizeName(name string) (turbopath.AnchoredSystemPath, error) {
 	noTrailingSlash := strings.TrimSuffix(name, "/")
 
 	// Okay, we're all set here.
-	return turbopath.AnchoredUnixPath(noTrailingSlash).ToSystemPath(), nil
+	return turbopath.AnchoredUnixPathFromUpstream(noTrailingSlash).ToSystemPath(), nil
 }
 
 // checkName returns `wellFormed, windowsSafe` via inspection of separators and traversal
