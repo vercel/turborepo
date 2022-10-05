@@ -149,25 +149,25 @@ func TestCreate(t *testing.T) {
 			archivePath := turbopath.AnchoredSystemPath("out.tar.gz").RestoreAnchor(archiveDir)
 
 			cacheItem, cacheCreateErr := Create(archivePath)
-			defer func() { assert.NilError(t, cacheItem.Close(), "Close") }()
 			assert.NilError(t, cacheCreateErr, "Cache Create")
 
 			for _, file := range tt.files {
 				createErr := createEntry(t, inputDir, file)
 				if createErr != nil {
 					assert.ErrorIs(t, createErr, tt.wantErr)
+					assert.NilError(t, cacheItem.Close(), "Close")
 					return
 				}
 
 				addFileError := cacheItem.AddFile(inputDir, file.Path)
 				if addFileError != nil {
 					assert.ErrorIs(t, addFileError, tt.wantErr)
+					assert.NilError(t, cacheItem.Close(), "Close")
 					return
 				}
 			}
 
-			closeErr := cacheItem.Close()
-			assert.NilError(t, closeErr, "Cache Close")
+			assert.NilError(t, cacheItem.Close(), "Cache Close")
 
 			// We actually only need to compare the generated SHA.
 			// That ensures we got the same output. (Effectively snapshots.)
@@ -177,7 +177,6 @@ func TestCreate(t *testing.T) {
 			snapshot := hex.EncodeToString(shaOne)
 
 			openedCacheItem, openedCacheItemErr := Open(archivePath)
-			defer func() { assert.NilError(t, openedCacheItem.Close(), "Close") }()
 			assert.NilError(t, openedCacheItemErr, "Cache Open")
 
 			shaTwo, shaTwoErr := openedCacheItem.GetSha()
@@ -193,6 +192,7 @@ func TestCreate(t *testing.T) {
 				assert.Equal(t, snapshot, tt.wantUnix, "Got expected hash.")
 			}
 			assert.Equal(t, snapshot, snapshotTwo, "Reopened snapshot matches.")
+			assert.NilError(t, openedCacheItem.Close(), "Close")
 		})
 	}
 }

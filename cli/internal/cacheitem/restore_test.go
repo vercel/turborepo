@@ -1075,11 +1075,10 @@ func TestOpen(t *testing.T) {
 			archivePath := generateTar(t, tt.tarFiles)
 			anchor := generateAnchor(t)
 
-			archive, err := Open(archivePath)
-			defer func() { assert.NilError(t, archive.Close(), "Close") }()
+			cacheItem, err := Open(archivePath)
 			assert.NilError(t, err, "Open")
 
-			restoreOutput, restoreErr := archive.Restore(anchor)
+			restoreOutput, restoreErr := cacheItem.Restore(anchor)
 			var desiredErr error
 			if runtime.GOOS == "windows" {
 				desiredErr = tt.wantErr.windows
@@ -1111,6 +1110,8 @@ func TestOpen(t *testing.T) {
 			for _, diskFile := range filesComparison {
 				assertFileExists(t, anchor, diskFile)
 			}
+
+			assert.NilError(t, cacheItem.Close(), "Close")
 		})
 	}
 }
