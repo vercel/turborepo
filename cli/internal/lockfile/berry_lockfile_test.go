@@ -190,6 +190,42 @@ func Test_PatchPathExtraction(t *testing.T) {
 	}
 }
 
+func Test_PatchPrimaryVersion(t *testing.T) {
+	// todo write tests to make sure extraction actually works
+	type TestCase struct {
+		descriptor string
+		version    string
+		isPatch    bool
+	}
+	testCases := []TestCase{
+		{
+			descriptor: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::locator=berry-patch%40workspace%3A.",
+			version:    "npm:4.17.21",
+			isPatch:    true,
+		},
+		{
+			descriptor: "typescript@patch:typescript@^4.5.2#~builtin<compat/typescript>",
+			version:    "npm:^4.5.2",
+			isPatch:    true,
+		},
+		{
+			descriptor: "react@npm:18.2.0",
+			isPatch:    false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		var d _Descriptor
+		err := d.parseDescriptor(testCase.descriptor)
+		assert.NilError(t, err, testCase.descriptor)
+		actual, isPatch := d.primaryVersion()
+		assert.Equal(t, isPatch, testCase.isPatch, testCase)
+		if testCase.isPatch {
+			assert.Equal(t, actual, testCase.version, testCase.descriptor)
+		}
+	}
+}
+
 func Test_BerryPruneDescriptors(t *testing.T) {
 	lockfile := getBerryLockfile(t, "minimal-berry.lock")
 	prunedLockfile, err := lockfile.Subgraph(
