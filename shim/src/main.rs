@@ -133,12 +133,23 @@ impl RepoState {
             .ancestors()
             .find(|p| fs::metadata(p.join("turbo.json")).is_ok());
 
-        // If that directory exists, we know we're in a multi package repository.
+        // If that directory exists, then we figure out if there are workspaces defined in it
         // NOTE: This may change with multiple `turbo.json` files
         if let Some(root_path) = root_path {
+            let pnpm = PackageManager::Pnpm;
+            let npm = PackageManager::Npm;
+            let is_workspace = pnpm.get_workspace_globs(root_path).is_ok()
+                || npm.get_workspace_globs(root_path).is_ok();
+
+            let mode = if is_workspace {
+                RepoMode::MultiPackage
+            } else {
+                RepoMode::SinglePackage
+            };
+
             return Ok(Self {
                 root: root_path.to_path_buf(),
-                mode: RepoMode::MultiPackage,
+                mode,
             });
         }
 
@@ -161,7 +172,7 @@ impl RepoState {
             if is_workspace {
                 return Ok(Self {
                     root: dir.to_path_buf(),
-                    mode: RepoMode::MultiPackage,
+                    mode: RepoMode::SinglePackage,
                 });
             }
         }
