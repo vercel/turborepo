@@ -1312,14 +1312,14 @@ func Test_canonicalizeLinkname(t *testing.T) {
 		},
 		{
 			name:             "Unix path subdirectory traversal",
-			processedName:    turbopath.AnchoredSystemPath(filepath.Join("child", "source")),
+			processedName:    turbopath.AnchoredUnixPath("child/source").ToSystemPath(),
 			linkname:         "../sibling/target",
 			canonicalUnix:    "path/to/anchor/sibling/target",
 			canonicalWindows: "path\\to\\anchor\\sibling\\target",
 		},
 		{
 			name:             "Windows path subdirectory traversal",
-			processedName:    turbopath.AnchoredSystemPath(filepath.Join("child", "source")),
+			processedName:    turbopath.AnchoredUnixPath("child/source").ToSystemPath(),
 			linkname:         "..\\sibling\\target",
 			canonicalUnix:    "path/to/anchor/child/..\\sibling\\target",
 			canonicalWindows: "path\\to\\anchor\\sibling\\target",

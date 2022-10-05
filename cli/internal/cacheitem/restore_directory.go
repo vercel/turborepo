@@ -37,7 +37,7 @@ func (cr *cachedDirTree) getStartingPoint(path turbopath.AnchoredSystemPath) (tu
 	pathSegmentStrings := strings.Split(path.ToString(), string(os.PathSeparator))
 	pathSegments := make([]turbopath.RelativeSystemPath, len(pathSegmentStrings))
 	for index, pathSegmentString := range pathSegmentStrings {
-		pathSegments[index] = turbopath.RelativeSystemPath(pathSegmentString)
+		pathSegments[index] = turbopath.RelativeSystemPathFromUpstream(pathSegmentString)
 	}
 
 	i := 0
