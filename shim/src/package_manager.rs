@@ -1,8 +1,9 @@
-use crate::paths::{AbsolutePath, GlobWalker};
+use crate::paths::GlobWalker;
 use anyhow::{anyhow, Result};
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::{Glob, GlobSetBuilder};
 use serde::Deserialize;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspaces {
@@ -22,6 +23,12 @@ pub enum PackageManager {
     Yarn,
 }
 
+#[derive(Debug)]
+pub struct Globs {
+    inclusions: Vec<PathBuf>,
+    exclusions: Vec<PathBuf>,
+}
+
 impl PackageManager {
     /// Returns a list of globs for the package workspace.
     /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
@@ -31,22 +38,22 @@ impl PackageManager {
     ///
     /// * `root_path`:
     ///
-    /// returns: Result<Vec<PathBuf, Global>, Error>
+    /// returns: Result<Globs, Error>
     ///
     /// # Examples
     ///
     /// ```
     ///
     /// ```
-    pub fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<String>> {
-        match self {
+    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Globs> {
+        let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
                 let workspaces: PnpmWorkspaces = serde_yaml::from_str(&workspace_yaml)?;
                 if workspaces.packages.is_empty() {
-                    Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"))
+                    return Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"));
                 } else {
-                    Ok(workspaces.packages)
+                    workspaces.packages
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
@@ -54,12 +61,28 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.is_empty() {
-                    Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"))
+                    return Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"));
                 } else {
-                    Ok(package_json.workspaces)
+                    package_json.workspaces
                 }
             }
+        };
+
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for glob in globs {
+            if glob.starts_with("!") {
+                exclusions.push(PathBuf::from(glob[1..].to_string()));
+            } else {
+                inclusions.push(PathBuf::from(glob));
+            }
         }
+
+        Ok(Globs {
+            inclusions,
+            exclusions,
+        })
     }
 
     /// Returns a `GlobSet` that matches the paths that should be ignored.
@@ -70,7 +93,7 @@ impl PackageManager {
     ///
     /// returns: Result<<unknown>, Error>
     ///
-    fn get_workspace_ignores(&self, root_path: &AbsolutePath) -> Result<GlobSet> {
+    fn get_workspace_ignores(&self, root_path: &Path) -> Result<GlobSetBuilder> {
         match self {
             PackageManager::Berry => {
                 // Matches upstream values:
@@ -80,7 +103,7 @@ impl PackageManager {
                 builder.add(Glob::new("**/.git")?);
                 builder.add(Glob::new("**/.yarn")?);
 
-                Ok(builder.build()?)
+                Ok(builder)
             }
             PackageManager::Npm => {
                 // Matches upstream values:
@@ -91,7 +114,7 @@ impl PackageManager {
                 let mut builder = GlobSetBuilder::new();
                 builder.add(Glob::new("**/node_modules/**")?);
 
-                Ok(builder.build()?)
+                Ok(builder)
             }
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 // Matches upstream values:
@@ -102,7 +125,7 @@ impl PackageManager {
                 builder.add(Glob::new("**/node_modules/**")?);
                 builder.add(Glob::new("**/bower_components/**")?);
 
-                Ok(builder.build()?)
+                Ok(builder)
             }
             PackageManager::Yarn => {
                 // function: https://github.com/yarnpkg/yarn/blob/3119382885ea373d3c13d6a846de743eca8c914b/src/config.js#L799
@@ -115,7 +138,7 @@ impl PackageManager {
                 let globs = self.get_workspace_globs(root_path)?;
 
                 let mut builder = GlobSetBuilder::new();
-                for mut glob_path in globs {
+                for mut glob_path in globs.inclusions {
                     glob_path.push("/node_modules/**");
 
                     builder.add(Glob::new(
@@ -125,7 +148,7 @@ impl PackageManager {
                     )?);
                 }
 
-                Ok(builder.build()?)
+                Ok(builder)
             }
         }
     }
@@ -138,12 +161,12 @@ impl PackageManager {
     ///
     /// returns: Result<Vec<DirEntry, Global>, Error>
     ///
-    fn get_workspaces(&self, root_path: &AbsolutePath) -> Result<Vec<PathBuf>> {
-        let workspace_paths = self.get_workspace_globs(root_path)?;
+    fn get_workspaces(&self, root_path: &Path) -> Result<Vec<PathBuf>> {
+        let workspace_globs = self.get_workspace_globs(root_path)?;
 
         let mut workspace_globs_builder = GlobSetBuilder::new();
 
-        for mut path in workspace_paths {
+        for mut path in workspace_globs.inclusions {
             path.push("package.json");
             let path_str = path
                 .to_str()
@@ -156,11 +179,24 @@ impl PackageManager {
 
             workspace_globs_builder.add(Glob::new(&format!("{}/{}", root_str, path_str))?);
         }
-        let workspace_globs = workspace_globs_builder.build()?;
+        let workspace_globs_set = workspace_globs_builder.build()?;
 
-        let ignores = self.get_workspace_ignores(root_path)?;
+        let mut ignores_builder = self.get_workspace_ignores(root_path)?;
+        for mut path in workspace_globs.exclusions {
+            path.push("package.json");
+            let path_str = path
+                .to_str()
+                .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
 
-        let glob_walker = GlobWalker::new(root_path, workspace_globs, ignores);
+            // We need to push on the root for the globbing to work properly
+            let root_str = root_path
+                .to_str()
+                .ok_or_else(|| anyhow!("Path is invalid unicode"))?;
+            ignores_builder.add(Glob::new(&format!("{}/{}", root_str, path_str))?);
+        }
+        let ignores_set = ignores_builder.build()?;
+
+        let glob_walker = GlobWalker::new(root_path, workspace_globs_set, ignores_set);
 
         glob_walker
             .map(|dir_entry| dir_entry.map(|e| e.into_path()))
@@ -171,8 +207,6 @@ impl PackageManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
-    use std::env::current_exe;
     use std::ffi::OsStr;
     use std::path::Path;
 
@@ -184,8 +218,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            globs,
-            vec![String::from("apps/*"), String::from("packages/*")]
+            globs.inclusions,
+            vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
         );
     }
 
@@ -194,6 +228,8 @@ mod tests {
         let package_manager = PackageManager::Npm;
         let globs = package_manager
             .get_workspace_ignores(&Path::new("../examples/basic"))
+            .unwrap()
+            .build()
             .unwrap();
 
         assert_eq!(globs.is_match("node_modules/foo"), true);

@@ -2,7 +2,6 @@ mod package_manager;
 mod paths;
 
 use crate::package_manager::PackageManager;
-use crate::paths::AncestorSearch;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
@@ -48,6 +47,18 @@ enum Commands {
     Run { tasks: Vec<String> },
 }
 
+#[derive(Debug)]
+struct RepoState {
+    root: PathBuf,
+    mode: RepoMode,
+}
+
+#[derive(Debug)]
+enum RepoMode {
+    SinglePackage,
+    MultiPackage,
+}
+
 extern "C" {
     pub fn nativeRunWithArgs(argc: c_int, argv: *mut *mut c_char) -> c_int;
 }
@@ -84,7 +95,8 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
 ///
 /// returns: Result<Option<PathBuf>, Error>
 ///
-fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
+fn find_local_turbo_path(repo_root: &Path) -> Result<Option<PathBuf>> {
+    let package_json_path = repo_root.join("package.json");
     let package_json_contents = fs::read_to_string(&package_json_path)?;
     let package_json: PackageJson = serde_json::from_str(&package_json_contents)?;
 
@@ -96,10 +108,7 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
         .map_or(false, |deps| deps.contains_key("turbo"));
 
     if dev_dependencies_has_turbo || dependencies_has_turbo {
-        let mut local_turbo_path = package_json_path
-            .parent()
-            .ok_or_else(|| anyhow!("An unexpected file system error occurred"))?
-            .join("node_modules");
+        let mut local_turbo_path = repo_root.join("node_modules");
         local_turbo_path.push(".bin");
         local_turbo_path.push("turbo");
 
@@ -109,38 +118,68 @@ fn find_local_turbo_path(package_json_path: &Path) -> Result<Option<PathBuf>> {
     }
 }
 
-/// Checks if we are in single package mode by first seeing if there is a turbo.json
-/// in the ancestor path, and then checking for workspaces.
-///
-/// # Arguments
-///
-/// * `current_dir`: Current working directory
-///
-/// returns: Result<bool, Error>
-///
-fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
-    let has_turbo_json = AncestorSearch::new(current_dir.to_path_buf(), "turbo.json")?
-        .next()
-        .is_some();
+impl RepoState {
+    /// Infers `RepoState` from current directory. Can either be `RepoState::MultiPackage` or `RepoState::SinglePackage`.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_dir`: Current working directory
+    ///
+    /// returns: Result<RepoState, Error>
+    ///
+    pub fn infer(current_dir: &Path) -> Result<Self> {
+        // First we look for a `turbo.json`. This iterator returns the first ancestor that contains
+        // a `turbo.json` file.
+        let root_path = current_dir
+            .ancestors()
+            .find(|p| fs::metadata(p.join("turbo.json")).is_ok());
 
-    if has_turbo_json {
-        return Ok(false);
+        // If that directory exists, we know we're in a multi package repository.
+        // NOTE: This may change with multiple `turbo.json` files
+        if let Some(root_path) = root_path {
+            return Ok(Self {
+                root: root_path.to_path_buf(),
+                mode: RepoMode::MultiPackage,
+            });
+        }
+
+        // What we look for next is either a `package.json` file or a `pnpm-workspace.yaml` file.
+        let potential_roots = current_dir
+            .ancestors()
+            .filter(|path| fs::metadata(path.join("package.json")).is_ok());
+
+        let mut first_package_json_dir = None;
+        for dir in potential_roots {
+            if first_package_json_dir.is_none() {
+                first_package_json_dir = Some(dir)
+            }
+
+            let pnpm = PackageManager::Pnpm;
+            let npm = PackageManager::Npm;
+            let is_workspace =
+                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
+
+            if is_workspace {
+                return Ok(Self {
+                    root: dir.to_path_buf(),
+                    mode: RepoMode::MultiPackage,
+                });
+            }
+        }
+
+        // Finally, if we don't detect any workspaces, we simply go to the first `package.json`
+        // and use that in single package mode.
+        let root = first_package_json_dir
+            .ok_or_else(|| {
+                anyhow!("Unable to find `turbo.json` or `package.json` in current path")
+            })?
+            .to_path_buf();
+
+        Ok(Self {
+            root,
+            mode: RepoMode::SinglePackage,
+        })
     }
-
-    // We should detect which package manager and then determine workspaces from there,
-    // but detection is not implemented yet and really we're either checking the `package.json`
-    // or the `pnpm-workspace.yaml` file so we can do both.
-    let npm = PackageManager::Npm;
-    if npm.get_workspace_globs(current_dir).is_ok() {
-        return Ok(false);
-    };
-
-    let pnpm = PackageManager::Pnpm;
-    if pnpm.get_workspace_globs(current_dir).is_ok() {
-        return Ok(false);
-    };
-
-    Ok(true)
 }
 
 /// Checks if either we have an explicit run command, i.e. `turbo run build`
@@ -160,10 +199,10 @@ fn is_run_command(clap_args: &Args) -> bool {
     is_explicit_run || is_implicit_run
 }
 
-/// Attempts to run local turbo by finding nearest package.json,
-/// then finding local turbo installation, then running installation if exists.
-/// If at any point this fails, return an error and let main run global turbo.
-/// If successful, return the exit code of local turbo.
+/// Attempts to run correct turbo by finding nearest package.json,
+/// then finding local turbo installation. If the current binary is the local
+/// turbo installation, then we run current turbo. Otherwise we kick over to
+/// the local turbo installation.
 ///
 /// # Arguments
 ///
@@ -171,14 +210,10 @@ fn is_run_command(clap_args: &Args) -> bool {
 ///
 /// returns: Result<i32, Error>
 ///
-fn try_run_local_turbo(current_dir: PathBuf) -> Result<i32> {
-    let package_json_path = AncestorSearch::new(current_dir, "package.json")?
-        .next()
-        .ok_or_else(|| anyhow!("No package.json found in ancestor path."))?;
-    let local_turbo_path = find_local_turbo_path(&package_json_path)?
+fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
+    let local_turbo_path = find_local_turbo_path(repo_root)?
         .ok_or_else(|| anyhow!("No local turbo installation found in package.json."))?;
 
-    let args = env::args().skip(1).collect::<Vec<_>>();
     if !local_turbo_path.try_exists()? {
         return Err(anyhow!(
             "No local turbo installation found in node_modules."
@@ -186,9 +221,7 @@ fn try_run_local_turbo(current_dir: PathBuf) -> Result<i32> {
     }
 
     if local_turbo_path == current_exe()? {
-        return Err(anyhow!(
-            "Local turbo is current turbo. Running current turbo."
-        ));
+        return run_current_turbo(args);
     }
 
     let output = Command::new(local_turbo_path)
@@ -212,17 +245,19 @@ struct PackageJson {
 fn main() -> Result<()> {
     let clap_args = Args::parse();
     let current_dir = if let Some(cwd) = &clap_args.cwd {
-        cwd.into()
+        fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
         env::current_dir()?
     };
 
     let mut args: Vec<_> = env::args().skip(1).collect();
-    if is_single_package_mode(&current_dir)? && is_run_command(&clap_args) {
+    let repo_state = RepoState::infer(&current_dir)?;
+
+    if matches!(repo_state.mode, RepoMode::SinglePackage) && is_run_command(&clap_args) {
         args.push("--single-package".to_string());
     }
 
-    let exit_code = match run_current_turbo(args) {
+    let exit_code = match run_correct_turbo(&repo_state.root, args) {
         Ok(exit_code) => exit_code,
         Err(e) => {
             println!("failed {:?}", e);
