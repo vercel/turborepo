@@ -137,6 +137,8 @@ type PrettyStdoutWriter struct {
 	Prefix string
 }
 
+var _ io.Writer = (*PrettyStdoutWriter)(nil)
+
 // NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
 func NewPrettyStdoutWriter(prefix string) *PrettyStdoutWriter {
 	return &PrettyStdoutWriter{
