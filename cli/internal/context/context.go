@@ -21,9 +21,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Warning Error type for errors that don't prevent the creation of a functional Context
+// Warnings Error type for errors that don't prevent the creation of a functional Context
 type Warnings struct {
 	warns *multierror.Error
+	mu    sync.Mutex
 }
 
 var _ error = (*Warnings)(nil)
@@ -37,6 +38,12 @@ func (w *Warnings) errorOrNil() error {
 		return w
 	}
 	return nil
+}
+
+func (w *Warnings) append(err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.warns = multierror.Append(w.warns, err)
 }
 
 // Context of the CLI
@@ -153,12 +160,12 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	c.PackageManager = packageManager
 
 	if lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot); err != nil {
-		warnings.warns = multierror.Append(warnings.warns, err)
+		warnings.append(err)
 	} else {
 		c.Lockfile = lockfile
 	}
 
-	if err := c.resolveWorkspaceRootDeps(rootPackageJSON); err != nil {
+	if err := c.resolveWorkspaceRootDeps(rootPackageJSON, &warnings); err != nil {
 		// TODO(Gaspar) was this the intended return error?
 		return nil, fmt.Errorf("could not resolve workspaces: %w", err)
 	}
@@ -189,7 +196,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	for _, pkg := range c.PackageInfos {
 		pkg := pkg
 		populateGraphWaitGroup.Go(func() error {
-			return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name)
+			return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings)
 		})
 	}
 
@@ -199,7 +206,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	// Resolve dependencies for the root package. We override the vertexName in the graph
 	// for the root package, since it can have an arbitrary name. We need it to have our
 	// RootPkgName so that we can identify it as the root later on.
-	err = c.populateTopologicGraphForPackageJSON(rootPackageJSON, rootpath, util.RootPkgName)
+	err = c.populateTopologicGraphForPackageJSON(rootPackageJSON, rootpath, util.RootPkgName, &warnings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 	}
@@ -208,9 +215,9 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	return c, warnings.errorOrNil()
 }
 
-func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) error {
+func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warnings *Warnings) error {
 	seen := mapset.NewSet()
-	var lockfileWg sync.WaitGroup
+	var lockfileEg errgroup.Group
 	pkg := rootPackageJSON
 	depSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
@@ -225,8 +232,12 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 	}
 	if c.Lockfile != nil {
 		pkg.TransitiveDeps = []string{}
-		c.resolveDepGraph(&lockfileWg, pkg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
-		lockfileWg.Wait()
+		c.resolveDepGraph(&lockfileEg, pkg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
+		if err := lockfileEg.Wait(); err != nil {
+			warnings.append(err)
+			// Return early to skip using results of incomplete dep graph resolution
+			return nil
+		}
 		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
 		for _, v := range depSet.ToSlice() {
 			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
@@ -249,7 +260,7 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON) erro
 // that are within the monorepo, as well as collecting and hashing the dependencies of the package
 // that are not within the monorepo. The vertexName is used to override the package name in the graph.
 // This can happen when adding the root package, which can have an arbitrary name.
-func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, rootpath string, vertexName string) error {
+func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, rootpath string, vertexName string, warnings *Warnings) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	depMap := make(map[string]string)
@@ -297,9 +308,13 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	pkg.TransitiveDeps = []string{}
 	seen := mapset.NewSet()
-	var lockfileWg sync.WaitGroup
-	c.resolveDepGraph(&lockfileWg, pkg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
-	lockfileWg.Wait()
+	lockfileEg := &errgroup.Group{}
+	c.resolveDepGraph(lockfileEg, pkg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
+	if err := lockfileEg.Wait(); err != nil {
+		warnings.append(err)
+		// reset external deps to original state
+		externalDepSet = mapset.NewSet()
+	}
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
@@ -346,38 +361,43 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	return nil
 }
 
-func (c *Context) resolveDepGraph(wg *sync.WaitGroup, workspace *fs.PackageJSON, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if c.Lockfile == nil {
+func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
+	if c.Lockfile == (lockfile.Lockfile)(nil) {
 		return
 	}
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
-		wg.Add(1)
-		go func(directDepName, unresolvedVersion string) {
-			defer wg.Done()
+		directDepName := directDepName
+		unresolvedVersion := unresolvedVersion
+		wg.Go(func() error {
 
-			key, resolvedVersion, ok := c.Lockfile.ResolvePackage(workspace.Dir.ToUnixPath(), directDepName, unresolvedVersion)
-			if seen.Contains(key) {
-				return
-			}
-			seen.Add(key)
+			lockfilePkg, err := c.Lockfile.ResolvePackage(workspace.Dir.ToUnixPath(), directDepName, unresolvedVersion)
 
-			if !ok {
-				return
+			if err != nil {
+				return err
 			}
+
+			if !lockfilePkg.Found || seen.Contains(lockfilePkg.Key) {
+				return nil
+			}
+
+			seen.Add(lockfilePkg.Key)
 
 			pkg.Mu.Lock()
-			pkg.TransitiveDeps = append(pkg.TransitiveDeps, key)
+			pkg.TransitiveDeps = append(pkg.TransitiveDeps, lockfilePkg.Key)
 			pkg.Mu.Unlock()
-			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, resolvedVersion))
+			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, lockfilePkg.Version))
 
-			allDeps, ok := c.Lockfile.AllDependencies(key)
+			allDeps, ok := c.Lockfile.AllDependencies(lockfilePkg.Key)
+
 			if !ok {
-				panic(fmt.Sprintf("Unable to find entry for %s", key))
+				panic(fmt.Sprintf("Unable to find entry for %s", lockfilePkg.Key))
 			}
 
 			if len(allDeps) > 0 {
 				c.resolveDepGraph(wg, workspace, allDeps, resolvedDepsSet, seen, pkg)
 			}
-		}(directDepName, unresolvedVersion)
+
+			return nil
+		})
 	}
 }
