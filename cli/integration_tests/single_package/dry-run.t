@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task            = build                  
-    Hash            = e491d0044f4b9b90       
+    Hash            = d415b27c3e54b6ed       
     Cached (Local)  = false                  
     Cached (Remote) = false                  
     Command         = echo 'building' > foo  
@@ -22,11 +22,12 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "e491d0044f4b9b90",
+        "hash": "d415b27c3e54b6ed",
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"
         ],
+        "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
         "dependencies": [],
         "dependents": []
