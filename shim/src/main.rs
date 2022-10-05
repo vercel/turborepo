@@ -183,7 +183,7 @@ impl RepoState {
             }
         }
 
-        // Finally, if we don't detect any workspaces, we simply go to the first `package.json`
+        // Finally, if we don't detect any workspaces, go to the first `package.json`
         // and use that in single package mode.
         let root = first_package_json_dir
             .ok_or_else(|| {
