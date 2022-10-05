@@ -3,6 +3,7 @@ package globby
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	iofs "io/fs"
@@ -18,7 +19,12 @@ import (
 func GlobAll(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
 	fsys := fs.CreateDirFSAtRoot(basePath)
 	fsysRoot := fs.GetDirFSRootPath(fsys)
-	return globAllFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
+	output, err := globAllFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
+
+	// Because this is coming out of a map output is in no way ordered.
+	// Sorting will put the files in a depth-first order.
+	sort.Strings(output)
+	return output, err
 }
 
 // GlobFiles returns an array of files that match the specified set of glob patterns.
@@ -26,7 +32,12 @@ func GlobAll(basePath string, includePatterns []string, excludePatterns []string
 func GlobFiles(basePath string, includePatterns []string, excludePatterns []string) ([]string, error) {
 	fsys := fs.CreateDirFSAtRoot(basePath)
 	fsysRoot := fs.GetDirFSRootPath(fsys)
-	return globFilesFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
+	output, err := globFilesFs(fsys, fsysRoot, basePath, includePatterns, excludePatterns)
+
+	// Because this is coming out of a map output is in no way ordered.
+	// Sorting will put the files in a depth-first order.
+	sort.Strings(output)
+	return output, err
 }
 
 // checkRelativePath ensures that the the requested file path is a child of `from`.
