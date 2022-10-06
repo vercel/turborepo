@@ -997,9 +997,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
 
-	// Create a logger
-	targetUI := &cli.BasicUi{}
-
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
 	ec.logger.Debug("task hash", "value", hash)
@@ -1029,7 +1026,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 	if err != nil {
-		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
+		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
 		return nil
@@ -1063,6 +1060,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		}
 	}
 
+	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
 	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
@@ -1109,10 +1107,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		tracer(TargetBuildFailed, err)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.continueOnError {
-			targetUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			ec.processes.Close()
 		} else {
-			targetUI.Warn("command finished with error, but continuing...")
+			prefixedUI.Warn("command finished with error, but continuing...")
 		}
 		return err
 	}
@@ -1122,7 +1120,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err := closeOutputs(); err != nil {
 		ec.logError(progressLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, targetUI, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
 			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
