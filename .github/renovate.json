@@ -14,6 +14,12 @@
     "before 5am every weekday",
     "every weekend"
   ],
+  "packageRules": [
+    {
+      "matchLanguages": ["golang"],
+      "enabled": false
+    }
+  ],
   "prCreation": "not-pending",
   "prConcurrentLimit": 5,
   "stabilityDays": 2
