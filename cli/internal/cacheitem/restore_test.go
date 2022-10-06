@@ -1435,7 +1435,9 @@ func TestCacheItem_Restore(t *testing.T) {
 			assert.NilError(t, restoreErr, "Restore #1")
 			assert.NilError(t, cacheItem.Close(), "Close")
 
-			cacheItem2, err := Open(archivePath)
+			cacheItem2, err2 := Open(archivePath)
+			assert.NilError(t, err2, "Open")
+
 			restoreOutput2, restoreErr2 := cacheItem2.Restore(anchor)
 			if !reflect.DeepEqual(restoreOutput2, tt.want) {
 				t.Errorf("#2 CacheItem.Restore() = %v, want %v", restoreOutput2, tt.want)
