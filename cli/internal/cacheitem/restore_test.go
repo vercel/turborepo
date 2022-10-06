@@ -1417,7 +1417,7 @@ func TestCacheItem_Restore(t *testing.T) {
 					},
 				},
 			},
-			want: []turbopath.AnchoredSystemPath{"target", "source", "one", "one/two"},
+			want: turbopath.AnchoredUnixPathArray{"target", "source", "one", "one/two"}.ToSystemPathArray(),
 		},
 	}
 	for _, tt := range tests {
