@@ -1376,3 +1376,72 @@ func Test_canonicalizeName(t *testing.T) {
 		})
 	}
 }
+
+func TestCacheItem_Restore(t *testing.T) {
+	tests := []struct {
+		name     string
+		tarFiles []tarFile
+		want     []turbopath.AnchoredSystemPath
+	}{
+		{
+			name: "duplicate restores",
+			tarFiles: []tarFile{
+				{
+					Header: &tar.Header{
+						Name:     "target",
+						Typeflag: tar.TypeReg,
+						Mode:     0644,
+					},
+					Body: "target",
+				},
+				{
+					Header: &tar.Header{
+						Name:     "source",
+						Linkname: "target",
+						Typeflag: tar.TypeSymlink,
+						Mode:     0777,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+				{
+					Header: &tar.Header{
+						Name:     "one/two/",
+						Typeflag: tar.TypeDir,
+						Mode:     0755,
+					},
+				},
+			},
+			want: []turbopath.AnchoredSystemPath{"target", "source", "one", "one/two"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			archivePath := generateTar(t, tt.tarFiles)
+			anchor := generateAnchor(t)
+
+			cacheItem, err := Open(archivePath)
+			assert.NilError(t, err, "Open")
+
+			restoreOutput, restoreErr := cacheItem.Restore(anchor)
+			if !reflect.DeepEqual(restoreOutput, tt.want) {
+				t.Errorf("#1 CacheItem.Restore() = %v, want %v", restoreOutput, tt.want)
+			}
+			assert.NilError(t, restoreErr, "Restore #1")
+			assert.NilError(t, cacheItem.Close(), "Close")
+
+			cacheItem2, err := Open(archivePath)
+			restoreOutput2, restoreErr2 := cacheItem2.Restore(anchor)
+			if !reflect.DeepEqual(restoreOutput2, tt.want) {
+				t.Errorf("#2 CacheItem.Restore() = %v, want %v", restoreOutput2, tt.want)
+			}
+			assert.NilError(t, restoreErr2, "Restore #2")
+			assert.NilError(t, cacheItem2.Close(), "Close")
+		})
+	}
+}

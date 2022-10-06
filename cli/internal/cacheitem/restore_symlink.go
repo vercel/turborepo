@@ -11,68 +11,32 @@ import (
 )
 
 // restoreSymlink restores a symlink and errors if the target is missing.
-func restoreSymlink(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
-	// We don't know _anything_ about linkname. It could be any of:
-	//
-	// - Absolute Unix Path
-	// - Absolute Windows Path
-	// - Relative Unix Path
-	// - Relative Windows Path
-	//
-	// We also can't _truly_ distinguish if the path is Unix or Windows.
-	// Take for example: `/Users/turbobot/weird-filenames/\foo\/lol`
-	// It is a valid file on Unix, but if we do slash conversion it breaks.
-	// Or `i\am\a\normal\unix\file\but\super\nested\on\windows`.
-	//
-	// We also can't safely assume that paths in link targets on one platform
-	// should be treated as targets for that platform. The author may be
-	// generating an artifact that should work on Windows on a Unix device.
-	//
-	// Given all of that, our best option is to restore link targets _verbatim_.
-	// No modification, no slash conversion.
+func restoreSymlink(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header) (turbopath.AnchoredSystemPath, error) {
 	processedName, canonicalizeNameErr := canonicalizeName(header.Name)
 	if canonicalizeNameErr != nil {
 		return "", canonicalizeNameErr
 	}
 
-	// We need to traverse `processedName` from base to root split at
-	// `os.Separator` to make sure we don't end up following a symlink
-	// outside of the restore path.
-	if err := safeMkdirFile(dirCache, anchor, processedName, header.Mode); err != nil {
-		return "", err
-	}
-
-	processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
-
 	// Check to see if the target exists.
+	processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
 	if _, err := os.Lstat(processedLinkname); err != nil {
 		return "", errMissingSymlinkTarget
 	}
 
-	// Create the symlink.
-	// Explicitly uses the _original_ header.Linkname as the target.
-	symlinkFrom := processedName.RestoreAnchor(anchor)
-	symlinkErr := symlinkFrom.Symlink(header.Linkname)
-	if symlinkErr != nil {
-		return "", symlinkErr
-	}
-
-	// Darwin allows you to change the permissions of a symlink.
-	lchmodErr := symlinkFrom.Lchmod(fs.FileMode(header.Mode))
-	if lchmodErr != nil {
-		return "", lchmodErr
-	}
-
-	return processedName, nil
+	return actuallyRestoreSymlink(dirCache, anchor, processedName, header)
 }
 
 // restoreSymlinkMissingTarget restores a symlink and does not error if the target is missing.
-func restoreSymlinkMissingTarget(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreSymlinkMissingTarget(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header) (turbopath.AnchoredSystemPath, error) {
 	processedName, canonicalizeNameErr := canonicalizeName(header.Name)
 	if canonicalizeNameErr != nil {
 		return "", canonicalizeNameErr
 	}
 
+	return actuallyRestoreSymlink(dirCache, anchor, processedName, header)
+}
+
+func actuallyRestoreSymlink(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, processedName turbopath.AnchoredSystemPath, header *tar.Header) (turbopath.AnchoredSystemPath, error) {
 	// We need to traverse `processedName` from base to root split at
 	// `os.Separator` to make sure we don't end up following a symlink
 	// outside of the restore path.
@@ -80,13 +44,16 @@ func restoreSymlinkMissingTarget(dirCache *cachedDirTree, anchor turbopath.Absol
 		return "", err
 	}
 
-	// Create the symlink.
-	// This does not support file names with `\` in them in a cross-platform manner.
+	// Specify where we restoring this symlink.
 	symlinkFrom := processedName.RestoreAnchor(anchor)
 
-	// Windows:
-	// - This converts `/` into `\`.
-	// - There is no way to create a link target to a non-existent directory.
+	// Remove any existing object at that location.
+	// If it errors we'll catch it on creation.
+	_ = symlinkFrom.Remove()
+
+	// Create the symlink.
+	// Explicitly uses the _original_ header.Linkname as the target.
+	// This does not support file names with `\` in them in a cross-platform manner.
 	symlinkErr := symlinkFrom.Symlink(header.Linkname)
 	if symlinkErr != nil {
 		return "", symlinkErr
@@ -144,7 +111,7 @@ func topologicallyRestoreSymlinks(dirCache *cachedDirTree, anchor turbopath.Abso
 			return nil
 		}
 
-		file, restoreErr := restoreSymlinkMissingTarget(dirCache, anchor, header, tr)
+		file, restoreErr := restoreSymlinkMissingTarget(dirCache, anchor, header)
 		if restoreErr != nil {
 			return restoreErr
 		}
