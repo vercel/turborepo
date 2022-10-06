@@ -740,9 +740,9 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 
 	useHTTPCache := !rs.Opts.cacheOpts.SkipRemote
 	if useHTTPCache {
-		r.base.LogInfo("• Remote caching enabled")
+		r.base.LogOutput(ui.Dim("• Remote caching enabled"))
 	} else {
-		r.base.LogInfo("• Remote caching disabled")
+		r.base.LogOutput(ui.Dim("• Remote caching disabled"))
 	}
 
 	turboCache, err := r.initCache(ctx, rs, analyticsClient)

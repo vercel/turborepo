@@ -238,3 +238,9 @@ func (b *CmdBase) LogInfo(msg string) {
 	b.Logger.Info(msg)
 	b.UI.Info(fmt.Sprintf("%s%s", ui.InfoPrefix, color.WhiteString(" %v", msg)))
 }
+
+// LogOutput logs an message and outputs it to the UI.
+func (b *CmdBase) LogOutput(msg string) {
+	b.Logger.Info(msg)
+	b.UI.Output(msg)
+}
