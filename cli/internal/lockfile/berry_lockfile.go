@@ -89,15 +89,19 @@ type BerryDependencyMetaEntry struct {
 var _ Lockfile = (*BerryLockfile)(nil)
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (l *BerryLockfile) ResolvePackage(_workspace turbopath.AnchoredUnixPath, name string, version string) (string, string, bool) {
+func (l *BerryLockfile) ResolvePackage(_workspace turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
 	for _, key := range berryPossibleKeys(name, version) {
 		if locator, ok := l.descriptors[key]; ok {
 			entry := l.packages[locator]
-			return locator.String(), entry.Version, true
+			return Package{
+				Found:   true,
+				Key:     locator.String(),
+				Version: entry.Version,
+			}, nil
 		}
 	}
 
-	return "", "", false
+	return Package{}, nil
 }
 
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package

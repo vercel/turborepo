@@ -22,14 +22,18 @@ type YarnLockfile struct {
 var _ Lockfile = (*YarnLockfile)(nil)
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (l *YarnLockfile) ResolvePackage(_workspacePath turbopath.AnchoredUnixPath, name string, version string) (string, string, bool) {
+func (l *YarnLockfile) ResolvePackage(_workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
 	for _, key := range yarnPossibleKeys(name, version) {
 		if entry, ok := (l.inner)[key]; ok {
-			return key, entry.Version, true
+			return Package{
+				Found:   true,
+				Key:     key,
+				Version: entry.Version,
+			}, nil
 		}
 	}
 
-	return "", "", false
+	return Package{}, nil
 }
 
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
