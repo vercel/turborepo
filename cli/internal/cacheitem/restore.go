@@ -110,11 +110,11 @@ func restoreEntry(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, 
 	// And on restoration, if we fail, we simply run the task.
 	switch header.Typeflag {
 	case tar.TypeDir:
-		return restoreDirectory(dirCache, anchor, header, reader)
+		return restoreDirectory(dirCache, anchor, header)
 	case tar.TypeReg:
 		return restoreRegular(dirCache, anchor, header, reader)
 	case tar.TypeSymlink:
-		return restoreSymlink(dirCache, anchor, header, reader)
+		return restoreSymlink(dirCache, anchor, header)
 	default:
 		return "", errUnsupportedFileType
 	}

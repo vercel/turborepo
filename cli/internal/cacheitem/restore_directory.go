@@ -10,7 +10,7 @@ import (
 )
 
 // restoreDirectory restores a directory.
-func restoreDirectory(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header, reader *tar.Reader) (turbopath.AnchoredSystemPath, error) {
+func restoreDirectory(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, header *tar.Header) (turbopath.AnchoredSystemPath, error) {
 	processedName, err := canonicalizeName(header.Name)
 	if err != nil {
 		return "", err
