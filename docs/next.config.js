@@ -1,3 +1,4 @@
+const { withSentryConfig } = require("@sentry/nextjs");
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.js",
@@ -5,11 +6,29 @@ const withNextra = require("nextra")({
   unstable_staticImage: true,
 });
 
-module.exports = withNextra({
+const sentryWebpackPluginOptions = {
+  silent: true,
+};
+
+const nextConfig = withNextra({
+  sentry: {
+    hideSourceMaps: true,
+  },
   reactStrictMode: true,
   experimental: {
     legacyBrowsers: false,
     images: { allowFutureImage: true },
+  },
+  webpack: (config, { webpack }) => {
+    config.plugins.push(
+      new webpack.DefinePlugin({
+        __SENTRY_DEBUG__: false,
+        __SENTRY_TRACING__: false,
+      })
+    );
+
+    // return the modified config
+    return config;
   },
   rewrites() {
     return {
@@ -91,3 +110,5 @@ module.exports = withNextra({
     ];
   },
 });
+
+module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
