@@ -1,0 +1,32 @@
+---
+title: Turborepo 1.6
+date: 2022/10/06
+description: Turborepo 1.6 lets you use Turbo in non-monorepos!
+tag: web development
+ogImage: /images/blog/turbo-1-6-0/twitter-card.png
+---
+
+# Turborepo 1.6
+
+import { Authors } from '../../components/Authors'
+import Callout from '../../components/Callout'
+
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Thursday, October 6th, 2022</div>
+
+<Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+
+Turborepo 1.6 changes the game for Turborepo - you can now use it for **any project**, monorepo or not.
+
+- [**Turborepo in non-monorepos**](#the-monorepo-handbook): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
+
+Update today by running `npm install turbo@latest`.
+
+## Any codebase can use Turborepo
+
+Turborepo helps speed up tasks in your codebase. Until now, we'd built Turborepo specifically for monorepos - codebases which contain multiple applications and packages.
+
+Turborepo is awesome in monorepos because they have so many tasks to handle. Each package and app needs to be built, linted, and tested.
+
+But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of tasks. Most CI/CD processes do a lot of duplicated work that would benefit from a [cache](/docs/core-concepts/caching).
+
+So we're excited to announce that **any codebase can now use Turborepo**. Try out our [new quickstart](/docs/getting-started/add-to-project) to get Turbo running on your non-monorepo project.
