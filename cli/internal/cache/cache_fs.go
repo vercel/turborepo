@@ -64,9 +64,8 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 	closeErr := cacheItem.Close()
 	if closeErr != nil {
 		return false, restoredFiles, 0, closeErr
-	} else {
-		return true, restoredFiles, meta.Duration, nil
 	}
+	return true, restoredFiles, meta.Duration, nil
 }
 
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {

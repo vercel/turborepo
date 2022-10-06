@@ -139,7 +139,6 @@ func checkPath(originalAnchor turbopath.AbsoluteSystemPath, accumulatedAnchor tu
 	if computedTarget.HasPrefix(originalAnchor) {
 		// Need to recurse and make sure the target doesn't link out.
 		return checkPath(originalAnchor, accumulatedAnchor, relativeLinkTarget)
-	} else {
-		return "", errTraversal
 	}
+	return "", errTraversal
 }
