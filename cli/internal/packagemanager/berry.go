@@ -3,6 +3,7 @@ package packagemanager
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
@@ -114,5 +115,42 @@ var nodejsBerry = PackageManager{
 
 	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodeBerryLockfile(contents)
+	},
+
+	prunePatches: func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {
+		pkgJSON.Mu.Lock()
+		defer pkgJSON.Mu.Unlock()
+
+		keysToDelete := []string{}
+		resolutions, ok := pkgJSON.RawJSON["resolutions"].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("Invalid structure for resolutions field in package.json")
+		}
+
+		for dependency, untypedPatch := range resolutions {
+			inPatches := false
+			patch, ok := untypedPatch.(string)
+			if !ok {
+				return fmt.Errorf("Expected value of %s in package.json to be a string, got %v", dependency, untypedPatch)
+			}
+
+			for _, wantedPatch := range patches {
+				if strings.HasSuffix(patch, wantedPatch.ToString()) {
+					inPatches = true
+					break
+				}
+			}
+
+			// We only want to delete unused patches as they are the only ones that throw if unused
+			if !inPatches && strings.HasSuffix(patch, ".patch") {
+				keysToDelete = append(keysToDelete, dependency)
+			}
+		}
+
+		for _, key := range keysToDelete {
+			delete(resolutions, key)
+		}
+
+		return nil
 	},
 }

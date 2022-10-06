@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -196,21 +195,24 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot))
 	}
 	if err != nil {
-		return err
+		var warnings *context.Warnings
+		if errors.As(err, &warnings) {
+			r.base.LogWarning("Issues occurred when constructing package graph. Turbo will function, but some features may not be available", err)
+		} else {
+			return err
+		}
 	}
-	if runtime.GOOS != "windows" {
-		if ui.IsCI && !r.opts.runOpts.noDaemon {
-			r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
-		} else if !r.opts.runOpts.noDaemon {
-			turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
-			if err != nil {
-				r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
-			} else {
-				defer func() { _ = turbodClient.Close() }()
-				r.base.Logger.Debug("running in daemon mode")
-				daemonClient := daemonclient.New(turbodClient)
-				r.opts.runcacheOpts.OutputWatcher = daemonClient
-			}
+	if ui.IsCI && !r.opts.runOpts.noDaemon {
+		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+	} else if !r.opts.runOpts.noDaemon {
+		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
+		if err != nil {
+			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+		} else {
+			defer func() { _ = turbodClient.Close() }()
+			r.base.Logger.Debug("running in daemon mode")
+			daemonClient := daemonclient.New(turbodClient)
+			r.opts.runcacheOpts.OutputWatcher = daemonClient
 		}
 	}
 
@@ -757,6 +759,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	colorCache := colorcache.New()
 	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
 	runCache := runcache.New(turboCache, r.base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runState:        runState,
@@ -772,13 +775,15 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		return ec.exec(ctx, packageTask, deps)
-	}), core.ExecOpts{
+	execOpts := core.ExecOpts{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
+	}
+	visitor := g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		return ec.exec(ctx, packageTask, deps)
 	})
+	errs := engine.Execute(visitor, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
@@ -807,17 +812,18 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 }
 
 type hashedTask struct {
-	TaskID       string           `json:"taskId"`
-	Task         string           `json:"task"`
-	Package      string           `json:"package"`
-	Hash         string           `json:"hash"`
-	CacheState   cache.ItemStatus `json:"cacheState"`
-	Command      string           `json:"command"`
-	Outputs      []string         `json:"outputs"`
-	LogFile      string           `json:"logFile"`
-	Dir          string           `json:"directory"`
-	Dependencies []string         `json:"dependencies"`
-	Dependents   []string         `json:"dependents"`
+	TaskID          string           `json:"taskId"`
+	Task            string           `json:"task"`
+	Package         string           `json:"package"`
+	Hash            string           `json:"hash"`
+	CacheState      cache.ItemStatus `json:"cacheState"`
+	Command         string           `json:"command"`
+	Outputs         []string         `json:"outputs"`
+	ExcludedOutputs []string         `json:"excludedOutputs"`
+	LogFile         string           `json:"logFile"`
+	Dir             string           `json:"directory"`
+	Dependencies    []string         `json:"dependencies"`
+	Dependents      []string         `json:"dependents"`
 }
 
 func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
@@ -841,13 +847,14 @@ func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
 }
 
 type hashedSinglePackageTask struct {
-	Task         string   `json:"task"`
-	Hash         string   `json:"hash"`
-	Command      string   `json:"command"`
-	Outputs      []string `json:"outputs"`
-	LogFile      string   `json:"logFile"`
-	Dependencies []string `json:"dependencies"`
-	Dependents   []string `json:"dependents"`
+	Task            string   `json:"task"`
+	Hash            string   `json:"hash"`
+	Command         string   `json:"command"`
+	Outputs         []string `json:"outputs"`
+	ExcludedOutputs []string `json:"excludedOutputs"`
+	LogFile         string   `json:"logFile"`
+	Dependencies    []string `json:"dependencies"`
+	Dependents      []string `json:"dependents"`
 }
 
 func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
@@ -911,17 +918,18 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 		}
 
 		taskIDs = append(taskIDs, hashedTask{
-			TaskID:       packageTask.TaskID,
-			Task:         packageTask.Task,
-			Package:      packageTask.PackageName,
-			Hash:         hash,
-			CacheState:   itemStatus,
-			Command:      command,
-			Dir:          packageTask.Pkg.Dir.ToString(),
-			Outputs:      packageTask.TaskDefinition.Outputs,
-			LogFile:      packageTask.RepoRelativeLogFile(),
-			Dependencies: stringAncestors,
-			Dependents:   stringDescendents,
+			TaskID:          packageTask.TaskID,
+			Task:            packageTask.Task,
+			Package:         packageTask.PackageName,
+			Hash:            hash,
+			CacheState:      itemStatus,
+			Command:         command,
+			Dir:             packageTask.Pkg.Dir.ToString(),
+			Outputs:         packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs: packageTask.TaskDefinition.Outputs.Exclusions,
+			LogFile:         packageTask.RepoRelativeLogFile(),
+			Dependencies:    stringAncestors,
+			Dependents:      stringDescendents,
 		})
 
 		return nil
@@ -967,42 +975,36 @@ type execContext struct {
 	isSinglePackage bool
 }
 
-func (e *execContext) logError(log hclog.Logger, prefix string, err error) {
-	e.logger.Error(prefix, "error", err)
+func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
+	ec.logger.Error(prefix, "error", err)
 
 	if prefix != "" {
 		prefix += ": "
 	}
 
-	e.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
+	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	outputPrefix := packageTask.OutputPrefix(e.isSinglePackage)
-	targetLogger := e.logger.Named(outputPrefix)
-	targetLogger.Debug("start")
+	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
+	prettyPrefix := ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
+
+	progressLogger := ec.logger.Named("")
+	progressLogger.Debug("start")
 
 	// Setup tracer
-	tracer := e.runState.Run(packageTask.TaskID)
+	tracer := ec.runState.Run(packageTask.TaskID)
 
 	// Create a logger
-	colorPrefixer := e.colorCache.PrefixColor(packageTask.PackageName)
-	prettyTaskPrefix := colorPrefixer("%s: ", outputPrefix)
-	targetUi := &cli.PrefixedUi{
-		Ui:           e.ui,
-		OutputPrefix: prettyTaskPrefix,
-		InfoPrefix:   prettyTaskPrefix,
-		ErrorPrefix:  prettyTaskPrefix,
-		WarnPrefix:   prettyTaskPrefix,
-	}
+	targetUI := &cli.BasicUi{}
 
-	passThroughArgs := e.rs.ArgsForTask(packageTask.Task)
-	hash, err := e.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
-	e.logger.Debug("task hash", "value", hash)
+	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
+	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
+	ec.logger.Debug("task hash", "value", hash)
 	if err != nil {
-		e.ui.Error(fmt.Sprintf("Hashing error: %v", err))
+		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
 		// @TODO probably should abort fatally???
 	}
 	// TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
@@ -1011,64 +1013,77 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	//
 	// bail if the script doesn't exist
 	if _, ok := packageTask.Command(); !ok {
-		targetLogger.Debug("no task in package, skipping")
-		targetLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
+		progressLogger.Debug("no task in package, skipping")
+		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
 	}
 	// Cache ---------------------------------------------
-	taskCache := e.runCache.TaskCache(packageTask, hash)
-	hit, err := taskCache.RestoreOutputs(ctx, targetUi, targetLogger)
+	taskCache := ec.runCache.TaskCache(packageTask, hash)
+	// Create a logger for replaying
+	prefixedUI := &cli.PrefixedUi{
+		Ui:           ec.ui,
+		OutputPrefix: prettyPrefix,
+		InfoPrefix:   prettyPrefix,
+		ErrorPrefix:  prettyPrefix,
+		WarnPrefix:   prettyPrefix,
+	}
+	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 	if err != nil {
-		targetUi.Error(fmt.Sprintf("error fetching from cache: %s", err))
+		targetUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
 		return nil
 	}
+
 	// Setup command execution
 	argsactual := append([]string{"run"}, packageTask.Task)
 	if len(passThroughArgs) > 0 {
 		// This will be either '--' or a typed nil
-		argsactual = append(argsactual, e.packageManager.ArgSeparator...)
+		argsactual = append(argsactual, ec.packageManager.ArgSeparator...)
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 
-	cmd := exec.Command(e.packageManager.Command, argsactual...)
+	cmd := exec.Command(ec.packageManager.Command, argsactual...)
 	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
 	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsoluteSystemPath to
 	// AbsoluteSystemPath
-	cmd.Dir = e.repoRoot.UntypedJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
+	cmd.Dir = ec.repoRoot.UntypedJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(outputPrefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
-		e.logError(targetLogger, prettyTaskPrefix, err)
-		if !e.rs.Opts.runOpts.continueOnError {
+		ec.logError(progressLogger, prettyPrefix, err)
+		if !ec.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
 		}
 	}
+
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyTaskPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
 	logStreamerErr.FlushRecord()
 	logStreamerOut.FlushRecord()
+
 	closeOutputs := func() error {
 		var closeErrors []error
+
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
 		}
 		if err := logStreamerErr.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stderr"))
 		}
+
 		if err := writer.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log file"))
 		}
@@ -1083,7 +1098,7 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	}
 
 	// Run the command
-	if err := e.processes.Exec(cmd); err != nil {
+	if err := ec.processes.Exec(cmd); err != nil {
 		// close off our outputs. We errored, so we mostly don't care if we fail to close
 		_ = closeOutputs()
 		// if we already know we're in the process of exiting,
@@ -1092,12 +1107,12 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 			return nil
 		}
 		tracer(TargetBuildFailed, err)
-		targetLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
-		if !e.rs.Opts.runOpts.continueOnError {
-			targetUi.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
-			e.processes.Close()
+		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
+		if !ec.rs.Opts.runOpts.continueOnError {
+			targetUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			ec.processes.Close()
 		} else {
-			targetUi.Warn("command finished with error, but continuing...")
+			targetUI.Warn("command finished with error, but continuing...")
 		}
 		return err
 	}
@@ -1105,16 +1120,16 @@ func (e *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask
 	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
-		e.logError(targetLogger, "", err)
+		ec.logError(progressLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, targetLogger, targetUi, int(duration.Milliseconds())); err != nil {
-			e.logError(targetLogger, "", fmt.Errorf("error caching output: %w", err))
+		if err = taskCache.SaveOutputs(ctx, progressLogger, targetUI, int(duration.Milliseconds())); err != nil {
+			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
 
 	// Clean up tracing
 	tracer(TargetBuilt, nil)
-	targetLogger.Debug("done", "status", "complete", "duration", duration)
+	progressLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }
 

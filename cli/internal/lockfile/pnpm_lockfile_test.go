@@ -68,6 +68,7 @@ func Test_SpecifierResolution(t *testing.T) {
 		specifier     string
 		version       string
 		found         bool
+		err           string
 	}
 
 	cases := []Case{
@@ -77,12 +78,17 @@ func Test_SpecifierResolution(t *testing.T) {
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "bad-tag", version: "", found: false},
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
 		{workspacePath: "", pkg: "turbo", specifier: "latest", version: "1.4.6", found: true},
+		{workspacePath: "apps/bad_workspace", pkg: "turbo", specifier: "latest", version: "1.4.6", err: "no workspace 'apps/bad_workspace' found in lockfile"},
 	}
 
 	for _, testCase := range cases {
-		actualVersion, actualFound := lockfile.resolveSpecifier(testCase.workspacePath, testCase.pkg, testCase.specifier)
-		assert.Equal(t, actualFound, testCase.found, "%s@%s", testCase.pkg, testCase.version)
-		assert.Equal(t, actualVersion, testCase.version, "%s@%s", testCase.pkg, testCase.version)
+		actualVersion, actualFound, err := lockfile.resolveSpecifier(testCase.workspacePath, testCase.pkg, testCase.specifier)
+		if testCase.err != "" {
+			assert.Error(t, err, testCase.err)
+		} else {
+			assert.Equal(t, actualFound, testCase.found, "%s@%s", testCase.pkg, testCase.version)
+			assert.Equal(t, actualVersion, testCase.version, "%s@%s", testCase.pkg, testCase.version)
+		}
 	}
 }
 

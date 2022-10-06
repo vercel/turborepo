@@ -105,7 +105,11 @@ func (c *Connector) lockFile() lockfile.Lockfile {
 }
 
 func (c *Connector) addr() string {
-	return fmt.Sprintf("unix://%v", c.SockPath.ToString())
+	// grpc special-cases parsing of unix:<path> urls
+	// to avoid url.Parse. This lets us pass through our absolute
+	// paths unmodified, even on windows.
+	// See code here: https://github.com/grpc/grpc-go/blob/d83070ec0d9043f713b6a63e1963c593b447208c/internal/transport/http_util.go#L392
+	return fmt.Sprintf("unix:%v", c.SockPath.ToString())
 }
 
 // We defer to the daemon's pid file as the locking mechanism.
