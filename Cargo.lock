@@ -2288,6 +2288,7 @@ dependencies = [
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbopack",
  "turbopack-core",
@@ -4942,6 +4943,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-env"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dotenvy",
+ "indexmap",
+ "serde",
+ "serde_json",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+]
+
+[[package]]
 name = "turbo-tasks-fs"
 version = "0.1.0"
 dependencies = [
@@ -5036,6 +5052,7 @@ dependencies = [
  "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbopack-core",
@@ -5177,6 +5194,7 @@ dependencies = [
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-ecmascript",
