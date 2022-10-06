@@ -117,6 +117,9 @@ func (p *prune) prune(opts *opts) error {
 	if !canPrune {
 		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
 	}
+	if ctx.Lockfile == nil {
+		return errors.New("Cannot prune without parsed lockfile")
+	}
 
 	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
 
