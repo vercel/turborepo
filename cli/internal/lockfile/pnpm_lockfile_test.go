@@ -91,3 +91,25 @@ func Test_SpecifierResolution(t *testing.T) {
 		}
 	}
 }
+
+func Test_SubgraphInjectedPackages(t *testing.T) {
+	contents, err := getFixture(t, "pnpm7-workspace.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "decode lockfile")
+
+	packageWithInjectedPackage := turbopath.AnchoredUnixPath("apps/docs").ToSystemPath()
+
+	prunedLockfile, err := lockfile.Subgraph([]turbopath.AnchoredSystemPath{packageWithInjectedPackage}, []string{})
+	assert.NilError(t, err, "prune lockfile")
+
+	pnpmLockfile, ok := prunedLockfile.(*PnpmLockfile)
+	assert.Assert(t, ok, "got different lockfile impl")
+
+	_, hasInjectedPackage := pnpmLockfile.Packages["file:packages/ui"]
+
+	assert.Assert(t, hasInjectedPackage, "pruned lockfile is missing injected package")
+
+}
