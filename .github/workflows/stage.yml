@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       increment:
-        description: "SemVer Increment"
+        description: "SemVer Increment (prerelease = bump canary)"
         required: true
         default: "prerelease"
         type: choice
