@@ -3,7 +3,7 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"compress/gzip"
+	"bufio"
 	"crypto/sha512"
 	"errors"
 	"hash"
@@ -30,9 +30,10 @@ type CacheItem struct {
 	Anchor turbopath.AbsoluteSystemPath
 
 	// For creation.
-	sha    hash.Hash
-	tw     *tar.Writer
-	gzw    *gzip.Writer
+	sha hash.Hash
+	tw  *tar.Writer
+	// gzw    *gzip.Writer
+	buffer *bufio.Writer
 	handle *os.File
 }
 
@@ -44,8 +45,14 @@ func (ci *CacheItem) Close() error {
 		}
 	}
 
-	if ci.gzw != nil {
-		if err := ci.gzw.Close(); err != nil {
+	// if ci.gzw != nil {
+	// 	if err := ci.gzw.Close(); err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	if ci.buffer != nil {
+		if err := ci.buffer.Flush(); err != nil {
 			return err
 		}
 	}

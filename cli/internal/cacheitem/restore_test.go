@@ -2,7 +2,6 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -39,8 +38,8 @@ func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	handle, handleCreateErr := testArchivePath.Create()
 	assert.NilError(t, handleCreateErr, "os.Create")
 
-	gzw := gzip.NewWriter(handle)
-	tw := tar.NewWriter(gzw)
+	// gzw := gzip.NewWriter(handle)
+	tw := tar.NewWriter(handle)
 
 	for _, file := range files {
 		if file.Header.Typeflag == tar.TypeReg {
@@ -57,8 +56,8 @@ func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	twCloseErr := tw.Close()
 	assert.NilError(t, twCloseErr, "tw.Close")
 
-	gzwCloseErr := gzw.Close()
-	assert.NilError(t, gzwCloseErr, "gzw.Close")
+	// gzwCloseErr := gzw.Close()
+	// assert.NilError(t, gzwCloseErr, "gzw.Close")
 
 	handleCloseErr := handle.Close()
 	assert.NilError(t, handleCloseErr, "handle.Close")
