@@ -3322,6 +3322,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_qs"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cac3f1e2ca2fe333923a1ae72caca910b98ed0630bb35ef6f8c8517d6e81afa"
+dependencies = [
+ "percent-encoding",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "serde_regex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5146,11 +5157,13 @@ dependencies = [
  "futures",
  "hyper",
  "hyper-tungstenite",
+ "indexmap",
  "lazy_static",
  "mime",
  "mime_guess",
  "serde",
  "serde_json",
+ "serde_qs",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
