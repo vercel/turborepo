@@ -1,11 +1,12 @@
 package cache
 
 import (
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/cacheitem"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
@@ -32,7 +33,7 @@ func TestPut(t *testing.T) {
 
 	src := turbopath.AbsoluteSystemPath(t.TempDir())
 	childDir := src.UntypedJoin("child")
-	err := childDir.MkdirAll(0775)
+	err := childDir.MkdirAll()
 	assert.NilError(t, err, "Mkdir")
 	aPath := childDir.UntypedJoin("a")
 	aFile, err := aPath.Create()
@@ -58,6 +59,7 @@ func TestPut(t *testing.T) {
 	assert.NilError(t, circlePath.Symlink(filepath.FromSlash("../child")), "Symlink")
 
 	files := []turbopath.AnchoredSystemPath{
+		turbopath.AnchoredUnixPath(".").ToSystemPath(),            // src
 		turbopath.AnchoredUnixPath("child/").ToSystemPath(),       // childDir
 		turbopath.AnchoredUnixPath("child/a").ToSystemPath(),      // aPath,
 		turbopath.AnchoredUnixPath("b").ToSystemPath(),            // bPath,
@@ -76,26 +78,17 @@ func TestPut(t *testing.T) {
 
 	hash := "the-hash"
 	duration := 0
-	putErr := cache.Put(src, hash, duration, files)
-	assert.NilError(t, putErr, "Put")
+	err = cache.Put(src, hash, duration, files)
+	assert.NilError(t, err, "Put")
 
 	// Verify that we got the files that we're expecting
 	dstCachePath := dst.UntypedJoin(hash)
 
-	// This test checks outputs, so we go ahead and pull things back out.
-	// Attempting to satisfy our beliefs that the change is viable with
-	// as few changes to the tests as possible.
-	cacheItem, openErr := cacheitem.Open(dst.UntypedJoin(hash + ".tar.gz"))
-	assert.NilError(t, openErr, "Open")
-
-	_, restoreErr := cacheItem.Restore(dstCachePath)
-	assert.NilError(t, restoreErr, "Restore")
-
 	dstAPath := dstCachePath.UntypedJoin("child", "a")
-	assertFileMatches(t, aPath, dstAPath)
+	assertFileMatches(t, aPath.ToStringDuringMigration(), dstAPath.ToStringDuringMigration())
 
 	dstBPath := dstCachePath.UntypedJoin("b")
-	assertFileMatches(t, bPath, dstBPath)
+	assertFileMatches(t, bPath.ToStringDuringMigration(), dstBPath.ToStringDuringMigration())
 
 	dstLinkPath := dstCachePath.UntypedJoin("child", "link")
 	target, err := dstLinkPath.Readlink()
@@ -118,20 +111,18 @@ func TestPut(t *testing.T) {
 	if circleLinkDest != expectedCircleLinkDest {
 		t.Errorf("Cache link got %v, want %v", circleLinkDest, expectedCircleLinkDest)
 	}
-
-	assert.NilError(t, cacheItem.Close(), "Close")
 }
 
-func assertFileMatches(t *testing.T, orig turbopath.AbsoluteSystemPath, copy turbopath.AbsoluteSystemPath) {
+func assertFileMatches(t *testing.T, orig string, copy string) {
 	t.Helper()
-	origBytes, err := orig.ReadFile()
+	origBytes, err := ioutil.ReadFile(orig)
 	assert.NilError(t, err, "ReadFile")
-	copyBytes, err := copy.ReadFile()
+	copyBytes, err := ioutil.ReadFile(copy)
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, origBytes, copyBytes)
-	origStat, err := orig.Lstat()
+	origStat, err := os.Lstat(orig)
 	assert.NilError(t, err, "Lstat")
-	copyStat, err := copy.Lstat()
+	copyStat, err := os.Lstat(copy)
 	assert.NilError(t, err, "Lstat")
 	assert.Equal(t, origStat.Mode(), copyStat.Mode())
 }
@@ -157,13 +148,12 @@ func TestFetch(t *testing.T) {
 	// "some-package"/...
 
 	cacheDir := turbopath.AbsoluteSystemPath(t.TempDir())
-	hash := "the-hash"
-	src := cacheDir.UntypedJoin(hash, "some-package")
-	err := src.MkdirAll(0775)
+	src := cacheDir.UntypedJoin("the-hash", "some-package")
+	err := src.MkdirAll()
 	assert.NilError(t, err, "mkdirAll")
 
 	childDir := src.UntypedJoin("child")
-	err = childDir.MkdirAll(0775)
+	err = childDir.MkdirAll()
 	assert.NilError(t, err, "Mkdir")
 	aPath := childDir.UntypedJoin("a")
 	aFile, err := aPath.Create()
@@ -184,12 +174,9 @@ func TestFetch(t *testing.T) {
 	assert.NilError(t, srcLinkPath.Symlink(linkTarget), "Symlink")
 
 	srcBrokenLinkPath := childDir.UntypedJoin("broken")
-	srcBrokenLinkTarget := turbopath.AnchoredUnixPath("missing").ToSystemPath()
-	assert.NilError(t, srcBrokenLinkPath.Symlink(srcBrokenLinkTarget.ToString()), "Symlink")
-
+	assert.NilError(t, srcBrokenLinkPath.Symlink("missing"), "Symlink")
 	circlePath := childDir.Join("circle")
-	srcCircleLinkTarget := turbopath.AnchoredUnixPath("../child").ToSystemPath()
-	assert.NilError(t, circlePath.Symlink(srcCircleLinkTarget.ToString()), "Symlink")
+	assert.NilError(t, circlePath.Symlink(filepath.FromSlash("../child")), "Symlink")
 
 	metadataPath := cacheDir.UntypedJoin("the-hash-meta.json")
 	err = metadataPath.WriteFile([]byte(`{"hash":"the-hash","duration":0}`), 0777)
@@ -202,18 +189,6 @@ func TestFetch(t *testing.T) {
 		recorder:       dr,
 	}
 
-	inputFiles := []turbopath.AnchoredSystemPath{
-		turbopath.AnchoredUnixPath("some-package/child/").ToSystemPath(),       // childDir
-		turbopath.AnchoredUnixPath("some-package/child/a").ToSystemPath(),      // aPath,
-		turbopath.AnchoredUnixPath("some-package/b").ToSystemPath(),            // bPath,
-		turbopath.AnchoredUnixPath("some-package/child/link").ToSystemPath(),   // srcLinkPath,
-		turbopath.AnchoredUnixPath("some-package/child/broken").ToSystemPath(), // srcBrokenLinkPath,
-		turbopath.AnchoredUnixPath("some-package/child/circle").ToSystemPath(), // circlePath
-	}
-
-	putErr := cache.Put(cacheDir.UntypedJoin(hash), hash, 0, inputFiles)
-	assert.NilError(t, putErr, "Put")
-
 	outputDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	dstOutputPath := "some-package"
 	hit, files, _, err := cache.Fetch(outputDir, "the-hash", []string{})
@@ -221,32 +196,39 @@ func TestFetch(t *testing.T) {
 	if !hit {
 		t.Error("Fetch got false, want true")
 	}
-	if len(files) != len(inputFiles) {
-		t.Errorf("len(files) got %v, want %v", len(files), len(inputFiles))
+	if len(files) != 0 {
+		// Not for any particular reason, but currently the fs cache doesn't return the
+		// list of files copied
+		t.Errorf("len(files) got %v, want 0", len(files))
 	}
+	t.Logf("files %v", files)
 
-	dstAPath := outputDir.UntypedJoin(dstOutputPath, "child", "a")
-	assertFileMatches(t, aPath, dstAPath)
+	dstAPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "a")
+	assertFileMatches(t, aPath.ToStringDuringMigration(), dstAPath)
 
-	dstBPath := outputDir.UntypedJoin(dstOutputPath, "b")
-	assertFileMatches(t, bPath, dstBPath)
+	dstBPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "b")
+	assertFileMatches(t, bPath.ToStringDuringMigration(), dstBPath)
 
-	dstLinkPath := outputDir.UntypedJoin(dstOutputPath, "child", "link")
-	target, err := dstLinkPath.Readlink()
+	dstLinkPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "link")
+	target, err := os.Readlink(dstLinkPath)
 	assert.NilError(t, err, "Readlink")
 	if target != linkTarget {
 		t.Errorf("Readlink got %v, want %v", target, linkTarget)
 	}
 
-	// Assert that we restore broken symlinks correctly
-	dstBrokenLinkPath := outputDir.UntypedJoin(dstOutputPath, "child", "broken")
-	target, readlinkErr := dstBrokenLinkPath.Readlink()
-	assert.NilError(t, readlinkErr, "Readlink")
-	assert.Equal(t, target, srcBrokenLinkTarget.ToString())
+	// We currently don't restore broken symlinks. This is probably a bug
+	dstBrokenLinkPath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "broken")
+	_, err = os.Readlink(dstBrokenLinkPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 
-	// Assert that we restore symlinks to directories correctly
-	dstCirclePath := outputDir.UntypedJoin(dstOutputPath, "child", "circle")
-	circleTarget, circleReadlinkErr := dstCirclePath.Readlink()
-	assert.NilError(t, circleReadlinkErr, "Circle Readlink")
-	assert.Equal(t, circleTarget, srcCircleLinkTarget.ToString())
+	// Currently, on restore, we convert symlink-to-directory to empty-directory
+	// This is very likely not ideal behavior, but leaving this test here to verify
+	// that it is what we expect at this point in time.
+	dstCirclePath := filepath.Join(outputDir.ToStringDuringMigration(), dstOutputPath, "child", "circle")
+	circleStat, err := os.Lstat(dstCirclePath)
+	assert.NilError(t, err, "Lstat")
+	assert.Equal(t, circleStat.IsDir(), true)
+	entries, err := os.ReadDir(dstCirclePath)
+	assert.NilError(t, err, "ReadDir")
+	assert.Equal(t, len(entries), 0)
 }

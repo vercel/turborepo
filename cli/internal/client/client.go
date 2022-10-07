@@ -572,7 +572,7 @@ type statusResponse struct {
 	Status string `json:"status"`
 }
 
-// GetCachingStatus returns the server's perspective on whether or not remove caching
+// GetCachingStatus returns the server's perspective on whether or not remote caching
 // requests will be allowed.
 func (c *ApiClient) GetCachingStatus() (util.CachingStatus, error) {
 	values := make(url.Values)

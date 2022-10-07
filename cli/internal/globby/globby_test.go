@@ -31,12 +31,11 @@ func TestGlobFilesFs(t *testing.T) {
 		excludePatterns []string
 	}
 	tests := []struct {
-		name      string
-		files     []string
-		args      args
-		wantAll   []string
-		wantFiles []string
-		wantErr   bool
+		name    string
+		files   []string
+		args    args
+		want    []string
+		wantErr bool
 	}{
 		{
 			name:  "hello world",
@@ -46,29 +45,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"*.txt"},
 				excludePatterns: []string{},
 			},
-			wantAll:   []string{"/test.txt"},
-			wantFiles: []string{"/test.txt"},
-		},
-		{
-			name: "bullet files",
-			files: []string{
-				"/test.txt",
-				"/subdir/test.txt",
-				"/other/test.txt",
-			},
-			args: args{
-				basePath:        "/",
-				includePatterns: []string{"subdir/test.txt", "test.txt"},
-				excludePatterns: []string{},
-			},
-			wantAll: []string{
-				"/subdir/test.txt",
-				"/test.txt",
-			},
-			wantFiles: []string{
-				"/subdir/test.txt",
-				"/test.txt",
-			},
+			want: []string{"/test.txt"},
 		},
 		{
 			name: "finding workspace package.json files",
@@ -92,14 +69,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"packages/*/package.json", "apps/*/package.json"},
 				excludePatterns: []string{"**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"},
 			},
-			wantAll: []string{
-				"/repos/some-app/apps/docs/package.json",
-				"/repos/some-app/apps/web/package.json",
-				"/repos/some-app/packages/colors/package.json",
-				"/repos/some-app/packages/faker/package.json",
-				"/repos/some-app/packages/left-pad/package.json",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/apps/docs/package.json",
 				"/repos/some-app/apps/web/package.json",
 				"/repos/some-app/packages/colors/package.json",
@@ -129,16 +99,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**/package.json"},
 				excludePatterns: []string{"**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"},
 			},
-			wantAll: []string{
-				"/repos/some-app/apps/docs/package.json",
-				"/repos/some-app/apps/web/package.json",
-				"/repos/some-app/examples/package.json",
-				"/repos/some-app/package.json",
-				"/repos/some-app/packages/colors/package.json",
-				"/repos/some-app/packages/faker/package.json",
-				"/repos/some-app/packages/left-pad/package.json",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/apps/docs/package.json",
 				"/repos/some-app/apps/web/package.json",
 				"/repos/some-app/examples/package.json",
@@ -176,14 +137,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"packages/**/package.json"},
 				excludePatterns: []string{"**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"},
 			},
-			wantAll: []string{
-				"/repos/some-app/packages/colors/package.json",
-				"/repos/some-app/packages/faker/package.json",
-				"/repos/some-app/packages/left-pad/package.json",
-				"/repos/some-app/packages/xzibit/package.json",
-				"/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/packages/colors/package.json",
 				"/repos/some-app/packages/faker/package.json",
 				"/repos/some-app/packages/left-pad/package.json",
@@ -219,14 +173,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"packages/**/package.json", "tests/mocks/*/package.json"},
 				excludePatterns: []string{"**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"},
 			},
-			wantAll: []string{
-				"/repos/some-app/packages/colors/package.json",
-				"/repos/some-app/packages/faker/package.json",
-				"/repos/some-app/packages/left-pad/package.json",
-				"/repos/some-app/packages/xzibit/package.json",
-				"/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/packages/colors/package.json",
 				"/repos/some-app/packages/faker/package.json",
 				"/repos/some-app/packages/left-pad/package.json",
@@ -256,26 +203,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{".turbo/turbo-build.log", "dist/**", ".next/**", "public/dist/**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/.next",
-				"/repos/some-app/.next/cache",
-				"/repos/some-app/.next/cache/db6a76a62043520e7aaadd0bb2104e78.txt",
-				"/repos/some-app/.next/log.txt",
-				"/repos/some-app/.turbo/turbo-build.log",
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-				"/repos/some-app/public/dist",
-				"/repos/some-app/public/dist/css",
-				"/repos/some-app/public/dist/css/index.css",
-				"/repos/some-app/public/dist/images",
-				"/repos/some-app/public/dist/images/rick_astley.jpg",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/.next/cache/db6a76a62043520e7aaadd0bb2104e78.txt",
 				"/repos/some-app/.next/log.txt",
 				"/repos/some-app/.turbo/turbo-build.log",
@@ -300,16 +228,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist/**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
@@ -329,8 +248,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist"},
 				excludePatterns: []string{},
 			},
-			wantAll:   []string{"/repos/some-app/dist"},
-			wantFiles: []string{},
+			want: []string{},
 		},
 		{
 			name: "redundant includes do not duplicate",
@@ -345,16 +263,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**/*", "dist/**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
@@ -374,8 +283,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"**"},
 			},
-			wantAll:   []string{},
-			wantFiles: []string{},
+			want: []string{},
 		},
 		{
 			name: "passing just a directory to exclude prevents capture of children",
@@ -390,11 +298,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist/**"},
 				excludePatterns: []string{"dist/js"},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 			},
 		},
@@ -411,12 +315,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist/**"},
 				excludePatterns: []string{"dist/js/**"},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 			},
 		},
@@ -433,8 +332,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"./"},
 			},
-			wantAll:   []string{},
-			wantFiles: []string{},
+			want: []string{},
 		},
 		{
 			name: "exclude everything with traversal applies at a non-base path",
@@ -449,8 +347,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"./dist"},
 			},
-			wantAll:   []string{},
-			wantFiles: []string{},
+			want: []string{},
 		},
 		{
 			name: "exclude everything with folder traversal (..) applies at base path",
@@ -465,8 +362,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"dist/../"},
 			},
-			wantAll:   []string{},
-			wantFiles: []string{},
+			want: []string{},
 		},
 		{
 			name: "how do globs even work bad glob microformat",
@@ -481,16 +377,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**/**/**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
@@ -511,9 +398,8 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"../spanish-inquisition/**", "dist/**"},
 				excludePatterns: []string{},
 			},
-			wantAll:   []string{},
-			wantFiles: []string{},
-			wantErr:   true,
+			want:    []string{},
+			wantErr: true,
 		},
 		{
 			name: "globs and traversal and globs do not cross base path",
@@ -529,9 +415,8 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**/../../spanish-inquisition/**"},
 				excludePatterns: []string{},
 			},
-			wantAll:   []string{},
-			wantFiles: []string{},
-			wantErr:   true,
+			want:    []string{},
+			wantErr: true,
 		},
 		{
 			name: "traversal works within base path",
@@ -546,16 +431,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist/js/../**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
@@ -575,16 +451,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist/./././**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
@@ -592,7 +459,7 @@ func TestGlobFilesFs(t *testing.T) {
 			},
 		},
 		{
-			name: "depth of 1 includes handles folders properly",
+			name: "depth of 1 includes does not capture folders",
 			files: []string{
 				"/repos/some-app/package.json",
 				"/repos/some-app/dist/index.html",
@@ -605,11 +472,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"*"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/package.json",
-			},
-			wantFiles: []string{"/repos/some-app/package.json"},
+			want: []string{"/repos/some-app/package.json"},
 		},
 		{
 			name: "depth of 1 excludes prevents capturing folders",
@@ -625,11 +488,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"**"},
 				excludePatterns: []string{"dist/*"},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/package.json",
-			},
-			wantFiles: []string{"/repos/some-app/package.json"},
+			want: []string{"/repos/some-app/package.json"},
 		},
 		{
 			name: "No-trailing slash basePath works",
@@ -644,16 +503,7 @@ func TestGlobFilesFs(t *testing.T) {
 				includePatterns: []string{"dist/**"},
 				excludePatterns: []string{},
 			},
-			wantAll: []string{
-				"/repos/some-app/dist",
-				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
-				"/repos/some-app/dist/js/index.js",
-				"/repos/some-app/dist/js/lib.js",
-				"/repos/some-app/dist/js/node_modules",
-				"/repos/some-app/dist/js/node_modules/browserify.js",
-			},
-			wantFiles: []string{
+			want: []string{
 				"/repos/some-app/dist/index.html",
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
@@ -680,28 +530,8 @@ func TestGlobFilesFs(t *testing.T) {
 
 			sort.Strings(gotToSlash)
 
-			if !reflect.DeepEqual(gotToSlash, tt.wantFiles) {
-				t.Errorf("globFilesFs() = %v, want %v", gotToSlash, tt.wantFiles)
-			}
-		})
-
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := globAllFs(fsys, fsysRoot, tt.args.basePath, tt.args.includePatterns, tt.args.excludePatterns)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("globAllFs() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			gotToSlash := make([]string, len(got))
-			for index, path := range got {
-				gotToSlash[index] = filepath.ToSlash(path)
-			}
-
-			sort.Strings(gotToSlash)
-
-			if !reflect.DeepEqual(gotToSlash, tt.wantAll) {
-				t.Errorf("globAllFs() = %v, want %v", gotToSlash, tt.wantAll)
+			if !reflect.DeepEqual(gotToSlash, tt.want) {
+				t.Errorf("globFilesFs() = %v, want %v", gotToSlash, tt.want)
 			}
 		})
 	}
