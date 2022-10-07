@@ -1,4 +1,4 @@
-name: Release
+name: Release From Branch
 
 env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -6,45 +6,108 @@ env:
 on:
   workflow_dispatch:
     inputs:
-      increment:
-        description: "SemVer Increment"
-        required: true
-        default: "prerelease"
-        type: choice
-        options:
-          - prerelease
-          - prepatch
-          - preminor
-          - premajor
-          - patch
-          - minor
-          - major
+      release_branch:
+        description: "Staging branch to run release from"
+
 jobs:
-  build:
-    runs-on: macos-latest
+  smoke-test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.TURBOBOT }}
+          ref: ${{ inputs.release_branch }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Test
+        run: pnpm -- turbo run test --filter=cli --color
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+  darwin:
+    name: "Build Darwin Binares"
+    needs: [smoke-test]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
         with:
-          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          ref: ${{ inputs.release_branch }}
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
           version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Build Artifacts
+        run: cd cli && make publish-turbo-darwin
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-artifacts-darwin
+          path: cli/dist-darwin
 
-          # Optional: working directory, useful for monorepos
-          working-directory: cli
+  # compiles linux and windows in a container
+  cross:
+    name: "Build Linux and Windows Binaries"
+    needs: [smoke-test]
+    runs-on: ubuntu-latest
+    container:
+      image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "${{ inputs.release_branch }}"
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Build Artifacts
+        run: cd cli && make publish-turbo-cross
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-artifacts-cross
+          path: cli/dist-cross
 
-          # `golangci-lint-action` does not have an "install only" option.
-          # We ignore the output of this run, instead using it just to install the binary.
-          args: --issues-exit-code=0
+  final-publish:
+    needs: [cross, darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "${{ inputs.release_branch }}"
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Configure git
         run: |
@@ -60,12 +123,38 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }}
-          cat version.txt
+      # Download the prebuilt binaries for each platform,
+      # combine them into a single dist-combined folder,
+      # then delegate to goreleaser / Makefile for deploy.
+      # Finally, set up a PR for the branch we released off of
+      - name: Download Cross-compiled Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: turbo-artifacts-cross
+          path: cli/dist-cross
+
+      - name: Download Darwin Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: turbo-artifacts-darwin
+          path: cli/dist-darwin
+
+      - name: Combine Artifacts
+        run: cd cli && mkdir -p dist-combined && cp -a dist-cross/. dist-combined/ && cp -a dist-darwin/. dist-combined/
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Release
         run: cd cli && make publish
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
+      - uses: repo-sync/pull-request@v2
+        with:
+          source_branch: ${{ inputs.release_branch }}
+          destination_branch: main
+          pr_title: Merge release branch ${{ inputs.release_branch }}
+          pr_body: ":crown: Merge release branch back to main"
+          pr_reviewer: ${{ github.actor }},gsoltis
+          pr_allow_empty: true
+          github_token: ${{ secrets.TURBOBOT }}
