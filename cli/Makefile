@@ -78,17 +78,42 @@ cmd/turbo/version.go: ../version.txt
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
-build: install compile-protos cmd/turbo/version.go $(GENERATED_FILES)
+build: install
 	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
 
-prepublish:
-	make -j3 bench/turbo test-go lint-go
+.PHONY: prepublish
+prepublish: compile-protos cmd/turbo/version.go
+	make -j3 bench/turbo test-go
 
-publish: clean prepublish build
+.PHONY: publish-turbo-cross
+publish-turbo-cross: prepublish
+	goreleaser release --rm-dist -f cross-release.yml
+
+.PHONY: publish-turbo-darwin
+publish-turbo-darwin: prepublish
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: snapshot-turbo-cross
+snapshot-turbo-cross:
+	goreleaser release --snapshot --rm-dist -f cross-release.yml
+
+.PHONY: snapshot-turbo-darwin
+snapshot-turbo-darwin:
+	goreleaser release --snapshot --rm-dist -f darwin-release.yml
+
+.PHONY: snapshot-turbo
+snapshot-turbo: clean
+	goreleaser release --snapshot --rm-dist -f combined-release.yml
+
+.PHONY: stage-release
+stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
+	cat $(CLI_DIR)/../version.txt
+	git diff -- $(CLI_DIR)/../version.txt
+	git status
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
@@ -102,16 +127,24 @@ publish: clean prepublish build
 	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
 
+	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
+	git push origin staging-$(TURBO_VERSION) --tags --force
+
+.PHONY: publish
+publish: clean build
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
 
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
+
 	# Publishes the native npm modules.
-	goreleaser release --rm-dist
+	goreleaser release --rm-dist -f combined-release.yml
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
@@ -125,10 +158,6 @@ publish: clean prepublish build
 	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
-
-	# Force push to ensure that the version used for the release is published.
-	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
-	git push -f origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
