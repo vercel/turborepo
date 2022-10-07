@@ -289,12 +289,12 @@ func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopat
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := filename.MkdirAll(0775); err != nil {
+			if err := filename.MkdirAll(); err != nil {
 				return nil, err
 			}
 		case tar.TypeReg:
 			if dir := filename.Dir(); dir != "." {
-				if err := dir.MkdirAll(0775); err != nil {
+				if err := dir.MkdirAll(); err != nil {
 					return nil, err
 				}
 			}

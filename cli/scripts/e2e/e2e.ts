@@ -1,5 +1,4 @@
 import execa from "execa";
-import tar from "tar";
 import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import { Monorepo } from "../monorepo";
@@ -183,9 +182,8 @@ function runSmokeTests<T>(
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
       assert.ok(!!hash, "No hash for c#test");
-      const cacheItemPath = getCacheItemForHash(repo, hash);
-      await tar.x({ file: path.join(repo.root, cacheItemPath), cwd: repo.root })
       const cachedLogFilePath = getCachedLogFilePathForTask(
+        getCachedDirForHash(repo, hash),
         path.join("packages", "c"),
         "test"
       );
@@ -215,9 +213,8 @@ function runSmokeTests<T>(
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#lint");
       assert.ok(!!hash, "No hash for c#lint");
-      const cacheItemPath = getCacheItemForHash(repo, hash);
-      await tar.x({ file: path.join(repo.root, cacheItemPath), cwd: repo.root })
       const cachedLogFilePath = getCachedLogFilePathForTask(
+        getCachedDirForHash(repo, hash),
         path.join("packages", "c"),
         "lint"
       );
@@ -695,19 +692,20 @@ function getHashFromOutput(lines: string[], taskId: string): string {
   return hash;
 }
 
-function getCacheItemForHash(repo: Monorepo, hash: string): string {
+function getCachedDirForHash(repo: Monorepo, hash: string): string {
   return path.join(
     repo.subdir ? repo.subdir : ".",
     "node_modules",
     ".cache",
     "turbo",
-    `${hash}.tar.gz`
+    hash
   );
 }
 
 function getCachedLogFilePathForTask(
+  cacheDir: string,
   pathToPackage: string,
   taskName: string
 ): string {
-  return path.join(pathToPackage, ".turbo", `turbo-${taskName}.log`);
+  return path.join(cacheDir, pathToPackage, ".turbo", `turbo-${taskName}.log`);
 }
