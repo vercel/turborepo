@@ -8,6 +8,7 @@ import (
 
 var (
 	errOverage            = errors.New("usage limit")
+	errPaused             = errors.New("spending paused")
 	errNeedCachingEnabled = errors.New("caching not enabled")
 	errTryAfterEnable     = errors.New("link after enabling caching")
 )
