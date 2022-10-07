@@ -12,7 +12,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "dev": "tsc -w",
-    "lint": "TIMING=1 eslint src/**/*.ts* --fix",
+    "lint": "TIMING=1 eslint \"src/**/*.ts*\"",
     "test": "jest"
   },
   "jest": {

@@ -8,7 +8,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "lint": "TIMING=1 eslint src --fix",
+    "lint": "TIMING=1 eslint \"src/**/*.ts*\"",
     "clean": "rm -rf build"
   },
   "dependencies": {

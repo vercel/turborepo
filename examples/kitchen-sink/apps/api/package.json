@@ -6,7 +6,7 @@
     "build": "tsup src/index.ts --format cjs",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist",
     "dev": "tsup src/index.ts --format cjs --watch --onSuccess \"node dist/index.js\"",
-    "lint": "tsc --noEmit && TIMING=1 eslint src/**/*.ts* --fix",
+    "lint": "tsc --noEmit && TIMING=1 eslint \"src/**/*.ts*\"",
     "start": "node dist/index.js",
     "test": "jest --detectOpenHandles"
   },

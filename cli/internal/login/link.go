@@ -187,6 +187,8 @@ func (l *link) run() error {
 		return errNeedCachingEnabled
 	case util.CachingStatusOverLimit:
 		return errOverage
+	case util.CachingStatusPaused:
+		return errPaused
 	case util.CachingStatusEnabled:
 	default:
 	}

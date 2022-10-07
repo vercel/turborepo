@@ -5,7 +5,7 @@ Setup
 Check
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
-   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing ad0ecb9fac7f41b0
   build: 
   build: > build
@@ -24,7 +24,7 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
-   INFO  \xe2\x80\xa2 Remote caching disabled (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output ad0ecb9fac7f41b0
   build: 
   build: > build
