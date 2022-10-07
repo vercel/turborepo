@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
 
-Check error is properly report
+Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
   $ ${TURBO} error
   \xe2\x80\xa2 Packages in scope: my-app (esc)
