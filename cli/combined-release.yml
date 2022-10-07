@@ -19,7 +19,7 @@ builds:
     hooks:
       pre:
         - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
-    binary: turbo
+    binary: bin/turbo
 checksum:
   name_template: "checksums.txt"
 snapshot:
