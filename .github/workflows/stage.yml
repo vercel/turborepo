@@ -1,6 +1,7 @@
 name: Create Release Branch
 
-# TODO: set outputs? optionally trigger release immediately?
+# TODO: Once we have confidence with the release process, add an
+# input to allow automatically kicking off the downstream release.
 on:
   workflow_dispatch:
     inputs:

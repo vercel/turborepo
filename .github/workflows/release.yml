@@ -26,6 +26,7 @@ jobs:
         run: pnpm -- turbo run test --filter=cli --color
 
   darwin:
+    name: "Build Darwin Binares"
     needs: [smoke-test]
     runs-on: macos-latest
     steps:
@@ -59,6 +60,7 @@ jobs:
 
   # compiles linux and windows in a container
   cross:
+    name: "Build Linux and Windows Binaries"
     needs: [smoke-test]
     runs-on: ubuntu-latest
     container:
@@ -121,6 +123,10 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
+      # Download the prebuilt binaries for each platform,
+      # combine them into a single dist-combined folder,
+      # then delegate to goreleaser / Makefile for deploy.
+      # Finally, set up a PR for the branch we released off of
       - name: Download Cross-compiled Artifacts
         uses: actions/download-artifact@v3
         with:
