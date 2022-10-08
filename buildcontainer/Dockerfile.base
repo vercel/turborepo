@@ -18,7 +18,7 @@ ARG COSIGN_SHA256
 ARG GORELEASER_DOWNLOAD_URL=https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}
 
 # install cosign
-COPY --from=gcr.io/projectsigstore/cosign:v1.11.1@sha256:f9fd5a287a67f4b955d08062a966df10f9a600b6b8583fd367bce3f1f000a429 /ko-app/cosign /usr/local/bin/cosign
+COPY --from=gcr.io/projectsigstore/cosign:v1.13.0@sha256:398f441c46e58906dc6d3aaaad22fe63f018dc30acbe13b326e5a016e711301c /ko-app/cosign /usr/local/bin/cosign
 COPY entrypoint.sh /
 
 # Install deps
