@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gopkg.in/yaml.v3"
@@ -119,4 +120,49 @@ var nodejsPnpm = PackageManager{
 	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodePnpmLockfile(contents)
 	},
+
+	prunePatches: func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {
+		return pnpmPrunePatches(pkgJSON, patches)
+	},
+}
+
+func pnpmPrunePatches(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {
+	pkgJSON.Mu.Lock()
+	defer pkgJSON.Mu.Unlock()
+
+	keysToDelete := []string{}
+	pnpmConfig, ok := pkgJSON.RawJSON["pnpm"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("Invalid structure for pnpm field in package.json")
+	}
+	patchedDependencies, ok := pnpmConfig["patchedDependencies"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("Invalid structure for patchedDependencies field in package.json")
+	}
+
+	for dependency, untypedPatch := range patchedDependencies {
+		patch, ok := untypedPatch.(string)
+		if !ok {
+			return fmt.Errorf("Expected only strings in patchedDependencies. Got %v", untypedPatch)
+		}
+
+		inPatches := false
+
+		for _, wantedPatch := range patches {
+			if wantedPatch.ToString() == patch {
+				inPatches = true
+				break
+			}
+		}
+
+		if !inPatches {
+			keysToDelete = append(keysToDelete, dependency)
+		}
+	}
+
+	for _, key := range keysToDelete {
+		delete(patchedDependencies, key)
+	}
+
+	return nil
 }

@@ -89,15 +89,19 @@ type BerryDependencyMetaEntry struct {
 var _ Lockfile = (*BerryLockfile)(nil)
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (l *BerryLockfile) ResolvePackage(_workspace turbopath.AnchoredUnixPath, name string, version string) (string, string, bool) {
+func (l *BerryLockfile) ResolvePackage(_workspace turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
 	for _, key := range berryPossibleKeys(name, version) {
 		if locator, ok := l.descriptors[key]; ok {
 			entry := l.packages[locator]
-			return locator.String(), entry.Version, true
+			return Package{
+				Found:   true,
+				Key:     locator.String(),
+				Version: entry.Version,
+			}, nil
 		}
 	}
 
-	return "", "", false
+	return Package{}, nil
 }
 
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
@@ -190,7 +194,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 		// and check if that descriptor is present in the pruned map and add it if it is present
 		for patch := range patchDescriptors {
 			primaryVersion, _ := patch.primaryVersion()
-			primaryDescriptor := _Descriptor{patch._Ident, fmt.Sprintf("npm:%s", primaryVersion)}
+			primaryDescriptor := _Descriptor{patch._Ident, primaryVersion}
 			_, isPresent := primaryDescriptors[primaryDescriptor]
 			if !isPresent {
 				panic(fmt.Sprintf("Unable to find primary descriptor %s", &primaryDescriptor))
@@ -493,8 +497,13 @@ func (d *_Descriptor) primaryVersion() (string, bool) {
 	if patchFileIndex < 0 || versionRangeIndex < 0 {
 		panic("Patch reference is missing required markers")
 	}
+	// The ':' following npm protocol gets encoded as '%3A' in the patch string
+	version := strings.Replace(d.versionRange[versionRangeIndex+1:patchFileIndex], "%3A", ":", 1)
+	if !strings.HasPrefix(version, "npm:") {
+		version = fmt.Sprintf("npm:%s", version)
+	}
 
-	return d.versionRange[versionRangeIndex+1 : patchFileIndex], true
+	return version, true
 }
 
 // Returns the protocol of the descriptor
