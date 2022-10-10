@@ -2,11 +2,12 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"compress/gzip"
-	"crypto/sha512"
+	"bufio"
 	"io"
 	"os"
 	"time"
+
+	"github.com/DataDog/zstd"
 
 	"github.com/moby/sys/sequential"
 	"github.com/vercel/turborepo/cli/internal/tarpatch"
@@ -15,7 +16,7 @@ import (
 
 // Create makes a new CacheItem at the specified path.
 func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
-	handle, err := path.Create()
+	handle, err := path.OpenFile(os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -31,16 +32,15 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 
 // init prepares the CacheItem for writing.
 // Wires all the writers end-to-end:
-// tar.Writer -> gzip.Writer -> io.MultiWriter -> (file & sha)
+// tar.Writer -> zstd.Writer -> fileBuffer -> file
 func (ci *CacheItem) init() {
-	sha := sha512.New()
-	mw := io.MultiWriter(sha, ci.handle)
-	gzw := gzip.NewWriter(mw)
-	tw := tar.NewWriter(gzw)
+	fileBuffer := bufio.NewWriterSize(ci.handle, 2^20) // Flush to disk in 1mb chunks.
+	zw := zstd.NewWriter(fileBuffer)
+	tw := tar.NewWriter(zw)
 
 	ci.tw = tw
-	ci.gzw = gzw
-	ci.sha = sha
+	ci.zw = zw
+	ci.fileBuffer = fileBuffer
 }
 
 // AddFile adds a user-cached item to the tar.
@@ -95,7 +95,7 @@ func (ci *CacheItem) AddFile(fsAnchor turbopath.AbsoluteSystemPath, filePath tur
 	if header.Typeflag == tar.TypeReg && header.Size > 0 {
 		// Windows has a distinct "sequential read" opening mode.
 		// We use a library that will switch to this mode for Windows.
-		sourceFile, sourceErr := sequential.Open(sourcePath.ToString())
+		sourceFile, sourceErr := sequential.OpenFile(sourcePath.ToString(), os.O_RDONLY, 0777)
 		if sourceErr != nil {
 			return sourceErr
 		}

@@ -6,7 +6,6 @@ package cache
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/DataDog/zstd"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/tarpatch"
@@ -83,9 +84,9 @@ func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, du
 // write writes a series of files into the given Writer.
 func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
 	defer w.Close()
-	gzw := gzip.NewWriter(w)
-	defer gzw.Close()
-	tw := tar.NewWriter(gzw)
+	zw := zstd.NewWriter(w)
+	defer zw.Close()
+	tw := tar.NewWriter(zw)
 	defer tw.Close()
 	for _, file := range files {
 		// log.Printf("caching file %v", file)
@@ -256,12 +257,9 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	files := []turbopath.AnchoredSystemPath{}
 	missingLinks := []*tar.Header{}
-	gzr, err := gzip.NewReader(reader)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = gzr.Close() }()
-	tr := tar.NewReader(gzr)
+	zr := zstd.NewReader(reader)
+	defer func() { _ = zr.Close() }()
+	tr := tar.NewReader(zr)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {

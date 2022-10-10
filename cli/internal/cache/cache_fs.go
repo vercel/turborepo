@@ -34,7 +34,7 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
 func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
-	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.gz")
+	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
 	// If it's not in the cache bail now
 	if !cachePath.FileExists() {
@@ -69,7 +69,7 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 }
 
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {
-	cachePath := f.cacheDirectory.UntypedJoin(hash + "tar.gz")
+	cachePath := f.cacheDirectory.UntypedJoin(hash + "tar.zst")
 
 	if !cachePath.FileExists() {
 		return ItemStatus{Local: false}, nil
@@ -95,7 +95,7 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 }
 
 func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
-	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.gz")
+	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 	cacheItem, err := cacheitem.Create(cachePath)
 	if err != nil {
 		return err

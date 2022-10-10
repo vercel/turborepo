@@ -85,7 +85,7 @@ func TestPut(t *testing.T) {
 	// This test checks outputs, so we go ahead and pull things back out.
 	// Attempting to satisfy our beliefs that the change is viable with
 	// as few changes to the tests as possible.
-	cacheItem, openErr := cacheitem.Open(dst.UntypedJoin(hash + ".tar.gz"))
+	cacheItem, openErr := cacheitem.Open(dst.UntypedJoin(hash + ".tar.zst"))
 	assert.NilError(t, openErr, "Open")
 
 	_, restoreErr := cacheItem.Restore(dstCachePath)

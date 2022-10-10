@@ -3,10 +3,9 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"compress/gzip"
+	"bufio"
 	"crypto/sha512"
 	"errors"
-	"hash"
 	"io"
 	"os"
 
@@ -30,10 +29,10 @@ type CacheItem struct {
 	Anchor turbopath.AbsoluteSystemPath
 
 	// For creation.
-	sha    hash.Hash
-	tw     *tar.Writer
-	gzw    *gzip.Writer
-	handle *os.File
+	tw         *tar.Writer
+	zw         io.WriteCloser
+	fileBuffer *bufio.Writer
+	handle     *os.File
 }
 
 // Close any open pipes
@@ -44,8 +43,14 @@ func (ci *CacheItem) Close() error {
 		}
 	}
 
-	if ci.gzw != nil {
-		if err := ci.gzw.Close(); err != nil {
+	if ci.zw != nil {
+		if err := ci.zw.Close(); err != nil {
+			return err
+		}
+	}
+
+	if ci.fileBuffer != nil {
+		if err := ci.fileBuffer.Flush(); err != nil {
 			return err
 		}
 	}
@@ -61,17 +66,10 @@ func (ci *CacheItem) Close() error {
 
 // GetSha returns the SHA-512 hash for the CacheItem.
 func (ci *CacheItem) GetSha() ([]byte, error) {
-	if ci.sha != nil {
-		return ci.sha.Sum(nil), nil
-	}
-
 	sha := sha512.New()
 	if _, err := io.Copy(sha, ci.handle); err != nil {
 		return nil, err
 	}
 
-	// Don't mutate the sha until it will return the correct value.
-	ci.sha = sha
-
-	return ci.sha.Sum(nil), nil
+	return sha.Sum(nil), nil
 }

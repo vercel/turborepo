@@ -2,11 +2,13 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"errors"
 	"io"
+	"os"
 	"runtime"
 	"strings"
+
+	"github.com/DataDog/zstd"
 
 	"github.com/moby/sys/sequential"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -14,7 +16,7 @@ import (
 
 // Open returns an existing CacheItem at the specified path.
 func Open(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
-	handle, err := sequential.Open(path.ToString())
+	handle, err := sequential.OpenFile(path.ToString(), os.O_RDONLY, 0777)
 	if err != nil {
 		return nil, err
 	}
@@ -28,18 +30,15 @@ func Open(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 // Restore extracts a cache to a specified disk location.
 func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.AnchoredSystemPath, error) {
 	// tar wrapped in gzip, we need to stream out of gzip first.
-	gzr, err := gzip.NewReader(ci.handle)
-	if err != nil {
-		return nil, err
-	}
+	zr := zstd.NewReader(ci.handle)
 
 	// The `Close` function for compression effectively just returns the singular
 	// error field on the decompressor instance. This is extremely unlikely to be
 	// set without triggering one of the numerous other errors, but we should still
 	// handle that possible edge case.
 	var closeError error
-	defer func() { closeError = gzr.Close() }()
-	tr := tar.NewReader(gzr)
+	defer func() { closeError = zr.Close() }()
+	tr := tar.NewReader(zr)
 
 	// On first attempt to restore it's possible that a link target doesn't exist.
 	// Save them and topsort them.

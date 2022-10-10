@@ -2,7 +2,6 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -13,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/DataDog/zstd"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
@@ -34,13 +34,13 @@ type restoreFile struct {
 func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	t.Helper()
 	testDir := turbopath.AbsoluteSystemPath(t.TempDir())
-	testArchivePath := testDir.UntypedJoin("out.tar.gz")
+	testArchivePath := testDir.UntypedJoin("out.tar.zst")
 
 	handle, handleCreateErr := testArchivePath.Create()
 	assert.NilError(t, handleCreateErr, "os.Create")
 
-	gzw := gzip.NewWriter(handle)
-	tw := tar.NewWriter(gzw)
+	zw := zstd.NewWriter(handle)
+	tw := tar.NewWriter(zw)
 
 	for _, file := range files {
 		if file.Header.Typeflag == tar.TypeReg {
@@ -57,8 +57,8 @@ func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	twCloseErr := tw.Close()
 	assert.NilError(t, twCloseErr, "tw.Close")
 
-	gzwCloseErr := gzw.Close()
-	assert.NilError(t, gzwCloseErr, "gzw.Close")
+	zwCloseErr := zw.Close()
+	assert.NilError(t, zwCloseErr, "zw.Close")
 
 	handleCloseErr := handle.Close()
 	assert.NilError(t, handleCloseErr, "handle.Close")

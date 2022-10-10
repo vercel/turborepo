@@ -184,7 +184,10 @@ function runSmokeTests<T>(
       const hash = getHashFromOutput(commandOutput, "c#test");
       assert.ok(!!hash, "No hash for c#test");
       const cacheItemPath = getCacheItemForHash(repo, hash);
-      await tar.x({ file: path.join(repo.root, cacheItemPath), cwd: repo.root })
+      await tar.x({
+        file: path.join(repo.root, cacheItemPath),
+        cwd: repo.root,
+      });
       const cachedLogFilePath = getCachedLogFilePathForTask(
         path.join("packages", "c"),
         "test"
@@ -216,7 +219,10 @@ function runSmokeTests<T>(
       const hash = getHashFromOutput(commandOutput, "c#lint");
       assert.ok(!!hash, "No hash for c#lint");
       const cacheItemPath = getCacheItemForHash(repo, hash);
-      await tar.x({ file: path.join(repo.root, cacheItemPath), cwd: repo.root })
+      await tar.x({
+        file: path.join(repo.root, cacheItemPath),
+        cwd: repo.root,
+      });
       const cachedLogFilePath = getCachedLogFilePathForTask(
         path.join("packages", "c"),
         "lint"
@@ -701,7 +707,7 @@ function getCacheItemForHash(repo: Monorepo, hash: string): string {
     "node_modules",
     ".cache",
     "turbo",
-    `${hash}.tar.gz`
+    `${hash}.tar.zst`
   );
 }
 

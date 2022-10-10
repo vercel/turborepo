@@ -71,8 +71,8 @@ func TestCreate(t *testing.T) {
 					FileMode: 0 | 0644,
 				},
 			},
-			wantDarwin:  "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
-			wantUnix:    "ac50a36fbd1c77ebe270bb1a383da5b1a5cf546bf9e04682ff4b2691daca5e8f16f878d6a3db179a2d1c363b4fadc98ce80645a6f820b5b399b5ac0a3c07a384",
+			wantDarwin:  "4f39f1cab23906f3b89f313392ef7c26f2586e1c15fa6b577cce640c4781d082817927b4875a5413bc23e1248f0b198218998d70e7336e8b1244542ba446ca07",
+			wantUnix:    "4f39f1cab23906f3b89f313392ef7c26f2586e1c15fa6b577cce640c4781d082817927b4875a5413bc23e1248f0b198218998d70e7336e8b1244542ba446ca07",
 			wantWindows: "37a271d277c299cfe130ccfdb98af6e5909ade7a640a126d1495a57af1b1aed0676eedd2f0c918a9dfc04145051f52c783e7e6c0eb9aaa32af8238b47aed16bf",
 		},
 		{
@@ -98,8 +98,8 @@ func TestCreate(t *testing.T) {
 					FileMode: 0 | 0644,
 				},
 			},
-			wantDarwin:  "3ef6504edc2865b89afe7aa07c181425c79a7f4193786792bc56a58c70cfc9cf4b8486f8af868c58894ba05ea2133893ad6a0de5d1f488cd0c5ad2ca8fc96204",
-			wantUnix:    "3ef6504edc2865b89afe7aa07c181425c79a7f4193786792bc56a58c70cfc9cf4b8486f8af868c58894ba05ea2133893ad6a0de5d1f488cd0c5ad2ca8fc96204",
+			wantDarwin:  "07278fdf37db4b212352367f391377bd6bac8f361dd834ae5522d809539bcf3b34d046873c1b45876d7372251446bb12c32f9fa9824914c4a1a01f6d7a206702",
+			wantUnix:    "07278fdf37db4b212352367f391377bd6bac8f361dd834ae5522d809539bcf3b34d046873c1b45876d7372251446bb12c32f9fa9824914c4a1a01f6d7a206702",
 			wantWindows: "46f4e6053867da99065e758c05648d2c5025830bf1e2fc9d54af1835e1d9ef3359f9a0ec942a4c8f88ebe427460cc92d2d9661956787b6045eb7ac9ecab4b5be",
 		},
 		{
@@ -114,8 +114,8 @@ func TestCreate(t *testing.T) {
 					FileMode: 0 | 0644,
 				},
 			},
-			wantDarwin:  "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
-			wantUnix:    "b8919559a95f229b9d0a460882566fee5cdd824388ecb6ef1a65938d1172ca1678ea054a0079a93ab58f041a78e3f35c911ed622a8d6c39d768299aa7f349cfa",
+			wantDarwin:  "b513eea231daa84245d1d23d99fc398ccf17166ca49754ffbdcc1a3269cd75b7ad176a9c7095ff2481f71dca9fc350189747035f13d53b3a864e4fe35165233f",
+			wantUnix:    "b513eea231daa84245d1d23d99fc398ccf17166ca49754ffbdcc1a3269cd75b7ad176a9c7095ff2481f71dca9fc350189747035f13d53b3a864e4fe35165233f",
 			wantWindows: "59201a55277cf9182d3513110eae0391c3881e441fcb9ec7a22d4d1e7e4c640568b29fa1ece502791ab15a1415a21e861a36c5b93c9544d675e71f0d3a613909",
 		},
 		{
@@ -127,7 +127,7 @@ func TestCreate(t *testing.T) {
 					FileMode: 0 | os.ModeSymlink | 0644,
 				},
 			},
-			wantDarwin:  "70bcf2ca3437520f4283797a93311bde0b8b8e13abd03bd7409eead9c1526a84306ca57d8a10a8027ffa64c53a134ceaddda664df87bdbeded3c05a1e98d8688",
+			wantDarwin:  "3ea9d8a4581a0c2ba77557c72447b240c5ac622edcdac570a0bf597c276c2917b4ea73e6c373bbac593a480e396845651fa4b51e049531ff5d44c0adb807c2d9",
 			wantUnix:    "c07abb37f1bcf96e1edf5e1c45d58186475d1451eb0cc0fb906a7cef013800d5005855be1998da067c67a6f8a27c7187d7eeafd2a50ad93f8088d9f44e2202e7",
 			wantWindows: "8d83add4152804c50bafa2779160cbd93d4e4d29deffa48526600291ba0b973c3a56e6adcc1eaa1e26dd18c352929279341db088841eccfa27e3ab37916961da",
 		},
@@ -146,7 +146,7 @@ func TestCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			inputDir := turbopath.AbsoluteSystemPath(t.TempDir())
 			archiveDir := turbopath.AbsoluteSystemPath(t.TempDir())
-			archivePath := turbopath.AnchoredSystemPath("out.tar.gz").RestoreAnchor(archiveDir)
+			archivePath := turbopath.AnchoredSystemPath("out.tar.zst").RestoreAnchor(archiveDir)
 
 			cacheItem, cacheCreateErr := Create(archivePath)
 			assert.NilError(t, cacheCreateErr, "Cache Create")
@@ -169,19 +169,15 @@ func TestCreate(t *testing.T) {
 
 			assert.NilError(t, cacheItem.Close(), "Cache Close")
 
-			// We actually only need to compare the generated SHA.
-			// That ensures we got the same output. (Effectively snapshots.)
-			// This must be called after `Close` because both `tar` and `gzip` have footers.
-			shaOne, shaOneErr := cacheItem.GetSha()
-			assert.NilError(t, shaOneErr, "GetSha")
-			snapshot := hex.EncodeToString(shaOne)
-
 			openedCacheItem, openedCacheItemErr := Open(archivePath)
 			assert.NilError(t, openedCacheItemErr, "Cache Open")
 
-			shaTwo, shaTwoErr := openedCacheItem.GetSha()
-			snapshotTwo := hex.EncodeToString(shaTwo)
-			assert.NilError(t, shaTwoErr, "GetSha")
+			// We actually only need to compare the generated SHA.
+			// That ensures we got the same output. (Effectively snapshots.)
+			// This must be called after `Close` because both `tar` and `gzip` have footers.
+			shaOne, shaOneErr := openedCacheItem.GetSha()
+			assert.NilError(t, shaOneErr, "GetSha")
+			snapshot := hex.EncodeToString(shaOne)
 
 			switch runtime.GOOS {
 			case "darwin":
@@ -191,7 +187,6 @@ func TestCreate(t *testing.T) {
 			default:
 				assert.Equal(t, snapshot, tt.wantUnix, "Got expected hash.")
 			}
-			assert.Equal(t, snapshot, snapshotTwo, "Reopened snapshot matches.")
 			assert.NilError(t, openedCacheItem.Close(), "Close")
 		})
 	}
