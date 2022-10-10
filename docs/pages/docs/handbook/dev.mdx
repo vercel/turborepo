@@ -101,7 +101,7 @@ Will only run `dev` in the workspace named `docs`.
 
 ## Using environment variables
 
-While developing, you'll often need to use environment variables. These let you customize the behaviour of your program - for instance, pointing to a different `DATABASE_URL` in dev and production.
+While developing, you'll often need to use environment variables. These let you customize the behavior of your program - for instance, pointing to a different `DATABASE_URL` in development and production.
 
 We recommend using a library called [`dotenv-cli`](https://www.npmjs.com/package/dotenv-cli) to solve this problem.
 
@@ -178,7 +178,7 @@ This will extract the environment variables from `.env` before running `turbo ru
   </Tab>
 </Tabs>
 
-And your environment variables will be populated! In node, these are available on `process.env.DATABASE_URL`.
+And your environment variables will be populated! In Node.js, these are available on `process.env.DATABASE_URL`.
 
 <Callout>
   You should also [add your environment variables](/docs/core-concepts/caching#altering-caching-based-on-environment-variables) to your `turbo.json` if you're using them to build your app.
