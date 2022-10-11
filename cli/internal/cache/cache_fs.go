@@ -78,9 +78,7 @@ func (f *fsCache) Exists(hash string) (ItemStatus, error) {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
-	if uncompressedCachePath.FileExists() {
-		return ItemStatus{Local: true}, nil
-	} else if compressedCachePath.FileExists() {
+	if compressedCachePath.FileExists() || uncompressedCachePath.FileExists() {
 		return ItemStatus{Local: true}, nil
 	}
 
