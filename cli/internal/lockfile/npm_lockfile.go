@@ -23,17 +23,23 @@ type NpmLockfile struct {
 
 // NpmPackage Representation of dependencies used in LockfileVersion 2+
 type NpmPackage struct {
-	Version   string `json:"version"`
+	// Only used for root level package
+	Name string `json:"name,omitempty"`
+
+	Version   string `json:"version,omitempty"`
 	Resolved  string `json:"resolved,omitempty"`
 	Integrity string `json:"integrity,omitempty"`
-	Dev       bool   `json:"dev,omitempty"`
-	Optional  bool   `json:"optional,omitempty"`
+	Link      bool   `json:"link,omitempty"`
+
+	Dev      bool `json:"dev,omitempty"`
+	Optional bool `json:"optional,omitempty"`
 	// Only used if included as a dev dep of one package and an optional dep of another
 	// An optional dep of a dev dep will have dev and optional set to true
 	DevOptional      bool `json:"devOptional,omitempty"`
 	InBundle         bool `json:"inBundle,omitempty"`
 	HasInstallScript bool `json:"hasInstallScript,omitempty"`
 	HasShrinkwrap    bool `json:"hasShrinkwrap,omitempty"`
+	Extraneous       bool `json:"extraneous,omitempty"`
 
 	Dependencies         map[string]string `json:"dependencies,omitempty"`
 	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
@@ -42,6 +48,11 @@ type NpmPackage struct {
 
 	Bin     map[string]string `json:"bin,omitempty"`
 	Engines map[string]string `json:"engines,omitempty"`
+	CPU     []string          `json:"cpu,omitempty"`
+	OS      []string          `json:"os,omitempty"`
+
+	// Only used for root level package
+	Workspaces []string `json:"workspaces,omitempty"`
 }
 
 // NpmDependency Legacy representation of dependencies
@@ -145,15 +156,24 @@ func (l *NpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath,
 		} else {
 			return nil, fmt.Errorf("No lockfile entry found for %s", workspacePkg)
 		}
+		// Each workspace package has a fake version of the package that links back to the original
+		// but is needed for dependency resolution.
+		for key, entry := range l.Packages {
+			if entry.Resolved == workspacePkg {
+				prunedPackages[key] = entry
+				break
+			}
+		}
 	}
 
 	return &NpmLockfile{
-		Name:            l.Name,
-		Version:         l.Version,
-		LockfileVersion: l.LockfileVersion,
+		Name:    l.Name,
+		Version: l.Version,
+		// Forcible upgrade to version 3 since we aren't including backward compatibility capabilities
+		LockfileVersion: 3,
 		Requires:        l.Requires,
-		Packages:        l.Packages,
-		// We omit dependencies as `npm ci` as they are only important for supporting npm <=6
+		Packages:        prunedPackages,
+		// We omit dependencies since they are only used for supporting npm <=6
 	}, nil
 }
 

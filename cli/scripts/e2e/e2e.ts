@@ -550,11 +550,11 @@ function runSmokeTests<T>(
     }
   );
 
-  if (["yarn", "pnpm6", "pnpm", "berry"].includes(npmClient)) {
+  if (["npm", "yarn", "pnpm6", "pnpm", "berry"].includes(npmClient)) {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
-    const installArgs =
-      npmClient === "berry" ? ["--immutable"] : ["--frozen-lockfile"];
+    const [installCmd, ...installArgs] =
+      getImmutableInstallForPackageManager(npmClient);
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
@@ -589,7 +589,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", installArgs, {
+        const install = repo.run(installCmd, installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -641,7 +641,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", installArgs, {
+        const install = repo.run(installCmd, installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -676,6 +676,22 @@ function getLockfileForPackageManager(ws: PackageManager) {
   }
 }
 
+function getImmutableInstallForPackageManager(ws: PackageManager): string[] {
+  switch (ws) {
+    case "yarn":
+      return ["install", "--frozen-lockfile"];
+    case "pnpm":
+      return ["install", "--frozen-lockfile"];
+    case "pnpm6":
+      return ["install", "--frozen-lockfile"];
+    case "npm":
+      return ["ci"];
+    case "berry":
+      return ["install", "--immutable"];
+    default:
+      throw new Error(`Unknown package manager: ${ws}`);
+  }
+}
 function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
