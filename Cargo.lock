@@ -2378,6 +2378,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
 name = "nom"
 version = "4.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4938,6 +4944,7 @@ dependencies = [
  "futures",
  "indexmap",
  "mopa",
+ "nohash-hasher",
  "once_cell",
  "regex",
  "serde",
@@ -5033,6 +5040,7 @@ dependencies = [
  "event-listener",
  "flurry",
  "lazy_static",
+ "nohash-hasher",
  "num_cpus",
  "parking_lot 0.12.1",
  "serde",
