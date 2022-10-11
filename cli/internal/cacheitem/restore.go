@@ -22,23 +22,30 @@ func Open(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 	}
 
 	return &CacheItem{
-		Path:   path,
-		handle: handle,
+		Path:       path,
+		handle:     handle,
+		compressed: strings.HasSuffix(path.ToString(), ".zst"),
 	}, nil
 }
 
 // Restore extracts a cache to a specified disk location.
 func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.AnchoredSystemPath, error) {
-	// tar wrapped in gzip, we need to stream out of gzip first.
-	zr := zstd.NewReader(ci.handle)
-
-	// The `Close` function for compression effectively just returns the singular
-	// error field on the decompressor instance. This is extremely unlikely to be
-	// set without triggering one of the numerous other errors, but we should still
-	// handle that possible edge case.
+	var tr *tar.Reader
 	var closeError error
-	defer func() { closeError = zr.Close() }()
-	tr := tar.NewReader(zr)
+
+	// We're reading a tar, possibly wrapped in zstd.
+	if ci.compressed {
+		zr := zstd.NewReader(ci.handle)
+
+		// The `Close` function for compression effectively just returns the singular
+		// error field on the decompressor instance. This is extremely unlikely to be
+		// set without triggering one of the numerous other errors, but we should still
+		// handle that possible edge case.
+		defer func() { closeError = zr.Close() }()
+		tr = tar.NewReader(zr)
+	} else {
+		tr = tar.NewReader(ci.handle)
+	}
 
 	// On first attempt to restore it's possible that a link target doesn't exist.
 	// Save them and topsort them.

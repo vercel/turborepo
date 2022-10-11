@@ -84,10 +84,11 @@ func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, du
 // write writes a series of files into the given Writer.
 func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
 	defer w.Close()
+	defer func() { _ = w.Close() }()
 	zw := zstd.NewWriter(w)
-	defer zw.Close()
+	defer func() { _ = zw.Close() }()
 	tw := tar.NewWriter(zw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 	for _, file := range files {
 		// log.Printf("caching file %v", file)
 		if err := cache.storeFile(tw, file); err != nil {
@@ -258,7 +259,8 @@ func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopat
 	files := []turbopath.AnchoredSystemPath{}
 	missingLinks := []*tar.Header{}
 	zr := zstd.NewReader(reader)
-	defer func() { _ = zr.Close() }()
+	var closeError error
+	defer func() { closeError = zr.Close() }()
 	tr := tar.NewReader(zr)
 	for {
 		hdr, err := tr.Next()
@@ -271,7 +273,7 @@ func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopat
 					}
 				}
 
-				return files, nil
+				return files, closeError
 			}
 			return nil, err
 		}

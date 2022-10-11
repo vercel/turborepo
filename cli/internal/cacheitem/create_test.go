@@ -143,51 +143,63 @@ func TestCreate(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inputDir := turbopath.AbsoluteSystemPath(t.TempDir())
-			archiveDir := turbopath.AbsoluteSystemPath(t.TempDir())
-			archivePath := turbopath.AnchoredSystemPath("out.tar.zst").RestoreAnchor(archiveDir)
-
-			cacheItem, cacheCreateErr := Create(archivePath)
-			assert.NilError(t, cacheCreateErr, "Cache Create")
-
-			for _, file := range tt.files {
-				createErr := createEntry(t, inputDir, file)
-				if createErr != nil {
-					assert.ErrorIs(t, createErr, tt.wantErr)
-					assert.NilError(t, cacheItem.Close(), "Close")
-					return
+		getTestFunc := func(compressed bool) func(t *testing.T) {
+			return func(t *testing.T) {
+				inputDir := turbopath.AbsoluteSystemPath(t.TempDir())
+				archiveDir := turbopath.AbsoluteSystemPath(t.TempDir())
+				var archivePath turbopath.AbsoluteSystemPath
+				if compressed {
+					archivePath = turbopath.AnchoredSystemPath("out.tar.zst").RestoreAnchor(archiveDir)
+				} else {
+					archivePath = turbopath.AnchoredSystemPath("out.tar").RestoreAnchor(archiveDir)
 				}
 
-				addFileError := cacheItem.AddFile(inputDir, file.Path)
-				if addFileError != nil {
-					assert.ErrorIs(t, addFileError, tt.wantErr)
-					assert.NilError(t, cacheItem.Close(), "Close")
-					return
+				cacheItem, cacheCreateErr := Create(archivePath)
+				assert.NilError(t, cacheCreateErr, "Cache Create")
+
+				for _, file := range tt.files {
+					createErr := createEntry(t, inputDir, file)
+					if createErr != nil {
+						assert.ErrorIs(t, createErr, tt.wantErr)
+						assert.NilError(t, cacheItem.Close(), "Close")
+						return
+					}
+
+					addFileError := cacheItem.AddFile(inputDir, file.Path)
+					if addFileError != nil {
+						assert.ErrorIs(t, addFileError, tt.wantErr)
+						assert.NilError(t, cacheItem.Close(), "Close")
+						return
+					}
+				}
+
+				assert.NilError(t, cacheItem.Close(), "Cache Close")
+
+				// We only check for repeatability on compressed caches.
+				if compressed {
+					openedCacheItem, openedCacheItemErr := Open(archivePath)
+					assert.NilError(t, openedCacheItemErr, "Cache Open")
+
+					// We actually only need to compare the generated SHA.
+					// That ensures we got the same output. (Effectively snapshots.)
+					// This must be called after `Close` because both `tar` and `gzip` have footers.
+					shaOne, shaOneErr := openedCacheItem.GetSha()
+					assert.NilError(t, shaOneErr, "GetSha")
+					snapshot := hex.EncodeToString(shaOne)
+
+					switch runtime.GOOS {
+					case "darwin":
+						assert.Equal(t, snapshot, tt.wantDarwin, "Got expected hash.")
+					case "windows":
+						assert.Equal(t, snapshot, tt.wantWindows, "Got expected hash.")
+					default:
+						assert.Equal(t, snapshot, tt.wantUnix, "Got expected hash.")
+					}
+					assert.NilError(t, openedCacheItem.Close(), "Close")
 				}
 			}
-
-			assert.NilError(t, cacheItem.Close(), "Cache Close")
-
-			openedCacheItem, openedCacheItemErr := Open(archivePath)
-			assert.NilError(t, openedCacheItemErr, "Cache Open")
-
-			// We actually only need to compare the generated SHA.
-			// That ensures we got the same output. (Effectively snapshots.)
-			// This must be called after `Close` because both `tar` and `gzip` have footers.
-			shaOne, shaOneErr := openedCacheItem.GetSha()
-			assert.NilError(t, shaOneErr, "GetSha")
-			snapshot := hex.EncodeToString(shaOne)
-
-			switch runtime.GOOS {
-			case "darwin":
-				assert.Equal(t, snapshot, tt.wantDarwin, "Got expected hash.")
-			case "windows":
-				assert.Equal(t, snapshot, tt.wantWindows, "Got expected hash.")
-			default:
-				assert.Equal(t, snapshot, tt.wantUnix, "Got expected hash.")
-			}
-			assert.NilError(t, openedCacheItem.Close(), "Close")
-		})
+		}
+		t.Run(tt.name, getTestFunc(false))
+		t.Run(tt.name+"zst", getTestFunc(true))
 	}
 }

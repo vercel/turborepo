@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -34,13 +35,12 @@ type restoreFile struct {
 func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	t.Helper()
 	testDir := turbopath.AbsoluteSystemPath(t.TempDir())
-	testArchivePath := testDir.UntypedJoin("out.tar.zst")
+	testArchivePath := testDir.UntypedJoin("out.tar")
 
 	handle, handleCreateErr := testArchivePath.Create()
 	assert.NilError(t, handleCreateErr, "os.Create")
 
-	zw := zstd.NewWriter(handle)
-	tw := tar.NewWriter(zw)
+	tw := tar.NewWriter(handle)
 
 	for _, file := range files {
 		if file.Header.Typeflag == tar.TypeReg {
@@ -57,13 +57,39 @@ func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	twCloseErr := tw.Close()
 	assert.NilError(t, twCloseErr, "tw.Close")
 
-	zwCloseErr := zw.Close()
-	assert.NilError(t, zwCloseErr, "zw.Close")
-
 	handleCloseErr := handle.Close()
 	assert.NilError(t, handleCloseErr, "handle.Close")
 
 	return testArchivePath
+}
+
+// This function is used specifically to generate tar files that Turborepo would
+// rarely or never encounter without malicious or pathological inputs. We use it
+// to make sure that we respond well in these scenarios during restore attempts.
+func compressTar(t *testing.T, archivePath turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	t.Helper()
+
+	inputHandle, inputHandleOpenErr := archivePath.Open()
+	assert.NilError(t, inputHandleOpenErr, "os.Open")
+
+	outputPath := archivePath + ".zst"
+	outputHandle, outputHandleCreateErr := outputPath.Create()
+	assert.NilError(t, outputHandleCreateErr, "os.Create")
+
+	zw := zstd.NewWriter(outputHandle)
+	_, copyError := io.Copy(zw, inputHandle)
+	assert.NilError(t, copyError, "io.Copy")
+
+	zwCloseErr := zw.Close()
+	assert.NilError(t, zwCloseErr, "zw.Close")
+
+	inputHandleCloseErr := inputHandle.Close()
+	assert.NilError(t, inputHandleCloseErr, "inputHandle.Close")
+
+	outputHandleCloseErr := outputHandle.Close()
+	assert.NilError(t, outputHandleCloseErr, "outputHandle.Close")
+
+	return outputPath
 }
 
 func generateAnchor(t *testing.T) turbopath.AbsoluteSystemPath {
@@ -1071,48 +1097,57 @@ func TestOpen(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			archivePath := generateTar(t, tt.tarFiles)
-			anchor := generateAnchor(t)
-
-			cacheItem, err := Open(archivePath)
-			assert.NilError(t, err, "Open")
-
-			restoreOutput, restoreErr := cacheItem.Restore(anchor)
-			var desiredErr error
-			if runtime.GOOS == "windows" {
-				desiredErr = tt.wantErr.windows
-			} else {
-				desiredErr = tt.wantErr.unix
-			}
-			if desiredErr != nil {
-				if !errors.Is(restoreErr, desiredErr) {
-					t.Errorf("wanted err: %v, got err: %v", tt.wantErr, restoreErr)
+		getTestFunc := func(compressed bool) func(t *testing.T) {
+			return func(t *testing.T) {
+				var archivePath turbopath.AbsoluteSystemPath
+				if compressed {
+					archivePath = compressTar(t, generateTar(t, tt.tarFiles))
+				} else {
+					archivePath = generateTar(t, tt.tarFiles)
 				}
-			} else {
-				assert.NilError(t, restoreErr, "Restore")
-			}
+				anchor := generateAnchor(t)
 
-			outputComparison := tt.wantOutput.unix
-			if runtime.GOOS == "windows" && tt.wantOutput.windows != nil {
-				outputComparison = tt.wantOutput.windows
-			}
+				cacheItem, err := Open(archivePath)
+				assert.NilError(t, err, "Open")
 
-			if !reflect.DeepEqual(restoreOutput, outputComparison) {
-				t.Errorf("Restore() = %v, want %v", restoreOutput, outputComparison)
-			}
+				restoreOutput, restoreErr := cacheItem.Restore(anchor)
+				var desiredErr error
+				if runtime.GOOS == "windows" {
+					desiredErr = tt.wantErr.windows
+				} else {
+					desiredErr = tt.wantErr.unix
+				}
+				if desiredErr != nil {
+					if !errors.Is(restoreErr, desiredErr) {
+						t.Errorf("wanted err: %v, got err: %v", tt.wantErr, restoreErr)
+					}
+				} else {
+					assert.NilError(t, restoreErr, "Restore")
+				}
 
-			// Check files on disk.
-			filesComparison := tt.wantFiles.unix
-			if runtime.GOOS == "windows" && tt.wantFiles.windows != nil {
-				filesComparison = tt.wantFiles.windows
-			}
-			for _, diskFile := range filesComparison {
-				assertFileExists(t, anchor, diskFile)
-			}
+				outputComparison := tt.wantOutput.unix
+				if runtime.GOOS == "windows" && tt.wantOutput.windows != nil {
+					outputComparison = tt.wantOutput.windows
+				}
 
-			assert.NilError(t, cacheItem.Close(), "Close")
-		})
+				if !reflect.DeepEqual(restoreOutput, outputComparison) {
+					t.Errorf("Restore() = %v, want %v", restoreOutput, outputComparison)
+				}
+
+				// Check files on disk.
+				filesComparison := tt.wantFiles.unix
+				if runtime.GOOS == "windows" && tt.wantFiles.windows != nil {
+					filesComparison = tt.wantFiles.windows
+				}
+				for _, diskFile := range filesComparison {
+					assertFileExists(t, anchor, diskFile)
+				}
+
+				assert.NilError(t, cacheItem.Close(), "Close")
+			}
+		}
+		t.Run(tt.name+"zst", getTestFunc(true))
+		t.Run(tt.name, getTestFunc(false))
 	}
 }
 
@@ -1421,29 +1456,38 @@ func TestCacheItem_Restore(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			archivePath := generateTar(t, tt.tarFiles)
-			anchor := generateAnchor(t)
+		getTestFunc := func(compressed bool) func(t *testing.T) {
+			return func(t *testing.T) {
+				var archivePath turbopath.AbsoluteSystemPath
+				if compressed {
+					archivePath = compressTar(t, generateTar(t, tt.tarFiles))
+				} else {
+					archivePath = generateTar(t, tt.tarFiles)
+				}
+				anchor := generateAnchor(t)
 
-			cacheItem, err := Open(archivePath)
-			assert.NilError(t, err, "Open")
+				cacheItem, err := Open(archivePath)
+				assert.NilError(t, err, "Open")
 
-			restoreOutput, restoreErr := cacheItem.Restore(anchor)
-			if !reflect.DeepEqual(restoreOutput, tt.want) {
-				t.Errorf("#1 CacheItem.Restore() = %v, want %v", restoreOutput, tt.want)
+				restoreOutput, restoreErr := cacheItem.Restore(anchor)
+				if !reflect.DeepEqual(restoreOutput, tt.want) {
+					t.Errorf("#1 CacheItem.Restore() = %v, want %v", restoreOutput, tt.want)
+				}
+				assert.NilError(t, restoreErr, "Restore #1")
+				assert.NilError(t, cacheItem.Close(), "Close")
+
+				cacheItem2, err2 := Open(archivePath)
+				assert.NilError(t, err2, "Open")
+
+				restoreOutput2, restoreErr2 := cacheItem2.Restore(anchor)
+				if !reflect.DeepEqual(restoreOutput2, tt.want) {
+					t.Errorf("#2 CacheItem.Restore() = %v, want %v", restoreOutput2, tt.want)
+				}
+				assert.NilError(t, restoreErr2, "Restore #2")
+				assert.NilError(t, cacheItem2.Close(), "Close")
 			}
-			assert.NilError(t, restoreErr, "Restore #1")
-			assert.NilError(t, cacheItem.Close(), "Close")
-
-			cacheItem2, err2 := Open(archivePath)
-			assert.NilError(t, err2, "Open")
-
-			restoreOutput2, restoreErr2 := cacheItem2.Restore(anchor)
-			if !reflect.DeepEqual(restoreOutput2, tt.want) {
-				t.Errorf("#2 CacheItem.Restore() = %v, want %v", restoreOutput2, tt.want)
-			}
-			assert.NilError(t, restoreErr2, "Restore #2")
-			assert.NilError(t, cacheItem2.Close(), "Close")
-		})
+		}
+		t.Run(tt.name+"zst", getTestFunc(true))
+		t.Run(tt.name, getTestFunc(false))
 	}
 }

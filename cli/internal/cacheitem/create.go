@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/DataDog/zstd"
@@ -22,8 +23,9 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 	}
 
 	cacheItem := &CacheItem{
-		Path:   path,
-		handle: handle,
+		Path:       path,
+		handle:     handle,
+		compressed: strings.HasSuffix(path.ToString(), ".zst"),
 	}
 
 	cacheItem.init()
@@ -35,11 +37,17 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 // tar.Writer -> zstd.Writer -> fileBuffer -> file
 func (ci *CacheItem) init() {
 	fileBuffer := bufio.NewWriterSize(ci.handle, 2^20) // Flush to disk in 1mb chunks.
-	zw := zstd.NewWriter(fileBuffer)
-	tw := tar.NewWriter(zw)
+
+	var tw *tar.Writer
+	if ci.compressed {
+		zw := zstd.NewWriter(fileBuffer)
+		tw = tar.NewWriter(zw)
+		ci.zw = zw
+	} else {
+		tw = tar.NewWriter(fileBuffer)
+	}
 
 	ci.tw = tw
-	ci.zw = zw
 	ci.fileBuffer = fileBuffer
 }
 

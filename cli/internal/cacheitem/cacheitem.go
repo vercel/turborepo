@@ -33,6 +33,7 @@ type CacheItem struct {
 	zw         io.WriteCloser
 	fileBuffer *bufio.Writer
 	handle     *os.File
+	compressed bool
 }
 
 // Close any open pipes
