@@ -1,11 +1,11 @@
 mod ffi;
 mod package_manager;
 
-use crate::ffi::nativeRunWithArgs;
+use crate::ffi::{nativeRunWithState, GoString};
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env::current_exe;
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ use std::{
     process,
 };
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Serialize)]
 #[clap(author, version, about = "Turbocharge your monorepo", long_about = None, disable_help_subcommand = true)]
 struct Args {
     /// Override the endpoint for API calls
@@ -66,7 +66,7 @@ struct Args {
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the --single-package
 /// flag into non-build commands.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Serialize)]
 enum Command {
     /// Get the path to the Turbo binary
     Bin,
@@ -90,16 +90,23 @@ enum Command {
     Unlink,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 struct RepoState {
     root: PathBuf,
     mode: RepoMode,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 enum RepoMode {
     SinglePackage,
     MultiPackage,
+}
+
+/// The entire state of the execution, including args, repo state, etc.
+#[derive(Debug, Serialize)]
+struct TurboState {
+    repo_state: RepoState,
+    cli_args: Args,
 }
 
 /// Runs the turbo in the current binary
@@ -110,18 +117,16 @@ enum RepoMode {
 ///
 /// returns: Result<i32, Error>
 ///
-fn run_current_turbo(args: Vec<String>) -> Result<i32> {
-    let mut args = args
-        .into_iter()
-        .map(|s| {
-            let c_string = CString::new(s)?;
-            Ok(c_string.into_raw())
-        })
-        .collect::<Result<Vec<*mut c_char>>>()?;
-    args.shrink_to_fit();
-    let argc: c_int = args.len() as c_int;
-    let argv = args.as_mut_ptr();
-    let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
+fn run_current_turbo(turbo_state: TurboState) -> Result<i32> {
+    let turbo_state_cstring = CString::new(serde_json::to_string(&turbo_state)?)?;
+    // NOTE: If we somehow have so many arguments that we overflow a usize -> isize
+    // or if we're running on an architecture where sizeof(usize) < 4, this might fail.
+    let turbo_state_gostring = GoString {
+        p: turbo_state_cstring.as_ptr(),
+        n: turbo_state_cstring.as_bytes().len() as isize,
+    };
+
+    let exit_code = unsafe { nativeRunWithState(turbo_state_gostring) };
     Ok(exit_code.try_into().unwrap())
 }
 
@@ -263,12 +268,12 @@ fn is_run_command(clap_args: &Args) -> bool {
 ///
 /// # Arguments
 ///
-/// * `current_dir`: Current working directory as defined by the --cwd flag
+/// * `turbo_state`: state for current execution
 ///
 /// returns: Result<i32, Error>
 ///
-fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
-    let local_turbo_path = find_local_turbo_path(repo_root)?
+fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
+    let local_turbo_path = find_local_turbo_path(&turbo_state.repo_state.root)?
         .ok_or_else(|| anyhow!("No local turbo installation found in package.json."))?;
 
     if !local_turbo_path.try_exists()? {
@@ -278,7 +283,14 @@ fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
     }
 
     if local_turbo_path == current_exe()? {
-        return run_current_turbo(args);
+        return run_current_turbo(turbo_state);
+    }
+
+    let mut args: Vec<_> = env::args().skip(1).collect();
+    if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
+        && is_run_command(&turbo_state.cli_args)
+    {
+        args.push("--single-package".to_string());
     }
 
     let mut command = process::Command::new(local_turbo_path)
@@ -310,14 +322,13 @@ fn main() -> Result<()> {
         process::exit(1);
     }
 
-    let mut args: Vec<_> = env::args().skip(1).collect();
     let repo_state = RepoState::infer(&current_dir)?;
-
-    if matches!(repo_state.mode, RepoMode::SinglePackage) && is_run_command(&clap_args) {
-        args.push("--single-package".to_string());
-    }
-
-    let exit_code = match run_correct_turbo(&repo_state.root, args) {
+    let turbo_state = TurboState {
+        repo_state: repo_state.clone(),
+        cli_args: clap_args,
+    };
+    println!("RUNNING CURRENT TURBO");
+    let exit_code = match run_current_turbo(turbo_state) {
         Ok(exit_code) => exit_code,
         Err(e) => {
             eprintln!("failed {:?}", e);

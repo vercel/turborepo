@@ -21,6 +21,34 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
+type Args struct {
+	Api        *string `json:"api"`
+	Color      bool    `json:"color"`
+	Cpuprofile *string `json:"cpuprofile"`
+	Cwd        *string `json:"cwd"`
+	Heap       *string `json:"heap"`
+	Login      *string `json:"login"`
+	NoColor    bool    `json:"no_color"`
+	Preflight  bool    `json:"preflight"`
+	Team       *string `json:"team"`
+	Token      *string `json:"token"`
+	Trace      *string `json:"trace"`
+	Verbosity  *uint8  `json:"verbosity"`
+	Command    *string `json:"command"`
+	Task       *string `json:"task"`
+}
+
+type RepoState struct {
+	Root string `json:"root"`
+	Mode string `json:"mode"`
+}
+
+// / State of turbo execution as given from Rust shim
+type TurboState struct {
+	RepoState RepoState `json:"repo_state"`
+	CliArgs   Args      `json:"cli_args"`
+}
+
 type execOpts struct {
 	heapFile       string
 	cpuProfileFile string
@@ -38,7 +66,7 @@ func (eo *execOpts) addFlags(flags *pflag.FlagSet) {
 
 // RunWithArgs runs turbo with the specified arguments. The arguments should not
 // include the binary being invoked (e.g. "turbo").
-func RunWithArgs(args []string, turboVersion string) int {
+func RunWithArgs(args []string, turboVersion string, turboState TurboState) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
@@ -51,6 +79,9 @@ func RunWithArgs(args []string, turboVersion string) int {
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
+		if *turboState.CliArgs.Command == "Bin" {
+
+		}
 		execErr = root.Execute()
 		close(doneCh)
 	}()

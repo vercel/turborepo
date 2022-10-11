@@ -5,6 +5,7 @@ package main
 // }
 import "C"
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"unsafe"
@@ -20,12 +21,22 @@ func main() {
 }
 
 //export nativeRunWithArgs
-func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
+func nativeRunWithArgs(argc C.int, argv **C.char, turboStateString string) C.uint {
 	arglen := int(argc)
 	args := make([]string, arglen)
 	for i, arg := range unsafe.Slice(argv, arglen) {
 		args[i] = C.GoString(arg)
 	}
-	exitCode := cmd.RunWithArgs(args, "my-version")
+
+	turboState := cmd.TurboState{}
+	if turboStateString != "" {
+		err := json.Unmarshal([]byte(turboStateString), &turboState)
+		if err != nil {
+			fmt.Printf("Error unmarshaling json: %v\n", err)
+			return C.uint(2)
+		}
+	}
+
+	exitCode := cmd.RunWithArgs(args, "my-version", turboState)
 	return C.uint(exitCode)
 }
