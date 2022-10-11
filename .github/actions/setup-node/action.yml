@@ -5,16 +5,20 @@ inputs:
     description: "Control turning on corepack."
     required: false
     default: true
+  disable-scripts:
+    description: "Control turning on installation scripts."
+    required: false
+    default: false
 runs:
   using: "composite"
   steps:
     - name: Setup pnpm
       uses: pnpm/action-setup@v2.2.2
       with:
-        version: 7.2.1
+        version: 7.12.1
 
     - name: Setup Node.js
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v3
       with:
         node-version: 16
         cache: pnpm
@@ -28,13 +32,17 @@ runs:
         npm install --force --global corepack@latest
         npm config get prefix >> $GITHUB_PATH
         corepack enable
-
     - name: Enable corepack
       if: ${{ inputs.enable-corepack == 'true' }}
       shell: bash
       run: |
         corepack enable
-
     - name: pnpm install
+      if: ${{ inputs.disable-scripts == 'false' }}
       shell: bash
       run: pnpm install
+
+    - name: pnpm install
+      if: ${{ inputs.disable-scripts == 'true' }}
+      shell: bash
+      run: pnpm install --ignore-scripts
