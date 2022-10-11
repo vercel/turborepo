@@ -37,9 +37,9 @@ Press enter to choose the version type you want to bump:
 
 Once you have finished the bump, the script will do the following things:
 
--   bump the version you choose in the corresponding package
--   update dependencies in other packages that depend on the package you choose
--   update `pnpm-lock.yaml` file
--   run `git tag -s pkg@version -m "pkg@version"` for each package
+- bump the version you choose in the corresponding package
+- update dependencies in other packages that depend on the package you choose
+- update `pnpm-lock.yaml` file
+- run `git tag -s pkg@version -m "pkg@version"` for each package
 
 You need to run `git push --follow-tags` to finish the release.

@@ -14,10 +14,10 @@ optimized (either for dev or prod) version of it).
 
 We are currently missing:
 
--   `turbopack-node` (node native modules)
--   `turbopack-wasm` (WASM in node and on the web)
--   `turbopack-image` (images on the web)
--   probably more? (e.g. `turbopack-svg`).
+- `turbopack-node` (node native modules)
+- `turbopack-wasm` (WASM in node and on the web)
+- `turbopack-image` (images on the web)
+- probably more? (e.g. `turbopack-svg`).
 
 ## `turbo-tasks`
 
@@ -26,9 +26,9 @@ We are currently missing:
 `#[turbo_tasks::value]` is a macro to generate a `XxxVc`
 wrapper type for some data (e.g. a struct `Xxx`).
 
--   `XxxVc` is like a Promise to some data stored somewhere
--   You can read the data via `.await?`
-    (e.g. `let x: XxxVc; let data: Xxx = x.await?`);
+- `XxxVc` is like a Promise to some data stored somewhere
+- You can read the data via `.await?`
+  (e.g. `let x: XxxVc; let data: Xxx = x.await?`);
 
 `turbo-tasks` values can also implement traits,
 see `#[turbo_tasks::value_trait]` for examples.
@@ -39,10 +39,10 @@ see `#[turbo_tasks::value_trait]` for examples.
 
 This means:
 
--   the function is cached (calling it twice returns the same `XxxVc`).
--   dependencies are tracked (reading a `XxxVc` via `.await?` is tracked).
--   `turbo-tasks` will take care of re-executing the function when any dependency
-    has changed.
+- the function is cached (calling it twice returns the same `XxxVc`).
+- dependencies are tracked (reading a `XxxVc` via `.await?` is tracked).
+- `turbo-tasks` will take care of re-executing the function when any dependency
+  has changed.
 
 From the outside `#[turbo_tasks::function]`s will always return an `XxxVc` (not
 a `Result<XxxVc>` or `Future<Output = XxxVc>`).
