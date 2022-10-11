@@ -117,6 +117,9 @@ func (p *prune) prune(opts *opts) error {
 	if !canPrune {
 		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
 	}
+	if ctx.Lockfile == nil {
+		return errors.New("Cannot prune without parsed lockfile")
+	}
 
 	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
 
@@ -182,42 +185,10 @@ func (p *prune) prune(opts *opts) error {
 		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.PackageInfos[internalDep].Name))
 	}
 	p.base.Logger.Trace("new workspaces", "value", workspaces)
-	if fs.FileExists(".gitignore") {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".gitignore")}, fullDir.UntypedJoin(".gitignore").ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "failed to copy root .gitignore")
-		}
-	}
-
-	if fs.FileExists("turbo.json") {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("turbo.json")}, fullDir.UntypedJoin("turbo.json").ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "failed to copy root turbo.json")
-		}
-	}
-
-	if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("package.json")}, fullDir.UntypedJoin("package.json").ToStringDuringMigration()); err != nil {
-		return errors.Wrap(err, "failed to copy root package.json")
-	}
-
-	if opts.docker {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("package.json")}, outDir.UntypedJoin("json", "package.json").ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "failed to copy root package.json")
-		}
-	}
 
 	lockfile, err := ctx.Lockfile.Subgraph(workspaces, lockfileKeys)
 	if err != nil {
 		return errors.Wrap(err, "Failed creating pruned lockfile")
-	}
-
-	if patches := lockfile.Patches(); patches != nil {
-		for _, patch := range patches {
-			if err := fs.CopyFile(
-				&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(patch.ToString())},
-				fullDir.UntypedJoin(patch.ToString()).ToStringDuringMigration(),
-			); err != nil {
-				return errors.Wrap(err, "Failed copying patch file")
-			}
-		}
 	}
 
 	lockfilePath := outDir.UntypedJoin(ctx.PackageManager.Lockfile)
@@ -233,6 +204,77 @@ func (p *prune) prune(opts *opts) error {
 
 	if err := lockfileWriter.Flush(); err != nil {
 		return errors.Wrap(err, "Failed to flush pruned lockfile")
+	}
+
+	if fs.FileExists(".gitignore") {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".gitignore")}, fullDir.UntypedJoin(".gitignore").ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "failed to copy root .gitignore")
+		}
+	}
+
+	if fs.FileExists("turbo.json") {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("turbo.json")}, fullDir.UntypedJoin("turbo.json").ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "failed to copy root turbo.json")
+		}
+	}
+
+	originalPackageJSON := fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("package.json")}
+	newPackageJSONPath := fullDir.UntypedJoin("package.json")
+	// If the original lockfile uses any patches we rewrite the package.json to make sure it doesn't
+	// include any patches that might have been pruned.
+	if originalPatches := ctx.Lockfile.Patches(); originalPatches != nil {
+		patches := lockfile.Patches()
+		if err := ctx.PackageManager.PrunePatchedPackages(rootPackageJSON, patches); err != nil {
+			return errors.Wrapf(err, "Unable to prune patches section of %s", rootPackageJSONPath)
+		}
+		packageJSONContent, err := fs.MarshalPackageJSON(rootPackageJSON)
+		if err != nil {
+			return err
+		}
+
+		info, err := originalPackageJSON.GetInfo()
+		if err != nil {
+			return err
+		}
+		newPackageJSON, err := newPackageJSONPath.Create()
+		if err != nil {
+			return err
+		}
+		if _, err := newPackageJSON.Write(packageJSONContent); err != nil {
+			return err
+		}
+		if err := newPackageJSON.Chmod(info.Mode()); err != nil {
+			return err
+		}
+		if err := newPackageJSON.Close(); err != nil {
+			return err
+		}
+
+		for _, patch := range patches {
+			if err := fs.CopyFile(
+				&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(patch.ToString())},
+				fullDir.UntypedJoin(patch.ToString()).ToStringDuringMigration(),
+			); err != nil {
+				return errors.Wrap(err, "Failed copying patch file")
+			}
+		}
+	} else {
+		if err := fs.CopyFile(
+			&originalPackageJSON,
+			fullDir.UntypedJoin("package.json").ToStringDuringMigration(),
+		); err != nil {
+			return errors.Wrap(err, "failed to copy root package.json")
+		}
+	}
+
+	if opts.docker {
+		// Copy from the package.json in the full directory so we get the pruned version if needed
+		if err := fs.CopyFile(
+			&fs.LstatCachedFile{Path: newPackageJSONPath},
+			outDir.Join(turbopath.RelativeUnixPath("json/package.json").ToSystemPath()).ToString(),
+		); err != nil {
+			return errors.Wrap(err, "failed to copy root package.json")
+		}
 	}
 
 	return nil

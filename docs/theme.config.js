@@ -7,8 +7,7 @@ const theme = {
   project: {
     link: "https://github.com/vercel/turborepo",
   },
-  docsRepositoryBase:
-    "https://github.com/vercel/turborepo/blob/main/docs",
+  docsRepositoryBase: "https://github.com/vercel/turborepo/blob/main/docs",
   titleSuffix: " | Turborepo",
   unstable_flexsearch: true,
   unstable_staticImage: true,
@@ -46,6 +45,10 @@ const theme = {
   head: function () {
     const router = useRouter();
     const { frontMatter, title } = useConfig();
+    const fullUrl =
+      router.asPath === "/"
+        ? "https://turborepo.org"
+        : `https://turborepo.org${router.asPath}`;
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -80,10 +83,8 @@ const theme = {
         <meta property="og:type" content="website" />
         <meta name="og:title" content={title} />
         <meta name="og:description" content={frontMatter.description} />
-        <meta
-          property="og:url"
-          content={`https://turborepo.org${router.asPath}`}
-        />
+        <meta property="og:url" content={fullUrl} />
+        <link rel="canonical" href={fullUrl} />
         <meta
           property="twitter:image"
           content={`https://turborepo.org${

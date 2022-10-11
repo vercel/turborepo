@@ -6,10 +6,9 @@
     "build": "vite build",
     "package": "vite package",
     "preview": "vite preview",
-    "prepare": "svelte-kit sync",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
-    "lint": "prettier --check --ignore-path=../../.prettierignore . && eslint .",
+    "lint": "prettier --check --ignore-path=../../.prettierignore . && TIMING=1 eslint \"src\"",
     "format": "prettier --write --ignore-path=../../.prettierignore ."
   },
   "dependencies": {
@@ -24,7 +23,7 @@
     "svelte-preprocess": "^4.10.6",
     "tslib": "^2.3.1",
     "typescript": "^4.7.2",
-		"vite": "^2.9.13"
+    "vite": "^3.1.6"
   },
   "type": "module"
 }

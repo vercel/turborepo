@@ -1,0 +1,75 @@
+project_name: turbo
+
+dist: dist
+
+builds:
+  - id: turbo
+    builder: prebuilt
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goamd64:
+      - v1
+    prebuilt:
+      path: dist-combined/turbo_{{ .Os }}_{{ .Arch }}{{ with .Amd64 }}_{{ .}}{{ end }}/bin/turbo{{ .Ext }}
+    hooks:
+      pre:
+        - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    binary: bin/turbo
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "{{ incpatch .Version }}"
+archives:
+  - id: github
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    wrap_in_directory: true
+    replacements:
+      amd64: 64
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+  - id: npm
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+    wrap_in_directory: true
+    replacements:
+      amd64: 64
+    format: tar.gz
+    files:
+      - LICENSE
+      - src: "scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/package.json"
+        dst: "workaround/.."
+        strip_parent: true
+      - src: "scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/README.md"
+        dst: "workaround/.."
+        strip_parent: true
+      - src: "scripts/npm-native-packages/build/{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}/bin/*"
+        dst: "bin/"
+        strip_parent: true
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+release:
+  github:
+    owner: vercel
+    name: turborepo
+  ids:
+    - github
+  prerelease: auto
+  disable: true
+publishers:
+  - name: npm
+    ids:
+      - npm
+    cmd: "npm publish{{ if .Prerelease }} --tag canary{{ end }} {{ abs .ArtifactPath }}"
