@@ -1,3 +1,6 @@
+import { Tabs, Tab } from '../../../components/Tabs'
+import Callout from '../../../components/Callout'
+
 # Development tasks in a Monorepo
 
 The vast majority of development workflows look like this:
@@ -95,3 +98,88 @@ turbo run dev --filter docs
 ```
 
 Will only run `dev` in the workspace named `docs`.
+
+## Using environment variables
+
+While developing, you'll often need to use environment variables. These let you customize the behavior of your program - for instance, pointing to a different `DATABASE_URL` in development and production.
+
+We recommend using a library called [`dotenv-cli`](https://www.npmjs.com/package/dotenv-cli) to solve this problem.
+
+### Tutorial
+
+1. Install `dotenv-cli` in your [root workspace](/docs/handbook/what-is-a-monorepo#the-root-workspace):
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    npm add dotenv-cli
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    yarn add dotenv-cli --ignore-workspace-root-check
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    pnpm add dotenv-cli --ignore-workspace-root-check
+    ```
+  </Tab>
+</Tabs>
+
+2. Add a `.env` file to your root workspace:
+
+```diff
+  ├── apps/
+  ├── packages/
++ ├── .env
+  ├── package.json
+  └── turbo.json
+```
+
+Add any environment variables you need to inject:
+
+```txt filename=".env"
+DATABASE_URL=my-database-url
+```
+
+3. Inside your root `package.json`, add a `dev` script. Prefix it with `dotenv`:
+
+```json
+{
+  "scripts": {
+    "dev": "dotenv turbo run dev"
+  }
+}
+```
+
+This will extract the environment variables from `.env` before running `turbo run dev`.
+
+4. Now, you can run your dev script:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm run dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm dev
+    ```
+  </Tab>
+</Tabs>
+
+And your environment variables will be populated! In Node.js, these are available on `process.env.DATABASE_URL`.
+
+<Callout>
+  You should also [add your environment variables](/docs/core-concepts/caching#altering-caching-based-on-environment-variables) to your `turbo.json` if you're using them to build your app.
+</Callout>
