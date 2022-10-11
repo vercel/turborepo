@@ -29,7 +29,7 @@ type restoreFile struct {
 	fs.FileMode
 }
 
-// This function is used specifically to generate tar files that Turborepo would
+// generateTar is used specifically to generate tar files that Turborepo would
 // rarely or never encounter without malicious or pathological inputs. We use it
 // to make sure that we respond well in these scenarios during restore attempts.
 func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
@@ -63,9 +63,9 @@ func generateTar(t *testing.T, files []tarFile) turbopath.AbsoluteSystemPath {
 	return testArchivePath
 }
 
-// This function is used specifically to generate tar files that Turborepo would
-// rarely or never encounter without malicious or pathological inputs. We use it
-// to make sure that we respond well in these scenarios during restore attempts.
+// compressTar splits the compression of a tar file so that we don't
+// accidentally diverge in tar creation while still being able to test
+// restoration from tar and from .tar.zst.
 func compressTar(t *testing.T, archivePath turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	t.Helper()
 
