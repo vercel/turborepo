@@ -34,15 +34,21 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
 func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
-	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
+	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
+	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
-	// If it's not in the cache bail now
-	if !cachePath.FileExists() {
+	var actualCachePath turbopath.AbsoluteSystemPath
+	if uncompressedCachePath.FileExists() {
+		actualCachePath = uncompressedCachePath
+	} else if compressedCachePath.FileExists() {
+		actualCachePath = compressedCachePath
+	} else {
+		// It's not in the cache, bail now
 		f.logFetch(false, hash, 0)
 		return false, nil, 0, nil
 	}
 
-	cacheItem, openErr := cacheitem.Open(cachePath)
+	cacheItem, openErr := cacheitem.Open(actualCachePath)
 	if openErr != nil {
 		return false, nil, 0, openErr
 	}
@@ -69,13 +75,16 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 }
 
 func (f *fsCache) Exists(hash string) (ItemStatus, error) {
-	cachePath := f.cacheDirectory.UntypedJoin(hash + "tar.zst")
+	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
+	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
-	if !cachePath.FileExists() {
-		return ItemStatus{Local: false}, nil
+	if uncompressedCachePath.FileExists() {
+		return ItemStatus{Local: true}, nil
+	} else if compressedCachePath.FileExists() {
+		return ItemStatus{Local: true}, nil
 	}
 
-	return ItemStatus{Local: true}, nil
+	return ItemStatus{Local: false}, nil
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
