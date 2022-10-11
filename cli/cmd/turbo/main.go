@@ -17,7 +17,7 @@ func main() {
 	// TODO(gsoltis): remove after verification
 	cgoCheck := C.cgoCheck()
 	fmt.Printf("CGO Check: %v\n", int(cgoCheck))
-	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion))
+	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion, &cmd.TurboState{}))
 }
 
 //export nativeRunWithArgs
@@ -37,6 +37,6 @@ func nativeRunWithArgs(argc C.int, argv **C.char, turboStateString string) C.uin
 		}
 	}
 
-	exitCode := cmd.RunWithArgs(args, "my-version", turboState)
+	exitCode := cmd.RunWithArgs(args, "my-version", &turboState)
 	return C.uint(exitCode)
 }

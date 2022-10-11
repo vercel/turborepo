@@ -6,7 +6,7 @@ fn main() {
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .allowlist_function("nativeRunWithState")
+        .allowlist_function("nativeRunWithArgs")
         .allowlist_function("testBindgen")
         .allowlist_type("GoString")
         .generate()

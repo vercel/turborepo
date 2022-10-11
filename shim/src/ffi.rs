@@ -55,5 +55,8 @@ fn bindgen_test_layout__GoString_() {
 }
 pub type GoString = _GoString_;
 extern "C" {
-    pub fn nativeRunWithState(turboStateString: GoString) -> ::std::os::raw::c_uint;
+    pub fn nativeRunWithArgs(
+        argc: ::std::os::raw::c_int,
+        argv: *mut *mut ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_uint;
 }

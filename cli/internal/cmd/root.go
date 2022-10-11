@@ -66,7 +66,7 @@ func (eo *execOpts) addFlags(flags *pflag.FlagSet) {
 
 // RunWithArgs runs turbo with the specified arguments. The arguments should not
 // include the binary being invoked (e.g. "turbo").
-func RunWithArgs(args []string, turboVersion string, turboState TurboState) int {
+func RunWithArgs(args []string, turboVersion string, turboState *TurboState) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
@@ -79,9 +79,6 @@ func RunWithArgs(args []string, turboVersion string, turboState TurboState) int 
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
-		if *turboState.CliArgs.Command == "Bin" {
-
-		}
 		execErr = root.Execute()
 		close(doneCh)
 	}()

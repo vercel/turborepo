@@ -1,7 +1,9 @@
+mod commands;
 mod ffi;
 mod package_manager;
+mod ui;
 
-use crate::ffi::{nativeRunWithState, GoString};
+use crate::ffi::{nativeRunWithArgs, GoString};
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
@@ -117,7 +119,7 @@ struct TurboState {
 ///
 /// returns: Result<i32, Error>
 ///
-fn run_current_turbo(turbo_state: TurboState) -> Result<i32> {
+fn run_current_turbo(args: Vec<String>, turbo_state: TurboState) -> Result<i32> {
     let turbo_state_cstring = CString::new(serde_json::to_string(&turbo_state)?)?;
     // NOTE: If we somehow have so many arguments that we overflow a usize -> isize
     // or if we're running on an architecture where sizeof(usize) < 4, this might fail.
@@ -126,7 +128,18 @@ fn run_current_turbo(turbo_state: TurboState) -> Result<i32> {
         n: turbo_state_cstring.as_bytes().len() as isize,
     };
 
-    let exit_code = unsafe { nativeRunWithState(turbo_state_gostring) };
+    let mut args = args
+        .into_iter()
+        .map(|s| {
+            let c_string = CString::new(s)?;
+            Ok(c_string.into_raw())
+        })
+        .collect::<Result<Vec<*mut c_char>>>()?;
+    args.shrink_to_fit();
+    let argc: c_int = args.len() as c_int;
+    let argv = args.as_mut_ptr();
+
+    let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
     Ok(exit_code.try_into().unwrap())
 }
 
@@ -282,11 +295,12 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
         ));
     }
 
+    let mut args: Vec<_> = env::args().skip(1).collect();
+
     if local_turbo_path == current_exe()? {
-        return run_current_turbo(turbo_state);
+        return run_current_turbo(args, turbo_state);
     }
 
-    let mut args: Vec<_> = env::args().skip(1).collect();
     if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
         && is_run_command(&turbo_state.cli_args)
     {
@@ -322,13 +336,20 @@ fn main() -> Result<()> {
         process::exit(1);
     }
 
+    match clap_args.command {
+        Some(Command::Bin) => {
+            return commands::bin::run();
+        }
+        _ => {}
+    }
+
     let repo_state = RepoState::infer(&current_dir)?;
     let turbo_state = TurboState {
         repo_state: repo_state.clone(),
         cli_args: clap_args,
     };
-    println!("RUNNING CURRENT TURBO");
-    let exit_code = match run_current_turbo(turbo_state) {
+
+    let exit_code = match run_correct_turbo(turbo_state) {
         Ok(exit_code) => exit_code,
         Err(e) => {
             eprintln!("failed {:?}", e);
