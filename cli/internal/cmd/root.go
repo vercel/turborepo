@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cmd/auth"
-	"github.com/vercel/turborepo/cli/internal/cmd/info"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/daemon"
 	"github.com/vercel/turborepo/cli/internal/login"
@@ -139,7 +138,6 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	cmd.AddCommand(login.NewLoginCommand(helper))
 	cmd.AddCommand(auth.LogoutCmd(helper))
 	cmd.AddCommand(auth.UnlinkCmd(helper))
-	cmd.AddCommand(info.BinCmd(helper))
 	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
 	cmd.AddCommand(prune.GetCmd(helper))
 	cmd.AddCommand(run.GetCmd(helper, signalWatcher))
