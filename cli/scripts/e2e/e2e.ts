@@ -1,5 +1,7 @@
 import execa from "execa";
 import tar from "tar";
+import { Readable } from "stream";
+import { ZstdCodec } from "zstd-codec";
 import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import { Monorepo } from "../monorepo";
@@ -183,12 +185,12 @@ function runSmokeTests<T>(
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
       assert.ok(!!hash, "No hash for c#test");
+
       const cacheItemPath = getCacheItemForHash(repo, hash);
-      await tar.x({
-        file: path.join(repo.root, cacheItemPath),
-        cwd: repo.root,
-      });
+      await extractZst(path.join(repo.root, cacheItemPath), repo.root);
+
       const cachedLogFilePath = getCachedLogFilePathForTask(
+        repo,
         path.join("packages", "c"),
         "test"
       );
@@ -218,12 +220,12 @@ function runSmokeTests<T>(
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#lint");
       assert.ok(!!hash, "No hash for c#lint");
+
       const cacheItemPath = getCacheItemForHash(repo, hash);
-      await tar.x({
-        file: path.join(repo.root, cacheItemPath),
-        cwd: repo.root,
-      });
+      await extractZst(path.join(repo.root, cacheItemPath), repo.root);
+
       const cachedLogFilePath = getCachedLogFilePathForTask(
+        repo,
         path.join("packages", "c"),
         "lint"
       );
@@ -712,8 +714,42 @@ function getCacheItemForHash(repo: Monorepo, hash: string): string {
 }
 
 function getCachedLogFilePathForTask(
+  repo: Monorepo,
   pathToPackage: string,
   taskName: string
 ): string {
-  return path.join(pathToPackage, ".turbo", `turbo-${taskName}.log`);
+  return path.join(
+    repo.subdir ? repo.subdir : "",
+    pathToPackage,
+    ".turbo",
+    `turbo-${taskName}.log`
+  );
+}
+
+function createDecoder() {
+  return new Promise((resolve) => {
+    ZstdCodec.run((zstd) => resolve(new zstd.Streaming()));
+  });
+}
+
+async function extractZst(zst, dest) {
+  let decoder = await createDecoder();
+  const fileBuffer = fs.readFileSync(zst);
+  const data = new Uint8Array(
+    fileBuffer.buffer.slice(
+      fileBuffer.byteOffset,
+      fileBuffer.byteOffset + fileBuffer.byteLength
+    )
+  );
+  const decompressed = decoder.decompress(data);
+  const stream = Readable.from(Buffer.from(decompressed));
+  const output = stream.pipe(
+    tar.x({
+      cwd: dest,
+    })
+  );
+
+  return new Promise((resolve) => {
+    output.on("finish", resolve);
+  });
 }
