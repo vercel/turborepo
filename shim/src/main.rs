@@ -1,9 +1,8 @@
 mod commands;
 mod ffi;
 mod package_manager;
-mod ui;
 
-use crate::ffi::{nativeRunWithArgs, GoString};
+use crate::ffi::nativeRunWithArgs;
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
@@ -119,15 +118,7 @@ struct TurboState {
 ///
 /// returns: Result<i32, Error>
 ///
-fn run_current_turbo(args: Vec<String>, turbo_state: TurboState) -> Result<i32> {
-    let turbo_state_cstring = CString::new(serde_json::to_string(&turbo_state)?)?;
-    // NOTE: If we somehow have so many arguments that we overflow a usize -> isize
-    // or if we're running on an architecture where sizeof(usize) < 4, this might fail.
-    let turbo_state_gostring = GoString {
-        p: turbo_state_cstring.as_ptr(),
-        n: turbo_state_cstring.as_bytes().len() as isize,
-    };
-
+fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     let mut args = args
         .into_iter()
         .map(|s| {
@@ -298,7 +289,7 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
     let mut args: Vec<_> = env::args().skip(1).collect();
 
     if local_turbo_path == current_exe()? {
-        return run_current_turbo(args, turbo_state);
+        return run_current_turbo(args);
     }
 
     if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)

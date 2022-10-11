@@ -80,7 +80,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern unsigned int nativeRunWithArgs(int argc, char** argv, GoString turboStateString);
+extern unsigned int nativeRunWithArgs(int argc, char** argv);
 
 #ifdef __cplusplus
 }

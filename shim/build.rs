@@ -7,8 +7,6 @@ fn main() {
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .allowlist_function("nativeRunWithArgs")
-        .allowlist_function("testBindgen")
-        .allowlist_type("GoString")
         .generate()
         .expect("Unable to generate bindings");
 

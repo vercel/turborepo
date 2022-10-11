@@ -5,7 +5,6 @@ package main
 // }
 import "C"
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"unsafe"
@@ -17,26 +16,17 @@ func main() {
 	// TODO(gsoltis): remove after verification
 	cgoCheck := C.cgoCheck()
 	fmt.Printf("CGO Check: %v\n", int(cgoCheck))
-	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion, &cmd.TurboState{}))
+	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion))
 }
 
 //export nativeRunWithArgs
-func nativeRunWithArgs(argc C.int, argv **C.char, turboStateString string) C.uint {
+func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
 	arglen := int(argc)
 	args := make([]string, arglen)
 	for i, arg := range unsafe.Slice(argv, arglen) {
 		args[i] = C.GoString(arg)
 	}
 
-	turboState := cmd.TurboState{}
-	if turboStateString != "" {
-		err := json.Unmarshal([]byte(turboStateString), &turboState)
-		if err != nil {
-			fmt.Printf("Error unmarshaling json: %v\n", err)
-			return C.uint(2)
-		}
-	}
-
-	exitCode := cmd.RunWithArgs(args, "my-version", &turboState)
+	exitCode := cmd.RunWithArgs(args, "my-version")
 	return C.uint(exitCode)
 }
