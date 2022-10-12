@@ -5,7 +5,6 @@ package main
 // }
 import "C"
 import (
-	"fmt"
 	"os"
 	"unsafe"
 
@@ -13,9 +12,6 @@ import (
 )
 
 func main() {
-	// TODO(gsoltis): remove after verification
-	cgoCheck := C.cgoCheck()
-	fmt.Printf("CGO Check: %v\n", int(cgoCheck))
 	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion))
 }
 

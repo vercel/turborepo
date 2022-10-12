@@ -478,21 +478,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shim"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "clap",
- "globset",
- "predicates",
- "serde",
- "serde_json",
- "serde_yaml",
- "walkdir",
-]
-
-[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -523,6 +508,21 @@ name = "termtree"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
+
+[[package]]
+name = "turbo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "globset",
+ "predicates",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "walkdir",
+]
 
 [[package]]
 name = "unicode-ident"
