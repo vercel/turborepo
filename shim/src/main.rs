@@ -124,7 +124,7 @@ fn find_local_turbo_path(repo_root: &Path) -> Result<Option<PathBuf>> {
 }
 
 impl RepoState {
-    /// Infers `RepoState` from current directory. Can either be `RepoState::MultiPackage` or `RepoState::SinglePackage`.
+    /// Infers `RepoState` from current directory.
     ///
     /// # Arguments
     ///
@@ -159,12 +159,14 @@ impl RepoState {
             });
         }
 
-        // What we look for next is either a `package.json` file or a `pnpm-workspace.yaml` file.
+        // What we look for next is a directory that contains a `package.json`.
         let potential_roots = current_dir
             .ancestors()
             .filter(|path| fs::metadata(path.join("package.json")).is_ok());
 
         let mut first_package_json_dir = None;
+        // We loop through these directories and see if there are workspaces defined in them,
+        // either in the `package.json` or `pnm-workspaces.yml`
         for dir in potential_roots {
             if first_package_json_dir.is_none() {
                 first_package_json_dir = Some(dir)
