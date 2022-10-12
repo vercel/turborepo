@@ -7,7 +7,7 @@ Populate cache
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing c50b1361a2e2ebf5
+  a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: building
   
    Tasks:    1 successful, 1 total
@@ -18,7 +18,7 @@ Populate cache
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing f8f391c807e6fed9
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: building
   
    Tasks:    1 successful, 1 total
@@ -34,7 +34,7 @@ Only b should have a cache miss
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache hit, replaying output c50b1361a2e2ebf5
+  a:build: cache hit, replaying output [0-9a-f]+ (re)
   a:build: building
   
    Tasks:    1 successful, 1 total
@@ -46,7 +46,7 @@ Only b should have a cache miss
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing e0a8a35a54508e7f
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: building
   
    Tasks:    1 successful, 1 total
@@ -61,7 +61,7 @@ Bump of root workspace invalidates all packages
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing 3d918a002d8810b4
+  a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: building
   
    Tasks:    1 successful, 1 total
@@ -72,7 +72,7 @@ Bump of root workspace invalidates all packages
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing 1c240ac10038c94c
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: building
   
    Tasks:    1 successful, 1 total

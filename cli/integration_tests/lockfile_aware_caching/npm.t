@@ -7,7 +7,7 @@ Populate cache
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing 17b0e61e4e2d05ff
+  a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: 
   a:build: > build
   a:build: > echo 'building'
@@ -22,7 +22,7 @@ Populate cache
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing 1a65f0cb3dc93890
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: 
   b:build: > build
   b:build: > echo 'building'
@@ -42,7 +42,7 @@ Both a and b should have a cache miss since npm isn't implemented
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing f3caf2df1844f930
+  a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: 
   a:build: > build
   a:build: > echo 'building'
@@ -58,7 +58,7 @@ Both a and b should have a cache miss since npm isn't implemented
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing f5eb13a5f2db7015
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: 
   b:build: > build
   b:build: > echo 'building'
@@ -77,7 +77,7 @@ Bump of root workspace invalidates all packages
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing 57198bf230b5a962
+  a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: 
   a:build: > build
   a:build: > echo 'building'
@@ -92,7 +92,7 @@ Bump of root workspace invalidates all packages
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing 538d5cb242612f64
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: 
   b:build: > build
   b:build: > echo 'building'
