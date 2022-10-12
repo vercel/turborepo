@@ -3,7 +3,7 @@ name: Benchmark PR
 on:
   pull_request:
     types: [synchronize, opened, reopened, edited]
-    branches: [main]
+    branches: [main, staging]
     paths:
       - "crates/**"
       - "Cargo.*"

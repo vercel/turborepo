@@ -2,7 +2,7 @@ name: Build release
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     tags:
       - node-file-trace*
 

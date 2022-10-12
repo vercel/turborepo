@@ -2,7 +2,7 @@ name: Check
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
     paths:
       - "crates/**"

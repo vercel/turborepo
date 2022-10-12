@@ -2,10 +2,10 @@ name: Test
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
     types: [synchronize, opened, reopened, edited]
-    branches: [main]
+    branches: [main, staging]
     paths:
       - "crates/**"
       - "Cargo.*"
