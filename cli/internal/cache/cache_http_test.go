@@ -3,10 +3,11 @@ package cache
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"net/http"
 	"testing"
+
+	"github.com/DataDog/zstd"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
@@ -64,13 +65,13 @@ func makeValidTar(t *testing.T) *bytes.Buffer {
 
 	t.Helper()
 	buf := &bytes.Buffer{}
-	gzw := gzip.NewWriter(buf)
+	zw := zstd.NewWriter(buf)
 	defer func() {
-		if err := gzw.Close(); err != nil {
+		if err := zw.Close(); err != nil {
 			t.Fatalf("failed to close gzip: %v", err)
 		}
 	}()
-	tw := tar.NewWriter(gzw)
+	tw := tar.NewWriter(zw)
 	defer func() {
 		if err := tw.Close(); err != nil {
 			t.Fatalf("failed to close tar: %v", err)
@@ -144,13 +145,13 @@ func makeInvalidTar(t *testing.T) *bytes.Buffer {
 
 	t.Helper()
 	buf := &bytes.Buffer{}
-	gzw := gzip.NewWriter(buf)
+	zw := zstd.NewWriter(buf)
 	defer func() {
-		if err := gzw.Close(); err != nil {
+		if err := zw.Close(); err != nil {
 			t.Fatalf("failed to close gzip: %v", err)
 		}
 	}()
-	tw := tar.NewWriter(gzw)
+	tw := tar.NewWriter(zw)
 	defer func() {
 		if err := tw.Close(); err != nil {
 			t.Fatalf("failed to close tar: %v", err)

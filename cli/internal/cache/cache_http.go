@@ -6,7 +6,6 @@ package cache
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/DataDog/zstd"
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/tarpatch"
@@ -83,10 +84,11 @@ func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, du
 // write writes a series of files into the given Writer.
 func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
 	defer w.Close()
-	gzw := gzip.NewWriter(w)
-	defer gzw.Close()
-	tw := tar.NewWriter(gzw)
-	defer tw.Close()
+	defer func() { _ = w.Close() }()
+	zw := zstd.NewWriter(w)
+	defer func() { _ = zw.Close() }()
+	tw := tar.NewWriter(zw)
+	defer func() { _ = tw.Close() }()
 	for _, file := range files {
 		// log.Printf("caching file %v", file)
 		if err := cache.storeFile(tw, file); err != nil {
@@ -256,12 +258,10 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	files := []turbopath.AnchoredSystemPath{}
 	missingLinks := []*tar.Header{}
-	gzr, err := gzip.NewReader(reader)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = gzr.Close() }()
-	tr := tar.NewReader(gzr)
+	zr := zstd.NewReader(reader)
+	var closeError error
+	defer func() { closeError = zr.Close() }()
+	tr := tar.NewReader(zr)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
@@ -273,7 +273,7 @@ func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopat
 					}
 				}
 
-				return files, nil
+				return files, closeError
 			}
 			return nil, err
 		}
@@ -289,12 +289,12 @@ func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopat
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := filename.MkdirAll(); err != nil {
+			if err := filename.MkdirAll(0775); err != nil {
 				return nil, err
 			}
 		case tar.TypeReg:
 			if dir := filename.Dir(); dir != "." {
-				if err := dir.MkdirAll(); err != nil {
+				if err := dir.MkdirAll(0775); err != nil {
 					return nil, err
 				}
 			}

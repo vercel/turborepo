@@ -242,7 +242,7 @@ func TestGetPackageDeps(t *testing.T) {
 	myPkgDir := repoRoot.UntypedJoin("my-pkg")
 
 	// create the dir first
-	err := myPkgDir.MkdirAll()
+	err := myPkgDir.MkdirAll(0775)
 	assert.NilError(t, err, "CreateDir")
 
 	// create file 1
