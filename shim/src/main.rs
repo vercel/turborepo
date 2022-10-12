@@ -6,8 +6,7 @@ use crate::ffi::nativeRunWithArgs;
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use std::env::current_exe;
 use std::path::{Path, PathBuf};
 
@@ -118,7 +117,15 @@ struct TurboState {
 ///
 /// returns: Result<i32, Error>
 ///
-fn run_current_turbo(args: Vec<String>) -> Result<i32> {
+fn run_current_turbo(clap_args: Args, args: Vec<String>) -> Result<i32> {
+    match clap_args.command {
+        Some(Command::Bin) => {
+            commands::bin::run()?;
+            return Ok(0);
+        }
+        _ => {}
+    }
+
     let mut args = args
         .into_iter()
         .map(|s| {
@@ -240,26 +247,24 @@ fn is_run_command(clap_args: &Args) -> bool {
 /// returns: Result<i32, Error>
 ///
 fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
-    let local_turbo_path = repo_root.join("node_modules").join(".bin").join("turbo");
-
-    if !local_turbo_path.try_exists()? {
-        return Err(anyhow!(
-            "No local turbo installation found in node_modules."
-        ));
-    }
+    let local_turbo_path = turbo_state
+        .repo_state
+        .root
+        .join("node_modules")
+        .join(".bin")
+        .join("turbo");
 
     let mut args: Vec<_> = env::args().skip(1).collect();
-
-    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
-    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
-        return run_current_turbo(args);
-    }
-
     if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
         && is_run_command(&turbo_state.cli_args)
     {
         args.push("--single-package".to_string());
+    }
+
+    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
+    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
+        return run_current_turbo(turbo_state.cli_args, args);
     }
 
     let mut command = process::Command::new(local_turbo_path)
@@ -282,13 +287,6 @@ fn main() -> Result<()> {
 
     if clap_args.command.is_none() && clap_args.task.is_none() {
         process::exit(1);
-    }
-
-    match clap_args.command {
-        Some(Command::Bin) => {
-            return commands::bin::run();
-        }
-        _ => {}
     }
 
     let repo_state = RepoState::infer(&current_dir)?;

@@ -92,7 +92,6 @@ impl PackageManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::OsStr;
     use std::path::Path;
 
     #[test]
