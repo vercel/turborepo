@@ -68,7 +68,7 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     Ok(exit_code)
 }
 
-/// Checks if we are in single package mode by first seeing if there is a turbo.json
+/// Checks if we are in "single package mode" by first seeing if there is a turbo.json
 /// in the ancestor path, and then checking for workspaces.
 ///
 /// # Arguments
