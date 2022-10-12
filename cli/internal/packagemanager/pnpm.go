@@ -8,7 +8,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"gopkg.in/yaml.v3"
+	"github.com/vercel/turborepo/cli/internal/yaml"
 )
 
 // PnpmWorkspaces is a representation of workspace package globs found

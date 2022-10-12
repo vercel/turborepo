@@ -14,7 +14,7 @@ import (
 	"github.com/andybalholm/crlf"
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"gopkg.in/yaml.v3"
+	"github.com/vercel/turborepo/cli/internal/yaml"
 )
 
 var _multipleKeyRegex = regexp.MustCompile(" *, *")

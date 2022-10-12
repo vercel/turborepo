@@ -6,7 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"gopkg.in/yaml.v3"
+	"github.com/vercel/turborepo/cli/internal/yaml"
 )
 
 // PnpmLockfile Go representation of the contents of 'pnpm-lock.yaml'
