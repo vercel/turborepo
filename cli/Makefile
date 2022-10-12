@@ -22,6 +22,13 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
 
+shim: libturbo.a
+	cargo build --manifest-path ../shim/Cargo.toml
+
+# CGO_ENABLED=1 go build -buildmode=c-archive -o libturbo.a ./internal/cmd
+libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
+	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
+
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
@@ -106,6 +113,14 @@ snapshot-turbo-darwin:
 snapshot-turbo: clean
 	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
+.PHONY: snapshot-lib-turbo-darwin
+snapshot-lib-turbo-darwin:
+	goreleaser release --snapshot --rm-dist -f darwin-lib.yml
+
+.PHONY: snapshot-lib-turbo-cross
+snapshot-lib-turbo-cross:
+	goreleaser release --snapshot --rm-dist -f cross-lib.yml
+
 .PHONY: stage-release
 stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
@@ -157,6 +172,14 @@ publish: clean build
 	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
+
+.PHONY: publish-shim
+publish-shim:
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
+
+	# Publishes the native npm modules.
+	goreleaser release --rm-dist -f combined-shim.yml --snapshot
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage

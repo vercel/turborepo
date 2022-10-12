@@ -1,0 +1,29 @@
+project_name: turbo
+before:
+  hooks:
+    - make compile-protos
+    - go mod tidy
+
+dist: dist-darwin
+
+builds:
+  - id: turbo-darwin
+    main: ./cmd/turbo
+    binary: lib/libturbo.a
+    flags:
+      - -trimpath
+      - -buildmode=c-archive
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - darwin_arm64
+      - darwin_amd64
+
+archives:
+  - format: binary
+
+release:
+  disable: true

@@ -1,0 +1,58 @@
+project_name: turbo
+before:
+  hooks:
+    - make compile-protos
+    - go mod tidy
+
+dist: dist-amd
+
+builds:
+  - id: turbo-linux64
+    main: ./main.go
+    binary: bin/turbo
+    # hooks:
+    #   pre:
+    #     - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - linux_amd64
+  - id: turbo-win64
+    main: ./main.go
+    binary: bin/turbo
+    # hooks:
+    #   pre:
+    #     - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-w64-mingw32-gcc
+      - CXX=x86_64-w64-mingw32-g++
+    targets:
+      - windows_amd64
+  - id: turbo-darwin64
+    main: ./main.go
+    binary: bin/turbo
+    # hooks:
+    #   pre:
+    #     - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    targets:
+      - darwin_amd64
