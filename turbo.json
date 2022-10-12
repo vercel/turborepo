@@ -34,6 +34,7 @@
       "outputs": []
     },
     "docs#build": {
+      "env": ["SENTRY_DSN", "TURBOREPO_SFDC_CAMPAIGN_ID", "TRAY_URL", "CONVERTKIT_API_KEY", "CONVERTKIT_API_SECRET"],
       "outputs": [".next/**"],
       "dependsOn": ["^build", "docs#rss", "docs#schema"]
     },

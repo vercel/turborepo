@@ -16,7 +16,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-const _globalCacheKey = "Colorless green ideas sleep furiously"
+const _globalCacheKey = "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo"
 
 // Variables that we always include
 var _defaultEnvVars = []string{

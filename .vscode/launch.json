@@ -69,13 +69,22 @@
       "args": ["run", "build"]
     },
     {
+      "name": "Build Basic (Dry Run / Debug)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cli/cmd/turbo",
+      "cwd": "${workspaceRoot}/examples/basic",
+      "args": ["run", "build", "--dry-run", "-vv"]
+    },
+    {
       "name": "Build Kitchen Sink",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/examples/kitchen-sink",
-      "args": ["run", "build"]
+      "args": ["run", "build", "-vv"]
     },
     {
       "name": "Build Kitchen Sink (Dry Run)",
@@ -84,7 +93,7 @@
       "mode": "debug",
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/examples/kitchen-sink",
-      "args": ["run", "build"]
+      "args": ["run", "build", "--dry-run"]
     },
     {
       "name": "Build All",
