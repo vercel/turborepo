@@ -14,7 +14,7 @@ jobs:
 
       - uses: ./.github/actions/setup-node
         with:
-          disable-scripts: true
+          extra-flags: "--filter=!@vercel/nft-tests"
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -27,7 +27,7 @@ jobs:
           key: publish-npm-cargo-cache
 
       - name: Build packages
-        run: pnpm turbo run build
+        run: pnpx turbo@canary run build:ts
 
       - name: Write NPM_TOKEN
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc

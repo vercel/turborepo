@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
 
 env:
   CARGO_TERM_COLOR: always
@@ -126,12 +132,12 @@ jobs:
           args: --check
 
       - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
 
-      - name: Prettier
-        run: pnpm exec prettier -c .
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: toml
-        run: pnpm exec taplo format --check
-
-      - name: eslint
-        run: pnpm lint
+      - name: Format check
+        run: pnpm -- turbo run check:fmt

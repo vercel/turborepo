@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches-ignore: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
 
 env:
   CARGO_TERM_COLOR: always

@@ -9,6 +9,10 @@ inputs:
     description: "Control turning on installation scripts."
     required: false
     default: false
+  extra-flags:
+    description: "Extra flags to pass to the pnpm install."
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -40,9 +44,9 @@ runs:
     - name: pnpm install
       if: ${{ inputs.disable-scripts == 'false' }}
       shell: bash
-      run: pnpm install
+      run: pnpm install ${{ inputs.extra-flags }}
 
     - name: pnpm install
       if: ${{ inputs.disable-scripts == 'true' }}
       shell: bash
-      run: pnpm install --ignore-scripts
+      run: pnpm install --ignore-scripts ${{ inputs.extra-flags }}

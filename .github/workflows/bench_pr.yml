@@ -4,6 +4,12 @@ on:
   pull_request:
     types: [synchronize, opened, reopened, edited]
     branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,7 +31,7 @@ jobs:
         uses: ouzi-dev/commit-status-updater@v1.0.4
         with:
           name: Benchmark PR / bench (pull_request)
-          url: https://github.com/vercel/turbo-tooling/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turborepo/actions/runs/${{ github.run_id }}
 
       - uses: actions/checkout@v3
 
@@ -33,6 +39,8 @@ jobs:
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
 
       - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
 
       - uses: Swatinem/rust-cache@v1
         with:

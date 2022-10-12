@@ -6,6 +6,12 @@ on:
   pull_request:
     types: [synchronize, opened, reopened, edited]
     branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
 
 env:
   CARGO_TERM_COLOR: always
@@ -88,16 +94,12 @@ jobs:
       - uses: ./.github/actions/setup-node
         if: matrix.os.name != 'windows-latest'
 
-      - name: install Node.js dependencies on Windows without scripts
-        uses: ./.github/actions/setup-node
-        with:
-          disable-scripts: true
+      - name: Run node-gyp install
+        run: npx node-gyp install
         if: matrix.os.name == 'windows-latest'
 
-      - name: install Node.js dependencies with scripts
-        run: |
-          pnpm node-gyp install
-          pnpm install --force
+      - name: install Node.js dependencies on Windows without scripts
+        uses: ./.github/actions/setup-node
         if: matrix.os.name == 'windows-latest'
 
       - name: Report progress
