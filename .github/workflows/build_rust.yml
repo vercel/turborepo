@@ -23,11 +23,8 @@ jobs:
           - host: ubuntu-latest
             target: "aarch64-unknown-linux-gnu"
             lib-cache-key: turbo-lib-cross
-            #docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
             rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
-            #setup: "rustup target add aarch64-unknown-linux-gnu && export CC_aarch64_unknown_linux_gnu=/usr/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-gcc && "
             setup: "sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
-            # rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             lib-cache-key: turbo-lib-cross
@@ -41,8 +38,8 @@ jobs:
         with:
           profile: minimal
           override: true
+          # TODO: copied from turbo tooling, may need to make this file-driven
           toolchain: nightly-2022-09-23
-          #toolchain: ${{ env.RUST_TOOLCHAIN }}
           target: ${{ matrix.settings.target }}
 
       - name: Cache cargo registry
@@ -108,7 +105,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: shim-${{ matrix.settings.target }}
-          # TODO: change binary name
+          # TODO: change binary name? goreleaser currently does the rename for us...
           path: shim/target/${{ matrix.settings.target }}/release/shim*
 
   final-publish:
@@ -177,9 +174,11 @@ jobs:
           name: shim-x86_64-pc-windows-gnu
           path: cli/dist-windows-amd64
 
+      # TODO: switch to publish-shim
       - name: Perform Release (Snapshot)
-        run: cd cli && make publish-shim
+        run: cd cli && make snapshot-shim
 
+      # TODO: probably don't need to upload this once we've verified the snapshots
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:

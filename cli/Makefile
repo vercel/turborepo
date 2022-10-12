@@ -25,7 +25,6 @@ turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 shim: libturbo.a
 	cargo build --manifest-path ../shim/Cargo.toml
 
-# CGO_ENABLED=1 go build -buildmode=c-archive -o libturbo.a ./internal/cmd
 libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
 
@@ -121,6 +120,15 @@ snapshot-lib-turbo-darwin:
 snapshot-lib-turbo-cross:
 	goreleaser release --snapshot --rm-dist -f cross-lib.yml
 
+.PHONY: build-lib-turbo-darwin
+build-lib-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-lib.yml
+
+.PHONY: build-lib-turbo-cross
+build-lib-turbo-cross:
+	goreleaser release --rm-dist -f cross-lib.yml
+
+
 .PHONY: stage-release
 stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
@@ -173,13 +181,51 @@ publish: clean build
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
+.PHONY: snapshot-shim
+snapshot-shim:
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
+
+	# Include the patch in the log.
+	git format-patch HEAD~1 --stdout | cat
+
+	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
+	# Publishes the native npm modules.
+	goreleaser release --rm-dist -f combined-shim.yml --snapshot
+
+	# Split packing from the publish step so that npm locates the correct .npmrc file.
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+
+
 .PHONY: publish-shim
 publish-shim:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
+	# Include the patch in the log.
+	git format-patch HEAD~1 --stdout | cat
+
+	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
 	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-shim.yml --snapshot
+	goreleaser release --rm-dist -f combined-shim.yml
+
+	# Split packing from the publish step so that npm locates the correct .npmrc file.
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+
+	# Publish the remaining JS packages in order to avoid race conditions.
+	cd $(CLI_DIR)/../
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
+	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
