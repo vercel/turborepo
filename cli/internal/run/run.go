@@ -876,7 +876,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *co
 	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
+		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, r.base.Logger, passThroughArgs)
 		if err != nil {
 			return err
 		}
@@ -998,7 +998,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, passThroughArgs)
+	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
 	ec.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
