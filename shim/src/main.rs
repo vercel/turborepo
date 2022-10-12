@@ -139,7 +139,7 @@ impl RepoState {
             if is_workspace {
                 return Ok(Self {
                     root: dir.to_path_buf(),
-                    mode: RepoMode::SinglePackage,
+                    mode: RepoMode::MultiPackage,
                 });
             }
         }
