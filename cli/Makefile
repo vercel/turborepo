@@ -205,7 +205,7 @@ $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES)
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
 
 # use target testbed-<some directory under integration_tests> to set up the testbed directory
