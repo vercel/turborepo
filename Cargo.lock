@@ -3722,6 +3722,7 @@ dependencies = [
  "swc_common",
  "swc_css_ast",
  "swc_css_codegen",
+ "swc_css_compat",
  "swc_css_parser",
  "swc_css_prefixer",
  "swc_css_utils",
@@ -3783,6 +3784,22 @@ dependencies = [
  "quote 1.0.21",
  "swc_macros_common",
  "syn 1.0.99",
+]
+
+[[package]]
+name = "swc_css_compat"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5635b4647864a84343238c03c871683cd30aabdc450273dd3d20a6a248513fe"
+dependencies = [
+ "once_cell",
+ "serde",
+ "serde_json",
+ "swc_atoms",
+ "swc_common",
+ "swc_css_ast",
+ "swc_css_utils",
+ "swc_css_visit",
 ]
 
 [[package]]
