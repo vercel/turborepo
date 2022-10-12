@@ -178,6 +178,7 @@ func getDefaultGlobalDeps(packageManager *packagemanager.PackageManager) []strin
 		"package.json",
 	}
 	if packageManager != nil {
+		// TODO: we should be smarter here and determine if the lockfile changes actually impact the given scope
 		defaultGlobalDeps = append(defaultGlobalDeps, packageManager.Lockfile)
 	}
 
