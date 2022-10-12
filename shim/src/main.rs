@@ -45,7 +45,7 @@ extern "C" {
     pub fn nativeRunWithArgs(argc: c_int, argv: *mut *mut c_char) -> c_int;
 }
 
-/// Runs the turbo in the current binary
+/// Runs the Go code linked in current binary.
 ///
 /// # Arguments
 ///
@@ -68,6 +68,7 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     Ok(exit_code)
 }
 
+static TURBO_JSON: &str = "turbo.json";
 /// Checks if we are in single package mode by first seeing if there is a turbo.json
 /// in the ancestor path, and then checking for workspaces.
 ///
@@ -78,7 +79,7 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
 /// returns: Result<bool, Error>
 ///
 fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
-    let has_turbo_json = AncestorSearch::new(current_dir.to_path_buf(), "turbo.json")?
+    let has_turbo_json = AncestorSearch::new(current_dir.to_path_buf(), TURBO_JSON)?
         .next()
         .is_some();
 
