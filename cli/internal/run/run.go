@@ -255,6 +255,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
+		pkgDepGraph.Lockfile,
 		r.base.Logger,
 		os.Environ(),
 	)
