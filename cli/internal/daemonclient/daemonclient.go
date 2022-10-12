@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/vercel/turborepo/cli/internal/daemon/connector"
+	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
@@ -17,10 +18,10 @@ type DaemonClient struct {
 
 // Status provides details about the daemon's status
 type Status struct {
-	UptimeMs uint64                 `json:"uptimeMs"`
-	LogFile  turbopath.AbsolutePath `json:"logFile"`
-	PidFile  turbopath.AbsolutePath `json:"pidFile"`
-	SockFile turbopath.AbsolutePath `json:"sockFile"`
+	UptimeMs uint64                       `json:"uptimeMs"`
+	LogFile  turbopath.AbsoluteSystemPath `json:"logFile"`
+	PidFile  turbopath.AbsoluteSystemPath `json:"pidFile"`
+	SockFile turbopath.AbsoluteSystemPath `json:"sockFile"`
 }
 
 // New creates a new instance of a DaemonClient.
@@ -39,14 +40,16 @@ func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoR
 	if err != nil {
 		return nil, err
 	}
+
 	return resp.ChangedOutputGlobs, nil
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
-func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs []string) error {
+func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs) error {
 	_, err := d.client.NotifyOutputsWritten(ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
-		Hash:        hash,
-		OutputGlobs: repoRelativeOutputGlobs,
+		Hash:                 hash,
+		OutputGlobs:          repoRelativeOutputGlobs.Inclusions,
+		OutputExclusionGlobs: repoRelativeOutputGlobs.Exclusions,
 	})
 	return err
 }

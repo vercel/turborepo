@@ -18,7 +18,7 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
             aria-hidden="true"
           />
         </div>
-        <h3 className="m-0 text-lg font-semibold leading-6 tracking-tighter text-gray-900 dark:text-white">
+        <h3 className="m-0 text-lg font-semibold leading-6 tracking-tight text-gray-900 dark:text-white">
           {name}
         </h3>
       </div>
@@ -53,7 +53,7 @@ export const DetailedFeatureLink = (props: {
 
 export default function Feature(props: FeatureProps) {
   const { feature, detailed = false } = props;
-  const { Icon, name, description } = feature;
+  const { Icon, name } = feature;
 
   if (detailed) {
     return (

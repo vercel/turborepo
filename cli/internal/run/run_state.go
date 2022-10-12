@@ -172,7 +172,7 @@ func writeChrometracing(filename string, terminal cli.Ui) error {
 		return err
 	}
 	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
-	// so we have to account for that before converting to turbopath.AbsolutePath
+	// so we have to account for that before converting to turbopath.AbsoluteSystemPath
 	if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
 		return err
 	}

@@ -8,15 +8,16 @@ import (
 
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
 type testCache struct {
 	disabledErr *util.CacheDisabledError
-	entries     map[string][]string
+	entries     map[string][]turbopath.AnchoredSystemPath
 }
 
-func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []string, int, error) {
+func (tc *testCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	if tc.disabledErr != nil {
 		return false, nil, 0, tc.disabledErr
 	}
@@ -28,7 +29,18 @@ func (tc *testCache) Fetch(target string, hash string, files []string) (bool, []
 	return false, nil, 0, nil
 }
 
-func (tc *testCache) Put(target string, hash string, duration int, files []string) error {
+func (tc *testCache) Exists(hash string) (ItemStatus, error) {
+	if tc.disabledErr != nil {
+		return ItemStatus{}, nil
+	}
+	_, ok := tc.entries[hash]
+	if ok {
+		return ItemStatus{Local: true}, nil
+	}
+	return ItemStatus{}, nil
+}
+
+func (tc *testCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	if tc.disabledErr != nil {
 		return tc.disabledErr
 	}
@@ -36,13 +48,13 @@ func (tc *testCache) Put(target string, hash string, duration int, files []strin
 	return nil
 }
 
-func (tc *testCache) Clean(target string) {}
-func (tc *testCache) CleanAll()           {}
-func (tc *testCache) Shutdown()           {}
+func (tc *testCache) Clean(anchor turbopath.AbsoluteSystemPath) {}
+func (tc *testCache) CleanAll()                                 {}
+func (tc *testCache) Shutdown()                                 {}
 
 func newEnabledCache() *testCache {
 	return &testCache{
-		entries: make(map[string][]string),
+		entries: make(map[string][]turbopath.AnchoredSystemPath),
 	}
 }
 
@@ -71,7 +83,7 @@ func TestPutCachingDisabled(t *testing.T) {
 		},
 	}
 
-	err := mplex.Put("unused-target", "some-hash", 5, []string{"a-file"})
+	err := mplex.Put("unused-target", "some-hash", 5, []turbopath.AnchoredSystemPath{"a-file"})
 	if err != nil {
 		// don't leak the cache removal
 		t.Errorf("Put got error %v, want <nil>", err)
@@ -108,10 +120,46 @@ func TestPutCachingDisabled(t *testing.T) {
 	}
 }
 
+func TestExists(t *testing.T) {
+	caches := []Cache{
+		newEnabledCache(),
+	}
+
+	mplex := &cacheMultiplexer{
+		caches: caches,
+	}
+
+	itemStatus, err := mplex.Exists("some-hash")
+	if err != nil {
+		t.Errorf("got error verifying files: %v", err)
+	}
+	if itemStatus.Local {
+		t.Error("did not expect file to exist")
+	}
+
+	err = mplex.Put("unused-target", "some-hash", 5, []turbopath.AnchoredSystemPath{"a-file"})
+	if err != nil {
+		// don't leak the cache removal
+		t.Errorf("Put got error %v, want <nil>", err)
+	}
+
+	itemStatus, err = mplex.Exists("some-hash")
+	if err != nil {
+		t.Errorf("got error verifying files: %v", err)
+	}
+	if !itemStatus.Local {
+		t.Error("failed to find previously stored files")
+	}
+}
+
 type fakeClient struct{}
 
 // FetchArtifact implements client
 func (*fakeClient) FetchArtifact(hash string) (*http.Response, error) {
+	panic("unimplemented")
+}
+
+func (*fakeClient) ArtifactExists(hash string) (*http.Response, error) {
 	panic("unimplemented")
 }
 
@@ -175,7 +223,7 @@ func (nullRecorder) LogEvent(analytics.EventPayload) {}
 
 func TestNew(t *testing.T) {
 	// Test will bomb if this fails, no need to specially handle the error
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	type args struct {
 		opts           Opts
 		recorder       analytics.Recorder

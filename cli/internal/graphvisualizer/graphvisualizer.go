@@ -16,7 +16,7 @@ import (
 
 // GraphVisualizer requirements
 type GraphVisualizer struct {
-	repoRoot  turbopath.AbsolutePath
+	repoRoot  turbopath.AbsoluteSystemPath
 	ui        cli.Ui
 	TaskGraph *dag.AcyclicGraph
 }
@@ -28,7 +28,7 @@ func hasGraphViz() bool {
 }
 
 // New creates an instance of ColorCache with helpers for adding colors to task outputs
-func New(repoRoot turbopath.AbsolutePath, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
+func New(repoRoot turbopath.AbsoluteSystemPath, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
 	return &GraphVisualizer{
 		repoRoot:  repoRoot,
 		ui:        ui,
@@ -58,12 +58,12 @@ func (g *GraphVisualizer) RenderDotGraph() {
 // GenerateGraphFile saves a visualization of the TaskGraph to a file (or renders a DotGraph as a fallback))
 func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 	graphString := g.generateDotString()
-	outputFilename := g.repoRoot.Join(outputName)
+	outputFilename := g.repoRoot.UntypedJoin(outputName)
 	ext := outputFilename.Ext()
 	// use .jpg as default extension if none is provided
 	if ext == "" {
 		ext = ".jpg"
-		outputFilename = g.repoRoot.Join(outputName + ext)
+		outputFilename = g.repoRoot.UntypedJoin(outputName + ext)
 	}
 	if ext == ".html" {
 		f, err := outputFilename.Create()

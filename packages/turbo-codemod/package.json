@@ -1,13 +1,13 @@
 {
   "name": "@turbo/codemod",
-  "version": "1.4.7",
+  "version": "1.5.6",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turborepo.org",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
-    "directory": "turbo-codemod"
+    "directory": "packages/turbo-codemod"
   },
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
@@ -15,6 +15,7 @@
   "bin": "dist/index.js",
   "scripts": {
     "build": "tsup",
+    "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit"
   },
@@ -38,12 +39,16 @@
     "@types/fs-extra": "^9.0.13",
     "@types/gradient-string": "^1.1.2",
     "@types/inquirer": "^7.3.1",
+    "@types/jest": "^27.4.0",
     "@types/node": "^16.11.12",
     "@types/semver": "^7.3.9",
+    "deepmerge": "^4.2.2",
     "eslint": "^7.23.0",
+    "jest": "^27.4.3",
     "semver": "^7.3.5",
     "strip-ansi": "^6.0.1",
     "tsconfig": "workspace:*",
+    "turbo-types": "workspace:*",
     "tsup": "^5.10.3",
     "typescript": "^4.5.5"
   },

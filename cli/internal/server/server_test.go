@@ -27,7 +27,7 @@ func TestDeleteRepoRoot(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
 	repoRootRaw := t.TempDir()
-	repoRoot := turbofs.AbsolutePathFromUpstream(repoRootRaw)
+	repoRoot := turbofs.AbsoluteSystemPathFromUpstream(repoRootRaw)
 
 	grpcServer := &mockGrpc{
 		stopped: make(chan struct{}),
@@ -51,7 +51,7 @@ func TestDeleteRepoRoot(t *testing.T) {
 func TestShutdown(t *testing.T) {
 	logger := hclog.Default()
 	repoRootRaw := t.TempDir()
-	repoRoot := turbofs.AbsolutePathFromUpstream(repoRootRaw)
+	repoRoot := turbofs.AbsoluteSystemPathFromUpstream(repoRootRaw)
 
 	grpcServer := &mockGrpc{
 		stopped: make(chan struct{}),

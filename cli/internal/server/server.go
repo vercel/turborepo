@@ -29,8 +29,8 @@ type Server struct {
 	globWatcher  *globwatcher.GlobWatcher
 	turboVersion string
 	started      time.Time
-	logFilePath  turbopath.AbsolutePath
-	repoRoot     turbopath.AbsolutePath
+	logFilePath  turbopath.AbsoluteSystemPath
+	repoRoot     turbopath.AbsoluteSystemPath
 	closerMu     sync.Mutex
 	closer       *closer
 }
@@ -63,8 +63,8 @@ func (c *closer) close() {
 var _defaultCookieTimeout = 500 * time.Millisecond
 
 // New returns a new instance of Server
-func New(serverName string, logger hclog.Logger, repoRoot turbopath.AbsolutePath, turboVersion string, logFilePath turbopath.AbsolutePath) (*Server, error) {
-	cookieDir := fs.GetTurboDataDir().Join("cookies", serverName)
+func New(serverName string, logger hclog.Logger, repoRoot turbopath.AbsoluteSystemPath, turboVersion string, logFilePath turbopath.AbsoluteSystemPath) (*Server, error) {
+	cookieDir := fs.GetTurboDataDir().UntypedJoin("cookies", serverName)
 	cookieJar, err := filewatcher.NewCookieJar(cookieDir, _defaultCookieTimeout)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,12 @@ func (s *Server) Register(grpcServer GRPCServer) {
 
 // NotifyOutputsWritten implements the NotifyOutputsWritten rpc from turbo.proto
 func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.NotifyOutputsWrittenRequest) (*turbodprotocol.NotifyOutputsWrittenResponse, error) {
-	err := s.globWatcher.WatchGlobs(req.Hash, req.OutputGlobs)
+	outputs := fs.TaskOutputs{
+		Inclusions: req.OutputGlobs,
+		Exclusions: req.OutputExclusionGlobs,
+	}
+
+	err := s.globWatcher.WatchGlobs(req.Hash, outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +151,7 @@ func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.N
 
 // GetChangedOutputs implements the GetChangedOutputs rpc from turbo.proto
 func (s *Server) GetChangedOutputs(ctx context.Context, req *turbodprotocol.GetChangedOutputsRequest) (*turbodprotocol.GetChangedOutputsResponse, error) {
+
 	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, req.OutputGlobs)
 	if err != nil {
 		return nil, err

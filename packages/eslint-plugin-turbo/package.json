@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -9,6 +9,14 @@
     "eslintplugin",
     "eslint-plugin"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/eslint-plugin-turbo"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "author": "Vercel",
   "main": "./dist/index.js",
   "files": [
@@ -30,6 +38,7 @@
     "tsconfig": "workspace:*",
     "tsup": "^6.2.0",
     "turbo-utils": "workspace:*",
+    "turbo-types": "workspace:*",
     "typescript": "^4.7.4"
   },
   "peerDependencies": {

@@ -43,9 +43,9 @@ type Opts struct {
 type Client struct {
 	turbodprotocol.TurbodClient
 	*grpc.ClientConn
-	SockPath turbopath.AbsolutePath
-	PidPath  turbopath.AbsolutePath
-	LogPath  turbopath.AbsolutePath
+	SockPath turbopath.AbsoluteSystemPath
+	PidPath  turbopath.AbsoluteSystemPath
+	LogPath  turbopath.AbsoluteSystemPath
 }
 
 // Connector instances are used to create a connection to turbo's daemon process
@@ -54,18 +54,18 @@ type Connector struct {
 	Logger       hclog.Logger
 	Bin          string
 	Opts         Opts
-	SockPath     turbopath.AbsolutePath
-	PidPath      turbopath.AbsolutePath
-	LogPath      turbopath.AbsolutePath
+	SockPath     turbopath.AbsoluteSystemPath
+	PidPath      turbopath.AbsoluteSystemPath
+	LogPath      turbopath.AbsoluteSystemPath
 	TurboVersion string
 }
 
 // ConnectionError is returned in the error case from connect. It wraps the underlying
 // cause and adds a message with the relevant files for the user to check.
 type ConnectionError struct {
-	SockPath turbopath.AbsolutePath
-	PidPath  turbopath.AbsolutePath
-	LogPath  turbopath.AbsolutePath
+	SockPath turbopath.AbsoluteSystemPath
+	PidPath  turbopath.AbsoluteSystemPath
+	LogPath  turbopath.AbsoluteSystemPath
 	cause    error
 }
 
@@ -94,7 +94,7 @@ func (c *Connector) wrapConnectionError(err error) error {
 // lockFile returns a pointer to where a lockfile should be.
 // lockfile.New does not perform IO and the only error it produces
 // is in the case a non-absolute path was provided. We're guaranteeing an
-// turbopath.AbsolutePath, so an error here is an indication of a bug and
+// turbopath.AbsoluteSystemPath, so an error here is an indication of a bug and
 // we should crash.
 func (c *Connector) lockFile() lockfile.Lockfile {
 	lockFile, err := lockfile.New(c.PidPath.ToString())
@@ -105,7 +105,11 @@ func (c *Connector) lockFile() lockfile.Lockfile {
 }
 
 func (c *Connector) addr() string {
-	return fmt.Sprintf("unix://%v", c.SockPath.ToString())
+	// grpc special-cases parsing of unix:<path> urls
+	// to avoid url.Parse. This lets us pass through our absolute
+	// paths unmodified, even on windows.
+	// See code here: https://github.com/grpc/grpc-go/blob/d83070ec0d9043f713b6a63e1963c593b447208c/internal/transport/http_util.go#L392
+	return fmt.Sprintf("unix:%v", c.SockPath.ToString())
 }
 
 // We defer to the daemon's pid file as the locking mechanism.

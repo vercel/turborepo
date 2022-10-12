@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"sort"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"muzzammil.xyz/jsonc"
@@ -18,7 +21,7 @@ const (
 	topologicalPipelineDelimiter = "^"
 )
 
-var defaultOutputs = []string{"dist/**/*", "build/**/*"}
+var defaultOutputs = TaskOutputs{Inclusions: []string{"dist/**/*", "build/**/*"}}
 
 type rawTurboJSON struct {
 	// Global root filesystem dependencies
@@ -60,7 +63,7 @@ type Pipeline map[string]TaskDefinition
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	Outputs                 []string
+	Outputs                 TaskOutputs
 	ShouldCache             bool
 	EnvVarDependencies      []string
 	TopologicalDependencies []string
@@ -69,10 +72,59 @@ type TaskDefinition struct {
 	OutputMode              util.TaskOutputMode
 }
 
-// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
-func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+// LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
+func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+	var turboJSON *TurboJSON
+	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
+	if !includeSynthesizedFromRootPackageJSON && err != nil {
+		// There was an error, and we don't have any chance of recovering
+		// because we aren't synthesizing anything
+		return nil, err
+	} else if !includeSynthesizedFromRootPackageJSON {
+		// We're not synthesizing anything and there was no error, we're done
+		return turboFromFiles, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		// turbo.json doesn't exist, but we're going try to synthesize something
+		turboJSON = &TurboJSON{
+			Pipeline: make(Pipeline),
+		}
+	} else if err != nil {
+		// some other happened, we can't recover
+		return nil, err
+	} else {
+		// we're synthesizing, but we have a starting point
+		// Note: this will have to change to support task inference in a monorepo
+		// for now, we're going to error on any "root" tasks and turn non-root tasks into root tasks
+		pipeline := make(Pipeline)
+		for taskID, taskDefinition := range turboFromFiles.Pipeline {
+			if util.IsPackageTask(taskID) {
+				return nil, fmt.Errorf("Package tasks (<package>#<task>) are not allowed in single-package repositories: found %v", taskID)
+			}
+			pipeline[util.RootTaskID(taskID)] = taskDefinition
+		}
+		turboJSON = turboFromFiles
+		turboJSON.Pipeline = pipeline
+	}
 
-	turboJSONPath := rootPath.Join(configFile)
+	for scriptName := range rootPackageJSON.Scripts {
+		if !turboJSON.Pipeline.HasTask(scriptName) {
+			taskName := util.RootTaskID(scriptName)
+			turboJSON.Pipeline[taskName] = TaskDefinition{}
+		}
+	}
+	return turboJSON, nil
+}
+
+// TaskOutputs represents the patterns for including and excluding files from outputs
+type TaskOutputs struct {
+	Inclusions []string
+	Exclusions []string
+}
+
+// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
+func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
+
+	turboJSONPath := rootPath.UntypedJoin(configFile)
 
 	// Check if turbo key in package.json exists
 	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
@@ -102,11 +154,11 @@ func ReadTurboConfig(rootPath turbopath.AbsolutePath, rootPackageJSON *PackageJS
 	}
 
 	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, fmt.Errorf("Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct
-func readTurboJSON(path turbopath.AbsolutePath) (*TurboJSON, error) {
+func readTurboJSON(path turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 	file, err := path.Open()
 	if err != nil {
 		return nil, err
@@ -165,10 +217,25 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
 	if rawPipeline.Outputs != nil {
-		c.Outputs = *rawPipeline.Outputs
+		var inclusions []string
+		var exclusions []string
+		for _, glob := range *rawPipeline.Outputs {
+			if strings.HasPrefix(glob, "!") {
+				exclusions = append(exclusions, glob[1:])
+			} else {
+				inclusions = append(inclusions, glob)
+			}
+		}
+
+		c.Outputs = TaskOutputs{
+			Inclusions: inclusions,
+			Exclusions: exclusions,
+		}
 	} else {
 		c.Outputs = defaultOutputs
 	}
+	sort.Strings(c.Outputs.Inclusions)
+	sort.Strings(c.Outputs.Exclusions)
 	if rawPipeline.Cache == nil {
 		c.ShouldCache = true
 	} else {
@@ -181,6 +248,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	for _, dependency := range rawPipeline.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
@@ -188,6 +256,8 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 			c.TaskDependencies = append(c.TaskDependencies, dependency)
 		}
 	}
+	sort.Strings(c.TaskDependencies)
+	sort.Strings(c.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
 	for _, value := range rawPipeline.Env {
@@ -201,6 +271,9 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
+	sort.Strings(c.EnvVarDependencies)
+	// Note that we don't require Inputs to be sorted, we're going to
+	// hash the resulting files and sort that instead
 	c.Inputs = rawPipeline.Inputs
 	c.OutputMode = rawPipeline.OutputMode
 	return nil
@@ -228,6 +301,7 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 
 	for _, value := range raw.GlobalDependencies {
 		if strings.HasPrefix(value, envPipelineDelimiter) {
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"globalDependencies\" is deprecated, found %s. Use the \"globalEnv\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", value)
 			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
 		} else {
 			globalFileDependencies.Add(value)
@@ -236,7 +310,9 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 
 	// turn the set into an array and assign to the TurboJSON struct fields.
 	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
+	sort.Strings(c.GlobalEnv)
 	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
+	sort.Strings(c.GlobalDeps)
 
 	// copy these over, we don't need any changes here.
 	c.Pipeline = raw.Pipeline

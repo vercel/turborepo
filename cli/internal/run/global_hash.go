@@ -16,14 +16,14 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-const _globalCacheKey = "Real G's move in silence like lasagna"
+const _globalCacheKey = "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo"
 
 // Variables that we always include
 var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-func calculateGlobalHash(rootpath turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
 	// Calculate env var dependencies
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}

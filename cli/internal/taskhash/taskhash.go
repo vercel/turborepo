@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turborepo/cli/internal/doublestar"
@@ -78,7 +79,7 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.AbsolutePath) (string, error) {
+func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) (string, error) {
 	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
@@ -97,16 +98,16 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.Absolut
 	return hashOfFiles, nil
 }
 
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopath.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
 	// the directory of a package.
-	ignore, err := safeCompileIgnoreFile(rootPath.Join(".gitignore").ToString())
+	ignore, err := safeCompileIgnoreFile(rootPath.UntypedJoin(".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
 
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.Join(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
+	ignorePkg, err := safeCompileIgnoreFile(rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		includePattern = "{" + strings.Join(inputs, ",") + "}"
 	}
 
-	pathPrefix := rootPath.Join(pkg.Dir.ToStringDuringMigration()).ToString()
+	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration()).ToString()
 	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
 	fs.Walk(pathPrefix, func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
@@ -156,7 +157,7 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsolutePath) error {
+func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
 	hashTasks := make(util.Set)
 
 	for _, v := range allTasks {
@@ -224,7 +225,7 @@ type taskHashInputs struct {
 	hashOfFiles          string
 	externalDepsHash     string
 	task                 string
-	outputs              []string
+	outputs              fs.TaskOutputs
 	passThruArgs         []string
 	hashableEnvPairs     []string
 	globalHash           string
@@ -262,7 +263,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, args []string) (string, error) {
+func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
 	pfs := specFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
@@ -274,6 +275,8 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	var envPrefixes []string
 	framework := inference.InferFramework(packageTask.Pkg)
 	if framework != nil && framework.EnvPrefix != "" {
+		// log auto detected framework and env prefix
+		logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvPrefix)
 		envPrefixes = append(envPrefixes, framework.EnvPrefix)
 	}
 
@@ -283,6 +286,9 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	if err != nil {
 		return "", err
 	}
+	// log any auto detected env vars
+	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
+
 	hash, err := fs.HashObject(&taskHashInputs{
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
