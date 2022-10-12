@@ -7,11 +7,6 @@ else
 	UNAME := $(shell uname -s)
 endif
 
-USE_CGO = 0
-ifeq ($(UNAME), Darwin)
-	USE_CGO = 1
-endif
-
 # Strip debug info
 GO_FLAGS += "-ldflags=-s -w"
 
@@ -25,7 +20,7 @@ SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
 turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=$(USE_CGO) go build $(GO_FLAGS) ./cmd/turbo
+	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
@@ -48,6 +43,10 @@ check-go-version:
 # Go's race detector does not run correctly on that version. With this flag
 # you can run "TURBO_RACE= make test-go" to disable the race detector.
 TURBO_RACE ?= -race
+
+ifeq ($(UNAME), Windows)
+	TURBO_RACE=
+endif
 
 clean-go:
 	go clean -testcache ./...
@@ -206,7 +205,7 @@ $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES)
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
 
 # use target testbed-<some directory under integration_tests> to set up the testbed directory
