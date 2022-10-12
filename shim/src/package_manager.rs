@@ -1,7 +1,7 @@
-use crate::paths::AbsolutePath;
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspaces {
@@ -24,6 +24,14 @@ pub enum PackageManager {
     Yarn,
 }
 
+#[derive(Debug)]
+pub struct Globs {
+    #[allow(dead_code)]
+    inclusions: Vec<PathBuf>,
+    #[allow(dead_code)]
+    exclusions: Vec<PathBuf>,
+}
+
 impl PackageManager {
     /// Returns a list of globs for the package workspace.
     /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
@@ -33,22 +41,22 @@ impl PackageManager {
     ///
     /// * `root_path`:
     ///
-    /// returns: Result<Vec<PathBuf, Global>, Error>
+    /// returns: Result<Globs, Error>
     ///
     /// # Examples
     ///
     /// ```
     ///
     /// ```
-    pub fn get_workspace_globs(&self, root_path: &AbsolutePath) -> Result<Vec<String>> {
-        match self {
+    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Globs> {
+        let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
                 let workspaces: PnpmWorkspaces = serde_yaml::from_str(&workspace_yaml)?;
                 if workspaces.packages.is_empty() {
-                    Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"))
+                    return Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"));
                 } else {
-                    Ok(workspaces.packages)
+                    workspaces.packages
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
@@ -56,12 +64,28 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.is_empty() {
-                    Err(anyhow!("package.json: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root package.json"))
+                    return Err(anyhow!("package.json: no packages found. Turborepo requires packages to be defined in the root package.json"));
                 } else {
-                    Ok(package_json.workspaces)
+                    package_json.workspaces
                 }
             }
+        };
+
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for glob in globs {
+            if let Some(exclusion) = glob.strip_prefix('!') {
+                exclusions.push(PathBuf::from(exclusion.to_string()));
+            } else {
+                inclusions.push(PathBuf::from(glob));
+            }
         }
+
+        Ok(Globs {
+            inclusions,
+            exclusions,
+        })
     }
 }
 
@@ -78,8 +102,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            globs,
-            vec![String::from("apps/*"), String::from("packages/*")]
+            globs.inclusions,
+            vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
         );
     }
 }

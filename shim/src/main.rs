@@ -1,14 +1,16 @@
 mod package_manager;
-mod paths;
 
 use crate::package_manager::PackageManager;
-use crate::paths::AncestorSearch;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use std::path::Path;
+use std::env::current_exe;
+use std::path::{Path, PathBuf};
+
+use std::process::Stdio;
 use std::{
     env,
     ffi::CString,
+    fs,
     os::raw::{c_char, c_int},
     process,
 };
@@ -16,13 +18,13 @@ use std::{
 static TURBO_JSON: &str = "turbo.json";
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true)]
+#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true)]
 struct Args {
     /// Current working directory
     #[clap(long, value_parser)]
     cwd: Option<String>,
     #[clap(subcommand)]
-    commands: Option<Commands>,
+    command: Option<Command>,
     task: Option<String>,
 }
 
@@ -30,7 +32,7 @@ struct Args {
 /// we must change these as well to avoid accidentally passing the --single-package
 /// flag into non-build commands.
 #[derive(Subcommand, Debug)]
-enum Commands {
+enum Command {
     Bin,
     Completion,
     Daemon,
@@ -41,6 +43,18 @@ enum Commands {
     Prune,
     Unlink,
     Run { tasks: Vec<String> },
+}
+
+#[derive(Debug)]
+struct RepoState {
+    root: PathBuf,
+    mode: RepoMode,
+}
+
+#[derive(Debug)]
+enum RepoMode {
+    SinglePackage,
+    MultiPackage,
 }
 
 extern "C" {
@@ -70,38 +84,84 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     Ok(exit_code)
 }
 
-/// Checks if we are in "single package mode" by first seeing if there is a turbo.json
-/// in the ancestor path, and then checking for workspaces.
-///
-/// # Arguments
-///
-/// * `current_dir`: Current working directory
-///
-/// returns: Result<bool, Error>
-///
-fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
-    let has_turbo_json = AncestorSearch::new(current_dir.to_path_buf(), TURBO_JSON)?
-        .next()
-        .is_some();
+impl RepoState {
+    /// Infers `RepoState` from current directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_dir`: Current working directory
+    ///
+    /// returns: Result<RepoState, Error>
+    ///
+    pub fn infer(current_dir: &Path) -> Result<Self> {
+        // First we look for a `turbo.json`. This iterator returns the first ancestor that contains
+        // a `turbo.json` file.
+        let root_path = current_dir
+            .ancestors()
+            .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
 
-    if has_turbo_json {
-        return Ok(false);
+        // If that directory exists, then we figure out if there are workspaces defined in it
+        // NOTE: This may change with multiple `turbo.json` files
+        if let Some(root_path) = root_path {
+            let pnpm = PackageManager::Pnpm;
+            let npm = PackageManager::Npm;
+            let is_workspace = pnpm.get_workspace_globs(root_path).is_ok()
+                || npm.get_workspace_globs(root_path).is_ok();
+
+            let mode = if is_workspace {
+                RepoMode::MultiPackage
+            } else {
+                RepoMode::SinglePackage
+            };
+
+            return Ok(Self {
+                root: root_path.to_path_buf(),
+                mode,
+            });
+        }
+
+        // What we look for next is a directory that contains a `package.json`.
+        let potential_roots = current_dir
+            .ancestors()
+            .filter(|path| fs::metadata(path.join("package.json")).is_ok());
+
+        let mut first_package_json_dir = None;
+        // We loop through these directories and see if there are workspaces defined in them,
+        // either in the `package.json` or `pnm-workspaces.yml`
+        for dir in potential_roots {
+            if first_package_json_dir.is_none() {
+                first_package_json_dir = Some(dir)
+            }
+
+            let pnpm = PackageManager::Pnpm;
+            let npm = PackageManager::Npm;
+            let is_workspace =
+                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
+
+            if is_workspace {
+                return Ok(Self {
+                    root: dir.to_path_buf(),
+                    mode: RepoMode::MultiPackage,
+                });
+            }
+        }
+
+        // Finally, if we don't detect any workspaces, go to the first `package.json`
+        // and use that in single package mode.
+        let root = first_package_json_dir
+            .ok_or_else(|| {
+                anyhow!(
+                    "Unable to find `{}` or `package.json` in current path",
+                    TURBO_JSON
+                )
+            })?
+            .to_path_buf();
+
+        Ok(Self {
+            root,
+            mode: RepoMode::SinglePackage,
+        })
     }
-
-    // We should detect which package manager and then determine workspaces from there,
-    // but detection is not implemented yet and really we're either checking the `package.json`
-    // or the `pnpm-workspace.yaml` file so we can do both.
-    let npm = PackageManager::Npm;
-    if npm.get_workspace_globs(current_dir).is_ok() {
-        return Ok(false);
-    };
-
-    let pnpm = PackageManager::Pnpm;
-    if pnpm.get_workspace_globs(current_dir).is_ok() {
-        return Ok(false);
-    };
-
-    Ok(true)
 }
 
 /// Checks if either we have an explicit run command, i.e. `turbo run build`
@@ -115,29 +175,65 @@ fn is_single_package_mode(current_dir: &Path) -> Result<bool> {
 /// returns: bool
 ///
 fn is_run_command(clap_args: &Args) -> bool {
-    let is_explicit_run = matches!(clap_args.commands, Some(Commands::Run { .. }));
-    let is_implicit_run = clap_args.commands.is_none() && clap_args.task.is_some();
+    let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
+    let is_implicit_run = clap_args.command.is_none() && clap_args.task.is_some();
 
     is_explicit_run || is_implicit_run
+}
+
+/// Attempts to run correct turbo by finding nearest package.json,
+/// then finding local turbo installation. If the current binary is the local
+/// turbo installation, then we run current turbo. Otherwise we kick over to
+/// the local turbo installation.
+///
+/// # Arguments
+///
+/// * `current_dir`: Current working directory as defined by the --cwd flag
+///
+/// returns: Result<i32, Error>
+///
+fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
+    let local_turbo_path = repo_root.join("node_modules").join(".bin").join("turbo");
+
+    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
+    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
+        return run_current_turbo(args);
+    }
+
+    let mut command = process::Command::new(local_turbo_path)
+        .args(&args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("Failed to execute turbo.");
+
+    Ok(command.wait()?.code().unwrap_or(2))
 }
 
 fn main() -> Result<()> {
     let clap_args = Args::parse();
     let current_dir = if let Some(cwd) = &clap_args.cwd {
-        cwd.into()
+        fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
         env::current_dir()?
     };
 
+    if clap_args.command.is_none() && clap_args.task.is_none() {
+        process::exit(1);
+    }
+
     let mut args: Vec<_> = env::args().skip(1).collect();
-    if is_single_package_mode(&current_dir)? && is_run_command(&clap_args) {
+    let repo_state = RepoState::infer(&current_dir)?;
+
+    if matches!(repo_state.mode, RepoMode::SinglePackage) && is_run_command(&clap_args) {
         args.push("--single-package".to_string());
     }
 
-    let exit_code = match run_current_turbo(args) {
+    let exit_code = match run_correct_turbo(&repo_state.root, args) {
         Ok(exit_code) => exit_code,
         Err(e) => {
-            println!("failed {:?}", e);
+            eprintln!("failed {:?}", e);
             2
         }
     };
