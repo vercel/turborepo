@@ -13,6 +13,8 @@ use std::{
     process,
 };
 
+static TURBO_JSON: &str = "turbo.json";
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true)]
 struct Args {
@@ -68,8 +70,7 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     Ok(exit_code)
 }
 
-static TURBO_JSON: &str = "turbo.json";
-/// Checks if we are in single package mode by first seeing if there is a turbo.json
+/// Checks if we are in "single package mode" by first seeing if there is a turbo.json
 /// in the ancestor path, and then checking for workspaces.
 ///
 /// # Arguments
