@@ -3,8 +3,6 @@ mod package_manager;
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use serde::Deserialize;
-use std::collections::HashMap;
 use std::env::current_exe;
 use std::path::{Path, PathBuf};
 
@@ -82,45 +80,6 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     let argv = args.as_mut_ptr();
     let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
     Ok(exit_code)
-}
-
-/// Finds local turbo path given the package.json path. We assume that the node_modules directory
-/// is at the same level as the package.json file.
-///
-/// # Arguments
-///
-/// * `package_json_path`: The location of the package.json file
-///
-/// returns: Result<Option<PathBuf>, Error>
-///
-fn find_local_turbo_path(repo_root: &Path) -> Result<Option<PathBuf>> {
-    let package_json_path = repo_root.join("package.json");
-    let package_json_contents = fs::read_to_string(&package_json_path)?;
-    let package_json: PackageJson = serde_json::from_str(&package_json_contents)?;
-
-    let dev_dependencies_has_turbo = package_json
-        .dev_dependencies
-        .map_or(false, |deps| deps.contains_key("turbo"));
-    let dependencies_has_turbo = package_json
-        .dependencies
-        .map_or(false, |deps| deps.contains_key("turbo"));
-
-    if dev_dependencies_has_turbo || dependencies_has_turbo {
-        let mut local_turbo_path = repo_root.join("node_modules");
-        local_turbo_path.push(".bin");
-        local_turbo_path.push("turbo");
-
-        fs::metadata(&local_turbo_path).map_err(|_| {
-            anyhow!(
-                "Could not find binary in {}.",
-                local_turbo_path.to_string_lossy()
-            )
-        })?;
-
-        Ok(Some(local_turbo_path))
-    } else {
-        Ok(None)
-    }
 }
 
 impl RepoState {
@@ -229,16 +188,11 @@ fn is_run_command(clap_args: &Args) -> bool {
 /// returns: Result<i32, Error>
 ///
 fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
-    let local_turbo_path = find_local_turbo_path(repo_root)?
-        .ok_or_else(|| anyhow!("No local turbo installation found in package.json."))?;
+    let local_turbo_path = repo_root.join("node_modules").join(".bin").join("turbo");
 
-    if !local_turbo_path.try_exists()? {
-        return Err(anyhow!(
-            "No local turbo installation found in node_modules."
-        ));
-    }
-
-    if local_turbo_path == current_exe()? {
+    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
+    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
         return run_current_turbo(args);
     }
 
@@ -250,13 +204,6 @@ fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
         .expect("Failed to execute turbo.");
 
     Ok(command.wait()?.code().unwrap_or(2))
-}
-
-#[derive(Debug, Deserialize)]
-struct PackageJson {
-    dependencies: Option<HashMap<String, String>>,
-    #[serde(rename = "devDependencies")]
-    dev_dependencies: Option<HashMap<String, String>>,
 }
 
 fn main() -> Result<()> {
