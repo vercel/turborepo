@@ -5168,6 +5168,7 @@ dependencies = [
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-ecmascript",
+ "turbopack-swc-utils",
 ]
 
 [[package]]
@@ -5225,6 +5226,7 @@ dependencies = [
  "turbo-tasks-testing",
  "turbopack-core",
  "turbopack-hash",
+ "turbopack-swc-utils",
  "url",
 ]
 
@@ -5282,6 +5284,19 @@ dependencies = [
  "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-hash",
+]
+
+[[package]]
+name = "turbopack-swc-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "swc_core",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack-core",
 ]
 
 [[package]]
