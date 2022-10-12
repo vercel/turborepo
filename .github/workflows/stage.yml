@@ -38,6 +38,6 @@ jobs:
           ./scripts/version.js ${{ inputs.increment }}
           cat version.txt
       - name: Stage Commit
-        run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git rev-parse HEAD)" >> $GITHUB_ENV
+        run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_ENV
       - name: Show Stage Commit
         run: echo "${{ env.STAGE_BRANCH }}"
