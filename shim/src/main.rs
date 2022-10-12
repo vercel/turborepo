@@ -134,47 +134,8 @@ fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     Ok(exit_code.try_into().unwrap())
 }
 
-/// Finds local turbo path given the package.json path. We assume that the node_modules directory
-/// is at the same level as the package.json file.
-///
-/// # Arguments
-///
-/// * `package_json_path`: The location of the package.json file
-///
-/// returns: Result<Option<PathBuf>, Error>
-///
-fn find_local_turbo_path(repo_root: &Path) -> Result<Option<PathBuf>> {
-    let package_json_path = repo_root.join("package.json");
-    let package_json_contents = fs::read_to_string(&package_json_path)?;
-    let package_json: PackageJson = serde_json::from_str(&package_json_contents)?;
-
-    let dev_dependencies_has_turbo = package_json
-        .dev_dependencies
-        .map_or(false, |deps| deps.contains_key("turbo"));
-    let dependencies_has_turbo = package_json
-        .dependencies
-        .map_or(false, |deps| deps.contains_key("turbo"));
-
-    if dev_dependencies_has_turbo || dependencies_has_turbo {
-        let mut local_turbo_path = repo_root.join("node_modules");
-        local_turbo_path.push(".bin");
-        local_turbo_path.push("turbo");
-
-        fs::metadata(&local_turbo_path).map_err(|_| {
-            anyhow!(
-                "Could not find binary in {}.",
-                local_turbo_path.to_string_lossy()
-            )
-        })?;
-
-        Ok(Some(local_turbo_path))
-    } else {
-        Ok(None)
-    }
-}
-
 impl RepoState {
-    /// Infers `RepoState` from current directory. Can either be `RepoState::MultiPackage` or `RepoState::SinglePackage`.
+    /// Infers `RepoState` from current directory.
     ///
     /// # Arguments
     ///
@@ -209,12 +170,14 @@ impl RepoState {
             });
         }
 
-        // What we look for next is either a `package.json` file or a `pnpm-workspace.yaml` file.
+        // What we look for next is a directory that contains a `package.json`.
         let potential_roots = current_dir
             .ancestors()
             .filter(|path| fs::metadata(path.join("package.json")).is_ok());
 
         let mut first_package_json_dir = None;
+        // We loop through these directories and see if there are workspaces defined in them,
+        // either in the `package.json` or `pnm-workspaces.yml`
         for dir in potential_roots {
             if first_package_json_dir.is_none() {
                 first_package_json_dir = Some(dir)
@@ -228,7 +191,7 @@ impl RepoState {
             if is_workspace {
                 return Ok(Self {
                     root: dir.to_path_buf(),
-                    mode: RepoMode::SinglePackage,
+                    mode: RepoMode::MultiPackage,
                 });
             }
         }
@@ -277,8 +240,7 @@ fn is_run_command(clap_args: &Args) -> bool {
 /// returns: Result<i32, Error>
 ///
 fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
-    let local_turbo_path = find_local_turbo_path(&turbo_state.repo_state.root)?
-        .ok_or_else(|| anyhow!("No local turbo installation found in package.json."))?;
+    let local_turbo_path = repo_root.join("node_modules").join(".bin").join("turbo");
 
     if !local_turbo_path.try_exists()? {
         return Err(anyhow!(
@@ -288,7 +250,9 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
 
     let mut args: Vec<_> = env::args().skip(1).collect();
 
-    if local_turbo_path == current_exe()? {
+    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
+    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
         return run_current_turbo(args);
     }
 
@@ -306,13 +270,6 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
         .expect("Failed to execute turbo.");
 
     Ok(command.wait()?.code().unwrap_or(2))
-}
-
-#[derive(Debug, Deserialize)]
-struct PackageJson {
-    dependencies: Option<HashMap<String, String>>,
-    #[serde(rename = "devDependencies")]
-    dev_dependencies: Option<HashMap<String, String>>,
 }
 
 fn main() -> Result<()> {
