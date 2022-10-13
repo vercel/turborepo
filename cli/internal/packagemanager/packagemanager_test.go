@@ -371,7 +371,7 @@ func Test_CanPrune(t *testing.T) {
 	cwd, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
 	wants := map[string]want{
-		"nodejs-npm":   {false, false},
+		"nodejs-npm":   {true, false},
 		"nodejs-berry": {false, true},
 		"nodejs-yarn":  {true, false},
 		"nodejs-pnpm":  {true, false},

@@ -12,7 +12,7 @@ This Turborepo includes the following:
 - `@acme/core`: core React components
 - `@acme/utils`: shared React utilities
 - `@acme/tsconfig`: shared `tsconfig.json`s used throughout the monorepo
-- `eslint-preset-acme`: ESLint preset
+- `eslint-config-acme`: ESLint preset
 
 Each package and app is 100% [TypeScript](https://www.typescriptlang.org/).
 
