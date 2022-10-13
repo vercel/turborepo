@@ -12,8 +12,11 @@ const (
 	// CachingStatusEnabled indicates that the server will accept and serve artifacts
 	CachingStatusEnabled
 	// CachingStatusOverLimit indicates that a usage limit has been hit and the
-	// server will temporarily not accept or server artifacts
+	// server will temporarily not accept or serve artifacts
 	CachingStatusOverLimit
+	// CachingStatusPaused indicates that a customer's spending has been paused and the
+	// server will temporarily not accept or serve artifacts
+	CachingStatusPaused
 )
 
 // CachingStatusFromString parses a raw string to a caching status enum value
@@ -25,6 +28,8 @@ func CachingStatusFromString(raw string) (CachingStatus, error) {
 		return CachingStatusEnabled, nil
 	case "over_limit":
 		return CachingStatusOverLimit, nil
+	case "paused":
+		return CachingStatusPaused, nil
 	default:
 		return CachingStatusDisabled, fmt.Errorf("unknown caching status: %v", raw)
 	}

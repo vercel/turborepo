@@ -1,0 +1,18 @@
+[package]
+name = "turbo"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dev-dependencies]
+assert_cmd = "2.0.4"
+
+[dependencies]
+anyhow = { version = "1.0.65", features = ["backtrace"] }
+clap = { version = "4.0.8", features = ["derive"] }
+globset = "0.4.9"
+predicates = "2.1.1"
+serde = { version = "1.0.145", features = ["derive"] }
+serde_json = "1.0.85"
+serde_yaml = "0.9.13"
+walkdir = "2"

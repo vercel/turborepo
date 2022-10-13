@@ -147,12 +147,18 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsoluteSystemPath, exclude
 }
 
 func waitForCookie(root turbopath.AbsoluteSystemPath, events <-chan []fsevents.Event, timeout time.Duration) error {
+	// This cookie needs to be in a location that we're watching, and at this point we can't guarantee
+	// what the root is, or if something like "node_modules/.cache/turbo" would make sense. As a compromise, ensure
+	// that we clean it up even in the event of a failure.
 	cookiePath := root.UntypedJoin(".turbo-cookie")
 	if err := cookiePath.WriteFile([]byte("cookie"), 0755); err != nil {
 		return err
 	}
 	expected := cookiePath.ToString()[1:] // trim leading slash
 	if err := waitForEvent(events, expected, fsevents.ItemCreated, timeout); err != nil {
+		// Attempt to not leave the cookie file lying around.
+		// Ignore the error, since there's not much we can do with it.
+		_ = cookiePath.Remove()
 		return err
 	}
 	if err := cookiePath.Remove(); err != nil {

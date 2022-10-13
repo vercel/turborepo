@@ -30,16 +30,23 @@ func New() *ColorCache {
 	}
 }
 
-// PrefixColor returns a color function for a given package name
-func (c *ColorCache) PrefixColor(name string) colorFn {
+// colorForKey returns a color function for a given package name
+func (c *ColorCache) colorForKey(key string) colorFn {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	colorFn, ok := c.Cache[name]
+	colorFn, ok := c.Cache[key]
 	if ok {
 		return colorFn
 	}
 	c.index++
-	colorFn = c.TermColors[util.PositiveMod(c.index, 5)] // 5 possible colors
-	c.Cache[name] = colorFn
+	colorFn = c.TermColors[util.PositiveMod(c.index, len(c.TermColors))] // 5 possible colors
+	c.Cache[key] = colorFn
 	return colorFn
+}
+
+// PrefixWithColor returns a string consisting of the provided prefix in a consistent
+// color based on the cacheKey
+func (c *ColorCache) PrefixWithColor(cacheKey string, prefix string) string {
+	colorFn := c.colorForKey(cacheKey)
+	return colorFn("%s: ", prefix)
 }
