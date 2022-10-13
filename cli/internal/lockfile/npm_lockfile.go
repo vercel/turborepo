@@ -177,7 +177,7 @@ func (l *NpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath,
 	}, nil
 }
 
-// Encode encode the lockfile representation and write it to the given writer
+// Encode the lockfile representation and write it to the given writer
 func (l *NpmLockfile) Encode(w io.Writer) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")

@@ -35,7 +35,7 @@ Populate cache
   
 
 Bump dependency for b and rebuild
-Both a and b should have a cache miss since npm isn't implemented
+Only b should have a cache miss
   $ patch package-lock.json package-lock.patch
   patching file package-lock.json
   $ ${TURBO} build  --filter=a
