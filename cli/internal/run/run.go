@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -202,17 +203,19 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			return err
 		}
 	}
-	if ui.IsCI && !r.opts.runOpts.noDaemon {
-		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
-	} else if !r.opts.runOpts.noDaemon {
-		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
-		if err != nil {
-			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
-		} else {
-			defer func() { _ = turbodClient.Close() }()
-			r.base.Logger.Debug("running in daemon mode")
-			daemonClient := daemonclient.New(turbodClient)
-			r.opts.runcacheOpts.OutputWatcher = daemonClient
+	if runtime.GOOS != "windows" || r.opts.runOpts.windowsUseDaemon {
+		if ui.IsCI && !r.opts.runOpts.noDaemon {
+			r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+		} else if !r.opts.runOpts.noDaemon {
+			turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
+			if err != nil {
+				r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+			} else {
+				defer func() { _ = turbodClient.Close() }()
+				r.base.Logger.Debug("running in daemon mode")
+				daemonClient := daemonclient.New(turbodClient)
+				r.opts.runcacheOpts.OutputWatcher = daemonClient
+			}
 		}
 	}
 
@@ -538,10 +541,11 @@ type runOpts struct {
 	dryRun     bool
 	dryRunJSON bool
 	// Graph flags
-	graphDot      bool
-	graphFile     string
-	noDaemon      bool
-	singlePackage bool
+	graphDot         bool
+	graphFile        string
+	noDaemon         bool
+	windowsUseDaemon bool
+	singlePackage    bool
 }
 
 var (
@@ -576,13 +580,12 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
 	flags.BoolVar(&opts.singlePackage, "single-package", false, "Run turbo in single-package mode")
 	// This is a no-op flag, we don't need it anymore
-	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
-	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
-	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
-		panic(err)
-	}
-	if err := flags.MarkHidden("no-daemon"); err != nil {
-		panic(err)
+	flags.BoolVar(&opts.windowsUseDaemon, "experimental-use-daemon", false, "Use the experimental turbo daemon on windows")
+	if runtime.GOOS != "windows" {
+		if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
+			// fail fast if we've messed up our flag configuration
+			panic(err)
+		}
 	}
 	if err := flags.MarkHidden("only"); err != nil {
 		// fail fast if we've messed up our flag configuration
