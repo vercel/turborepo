@@ -2,10 +2,7 @@ use std::{env, ffi::OsStr, process::Command, path::PathBuf};
 
 
 fn main() {
-    let is_release = match env::var("PROFILE") {
-        Ok(profile) if profile == "release" => true,
-        _ => false
-    };
+    let is_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
     let lib_search_path = if is_release {
         expect_release_lib()
     } else {
@@ -40,18 +37,16 @@ fn expect_release_lib() -> String {
 }
 
 fn build_debug_libturbo() -> String {
-    let path = env::current_dir().expect("working directory");
-    println!("wd: {:?}", path);
     let cli_path = "../cli";
     let mut cmd = new_command("make");
-    cmd.current_dir(&cli_path);
+    cmd.current_dir(cli_path);
     cmd.arg("libturbo.a");
     let mut child = cmd.spawn().expect("failed to spawn make libturbo.a");
     child.wait().expect("failed to build libturbo.a");
     cli_path.to_string()
 }
 
-fn new_command<S: AsRef<OsStr>>(program: S) -> Command {
+fn new_command(program: impl AsRef<OsStr>) -> Command {
   let mut cmd = Command::new("sh");
   cmd.args(["-c", "exec \"$0\" \"$@\""]).arg(program);
   cmd
