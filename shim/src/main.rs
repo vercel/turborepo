@@ -20,7 +20,7 @@ use std::{
 };
 
 #[derive(Parser, Debug, Serialize, Default, PartialEq)]
-#[clap(author, version, about = "Turbocharge your monorepo", long_about = None, disable_help_subcommand = true)]
+#[clap(author, version, about = "Turbocharge your monorepo", long_about = None, ignore_errors = true, disable_help_subcommand = true)]
 struct Args {
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
