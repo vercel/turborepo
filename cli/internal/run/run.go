@@ -577,11 +577,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.singlePackage, "single-package", false, "Run turbo in single-package mode")
 	// This is a no-op flag, we don't need it anymore
 	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
-	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
 	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
-		panic(err)
-	}
-	if err := flags.MarkHidden("no-daemon"); err != nil {
 		panic(err)
 	}
 	if err := flags.MarkHidden("only"); err != nil {
