@@ -356,7 +356,7 @@ fs.copyFileSync(
           ...options,
         });
       case "npm":
-        return execa.sync("npm", ["run", command, ...(args || [])], {
+        return execa.sync("npm", [command, ...(args || [])], {
           cwd: this.root,
           shell: true,
           ...options,
