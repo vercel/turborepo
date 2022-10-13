@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -207,7 +208,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	} else if !r.opts.runOpts.noDaemon {
 		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
-			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+			if runtime.GOOS != "windows" {
+				// We expect the daemon to work well in non-windows scenarios.
+				// Windows seems to be a bit flakier on daemon functionality, so turn down the warnings
+				// until we've ironed out some the edige cases.
+				r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
+			}
 		} else {
 			defer func() { _ = turbodClient.Close() }()
 			r.base.Logger.Debug("running in daemon mode")
