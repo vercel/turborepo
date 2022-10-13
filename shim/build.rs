@@ -34,7 +34,7 @@ fn expect_release_lib() -> String {
     };
     let mut dir = PathBuf::from("libturbo");
     // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons, turbo-${OS}
-    dir.push(format!("turbo-{}_{}_{}", platform, platform, arch));
+    dir.push(format!("turbo-{platform}_{platform}_{arch}"));
     dir.push("lib");
     dir.to_string_lossy().to_string()
 }
