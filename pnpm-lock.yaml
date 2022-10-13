@@ -62,7 +62,9 @@ importers:
       globby: 11.1.0
       ngraph.generators: ^19.3.0
       shelljs: ^0.8.4
+      tar: 6.1.11
       uvu: ^0.5.3
+      zstd-codec: 0.1.4
     devDependencies:
       copy-template-dir: 1.4.0
       esbuild: 0.15.7
@@ -73,7 +75,9 @@ importers:
       globby: 11.1.0
       ngraph.generators: 19.3.1
       shelljs: 0.8.5
+      tar: 6.1.11
       uvu: 0.5.6
+      zstd-codec: 0.1.4
 
   crates/next-dev/tests:
     specifiers:
@@ -549,7 +553,7 @@ importers:
       eslint: 7.32.0
       jest: 27.5.1
       strip-ansi: 6.0.1
-      ts-jest: 27.1.5_my3zrisxgeytnovjsc5rlbgarq
+      ts-jest: 27.1.5_zvdvir2mjdmz4zdlrzs7xvgk4e
       tsconfig: link:../tsconfig
       tsup: 5.12.9_typescript@4.8.3
       turbo-types: link:../turbo-types
@@ -23495,6 +23499,10 @@ packages:
 
   /zen-observable/0.8.15:
     resolution: {integrity: sha512-PQ2PC7R9rslx84ndNBZB/Dkv8V8fZEpk83RLgXtYd0fwUgEjseMn1Dgajh2x6S8QbZAFa9p2qVCEuYZNgve0dQ==}
+    dev: true
+
+  /zstd-codec/0.1.4:
+    resolution: {integrity: sha512-KYnWoFWgGtWyQEKNnUcb3u8ZtKO8dn5d8u+oGpxPlopqsPyv60U8suDyfk7Z7UtAO6Sk5i1aVcAs9RbaB1n36A==}
     dev: true
 
   /zwitch/2.0.2:

@@ -51,9 +51,14 @@ func (p AbsoluteSystemPath) Dir() AbsoluteSystemPath {
 	return AbsoluteSystemPath(filepath.Dir(p.ToString()))
 }
 
-// MkdirAll implements os.MkdirAll(p, DirPermissions|0644)
-func (p AbsoluteSystemPath) MkdirAll() error {
-	return os.MkdirAll(p.ToString(), _dirPermissions|0644)
+// Mkdir implements os.Mkdir(p, perm)
+func (p AbsoluteSystemPath) Mkdir(perm os.FileMode) error {
+	return os.Mkdir(p.ToString(), perm)
+}
+
+// MkdirAll implements os.MkdirAll(p, perm)
+func (p AbsoluteSystemPath) MkdirAll(perm os.FileMode) error {
+	return os.MkdirAll(p.ToString(), perm)
 }
 
 // Open implements os.Open(p) for an AbsoluteSystemPath
@@ -212,4 +217,24 @@ func (p AbsoluteSystemPath) EvalSymlinks() (AbsoluteSystemPath, error) {
 		return "", err
 	}
 	return AbsoluteSystemPath(result), nil
+}
+
+// HasPrefix is strings.HasPrefix for paths, ensuring that it matches on separator boundaries.
+// This does NOT perform Clean in advance.
+func (p AbsoluteSystemPath) HasPrefix(prefix AbsoluteSystemPath) bool {
+	prefixLen := len(prefix)
+	pathLen := len(p)
+
+	if prefixLen > pathLen {
+		// Can't be a prefix if longer.
+		return false
+	} else if prefixLen == pathLen {
+		// Can be a prefix if they're equal, but otherwise no.
+		return p == prefix
+	}
+
+	// otherPath is definitely shorter than p.
+	// We need to confirm that p[len(otherPath)] is a system separator.
+
+	return strings.HasPrefix(p.ToString(), prefix.ToString()) && os.IsPathSeparator(p[prefixLen])
 }
