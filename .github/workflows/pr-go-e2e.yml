@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -32,4 +34,3 @@ jobs:
       - name: Integration Tests
         if: matrix.os != 'windows-latest'
         run: pnpm -- turbo run integration-tests --filter=cli
-

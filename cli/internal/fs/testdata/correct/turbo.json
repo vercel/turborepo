@@ -7,18 +7,12 @@
         // mocked test comment
         "^build"
       ],
-      "outputs": [
-        "dist/**",
-        "!dist/assets/**",
-        ".next/**"
-      ],
+      "outputs": ["dist/**", "!dist/assets/**", ".next/**"],
       "outputMode": "new-only"
     }, // mocked test comment
     "lint": {
       "outputs": [],
-      "dependsOn": [
-        "$MY_VAR"
-      ],
+      "dependsOn": ["$MY_VAR"],
       "cache": true,
       "outputMode": "new-only"
     },
@@ -28,17 +22,15 @@
     },
     /* mocked test comment */
     "publish": {
-      "outputs": [
-        "dist/**"
-      ],
+      "outputs": ["dist/**"],
       "inputs": [
-         /*
+        /*
           mocked test comment
          */
         "build/**/*"
       ],
       "dependsOn": [
-         /* mocked test comment */"^publish",
+        /* mocked test comment */ "^publish",
         "^build",
         "build",
         "admin#lint"
@@ -46,11 +38,7 @@
       "cache": false
     }
   },
-  "globalDependencies": [
-    "some-file",
-    "../another-dir/**",
-    "$GLOBAL_ENV_VAR"
-  ],
+  "globalDependencies": ["some-file", "../another-dir/**", "$GLOBAL_ENV_VAR"],
   "globlaEnv": ["SOME_VAR", "ANOTHER_VAR"],
   "remoteCache": {
     "teamId": "team_id",
