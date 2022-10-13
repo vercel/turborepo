@@ -19,7 +19,6 @@ func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
 	for i, arg := range unsafe.Slice(argv, arglen) {
 		args[i] = C.GoString(arg)
 	}
-
 	exitCode := cmd.RunWithArgs(args, turboVersion)
 	return C.uint(exitCode)
 }

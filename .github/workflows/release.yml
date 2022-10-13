@@ -144,21 +144,6 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      - name: Download Cross-compiled Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-snapshot-cross
-          path: cli/dist-cross
-
-      - name: Download Darwin Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-snapshot-darwin
-          path: cli/dist-darwin
-
-      - name: Combine Artifacts
-        run: cd cli && mkdir -p dist-combined && cp -a dist-cross/. dist-combined/ && cp -a dist-darwin/. dist-combined/
-
       - name: Release
         run: cd cli && make publish
         env:

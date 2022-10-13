@@ -22,10 +22,6 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
 
-shim: libturbo.a
-	cargo build --manifest-path ../shim/Cargo.toml
-
-# CGO_ENABLED=1 go build -buildmode=c-archive -o libturbo.a ./internal/cmd
 libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
 
