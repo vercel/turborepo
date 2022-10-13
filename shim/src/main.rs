@@ -19,48 +19,48 @@ use std::{
     process,
 };
 
-#[derive(Parser, Debug, Serialize)]
+#[derive(Parser, Debug, Serialize, Default, PartialEq)]
 #[clap(author, version, about = "Turbocharge your monorepo", long_about = None, disable_help_subcommand = true)]
 struct Args {
     /// Override the endpoint for API calls
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     api: Option<String>,
     /// Force color usage in the terminal
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     color: bool,
     /// Specify a file to save a cpu profile
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     cpuprofile: Option<String>,
     /// The directory in which to run turbo
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     cwd: Option<String>,
     /// Specify a file to save a pprof heap profile
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     heap: Option<String>,
     /// Override the login endpoint
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     login: Option<String>,
     /// Suppress color usage in the terminal
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     no_color: bool,
     /// When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     preflight: bool,
     /// Set the team slug for API calls
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     team: Option<String>,
     /// Set the auth token for API calls
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     token: Option<String>,
     /// Specify a file to save a pprof trace
-    #[clap(long, value_parser)]
+    #[clap(long, global = true, value_parser)]
     trace: Option<String>,
     /// verbosity
-    #[clap(short, long, value_parser)]
+    #[clap(short, long, global = true, value_parser)]
     verbosity: Option<u8>,
     #[clap(subcommand)]
     command: Option<Command>,
-    task: Option<String>,
+    tasks: Vec<String>,
 }
 
 static TURBO_JSON: &str = "turbo.json";
@@ -68,7 +68,7 @@ static TURBO_JSON: &str = "turbo.json";
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the --single-package
 /// flag into non-build commands.
-#[derive(Subcommand, Debug, Serialize)]
+#[derive(Subcommand, Debug, Serialize, PartialEq)]
 enum Command {
     /// Get the path to the Turbo binary
     Bin,
@@ -231,7 +231,7 @@ impl RepoState {
 ///
 fn is_run_command(clap_args: &Args) -> bool {
     let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
-    let is_implicit_run = clap_args.command.is_none() && clap_args.task.is_some();
+    let is_implicit_run = clap_args.command.is_none() && !clap_args.tasks.is_empty();
 
     is_explicit_run || is_implicit_run
 }
@@ -286,7 +286,7 @@ fn main() -> Result<()> {
         env::current_dir()?
     };
 
-    if clap_args.command.is_none() && clap_args.task.is_none() {
+    if clap_args.command.is_none() && clap_args.tasks.is_empty() {
         process::exit(1);
     }
 
@@ -305,4 +305,69 @@ fn main() -> Result<()> {
     };
 
     process::exit(exit_code)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Args, Command};
+    use clap::Parser;
+
+    #[test]
+    fn test_parse_run() {
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run {
+                    tasks: vec!["build".to_string()]
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "run", "build", "lint", "test"]).unwrap(),
+            Args {
+                command: Some(Command::Run {
+                    tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()]
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "build"]).unwrap(),
+            Args {
+                tasks: vec!["build".to_string()],
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "build", "lint", "test"]).unwrap(),
+            Args {
+                tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
+                ..Args::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_bin() {
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "bin"]).unwrap(),
+            Args {
+                command: Some(Command::Bin),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "--cwd", "../examples/basic", "bin"]).unwrap(),
+            Args {
+                command: Some(Command::Bin),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            }
+        );
+    }
 }
