@@ -64,7 +64,7 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.is_empty() {
-                    return Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"));
+                    return Err(anyhow!("package.json: no packages found. Turborepo requires packages to be defined in the root package.json"));
                 } else {
                     package_json.workspaces
                 }

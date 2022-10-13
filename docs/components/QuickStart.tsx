@@ -1,11 +1,15 @@
 import {
+  BookOpenIcon,
   CloudDownloadIcon,
   CloudUploadIcon,
+  LightBulbIcon,
   LightningBoltIcon,
+  PencilIcon,
   ServerIcon,
   SparklesIcon,
 } from "@heroicons/react/outline";
 import { DetailedFeatureLink } from "./Feature";
+import Turbo from "./logos/Turbo";
 
 export const QuickStartArea = () => {
   return (
@@ -25,6 +29,23 @@ export const QuickStartArea = () => {
           name: "Add to existing monorepo",
         }}
         href="/docs/getting-started/existing-monorepo"
+      ></DetailedFeatureLink>
+
+      <DetailedFeatureLink
+        feature={{
+          Icon: BookOpenIcon,
+          description: `Learn the basics of monorepos before you dive in to Turborepo.`,
+          name: "Read the Monorepo Handbook",
+        }}
+        href="/docs/handbook"
+      ></DetailedFeatureLink>
+      <DetailedFeatureLink
+        feature={{
+          Icon: LightBulbIcon,
+          description: `Understand why monorepos don't scale - and why Turborepo is the solution.`,
+          name: "Why Turborepo?",
+        }}
+        href="/docs/core-concepts/why-turborepo"
       ></DetailedFeatureLink>
     </div>
   );

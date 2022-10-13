@@ -45,7 +45,7 @@ type Helper struct {
 	// UserConfigPath is the path to where we expect to find
 	// a user-specific config file, if one is present. Public
 	// to allow overrides in tests
-	UserConfigPath turbopath.AbsolutePath
+	UserConfigPath turbopath.AbsoluteSystemPath
 
 	cleanupsMu sync.Mutex
 	cleanups   []io.Closer
@@ -147,8 +147,12 @@ func NewHelper(turboVersion string) *Helper {
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
 func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
+	// terminal is for color/no-color output
 	terminal := h.getUI(flags)
+
+	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
+
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +190,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 		h.TurboVersion,
 		h.clientOpts,
 	)
+
 	return &CmdBase{
 		UI:           terminal,
 		Logger:       logger,
@@ -202,7 +207,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 type CmdBase struct {
 	UI           cli.Ui
 	Logger       hclog.Logger
-	RepoRoot     turbopath.AbsolutePath
+	RepoRoot     turbopath.AbsoluteSystemPath
 	APIClient    *client.ApiClient
 	RepoConfig   *config.RepoConfig
 	UserConfig   *config.UserConfig
@@ -215,4 +220,21 @@ func (b *CmdBase) LogError(format string, args ...interface{}) {
 	err := fmt.Errorf(format, args...)
 	b.Logger.Error("error", err)
 	b.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+}
+
+// LogWarning logs an error and outputs it to the UI.
+func (b *CmdBase) LogWarning(prefix string, err error) {
+	b.Logger.Warn(prefix, "warning", err)
+
+	if prefix != "" {
+		prefix = " " + prefix + ": "
+	}
+
+	b.UI.Warn(fmt.Sprintf("%s%s%s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
+}
+
+// LogInfo logs an message and outputs it to the UI.
+func (b *CmdBase) LogInfo(msg string) {
+	b.Logger.Info(msg)
+	b.UI.Info(fmt.Sprintf("%s%s", ui.InfoPrefix, color.WhiteString(" %v", msg)))
 }

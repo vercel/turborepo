@@ -264,6 +264,8 @@ func (l *login) verifyCachingEnabled(teamID string) error {
 		return errNeedCachingEnabled
 	case util.CachingStatusOverLimit:
 		return errOverage
+	case util.CachingStatusPaused:
+		return errPaused
 	case util.CachingStatusEnabled:
 	default:
 	}

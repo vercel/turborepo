@@ -7,11 +7,6 @@ else
 	UNAME := $(shell uname -s)
 endif
 
-USE_CGO = 0
-ifeq ($(UNAME), Darwin)
-	USE_CGO = 1
-endif
-
 # Strip debug info
 GO_FLAGS += "-ldflags=-s -w"
 
@@ -25,7 +20,7 @@ SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
 turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=$(USE_CGO) go build $(GO_FLAGS) ./cmd/turbo
+	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
 
 shim: libturbo.a
 	cargo build --manifest-path ../shim/Cargo.toml
@@ -55,6 +50,10 @@ check-go-version:
 # Go's race detector does not run correctly on that version. With this flag
 # you can run "TURBO_RACE= make test-go" to disable the race detector.
 TURBO_RACE ?= -race
+
+ifeq ($(UNAME), Windows)
+	TURBO_RACE=
+endif
 
 clean-go:
 	go clean -testcache ./...
@@ -92,7 +91,7 @@ build: install
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
-	make -j3 bench/turbo test-go lint-go
+	make -j3 bench/turbo test-go
 
 .PHONY: publish-turbo-cross
 publish-turbo-cross: prepublish
@@ -114,9 +113,13 @@ snapshot-turbo-darwin:
 snapshot-turbo: clean
 	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
-publish: clean build
+.PHONY: stage-release
+stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
+	cat $(CLI_DIR)/../version.txt
+	git diff -- $(CLI_DIR)/../version.txt
+	git status
 	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
@@ -130,13 +133,21 @@ publish: clean build
 	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
 
+	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
+	git push origin staging-$(TURBO_VERSION) --tags --force
+
+.PHONY: publish
+publish: clean build
+	echo "Version: $(TURBO_VERSION)"
+	echo "Tag: $(TURBO_TAG)"
 
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
 
 	# Publishes the native npm modules.
 	goreleaser release --rm-dist -f combined-release.yml
@@ -153,10 +164,6 @@ publish: clean build
 	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
-
-	# Force push to ensure that the version used for the release is published.
-	# This _intentionally_ clobbers. If it does so, redo the clobbered thing.
-	git push -f origin main "v$(TURBO_VERSION)"
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
@@ -205,5 +212,15 @@ $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES)
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
+
+# use target testbed-<some directory under integration_tests> to set up the testbed directory
+.PHONY=testbed-%
+testbed-%:
+	$(eval $@_TEST := $(@:testbed-%=%))
+	@echo "testbed setup $($@_TEST)"
+	rm -rf testbed
+	mkdir -p testbed
+	./integration_tests/$($@_TEST)/setup.sh testbed
+

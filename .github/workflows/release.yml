@@ -1,4 +1,4 @@
-name: Release
+name: Release From Branch
 
 env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -6,55 +6,34 @@ env:
 on:
   workflow_dispatch:
     inputs:
-      increment:
-        description: "SemVer Increment"
-        required: true
-        default: "prerelease"
-        type: choice
-        options:
-          - prerelease
-          - prepatch
-          - preminor
-          - premajor
-          - patch
-          - minor
-          - major
-      identifier:
-        description: "npm Tag"
-        required: true
-        default: "canary"
-        type: choice
-        options:
-          - canary
-          - latest
+      release_branch:
+        description: "Staging branch to run release from"
 
-# Plan:
-# 1. verification step -> lint, test
-# 2. in parallel, build artifacts
-# 3. Download artifacts, run publish process, including npm. No building / verification here
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.TURBOBOT }}
+          ref: ${{ inputs.release_branch }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: test
+      - name: Test
         run: pnpm -- turbo run test --filter=cli --color
 
   darwin:
+    name: "Build Darwin Binares"
     needs: [smoke-test]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.TURBOBOT }}
+          ref: ${{ inputs.release_branch }}
+      - run: git fetch origin --tags
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -69,27 +48,28 @@ jobs:
           install-only: true
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-          cat version.txt
       - name: Build Artifacts
         run: cd cli && make publish-turbo-darwin
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: turbo-artifacts-darwin
           path: cli/dist-darwin
 
+  # compiles linux and windows in a container
   cross:
+    name: "Build Linux and Windows Binaries"
     needs: [smoke-test]
     runs-on: ubuntu-latest
     container:
-      image: docker://ghcr.io/gsoltis/turbo-cross:v1.18.5
+      image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.TURBOBOT }}
+          ref: "${{ inputs.release_branch }}"
+      - run: git fetch origin --tags
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -104,12 +84,10 @@ jobs:
           install-only: true
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-          cat version.txt
       - name: Build Artifacts
         run: cd cli && make publish-turbo-cross
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -122,26 +100,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.TURBOBOT }}
+          ref: "${{ inputs.release_branch }}"
+      - run: git fetch origin --tags
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      # - name: golangci-lint
-      #   uses: golangci/golangci-lint-action@v3
-      #   with:
-      #     # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-      #     version: latest
-
-      #     # Optional: working directory, useful for monorepos
-      #     working-directory: cli
-
-      #     # `golangci-lint-action` does not have an "install only" option.
-      #     # We ignore the output of this run, instead using it just to install the binary.
-      #     args: --issues-exit-code=0
 
       - name: Configure git
         run: |
@@ -157,10 +123,26 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      - name: Version
-        run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.identifier }}
-          cat version.txt
+      # Download the prebuilt binaries for each platform,
+      # combine them into a single dist-combined folder,
+      # then delegate to goreleaser / Makefile for deploy.
+      # Finally, set up a PR for the branch we released off of
+      - name: Download Cross-compiled Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: turbo-artifacts-cross
+          path: cli/dist-cross
+
+      - name: Download Darwin Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: turbo-artifacts-darwin
+          path: cli/dist-darwin
+
+      - name: Combine Artifacts
+        run: cd cli && mkdir -p dist-combined && cp -a dist-cross/. dist-combined/ && cp -a dist-darwin/. dist-combined/
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Download Cross-compiled Artifacts
         uses: actions/download-artifact@v3
@@ -181,3 +163,13 @@ jobs:
         run: cd cli && make publish
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
+      - uses: repo-sync/pull-request@v2
+        with:
+          source_branch: ${{ inputs.release_branch }}
+          destination_branch: main
+          pr_title: Merge release branch ${{ inputs.release_branch }}
+          pr_body: ":crown: Merge release branch back to main"
+          pr_reviewer: ${{ github.actor }},gsoltis
+          pr_allow_empty: true
+          github_token: ${{ secrets.TURBOBOT }}

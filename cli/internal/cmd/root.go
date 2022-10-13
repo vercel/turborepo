@@ -78,7 +78,7 @@ const _defaultCmd string = "run"
 // resolveArgs adds a default command to the supplied arguments if none exists.
 func resolveArgs(root *cobra.Command, args []string) []string {
 	for _, arg := range args {
-		if arg == "--help" || arg == "-h" || arg == "--version" {
+		if arg == "--help" || arg == "-h" || arg == "--version" || arg == "completion" {
 			return args
 		}
 	}

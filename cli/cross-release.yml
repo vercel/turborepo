@@ -45,3 +45,9 @@ builds:
         env:
           - CC=x86_64-w64-mingw32-gcc
           - CXX=x86_64-w64-mingw32-g++
+
+archives:
+  - format: binary
+
+release:
+  disable: true

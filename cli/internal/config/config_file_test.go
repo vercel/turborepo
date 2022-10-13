@@ -10,7 +10,7 @@ import (
 )
 
 func TestReadRepoConfigWhenMissing(t *testing.T) {
-	testDir := fs.AbsolutePathFromUpstream(t.TempDir()).Join("config.json")
+	testDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
@@ -23,8 +23,37 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 	}
 }
 
+func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
+	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
+
+	teamID := "some-id"
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamId":"%v"}`, teamID)), 0644), "WriteFile")
+	slug := "my-team-slug"
+	assert.NilError(t, flags.Set("team", slug), "flags.Set")
+	apiURL := "http://my-login-url"
+	assert.NilError(t, flags.Set("api", apiURL), "flags.Set")
+
+	config, err := ReadRepoConfigFile(testConfigFile, flags)
+	if err != nil {
+		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
+	}
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.TeamID != "" {
+		t.Errorf("TeamID got %v, want <empty string>", remoteConfig.TeamID)
+	}
+	if remoteConfig.TeamSlug != slug {
+		t.Errorf("TeamSlug got %v, want %v", remoteConfig.TeamSlug, slug)
+	}
+	if remoteConfig.APIURL != apiURL {
+		t.Errorf("APIURL got %v, want %v", remoteConfig.APIURL, apiURL)
+	}
+}
+
 func TestRepoConfigIncludesDefaults(t *testing.T) {
-	testConfigFile := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
+	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
@@ -48,8 +77,8 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 }
 
 func TestWriteRepoConfig(t *testing.T) {
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
-	testConfigFile := repoRoot.Join(".turbo", "config.json")
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	testConfigFile := repoRoot.UntypedJoin(".turbo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
@@ -80,7 +109,7 @@ func TestWriteRepoConfig(t *testing.T) {
 }
 
 func TestWriteUserConfig(t *testing.T) {
-	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
+	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddUserConfigFlags(flags)
 	// Non-existent config file should get empty values
@@ -108,7 +137,7 @@ func TestWriteUserConfig(t *testing.T) {
 }
 
 func TestUserConfigFlags(t *testing.T) {
-	configPath := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
+	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddUserConfigFlags(flags)
 

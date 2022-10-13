@@ -78,6 +78,13 @@ func CopyFile(from *LstatCachedFile, to string) error {
 		if err := EnsureDir(to); err != nil {
 			return err
 		}
+		if _, err := os.Lstat(to); err == nil {
+			// target link file exist, should remove it first
+			err := os.Remove(to)
+			if err != nil {
+				return err
+			}
+		}
 		return os.Symlink(target, to)
 	}
 	fromFile, err := from.Path.Open()

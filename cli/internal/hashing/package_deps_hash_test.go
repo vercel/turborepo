@@ -48,8 +48,8 @@ func TestSpecialCharacters(t *testing.T) {
 	}
 
 	fixturePath := getFixture(1)
-	newlinePath := turbopath.AnchoredSystemPath("new\nline")
-	quotePath := turbopath.AnchoredSystemPath("\"quote\"")
+	newlinePath := turbopath.AnchoredUnixPath("new\nline").ToSystemPath()
+	quotePath := turbopath.AnchoredUnixPath("\"quote\"").ToSystemPath()
 	newline := newlinePath.RestoreAnchor(fixturePath)
 	quote := quotePath.RestoreAnchor(fixturePath)
 
@@ -83,7 +83,7 @@ func TestSpecialCharacters(t *testing.T) {
 			name:     "Quotes",
 			rootPath: fixturePath,
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath(quotePath),
+				quotePath,
 			},
 			want: map[turbopath.AnchoredUnixPath]string{
 				quotePath.ToUnixPath(): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -93,7 +93,7 @@ func TestSpecialCharacters(t *testing.T) {
 			name:     "Newlines",
 			rootPath: fixturePath,
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath(newlinePath),
+				newlinePath,
 			},
 			want: map[turbopath.AnchoredUnixPath]string{
 				newlinePath.ToUnixPath(): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -138,9 +138,9 @@ func Test_gitHashObject(t *testing.T) {
 			name:     "Absolute paths come back relative to rootPath",
 			rootPath: fixturePath.Join("child"),
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath(filepath.Join("..", "root.json")),
-				turbopath.AnchoredSystemPath("child.json"),
-				turbopath.AnchoredSystemPath(filepath.Join("grandchild", "grandchild.json")),
+				turbopath.AnchoredUnixPath("../root.json").ToSystemPath(),
+				turbopath.AnchoredUnixPath("child.json").ToSystemPath(),
+				turbopath.AnchoredUnixPath("grandchild/grandchild.json").ToSystemPath(),
 			},
 			want: map[turbopath.AnchoredUnixPath]string{
 				"../root.json":               "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -152,7 +152,7 @@ func Test_gitHashObject(t *testing.T) {
 			name:     "Traverse outside of the repo",
 			rootPath: fixturePath.Join(traversePath.ToSystemPath(), ".."),
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath("null.json"),
+				turbopath.AnchoredUnixPath("null.json").ToSystemPath(),
 			},
 			want:    nil,
 			wantErr: true,
@@ -161,7 +161,7 @@ func Test_gitHashObject(t *testing.T) {
 			name:     "Nonexistent file",
 			rootPath: fixturePath,
 			filesToHash: []turbopath.AnchoredSystemPath{
-				turbopath.AnchoredSystemPath("nonexistent.json"),
+				turbopath.AnchoredUnixPath("nonexistent.json").ToSystemPath(),
 			},
 			want:    nil,
 			wantErr: true,
@@ -198,7 +198,7 @@ func Test_getTraversePath(t *testing.T) {
 		},
 		{
 			name:     "Traverse out of git repo",
-			rootPath: fixturePath.Join("..", "..", "..", ".."),
+			rootPath: fixturePath.UntypedJoin("..", "..", "..", ".."),
 			want:     "",
 			wantErr:  true,
 		},
@@ -217,7 +217,7 @@ func Test_getTraversePath(t *testing.T) {
 	}
 }
 
-func requireGitCmd(t *testing.T, repoRoot turbopath.AbsolutePath, args ...string) {
+func requireGitCmd(t *testing.T, repoRoot turbopath.AbsoluteSystemPath, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoRoot.ToString()
@@ -238,30 +238,30 @@ func TestGetPackageDeps(t *testing.T) {
 	//     dir/
 	//       nested-file
 
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
-	myPkgDir := repoRoot.Join("my-pkg")
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	myPkgDir := repoRoot.UntypedJoin("my-pkg")
 
 	// create the dir first
-	err := myPkgDir.MkdirAll()
+	err := myPkgDir.MkdirAll(0775)
 	assert.NilError(t, err, "CreateDir")
 
 	// create file 1
-	committedFilePath := myPkgDir.Join("committed-file")
+	committedFilePath := myPkgDir.UntypedJoin("committed-file")
 	err = committedFilePath.WriteFile([]byte("committed bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create file 2
-	deletedFilePath := myPkgDir.Join("deleted-file")
+	deletedFilePath := myPkgDir.UntypedJoin("deleted-file")
 	err = deletedFilePath.WriteFile([]byte("delete-me"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create file 3
-	nestedPath := myPkgDir.Join("dir", "nested-file")
+	nestedPath := myPkgDir.UntypedJoin("dir", "nested-file")
 	assert.NilError(t, nestedPath.EnsureDir(), "EnsureDir")
 	assert.NilError(t, nestedPath.WriteFile([]byte("nested"), 0644), "WriteFile")
 
 	// create a package.json
-	packageJSONPath := myPkgDir.Join("package.json")
+	packageJSONPath := myPkgDir.UntypedJoin("package.json")
 	err = packageJSONPath.WriteFile([]byte("{}"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
@@ -277,12 +277,12 @@ func TestGetPackageDeps(t *testing.T) {
 	assert.NilError(t, err, "Remove")
 
 	// create another untracked file in git
-	uncommittedFilePath := myPkgDir.Join("uncommitted-file")
+	uncommittedFilePath := myPkgDir.UntypedJoin("uncommitted-file")
 	err = uncommittedFilePath.WriteFile([]byte("uncommitted bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	// create an untracked file in git up a level
-	rootFilePath := repoRoot.Join("new-root-file")
+	rootFilePath := repoRoot.UntypedJoin("new-root-file")
 	err = rootFilePath.WriteFile([]byte("new-root bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
 

@@ -63,6 +63,8 @@ struct Args {
     task: Option<String>,
 }
 
+static TURBO_JSON: &str = "turbo.json";
+
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the --single-package
 /// flag into non-build commands.
@@ -109,7 +111,7 @@ struct TurboState {
     cli_args: Args,
 }
 
-/// Runs the turbo in the current binary
+/// Runs the Go code linked in current binary.
 ///
 /// # Arguments
 ///
@@ -118,12 +120,9 @@ struct TurboState {
 /// returns: Result<i32, Error>
 ///
 fn run_current_turbo(clap_args: Args, args: Vec<String>) -> Result<i32> {
-    match clap_args.command {
-        Some(Command::Bin) => {
-            commands::bin::run()?;
-            return Ok(0);
-        }
-        _ => {}
+    if let Some(Command::Bin) = clap_args.command {
+        commands::bin::run()?;
+        return Ok(0);
     }
 
     let mut args = args
@@ -136,7 +135,6 @@ fn run_current_turbo(clap_args: Args, args: Vec<String>) -> Result<i32> {
     args.shrink_to_fit();
     let argc: c_int = args.len() as c_int;
     let argv = args.as_mut_ptr();
-
     let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
     Ok(exit_code.try_into().unwrap())
 }
@@ -155,7 +153,7 @@ impl RepoState {
         // a `turbo.json` file.
         let root_path = current_dir
             .ancestors()
-            .find(|p| fs::metadata(p.join("turbo.json")).is_ok());
+            .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
 
         // If that directory exists, then we figure out if there are workspaces defined in it
         // NOTE: This may change with multiple `turbo.json` files
@@ -207,7 +205,10 @@ impl RepoState {
         // and use that in single package mode.
         let root = first_package_json_dir
             .ok_or_else(|| {
-                anyhow!("Unable to find `turbo.json` or `package.json` in current path")
+                anyhow!(
+                    "Unable to find `{}` or `package.json` in current path",
+                    TURBO_JSON
+                )
             })?
             .to_path_buf();
 
@@ -291,7 +292,7 @@ fn main() -> Result<()> {
 
     let repo_state = RepoState::infer(&current_dir)?;
     let turbo_state = TurboState {
-        repo_state: repo_state.clone(),
+        repo_state,
         cli_args: clap_args,
     };
 
