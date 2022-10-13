@@ -93,6 +93,10 @@ Add [`turbo`](https://www.npmjs.com/package/turbo) as a development dependency a
 
 The `turbo` package is a shell script that will install the proper `turbo-<os>-<arch>` package for your operating system and architecture.
 
+<Callout>
+  Note: Linux builds of `turbo` link against `glibc`. For Alpine Docker environments, you will need to ensure libc6-compat is installed as well, via `RUN apk add --no-cache libc6-compat`
+</Callout>
+
 ## Create `turbo.json`
 
 In the root of your monorepo, create an empty file named `turbo.json`. This will hold the configuration for Turborepo.

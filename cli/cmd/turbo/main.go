@@ -1,8 +1,5 @@
 package main
 
-// static int cgoCheck() {
-//     return 2;
-// }
 import "C"
 import (
 	"os"
@@ -23,6 +20,6 @@ func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
 		args[i] = C.GoString(arg)
 	}
 
-	exitCode := cmd.RunWithArgs(args, "my-version")
+	exitCode := cmd.RunWithArgs(args, turboVersion)
 	return C.uint(exitCode)
 }

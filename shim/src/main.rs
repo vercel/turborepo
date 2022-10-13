@@ -264,10 +264,13 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
 
     let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
     // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
+    // the Go code linked in the current binary.
     if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
         return run_current_turbo(turbo_state.cli_args, args);
     }
 
+    // Otherwise, we spawn a process that executes the local turbo
+    // that we've found in node_modules/.bin/turbo.
     let mut command = process::Command::new(local_turbo_path)
         .args(&args)
         .stdout(Stdio::inherit())
