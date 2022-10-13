@@ -327,8 +327,8 @@ fs.copyFileSync(
 
     // Include these to make sure we don't error.
     if (command == "run") {
-      resolvedArgs.push("--experimental-use-daemon");
-      resolvedArgs.push("--stream");
+      resolvedArgs.unshift("--experimental-use-daemon");
+      resolvedArgs.unshift("--stream");
     }
 
     return execa.sync(turboPath, [command, ...resolvedArgs], {
