@@ -451,4 +451,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://reactflow.dev",
     pinned: true,
   },
+  {
+    caption: "Agrotoken",
+    image: "/images/logos/agrotoken.svg",
+    infoLink: "https://agrotoken.io",
+    pinned: true,
+  },
 ];
