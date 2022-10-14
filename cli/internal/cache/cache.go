@@ -70,9 +70,9 @@ type Opts struct {
 	RemoteCacheOpts fs.RemoteCacheOptions
 }
 
-// ResolveCacheDir calculates the location turbo should use to cache artifacts,
+// resolveCacheDir calculates the location turbo should use to cache artifacts,
 // based on the options supplied by the user.
-func (o *Opts) ResolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+func (o *Opts) resolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	if o.OverrideDir != "" {
 		return fs.ResolveUnknownPath(repoRoot, o.OverrideDir)
 	}
