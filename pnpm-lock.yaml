@@ -77,8 +77,8 @@ importers:
       js-cookie: 3.0.1
       next: 12.3.1
       next-themes: ^0.2.0
-      nextra: 2.0.0-beta.29
-      nextra-theme-docs: 2.0.0-beta.28
+      nextra: 2.0.0-beta.30
+      nextra-theme-docs: 2.0.0-beta.30
       postcss: 8.4.17
       react: 17.0.2
       react-dom: 17.0.2
@@ -98,8 +98,8 @@ importers:
       js-cookie: 3.0.1
       next: 12.3.1_7zkbjz6d46tpcbbta4lk5n6n6i
       next-themes: 0.2.0_dty4et2pnba4zo7o4cegg6bk2e
-      nextra: 2.0.0-beta.29_dty4et2pnba4zo7o4cegg6bk2e
-      nextra-theme-docs: 2.0.0-beta.28_dty4et2pnba4zo7o4cegg6bk2e
+      nextra: 2.0.0-beta.30_dty4et2pnba4zo7o4cegg6bk2e
+      nextra-theme-docs: 2.0.0-beta.30_dty4et2pnba4zo7o4cegg6bk2e
       react: 17.0.2
       react-dom: 17.0.2_react@17.0.2
       react-hot-toast: 2.4.0_pwge5r66yg44rq5pj4ruhckhdm
@@ -822,8 +822,8 @@ packages:
       - supports-color
     dev: true
 
-  /@headlessui/react/1.6.6_sfoxds7t5ydpegc3knd667wn6m:
-    resolution: {integrity: sha512-MFJtmj9Xh/hhBMhLccGbBoSk+sk61BlP6sJe4uQcVMtXZhCgGqd2GyIQzzmsdPdTEWGSF434CBi8mnhR6um46Q==}
+  /@headlessui/react/1.7.3_sfoxds7t5ydpegc3knd667wn6m:
+    resolution: {integrity: sha512-LGp06SrGv7BMaIQlTs8s2G06moqkI0cb0b8stgq7KZ3xcHdH3qMP+cRyV7qe5x4XEW/IGY48BW4fLesD6NQLng==}
     engines: {node: '>=10'}
     peerDependencies:
       react: ^16 || ^17 || ^18
@@ -1159,8 +1159,8 @@ packages:
       - supports-color
     dev: false
 
-  /@mdx-js/react/2.1.3_react@17.0.2:
-    resolution: {integrity: sha512-11n4lTvvRyxq3OYbWJwEYM+7q6PE0GxKbk0AwYIIQmrRkxDeljIsjDQkKOgdr/orgRRbYy5zi+iERdnwe01CHQ==}
+  /@mdx-js/react/2.1.5_react@17.0.2:
+    resolution: {integrity: sha512-3Az1I6SAWA9R38rYjz5rXBrGKeZhq96CSSyQtqY+maPj8stBsoUH5pNcmIixuGkufYsh8F5+ka2CVPo2fycWZw==}
     peerDependencies:
       react: '>=16'
     dependencies:
@@ -4309,8 +4309,8 @@ packages:
     resolution: {integrity: sha512-5nqDSxl8nn5BSNxyR3n4I6eDmbolI6WT+QqR547RwxQapgjQBmtktdP+HTBb/a/zLsbzERTONyUB5pefh5TtjQ==}
     dev: true
 
-  /flexsearch/0.7.21:
-    resolution: {integrity: sha512-W7cHV7Hrwjid6lWmy0IhsWDFQboWSng25U3VVywpHOTJnnAZNPScog67G+cVpeX9f7yDD21ih0WDrMMT+JoaYg==}
+  /flexsearch/0.7.31:
+    resolution: {integrity: sha512-XGozTsMPYkm+6b5QL3Z9wQcJjNYxp0CYn3U1gO7dwD6PAqU1SVWZxI9CCg3z+ml3YfqdPnrBehaBrnH2AGKbNA==}
     dev: false
 
   /focus-visible/5.2.0:
@@ -6166,9 +6166,10 @@ packages:
       mdast-util-to-markdown: 1.3.0
     dev: false
 
-  /mdast-util-gfm-table/1.0.4:
-    resolution: {integrity: sha512-aEuoPwZyP4iIMkf2cLWXxx3EQ6Bmh2yKy9MVCg4i6Sd3cX80dcLEfXO/V4ul3pGH9czBK4kp+FAl+ZHmSUt9/w==}
+  /mdast-util-gfm-table/1.0.6:
+    resolution: {integrity: sha512-uHR+fqFq3IvB3Rd4+kzXW8dmpxUhvgCQZep6KdjsLK4O6meK5dYZEayLtIxNus1XO3gfjfcIFe8a7L0HZRGgag==}
     dependencies:
+      '@types/mdast': 3.0.10
       markdown-table: 3.0.2
       mdast-util-from-markdown: 1.2.0
       mdast-util-to-markdown: 1.3.0
@@ -6190,7 +6191,7 @@ packages:
       mdast-util-gfm-autolink-literal: 1.0.2
       mdast-util-gfm-footnote: 1.0.1
       mdast-util-gfm-strikethrough: 1.0.1
-      mdast-util-gfm-table: 1.0.4
+      mdast-util-gfm-table: 1.0.6
       mdast-util-gfm-task-list-item: 1.0.1
       mdast-util-to-markdown: 1.3.0
     transitivePeerDependencies:
@@ -6890,19 +6891,19 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.0.0-beta.28_dty4et2pnba4zo7o4cegg6bk2e:
-    resolution: {integrity: sha512-igsNR9GknQqah7R2bHM6NO/hhVmZyUAP3AkxTtW9Gn/l2+y0io2rwPj17B6a9/mQ1ivLEcTYrB3kEIudBFSdog==}
+  /nextra-theme-docs/2.0.0-beta.30_dty4et2pnba4zo7o4cegg6bk2e:
+    resolution: {integrity: sha512-u8MCl8/5qH5iLKQKeUtWc52a3dGFIBF0F1sQqGVeMRfADc2uEtRoUaZb8Lh/b/7EtGpI+g8AJ0qLqBsRiuz6yg==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
-      '@headlessui/react': 1.6.6_sfoxds7t5ydpegc3knd667wn6m
-      '@mdx-js/react': 2.1.3_react@17.0.2
+      '@headlessui/react': 1.7.3_sfoxds7t5ydpegc3knd667wn6m
+      '@mdx-js/react': 2.1.5_react@17.0.2
       '@popperjs/core': 2.11.6
       '@reach/skip-nav': 0.17.0_sfoxds7t5ydpegc3knd667wn6m
       clsx: 1.2.1
-      flexsearch: 0.7.21
+      flexsearch: 0.7.31
       focus-visible: 5.2.0
       github-slugger: 1.4.0
       intersection-observer: 0.12.2
@@ -6915,8 +6916,8 @@ packages:
       scroll-into-view-if-needed: 2.2.29
     dev: false
 
-  /nextra/2.0.0-beta.29_dty4et2pnba4zo7o4cegg6bk2e:
-    resolution: {integrity: sha512-UjsaoMNsJRG0fbzqgoLDXgvJwcSJxwPr+ojBBjJsaZ6fu5+cwbCx8wXazA0y5sSxGw75fG6D1I7rS6pflHctuQ==}
+  /nextra/2.0.0-beta.30_dty4et2pnba4zo7o4cegg6bk2e:
+    resolution: {integrity: sha512-X8z9n/GWIsS/5BgAHlB8aTLkInmrV0EKRC6rbVAs0zApjVbA/9Wy/KhasyyQVMuyceCJC2jmI367EaBsQ3RuRg==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'

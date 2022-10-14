@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
@@ -46,5 +47,13 @@ var nodejsNpm = PackageManager{
 		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
 
 		return (specfileExists && lockfileExists), nil
+	},
+
+	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
+		return true, nil
+	},
+
+	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+		return lockfile.DecodeNpmLockfile(contents)
 	},
 }
