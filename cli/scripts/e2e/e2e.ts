@@ -43,9 +43,10 @@ const basicPipeline = {
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
 
-let suites = [];
+let suites: uvu.uvu.Test<uvu.Context>[] = [];
 for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
+
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
   repo.install();
@@ -55,6 +56,7 @@ for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   repo.linkPackages();
   repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient);
+
   const sub = new Monorepo("in-subdirectory");
   sub.init(npmClient, basicPipeline, "js");
   sub.install();
@@ -62,15 +64,17 @@ for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   sub.addPackage("b");
   sub.addPackage("c");
   sub.linkPackages();
+
   runSmokeTests(Suite, sub, npmClient, {
-    cwd: path.join(sub.root, sub.subdir),
+    cwd: sub.subdir ? path.join(sub.root, sub.subdir) : sub.root,
   });
+
   suites.push(Suite);
   // test that turbo can run from a subdirectory
 }
 
-for (let s of suites) {
-  s.run();
+for (let suite of suites) {
+  suite.run();
 }
 
 type Task = {
@@ -620,7 +624,7 @@ function runSmokeTests<T>(
         assert.fixture(pruneCommandOutput[1], " - Added a");
         assert.fixture(pruneCommandOutput[2], " - Added b");
 
-        let files = [];
+        let files: string[] = [];
         assert.not.throws(() => {
           files = repo.globbySync("out/**/*", {
             cwd: options.cwd ?? repo.root,
