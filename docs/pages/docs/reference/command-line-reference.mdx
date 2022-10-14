@@ -270,6 +270,12 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+### `--no-daemon`
+
+Default `false`. `turbo` can run a standalone process in some cases to precalculate values used for determining what work needs to be done.
+This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
+Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+
 #### `--output-logs`
 
 `type: string`

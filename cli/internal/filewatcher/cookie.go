@@ -41,7 +41,7 @@ func NewCookieJar(cookieDir turbopath.AbsoluteSystemPath, timeout time.Duration)
 	if err := cookieDir.RemoveAll(); err != nil {
 		return nil, err
 	}
-	if err := cookieDir.MkdirAll(); err != nil {
+	if err := cookieDir.MkdirAll(0775); err != nil {
 		return nil, err
 	}
 	return &CookieJar{

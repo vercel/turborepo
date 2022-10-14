@@ -67,26 +67,29 @@ func Test_ResolvePackage(t *testing.T) {
 	}
 
 	for testName, testCase := range cases {
-		key, version, found := lockfile.ResolvePackage("some-pkg", testCase.name, testCase.semver)
+		pkg, err := lockfile.ResolvePackage("some-pkg", testCase.name, testCase.semver)
+		assert.NilError(t, err)
 		if testCase.found {
-			assert.Equal(t, key, testCase.key, testName)
-			assert.Equal(t, version, testCase.version, testName)
+			assert.Equal(t, pkg.Key, testCase.key, testName)
+			assert.Equal(t, pkg.Version, testCase.version, testName)
 		}
-		assert.Equal(t, found, testCase.found, testName)
+		assert.Equal(t, pkg.Found, testCase.found, testName)
 	}
 }
 
 func Test_AllDependencies(t *testing.T) {
 	lockfile := getBerryLockfile(t, "berry.lock")
 
-	key, _, found := lockfile.ResolvePackage("some-pkg", "react-dom", "18.2.0")
-	assert.Assert(t, found, "expected to find react-dom")
-	deps, found := lockfile.AllDependencies(key)
+	pkg, err := lockfile.ResolvePackage("some-pkg", "react-dom", "18.2.0")
+	assert.NilError(t, err)
+	assert.Assert(t, pkg.Found, "expected to find react-dom")
+	deps, found := lockfile.AllDependencies(pkg.Key)
 	assert.Assert(t, found, "expected lockfile key for react-dom to be present")
 	assert.Equal(t, len(deps), 3, "expected to find all react-dom direct dependencies")
 	for pkgName, version := range deps {
-		_, _, found := lockfile.ResolvePackage("some-pkg", pkgName, version)
-		assert.Assert(t, found, "expected to find lockfile entry for %s@%s", pkgName, version)
+		pkg, err := lockfile.ResolvePackage("some-pkg", pkgName, version)
+		assert.NilError(t, err, "error finding %s@%s", pkgName, version)
+		assert.Assert(t, pkg.Found, "expected to find lockfile entry for %s@%s", pkgName, version)
 	}
 }
 
@@ -187,6 +190,42 @@ func Test_PatchPathExtraction(t *testing.T) {
 		patchPath, isPatch := locator.patchPath()
 		assert.Equal(t, isPatch, testCase.isPatch, locator)
 		assert.Equal(t, patchPath, testCase.patchPath, locator)
+	}
+}
+
+func Test_PatchPrimaryVersion(t *testing.T) {
+	// todo write tests to make sure extraction actually works
+	type TestCase struct {
+		descriptor string
+		version    string
+		isPatch    bool
+	}
+	testCases := []TestCase{
+		{
+			descriptor: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::locator=berry-patch%40workspace%3A.",
+			version:    "npm:4.17.21",
+			isPatch:    true,
+		},
+		{
+			descriptor: "typescript@patch:typescript@^4.5.2#~builtin<compat/typescript>",
+			version:    "npm:^4.5.2",
+			isPatch:    true,
+		},
+		{
+			descriptor: "react@npm:18.2.0",
+			isPatch:    false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		var d _Descriptor
+		err := d.parseDescriptor(testCase.descriptor)
+		assert.NilError(t, err, testCase.descriptor)
+		actual, isPatch := d.primaryVersion()
+		assert.Equal(t, isPatch, testCase.isPatch, testCase)
+		if testCase.isPatch {
+			assert.Equal(t, actual, testCase.version, testCase.descriptor)
+		}
 	}
 }
 

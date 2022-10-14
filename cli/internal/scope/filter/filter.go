@@ -22,11 +22,9 @@ type SelectedPackages struct {
 type PackagesChangedInRange = func(fromRef string, toRef string) (util.Set, error)
 
 type Resolver struct {
-	Graph        *dag.AcyclicGraph
-	PackageInfos map[interface{}]*fs.PackageJSON
-	// SCM                  scm.SCM
-	Cwd string
-	// HasGlobalChange      bool
+	Graph                  *dag.AcyclicGraph
+	PackageInfos           map[interface{}]*fs.PackageJSON
+	Cwd                    string
 	PackagesChangedInRange PackagesChangedInRange
 }
 
