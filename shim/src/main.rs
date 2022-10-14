@@ -5,7 +5,7 @@ mod package_manager;
 use crate::ffi::nativeRunWithArgs;
 use crate::package_manager::PackageManager;
 use anyhow::{anyhow, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use serde::Serialize;
 use std::env::current_exe;
 use std::path::{Path, PathBuf};
@@ -20,13 +20,20 @@ use std::{
 };
 
 #[derive(Parser, Debug, Serialize, Default, PartialEq)]
-#[clap(author, version, about = "Turbocharge your monorepo", long_about = None, ignore_errors = true, disable_help_subcommand = true)]
+#[clap(author, version, about = "Turbocharge your monorepo", long_about = None)]
+#[clap(
+    disable_help_subcommand = true,
+    disable_help_flag = true,
+    ignore_errors = true
+)]
 struct Args {
+    #[clap(long, short, global = true)]
+    help: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
     api: Option<String>,
     /// Force color usage in the terminal
-    #[clap(long, global = true, value_parser)]
+    #[clap(long, global = true)]
     color: bool,
     /// Specify a file to save a cpu profile
     #[clap(long, global = true, value_parser)]
@@ -41,10 +48,10 @@ struct Args {
     #[clap(long, global = true, value_parser)]
     login: Option<String>,
     /// Suppress color usage in the terminal
-    #[clap(long, global = true, value_parser)]
+    #[clap(long, global = true)]
     no_color: bool,
     /// When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-    #[clap(long, global = true, value_parser)]
+    #[clap(long, global = true)]
     preflight: bool,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
@@ -283,6 +290,13 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
 
 fn main() -> Result<()> {
     let clap_args = Args::parse();
+    // Quick fix because --help doesn't work with ignore_errors in clap.
+    if clap_args.help {
+        let mut command = Args::command();
+        command.print_help()?;
+        process::exit(0);
+    }
+
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
