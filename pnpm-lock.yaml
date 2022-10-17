@@ -79,6 +79,14 @@ importers:
       uvu: 0.5.6
       zstd-codec: 0.1.4
 
+  crates/next-core:
+    specifiers:
+      react: ^18.2.0
+      react-dom: ^18.2.0
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+
   crates/next-dev/tests:
     specifiers:
       expect: ^24.5.0
@@ -92,6 +100,9 @@ importers:
       react: 18.2.0
       react-test-renderer: 18.2.0_react@18.2.0
       styled-jsx: 5.0.7_react@18.2.0
+
+  crates/turbopack-ecmascript:
+    specifiers: {}
 
   crates/turbopack/tests/node-file-trace:
     specifiers:
