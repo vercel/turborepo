@@ -20,15 +20,18 @@ use std::{
 };
 
 #[derive(Parser, Debug, Serialize, Default, PartialEq)]
-#[clap(author, version, about = "Turbocharge your monorepo", long_about = None)]
+#[clap(author, about = "Turbocharge your monorepo", long_about = None)]
 #[clap(
     disable_help_subcommand = true,
     disable_help_flag = true,
+    disable_version_flag = true,
     ignore_errors = true
 )]
 struct Args {
     #[clap(long, short, global = true)]
     help: bool,
+    #[clap(long, short, global = true)]
+    version: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
     api: Option<String>,
@@ -63,7 +66,7 @@ struct Args {
     #[clap(long, global = true, value_parser)]
     trace: Option<String>,
     /// verbosity
-    #[clap(short, long, global = true, value_parser)]
+    #[clap(short = 'V', long, global = true, value_parser)]
     verbosity: Option<u8>,
     #[clap(subcommand)]
     command: Option<Command>,
@@ -288,12 +291,24 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
     Ok(command.wait()?.code().unwrap_or(2))
 }
 
+fn get_version() -> &'static str {
+    include_str!("../../version.txt")
+        .split_once('\n')
+        .expect("Failed to read version from version.txt")
+        .0
+}
+
 fn main() -> Result<()> {
     let clap_args = Args::parse();
     // Quick fix because --help doesn't work with ignore_errors in clap.
     if clap_args.help {
         let mut command = Args::command();
         command.print_help()?;
+        process::exit(0);
+    }
+    // Quick fix because --version doesn't work with ignore_errors in clap.
+    if clap_args.version {
+        println!("{}", get_version());
         process::exit(0);
     }
 
