@@ -18,7 +18,6 @@ env:
   RUST_BACKTRACE: 1
 
 concurrency:
-  # shared with quick-test
   group: test-${{ github.head_ref || github.run_id }}-${{ github.event.action != 'edited' || github.event.changes.base != '' }}
   cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
 

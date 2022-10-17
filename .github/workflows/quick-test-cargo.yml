@@ -17,8 +17,7 @@ env:
   RUST_BACKTRACE: 1
 
 concurrency:
-  # shared with test
-  group: test-${{ github.head_ref || github.run_id }}-true
+  group: quick-test-${{ github.head_ref || github.run_id }}-true
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
