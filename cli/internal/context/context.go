@@ -145,7 +145,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 }
 
 // BuildPackageGraph constructs a Context instance with information about the package dependency graph
-func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, cacheDir turbopath.AbsoluteSystemPath) (*Context, error) {
+func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
 	c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
@@ -159,7 +159,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	c.PackageManager = packageManager
 
-	if lockfile, err := c.PackageManager.ReadLockfile(cacheDir, repoRoot); err != nil {
+	if lockfile, err := c.PackageManager.ReadLockfile(repoRoot); err != nil {
 		warnings.append(err)
 	} else {
 		c.Lockfile = lockfile
