@@ -97,15 +97,13 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, token *string) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
-	if err := userViper.BindPFlag("token", flags.Lookup("token")); err != nil {
-		return nil, err
-	}
+	userViper.SetDefault("token", token)
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -135,7 +133,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginUrl *string, apiUrl *string, teamSlug *string) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -144,23 +142,27 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet)
 	repoViper.MustBindEnv("loginurl", "TURBO_LOGIN")
 	repoViper.MustBindEnv("teamslug", "TURBO_TEAM")
 	repoViper.MustBindEnv("teamid")
-	repoViper.SetDefault("apiurl", _defaultAPIURL)
-	repoViper.SetDefault("loginurl", _defaultLoginURL)
-	if err := repoViper.BindPFlag("loginurl", flags.Lookup("login")); err != nil {
-		return nil, err
+
+	if loginUrl != nil {
+		repoViper.SetDefault("loginurl", loginUrl)
+	} else {
+		repoViper.SetDefault("loginurl", _defaultLoginURL)
 	}
-	if err := repoViper.BindPFlag("apiurl", flags.Lookup("api")); err != nil {
-		return nil, err
+	if apiUrl != nil {
+		repoViper.SetDefault("apiurl", apiUrl)
+	} else {
+		repoViper.SetDefault("apiurl", _defaultAPIURL)
 	}
-	if err := repoViper.BindPFlag("teamslug", flags.Lookup("team")); err != nil {
-		return nil, err
+	if teamSlug != nil {
+		repoViper.SetDefault("teamslug", teamSlug)
 	}
+
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	// If team was set via commandline, don't read the teamId from the config file, as it
 	// won't necessarily match.
-	if flags.Changed("team") {
+	if teamSlug != nil {
 		repoViper.Set("teamid", "")
 	}
 	return &RepoConfig{

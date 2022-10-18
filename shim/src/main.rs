@@ -73,7 +73,8 @@ struct Args {
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the
 /// --single-package flag into non-build commands.
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Debug, Serialize, PartialEq)]
+#[serde(tag = "id", content = "payload")]
 enum Command {
     /// Get the path to the Turbo binary
     Bin,
@@ -85,7 +86,10 @@ enum Command {
     Help,
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
-    Link,
+    Link {
+        #[clap(long)]
+        no_gitignore: bool,
+    },
     /// Login to your Vercel account
     Login {
         #[clap(long = "sso-team")]
@@ -125,35 +129,96 @@ enum RepoMode {
 #[derive(Debug, Serialize)]
 struct TurboState {
     repo_state: RepoState,
-    cli_args: Args,
+    parsed_args: Args,
+    raw_args: Vec<String>,
 }
 
-/// Runs the Go code linked in current binary.
-///
-/// # Arguments
-///
-/// * `clap_args`: Parsed arguments from clap
-/// * `args`: Raw un-parsed arguments
-///
-/// returns: Result<i32, Error>
-fn run_current_turbo(clap_args: Args, args: Vec<String>) -> Result<i32> {
-    if let Some(Command::Bin) = clap_args.command {
-        commands::bin::run()?;
-        return Ok(0);
+impl TryInto<GoString> for TurboState {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> std::result::Result<GoString, Self::Error> {
+        let json = serde_json::to_string(&self)?;
+        let cstring = CString::new(json)?;
+        let n = cstring.as_bytes().len() as isize;
+
+        Ok(GoString {
+            p: cstring.into_raw(),
+            n,
+        })
+    }
+}
+impl TurboState {
+    /// Runs the Go code linked in current binary.
+    ///
+    /// # Arguments
+    ///
+    /// * `args`: Arguments for turbo
+    ///
+    /// returns: Result<i32, Error>
+    fn run_current_turbo(self) -> Result<i32> {
+        if matches!(self.parsed_args.command, Some(Command::Bin)) {
+            commands::bin::run()?;
+            return Ok(0);
+        }
+
+        let mut args = self
+            .raw_args
+            .iter()
+            .map(|s| {
+                let c_string = CString::new(s.as_str())?;
+                Ok(c_string.into_raw())
+            })
+            .collect::<Result<Vec<*mut c_char>>>()?;
+        args.shrink_to_fit();
+        let argc: c_int = args.len() as c_int;
+        let argv = args.as_mut_ptr();
+
+        let exit_code = unsafe { nativeRunWithArgs(argc, argv, self.try_into()?) };
+        Ok(exit_code.try_into().unwrap())
     }
 
-    let mut args = args
-        .into_iter()
-        .map(|s| {
-            let c_string = CString::new(s)?;
-            Ok(c_string.into_raw())
-        })
-        .collect::<Result<Vec<*mut c_char>>>()?;
-    args.shrink_to_fit();
-    let argc: c_int = args.len() as c_int;
-    let argv = args.as_mut_ptr();
-    let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
-    Ok(exit_code.try_into().unwrap())
+    /// Attempts to run correct turbo by finding nearest package.json,
+    /// then finding local turbo installation. If the current binary is the
+    /// local turbo installation, then we run current turbo. Otherwise we
+    /// kick over to the local turbo installation.
+    ///
+    /// # Arguments
+    ///
+    /// * `turbo_state`: state for current execution
+    ///
+    /// returns: Result<i32, Error>
+    fn run_correct_turbo(mut self) -> Result<i32> {
+        let local_turbo_path = self
+            .repo_state
+            .root
+            .join("node_modules")
+            .join(".bin")
+            .join("turbo");
+
+        if matches!(self.repo_state.mode, RepoMode::SinglePackage)
+            && self.parsed_args.is_run_command()
+        {
+            self.raw_args.push("--single-package".to_string());
+        }
+
+        let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+        // If the local turbo path doesn't exist or if we are local turbo, then we go
+        // ahead and run the Go code linked in the current binary.
+        if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
+            return self.run_current_turbo();
+        }
+
+        // Otherwise, we spawn a process that executes the local turbo
+        // that we've found in node_modules/.bin/turbo.
+        let mut command = process::Command::new(local_turbo_path)
+            .args(&self.raw_args)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Failed to execute turbo.");
+
+        Ok(command.wait()?.code().unwrap_or(2))
+    }
 }
 
 impl RepoState {
@@ -235,64 +300,23 @@ impl RepoState {
     }
 }
 
-/// Checks if either we have an explicit run command, i.e. `turbo run build`
-/// or an implicit run, i.e. `turbo build`, where the command after `turbo` is
-/// not one of the reserved commands like `link`, `login`, `bin`, etc.
-///
-/// # Arguments
-///
-/// * `clap_args`:
-///
-/// returns: bool
-fn is_run_command(clap_args: &Args) -> bool {
-    let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
-    let is_implicit_run = clap_args.command.is_none() && !clap_args.tasks.is_empty();
+impl Args {
+    /// Checks if either we have an explicit run command, i.e. `turbo run build`
+    /// or an implicit run, i.e. `turbo build`, where the command after `turbo`
+    /// is not one of the reserved commands like `link`, `login`, `bin`,
+    /// etc.
+    ///
+    /// # Arguments
+    ///
+    /// * `clap_args`:
+    ///
+    /// returns: bool
+    fn is_run_command(&self) -> bool {
+        let is_explicit_run = matches!(self.command, Some(Command::Run { .. }));
+        let is_implicit_run = self.command.is_none() && !self.tasks.is_empty();
 
-    is_explicit_run || is_implicit_run
-}
-
-/// Attempts to run correct turbo by finding nearest package.json,
-/// then finding local turbo installation. If the current binary is the local
-/// turbo installation, then we run current turbo. Otherwise we kick over to
-/// the local turbo installation.
-///
-/// # Arguments
-///
-/// * `turbo_state`: state for current execution
-///
-/// returns: Result<i32, Error>
-fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
-    let local_turbo_path = turbo_state
-        .repo_state
-        .root
-        .join("node_modules")
-        .join(".bin")
-        .join("turbo");
-
-    let mut args: Vec<_> = env::args().skip(1).collect();
-    if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
-        && is_run_command(&turbo_state.cli_args)
-    {
-        args.push("--single-package".to_string());
+        is_explicit_run || is_implicit_run
     }
-
-    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-    // If the local turbo path doesn't exist or if we are local turbo, then we go
-    // ahead and run the Go code linked in the current binary.
-    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
-        return run_current_turbo(turbo_state.cli_args, args);
-    }
-
-    // Otherwise, we spawn a process that executes the local turbo
-    // that we've found in node_modules/.bin/turbo.
-    let mut command = process::Command::new(local_turbo_path)
-        .args(&args)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to execute turbo.");
-
-    Ok(command.wait()?.code().unwrap_or(2))
 }
 
 fn get_version() -> &'static str {
@@ -331,10 +355,11 @@ fn main() -> Result<()> {
     let repo_state = RepoState::infer(&current_dir)?;
     let turbo_state = TurboState {
         repo_state,
-        cli_args: clap_args,
+        parsed_args: clap_args,
+        raw_args: env::args().skip(1).collect(),
     };
 
-    let exit_code = match run_correct_turbo(turbo_state) {
+    let exit_code = match turbo_state.run_correct_turbo() {
         Ok(exit_code) => exit_code,
         Err(e) => {
             eprintln!("failed {:?}", e);

@@ -9,19 +9,60 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/spf13/cobra"
+	"github.com/vercel/turborepo/cli/internal/turbostate"
+
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
-
-	"github.com/spf13/cobra"
 )
 
 const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
+
+func RunLogin(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context) error {
+	ssoTeam := args.Command.Payload["ssoTeam"]
+	fmt.Printf("sso team %v\n", ssoTeam)
+	base, err := helper.GetCmdBaseFromArgs(args)
+	if err != nil {
+		return err
+	}
+	login := login{
+		base:                base,
+		openURL:             browser.OpenBrowser,
+		client:              base.APIClient,
+		promptEnableCaching: promptEnableCaching,
+	}
+	if ssoTeam != nil {
+		fmt.Println("SSO TEAM")
+		err := login.loginSSO(ctx, ssoTeam.(string))
+		if err != nil {
+			if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
+				base.UI.Info("Canceled. Turborepo not set up.")
+			} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
+				base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+			} else {
+				base.LogError("SSO login failed: %v", err)
+			}
+			return err
+		}
+	} else {
+		err := login.run(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				base.UI.Info("Canceled. Turborepo not set up.")
+			} else {
+				base.LogError("login failed: %v", err)
+			}
+			return err
+		}
+	}
+	return nil
+}
 
 // NewLoginCommand returns the cobra subcommand for turbo login
 func NewLoginCommand(helper *cmdutil.Helper) *cobra.Command {

@@ -2,9 +2,13 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
+
+	"github.com/vercel/turborepo/cli/internal/turbostate"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -52,6 +56,74 @@ func RunWithArgs(args []string, turboVersion string) int {
 	var execErr error
 	go func() {
 		execErr = root.Execute()
+		close(doneCh)
+	}()
+
+	// Wait for either our command to finish, in which case we need to clean up,
+	// or to receive a signal, in which case the signal handler above does the cleanup
+	select {
+	case <-doneCh:
+		// We finished whatever task we were running
+		signalWatcher.Close()
+		exitErr := &process.ChildExit{}
+		if errors.As(execErr, &exitErr) {
+			return exitErr.ExitCode
+		} else if execErr != nil {
+			return 1
+		}
+		return 0
+	case <-signalWatcher.Done():
+		// We caught a signal, which already called the close handlers
+		return 1
+	}
+}
+
+// RunWithTurboState runs turbo with the specified arguments. The arguments should not
+// include the binary being invoked (e.g. "turbo").
+func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
+	util.InitPrintf()
+	// TODO: replace this with a context
+	signalWatcher := signals.NewWatcher()
+	helper := cmdutil.NewHelper(turboVersion)
+	ctx := context.Background()
+
+	if state.ParsedArgs.Trace != nil {
+		cleanup, err := createTraceFile(*state.ParsedArgs.Trace)
+		if err != nil {
+			fmt.Printf("Failed to create trace file: %v\n", err)
+			return 1
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if state.ParsedArgs.Heap != nil {
+		cleanup, err := createHeapFile(*state.ParsedArgs.Heap)
+		if err != nil {
+			fmt.Printf("Failed to create heap file: %v\n", err)
+			return 1
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if state.ParsedArgs.Cpuprofile != nil {
+		cleanup, err := createCpuprofileFile(*state.ParsedArgs.Cpuprofile)
+		if err != nil {
+			fmt.Printf("Failed to create CPU profile file: %v\n", err)
+			return 1
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+
+	defer helper.CleanupWithArgs(&state.ParsedArgs)
+
+	doneCh := make(chan struct{})
+	var execErr error
+	go func() {
+		switch state.ParsedArgs.Command.Id {
+		case "Login":
+			fmt.Println("RUNNING LOGIN")
+			execErr = login.RunLogin(helper, &state.ParsedArgs, ctx)
+		default:
+			fmt.Printf("ERROR: Command `%v` not handled\n", state.ParsedArgs.Command.Id)
+		}
 		close(doneCh)
 	}()
 

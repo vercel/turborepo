@@ -9,8 +9,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
+	"github.com/vercel/turborepo/cli/internal/turbostate"
+
+	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/client"
@@ -75,12 +77,39 @@ func (h *Helper) Cleanup(flags *pflag.FlagSet) {
 	}
 }
 
+// Cleanup runs the register cleanup handlers. It requires the flags
+// to the root command so that it can construct a UI if necessary
+func (h *Helper) CleanupWithArgs(args *turbostate.Args) {
+	h.cleanupsMu.Lock()
+	defer h.cleanupsMu.Unlock()
+	var ui cli.Ui
+	for _, cleanup := range h.cleanups {
+		if err := cleanup.Close(); err != nil {
+			if ui == nil {
+				ui = h.getUIFromArgs(args)
+			}
+			ui.Warn(fmt.Sprintf("failed cleanup: %v", err))
+		}
+	}
+}
+
 func (h *Helper) getUI(flags *pflag.FlagSet) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
 	if flags.Changed("no-color") && h.noColor {
 		colorMode = ui.ColorModeSuppressed
 	}
 	if flags.Changed("color") && h.forceColor {
+		colorMode = ui.ColorModeForced
+	}
+	return ui.BuildColoredUi(colorMode)
+}
+
+func (h *Helper) getUIFromArgs(args *turbostate.Args) cli.Ui {
+	colorMode := ui.GetColorModeFromEnv()
+	if args.NoColor && h.noColor {
+		colorMode = ui.ColorModeSuppressed
+	}
+	if args.Color && h.forceColor {
 		colorMode = ui.ColorModeForced
 	}
 	return ui.BuildColoredUi(colorMode)
@@ -165,11 +194,87 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 	if err != nil {
 		return nil, err
 	}
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), flags)
+	login, err := flags.GetString("login")
 	if err != nil {
 		return nil, err
 	}
-	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, flags)
+	api, err := flags.GetString("api")
+	if err != nil {
+		return nil, err
+	}
+	team, err := flags.GetString("team")
+	if err != nil {
+		return nil, err
+	}
+	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), &login, &api, &team)
+	if err != nil {
+		return nil, err
+	}
+	token, err := flags.GetString("token")
+	if err != nil {
+		return nil, err
+	}
+	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, &token)
+	if err != nil {
+		return nil, err
+	}
+	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
+	if remoteConfig.Token == "" && ui.IsCI {
+		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
+		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
+		if vercelArtifactsToken != "" {
+			remoteConfig.Token = vercelArtifactsToken
+		}
+		if vercelArtifactsOwner != "" {
+			remoteConfig.TeamID = vercelArtifactsOwner
+		}
+	}
+	apiClient := client.NewClient(
+		remoteConfig,
+		logger,
+		h.TurboVersion,
+		h.clientOpts,
+	)
+
+	return &CmdBase{
+		UI:           terminal,
+		Logger:       logger,
+		RepoRoot:     repoRoot,
+		APIClient:    apiClient,
+		RepoConfig:   repoConfig,
+		UserConfig:   userConfig,
+		RemoteConfig: remoteConfig,
+		TurboVersion: h.TurboVersion,
+	}, nil
+}
+
+// GetCmdBaseFromArgs returns a CmdBase instance configured with values from this helper,
+// using the turbostate.Args struct.
+// It additionally returns a mechanism to set an error, so
+func (h *Helper) GetCmdBaseFromArgs(args *turbostate.Args) (*CmdBase, error) {
+	// terminal is for color/no-color output
+	terminal := h.getUIFromArgs(args)
+
+	// logger is configured with verbosity level using --verbosity flag from end users
+	logger, err := h.getLogger()
+
+	if err != nil {
+		return nil, err
+	}
+	cwd, err := fs.GetCwd()
+	if err != nil {
+		return nil, err
+	}
+	repoRoot := fs.ResolveUnknownPath(cwd, h.rawRepoRoot)
+	repoRoot, err = repoRoot.EvalSymlinks()
+	if err != nil {
+		return nil, err
+	}
+	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), args.Login, args.Api, args.Team)
+	if err != nil {
+		return nil, err
+	}
+	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, args.Token)
 	if err != nil {
 		return nil, err
 	}

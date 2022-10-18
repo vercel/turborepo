@@ -6,8 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
+	"github.com/vercel/turborepo/cli/internal/turbostate"
+
+	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -15,9 +19,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
-	"github.com/mitchellh/go-homedir"
 )
 
 type link struct {
@@ -41,6 +43,39 @@ type linkAPIClient interface {
 // NewLinkCommand returns the cobra subcommand for turbo link
 func NewLinkCommand(helper *cmdutil.Helper) *cobra.Command {
 	return getCmd(helper)
+}
+
+type LinkPayload struct {
+	DontModifyGitIgnore bool
+}
+
+func Run(helper *cmdutil.Helper, args *turbostate.Args) error {
+	base, err := helper.GetCmdBaseFromArgs(args)
+	if err != nil {
+		return err
+	}
+	dontModifyGitignore := args.Command.Payload["dontModifyGitIgnore"].(bool)
+	link := &link{
+		base:                base,
+		modifyGitIgnore:     !dontModifyGitignore,
+		apiClient:           base.APIClient,
+		promptSetup:         promptSetup,
+		promptTeam:          promptTeam,
+		promptEnableCaching: promptEnableCaching,
+		openBrowser:         browser.OpenBrowser,
+	}
+	err = link.run()
+	if err != nil {
+		if errors.Is(err, errUserCanceled) {
+			base.UI.Info("Canceled. Turborepo not set up.")
+		} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
+			base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+		} else {
+			link.logError(err)
+		}
+		return err
+	}
+	return nil
 }
 
 func getCmd(helper *cmdutil.Helper) *cobra.Command {
