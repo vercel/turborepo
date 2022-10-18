@@ -18,8 +18,8 @@ import Callout from '../../components/Callout'
 Turborepo 1.6 changes the game for Turborepo - you can now use it in **any project**, and we've shipped the **Turborepo Agent** to speed up everything you do with Turborepo.
 
 - [**Turborepo in non-monorepos**](#any-codebase-can-use-turborepo): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
-- [**Turborepo Agent:**](#the-turborepo-agent) A daemon to make your local building experience faster - while you're not even looking.
 - [**`turbo prune` now supports npm**](#prune-now-supported-on-npm): Pruning your monorepo is now supported in monorepos using `npm`, completing support for all major workspace managers.
+- [**Faster caching**](#performance-improvements-in-the-cache): We've improved the way we handle local file writes, meaning a big speed-up of Turbo's cache.
 
 Update today by running `npm install turbo@latest`.
 
@@ -33,42 +33,20 @@ But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of 
 
 So we're excited to announce that **any codebase can now use Turborepo**. Try out our [new quickstart](/docs/getting-started/add-to-project) to get Turbo running on your non-monorepo project.
 
-## The Turborepo Agent
-
-The Turborepo Agent (also known as a daemon) is a background process that works on your behalf to perform system chores. Behind the scenes, the Turborepo Agent will work with the `turbo` main process to offload work that can be done either in advance or later.
-
-This is one of the **most significant Turborepo features we have ever built** and it will silently improve your day-to-day local build experience.
-
-### Try it out
-
-As of 1.6, **you don't need to do anything**. On your first run, Turborepo Agent will start in the background. Anywhere in your logs that you see `Skipping cache check for <TASK>, outputs have not changed since previous run.`, the **Turborepo Agent just got you building faster**.
-
-### How it works
-
-A Turborepo build spends the majority of its time handling system calls, so small performance cuts add up. For large builds, system calls can account for as much as 82% of Turborepo's entire execution time.
-
-![Flamechart of a Turborepo build showing the majority of the time spent at the leaf nodes in system calls.](../../images/flamechart.png)
-
-We debated several options for making Turborepo faster's system calls faster.
-
-- **Do things faster**: OS code is already super-optimized, so attempting to make the system calls faster wasn't an option.
-- **Do less work**: Turborepo often isn't in charge of the amount of work it does. You give it tasks to perform, and it attempts to schedule it the best it can. So - not much to be gained here.
-
-However - there was something still to be tried.
-
-#### Do the work when nobody is watching
-
-So, if we can't make it faster and we can't do less work, the best way we can make things _feel_ faster is to **do the work when nobody is watching**. Turborepo Agent can now perform a lot more work in the background:
-
-- **Upload to the cache**: No more waiting around for your build outputs to upload.
-- **Run file system**: We now know _ahead of time_ which workspaces have changed.
-
-As we transfer more powers to the agent, you'll see Turborepo feel faster and faster. We're committed to giving you the fastest experience possible.
-
 ## Prune now supported on npm
 
 Over the last several releases, we've been adding support for [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
 
 We're delighted to announce that `turbo prune` now works for `npm`, completing support for all major package managers. This means that if your monorepo uses `npm`, `yarn`, `yarn 2+` or `pnpm`, you'll be able to deploy to Docker with ease.
 
-Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
+Check out our previous [blog on `turbo prune`](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
+
+## Performance improvements in the cache
+
+Before 1.6, Turborepo's local cache was a recursive copy of files on the system to another place on disk. This was _slow_. It meant that for every file that we needed to cache, we'd need to perform six system calls: open, read, and close on the source file; open, write, and close on the destination file.
+
+In 1.6, we've cut that nearly in half. Now, when creating a cache, we create a single `.tar` file (_one_ open), we write to it in 1mb chunks (_batched_ writes), and then close it (_one_ close). The halving of system calls happens on the way back out of cache.
+
+And we didn't stop there. Over the past month we've invested significantly in our build toolchain to enable CGO which unlocks usage of best-in-class libraries written in C. This enabled us to adopt [Zstandard](http://facebook.github.io/zstd/)'s `libzstd` for compression which gets us an algorithmic 3x performance improvement for compression.
+
+After all of these changes we're regularly seeing performance improvements of more than 2x on local cache creation and more than 3x on remote cache creation. This gets even better the bigger your repository is, or the slower your device is (looking at you, CI). This means we've been able to deliver performance wins precisely to those who needed it the most.
