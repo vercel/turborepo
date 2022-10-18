@@ -15,9 +15,10 @@ import Callout from '../../components/Callout'
 
 <Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
 
-Turborepo 1.6 changes the game for Turborepo - you can now use it for **any project**, monorepo or not.
+Turborepo 1.6 changes the game for Turborepo - you can now use it in **any project**, and we've shipped the **Turborepo Agent** to speed up everything you do with Turborepo.
 
 - [**Turborepo in non-monorepos**](#the-monorepo-handbook): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
+- [**Turborepo Agent:**](#the-turborepo-agent) A daemon to make your local building experience faster - while you're not even looking.
 
 Update today by running `npm install turbo@latest`.
 
@@ -30,3 +31,35 @@ Turborepo is awesome in monorepos because they have so many tasks to handle. Eac
 But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of tasks. Most CI/CD processes do a lot of duplicated work that would benefit from a [cache](/docs/core-concepts/caching).
 
 So we're excited to announce that **any codebase can now use Turborepo**. Try out our [new quickstart](/docs/getting-started/add-to-project) to get Turbo running on your non-monorepo project.
+
+## The Turborepo Agent
+
+The Turborepo Agent (also known as a daemon) is a background process that works on your behalf to perform system chores. Behind the scenes, the Turborepo Agent will work with the `turbo` main process to offload work that can be done either in advance or later.
+
+This is one of the **most significant Turborepo features we have ever built** and it will silently improve your day-to-day local build experience.
+
+### Try it out
+
+As of 1.6, **you don't need to do anything**. On your first run, Turborepo Agent will start in the background. Anywhere in your logs that you see `Skipping cache check for <TASK>, outputs have not changed since previous run.`, the **Turborepo Agent just got you building faster**.
+
+### How it works
+
+A Turborepo build spends the majority of its time handling system calls, so small performance cuts add up. For large builds, system calls can account for as much as 82% of Turborepo's entire execution time.
+
+![Flamechart of a Turborepo build showing the majority of the time spent at the leaf nodes in system calls.](../../images/flamechart.png)
+
+We debated several options for making Turborepo faster's system calls faster.
+
+- **Do things faster**: OS code is already super-optimized, so attempting to make the system calls faster wasn't an option.
+- **Do less work**: Turborepo often isn't in charge of the amount of work it does. You give it tasks to perform, and it attempts to schedule it the best it can. So - not much to be gained here.
+
+However - there was something still to be tried.
+
+#### Do the work when nobody is watching
+
+So, if we can't make it faster and we can't do less work, the best way we can make things _feel_ faster is to **do the work when nobody is watching**. Turborepo Agent can now perform a lot more work in the background:
+
+- **Upload to the cache**: No more waiting around for your build outputs to upload.
+- **Run file system**: We now know _ahead of time_ which workspaces have changed.
+
+As we transfer more powers to the agent, you'll see Turborepo feel faster and faster. We're committed to giving you the fastest experience possible.
