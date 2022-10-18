@@ -24,6 +24,7 @@ type Task struct {
 
 type Visitor = func(taskID string) error
 
+// Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
 	// TopologicGraph is a graph of workspaces
 	TopologicGraph *dag.AcyclicGraph
@@ -56,6 +57,7 @@ type EngineExecutionOptions struct {
 	TasksOnly bool
 }
 
+// Prepare constructs the Task Graph for a list of packages and tasks
 func (e *Engine) Prepare(options *EngineExecutionOptions) error {
 	pkgs := options.Packages
 	tasks := options.TaskNames
@@ -231,6 +233,7 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
+// AddTask adds a task to the Engine so it can be looked up later.
 func (e *Engine) AddTask(task *Task) *Engine {
 	// If a root task is added, mark the task name as eligible for
 	// root execution. Otherwise, it will be skipped.
@@ -244,6 +247,7 @@ func (e *Engine) AddTask(task *Task) *Engine {
 	return e
 }
 
+// AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
 func (e *Engine) AddDep(fromTaskId string, toTaskId string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
 	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
