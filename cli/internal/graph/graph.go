@@ -1,3 +1,4 @@
+// Package graph contains the CompleteGraph struct and some methods around it
 package graph
 
 import (
@@ -10,13 +11,16 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// WorkspaceInfos holds information about each workspace in the monorepo.
+type WorkspaceInfos map[interface{}]*fs.PackageJSON
+
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
 type CompleteGraph struct {
 	// Topo
 	TopologicalGraph dag.AcyclicGraph
 	Pipeline         fs.Pipeline
-	PackageInfos     map[interface{}]*fs.PackageJSON
+	PackageInfos     WorkspaceInfos
 	GlobalHash       string
 	RootNode         string
 }

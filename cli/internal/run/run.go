@@ -196,6 +196,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			return err
 		}
 	}
+
 	if ui.IsCI && !r.opts.runOpts.noDaemon {
 		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
 	} else if !r.opts.runOpts.noDaemon {
@@ -282,7 +283,8 @@ func (r *run) runOperation(ctx gocontext.Context, g *graph.CompleteGraph, rs *ru
 		vertexSet.Add(v)
 	}
 
-	engine, err := buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
+	engine, err := buildTaskGraphEngine(g, rs)
+
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
@@ -301,7 +303,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *graph.CompleteGraph, rs *ru
 				g.TopologicalGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
+		engine, err = buildTaskGraphEngine(g, rs)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
@@ -464,13 +466,14 @@ func filterSinglePackageGraphForDisplay(originalGraph *dag.AcyclicGraph) *dag.Ac
 	return graph
 }
 
-func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(topoGraph)
+func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
+	engine := core.NewEngine(&g.TopologicalGraph)
 
-	for taskName, taskDefinition := range pipeline {
-		topoDeps := make(util.Set)
+	for taskName, taskDefinition := range g.Pipeline {
 		deps := make(util.Set)
+
 		isPackageTask := util.IsPackageTask(taskName)
+
 		for _, dependency := range taskDefinition.TaskDependencies {
 			if isPackageTask && util.IsPackageTask(dependency) {
 				err := engine.AddDep(dependency, taskName)
@@ -481,13 +484,13 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 				deps.Add(dependency)
 			}
 		}
-		for _, dependency := range taskDefinition.TopologicalDependencies {
-			topoDeps.Add(dependency)
-		}
+
+		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 		engine.AddTask(&core.Task{
-			Name:     taskName,
-			TopoDeps: topoDeps,
-			Deps:     deps,
+			Name:       taskName,
+			TopoDeps:   topoDeps,
+			Deps:       deps,
+			Persistent: taskDefinition.Persistent,
 		})
 	}
 
@@ -499,8 +502,14 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 		return nil, err
 	}
 
+	// Check for cycles in the DAG.
 	if err := util.ValidateGraph(engine.TaskGraph); err != nil {
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
+	}
+
+	// Check that no tasks would be blocked by a persistent task
+	if err := engine.ValidatePersistentDependencies(g); err != nil {
+		return nil, fmt.Errorf("Invalid persistent task dependency:\n%v", err)
 	}
 
 	return engine, nil
@@ -771,15 +780,20 @@ func (r *run) executeTasks(ctx gocontext.Context, g *graph.CompleteGraph, rs *ru
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
-	visitor := g.GetPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
-	})
-	errs := engine.Execute(visitor, execOpts)
+	}
+
+	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
+	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
+
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
 			if exitCodeErr.ExitCode > exitCode {
