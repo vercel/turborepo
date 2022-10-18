@@ -8,12 +8,23 @@ ogImage: /images/blog/turbo-1-4-0/twitter-card.png
 
 # Turborepo 1.4
 
-import { Authors } from '../../components/Authors'
-import Callout from '../../components/Callout'
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Tuesday, August 9th, 2022</div>
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">
+  Tuesday, August 9th, 2022
+</div>
 
-<Authors authors={[ 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+<Authors
+  authors={[
+    "gsoltis",
+    "nathanhammond",
+    "tknickman",
+    "anthonyshewdev",
+    "jaredpalmer",
+    "mehulkar",
+  ]}
+/>
 
 Turborepo 1.4 brings:
 
@@ -52,9 +63,7 @@ For example, consider a monorepo with three workspaces: a Next.js project, a Cre
 {
   "pipeline": {
     "build": {
-      "dependsOn": [
-        "^build",
-      ]
+      "dependsOn": ["^build"]
     }
   }
 }
@@ -73,7 +82,7 @@ To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](http
 ```jsonc
 {
   // Automatically flag env vars missing from turbo.json
-  "extends": ["next/core-web-vitals", "turbo"],
+  "extends": ["next/core-web-vitals", "turbo"]
 }
 ```
 

@@ -3,7 +3,15 @@ on:
   push:
     branches: [main, staging]
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - run: 'echo "No build required"'
+      - run: 'echo "No check run equired"'
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'echo "No clippy run required"'
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'echo "No fmt run required"'

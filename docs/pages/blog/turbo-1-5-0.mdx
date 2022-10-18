@@ -8,12 +8,24 @@ ogImage: /images/blog/turbo-1-5-0/twitter-card.png
 
 # Turborepo 1.5
 
-import { Authors } from '../../components/Authors'
-import Callout from '../../components/Callout'
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Monday, September 19th, 2022</div>
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">
+  Monday, September 19th, 2022
+</div>
 
-<Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+<Authors
+  authors={[
+    "mattpocock",
+    "gsoltis",
+    "nathanhammond",
+    "tknickman",
+    "anthonyshewdev",
+    "jaredpalmer",
+    "mehulkar",
+  ]}
+/>
 
 Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well as bringing big improvements to `turbo prune`:
 
@@ -41,7 +53,13 @@ We want to fill this gap with [the Monorepo Handbook](/docs/handbook). We've bui
 
 ## Drop the `run`
 
-<iframe className="max-w-xl h-72 sm:h-96 w-full mt-6" src="https://www.youtube.com/embed/PEgk2v6KntY" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+<iframe
+  className="max-w-xl h-72 sm:h-96 w-full mt-6"
+  src="https://www.youtube.com/embed/PEgk2v6KntY"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+></iframe>
 
 You can now run tasks with the Turborepo CLI using `turbo <task>`.
 

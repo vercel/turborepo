@@ -8,12 +8,23 @@ ogImage: /images/blog/turbo-1-3-0/twitter-card.png
 
 # Turborepo 1.3
 
-import { Authors } from '../../components/Authors'
-import Callout from '../../components/Callout'
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Thursday, June 23rd, 2022</div>
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">
+  Thursday, June 23rd, 2022
+</div>
 
-<Authors authors={[ 'gsoltis', 'nathanhammond', 'tknickman', 'jaredpalmer', 'gaspargarcia_', 'becca__z', ]} />
+<Authors
+  authors={[
+    "gsoltis",
+    "nathanhammond",
+    "tknickman",
+    "jaredpalmer",
+    "gaspargarcia_",
+    "becca__z",
+  ]}
+/>
 
 With Turborepo 1.3 we are bringing improved caching and flexibility which includes:
 
@@ -65,11 +76,11 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     // ... omitted for brevity
-	 "build": {
+    "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"],
-   },
-   "docs#build": {
+      "outputs": [".next/**", "dist/**"]
+    },
+    "docs#build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**"],
       // Define set of relevant globs which impact caching of docs site
@@ -123,7 +134,7 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": [],
+      "outputs": []
     },
     // This will cause the "test" script from all workspace package.json's
     // AND the root package.json to be included when "turbo run test" is run
@@ -147,8 +158,8 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
         "examples/**/*.yaml",
         "cli/**/*.ts",
         "./scripts/run-example.sh"
-       ]
-    },
+      ]
+    }
   }
 }
 ```
