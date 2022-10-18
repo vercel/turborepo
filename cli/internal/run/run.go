@@ -192,7 +192,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if r.opts.runOpts.singlePackage {
 		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
 	} else {
-		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot))
+		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON)
 	}
 	if err != nil {
 		var warnings *context.Warnings
@@ -255,6 +255,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
+		pkgDepGraph.Lockfile,
 		r.base.Logger,
 		os.Environ(),
 	)
@@ -576,11 +577,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.singlePackage, "single-package", false, "Run turbo in single-package mode")
 	// This is a no-op flag, we don't need it anymore
 	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
-	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
 	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
-		panic(err)
-	}
-	if err := flags.MarkHidden("no-daemon"); err != nil {
 		panic(err)
 	}
 	if err := flags.MarkHidden("only"); err != nil {
