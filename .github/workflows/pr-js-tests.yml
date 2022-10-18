@@ -9,8 +9,8 @@ on:
     branches: ["main"]
   pull_request:
     types: [opened, edited, synchronize]
-    paths-ignore:
-      - docs/**
+    # paths-ignore:
+    #   - docs/**
 
 jobs:
   test:
