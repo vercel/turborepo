@@ -16,7 +16,7 @@ func testVisitor(taskID string) error {
 	return nil
 }
 
-func TestSchedulerDefault(t *testing.T) {
+func TestEngineDefault(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")
 	g.Add("b")
@@ -24,7 +24,7 @@ func TestSchedulerDefault(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "b"))
 	g.Connect(dag.BasicEdge("c", "a"))
 
-	p := NewScheduler(&g)
+	p := NewEngine(&g)
 	topoDeps := make(util.Set)
 	topoDeps.Add("build")
 	deps := make(util.Set)
@@ -55,7 +55,7 @@ func TestSchedulerDefault(t *testing.T) {
 		t.Fatal("AddTask is not adding tasks (test)")
 	}
 
-	err := p.Prepare(&SchedulerExecutionOptions{
+	err := p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"a", "b", "c"},
 		TaskNames: []string{"test"},
 		TasksOnly: false,
@@ -85,7 +85,7 @@ func TestUnknownDependency(t *testing.T) {
 	g.Add("a")
 	g.Add("b")
 	g.Add("c")
-	p := NewScheduler(g)
+	p := NewEngine(g)
 	err := p.AddDep("unknown#custom", "build")
 	if err == nil {
 		t.Error("expected error for unknown package, got nil")
@@ -118,7 +118,7 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 	p.AddTask(&Task{
@@ -135,12 +135,12 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	// but the combination of that package and task causes
 	// dependencies to also get run. This is the equivalent of
 	// turbo run test --filter=app2
-	err := p.Prepare(&SchedulerExecutionOptions{
+	err := p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"app2"},
 		TaskNames: []string{"test"},
 	})
 	if err != nil {
-		t.Fatalf("failed to prepare scheduler: %v", err)
+		t.Fatalf("failed to prepare engine: %v", err)
 	}
 	errs := p.Execute(testVisitor, ExecOpts{
 		Concurrency: 10,
@@ -173,7 +173,7 @@ func TestRunPackageTask(t *testing.T) {
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 	p.AddTask(&Task{
@@ -188,7 +188,7 @@ func TestRunPackageTask(t *testing.T) {
 	})
 	// equivalent to "turbo run special", without an entry for
 	// "special" in turbo.json. Only "app1#special" is defined.
-	err := p.Prepare(&SchedulerExecutionOptions{
+	err := p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"app1", "libA"},
 		TaskNames: []string{"special"},
 	})
@@ -215,15 +215,15 @@ func TestRunWithNoTasksFound(t *testing.T) {
 	graph.Add("lib")
 	graph.Connect(dag.BasicEdge("app", "lib"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 
-	err := p.Prepare(&SchedulerExecutionOptions{
+	err := p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"app", "lib"},
 		TaskNames: []string{"build"},
 	})
-	// should not fail because we have no tasks in the scheduler
+	// should not fail because we have no tasks in the engine
 	assert.NilError(t, err, "Prepare")
 }
 
@@ -233,7 +233,7 @@ func TestIncludeRootTasks(t *testing.T) {
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 	p.AddTask(&Task{
@@ -251,12 +251,12 @@ func TestIncludeRootTasks(t *testing.T) {
 		TopoDeps: make(util.Set),
 		Deps:     make(util.Set),
 	})
-	err := p.Prepare(&SchedulerExecutionOptions{
+	err := p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{util.RootPkgName, "app1", "libA"},
 		TaskNames: []string{"build", "test"},
 	})
 	if err != nil {
-		t.Fatalf("failed to prepare scheduler: %v", err)
+		t.Fatalf("failed to prepare engine: %v", err)
 	}
 	errs := p.Execute(testVisitor, ExecOpts{
 		Concurrency: 10,
@@ -290,7 +290,7 @@ func TestDependOnRootTask(t *testing.T) {
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 
@@ -307,7 +307,7 @@ func TestDependOnRootTask(t *testing.T) {
 	err := p.AddDep("//#root-task", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&SchedulerExecutionOptions{
+	err = p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -335,7 +335,7 @@ func TestDependOnMissingRootTask(t *testing.T) {
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 
@@ -347,7 +347,7 @@ func TestDependOnMissingRootTask(t *testing.T) {
 	err := p.AddDep("//#root-task", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&SchedulerExecutionOptions{
+	err = p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -362,7 +362,7 @@ func TestDependOnUnenabledRootTask(t *testing.T) {
 	graph.Add("libA")
 	graph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewScheduler(graph)
+	p := NewEngine(graph)
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 
@@ -379,7 +379,7 @@ func TestDependOnUnenabledRootTask(t *testing.T) {
 	err := p.AddDep("//#foo", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&SchedulerExecutionOptions{
+	err = p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -388,7 +388,7 @@ func TestDependOnUnenabledRootTask(t *testing.T) {
 	}
 }
 
-func TestSchedulerTasksOnly(t *testing.T) {
+func TestEngineTasksOnly(t *testing.T) {
 	var g dag.AcyclicGraph
 	g.Add("a")
 	g.Add("b")
@@ -396,7 +396,7 @@ func TestSchedulerTasksOnly(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "b"))
 	g.Connect(dag.BasicEdge("c", "a"))
 
-	p := NewScheduler(&g)
+	p := NewEngine(&g)
 	topoDeps := make(util.Set)
 	topoDeps.Add("build")
 	deps := make(util.Set)
@@ -423,7 +423,7 @@ func TestSchedulerTasksOnly(t *testing.T) {
 		t.Fatal("AddTask is not adding tasks (test)")
 	}
 
-	err := p.Prepare(&SchedulerExecutionOptions{
+	err := p.Prepare(&EngineExecutionOptions{
 		Packages:  []string{"a", "b", "c"},
 		TaskNames: []string{"test"},
 		TasksOnly: true,
