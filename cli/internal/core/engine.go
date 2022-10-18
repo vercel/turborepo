@@ -17,6 +17,8 @@ type Task struct {
 	Deps util.Set
 	// TopoDeps are dependencies across packages within the same topological graph (e.g. parent `build` -> child `build`) */
 	TopoDeps util.Set
+	// Persistent is whether this task is persistent or not. We need this information to validate TopoDeps graph
+	Persistent bool
 }
 
 type Visitor = func(taskID string) error
@@ -97,7 +99,7 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
-func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
+func (e *Engine) GetTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	if task, ok := e.Tasks[taskID]; ok {
 		return task, nil
 	}
@@ -115,12 +117,13 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		for _, taskName := range taskNames {
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
-				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
+				if _, err := e.GetTaskDefinition(pkg, taskName, taskID); err != nil {
 					// Initial, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.
 					continue
 				}
+
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
@@ -128,7 +131,9 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 	visited := make(util.Set)
 
+	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
 	for len(traversalQueue) > 0 {
+		// pop off the first item from the traversalQueue
 		taskID := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
 
@@ -136,7 +141,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
-		task, err := e.getTaskDefinition(pkg, taskName, taskID)
+		task, err := e.GetTaskDefinition(pkg, taskName, taskID)
 		if err != nil {
 			return err
 		}
