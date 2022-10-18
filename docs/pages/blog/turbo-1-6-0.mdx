@@ -19,6 +19,7 @@ Turborepo 1.6 changes the game for Turborepo - you can now use it in **any proje
 
 - [**Turborepo in non-monorepos**](#any-codebase-can-use-turborepo): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
 - [**Turborepo Agent:**](#the-turborepo-agent) A daemon to make your local building experience faster - while you're not even looking.
+- [**`turbo prune` now supports npm**](#prune-now-supported-on-npm): Pruning your monorepo is now supported in monorepos using `npm`, completing support for all major workspace managers.
 
 Update today by running `npm install turbo@latest`.
 
@@ -63,3 +64,11 @@ So, if we can't make it faster and we can't do less work, the best way we can ma
 - **Run file system**: We now know _ahead of time_ which workspaces have changed.
 
 As we transfer more powers to the agent, you'll see Turborepo feel faster and faster. We're committed to giving you the fastest experience possible.
+
+## Prune now supported on npm
+
+Over the last several releases, we've been adding support for [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
+
+We're delighted to announce that `turbo prune` now works for `npm`, completing support for all major package managers. This means that if your monorepo uses `npm`, `yarn`, `yarn 2+` or `pnpm`, you'll be able to deploy to Docker with ease.
+
+Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
