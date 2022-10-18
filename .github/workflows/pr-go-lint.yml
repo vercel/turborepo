@@ -7,6 +7,8 @@ concurrency:
 on:
   pull_request:
     types: [opened, edited, synchronize]
+    paths-ignore:
+      - docs/**
 
 permissions:
   contents: read
