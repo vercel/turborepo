@@ -24,20 +24,20 @@ type Task struct {
 
 type Visitor = func(taskID string) error
 
-type Scheduler struct {
+type Engine struct {
 	// TopologicGraph is a graph of workspaces
 	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
-	// Tasks are a map of tasks in the scheduler
+	// Tasks are a map of tasks in the engine
 	Tasks            map[string]*Task
 	PackageTaskDeps  [][]string
 	rootEnabledTasks util.Set
 }
 
-// NewScheduler creates a new scheduler given a topologic graph of workspace package names
-func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
-	return &Scheduler{
+// NewEngine creates a new engine given a topologic graph of workspace package names
+func NewEngine(topologicalGraph *dag.AcyclicGraph) *Engine {
+	return &Engine{
 		Tasks:            make(map[string]*Task),
 		TopologicGraph:   topologicalGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
@@ -46,8 +46,8 @@ func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
 	}
 }
 
-// SchedulerExecutionOptions are options for a single scheduler execution
-type SchedulerExecutionOptions struct {
+// EngineExecutionOptions are options for a single engine execution
+type EngineExecutionOptions struct {
 	// Packages in the execution scope, if nil, all packages will be considered in scope
 	Packages []string
 	// TaskNames in the execution scope, if nil, all tasks will be executed
@@ -56,7 +56,7 @@ type SchedulerExecutionOptions struct {
 	TasksOnly bool
 }
 
-func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
+func (p *Engine) Prepare(options *EngineExecutionOptions) error {
 	pkgs := options.Packages
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
@@ -82,7 +82,7 @@ type ExecOpts struct {
 }
 
 // Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
-func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
+func (p *Engine) Execute(visitor Visitor, opts ExecOpts) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
 	return p.TaskGraph.Walk(func(v dag.Vertex) error {
 		// Always return if it is the root node
@@ -98,7 +98,7 @@ func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
-func (p *Scheduler) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
+func (p *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	if task, ok := p.Tasks[taskID]; ok {
 		return task, nil
 	}
@@ -108,7 +108,7 @@ func (p *Scheduler) getTaskDefinition(pkg string, taskName string, taskID string
 	return nil, errNoTask
 }
 
-func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
+func (p *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
 	if p.PackageTaskDeps == nil {
 		p.PackageTaskDeps = [][]string{}
 	}
@@ -231,7 +231,7 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
-func (p *Scheduler) AddTask(task *Task) *Scheduler {
+func (p *Engine) AddTask(task *Task) *Engine {
 	// If a root task is added, mark the task name as eligible for
 	// root execution. Otherwise, it will be skipped.
 	if util.IsPackageTask(task.Name) {
@@ -244,7 +244,7 @@ func (p *Scheduler) AddTask(task *Task) *Scheduler {
 	return p
 }
 
-func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
+func (p *Engine) AddDep(fromTaskId string, toTaskId string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
 	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !p.TopologicGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
