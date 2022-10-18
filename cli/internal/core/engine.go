@@ -137,19 +137,19 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 	visited := make(util.Set)
 
 	for len(traversalQueue) > 0 {
-		taskId := traversalQueue[0]
+		taskID := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
 
-		pkg, taskName := util.GetPackageTaskFromId(taskId)
+		pkg, taskName := util.GetPackageTaskFromId(taskID)
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
-			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskId)
+			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
-		task, err := e.getTaskDefinition(pkg, taskName, taskId)
+		task, err := e.getTaskDefinition(pkg, taskName, taskID)
 		if err != nil {
 			return err
 		}
-		if !visited.Includes(taskId) {
-			visited.Add(taskId)
+		if !visited.Includes(taskID) {
+			visited.Add(taskID)
 			deps := task.Deps
 
 			if tasksOnly {
@@ -167,11 +167,11 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 				})
 			}
 
-			toTaskId := taskId
+			toTaskID := taskID
 			hasTopoDeps := task.TopoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
 			hasDeps := deps.Len() > 0
 			hasPackageTaskDeps := false
-			if _, ok := packageTasksDepsMap[toTaskId]; ok {
+			if _, ok := packageTasksDepsMap[toTaskID]; ok {
 				hasPackageTaskDeps = true
 			}
 
@@ -180,40 +180,40 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 				for _, from := range task.TopoDeps.UnsafeListOfStrings() {
 					// add task dep from all the package deps within repo
 					for depPkg := range depPkgs {
-						fromTaskId := util.GetTaskId(depPkg, from)
-						e.TaskGraph.Add(fromTaskId)
-						e.TaskGraph.Add(toTaskId)
-						e.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
-						traversalQueue = append(traversalQueue, fromTaskId)
+						fromTaskID := util.GetTaskId(depPkg, from)
+						e.TaskGraph.Add(fromTaskID)
+						e.TaskGraph.Add(toTaskID)
+						e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+						traversalQueue = append(traversalQueue, fromTaskID)
 					}
 				}
 			}
 
 			if hasDeps {
 				for _, from := range deps.UnsafeListOfStrings() {
-					fromTaskId := util.GetTaskId(pkg, from)
-					e.TaskGraph.Add(fromTaskId)
-					e.TaskGraph.Add(toTaskId)
-					e.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
-					traversalQueue = append(traversalQueue, fromTaskId)
+					fromTaskID := util.GetTaskId(pkg, from)
+					e.TaskGraph.Add(fromTaskID)
+					e.TaskGraph.Add(toTaskID)
+					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
 
 			if hasPackageTaskDeps {
-				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskId]; ok {
-					for _, fromTaskId := range pkgTaskDeps {
-						e.TaskGraph.Add(fromTaskId)
-						e.TaskGraph.Add(toTaskId)
-						e.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
-						traversalQueue = append(traversalQueue, fromTaskId)
+				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskID]; ok {
+					for _, fromTaskID := range pkgTaskDeps {
+						e.TaskGraph.Add(fromTaskID)
+						e.TaskGraph.Add(toTaskID)
+						e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+						traversalQueue = append(traversalQueue, fromTaskID)
 					}
 				}
 			}
 
 			if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
 				e.TaskGraph.Add(ROOT_NODE_NAME)
-				e.TaskGraph.Add(toTaskId)
-				e.TaskGraph.Connect(dag.BasicEdge(toTaskId, ROOT_NODE_NAME))
+				e.TaskGraph.Add(toTaskID)
+				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, ROOT_NODE_NAME))
 			}
 		}
 	}
@@ -248,11 +248,11 @@ func (e *Engine) AddTask(task *Task) *Engine {
 }
 
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
-func (e *Engine) AddDep(fromTaskId string, toTaskId string) error {
-	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
+func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
+	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
 	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
-		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
+		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
-	e.PackageTaskDeps = append(e.PackageTaskDeps, []string{fromTaskId, toTaskId})
+	e.PackageTaskDeps = append(e.PackageTaskDeps, []string{fromTaskID, toTaskID})
 	return nil
 }
