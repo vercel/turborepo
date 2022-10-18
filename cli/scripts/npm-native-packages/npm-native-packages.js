@@ -45,13 +45,11 @@ const outputPath = path.join(__dirname, "build", template.name);
 fs.rmSync(outputPath, { recursive: true, force: true });
 fs.mkdirSync(outputPath, { recursive: true });
 
-if (os === "windows") {
-  fs.mkdirSync(path.join(outputPath, "bin"));
-  fs.copyFileSync(
-    path.join(__dirname, "template", "bin", "turbo"),
-    path.join(outputPath, "bin", "turbo")
-  );
-}
+fs.mkdirSync(path.join(outputPath, "bin"));
+fs.copyFileSync(
+  path.join(__dirname, "template", "bin", "turbo"),
+  path.join(outputPath, "bin", "turbo")
+);
 fs.copyFileSync(
   path.join(__dirname, "template", "README.md"),
   path.join(outputPath, "README.md")
