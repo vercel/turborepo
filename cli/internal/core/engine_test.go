@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pyr-sh/dag"
+	assertOther "github.com/stretchr/testify/assert"
 	"github.com/vercel/turbo/cli/internal/util"
 	"gotest.tools/v3/assert"
-
-	"github.com/pyr-sh/dag"
 )
 
 func testVisitor(taskID string) error {
@@ -65,7 +65,7 @@ func TestEngineDefault(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	errs := p.Execute(testVisitor, EngineExecutionOptions{
+	errs := p.Execute(testVisitor, EngineBuildingOptions{
 		Concurrency: 10,
 	})
 
@@ -142,7 +142,7 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare engine: %v", err)
 	}
-	errs := p.Execute(testVisitor, EngineExecutionOptions{
+	errs := p.Execute(testVisitor, EngineBuildingOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -165,6 +165,125 @@ libD#build
 	if actual != expected {
 		t.Errorf("task graph got:\n%v\nwant:\n%v", actual, expected)
 	}
+}
+
+func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
+	pkgGraph, workspaces := _buildWorkspaceGraph()
+	engine := NewEngine(&pkgGraph)
+
+	// "dev": dependsOn: ["^dev"] (where dev is persistent)
+	engine.AddTask(&Task{
+		Name:       "dev",
+		TopoDeps:   util.SetFromStrings([]string{"dev"}),
+		Deps:       make(util.Set), // empty, no non-caret task deps.
+		Persistent: true,
+	})
+
+	err := engine.Prepare(&EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"dev"},
+		TasksOnly: false,
+	})
+
+	expected := "Persistent tasks cannot depend on other persistent tasks. Found \"workspace-c#dev\" depends on \"workspace-b#dev\""
+	assertOther.EqualErrorf(t, err, expected, "")
+}
+
+func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
+	pkgGraph, workspaces := _buildWorkspaceGraph()
+	engine := NewEngine(&pkgGraph)
+
+	// "build": dependsOn: ["something"] (where build is not, but "something" is persistent)
+	engine.AddTask(&Task{
+		Name:       "build",
+		TopoDeps:   make(util.Set), // empty
+		Deps:       util.SetFromStrings([]string{"something"}),
+		Persistent: false,
+	})
+
+	engine.AddTask(&Task{
+		Name:       "something",
+		TopoDeps:   make(util.Set),
+		Deps:       make(util.Set),
+		Persistent: true,
+	})
+
+	err := engine.Prepare(&EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"build"},
+		TasksOnly: false,
+	})
+
+	expected := "Persistent tasks cannot depend on other persistent tasks. Found \"workspace-a#build\" depends on \"workspace-a#something\""
+	assertOther.EqualErrorf(t, err, expected, "")
+}
+
+func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
+	pkgGraph, workspaces := _buildWorkspaceGraph()
+	engine := NewEngine(&pkgGraph)
+
+	// "dev": dependsOn: ["workspace-b#something"]
+	engine.AddTask(&Task{
+		Name:       "dev",
+		TopoDeps:   make(util.Set), // empty
+		Deps:       util.SetFromStrings([]string{"workspace-b#something"}),
+		Persistent: true,
+	})
+
+	// workspace-b#something is persistent, and has no dependencies
+	engine.AddTask(&Task{
+		Name:       "workspace-b#something",
+		TopoDeps:   make(util.Set), // empty
+		Deps:       make(util.Set), // empty
+		Persistent: true,
+	})
+
+	// Do the thing
+	err := engine.Prepare(&EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"dev"},
+		TasksOnly: false,
+	})
+
+	expected := "Persistent tasks cannot depend on other persistent tasks. Found \"workspace-a#dev\" depends on \"workspace-b#something\""
+	assertOther.EqualErrorf(t, err, expected, "")
+}
+
+func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
+	// "workspace-a#dev": dependsOn: ["workspace-b#dev"] (where workspace-a#dev and workspace-b#dev are persistent)
+
+	pkgGraph, workspaces := _buildWorkspaceGraph()
+	engine := NewEngine(&pkgGraph)
+
+	// workspace-a#dev dependsOn workspace-a#dev
+	if err := engine.AddDep("workspace-b#dev", "workspace-a#dev"); err != nil {
+		t.Fatalf("Something went wrong in test construction: %s", err)
+	}
+
+	// workspace-a#dev specifically dependsOn workspace-b#dev
+	engine.AddTask(&Task{
+		Name:       "workspace-a#dev",
+		TopoDeps:   make(util.Set), // empty
+		Deps:       util.SetFromStrings([]string{"workspace-b#dev"}),
+		Persistent: true,
+	})
+
+	// workspace-b#dev dependsOn nothing else
+	engine.AddTask(&Task{
+		Name:       "workspace-b#dev",
+		TopoDeps:   make(util.Set), // empty
+		Deps:       make(util.Set), // empty
+		Persistent: true,
+	})
+
+	err := engine.Prepare(&EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"dev"},
+		TasksOnly: false,
+	})
+
+	expected := "Persistent tasks cannot depend on other persistent tasks. Found \"workspace-a#dev\" depends on \"workspace-b#dev\""
+	assertOther.EqualErrorf(t, err, expected, "")
 }
 
 func TestRunPackageTask(t *testing.T) {
@@ -193,7 +312,7 @@ func TestRunPackageTask(t *testing.T) {
 		TaskNames: []string{"special"},
 	})
 	assert.NilError(t, err, "Prepare")
-	errs := p.Execute(testVisitor, EngineExecutionOptions{
+	errs := p.Execute(testVisitor, EngineBuildingOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -258,7 +377,7 @@ func TestIncludeRootTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare engine: %v", err)
 	}
-	errs := p.Execute(testVisitor, EngineExecutionOptions{
+	errs := p.Execute(testVisitor, EngineBuildingOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -312,7 +431,7 @@ func TestDependOnRootTask(t *testing.T) {
 		TaskNames: []string{"build"},
 	})
 	assert.NilError(t, err, "Prepare")
-	errs := p.Execute(testVisitor, EngineExecutionOptions{
+	errs := p.Execute(testVisitor, EngineBuildingOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -433,7 +552,7 @@ func TestEngineTasksOnly(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	errs := p.Execute(testVisitor, EngineExecutionOptions{
+	errs := p.Execute(testVisitor, EngineBuildingOptions{
 		Concurrency: 10,
 	})
 
@@ -479,3 +598,18 @@ b#test
 c#test
   ___ROOT___
 `
+
+// helper function for some of the tests to set up workspace
+func _buildWorkspaceGraph() (dag.AcyclicGraph, []string) {
+	var graph dag.AcyclicGraph
+	// build workspace graph.
+	allWorkspaces := []string{"workspace-a", "workspace-b", "workspace-c"}
+	for _, workspace := range allWorkspaces {
+		graph.Add(workspace)
+	}
+
+	// A and B depend on C.
+	graph.Connect(dag.BasicEdge("workspace-c", "workspace-b"))
+	graph.Connect(dag.BasicEdge("workspace-c", "workspace-a"))
+	return graph, allWorkspaces
+}

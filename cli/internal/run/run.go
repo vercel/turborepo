@@ -478,28 +478,29 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 	engine := core.NewEngine(topoGraph)
 
 	for taskName, taskDefinition := range pipeline {
-		topoDeps := make(util.Set)
 		deps := make(util.Set)
+
 		isPackageTask := util.IsPackageTask(taskName)
+
 		for _, dependency := range taskDefinition.TaskDependencies {
-			if isPackageTask && util.IsPackageTask(dependency) {
-				err := engine.AddDep(dependency, taskName)
-				if err != nil {
+			depTaskIsPackageTask := util.IsPackageTask(dependency)
+			// If both tasks are package tasks, add the relationship to the engine.
+			// Otherwise, if it's a dependency like `dependsOn: ['whatever']`
+			// add the dependency to the task itself.
+			if isPackageTask && depTaskIsPackageTask {
+				if err := engine.AddDep(dependency, taskName); err != nil {
 					return nil, err
 				}
 			} else {
 				deps.Add(dependency)
 			}
 		}
-		for _, dependency := range taskDefinition.TopologicalDependencies {
-			topoDeps.Add(dependency)
-		}
 
 		engine.AddTask(&core.Task{
 			Name:       taskName,
-			TopoDeps:   topoDeps,
-			Persistent: taskDefinition.Persistent,
+			TopoDeps:   util.SetFromStrings(taskDefinition.TopologicalDependencies),
 			Deps:       deps,
+			Persistent: taskDefinition.Persistent,
 		})
 	}
 
@@ -518,70 +519,7 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
 	}
 
-	// TaskGraph is a DAG with string references, not the full pipeline.
-	// We need to do some validation of the TaskGraph _while_ looking at the
-	// information in engine.pipeline, which has the Persistent field.
-	if err := validatePersistentTasks(engine); err != nil {
-		return nil, err
-	}
-
 	return engine, nil
-}
-
-// TODO: replace all the debug logs with actual debug logging.
-func validatePersistentTasks(engine *core.Engine) error {
-	// Check that only leaf nodes are persistent:true
-	for _, vertex := range engine.TaskGraph.Vertices() {
-		taskID := vertex.(string)
-		// We don't care about the root node in the graph
-		// TODO: is there a better way to check this?
-		if taskID == "___ROOT___" {
-			continue
-		}
-
-		currentTaskPackageName, currentTaskName := util.GetPackageTaskFromId(taskID)
-		currentTask, err := engine.GetTaskDefinition(currentTaskPackageName, currentTaskName, taskID)
-		if err != nil {
-			return fmt.Errorf("Something went wrong: %s", err)
-		}
-
-		// We only care about Persistent task
-		if !currentTask.Persistent {
-			continue
-		}
-
-		taskDependenciesNodes := engine.TaskGraph.DownEdges(vertex)
-
-		// We only care if Persistent tasks have dependencies
-		if taskDependenciesNodes.Len() == 0 {
-			continue
-		}
-
-		// For each dependency, check if it's a Persistent task
-		for _, dependencyID := range taskDependenciesNodes {
-			dependencyIDStr := dependencyID.(string)
-
-			// We don't care about the root node in the graph
-			// TODO: is there a better way to check this?
-			if dependencyIDStr == "___ROOT___" {
-				continue
-			}
-
-			pkgName, taskName := util.GetPackageTaskFromId(dependencyIDStr)
-			dependencyTask, err := engine.GetTaskDefinition(pkgName, taskName, dependencyIDStr)
-
-			if err != nil {
-				return fmt.Errorf("Someting went wrong: %s", err)
-			}
-
-			if dependencyTask.Persistent {
-				return fmt.Errorf("Persistent tasks cannot depend on other persistent tasks. Found %#v depends on %#v", taskID, dependencyIDStr)
-			}
-
-		}
-	}
-
-	return nil
 }
 
 // Opts holds the current run operations configuration

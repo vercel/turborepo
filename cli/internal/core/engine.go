@@ -99,7 +99,7 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
-func (e *Engine) GetTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
+func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	if task, ok := e.Tasks[taskID]; ok {
 		return task, nil
 	}
@@ -117,7 +117,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		for _, taskName := range taskNames {
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
-				if _, err := e.GetTaskDefinition(pkg, taskName, taskID); err != nil {
+				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
 					// Initial, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.
@@ -141,7 +141,11 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
-		task, err := e.GetTaskDefinition(pkg, taskName, taskID)
+
+		// `task` could be a workspace-specific task definition or
+		// the generic task definition in turbo.json
+		task, err := e.getTaskDefinition(pkg, taskName, taskID)
+
 		if err != nil {
 			return err
 		}
@@ -193,10 +197,10 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			for _, from := range task.TopoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
-					fromTaskID := util.GetTaskId(depPkg, from)
-					e.TaskGraph.Add(fromTaskID)
-					e.TaskGraph.Add(toTaskID)
-					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+					fromTaskID, err := e.addTaskToGraph(toTaskID, from, depPkg.(string))
+					if err != nil {
+						return err
+					}
 					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
@@ -204,10 +208,10 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		if hasDeps {
 			for _, from := range task.Deps.UnsafeListOfStrings() {
-				fromTaskID := util.GetTaskId(pkg, from)
-				e.TaskGraph.Add(fromTaskID)
-				e.TaskGraph.Add(toTaskID)
-				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+				fromTaskID, err := e.addTaskToGraph(toTaskID, from, pkg)
+				if err != nil {
+					return err
+				}
 				traversalQueue = append(traversalQueue, fromTaskID)
 			}
 		}
@@ -215,14 +219,17 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		if hasPackageTaskDeps {
 			if pkgTaskDeps, ok := e.PackageTaskDeps[toTaskID]; ok {
 				for _, fromTaskID := range pkgTaskDeps {
-					e.TaskGraph.Add(fromTaskID)
-					e.TaskGraph.Add(toTaskID)
-					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+					fromTaskID, err := e.addTaskToGraph(toTaskID, fromTaskID, "")
+					if err != nil {
+						return err
+					}
+
 					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
 		}
 
+		// Add the root node into the graph
 		if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
 			e.TaskGraph.Add(ROOT_NODE_NAME)
 			e.TaskGraph.Add(toTaskID)
@@ -231,6 +238,25 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 	}
 
 	return nil
+}
+
+// addTaskToGraph adds an edge between two tasks, but validates the relationship is valid first.
+func (e *Engine) addTaskToGraph(taskID string, from string, pkgName string) (string, error) {
+	fromTaskID := util.GetTaskId(pkgName, from)
+	fromTask, _ := e.getTaskDefinition(pkgName, from, fromTaskID)
+
+	// If the fromTask is persistent, we need to throw, because tasks cannot depend on persistent tasks.
+	if fromTask.Persistent {
+		return "", fmt.Errorf("Persistent tasks cannot depend on other persistent tasks. Found %#v depends on %#v", taskID, fromTaskID)
+	}
+
+	// Otherwise, add the relationship into the TaskGraph.
+	e.TaskGraph.Add(fromTaskID)
+	e.TaskGraph.Add(taskID)
+	e.TaskGraph.Connect(dag.BasicEdge(taskID, fromTaskID))
+
+	// Return the fromTaskID we looked up
+	return fromTaskID, nil
 }
 
 // AddTask adds a task to the Engine so it can be looked up later.
@@ -247,7 +273,8 @@ func (e *Engine) AddTask(task *Task) *Engine {
 	return e
 }
 
-// AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
+// AddDep adds tuples from+to task ID combos in tuple format so
+// they can be looked up later.
 func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
 	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
