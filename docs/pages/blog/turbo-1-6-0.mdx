@@ -125,6 +125,71 @@ Congratulations - **you just ran your first build with `turbo`**. You can try:
 - Running through the full [Quickstart](/docs/getting-started/add-to-project).
 - Check out our updated [Core Concepts docs](/docs/core-concepts/caching) to understand what makes Turborepo special.
 
+## When should I use Turborepo?
+
+Turborepo being available for non-monorepos opens up a lot of new use cases. But when is it at its best?
+
+### When scripts depend on each other
+
+You should use Turbo to run your `package.json` scripts. If you've got multiple scripts which all rely on each other, you can express them as Turbo tasks:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      // 'build' should be run before 'lint'
+      "dependsOn": ["build"]
+    },
+    "test": {
+      // 'build' should be run before 'test'
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+Then, you can run:
+
+```sh
+turbo run lint test
+```
+
+Because you've said that `build` should be run before `lint` and `test`, it'll _automatically run `build` for you_ when you run `lint` or `test`.
+
+Not only that, but it'll figure out the optimal schedule for you. Head to our core concepts doc on [optimizing for speed](/docs/core-concepts/monorepos/running-tasks#most-tools-dont-optimize-for-speed).
+
+### When you want to run tasks in parallel
+
+Imagine you're running a [Next.js](https://nextjs.org/) app, and also running the [Tailwind CLI](https://tailwindcss.com/docs). You might have two scripts - `dev` and `dev:css`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "dev": "next",
+    "dev:css": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+  }
+}
+```
+
+Without anything being added to your `turbo.json`, you can run:
+
+```sh
+turbo run dev dev:css
+```
+
+Just like tools like [`concurrently`](https://www.npmjs.com/package/concurrently), Turborepo will automatically run the two scripts in parallel.
+
+This is extremely useful for dev mode, but can also be used to speed up tasks on CI - imagine you have multiple scripts to run:
+
+```sh
+turbo run lint unit:test e2e:test integration:test
+```
+
+Turborepo will figure out the optimally fast path to run all of your tasks in parallel.
+
 ## Prune now supported on npm
 
 Over the last several releases, we've been adding support for [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
