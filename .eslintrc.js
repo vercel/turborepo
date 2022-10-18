@@ -6,7 +6,8 @@ module.exports = {
     "target",
     "dist",
     "node_modules",
-    "crates",
+    "crates/*/tests",
+    "crates/*/benches",
     "packages/create-turbo/templates",
     "packages/turbo-tracing-next-plugin/test/with-mongodb-mongoose",
   ],
@@ -20,9 +21,15 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["./docs/theme.config.js"],
+      files: ["docs/theme.config.js"],
       rules: {
         "react-hooks/rules-of-hooks": "off",
+      },
+    },
+    {
+      files: "crates/*/js/**",
+      rules: {
+        "prefer-const": "error",
       },
     },
   ],
