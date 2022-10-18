@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"gopkg.in/yaml.v3"
+	"github.com/vercel/turborepo/cli/internal/yaml"
 )
 
 type YarnRC struct {
