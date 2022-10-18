@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/yaml"
 	"gotest.tools/v3/assert"
 )
 
@@ -112,4 +113,12 @@ func Test_SubgraphInjectedPackages(t *testing.T) {
 
 	assert.Assert(t, hasInjectedPackage, "pruned lockfile is missing injected package")
 
+}
+
+func Test_DecodePnpmUnquotedURL(t *testing.T) {
+	resolutionWithQuestionMark := `{integrity: sha512-deadbeef, tarball: path/to/tarball?foo=bar}`
+	var resolution map[string]interface{}
+	err := yaml.Unmarshal([]byte(resolutionWithQuestionMark), &resolution)
+	assert.NilError(t, err, "valid package entry should be able to be decoded")
+	assert.Equal(t, resolution["tarball"], "path/to/tarball?foo=bar")
 }
