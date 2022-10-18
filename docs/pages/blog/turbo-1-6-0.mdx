@@ -6,6 +6,8 @@ tag: web development
 ogImage: /images/blog/turbo-1-6-0/twitter-card.png
 ---
 
+import { Tabs, Tab } from '../../components/Tabs'
+
 # Turborepo 1.6
 
 import { Authors } from '../../components/Authors'
@@ -15,7 +17,7 @@ import Callout from '../../components/Callout'
 
 <Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
 
-Turborepo 1.6 changes the game for Turborepo - you can now use it in **any project**, and we've shipped the **Turborepo Agent** to speed up everything you do with Turborepo.
+Turborepo 1.6 changes the game for Turborepo - you can now use it in **any project**.
 
 - [**Turborepo in non-monorepos**](#any-codebase-can-use-turborepo): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
 - [**`turbo prune` now supports npm**](#prune-now-supported-on-npm): Pruning your monorepo is now supported in monorepos using `npm`, completing support for all major workspace managers.
@@ -27,11 +29,101 @@ Update today by running `npm install turbo@latest`.
 
 Turborepo helps speed up tasks in your codebase. Until now, we'd built Turborepo specifically for monorepos - codebases which contain multiple applications and packages.
 
-Turborepo is awesome in monorepos because they have so many tasks to handle. Each package and app needs to be built, linted, and tested.
+Turborepo is fantastic in monorepos because they have so many tasks to handle. Each package and app needs to be built, linted, and tested.
 
 But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of tasks. Most CI/CD processes do a lot of duplicated work that would benefit from a [cache](/docs/core-concepts/caching).
 
-So we're excited to announce that **any codebase can now use Turborepo**. Try out our [new quickstart](/docs/getting-started/add-to-project) to get Turbo running on your non-monorepo project.
+So we're excited to announce that **any codebase can now use Turborepo**. Try it out now:
+
+### Add Turborepo to your project
+
+1. **Install `turbo` globally:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install --global turbo
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn global add turbo
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install --global turbo
+    ```
+  </Tab>
+</Tabs>
+
+2. **Add a `turbo.json` file at the base of your new repository:**
+
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Some Vite starters ship with a `package.json` that looks like this:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "tsc && vite build"
+  }
+}
+```
+
+We recommend splitting these into a `lint` and `build` script.
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "vite build",
+    "lint": "tsc"
+  }
+}
+```
+
+This means that Turbo can schedule them separately.
+
+  </Tab>
+</Tabs>
+
+3. **Try running `build` and `lint` with `turbo`:**
+
+```bash
+turbo build lint
+```
+
+Congratulations - **you just ran your first build with `turbo`**. You can try:
+
+- Running through the full [Quickstart](/docs/getting-started/add-to-project).
+- Check out our updated [Core Concepts docs](/docs/core-concepts/caching) to understand what makes Turborepo special.
 
 ## Prune now supported on npm
 
