@@ -219,11 +219,11 @@ fn main() -> Result<()> {
         env::current_dir()?
     };
 
-    if clap_args.command.is_none() && clap_args.task.is_none() {
+    let mut args: Vec<_> = env::args().skip(1).collect();
+
+    if args.is_empty() {
         process::exit(1);
     }
-
-    let mut args: Vec<_> = env::args().skip(1).collect();
     let repo_state = RepoState::infer(&current_dir)?;
 
     if matches!(repo_state.mode, RepoMode::SinglePackage) && is_run_command(&clap_args) {
