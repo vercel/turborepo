@@ -49,7 +49,7 @@ type RemoteCacheOptions struct {
 	Signature bool   `json:"signature,omitempty"`
 }
 
-type rawTaskDefinition struct {
+type rawTask struct {
 	Outputs    *[]string           `json:"outputs"`
 	Cache      *bool               `json:"cache,omitempty"`
 	DependsOn  []string            `json:"dependsOn,omitempty"`
@@ -207,8 +207,8 @@ func (pc Pipeline) HasTask(task string) bool {
 
 // UnmarshalJSON deserializes JSON into a TaskDefinition
 func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
-	rawTaskDefinition := &rawTaskDefinition{}
-	if err := json.Unmarshal(data, &rawTaskDefinition); err != nil {
+	task := rawTask{}
+	if err := json.Unmarshal(data, &task); err != nil {
 		return err
 	}
 
@@ -216,10 +216,10 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// because we interpret the omission of outputs to be different
 	// from an empty array. We can't use omitempty because it will
 	// always unmarshal into an empty array which is not what we want.
-	if rawTaskDefinition.Outputs != nil {
+	if task.Outputs != nil {
 		var inclusions []string
 		var exclusions []string
-		for _, glob := range *rawTaskDefinition.Outputs {
+		for _, glob := range *task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
 			} else {
@@ -236,17 +236,17 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 	sort.Strings(c.Outputs.Inclusions)
 	sort.Strings(c.Outputs.Exclusions)
-	if rawTaskDefinition.Cache == nil {
+	if task.Cache == nil {
 		c.ShouldCache = true
 	} else {
-		c.ShouldCache = *rawTaskDefinition.Cache
+		c.ShouldCache = *task.Cache
 	}
 
 	envVarDependencies := make(util.Set)
 	c.TopologicalDependencies = []string{}
 	c.TaskDependencies = []string{}
 
-	for _, dependency := range rawTaskDefinition.DependsOn {
+	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
 			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
@@ -260,7 +260,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	sort.Strings(c.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
-	for _, value := range rawTaskDefinition.Env {
+	for _, value := range task.Env {
 		if strings.HasPrefix(value, envPipelineDelimiter) {
 			// Hard error to help people specify this correctly during migration.
 			// TODO: Remove this error after we have run summary.
@@ -274,8 +274,8 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	sort.Strings(c.EnvVarDependencies)
 	// Note that we don't require Inputs to be sorted, we're going to
 	// hash the resulting files and sort that instead
-	c.Inputs = rawTaskDefinition.Inputs
-	c.OutputMode = rawTaskDefinition.OutputMode
+	c.Inputs = task.Inputs
+	c.OutputMode = task.OutputMode
 	return nil
 }
 
