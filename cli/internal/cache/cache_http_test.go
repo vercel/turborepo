@@ -3,12 +3,14 @@ package cache
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"net/http"
 	"testing"
 
+	"github.com/DataDog/zstd"
+
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"gotest.tools/v3/assert"
 )
@@ -23,6 +25,14 @@ func (sr *errorResp) PutArtifact(hash string, body []byte, duration int, tag str
 
 func (sr *errorResp) FetchArtifact(hash string) (*http.Response, error) {
 	return nil, sr.err
+}
+
+func (sr *errorResp) ArtifactExists(hash string) (*http.Response, error) {
+	return nil, sr.err
+}
+
+func (sr *errorResp) GetTeamID() string {
+	return ""
 }
 
 func TestRemoteCachingDisabled(t *testing.T) {
@@ -55,13 +65,13 @@ func makeValidTar(t *testing.T) *bytes.Buffer {
 
 	t.Helper()
 	buf := &bytes.Buffer{}
-	gzw := gzip.NewWriter(buf)
+	zw := zstd.NewWriter(buf)
 	defer func() {
-		if err := gzw.Close(); err != nil {
+		if err := zw.Close(); err != nil {
 			t.Fatalf("failed to close gzip: %v", err)
 		}
 	}()
-	tw := tar.NewWriter(gzw)
+	tw := tar.NewWriter(zw)
 	defer func() {
 		if err := tw.Close(); err != nil {
 			t.Fatalf("failed to close tar: %v", err)
@@ -135,13 +145,13 @@ func makeInvalidTar(t *testing.T) *bytes.Buffer {
 
 	t.Helper()
 	buf := &bytes.Buffer{}
-	gzw := gzip.NewWriter(buf)
+	zw := zstd.NewWriter(buf)
 	defer func() {
-		if err := gzw.Close(); err != nil {
+		if err := zw.Close(); err != nil {
 			t.Fatalf("failed to close gzip: %v", err)
 		}
 	}()
-	tw := tar.NewWriter(gzw)
+	tw := tar.NewWriter(zw)
 	defer func() {
 		if err := tw.Close(); err != nil {
 			t.Fatalf("failed to close tar: %v", err)
@@ -166,22 +176,28 @@ func makeInvalidTar(t *testing.T) *bytes.Buffer {
 }
 
 func TestRestoreTar(t *testing.T) {
-	root := fs.AbsolutePathFromUpstream(t.TempDir())
+	root := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	tar := makeValidTar(t)
 
-	expectedFiles := []string{
-		"extra-file",
-		"my-pkg/",
-		"my-pkg/some-file",
-		"my-pkg/link-to-extra-file",
-		"my-pkg/broken-link",
+	expectedFiles := []turbopath.AnchoredSystemPath{
+		turbopath.AnchoredUnixPath("extra-file").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/some-file").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/link-to-extra-file").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg/broken-link").ToSystemPath(),
 	}
 	files, err := restoreTar(root, tar)
 	assert.NilError(t, err, "readTar")
 
-	expectedSet := util.SetFromStrings(expectedFiles)
-	gotSet := util.SetFromStrings(files)
+	expectedSet := make(util.Set)
+	for _, file := range expectedFiles {
+		expectedSet.Add(file.ToString())
+	}
+	gotSet := make(util.Set)
+	for _, file := range files {
+		gotSet.Add(file.ToString())
+	}
 	extraFiles := gotSet.Difference(expectedSet)
 	if extraFiles.Len() > 0 {
 		t.Errorf("got extra files: %v", extraFiles.UnsafeListOfStrings())
@@ -192,28 +208,28 @@ func TestRestoreTar(t *testing.T) {
 	}
 
 	// Verify file contents
-	extraFile := root.Join("extra-file")
+	extraFile := root.UntypedJoin("extra-file")
 	contents, err := extraFile.ReadFile()
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, contents, []byte("extra-file-contents"))
 
-	someFile := root.Join("my-pkg", "some-file")
+	someFile := root.UntypedJoin("my-pkg", "some-file")
 	contents, err = someFile.ReadFile()
 	assert.NilError(t, err, "ReadFile")
 	assert.DeepEqual(t, contents, []byte("some-file-contents"))
 }
 
 func TestRestoreInvalidTar(t *testing.T) {
-	root := fs.AbsolutePathFromUpstream(t.TempDir())
+	root := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	expectedContents := []byte("important-data")
-	someFile := root.Join("some-file")
+	someFile := root.UntypedJoin("some-file")
 	err := someFile.WriteFile(expectedContents, 0644)
 	assert.NilError(t, err, "WriteFile")
 
 	tar := makeInvalidTar(t)
 	// use a child directory so that blindly untarring will squash the file
 	// that we just wrote above.
-	repoRoot := root.Join("repo")
+	repoRoot := root.UntypedJoin("repo")
 	_, err = restoreTar(repoRoot, tar)
 	if err == nil {
 		t.Error("expected error untarring invalid tar")

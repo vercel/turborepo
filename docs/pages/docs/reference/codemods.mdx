@@ -125,3 +125,67 @@ Run the codemod:
 ```sh
 npx @turbo/codemod create-turbo-config
 ```
+
+### `migrate-env-var-dependencies`
+
+Migrates all environment variable dependencies in `turbo.json` from `dependsOn` and `globalDependencies` to `env` and `globalEnv` respecively.
+
+For example:
+
+```json
+// Before, turbo.json
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "globalDependencies": [".env", "$CI_ENV"],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build", "$API_BASE"],
+      "outputs": [".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+
+```
+
+````diff
+// After, turbo.json
+{
+  "$schema": "https://turborepo.org/schema.json",
+- "globalDependencies": [".env", "$CI_ENV"],
++ "globalDependencies": [".env"],
++ "globalEnv": ["CI_ENV"],
+  "pipeline": {
+    "build": {
+-     "dependsOn": ["^build", "$API_BASE"],
++     "dependsOn": ["^build"],
++     "env": ["API_BASE"],
+      "outputs": [".next/**"],
+    },
+    "lint": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
+
+#### Usage
+
+Go to your project:
+
+```sh
+cd path-to-your-turborepo/
+````
+
+Run the codemod:
+
+```sh
+npx @turbo/codemod migrate-env-var-dependencies
+```

@@ -8,39 +8,46 @@ import (
 	"reflect"
 
 	"github.com/adrg/xdg"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
-func CheckedToAbsolutePath(s string) (turbopath.AbsolutePath, error) {
+// CheckedToAbsoluteSystemPath inspects a string and determines if it is an absolute path.
+func CheckedToAbsoluteSystemPath(s string) (turbopath.AbsoluteSystemPath, error) {
 	if filepath.IsAbs(s) {
-		return turbopath.AbsolutePath(s), nil
+		return turbopath.AbsoluteSystemPath(s), nil
 	}
 	return "", fmt.Errorf("%v is not an absolute path", s)
 }
 
 // ResolveUnknownPath returns unknown if it is an absolute path, otherwise, it
 // assumes unknown is a path relative to the given root.
-func ResolveUnknownPath(root turbopath.AbsolutePath, unknown string) turbopath.AbsolutePath {
+func ResolveUnknownPath(root turbopath.AbsoluteSystemPath, unknown string) turbopath.AbsoluteSystemPath {
 	if filepath.IsAbs(unknown) {
-		return turbopath.AbsolutePath(unknown)
+		return turbopath.AbsoluteSystemPath(unknown)
 	}
-	return root.Join(unknown)
+	return root.UntypedJoin(unknown)
 }
 
-func UnsafeToAbsolutePath(s string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(s)
+// UnsafeToAbsoluteSystemPath directly converts a string to an AbsoluteSystemPath
+func UnsafeToAbsoluteSystemPath(s string) turbopath.AbsoluteSystemPath {
+	return turbopath.AbsoluteSystemPath(s)
 }
 
-// AbsolutePathFromUpstream is used to mark return values from APIs that we
+// UnsafeToAnchoredSystemPath directly converts a string to an AbsoluteSystemPath
+func UnsafeToAnchoredSystemPath(s string) turbopath.AnchoredSystemPath {
+	return turbopath.AnchoredSystemPath(s)
+}
+
+// AbsoluteSystemPathFromUpstream is used to mark return values from APIs that we
 // expect to give us absolute paths. No checking is performed.
 // Prefer to use this over a cast to maintain the search-ability of interfaces
-// into and out of the turbopath.AbsolutePath type.
-func AbsolutePathFromUpstream(s string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(s)
+// into and out of the turbopath.AbsoluteSystemPath type.
+func AbsoluteSystemPathFromUpstream(s string) turbopath.AbsoluteSystemPath {
+	return turbopath.AbsoluteSystemPath(s)
 }
 
-func GetCwd() (turbopath.AbsolutePath, error) {
+// GetCwd returns the calculated working directory after traversing symlinks.
+func GetCwd() (turbopath.AbsoluteSystemPath, error) {
 	cwdRaw, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("invalid working directory: %w", err)
@@ -51,7 +58,7 @@ func GetCwd() (turbopath.AbsolutePath, error) {
 	if err != nil {
 		return "", fmt.Errorf("evaluating symlinks in cwd: %w", err)
 	}
-	cwd, err := CheckedToAbsolutePath(cwdRaw)
+	cwd, err := CheckedToAbsoluteSystemPath(cwdRaw)
 	if err != nil {
 		return "", fmt.Errorf("cwd is not an absolute path %v: %v", cwdRaw, err)
 	}
@@ -91,56 +98,20 @@ func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 
 // TempDir returns the absolute path of a directory with the given name
 // under the system's default temp directory location
-func TempDir(subDir string) turbopath.AbsolutePath {
-	return turbopath.AbsolutePath(os.TempDir()).Join(subDir)
+func TempDir(subDir string) turbopath.AbsoluteSystemPath {
+	return turbopath.AbsoluteSystemPath(os.TempDir()).UntypedJoin(subDir)
 }
 
 // GetTurboDataDir returns a directory outside of the repo
 // where turbo can store data files related to turbo.
-func GetTurboDataDir() turbopath.AbsolutePath {
-	dataHome := AbsolutePathFromUpstream(xdg.DataHome)
-	return dataHome.Join("turborepo")
+func GetTurboDataDir() turbopath.AbsoluteSystemPath {
+	dataHome := AbsoluteSystemPathFromUpstream(xdg.DataHome)
+	return dataHome.UntypedJoin("turborepo")
 }
 
 // GetUserConfigDir returns the platform-specific common location
 // for configuration files that belong to a user.
-func GetUserConfigDir() turbopath.AbsolutePath {
-	configHome := AbsolutePathFromUpstream(xdg.ConfigHome)
-	return configHome.Join("turborepo")
-}
-
-type pathValue struct {
-	base     turbopath.AbsolutePath
-	current  *turbopath.AbsolutePath
-	defValue string
-}
-
-func (pv *pathValue) String() string {
-	if *pv.current == "" {
-		return ResolveUnknownPath(pv.base, pv.defValue).ToString()
-	}
-	return pv.current.ToString()
-}
-
-func (pv *pathValue) Set(value string) error {
-	*pv.current = ResolveUnknownPath(pv.base, value)
-	return nil
-}
-
-func (pv *pathValue) Type() string {
-	return "path"
-}
-
-var _ pflag.Value = &pathValue{}
-
-// AbsolutePathVar adds a flag interpreted as an absolute path to the given FlagSet.
-// It currently requires a root because relative paths are interpreted relative to the
-// given root.
-func AbsolutePathVar(flags *pflag.FlagSet, target *turbopath.AbsolutePath, name string, root turbopath.AbsolutePath, usage string, defValue string) {
-	value := &pathValue{
-		base:     root,
-		current:  target,
-		defValue: defValue,
-	}
-	flags.Var(value, name, usage)
+func GetUserConfigDir() turbopath.AbsoluteSystemPath {
+	configHome := AbsoluteSystemPathFromUpstream(xdg.ConfigHome)
+	return configHome.UntypedJoin("turborepo")
 }

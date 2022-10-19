@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
@@ -12,7 +13,7 @@ import (
 // RepoConfig is a configuration object for the logged-in turborepo.com user
 type RepoConfig struct {
 	repoViper *viper.Viper
-	path      turbopath.AbsolutePath
+	path      turbopath.AbsoluteSystemPath
 }
 
 // LoginURL returns the configured URL for authenticating the user
@@ -61,7 +62,7 @@ func (rc *RepoConfig) Delete() error {
 // for Turborepo.
 type UserConfig struct {
 	userViper *viper.Viper
-	path      turbopath.AbsolutePath
+	path      turbopath.AbsoluteSystemPath
 }
 
 // Token returns the Bearer token for this user if it exists
@@ -96,12 +97,15 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsolutePath) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
+	if err := userViper.BindPFlag("token", flags.Lookup("token")); err != nil {
+		return nil, err
+	}
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -111,10 +115,15 @@ func ReadUserConfigFile(path turbopath.AbsolutePath) (*UserConfig, error) {
 	}, nil
 }
 
+// AddUserConfigFlags adds per-user configuration item flags to the given flagset
+func AddUserConfigFlags(flags *pflag.FlagSet) {
+	flags.String("token", "", "Set the auth token for API calls")
+}
+
 // DefaultUserConfigPath returns the default platform-dependent place that
 // we store the user-specific configuration.
-func DefaultUserConfigPath() turbopath.AbsolutePath {
-	return fs.GetUserConfigDir().Join("config.json")
+func DefaultUserConfigPath() turbopath.AbsoluteSystemPath {
+	return fs.GetUserConfigDir().UntypedJoin("config.json")
 }
 
 const (
@@ -126,7 +135,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -137,8 +146,22 @@ func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
 	repoViper.MustBindEnv("teamid")
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
+	if err := repoViper.BindPFlag("loginurl", flags.Lookup("login")); err != nil {
+		return nil, err
+	}
+	if err := repoViper.BindPFlag("apiurl", flags.Lookup("api")); err != nil {
+		return nil, err
+	}
+	if err := repoViper.BindPFlag("teamslug", flags.Lookup("team")); err != nil {
+		return nil, err
+	}
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
+	}
+	// If team was set via commandline, don't read the teamId from the config file, as it
+	// won't necessarily match.
+	if flags.Changed("team") {
+		repoViper.Set("teamid", "")
 	}
 	return &RepoConfig{
 		repoViper: repoViper,
@@ -146,7 +169,14 @@ func ReadRepoConfigFile(path turbopath.AbsolutePath) (*RepoConfig, error) {
 	}, nil
 }
 
+// AddRepoConfigFlags adds per-repository configuration items to the given flagset
+func AddRepoConfigFlags(flags *pflag.FlagSet) {
+	flags.String("team", "", "Set the team slug for API calls")
+	flags.String("api", "", "Override the endpoint for API calls")
+	flags.String("login", "", "Override the login endpoint")
+}
+
 // GetRepoConfigPath reads the user-specific configuration values
-func GetRepoConfigPath(repoRoot turbopath.AbsolutePath) turbopath.AbsolutePath {
-	return repoRoot.Join(".turbo", "config.json")
+func GetRepoConfigPath(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return repoRoot.UntypedJoin(".turbo", "config.json")
 }

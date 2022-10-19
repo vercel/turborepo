@@ -26,13 +26,17 @@
     "schema": {
       "outputs": ["public/schema.json"]
     },
+    "rss": {
+      "outputs": ["public/feed.xml"]
+    },
     "create-turbo#test": {
       "dependsOn": ["create-turbo#build"],
       "outputs": []
     },
     "docs#build": {
+      "env": ["SENTRY_DSN", "TURBOREPO_SFDC_CAMPAIGN_ID", "TRAY_URL", "CONVERTKIT_API_KEY", "CONVERTKIT_API_SECRET"],
       "outputs": [".next/**"],
-      "dependsOn": ["^build", "docs#schema"]
+      "dependsOn": ["^build", "docs#rss", "docs#schema"]
     },
     "cli#e2e": {
       "outputs": [],
@@ -42,6 +46,9 @@
         "cli/go.sum",
         "cli/scripts/e2e/e2e.ts"
       ]
+    },
+    "cli#integration-tests": {
+      "outputs": []
     },
     "//#run-example": {
       "outputs": [],

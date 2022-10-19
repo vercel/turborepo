@@ -218,6 +218,7 @@ This explicit configuration for `frontend#deploy` may seem to conflict with the 
 1. Although this `<workspace>#<task>` syntax is a useful escape hatch, we generally recommend using it for deployment orchestration tasks such as health checks, rather than build-time dependencies, so that Turborepo can optimize these tasks more efficiently
 1. Package-tasks do not inherit cache configuration. You must redeclare
    [`outputs`](../reference/configuration#outputs) at the moment.
+1. `<workspace>` must match the `name` key in the workspace's `package.json` or the task will be ignored.
 
 </Callout>
 
@@ -270,7 +271,7 @@ some best-effort checking to produce an error in the recursion situations, but i
 opt in those tasks which don't themselves trigger a `turbo` run that would recurse.
 
 <Callout type="idea" icon={<HeartIcon  className="h-5 w-5 mt-1 text-gray-400" aria-hidden="true" />}>
-Turborepo's Pipeline API design and this page of documentation was inspired by [Microsoft's Lage project](https://microsoft.github.io/lage/docs/Guide/pipeline#defining-a-pipeline).
+Turborepo's Pipeline API design and this page of documentation was inspired by [Microsoft's Lage project](https://microsoft.github.io/lage/docs/Tutorial/pipeline#defining-a-pipeline).
 Shoutout to [Kenneth Chau](https://twitter.com/kenneth_chau) for the idea of fanning out tasks in such a concise and elegant way.
 </Callout>
 

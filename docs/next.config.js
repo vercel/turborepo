@@ -1,3 +1,4 @@
+const { withSentryConfig } = require("@sentry/nextjs");
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.js",
@@ -5,11 +6,39 @@ const withNextra = require("nextra")({
   unstable_staticImage: true,
 });
 
-module.exports = withNextra({
+const sentryWebpackPluginOptions = {
+  silent: true,
+};
+
+const nextConfig = withNextra({
+  sentry: {
+    hideSourceMaps: true,
+  },
   reactStrictMode: true,
   experimental: {
     legacyBrowsers: false,
     images: { allowFutureImage: true },
+  },
+  webpack: (config, { webpack }) => {
+    config.plugins.push(
+      new webpack.DefinePlugin({
+        __SENTRY_DEBUG__: false,
+        __SENTRY_TRACING__: false,
+      })
+    );
+
+    // return the modified config
+    return config;
+  },
+  rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/sitemap.xml",
+          destination: "https://crawled-sitemap.vercel.sh/turbo-sitemap.xml",
+        },
+      ],
+    };
   },
   async redirects() {
     return [
@@ -19,8 +48,28 @@ module.exports = withNextra({
         permanent: true,
       },
       {
+        source: "/docs/guides/workspaces",
+        destination: "/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/workspaces",
+        destination: "/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
         source: "/docs/core-concepts/pipelines",
         destination: "/docs/core-concepts/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/guides/migrate-from-lerna",
+        destination: "/docs/handbook/migrating-to-a-monorepo",
+        permanent: true,
+      },
+      {
+        source: "/docs/getting-started",
+        destination: "/docs",
         permanent: true,
       },
       {
@@ -36,7 +85,17 @@ module.exports = withNextra({
       {
         source: "/docs/guides/complimentary-tools",
         permanent: true,
-        destination: "/docs/guides/monorepo-tools",
+        destination: "/docs/handbook",
+      },
+      {
+        source: "/docs/guides/monorepo-tools",
+        permanent: true,
+        destination: "/docs/handbook",
+      },
+      {
+        source: "/docs/glossary",
+        permanent: true,
+        destination: "/docs/handbook",
       },
       {
         source: "/docs/guides/continuous-integration",
@@ -51,3 +110,5 @@ module.exports = withNextra({
     ];
   },
 });
+
+module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);

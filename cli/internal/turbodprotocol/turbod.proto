@@ -33,6 +33,7 @@ message StatusResponse {
 message NotifyOutputsWrittenRequest {
   repeated string output_globs = 1;
   string hash = 2;
+  repeated string output_exclusion_globs = 3;
 }
 
 message NotifyOutputsWrittenResponse {}

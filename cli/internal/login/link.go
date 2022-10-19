@@ -2,40 +2,28 @@ package login
 
 import (
 	"fmt"
-	"os/exec"
+	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turborepo/cli/internal/client"
-	"github.com/vercel/turborepo/cli/internal/config"
+	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 	"github.com/vercel/turborepo/cli/internal/util"
 	"github.com/vercel/turborepo/cli/internal/util/browser"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
-	"github.com/mitchellh/cli"
 	"github.com/mitchellh/go-homedir"
 )
 
-// LinkCommand is a Command implementation allows the user to link your local directory to a Turbrepo
-type LinkCommand struct {
-	Config *config.Config
-	Ui     *cli.ColoredUi
-}
-
 type link struct {
-	ui                  cli.Ui
-	logger              hclog.Logger
-	cwd                 turbopath.AbsolutePath
+	base                *cmdutil.CmdBase
 	modifyGitIgnore     bool
-	repoConfig          *config.RepoConfig
-	apiClient           linkAPIClient
+	apiClient           linkAPIClient // separate from base to allow testing
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
 	promptEnableCaching func() (bool, error)
@@ -50,33 +38,38 @@ type linkAPIClient interface {
 	GetCachingStatus() (util.CachingStatus, error)
 }
 
-func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
+// NewLinkCommand returns the cobra subcommand for turbo link
+func NewLinkCommand(helper *cmdutil.Helper) *cobra.Command {
+	return getCmd(helper)
+}
+
+func getCmd(helper *cmdutil.Helper) *cobra.Command {
 	var dontModifyGitIgnore bool
 	cmd := &cobra.Command{
-		Use:           "turbo link",
+		Use:           "link",
 		Short:         "Link your local directory to a Vercel organization and enable remote caching.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			apiClient := config.NewClient()
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
+			}
 			link := &link{
-				ui:                  ui,
-				logger:              config.Logger,
-				cwd:                 config.Cwd,
+				base:                base,
 				modifyGitIgnore:     !dontModifyGitIgnore,
-				repoConfig:          config.RepoConfig,
-				apiClient:           apiClient,
+				apiClient:           base.APIClient,
 				promptSetup:         promptSetup,
 				promptTeam:          promptTeam,
 				promptEnableCaching: promptEnableCaching,
 				openBrowser:         browser.OpenBrowser,
 			}
-			err := link.run()
+			err = link.run()
 			if err != nil {
 				if errors.Is(err, errUserCanceled) {
-					ui.Info("Canceled. Turborepo not set up.")
+					base.UI.Info("Canceled. Turborepo not set up.")
 				} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
-					ui.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+					base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
 				} else {
 					link.logError(err)
 				}
@@ -89,29 +82,6 @@ func getCmd(config *config.Config, ui cli.Ui) *cobra.Command {
 	return cmd
 }
 
-// Synopsis of link command
-func (c *LinkCommand) Synopsis() string {
-	cmd := getCmd(c.Config, c.Ui)
-	return cmd.Short
-}
-
-// Help returns information about the `link` command
-func (c *LinkCommand) Help() string {
-	cmd := getCmd(c.Config, c.Ui)
-	return util.HelpForCobraCmd(cmd)
-}
-
-// Run links a local directory to a Vercel organization and enables remote caching
-func (c *LinkCommand) Run(args []string) int {
-	cmd := getCmd(c.Config, c.Ui)
-	cmd.SetArgs(args)
-	err := cmd.Execute()
-	if err != nil {
-		return 1
-	}
-	return 0
-}
-
 var errUserCanceled = errors.New("canceled")
 
 func (l *link) run() error {
@@ -119,14 +89,14 @@ func (l *link) run() error {
 	if err != nil {
 		return fmt.Errorf("could not find home directory.\n%w", err)
 	}
-	l.ui.Info(">>> Remote Caching")
-	l.ui.Info("")
-	l.ui.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
-	l.ui.Info("  all your team’s Vercel projects. It also can share outputs")
-	l.ui.Info("  with other services that enable Remote Caching, like CI/CD systems.")
-	l.ui.Info("  This results in faster build times and deployments for your team.")
-	l.ui.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/core-concepts/remote-caching${RESET}"))
-	l.ui.Info("")
+	l.base.UI.Info(">>> Remote Caching")
+	l.base.UI.Info("")
+	l.base.UI.Info("  Remote Caching shares your cached Turborepo task outputs and logs across")
+	l.base.UI.Info("  all your team’s Vercel projects. It also can share outputs")
+	l.base.UI.Info("  with other services that enable Remote Caching, like CI/CD systems.")
+	l.base.UI.Info("  This results in faster build times and deployments for your team.")
+	l.base.UI.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/core-concepts/remote-caching${RESET}"))
+	l.base.UI.Info("")
 	currentDir, err := filepath.Abs(".")
 	if err != nil {
 		return fmt.Errorf("could figure out file path.\n%w", err)
@@ -207,9 +177,9 @@ func (l *link) run() error {
 				}
 				err = l.openBrowser(url)
 				if err != nil {
-					l.ui.Warn(fmt.Sprintf("Failed to open browser. Please visit %v to enable Remote Caching", url))
+					l.base.UI.Warn(fmt.Sprintf("Failed to open browser. Please visit %v to enable Remote Caching", url))
 				} else {
-					l.ui.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
+					l.base.UI.Info(fmt.Sprintf("Visit %v in your browser to enable Remote Caching", url))
 				}
 				return errTryAfterEnable
 			}
@@ -217,36 +187,36 @@ func (l *link) run() error {
 		return errNeedCachingEnabled
 	case util.CachingStatusOverLimit:
 		return errOverage
+	case util.CachingStatusPaused:
+		return errPaused
 	case util.CachingStatusEnabled:
 	default:
 	}
 
 	fs.EnsureDir(filepath.Join(".turbo", "config.json"))
-	err = l.repoConfig.SetTeamID(teamID)
+	err = l.base.RepoConfig.SetTeamID(teamID)
 	if err != nil {
 		return fmt.Errorf("could not link current directory to team/user.\n%w", err)
 	}
 
 	if l.modifyGitIgnore {
-		fs.EnsureDir(".gitignore")
-		_, gitIgnoreErr := exec.Command("sh", "-c", "grep -qxF '.turbo' .gitignore || echo '.turbo' >> .gitignore").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("could find or update .gitignore.\n%w", gitIgnoreErr)
+		if err := l.addTurboToGitignore(); err != nil {
+			return err
 		}
 	}
 
-	l.ui.Info("")
-	l.ui.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeamName))
-	l.ui.Info("")
-	l.ui.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
-	l.ui.Info("")
+	l.base.UI.Info("")
+	l.base.UI.Info(util.Sprintf("%s${RESET} Turborepo CLI authorized for ${BOLD}%s${RESET}", ui.Rainbow(">>> Success!"), chosenTeamName))
+	l.base.UI.Info("")
+	l.base.UI.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
+	l.base.UI.Info("")
 	return nil
 }
 
 // logError logs an error and outputs it to the UI.
 func (l *link) logError(err error) {
-	l.logger.Error("error", err)
-	l.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
+	l.base.Logger.Error(fmt.Sprintf("error: %v", err))
+	l.base.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 
 func promptSetup(location string) (bool, error) {
@@ -265,6 +235,54 @@ func promptSetup(location string) (bool, error) {
 		return false, err
 	}
 	return shouldSetup, nil
+}
+
+func (l *link) addTurboToGitignore() error {
+	gitignorePath := l.base.RepoRoot.Join(".gitignore")
+
+	if !gitignorePath.FileExists() {
+		err := gitignorePath.WriteFile([]byte(".turbo\n"), 0644)
+		if err != nil {
+			return fmt.Errorf("could not create .gitignore.\n%w", err)
+		}
+		return nil
+	}
+
+	gitignoreBytes, err := gitignorePath.ReadFile()
+	if err != nil {
+		return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+	}
+
+	hasTurbo := false
+	gitignoreContents := string(gitignoreBytes)
+	gitignoreLines := strings.Split(gitignoreContents, "\n")
+
+	for _, line := range gitignoreLines {
+		if strings.TrimSpace(line) == ".turbo" {
+			hasTurbo = true
+			break
+		}
+	}
+
+	if !hasTurbo {
+		gitignore, err := gitignorePath.OpenFile(os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+		}
+
+		// if the file doesn't end in a newline, we add one
+		if !strings.HasSuffix(gitignoreContents, "\n") {
+			if _, err := gitignore.WriteString("\n"); err != nil {
+				return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+			}
+		}
+
+		if _, err := gitignore.WriteString(".turbo\n"); err != nil {
+			return fmt.Errorf("could not find or update .gitignore.\n%w", err)
+		}
+	}
+
+	return nil
 }
 
 func promptTeam(teams []string) (string, error) {

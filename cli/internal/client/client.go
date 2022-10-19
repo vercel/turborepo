@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
@@ -61,6 +62,11 @@ type Opts struct {
 	UsePreflight bool
 }
 
+// AddFlags adds flags specific to the api client to the given flagset
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
+	flags.BoolVar(&opts.UsePreflight, "preflight", false, "When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization")
+}
+
 // New creates a new ApiClient
 func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *ApiClient {
 	client := &ApiClient{
@@ -98,6 +104,11 @@ func (c *ApiClient) IsLinked() bool {
 // SetTeamID sets the team parameter used on all requests by this client
 func (c *ApiClient) SetTeamID(teamID string) {
 	c.teamID = teamID
+}
+
+// GetTeamID returns the currently configured team id
+func (c *ApiClient) GetTeamID() string {
+	return c.teamID
 }
 
 func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
@@ -291,6 +302,23 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 // FetchArtifact attempts to retrieve the build artifact with the given hash from the
 // Remote Caching server
 func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
+	return c.getArtifact(hash, http.MethodGet)
+}
+
+// ArtifactExists attempts to determine if the build artifact with the given hash
+// exists in the Remote Caching server
+func (c *ApiClient) ArtifactExists(hash string) (*http.Response, error) {
+	return c.getArtifact(hash, http.MethodHead)
+}
+
+// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// Remote Caching server
+func (c *ApiClient) getArtifact(hash string, httpMethod string) (*http.Response, error) {
+
+	if httpMethod != http.MethodHead && httpMethod != http.MethodGet {
+		return nil, fmt.Errorf("invalid httpMethod %v, expected GET or HEAD", httpMethod)
+	}
+
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -314,7 +342,7 @@ func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
 	}
 
-	req, err := retryablehttp.NewRequest(http.MethodGet, requestURL, nil)
+	req, err := retryablehttp.NewRequest(httpMethod, requestURL, nil)
 	if allowAuth {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
@@ -544,7 +572,7 @@ type statusResponse struct {
 	Status string `json:"status"`
 }
 
-// GetCachingStatus returns the server's perspective on whether or not remove caching
+// GetCachingStatus returns the server's perspective on whether or not remote caching
 // requests will be allowed.
 func (c *ApiClient) GetCachingStatus() (util.CachingStatus, error) {
 	values := make(url.Values)

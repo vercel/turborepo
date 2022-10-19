@@ -4,6 +4,7 @@ description: Turborepo is a high-performance build system for JavaScript and Typ
 ---
 
 import Callout from "../../../components/Callout";
+import OuputModeTable from '../../../components/output-mode-table.mdx';
 
 # Command-Line Reference
 
@@ -14,15 +15,25 @@ After [installing the `turbo`](../getting-started) package (or cloning a starter
 Options can be passed to `turbo` in different ways. Options that require a value can be passed with an equals sign:
 
 ```sh
---<option>=<value>
---<option>="<value with a space>"
+--opt=<value>
+--opt="<value with a space>"
+```
+
+They can also be passed with a space between:
+
+```sh
+--opt value
+--opt "value with a space"
 ```
 
 Boolean options can be enabled as follows:
 
 ```sh
---no<option>
---<option>=false
+# To pass true
+--opt
+
+# To pass false
+--opt=false
 ```
 
 ## Global Arguments
@@ -259,11 +270,21 @@ turbo run build --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+#### `--no-daemon`
+
+Default `false`. `turbo` can run a standalone process in some cases to precalculate values used for determining what work needs to be done.
+This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
+Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+
 #### `--output-logs`
 
 `type: string`
 
-Defaults to "outputMode" for the task in `turbo.json`. Set type of process output logging. Use `full` to show all output. Use `hash-only` to show only `turbo`-computed task hashes. Use `new-only` to show only new output with only hashes for cached tasks. Use `none` to hide process output.
+Set type of output logging. Defaults to "outputMode" for the task in `turbo.json`.
+
+<OuputModeTable />
+
+**Example**
 
 ```shell
 turbo run build --output-logs=full
@@ -452,7 +473,7 @@ turbo run build -vvv
 Generate a sparse/partial monorepo with a pruned lockfile for a target workspace.
 
 <Callout>
-  This command is not yet implemented for `npm` or `pnpm`.
+  This command is not yet implemented for `npm`.
 </Callout>
 
 This command will generate folder called `out` with the following inside of it:

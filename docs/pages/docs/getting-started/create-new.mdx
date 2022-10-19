@@ -82,7 +82,7 @@ Next, open `./apps/web/package.json`. You'll notice that this package's name is 
 
 You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
 
-```json filename="packages/ui/package.json"
+```json filename="apps/web/package.json"
 {
   "dependencies": {
     "ui": "workspace:*"
@@ -356,7 +356,7 @@ Try running our `lint` script:
 You'll notice several things happen in the terminal.
 
 1. Several scripts will be run at the same time, each prefixed with either `docs:lint`, `ui:lint` or `web:lint`.
-2. They'll each succeed, and you'll see `3 successful` in ther terminal.
+2. They'll each succeed, and you'll see `3 successful` in the terminal.
 3. You'll also see `0 cached, 3 total`. We'll cover what this means later.
 
 The scripts that each run come from each workspace's `package.json`. Each workspace can optionally specify its own `lint` script:
@@ -420,7 +420,7 @@ Now, run the `lint` script again. You'll notice that:
 1. `docs:lint` has a comment saying `cache miss, executing`. This means that `docs` is running its linting.
 2. `2 cached, 3 total` appears at the bottom.
 
-This means that **the results of our previous tasks were still cached**. Only the `lint` script inside `docs` actually ran - again, speeding things up. To learn more, check our our [caching docs](/docs/core-concepts/caching).
+This means that **the results of our previous tasks were still cached**. Only the `lint` script inside `docs` actually ran - again, speeding things up. To learn more, check out our [caching docs](/docs/core-concepts/caching).
 
 ### 5. Building with Turborepo
 
