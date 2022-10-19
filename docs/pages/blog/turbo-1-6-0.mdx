@@ -1,7 +1,7 @@
 ---
 title: Turborepo 1.6
 date: 2022/10/06
-description: Turborepo 1.6 lets you use Turbo in non-monorepos, and introduces the Turborepo Agent.
+description: Turborepo 1.6 lets you use Turborepo in non-monorepos, prune for npm, and improves cache performance.
 tag: web development
 ogImage: /images/blog/turbo-1-6-0/twitter-card.png
 ---
@@ -13,7 +13,7 @@ import { Tabs, Tab } from '../../components/Tabs'
 import { Authors } from '../../components/Authors'
 import Callout from '../../components/Callout'
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Thursday, October 6th, 2022</div>
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Wednesday, October 19th, 2022</div>
 
 <Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
 
@@ -21,7 +21,7 @@ Turborepo 1.6 changes the game for Turborepo - you can now use it in **any proje
 
 - [**Turborepo in non-monorepos**](#any-codebase-can-use-turborepo): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
 - [**`turbo prune` now supports npm**](#prune-now-supported-on-npm): Pruning your monorepo is now supported in monorepos using `npm`, completing support for all major workspace managers.
-- [**Faster caching**](#performance-improvements-in-the-cache): We've improved the way we handle local file writes, meaning a big speed-up of Turbo's cache.
+- [**Faster caching**](#performance-improvements-in-the-cache): We've improved the way we handle local file writes, meaning a big speed-up of Turborepo's cache.
 
 Update today by running `npm install turbo@latest`.
 
@@ -109,7 +109,7 @@ We recommend splitting these into a `lint` and `build` script.
 }
 ```
 
-This means that Turbo can schedule them separately.
+This enables `turbo` to schedule them separately.
 
   </Tab>
 </Tabs>
@@ -131,7 +131,7 @@ Turborepo being available for non-monorepos opens up a lot of new use cases. But
 
 ### When scripts depend on each other
 
-You should use Turbo to run your `package.json` scripts. If you've got multiple scripts which all rely on each other, you can express them as Turbo tasks:
+You should use `turbo` to run your `package.json` scripts. If you've got multiple scripts which all rely on each other, you can express them as Turborepo tasks:
 
 ```json filename="turbo.json"
 {
@@ -188,7 +188,7 @@ This is extremely useful for dev mode, but can also be used to speed up tasks on
 turbo run lint unit:test e2e:test integration:test
 ```
 
-Turborepo will figure out the optimally fast path to run all of your tasks in parallel.
+Turborepo will figure out the fastest possible way to run all your tasks in parallel.
 
 ## Prune now supported on npm
 
@@ -202,7 +202,7 @@ Check out our previous [blog on `turbo prune`](/blog/turbo-0-4-0#experimental-pr
 
 Before 1.6, Turborepo's local cache was a recursive copy of files on the system to another place on disk. This was _slow_. It meant that for every file that we needed to cache, we'd need to perform six system calls: open, read, and close on the source file; open, write, and close on the destination file.
 
-In 1.6, we've cut that nearly in half. Now, when creating a cache, we create a single `.tar` file (_one_ open), we write to it in 1mb chunks (_batched_ writes), and then close it (_one_ close). The halving of system calls happens on the way back out of cache.
+In 1.6, we've cut that nearly in half. Now, when creating a cache, we create a single `.tar` file (_one_ open), we write to it in 1mb chunks (_batched_ writes), and then close it (_one_ close). The halving of system calls _also_ happens on the way back out of cache.
 
 And we didn't stop there. Over the past month we've invested significantly in our build toolchain to enable CGO which unlocks usage of best-in-class libraries written in C. This enabled us to adopt [Zstandard](http://facebook.github.io/zstd/)'s `libzstd` for compression which gets us an algorithmic 3x performance improvement for compression.
 
