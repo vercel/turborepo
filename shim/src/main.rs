@@ -22,6 +22,8 @@ static TURBO_JSON: &str = "turbo.json";
 struct Args {
     #[clap(long, global = true)]
     version: bool,
+    #[clap(long, short, global = true)]
+    help: bool,
     /// Current working directory
     #[clap(long, value_parser)]
     cwd: Option<String>,
@@ -227,13 +229,19 @@ fn main() -> Result<()> {
         println!("{}", get_version());
         process::exit(0);
     }
+
+    let mut args: Vec<_> = env::args().skip(1).collect();
+    // Quick fix for --help.
+    if clap_args.help {
+        let exit_code = run_current_turbo(args)?;
+        process::exit(exit_code);
+    }
+
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
         env::current_dir()?
     };
-
-    let mut args: Vec<_> = env::args().skip(1).collect();
 
     if args.is_empty() {
         process::exit(1);
