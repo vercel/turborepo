@@ -178,6 +178,8 @@ jobs:
 
       - name: Perform Release
         run: cd cli && make publish-shim
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       # TODO: probably don't need to upload this once we've verified the snapshots
       - name: Upload Artifacts
