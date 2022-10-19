@@ -23,7 +23,6 @@ func nativeRunWithArgs(argc C.int, argv **C.char, turboStateString string) C.uin
 	for i, arg := range unsafe.Slice(argv, arglen) {
 		args[i] = C.GoString(arg)
 	}
-	fmt.Printf("%v\n", turboStateString)
 	turboState := turbostate.TurboState{}
 	err := json.Unmarshal([]byte(turboStateString), &turboState)
 	if err != nil {

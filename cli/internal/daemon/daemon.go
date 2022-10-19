@@ -78,7 +78,6 @@ func (d *daemon) logError(err error) {
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
 func Run(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context, signalWatcher *signals.Watcher) error {
-	idleTimeout := args.Command.Payload["idleTimeout"].(time.Duration)
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err
@@ -104,7 +103,7 @@ func Run(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context, sig
 	d := &daemon{
 		logger:     logger,
 		repoRoot:   base.RepoRoot,
-		timeout:    idleTimeout,
+		timeout:    args.Command.Daemon.IdleTimeout,
 		reqCh:      make(chan struct{}),
 		timedOutCh: make(chan struct{}),
 	}

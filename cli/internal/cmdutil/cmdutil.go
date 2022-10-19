@@ -252,32 +252,39 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 // using the turbostate.Args struct.
 // It additionally returns a mechanism to set an error, so
 func (h *Helper) GetCmdBaseFromArgs(args *turbostate.Args) (*CmdBase, error) {
+	fmt.Println("1")
 	// terminal is for color/no-color output
 	terminal := h.getUIFromArgs(args)
-
+	fmt.Println("2")
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
 
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("3")
 	cwd, err := fs.GetCwd()
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("4")
 	repoRoot := fs.ResolveUnknownPath(cwd, h.rawRepoRoot)
 	repoRoot, err = repoRoot.EvalSymlinks()
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("5")
+
 	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), args.Login, args.Api, args.Team)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("6")
 	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, args.Token)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("7")
 	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
 	if remoteConfig.Token == "" && ui.IsCI {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
@@ -289,6 +296,7 @@ func (h *Helper) GetCmdBaseFromArgs(args *turbostate.Args) (*CmdBase, error) {
 			remoteConfig.TeamID = vercelArtifactsOwner
 		}
 	}
+	fmt.Println("8")
 	apiClient := client.NewClient(
 		remoteConfig,
 		logger,

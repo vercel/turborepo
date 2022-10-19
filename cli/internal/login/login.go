@@ -25,8 +25,6 @@ const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
 func RunLogin(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context) error {
-	ssoTeam := args.Command.Payload["ssoTeam"]
-	fmt.Printf("sso team %v\n", ssoTeam)
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err
@@ -37,9 +35,9 @@ func RunLogin(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context
 		client:              base.APIClient,
 		promptEnableCaching: promptEnableCaching,
 	}
-	if ssoTeam != nil {
+	if args.Command.Login.SsoTeam != "" {
 		fmt.Println("SSO TEAM")
-		err := login.loginSSO(ctx, ssoTeam.(string))
+		err := login.loginSSO(ctx, args.Command.Login.SsoTeam)
 		if err != nil {
 			if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
 				base.UI.Info("Canceled. Turborepo not set up.")

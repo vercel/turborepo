@@ -1,13 +1,35 @@
 package turbostate
 
+import "time"
+
 type RepoState struct {
 	Root string `json:"root"`
 	Mode string `json:"mode"`
 }
 
+type DaemonPayload struct {
+	IdleTimeout time.Duration `json:"idle_timeout"`
+}
+
+type LinkPayload struct {
+	DontModifyGitIgnore bool `json:"dont_modify_gitIgnore"`
+}
+
+type LoginPayload struct {
+	SsoTeam string `json:"sso_team"`
+}
+
+type PrunePayload struct {
+	Scope     string `json:"scope"`
+	Docker    bool   `json:"docker"`
+	OutputDir string `json:"output_dir"`
+}
+
 type Command struct {
-	Id      string                 `json:"id"`
-	Payload map[string]interface{} `json:"payload"`
+	Daemon *DaemonPayload `json:"daemon"`
+	Link   *LinkPayload   `json:"link"`
+	Login  *LoginPayload  `json:"login"`
+	Prune  *PrunePayload  `json:"prune"`
 }
 
 type Args struct {

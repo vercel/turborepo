@@ -40,14 +40,11 @@ func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
 
 func Run(helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
-	scope := args.Command.Payload["scope"].(string)
-	docker := args.Command.Payload["docker"].(bool)
-	outputDir := args.Command.Payload["outputDir"].(string)
-
 	if err != nil {
 		return err
 	}
-	if scope == "" {
+
+	if args.Command.Prune.Scope == "" {
 		err := errors.New("at least one target must be specified")
 		base.LogError(err.Error())
 		return err
@@ -56,9 +53,9 @@ func Run(helper *cmdutil.Helper, args *turbostate.Args) error {
 		base,
 	}
 	opts := &opts{
-		scope:     scope,
-		docker:    docker,
-		outputDir: outputDir,
+		scope:     args.Command.Prune.Scope,
+		docker:    args.Command.Prune.Docker,
+		outputDir: args.Command.Prune.OutputDir,
 	}
 	if err := p.prune(opts); err != nil {
 		logError(p.base.Logger, p.base.UI, err)

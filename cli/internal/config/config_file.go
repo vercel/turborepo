@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -103,7 +104,6 @@ func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, token *string) (*User
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
-	userViper.SetDefault("token", token)
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}

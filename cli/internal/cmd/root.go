@@ -117,12 +117,13 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
-		switch state.ParsedArgs.Command.Id {
-		case "Login":
-			fmt.Println("RUNNING LOGIN")
+		command := state.ParsedArgs.Command
+		fmt.Printf("Running command: %+v\n", command.Login)
+		if command.Login != nil {
+			fmt.Printf("Running login command\n")
 			execErr = login.RunLogin(helper, &state.ParsedArgs, ctx)
-		default:
-			fmt.Printf("ERROR: Command `%v` not handled\n", state.ParsedArgs.Command.Id)
+		} else {
+			fmt.Printf("COMMAND NOT HANDLED %v\n", command)
 		}
 		close(doneCh)
 	}()

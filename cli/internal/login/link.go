@@ -45,19 +45,15 @@ func NewLinkCommand(helper *cmdutil.Helper) *cobra.Command {
 	return getCmd(helper)
 }
 
-type LinkPayload struct {
-	DontModifyGitIgnore bool
-}
-
 func Run(helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err
 	}
-	dontModifyGitignore := args.Command.Payload["dontModifyGitIgnore"].(bool)
+
 	link := &link{
 		base:                base,
-		modifyGitIgnore:     !dontModifyGitignore,
+		modifyGitIgnore:     !args.Command.Link.DontModifyGitIgnore,
 		apiClient:           base.APIClient,
 		promptSetup:         promptSetup,
 		promptTeam:          promptTeam,

@@ -74,7 +74,6 @@ struct Args {
 /// we must change these as well to avoid accidentally passing the
 /// --single-package flag into non-build commands.
 #[derive(Subcommand, Debug, Serialize, PartialEq)]
-#[serde(tag = "id", content = "payload")]
 enum Command {
     /// Get the path to the Turbo binary
     Bin,
