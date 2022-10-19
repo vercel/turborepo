@@ -4994,6 +4994,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "turbo-tasks-build",
+ "turbo-tasks-hash",
  "turbo-tasks-macros",
  "weak-table",
 ]
@@ -5052,6 +5053,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-hash"
+version = "0.1.0"
+dependencies = [
+ "base16",
+ "md4",
+ "twox-hash",
+]
+
+[[package]]
 name = "turbo-tasks-macros"
 version = "0.1.0"
 dependencies = [
@@ -5089,6 +5099,7 @@ dependencies = [
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-hash",
  "turbo-tasks-testing",
 ]
 
@@ -5178,7 +5189,7 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
- "turbopack-hash",
+ "turbo-tasks-hash",
  "url",
 ]
 
@@ -5206,9 +5217,9 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-hash",
  "turbopack-core",
  "turbopack-ecmascript",
- "turbopack-hash",
  "turbopack-swc-utils",
 ]
 
@@ -5233,10 +5244,10 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-hash",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-ecmascript",
- "turbopack-hash",
  "urlencoding",
 ]
 
@@ -5264,10 +5275,10 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-hash",
  "turbo-tasks-memory",
  "turbo-tasks-testing",
  "turbopack-core",
- "turbopack-hash",
  "turbopack-swc-utils",
  "url",
 ]
@@ -5286,15 +5297,6 @@ dependencies = [
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-ecmascript",
-]
-
-[[package]]
-name = "turbopack-hash"
-version = "0.1.0"
-dependencies = [
- "base16",
- "md4",
- "twox-hash",
 ]
 
 [[package]]
@@ -5322,10 +5324,10 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-hash",
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
- "turbopack-hash",
 ]
 
 [[package]]
