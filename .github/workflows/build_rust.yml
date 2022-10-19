@@ -34,6 +34,8 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: "${{ inputs.release_branch }}"
 
       - name: Install
         uses: actions-rs/toolchain@v1
@@ -72,7 +74,7 @@ jobs:
           # Use the empty string ("") to ignore status or conclusion in the search
           workflow_conclusion: success
           # Optional, will use the specified branch. Defaults to all branches
-          branch: main
+          branch: ${{ inputs.release_branch }}
           # Optional, uploaded artifact name,
           # will download all artifacts if not specified
           # and extract them into respective subdirectories
