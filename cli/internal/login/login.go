@@ -36,7 +36,6 @@ func RunLogin(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context
 		promptEnableCaching: promptEnableCaching,
 	}
 	if args.Command.Login.SsoTeam != "" {
-		fmt.Println("SSO TEAM")
 		err := login.loginSSO(ctx, args.Command.Login.SsoTeam)
 		if err != nil {
 			if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {

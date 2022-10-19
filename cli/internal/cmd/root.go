@@ -119,9 +119,18 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 	go func() {
 		command := state.ParsedArgs.Command
 		fmt.Printf("Running command: %+v\n", command.Login)
-		if command.Login != nil {
-			fmt.Printf("Running login command\n")
+		if command.Daemon != nil {
+			execErr = daemon.Run(helper, &state.ParsedArgs, ctx, signalWatcher)
+		} else if command.Link != nil {
+			execErr = login.RunLink(helper, &state.ParsedArgs)
+		} else if command.Login != nil {
 			execErr = login.RunLogin(helper, &state.ParsedArgs, ctx)
+		} else if command.Logout != nil {
+			execErr = auth.RunLogout(helper, &state.ParsedArgs)
+		} else if command.Prune != nil {
+			execErr = prune.Run(helper, &state.ParsedArgs)
+		} else if command.Unlink != nil {
+			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
 		} else {
 			fmt.Printf("COMMAND NOT HANDLED %v\n", command)
 		}

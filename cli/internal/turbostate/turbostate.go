@@ -29,7 +29,9 @@ type Command struct {
 	Daemon *DaemonPayload `json:"daemon"`
 	Link   *LinkPayload   `json:"link"`
 	Login  *LoginPayload  `json:"login"`
+	Logout *struct{}      `json:"logout"`
 	Prune  *PrunePayload  `json:"prune"`
+	Unlink *struct{}      `json:"unlink"`
 }
 
 type Args struct {
