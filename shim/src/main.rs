@@ -18,8 +18,12 @@ use std::{
 static TURBO_JSON: &str = "turbo.json";
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true)]
+#[clap(author, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true, disable_version_flag = true)]
 struct Args {
+    #[clap(long, global = true)]
+    version: bool,
+    #[clap(long, short, global = true)]
+    help: bool,
     /// Current working directory
     #[clap(long, value_parser)]
     cwd: Option<String>,
@@ -211,15 +215,33 @@ fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
     Ok(command.wait()?.code().unwrap_or(2))
 }
 
+fn get_version() -> &'static str {
+    include_str!("../../version.txt")
+        .split_once('\n')
+        .expect("Failed to read version from version.txt")
+        .0
+}
+
 fn main() -> Result<()> {
     let clap_args = Args::parse();
+    // --version flag doesn't work with ignore_errors in clap, so we have to handle it manually
+    if clap_args.version {
+        println!("{}", get_version());
+        process::exit(0);
+    }
+
+    let mut args: Vec<_> = env::args().skip(1).collect();
+    // Quick fix for --help.
+    if clap_args.help {
+        let exit_code = run_current_turbo(args)?;
+        process::exit(exit_code);
+    }
+
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
         env::current_dir()?
     };
-
-    let mut args: Vec<_> = env::args().skip(1).collect();
 
     if args.is_empty() {
         process::exit(1);
