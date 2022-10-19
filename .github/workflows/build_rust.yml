@@ -173,9 +173,8 @@ jobs:
           name: shim-x86_64-pc-windows-gnu
           path: cli/dist-windows-amd64
 
-      # TODO: switch to publish-shim
-      - name: Perform Release (Snapshot)
-        run: cd cli && make snapshot-shim
+      - name: Perform Release
+        run: cd cli && make publish-shim
 
       # TODO: probably don't need to upload this once we've verified the snapshots
       - name: Upload Artifacts
