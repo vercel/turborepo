@@ -105,8 +105,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: shim-${{ matrix.settings.target }}
-          # TODO: change binary name? goreleaser currently does the rename for us...
-          path: shim/target/${{ matrix.settings.target }}/release/shim*
+          path: shim/target/${{ matrix.settings.target }}/release/turbo*
 
   final-publish:
     name: "Publish To NPM"

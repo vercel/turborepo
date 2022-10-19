@@ -15,7 +15,7 @@ builds:
     goamd64:
       - v1
     prebuilt:
-      path: dist-{{ .Os }}-{{ .Arch }}/shim{{ .Ext }}
+      path: dist-{{ .Os }}-{{ .Arch }}/turbo{{ .Ext }}
     hooks:
       pre:
         - cmd: ./scripts/npm-native-packages/npm-native-packages.js {{ .Os }} {{ .Arch }} {{ .Version }}
