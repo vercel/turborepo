@@ -1,8 +1,12 @@
 import { useRouter } from "next/router";
 import { useConfig } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
-import TurboLogo from "./components/logos/Turbo";
+import Navigation from "./components/Navigation";
+import HeaderLogo from "./components/HeaderLogo";
 
+/**
+ * @type {import('nextra-theme-docs').DocsThemeConfig}
+ */
 const theme = {
   project: {
     link: "https://github.com/vercel/turborepo",
@@ -34,14 +38,8 @@ const theme = {
       </a>
     );
   },
-  logo: function LogoActual() {
-    return (
-      <>
-        <TurboLogo height={32} />
-        <span className="sr-only">Turborepo</span>
-      </>
-    );
-  },
+  logo: HeaderLogo,
+  logoLink: false,
   head: function () {
     const router = useRouter();
     const { frontMatter, title } = useConfig();
@@ -105,6 +103,7 @@ const theme = {
   editLink: {
     text: "Edit this page on GitHub",
   },
+  navbar: Navigation,
   footer: {
     text: () => {
       return <Footer />;
@@ -113,5 +112,11 @@ const theme = {
   nextThemes: {
     defaultTheme: "dark",
   },
+  head: (
+    <>
+      <link rel="prefetch" href="/repo" as="document" />
+      <link rel="prefetch" href="/pack" as="document" />
+    </>
+  ),
 };
 export default theme;

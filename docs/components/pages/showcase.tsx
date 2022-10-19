@@ -1,7 +1,5 @@
 /* eslint-disable react/no-unescaped-entities */
-import { useTheme } from "next-themes";
 import Head from "next/head";
-import Image from "next/future/image";
 import { Container } from "../Container";
 import { Clients } from "../clients/Clients";
 
@@ -18,10 +16,10 @@ export default function Showcase() {
             Showcase
           </p>
           <h1 className="mt-2 text-3xl font-extrabold leading-8 tracking-tight text-gray-900 md:text-5xl dark:text-white sm:text-4xl sm:leading-10">
-            Who's using Turborepo?
+            Who's using Turbo?
           </h1>
           <p className="max-w-3xl mt-4 text-xl leading-7 text-gray-500 lg:mx-auto">
-            Turborepo is the one of the fastest growing build systems in the
+            Turbo is the one of the fastest growing build systems in the
             frontend ecosystem. It's trusted by thousands of developers in
             production including teams at Vercel, AWS, Netflix, Microsoft,
             Disney, and more.
@@ -35,7 +33,7 @@ export default function Showcase() {
       <Container>
         <div className="max-w-xl pt-20 pb-24 mx-auto space-y-6 text-center">
           <div className="mt-2 text-2xl font-extrabold leading-8 tracking-tight text-gray-900 dark:text-white sm:text-4xl sm:leading-10">
-            Are you using Turborepo?
+            Are you using Turbo?
           </div>
           <div className="mx-auto rounded-md">
             <a
