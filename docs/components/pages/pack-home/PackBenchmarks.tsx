@@ -2,7 +2,6 @@ import { useState } from "react";
 import { PackBenchmarkTabs } from "./PackBenchmarkTabs";
 import { SectionHeader, SectionSubtext } from "./Headings";
 import { BenchmarksGraph } from "./PackBenchmarksGraph";
-import { GradientSectionBorder } from "./GradientSectionBorder";
 import { PackDropdown } from "./PackDropdown";
 import { FadeIn } from "./FadeIn";
 
@@ -27,8 +26,13 @@ export function PackBenchmarks() {
           Crafted by the creators of Webpack, Turbopack delivers unparalleled
         </SectionSubtext>
       </div>
-      <PackBenchmarkTabs onTabChange={setCategory} />
-      <BenchmarksGraph category={category} numberOfModules={numberOfModules} />
+      <div className="flex flex-col w-full items-center">
+        <PackBenchmarkTabs onTabChange={setCategory} />
+        <BenchmarksGraph
+          category={category}
+          numberOfModules={numberOfModules}
+        />
+      </div>
       <div className="flex gap-3 items-center">
         <p className="dark:text-[#888888] text-[#666666] text-sm">
           React Components

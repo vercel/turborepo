@@ -22,7 +22,7 @@ export function PackDropdown({
       <button
         onClick={() => setIsOpen(!isOpen)}
         type="button"
-        className={`flex w-24 pl-3 pr-2 py-2 gap-3 border rounded dark:border-[#333333] dark:hover:border-white border-[#EAEAEA] hover:border-black dark:hover:text-white hover:text-black dark:text-[#888888] text-[#666666] items-center justify-between transition-all`}
+        className="flex w-24 pl-3 pr-2 py-2 gap-3 rounded !bg-[#fafafa] dark:!bg-[#111111] dark:hover:text-white hover:text-black dark:text-[#888888] text-[#666666] items-center justify-between transition-all"
       >
         <p className="text-sm leading-none font-medium m-0 ">
           {Number(selectedOption).toLocaleString()}
@@ -35,7 +35,7 @@ export function PackDropdown({
           initial={{ y: -8, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="absolute left-0 mt-2 w-full dark:bg-[#000] bg-[#fff] border dark:border-[#333333] rounded py-1 z-50"
+          className="absolute left-0 mt-2 w-full dark:bg-[#111111] bg-[#FAFAFA] rounded py-1 z-50"
         >
           <BenchmarkOption value="1000" onSelect={onSelect} />
           <BenchmarkOption value="5000" onSelect={onSelect} />

@@ -8,18 +8,13 @@ import { PackFeatures } from "./PackFeatures";
 import { GradientSectionBorder } from "./GradientSectionBorder";
 
 export default function Home() {
-  const onClick = () => {
-    copy("npx create-turbo@latest");
-    toast.success("Copied to clipboard");
-  };
-
   return (
     <>
       <Head>
         <title>Turbopack</title>
       </Head>
       <PackHero />
-      <GradientSectionBorder hexBottomOffset={560}>
+      <GradientSectionBorder>
         <PackBenchmarks />
         <PackFeatures />
       </GradientSectionBorder>

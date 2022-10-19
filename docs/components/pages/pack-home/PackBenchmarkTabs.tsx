@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BenchmarkCategory } from "./PackBenchmarks";
 import classNames from "classnames";
@@ -8,31 +8,37 @@ const TABS: {
   id: BenchmarkCategory;
   title: string;
   soon: boolean;
+  tooltip: string;
 }[] = [
   {
     id: "cold",
     title: "Cold Start",
     soon: false,
+    tooltip: "First run",
   },
   {
     id: "from_cache",
     title: "Start from Cache",
     soon: false,
+    tooltip: "Second run",
   },
   {
     id: "file_change",
     title: "File Change",
     soon: false,
+    tooltip: "Hot Reload (HMR)",
   },
   {
     id: "code_build",
     title: "Code Build",
     soon: true,
+    tooltip: "First Build",
   },
   {
     id: "build_from_cache",
     title: "Build from Cache",
     soon: true,
+    tooltip: "Second Build",
   },
 ];
 
@@ -64,14 +70,15 @@ export function PackBenchmarkTabs({
 
   return (
     <div className="flex w-full items-center justify-center">
-      <div className="relative overflow-x-auto flex items-center justify-start no-scrollbar">
+      <div className="relative flex items-center pb-12 overflow-x-scroll overflow-y-clip justify-start no-scrollbar">
         <AnimatePresence>
-          <div className="flex flex-row items-center rounded-full p-1 dark:bg-[#ffffff03] bg-[#00000005] mx-6">
+          <div className="flex flex-row items-center rounded-full p-1 dark:bg-[#ffffff0d] bg-[#00000005] mx-5">
             {TABS.map((tab, index) => (
-              <div
+              <button
                 className="py-3 px-5 relative"
                 key={tab.id}
                 onClick={() => onTabClick(index)}
+                disabled={tab.soon}
               >
                 {TABS[activeTab].id === tab.id && (
                   <motion.div
@@ -84,25 +91,65 @@ export function PackBenchmarkTabs({
                     transition={TRANSITION}
                   />
                 )}
-                <motion.div
-                  animate={{ opacity: activeTab === index ? 1 : 0.4 }}
-                  className="flex flex-row items-center gap-2 justify-center whitespace-nowrap"
-                  transition={{ ...TRANSITION, duration: 0.2 }}
-                  style={{ cursor: tab.soon ? "not-allowed" : "pointer" }}
-                >
-                  <p
-                    className="font-medium m-0 z-10"
-                    style={{ opacity: tab.soon ? 0.6 : 1 }}
+                <ToolTip text={tab.tooltip}>
+                  <motion.div
+                    animate={{ opacity: activeTab === index ? 1 : 0.4 }}
+                    className="flex flex-row items-center gap-2 justify-center whitespace-nowrap"
+                    transition={{ ...TRANSITION, duration: 0.2 }}
+                    style={{ cursor: tab.soon ? "not-allowed" : "pointer" }}
                   >
-                    {tab.title}
-                  </p>
-                  {tab.soon && <SoonBadge />}
-                </motion.div>
-              </div>
+                    <span
+                      className="font-medium m-0 z-10"
+                      style={{ opacity: tab.soon ? 0.6 : 1 }}
+                    >
+                      {tab.title}
+                    </span>
+                    {tab.soon && <SoonBadge />}
+                  </motion.div>
+                </ToolTip>
+              </button>
             ))}
           </div>
         </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+function ToolTip({ text, children }: { text; children: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  const timeout = useRef<NodeJS.Timeout>();
+
+  const onMouseEnter = () => {
+    timeout.current = setTimeout(() => {
+      setShow(true);
+    }, 800);
+  };
+
+  const onMouseLeave = () => {
+    clearTimeout(timeout.current);
+    setShow(false);
+  };
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <motion.div
+        animate={show ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }}
+        transition={{ duration: 0.2, ease: [0.59, 0.15, 0.18, 0.93] }}
+        className={
+          "absolute top-[100%] mt-4 w-full flex flex-col items-center justify-center z-50"
+        }
+      >
+        <div className={gradients.tooltipArrow} />
+        <div className="dark:bg-[#333333] bg-neutral-100 rounded-lg px-4 py-1 whitespace-nowrap">
+          <p className="font-sans text-sm text-[#888888]">{text}</p>
+        </div>
+      </motion.div>
+      <div>{children}</div>
     </div>
   );
 }

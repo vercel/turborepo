@@ -6,7 +6,6 @@ import Link from "next/link";
 import gradients from "./gradients.module.css";
 import { HeroText, SectionSubtext } from "./Headings";
 import { Gradient } from "./Gradient";
-import { useTheme } from "next-themes";
 import { FadeIn } from "./FadeIn";
 import { CTAButton } from "./CTAButton";
 
@@ -16,13 +15,22 @@ export function PackHero() {
       <div className="absolute top-0 dark:from-black from-white to-transparent w-full h-48 z-10 bg-gradient-to-b" />
       <FadeIn className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
         <div className="flex justify-center items-center w-full ">
-          <Image
-            alt="Turbopack"
-            src="/images/docs/pack/turbopack-hero-hexagons.svg"
-            width={614}
-            height={614}
-            className="absolute -z-10 min-w-[614px] min-h-[614px]"
-          />
+          <div className="absolute z-50 min-w-[614px] min-h-[614px]">
+            <Image
+              alt="Turbopack"
+              src="/images/docs/pack/turbopack-hero-hexagons-dark.svg"
+              width={614}
+              height={614}
+              className="hidden dark:block"
+            />
+            <Image
+              alt="Turbopack"
+              src="/images/docs/pack/turbopack-hero-hexagons-light.svg"
+              width={614}
+              height={614}
+              className="block dark:hidden"
+            />
+          </div>
           <div className="absolute w-64 h-64 flex items-center justify-center z-50">
             <Gradient
               small
@@ -58,7 +66,7 @@ export function PackHero() {
         </div>
         <FadeIn
           delay={0.2}
-          className="flex max-w-4xl justify-center flex-col items-center gap-5 lg:gap-6 text-center px-6 z-50"
+          className="flex justify-center flex-col items-center gap-5 lg:gap-6 text-center px-6 z-50"
         >
           <h3
             className={cn(
@@ -69,7 +77,7 @@ export function PackHero() {
             TURBOPACK
           </h3>
           <HeroText>The Rust-based successor to Webpack</HeroText>
-          <SectionSubtext>
+          <SectionSubtext hero>
             Turbo is an incremental, distributed bundler optimized for
             JavaScript and TypeScript, written in Rust.
           </SectionSubtext>

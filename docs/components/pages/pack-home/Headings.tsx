@@ -6,7 +6,7 @@ export function HeroText({ children }: { children: React.ReactNode }) {
     <h1
       className={cn(
         gradients.heroHeading,
-        "font-semibold font-wide tracking-[-0.01em] leading-none text-[40px] md:text-5xl lg:text-[64px] max-w-lg md:max-w-xl lg:max-w-3xl text-center text-transparent"
+        "font-extrabold tracking-[-0.04em] leading-none text-[40px] md:text-5xl lg:text-[80px] max-w-lg md:max-w-xl lg:max-w-4xl text-center text-transparent"
       )}
     >
       {children}
@@ -19,7 +19,7 @@ export function SectionHeader({ children }: { children: React.ReactNode }) {
     <h2
       className={cn(
         gradients.heroHeading,
-        "font-semibold font-wide tracking-[-0.01em] leading-tight text-[32px] md:text-4xl lg:text-[40px] max-w-sm md:max-w-md lg:max-w-2xl text-center text-transparent"
+        "font-bold tracking-[-0.01em] leading-tight text-[32px] md:text-4xl lg:text-[40px] max-w-sm md:max-w-md lg:max-w-2xl text-center text-transparent"
       )}
     >
       {children}
@@ -27,9 +27,21 @@ export function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function SectionSubtext({ children }: { children: React.ReactNode }) {
+export function SectionSubtext({
+  hero,
+  children,
+}: {
+  hero?: boolean;
+  children: React.ReactNode;
+}) {
+  const textClasses = hero
+    ? "text-[20px] lg:text-2xl"
+    : "text-[16px] lg:text-[20px]";
+
   return (
-    <h3 className="leading-snug dark:text-[#FFFFFFB2] text-[#00000080] text-[20px] lg:text-2xl max-w-sm md:max-w-md lg:max-w-2xl text-center">
+    <h3
+      className={`font-space-grotesk leading-snug dark:text-[#FFFFFFB2] text-[#00000080] ${textClasses} max-w-sm md:max-w-md lg:max-w-2xl text-center`}
+    >
       {children}
     </h3>
   );

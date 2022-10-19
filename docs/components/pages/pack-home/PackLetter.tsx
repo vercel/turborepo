@@ -12,8 +12,9 @@ export function PackLetter() {
     <section className="font-sans relative px-6 py-16 md:py-24 lg:py-32 items-center flex flex-col gap-14">
       <FadeIn>
         <HeroText>
-          Let&apos;s move the <br /> web{" "}
-          <span className={gradients.textGlow}>forward</span>
+          Let&apos;s move
+          <br />
+          the web forward
         </HeroText>
       </FadeIn>
       <div className="flex flex-col max-w-xl md:text-lg lg:text-lg leading-6">
@@ -57,9 +58,9 @@ export function PackLetter() {
         <FadeIn
           viewTriggerOffset
           noVertical
-          className="flex items-end justify-center gap-3 md:self-start md:-ml-4 lg:self-start lg:-ml-4"
+          className="flex items-end justify-center gap-3 md:self-start md:-ml-4 lg:self-start lg:-ml-4 min-w-[300px]"
         >
-          <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border border-white/10 flex items-center justify-center ">
+          <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border dark:border-white/10 border-black/10 flex items-center justify-center ">
             <Image
               alt="Image of Tobias Koopers"
               src="/images/people/tobias.jpg"
@@ -70,10 +71,20 @@ export function PackLetter() {
           </div>
           <div className="flex flex-col pb-2 gap-3">
             <Image
-              alt="Tobias Koopers hand written signature glowing with neon pink and blue light"
-              src="/images/docs/pack/tobias-signature.svg"
-              width={173}
-              height={91}
+              alt="Tobias Koopers hand written signature"
+              src="/images/docs/pack/tobias-signature-light.svg"
+              // 16 px added and offset to account for the glow
+              width={173 + 16}
+              height={91 + 16}
+              className="-ml-3 -mb-3 block dark:hidden"
+            />
+            <Image
+              alt="Tobias Koopers hand written signature"
+              src="/images/docs/pack/tobias-signature-dark.svg"
+              // 16 px added and offset to account for the glow
+              width={173 + 16}
+              height={91 + 16}
+              className="-ml-3 -mb-3 hidden dark:block"
             />
             <div className="flex gap-2 flex-wrap text-sm leading-none text-[#888888] max-w-[156px] md:max-w-xl lg:max-w-xl">
               <p className="font-bold">Tobias Koppers</p>

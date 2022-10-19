@@ -6,11 +6,9 @@ import {
   useAnimation,
   AnimationPlaybackControls,
 } from "framer-motion";
-import { useTheme } from "next-themes";
 import Image from "next/future/image";
 import { useEffect, useRef, useState } from "react";
 import benchmarkData from "./benchmark-data.json";
-import { FadeIn } from "./FadeIn";
 import { Gradient } from "./Gradient";
 import gradients from "./gradients.module.css";
 import { BenchmarkCategory, BenchmarkNumberOfModules } from "./PackBenchmarks";
@@ -31,60 +29,46 @@ export function BenchmarksGraph({
 
   return (
     <div className="flex w-full max-w-[1280px] relative px-6">
-      <div className="flex items-center justify-center flex-1 absolute top-0  w-full h-full">
+      <div className="flex items-center justify-center flex-1 absolute top-0 w-full h-full">
         <Gradient
-          conic
+          gray
           width="100%"
           height="100%"
-          className="dark:opacity-20 dark:md:opacity-25 opacity-10"
+          className="dark:opacity-0 dark:md:opacity-25 opacity-10"
         />
-      </div>
-      <div className="w-40 hidden md:flex flex-col gap-10 ">
-        <GraphLabel label="Next.js 13" turbo />
-        <GraphLabel label="Next.js 12" />
-        <GraphLabel label="Vite" esbuild />
-        <GraphLabel label="Next.js 11" />
       </div>
       <div
         ref={graphRef}
         className="relative flex flex-col flex-1 md:gap-10 gap-6"
       >
-        <div className="absolute hidden md:flex w-full h-full py-12 -mt-12 box-content">
-          <GraphLines />
-        </div>
-        <div>
-          <GraphLabel mobileOnly label="Next.js 13" turbo />
-          <GraphBar
-            turbo
-            duration={data.next13 * 1000}
-            longestTime={roundedLongestTime}
-            inView={graphInView}
-          />
-        </div>
-        <div>
-          <GraphLabel mobileOnly label="Next.js 12" />
-          <GraphBar
-            duration={data.next12 * 1000}
-            longestTime={roundedLongestTime}
-            inView={graphInView}
-          />
-        </div>
-        <div>
-          <GraphLabel mobileOnly label="Vite" esbuild />
-          <GraphBar
-            duration={data.vite * 1000}
-            longestTime={roundedLongestTime}
-            inView={graphInView}
-          />
-        </div>
-        <div>
-          <GraphLabel mobileOnly label="Next.js 11" />
-          <GraphBar
-            duration={data.next11 * 1000}
-            longestTime={roundedLongestTime}
-            inView={graphInView}
-          />
-        </div>
+        <GraphBar
+          turbo
+          Label={<GraphLabel label="Next.js 13" turbo />}
+          duration={data.next13 * 1000}
+          longestTime={roundedLongestTime}
+          inView={graphInView}
+        />
+
+        <GraphBar
+          Label={<GraphLabel label="Next.js 12" />}
+          duration={data.next12 * 1000}
+          longestTime={roundedLongestTime}
+          inView={graphInView}
+        />
+
+        <GraphBar
+          Label={<GraphLabel label="Vite" esbuild />}
+          duration={data.vite * 1000}
+          longestTime={roundedLongestTime}
+          inView={graphInView}
+        />
+
+        <GraphBar
+          Label={<GraphLabel label="Next.js 11" />}
+          duration={data.next11 * 1000}
+          longestTime={roundedLongestTime}
+          inView={graphInView}
+        />
       </div>
     </div>
   );
@@ -115,10 +99,12 @@ function GraphBar({
   duration,
   longestTime,
   inView,
+  Label,
 }: {
   turbo?: boolean;
   duration: number;
   longestTime: number;
+  Label: JSX.Element;
   inView?: boolean;
 }) {
   const controls = useAnimation();
@@ -126,7 +112,7 @@ function GraphBar({
   const [timerAnimation, setTimerAnimation] =
     useState<AnimationPlaybackControls>();
   const [barWidth, setBarWidth] = useState(0);
-  const [finished, setFinished] = useState(false);
+  const [, setFinished] = useState(false);
 
   async function stopAnimation() {
     timerAnimation && timerAnimation.stop();
@@ -188,55 +174,48 @@ function GraphBar({
   }, [duration, longestTime]);
 
   return (
-    <motion.div
-      animate={{ opacity: finished ? 1 : 0.7 }}
-      className="flex items-center justify-between gap-4 z-10 dark:bg-[#ffffff0c] bg-[#0000000c] md:bg-transparent dark:md:bg-transparent rounded-lg p-1"
-    >
-      <motion.div
-        animate={controls}
-        variants={graphBarWrapperVariants}
-        style={{ width: `${barWidth}%` }}
-        transition={{ duration: 0.2 }}
-        className="flex items-center h-full rounded-lg md:rounded-l-none relative dark:bg-[#ffffff0c] bg-[#0000000c]"
-      >
+    <div className="md:flex-row md:flex w-full justify-center gap-1">
+      <div className="w-48">{Label}</div>
+      <div className="flex w-full items-center justify-between gap-4 z-10 border dark:border-[#333333] rounded-lg p-1">
         <motion.div
-          className={cn(
-            "h-12 rounded-r-lg rounded-l-lg md:rounded-l-none w-0 relative",
-            turbo ? gradients.benchmarkTurbo : gradients.benchmark
-          )}
-          variants={graphBarVariants}
           animate={controls}
+          variants={graphBarWrapperVariants}
+          style={{ width: `${barWidth}%` }}
+          transition={{ duration: 0.2 }}
+          initial="hidden"
+          className={cn(
+            "flex items-center h-full rounded relative dark:bg-[#ffffff06] bg-[#00000006]"
+          )}
+        >
+          <motion.div
+            className={cn(
+              "h-12 rounded w-0 relative",
+              turbo ? gradients.benchmarkTurbo : gradients.benchmark,
+              { [gradients.barBorder]: !turbo }
+            )}
+            variants={graphBarVariants}
+            animate={controls}
+            transition={{ duration: 0.2 }}
+          />
+        </motion.div>
+        <motion.div
+          animate={controls}
+          variants={graphBarWrapperVariants}
+          className="pr-2"
           transition={{ duration: 0.2 }}
         >
-          <div className="absolute -right-8 w-4 h-12 flex items-center">
-            <GraphTimer turbo={turbo} timer={timer} />
-          </div>
+          <GraphTimer turbo={turbo} timer={timer} />
         </motion.div>
-      </motion.div>
-      <motion.div className="pr-2">
-        <GraphTimer turbo={turbo} timer={timer} mobileOnly />
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
-const GraphTimer = ({
-  turbo,
-  mobileOnly,
-  timer,
-}: {
-  turbo: boolean;
-  timer: number;
-  mobileOnly?: boolean;
-}) => {
+const GraphTimer = ({ turbo, timer }: { turbo: boolean; timer: number }) => {
   return (
-    <div
-      className={`flex flex-row gap-2 items-center z-10 ${
-        mobileOnly ? "md:hidden" : "hidden md:flex"
-      }`}
-    >
+    <div className={`flex flex-row gap-2 w-24 justify-end items-center z-10`}>
       {turbo && (
-        <div className="w-8 h-8 flex ">
+        <div className="w-8 h-8 flex relative ">
           <Image
             alt="Turbopack"
             src="/images/docs/pack/turbo-benchmark-icon-light.svg"
@@ -250,6 +229,13 @@ const GraphTimer = ({
             width={32}
             height={32}
             className="hidden dark:block"
+          />
+          <Gradient
+            pink
+            width="100%"
+            height="100%"
+            small
+            className="dark:opacity-60 opacity-0"
           />
         </div>
       )}
@@ -277,90 +263,18 @@ function GraphLabel({
     >
       <p>{label}</p>
       {turbo && (
-        <p className={cn("font-mono m-0", gradients.benchmarkTurboLabel)}>
+        <p
+          className={cn(
+            "font-space-grotesk m-0",
+            gradients.benchmarkTurboLabel
+          )}
+        >
           turbo
         </p>
       )}
-      {esbuild && <p className="font-mono m-0 text-[#666666]">esbuild</p>}
-    </div>
-  );
-}
-
-function GraphLines() {
-  const { resolvedTheme } = useTheme();
-  const [lineColor, setLineColor] = useState("transparent");
-
-  useEffect(() => {
-    setLineColor(resolvedTheme === "dark" ? "white" : "black");
-  }, [resolvedTheme]);
-
-  const majorLines = 4;
-  const minorLines = 5;
-  return (
-    <div className="absolute flex flex-1 w-full top-0 bottom-0 opacity-50 z-10">
-      <div
-        className={cn(
-          "w-[1px] h-full absolute left-1 z-20",
-          gradients.benchmarkGraphLine
-        )}
-      />
-      {Array.from({ length: majorLines }).map((_, i) => (
-        <div className="relative w-full" key={`grid-minor-ticks-${i}`}>
-          {Array.from({ length: minorLines }).map((_, i) =>
-            i > 0 ? (
-              <svg
-                key={`grid-minor-tick-${i}`}
-                className={`w-[1px] h-full absolute`}
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ left: `${(i / minorLines) * 100}%` }}
-              >
-                <defs>
-                  <linearGradient
-                    id="dashed_line_gradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="100%"
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <stop offset="0%" stopColor={lineColor} stopOpacity={0} />
-                    <stop
-                      offset="30%"
-                      stopColor={lineColor}
-                      stopOpacity={0.3}
-                    />
-                    <stop
-                      offset="70%"
-                      stopColor={lineColor}
-                      stopOpacity={0.3}
-                    />
-                    <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <line
-                  strokeDasharray="5, 10"
-                  x1="0"
-                  y1="600"
-                  x2="1"
-                  y2="1"
-                  stroke="url(#dashed_line_gradient)"
-                  strokeWidth={5}
-                />
-              </svg>
-            ) : null
-          )}
-        </div>
-      ))}
-      {Array.from({ length: majorLines }).map((_, i) => (
-        <div
-          key={`grid-${i}`}
-          className={cn(
-            `w-[1px] h-full absolute ml-[-1px] mix-blend-overlay`,
-            gradients.benchmarkGraphLine
-          )}
-          style={{ left: `${((i + 1) / majorLines) * 100}%` }}
-        />
-      ))}
+      {esbuild && (
+        <p className="font-space-grotesk m-0 text-[#666666]">esbuild</p>
+      )}
     </div>
   );
 }

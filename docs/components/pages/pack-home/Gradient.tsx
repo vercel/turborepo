@@ -8,6 +8,7 @@ export function Gradient({
   pink,
   blue,
   conic,
+  gray,
   className,
   small,
 }: {
@@ -17,6 +18,7 @@ export function Gradient({
   pink?: boolean;
   blue?: boolean;
   conic?: boolean;
+  gray?: boolean;
   className?: string;
   small?: boolean;
 }) {
@@ -30,6 +32,7 @@ export function Gradient({
           [gradients.glowBlue]: blue,
           [gradients.glowConic]: conic,
           [gradients.glowSmall]: small,
+          [gradients.glowGray]: gray,
         },
         className
       )}
