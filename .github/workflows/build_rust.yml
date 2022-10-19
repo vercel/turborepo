@@ -45,17 +45,17 @@ jobs:
           toolchain: nightly-2022-09-23
           target: ${{ matrix.settings.target }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.settings.target }}-cargo-registry
+      # - name: Cache cargo registry
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/.cargo/registry
+      #     key: ${{ matrix.settings.target }}-cargo-registry
 
-      - name: Cache cargo index
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.settings.target }}-cargo-index
+      # - name: Cache cargo index
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/.cargo/git
+      #     key: ${{ matrix.settings.target }}-cargo-index
 
       - name: Download artifact
         id: download-artifact
