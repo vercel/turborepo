@@ -5058,6 +5058,7 @@ version = "0.1.0"
 dependencies = [
  "base16",
  "md4",
+ "turbo-tasks-macros",
  "twox-hash",
 ]
 
@@ -5079,6 +5080,9 @@ dependencies = [
 name = "turbo-tasks-macros-shared"
 version = "0.1.0"
 dependencies = [
+ "proc-macro-error",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
  "syn 1.0.99",
 ]
 
