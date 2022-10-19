@@ -180,6 +180,7 @@ jobs:
         run: cd cli && make publish-shim
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # TODO: probably don't need to upload this once we've verified the snapshots
       - name: Upload Artifacts
