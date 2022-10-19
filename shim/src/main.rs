@@ -30,7 +30,7 @@ use std::{
 struct Args {
     #[clap(long, short, global = true)]
     help: bool,
-    #[clap(long, short, global = true)]
+    #[clap(long, global = true)]
     version: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
