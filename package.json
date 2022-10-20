@@ -8,7 +8,7 @@
     "check:prettier": "prettier -c .",
     "check:toml": "taplo format --check",
     "format": "run-p format:prettier format:rs format:toml",
-    "format:prettier": "prettier --config ./package.json -w .",
+    "format:prettier": "prettier -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
     "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.js",
