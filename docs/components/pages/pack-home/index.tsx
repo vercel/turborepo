@@ -12,6 +12,13 @@ export default function Home() {
     <>
       <Head>
         <title>Turbopack</title>
+        <style>
+          {`
+            .dark body {
+              background-color: black !important;
+            }
+          `}
+        </style>
       </Head>
       <PackHero />
       <GradientSectionBorder>
