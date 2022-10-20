@@ -5,6 +5,8 @@ import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
 import { Discord, Github } from "./components/Social";
 
+const SITE_ROOT = "https://turbo.build";
+
 /**
  * @type {import('nextra-theme-docs').DocsThemeConfig}
  */
@@ -16,7 +18,7 @@ const theme = {
     icon: Discord,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
-  titleSuffix: " | Turb",
+  titleSuffix: " | Turbo",
   unstable_flexsearch: true,
   unstable_staticImage: true,
   toc: {
@@ -32,9 +34,7 @@ const theme = {
     const router = useRouter();
     const { frontMatter, title } = useConfig();
     const fullUrl =
-      router.asPath === "/"
-        ? "https://turborepo.org"
-        : `https://turborepo.org${router.asPath}`;
+      router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -73,18 +73,14 @@ const theme = {
         <link rel="canonical" href={fullUrl} />
         <meta
           property="twitter:image"
-          content={`https://turborepo.org${
-            frontMatter.ogImage ?? "/og-image.png"
-          }`}
+          content={`${SITE_ROOT}${frontMatter.ogImage ?? "/og-image.png"}`}
         />
         <meta
           property="og:image"
-          content={`https://turborepo.org${
-            frontMatter.ogImage ?? "/og-image.png"
-          }`}
+          content={`${SITE_ROOT}${frontMatter.ogImage ?? "/og-image.png"}`}
         />
         <meta property="og:locale" content="en_IE" />
-        <meta property="og:site_name" content="Turborepo" />
+        <meta property="og:site_name" content="Turbo" />
       </>
     );
   },
