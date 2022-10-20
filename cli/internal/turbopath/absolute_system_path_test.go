@@ -143,8 +143,8 @@ func TestAbsoluteSystemPath_Findup(t *testing.T) {
 			}
 
 			got, err := tt.executionDirectory.RestoreAnchor(fsRoot).Findup(tt.fileName)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("AbsoluteSystemPath.Findup() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.ErrorIs(t, err, os.ErrNotExist)
 				return
 			}
 			if got != tt.want.RestoreAnchor(fsRoot) {
