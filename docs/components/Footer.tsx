@@ -1,11 +1,13 @@
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { useState, ReactNode } from "react";
+import { useState, ReactNode, ReactElement } from "react";
+import cn from "classnames";
+import { ThemeSwitch } from "nextra-theme-docs";
 import VercelLogo from "./logos/Vercel";
 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   const classes =
-    "text-sm text-gray-500 no-underline betterhover:hover:text-gray-700 betterhover:hover:dark:text-white transition";
+    "text-sm text-[#666666] dark:text-[#888888] no-underline betterhover:hover:text-gray-700 betterhover:hover:dark:text-white transition";
   if (href.startsWith("http")) {
     return (
       <a href={href} className={classes}>
@@ -21,7 +23,7 @@ function FooterLink({ href, children }: { href: string; children: ReactNode }) {
 }
 
 function FooterHeader({ children }: { children: ReactNode }) {
-  return <h3 className="text-sm text-gray-900 dark:text-white">{children}</h3>;
+  return <h3 className="text-sm text-black dark:text-white">{children}</h3>;
 }
 
 const navigation = {
@@ -60,7 +62,7 @@ const navigation = {
   ],
 };
 
-export function Footer() {
+export function FooterContent() {
   return (
     <footer className="" aria-labelledby="footer-heading">
       <h2 id="footer-heading" className="sr-only">
@@ -116,7 +118,7 @@ export function Footer() {
           </div>
           <div className="mt-12 xl:!mt-0">
             <FooterHeader>Subscribe to our newsletter</FooterHeader>
-            <p className="mt-4 text-sm text-gray-600 dark:text-gray-500">
+            <p className="mt-4 text-sm text-gray-600 dark:text-[#888888]">
               Join the Turborepo newsletter and stay updated on new releases and
               features, guides, and case studies.
             </p>
@@ -124,7 +126,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="pt-8 mt-8 md:flex md:items-center md:justify-between">
+        <div className="pt-8 mt-8 sm:flex sm:items-center sm:justify-between">
           <div>
             <a
               className="text-current"
@@ -134,7 +136,7 @@ export function Footer() {
             >
               <VercelLogo />
             </a>
-            <p className="mt-4 text-xs text-gray-500 ">
+            <p className="mt-4 text-xs text-gray-500">
               &copy; {new Date().getFullYear()} Vercel, Inc. All rights
               reserved.
             </p>
@@ -177,7 +179,7 @@ function SubmitForm() {
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full min-w-0 px-4 py-2 text-base text-gray-900 placeholder-gray-500 bg-white border border-transparent rounded-md appearance-none dark:text-white sm:text-sm dark:border-gray-700 dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:border-white focus:placeholder-gray-400"
+        className="border-[#666666] dark:border-[#888888] w-full min-w-0 px-4 py-2 text-base text-gray-900 placeholder-gray-500 bg-white border rounded-md appearance-none dark:text-white sm:text-sm dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:border-white focus:placeholder-gray-400"
         placeholder="you@domain.com"
       />
       <div className="mt-3 rounded-md sm:mt-0 sm:ml-3 sm:flex-shrink-0">
@@ -189,5 +191,29 @@ function SubmitForm() {
         </button>
       </div>
     </form>
+  );
+}
+
+export function Footer({ menu }: { menu?: boolean }): ReactElement {
+  return (
+    <footer className="bg-[#FAFAFA] pb-[env(safe-area-inset-bottom)] dark:bg-[#111111]">
+      <div
+        className={cn(
+          "mx-auto max-w-[90rem] py-2 px-4 flex gap-2",
+          menu ? "flex" : "hidden"
+        )}
+      >
+        <ThemeSwitch />
+      </div>
+      <hr className="dark:border-neutral-800" />
+      <div
+        className={cn(
+          "mx-auto max-w-[90rem] py-12 flex justify-center md:justify-center text-black dark:text-white",
+          "pl-[max(env(safe-area-inset-left),1.5rem)] pr-[max(env(safe-area-inset-right),1.5rem)]"
+        )}
+      >
+        <FooterContent />
+      </div>
+    </footer>
   );
 }

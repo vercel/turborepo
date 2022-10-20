@@ -20,6 +20,13 @@ function SiteSwitcher() {
   const site = useTurboSite();
 
   const handleChange = () => {
+    // special cases where we know we can map 1:1 between pack and repo
+    if (router.pathname.endsWith("/docs")) {
+      router.push(site === "repo" ? "/pack/docs" : "/repo/docs");
+      return;
+    }
+
+    // fallback to just redirecting to the root
     router.push(site === "repo" ? "/pack" : "/repo");
   };
 
@@ -44,8 +51,8 @@ function SiteSwitcher() {
       />
       <span
         className={cn(
-          "flex h-[34px] w-[100px] flex-shrink-0 items-center rounded-[8px] border border-[#333333] p-1 duration-300 ease-in-out",
-          "after:h-[24px] after:w-[44px] after:rounded-md after:bg-[#333333] after:shadow-sm after:duration-300",
+          "flex h-[34px] w-[100px] flex-shrink-0 items-center rounded-[8px] border border-[#dedfde] dark:border-[#333333] p-1 duration-300 ease-in-out",
+          "after:h-[24px] after:w-[44px] after:rounded-md dark:after:bg-[#333333] after:shadow-sm after:duration-300 after:border dark:after:border-[#333333] after:border-[#666666]/100 after:bg-gradient-to-b after:from-[#3286F1] after:to-[#C33AC3] after:opacity-20 dark:after:opacity-100 dark:after:bg-none",
           "indeterminate:after:hidden",
           "group-hover:after:translate-x-[4px] peer-checked:after:translate-x-[46px] group-hover:peer-checked:after:translate-x-[42px]",
           {
@@ -53,12 +60,12 @@ function SiteSwitcher() {
           }
         )}
       />
-      <span className="z-50 absolute p-1 text-sm flex justify-between text-center w-[100px] text-[#888888]">
+      <span className="z-50 absolute p-1 text-sm flex justify-between text-center w-[100px] text-[#666666] dark:text-[#888888]">
         <span
           className={cn(
             "py-1 transition-colors duration-300 inline-block w-[50px]",
             {
-              "text-white": site === "repo",
+              "text-black dark:text-white": site === "repo",
             }
           )}
         >
@@ -68,7 +75,7 @@ function SiteSwitcher() {
           className={cn(
             "inline-block w-[50px] py-1 transition-colors duration-300",
             {
-              "text-white": site === "pack",
+              "text-black dark:text-white": site === "pack",
             }
           )}
         >

@@ -387,8 +387,8 @@ importers:
       ms: ^2.1.3
       next: 12.3.1
       next-themes: ^0.2.0
-      nextra: 2.0.0-beta.31
-      nextra-theme-docs: 2.0.0-beta.31
+      nextra: 2.0.0-beta.32
+      nextra-theme-docs: 2.0.0-beta.32
       postcss: 8.4.17
       react: ^18.2.0
       react-dom: ^18.2.0
@@ -412,8 +412,8 @@ importers:
       ms: 2.1.3
       next: 12.3.1_6tziyx3dehkoeijunclpkpolha
       next-themes: 0.2.0_azq6kxkn3od7qdylwkyksrwopy
-      nextra: 2.0.0-beta.31_azq6kxkn3od7qdylwkyksrwopy
-      nextra-theme-docs: 2.0.0-beta.31_azq6kxkn3od7qdylwkyksrwopy
+      nextra: 2.0.0-beta.32_azq6kxkn3od7qdylwkyksrwopy
+      nextra-theme-docs: 2.0.0-beta.32_azq6kxkn3od7qdylwkyksrwopy
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-hot-toast: 2.4.0_owo25xnefcwdq3zjgtohz6dbju
@@ -1898,8 +1898,8 @@ packages:
       yargs: 16.2.0
     dev: true
 
-  /@headlessui/react/1.6.6_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-MFJtmj9Xh/hhBMhLccGbBoSk+sk61BlP6sJe4uQcVMtXZhCgGqd2GyIQzzmsdPdTEWGSF434CBi8mnhR6um46Q==}
+  /@headlessui/react/1.7.3_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-LGp06SrGv7BMaIQlTs8s2G06moqkI0cb0b8stgq7KZ3xcHdH3qMP+cRyV7qe5x4XEW/IGY48BW4fLesD6NQLng==}
     engines: {node: '>=10'}
     peerDependencies:
       react: ^16 || ^17 || ^18
@@ -2667,8 +2667,8 @@ packages:
       - supports-color
     dev: true
 
-  /@mdx-js/mdx/2.1.3:
-    resolution: {integrity: sha512-ahbb47HJIJ4xnifaL06tDJiSyLEy1EhFAStO7RZIm3GTa7yGW3NGhZaj+GUCveFgl5oI54pY4BgiLmYm97y+zg==}
+  /@mdx-js/mdx/2.1.5:
+    resolution: {integrity: sha512-zEG0lt+Bl/r5U6e0TOS7qDbsXICtemfAPquxWFsMbdzrvlWaqMGemLl+sjVpqlyaaiCiGVQBSGdCk0t1qXjkQg==}
     dependencies:
       '@types/estree-jsx': 1.0.0
       '@types/mdx': 2.0.2
@@ -2679,7 +2679,7 @@ packages:
       hast-util-to-estree: 2.1.0
       markdown-extensions: 1.1.1
       periscopic: 3.0.4
-      remark-mdx: 2.1.3
+      remark-mdx: 2.1.5
       remark-parse: 10.0.1
       remark-rehype: 10.1.0
       unified: 10.1.2
@@ -5168,10 +5168,6 @@ packages:
     dependencies:
       '@types/unist': 2.0.6
 
-  /@types/mdurl/1.0.2:
-    resolution: {integrity: sha512-eC4U9MlIcu2q0KQmXszyn5Akca/0jrQmwDRgpAMJai7qBWq4amIQhZyNau4VYGtCeALvW1/NtjzJJ567aZxfKA==}
-    dev: false
-
   /@types/mdx/2.0.2:
     resolution: {integrity: sha512-mJGfgj4aWpiKb8C0nnJJchs1sHBHn0HugkVfqqyQi7Wn6mBRksLeQsPOFvih/Pu8L1vlDzfe/LidhVHBeUk3aQ==}
     dev: false
@@ -6574,7 +6570,7 @@ packages:
   /axios/0.26.1_debug@4.3.4:
     resolution: {integrity: sha512-fPwcX4EvnSHuInCMItEhAGnaSEXRBjtzh9fOtsE6E1G6p7vl7edEeZe11QHf18+6+9gR5PbKV/sGKNaD8YaMeA==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.4
     transitivePeerDependencies:
       - debug
     dev: true
@@ -11466,8 +11462,8 @@ packages:
   /flatted/3.2.7:
     resolution: {integrity: sha512-5nqDSxl8nn5BSNxyR3n4I6eDmbolI6WT+QqR547RwxQapgjQBmtktdP+HTBb/a/zLsbzERTONyUB5pefh5TtjQ==}
 
-  /flexsearch/0.7.21:
-    resolution: {integrity: sha512-W7cHV7Hrwjid6lWmy0IhsWDFQboWSng25U3VVywpHOTJnnAZNPScog67G+cVpeX9f7yDD21ih0WDrMMT+JoaYg==}
+  /flexsearch/0.7.31:
+    resolution: {integrity: sha512-XGozTsMPYkm+6b5QL3Z9wQcJjNYxp0CYn3U1gO7dwD6PAqU1SVWZxI9CCg3z+ml3YfqdPnrBehaBrnH2AGKbNA==}
     dev: false
 
   /fluent-ffmpeg/2.1.2:
@@ -11490,6 +11486,7 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dev: false
 
   /follow-redirects/1.15.1_debug@4.3.4:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
@@ -12535,7 +12532,7 @@ packages:
       estree-util-attach-comments: 2.1.0
       estree-util-is-identifier-name: 2.0.1
       hast-util-whitespace: 2.0.0
-      mdast-util-mdx-expression: 1.3.0
+      mdast-util-mdx-expression: 1.3.1
       mdast-util-mdxjs-esm: 1.3.0
       property-information: 6.1.1
       space-separated-tokens: 2.0.1
@@ -15900,9 +15897,10 @@ packages:
       mdast-util-to-markdown: 1.3.0
     dev: false
 
-  /mdast-util-gfm-table/1.0.4:
-    resolution: {integrity: sha512-aEuoPwZyP4iIMkf2cLWXxx3EQ6Bmh2yKy9MVCg4i6Sd3cX80dcLEfXO/V4ul3pGH9czBK4kp+FAl+ZHmSUt9/w==}
+  /mdast-util-gfm-table/1.0.6:
+    resolution: {integrity: sha512-uHR+fqFq3IvB3Rd4+kzXW8dmpxUhvgCQZep6KdjsLK4O6meK5dYZEayLtIxNus1XO3gfjfcIFe8a7L0HZRGgag==}
     dependencies:
+      '@types/mdast': 3.0.10
       markdown-table: 3.0.2
       mdast-util-from-markdown: 1.2.0
       mdast-util-to-markdown: 1.3.0
@@ -15924,15 +15922,15 @@ packages:
       mdast-util-gfm-autolink-literal: 1.0.2
       mdast-util-gfm-footnote: 1.0.1
       mdast-util-gfm-strikethrough: 1.0.1
-      mdast-util-gfm-table: 1.0.4
+      mdast-util-gfm-table: 1.0.6
       mdast-util-gfm-task-list-item: 1.0.1
       mdast-util-to-markdown: 1.3.0
     transitivePeerDependencies:
       - supports-color
     dev: false
 
-  /mdast-util-mdx-expression/1.3.0:
-    resolution: {integrity: sha512-9kTO13HaL/ChfzVCIEfDRdp1m5hsvsm6+R8yr67mH+KS2ikzZ0ISGLPTbTswOFpLLlgVHO9id3cul4ajutCvCA==}
+  /mdast-util-mdx-expression/1.3.1:
+    resolution: {integrity: sha512-TTb6cKyTA1RD+1su1iStZ5PAv3rFfOUKcoU5EstUpv/IZo63uDX03R8+jXjMEhcobXnNOiG6/ccekvVl4eV1zQ==}
     dependencies:
       '@types/estree-jsx': 1.0.0
       '@types/hast': 2.3.4
@@ -15961,7 +15959,7 @@ packages:
   /mdast-util-mdx/2.0.0:
     resolution: {integrity: sha512-M09lW0CcBT1VrJUaF/PYxemxxHa7SLDHdSn94Q9FhxjCQfuW7nMAWKWimTmA3OyDMSTH981NN1csW1X+HPSluw==}
     dependencies:
-      mdast-util-mdx-expression: 1.3.0
+      mdast-util-mdx-expression: 1.3.1
       mdast-util-mdx-jsx: 2.1.0
       mdast-util-mdxjs-esm: 1.3.0
     transitivePeerDependencies:
@@ -15980,15 +15978,13 @@ packages:
       - supports-color
     dev: false
 
-  /mdast-util-to-hast/12.2.1:
-    resolution: {integrity: sha512-dyindR2P7qOqXO1hQirZeGtVbiX7xlNQbw7gGaAwN4A1dh4+X8xU/JyYmRoyB8Fu1uPXzp7mlL5QwW7k+knvgA==}
+  /mdast-util-to-hast/12.2.4:
+    resolution: {integrity: sha512-a21xoxSef1l8VhHxS1Dnyioz6grrJkoaCUgGzMD/7dWHvboYX3VW53esRUfB5tgTyz4Yos1n25SPcj35dJqmAg==}
     dependencies:
       '@types/hast': 2.3.4
       '@types/mdast': 3.0.10
-      '@types/mdurl': 1.0.2
       mdast-util-definitions: 5.1.1
-      mdurl: 1.0.1
-      micromark-util-sanitize-uri: 1.0.0
+      micromark-util-sanitize-uri: 1.1.0
       trim-lines: 3.0.1
       unist-builder: 3.0.0
       unist-util-generated: 2.0.0
@@ -16013,10 +16009,6 @@ packages:
 
   /mdn-data/2.0.14:
     resolution: {integrity: sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==}
-    dev: false
-
-  /mdurl/1.0.1:
-    resolution: {integrity: sha512-/sKlQJCBYVY9Ers9hqzKou4H6V5UWc/M59TH2dvkt+84itfnq7uFOMLpOiOS4ujvHP4etln18fmIxA5R5fll0g==}
     dev: false
 
   /media-typer/0.3.0:
@@ -16124,7 +16116,7 @@ packages:
     resolution: {integrity: sha512-i3dmvU0htawfWED8aHMMAzAVp/F0Z+0bPh3YrbTPPL1v4YAlCZpy5rBO5p0LPYiZo0zFVkoYh7vDU7yQSiCMjg==}
     dependencies:
       micromark-util-character: 1.1.0
-      micromark-util-sanitize-uri: 1.0.0
+      micromark-util-sanitize-uri: 1.1.0
       micromark-util-symbol: 1.0.1
       micromark-util-types: 1.0.2
       uvu: 0.5.6
@@ -16137,7 +16129,7 @@ packages:
       micromark-factory-space: 1.0.0
       micromark-util-character: 1.1.0
       micromark-util-normalize-identifier: 1.0.0
-      micromark-util-sanitize-uri: 1.0.0
+      micromark-util-sanitize-uri: 1.1.0
       micromark-util-symbol: 1.0.1
       micromark-util-types: 1.0.2
       uvu: 0.5.6
@@ -16367,8 +16359,8 @@ packages:
     dependencies:
       micromark-util-types: 1.0.2
 
-  /micromark-util-sanitize-uri/1.0.0:
-    resolution: {integrity: sha512-cCxvBKlmac4rxCGx6ejlIviRaMKZc0fWm5HdCHEeDWRSkn44l6NdYVRyU+0nT1XC72EQJMZV8IPHF+jTr56lAg==}
+  /micromark-util-sanitize-uri/1.1.0:
+    resolution: {integrity: sha512-RoxtuSCX6sUNtxhbmsEFQfWzs8VN7cTctmBPvYivo98xb/kDEoTCtJQX5wyzIYEmk/lvNFTat4hL8oW0KndFpg==}
     dependencies:
       micromark-util-character: 1.1.0
       micromark-util-encode: 1.0.1
@@ -16403,7 +16395,7 @@ packages:
       micromark-util-encode: 1.0.1
       micromark-util-normalize-identifier: 1.0.0
       micromark-util-resolve-all: 1.0.0
-      micromark-util-sanitize-uri: 1.0.0
+      micromark-util-sanitize-uri: 1.1.0
       micromark-util-subtokenize: 1.0.2
       micromark-util-symbol: 1.0.1
       micromark-util-types: 1.0.2
@@ -17194,19 +17186,19 @@ packages:
       - '@babel/core'
       - babel-plugin-macros
 
-  /nextra-theme-docs/2.0.0-beta.31_azq6kxkn3od7qdylwkyksrwopy:
-    resolution: {integrity: sha512-juyiXh4BqwQq7Hit522bEXs699jgnxwMIumjezm5wjd12CiWRq1IYBPiIv0K0Jerd2tgMaSp8H2ZR+HvFw4Y5w==}
+  /nextra-theme-docs/2.0.0-beta.32_azq6kxkn3od7qdylwkyksrwopy:
+    resolution: {integrity: sha512-plsnL0vflIezQVzFsoAYRH0xnlmtqiOuEjImeocc2so3CkcyJIIA8g1sGNvMZ9fCn2815NdTthWYq6e6FH/Pug==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
-      '@headlessui/react': 1.6.6_biqbaboplfbrettd7655fr4n2y
+      '@headlessui/react': 1.7.3_biqbaboplfbrettd7655fr4n2y
       '@mdx-js/react': 2.1.5_react@18.2.0
       '@popperjs/core': 2.11.6
       '@reach/skip-nav': 0.17.0_biqbaboplfbrettd7655fr4n2y
       clsx: 1.2.1
-      flexsearch: 0.7.21
+      flexsearch: 0.7.31
       focus-visible: 5.2.0
       github-slugger: 1.4.0
       intersection-observer: 0.12.2
@@ -17219,14 +17211,14 @@ packages:
       scroll-into-view-if-needed: 2.2.29
     dev: false
 
-  /nextra/2.0.0-beta.31_azq6kxkn3od7qdylwkyksrwopy:
-    resolution: {integrity: sha512-J1CzMoZWX9bH6XsiUxIj7PjyYj0iRspnkSVPYPjvxf4nkRi+eywM3DHszFe4RVw1oLpio5n1A/KMSgodQpN2iw==}
+  /nextra/2.0.0-beta.32_azq6kxkn3od7qdylwkyksrwopy:
+    resolution: {integrity: sha512-qTuZTNeu4farP+gXZLs8rKIrWRuCAn36IStPNrSdfY/6ZchvMnza+bpPUmCyUSVHrkNEZ/jToDi4WVRQekojTg==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
-      '@mdx-js/mdx': 2.1.3
+      '@mdx-js/mdx': 2.1.5
       '@napi-rs/simple-git': 0.1.8
       github-slugger: 1.4.0
       graceful-fs: 4.2.10
@@ -19719,8 +19711,8 @@ packages:
       - supports-color
     dev: false
 
-  /remark-mdx/2.1.3:
-    resolution: {integrity: sha512-3SmtXOy9+jIaVctL8Cs3VAQInjRLGOwNXfrBB9KCT+EpJpKD3PQiy0x8hUNGyjQmdyOs40BqgPU7kYtH9uoR6w==}
+  /remark-mdx/2.1.5:
+    resolution: {integrity: sha512-A8vw5s+BgOa968Irt8BO7DfWJTE0Fe7Ge3hX8zzDB1DnwMZTNdK6qF2IcFao+/7nzk1vSysKcFp+3ku4vhMpaQ==}
     dependencies:
       mdast-util-mdx: 2.0.0
       micromark-extension-mdxjs: 1.0.0
@@ -19770,7 +19762,7 @@ packages:
     dependencies:
       '@types/hast': 2.3.4
       '@types/mdast': 3.0.10
-      mdast-util-to-hast: 12.2.1
+      mdast-util-to-hast: 12.2.4
       unified: 10.1.2
     dev: false
 

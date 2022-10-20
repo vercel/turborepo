@@ -3,40 +3,28 @@ import { useConfig } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
+import { Discord, Github } from "./components/Social";
 
 /**
  * @type {import('nextra-theme-docs').DocsThemeConfig}
  */
 const theme = {
   project: {
-    link: "https://github.com/vercel/turborepo",
+    icon: Github,
   },
-  docsRepositoryBase: "https://github.com/vercel/turborepo/blob/main/docs",
-  titleSuffix: " | Turborepo",
+  chat: {
+    icon: Discord,
+  },
+  docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
+  titleSuffix: " | Turb",
   unstable_flexsearch: true,
   unstable_staticImage: true,
   toc: {
     float: true,
   },
   font: false,
-  chat: {
-    link: "https://turborepo.org/discord",
-  },
   feedback: {
     link: "Question? Give us feedback →",
-  },
-  banner: function Banner() {
-    return (
-      <a
-        href="https://vercel.com/blog/vercel-acquires-turborepo?utm_source=turbo-site&amp;utm_medium=banner&amp;utm_campaign=turbo-website"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-current no-underline"
-        title="Go to the Vercel website"
-      >
-        Turborepo has joined Vercel. Read More →
-      </a>
-    );
   },
   logo: HeaderLogo,
   logoLink: false,
@@ -105,9 +93,7 @@ const theme = {
   },
   navbar: Navigation,
   footer: {
-    text: () => {
-      return <Footer />;
-    },
+    component: Footer,
   },
   nextThemes: {
     defaultTheme: "dark",
@@ -115,7 +101,9 @@ const theme = {
   head: (
     <>
       <link rel="prefetch" href="/repo" as="document" />
+      <link rel="prefetch" href="/repo/docs" as="document" />
       <link rel="prefetch" href="/pack" as="document" />
+      <link rel="prefetch" href="/pack/docs" as="document" />
     </>
   ),
 };
