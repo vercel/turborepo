@@ -16,13 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu-latest
+          - name: ubuntu-latest-16-core
             target: x86_64-unknown-linux-musl
           - name: macos-latest
             target: x86_64-apple-darwin
           - name: macos-latest
             target: aarch64-apple-darwin
-          - name: windows-latest
+          - name: ubuntu-latest-16-core
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os.name }}
 
@@ -43,6 +43,12 @@ jobs:
           sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-g++ /usr/bin/musl-g++
         if: matrix.os.target == 'x86_64-unknown-linux-musl'
 
+      - name: Install Cargo xwin toolchain
+        run: |
+          cargo install cargo-xwin
+          rustup component add llvm-tools-preview
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+
       - uses: Swatinem/rust-cache@v1
         with:
           key: release-${{ matrix.os.target }}
@@ -52,12 +58,21 @@ jobs:
         with:
           command: build
           args: --release -p node-file-trace --target ${{ matrix.os.target }}
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+
+      - name: Build node-file-trace
+        uses: actions-rs/cargo@v1
+        with:
+          command: xwin
+          args: build --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
 
       - name: Build next-dev
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release -p next-dev --target ${{ matrix.os.target }}
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
 
       - uses: actions/upload-artifact@v3
         with:
