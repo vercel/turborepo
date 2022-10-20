@@ -14,44 +14,31 @@ const (
 	Multi  PackageType = "multi"
 )
 
-func candidateDirectoryHasWorkspaces(directory turbopath.AbsoluteSystemPath) bool {
+func candidateDirectoryWorkspaceGlobs(directory turbopath.AbsoluteSystemPath) []string {
 	packageManagers := []PackageManager{
 		nodejsNpm,
 		nodejsPnpm,
 	}
 
 	for _, pm := range packageManagers {
-		_, err := pm.getWorkspaceGlobs(directory)
+		globs, err := pm.getWorkspaceGlobs(directory)
 		if err != nil {
 			// Try the other package manager workspace formats.
 			continue
 		}
 
-		return true
+		return globs
 	}
 
-	return false
+	return nil
 }
 
-func isOneOfTheWorkspaces(nearestPackageJsonDir turbopath.AbsoluteSystemPath, currentPackageJsonDir turbopath.AbsoluteSystemPath) bool {
-	packageManagers := []PackageManager{
-		nodejsNpm,
-		nodejsPnpm,
-	}
-
-	for _, pm := range packageManagers {
-		globs, err := pm.getWorkspaceGlobs(currentPackageJsonDir)
-		if err != nil {
-			// Try the other package manager workspace formats.
-			continue
-		}
-
-		for _, glob := range globs {
-			globpattern := currentPackageJsonDir.UntypedJoin(filepath.FromSlash(glob)).ToString()
-			match, _ := doublestar.PathMatch(globpattern, nearestPackageJsonDir.ToString())
-			if match {
-				return true
-			}
+func isOneOfTheWorkspaces(globs []string, nearestPackageJsonDir turbopath.AbsoluteSystemPath, currentPackageJsonDir turbopath.AbsoluteSystemPath) bool {
+	for _, glob := range globs {
+		globpattern := currentPackageJsonDir.UntypedJoin(filepath.FromSlash(glob)).ToString()
+		match, _ := doublestar.PathMatch(globpattern, nearestPackageJsonDir.ToString())
+		if match {
+			return true
 		}
 	}
 
@@ -92,7 +79,7 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 		// If we find a package.json which has workspaces we aren't in single package mode.
 		// We let things go through our existing failure paths.
 		// Scenario 2B.
-		if candidateDirectoryHasWorkspaces(nearestPackageJson.Dir()) {
+		if candidateDirectoryWorkspaceGlobs(nearestPackageJson.Dir()) != nil {
 			// In a future world we could maybe change this behavior.
 			// return nearestPackageJson.Dir(), Multi
 			return directory, Multi
@@ -114,8 +101,9 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 				// Found a package.json file, see if it has workspaces.
 				// Workspaces are not allowed to be recursive, so we know what to
 				// return the moment we find something with workspaces.
-				if candidateDirectoryHasWorkspaces(nextPackageJson.Dir()) {
-					if isOneOfTheWorkspaces(nearestPackageJson.Dir(), nextPackageJson.Dir()) {
+				globs := candidateDirectoryWorkspaceGlobs(nextPackageJson.Dir())
+				if globs != nil {
+					if isOneOfTheWorkspaces(globs, nearestPackageJson.Dir(), nextPackageJson.Dir()) {
 						// If it has workspaces, and nearestPackageJson is one of them, we're multi.
 						// We don't infer in this scenario.
 						// Scenario 3BI.
@@ -142,7 +130,7 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 			return directory, Multi
 		}
 
-		if candidateDirectoryHasWorkspaces(nearestTurbo.Dir()) {
+		if candidateDirectoryWorkspaceGlobs(nearestTurbo.Dir()) != nil {
 			// Scenario 1A.
 			return nearestTurbo.Dir(), Multi
 		} else {
