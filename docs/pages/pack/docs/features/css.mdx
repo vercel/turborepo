@@ -1,0 +1,54 @@
+# CSS
+
+## Global CSS
+
+Importing CSS into global scope is supported **out-of-the-box** in Turbopack.
+
+```ts
+import './globals.css';
+```
+
+Transpilation is handled by SWC. TODO - is this true?
+
+## CSS Modules
+
+Turbopack handles CSS Modules out-of-the-box. Any file with a `.module.css` extension will be considered a CSS module, and you can import it into a JavaScript or TypeScript file:
+
+```tsx Component.tsx
+import cssExports from './phone.module.css'
+```
+
+This follows the same rules set out by [Next.js](https://nextjs.org/docs/basic-features/built-in-css-support#adding-component-level-css) - letting you easiy distinguish between global and scoped CSS.
+
+## `postcss-nested`
+
+Turbopack handles [`postcss-nested`](https://www.npmjs.com/package/postcss-nested) syntax out-of-the-box. This useful library lets you nest CSS declarations inside each other:
+
+```css phone.css
+.phone {
+    &_title {
+        width: 500px;
+        @media (max-width: 500px) {
+            width: auto;
+        }
+        body.is_dark & {
+            color: white;
+        }
+    }
+    img {
+        display: block;
+    }
+}
+```
+
+## PostCSS Plugins
+
+Doesn't work out of the box - available further down the line via plugins.
+
+## `@import` syntax
+
+Works
+
+## SCSS and LESS
+
+Don't work out of the box - available further down the line via plugins.

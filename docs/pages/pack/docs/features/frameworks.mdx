@@ -1,0 +1,41 @@
+# Frameworks
+
+## React
+
+### JSX/TSX
+
+`.jsx` and `.tsx` files are supported out-of-the-box with Turbopack. We use [SWC](https://swc.rs/) to compile your JavaScript and TypeScript code, which results in extremely fast compilation.
+
+Similar to Next.js, Turbopack doesn't require you to import React in order to use JSX:
+
+```diff filename="src/index.tsx"
+- import React from 'react';
+
+const Component = () => {
+  return <div />
+}
+```
+
+### React Server Components
+
+Not yet merged
+
+## Vue
+
+Not yet available, but will be configurable via plugins
+
+## Svelte
+
+Not yet available, but will be configurable via plugins
+
+## Preact
+
+Not yet available, but will be configurable via plugins
+
+## Next
+
+We plan to support all features of Next out of the box.
+
+### `next/dynamic`
+
+We don't yet support it
