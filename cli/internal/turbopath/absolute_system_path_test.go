@@ -82,3 +82,27 @@ func Test_Mkdir(t *testing.T) {
 
 	}
 }
+
+func TestAbsoluteSystemPath_Findup(t *testing.T) {
+	tests := []struct {
+		name     string
+		p        AbsoluteSystemPath
+		fileName RelativeSystemPath
+		want     AbsoluteSystemPath
+		wantErr  bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.p.Findup(tt.fileName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AbsoluteSystemPath.Findup() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("AbsoluteSystemPath.Findup() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
