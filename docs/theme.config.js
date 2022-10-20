@@ -30,7 +30,7 @@ const theme = {
   },
   logo: HeaderLogo,
   logoLink: false,
-  head: function () {
+  head: function Head() {
     const router = useRouter();
     const { frontMatter, title } = useConfig();
     const fullUrl =
