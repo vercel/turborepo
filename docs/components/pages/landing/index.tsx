@@ -20,7 +20,7 @@ function Background() {
   );
 }
 
-export function NewBadge({ children }: { children: React.ReactNode }) {
+export function CardBadge({ children }: { children: React.ReactNode }) {
   return (
     <div className="font-mono font-bold text-xs text-black/50 dark:text-white/50  px-[6px] py-[3.25px] tracking-[-0.01em] rounded-[6px] uppercase flex justify-center items-center bg-black/5 dark:bg-white/[0.15] border border-black/[0.1] dark:border-white/[0.1]">
       {children}
@@ -96,7 +96,7 @@ function SiteCards() {
           href="/repo"
           className="turborepoCardBg"
         >
-          <p className="text-lg !w-[280px] md:!w-[340px] font-grotesk text-center opacity-50 dark:opacity-70">
+          <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70">
             High-performance task runner for JavaScript and TypeScript
             codebases.
           </p>
@@ -108,9 +108,9 @@ function SiteCards() {
           className="turbopackCardBg"
         >
           <div className="absolute top-3 left-3">
-            <NewBadge>New</NewBadge>
+            <CardBadge>alpha</CardBadge>
           </div>
-          <p className="text-lg !w-[280px] md:!w-[340px] font-grotesk text-center opacity-50 dark:opacity-70 ">
+          <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70 ">
             The Rust-powered successor to Webpack.
           </p>
         </Card>
@@ -149,7 +149,7 @@ function LandingPage() {
           <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
             Make Ship Happen
           </h1>
-          <p className="mx-6 text-xl w-[315px] md:w-[615px] md:text-2xl font-grotesk text-center text-[#666666] dark:text-[#888888]">
+          <p className="mx-6 text-xl w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
             Turbo is an incremental, distributed bundler and task runner
             optimized for JavaScript and TypeScript, written in Rust.
           </p>

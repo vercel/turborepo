@@ -28,20 +28,29 @@ function FooterHeader({ children }: { children: ReactNode }) {
 
 const navigation = {
   general: [
-    { name: "Documentation", href: "/docs" },
-    { name: "API Reference", href: "/docs/reference/command-line-reference" },
     { name: "Blog", href: "/blog" },
     { name: "Releases", href: "https://github.com/vercel/turborepo/releases" },
-    { name: "FAQ", href: "/docs/faq" },
     {
       name: "Enterprise",
       href: "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-enterpriseLink",
     },
   ],
+  repo: [
+    { name: "Documentation", href: "/repo/docs" },
+    {
+      name: "API Reference",
+      href: "/repo/docs/reference/command-line-reference",
+    },
+    { name: "FAQ", href: "/repo/docs/faq" },
+  ],
+  pack: [
+    { name: "Documentation", href: "/pack/docs" },
+    { name: "Features", href: "/pack/docs/features" },
+  ],
   support: [
     {
       name: "GitHub",
-      href: "https://github.com/vercel/turborepo",
+      href: "https://github.com/vercel/turbo",
     },
     {
       name: "Discord",
@@ -51,7 +60,7 @@ const navigation = {
   company: [
     {
       name: "Open Source Software",
-      href: "https://vercel.com/oss?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-ossLink",
+      href: "https://vercel.com/oss?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-ossLink",
     },
     { name: "GitHub", href: "https://github.com/vercel" },
     { name: "Twitter", href: "https://twitter.com/vercel" },
@@ -70,9 +79,9 @@ export function FooterContent() {
       </h2>
       <div className="py-8 mx-auto max-w-7xl">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
-          <div className="grid grid-cols-2 gap-8 xl:col-span-2">
-            <div className="md:grid md:grid-cols-2 md:gap-8">
-              <div>
+          <div className="grid grid-cols-1 gap-8 xl:col-span-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 md:gap-8">
+              <div className="mt-12 md:!mt-0">
                 <FooterHeader>Solutions</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.general.map((item) => (
@@ -83,18 +92,26 @@ export function FooterContent() {
                 </ul>
               </div>
               <div className="mt-12 md:!mt-0">
-                <FooterHeader>Support</FooterHeader>
+                <FooterHeader>Turborepo</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
-                  {navigation.support.map((item) => (
+                  {navigation.repo.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
                     </li>
                   ))}
                 </ul>
               </div>
-            </div>
-            <div className="md:grid md:grid-cols-2 md:gap-8">
-              <div>
+              <div className="mt-12 md:!mt-0">
+                <FooterHeader>Turbopack</FooterHeader>
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
+                  {navigation.pack.map((item) => (
+                    <li key={item.name}>
+                      <FooterLink href={item.href}>{item.name}</FooterLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="mt-12 md:!mt-0">
                 <FooterHeader>Company</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.company.map((item) => (
@@ -114,12 +131,22 @@ export function FooterContent() {
                   ))}
                 </ul>
               </div>
+              <div className="mt-12 md:!mt-0">
+                <FooterHeader>Support</FooterHeader>
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
+                  {navigation.support.map((item) => (
+                    <li key={item.name}>
+                      <FooterLink href={item.href}>{item.name}</FooterLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
           <div className="mt-12 xl:!mt-0">
             <FooterHeader>Subscribe to our newsletter</FooterHeader>
             <p className="mt-4 text-sm text-gray-600 dark:text-[#888888]">
-              Join the Turborepo newsletter and stay updated on new releases and
+              Join the Turbo newsletter and stay updated on new releases and
               features, guides, and case studies.
             </p>
             <SubmitForm />

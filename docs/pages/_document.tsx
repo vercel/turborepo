@@ -21,21 +21,7 @@ class MyDocument extends Document {
             crossOrigin="true"
           />
           <link
-            rel="preload"
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=optional"
-            as="stylesheet"
-          />
-          <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=optional"
-            rel="stylesheet"
-          />
-          <link
-            rel="preload"
-            href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=optional"
-            as="stylesheet"
-          />
-          <link
-            href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=optional"
             rel="stylesheet"
           />
         </Head>
