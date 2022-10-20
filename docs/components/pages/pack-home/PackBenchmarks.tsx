@@ -20,10 +20,11 @@ export function PackBenchmarks() {
 
   return (
     <FadeIn className="font-sans relative py-16 md:py-24 lg:py-32 w-full items-center flex flex-col gap-10 justify-center">
-      <div className="flex flex-col gap-5 md:gap-6">
+      <div className="flex flex-col gap-5 md:gap-6 items-center">
         <SectionHeader>Faster Than Fast</SectionHeader>
         <SectionSubtext>
           Crafted by the creators of Webpack, Turbopack delivers unparalleled
+          performance at scale.
         </SectionSubtext>
       </div>
       <div className="flex flex-col w-full items-center">

@@ -1,17 +1,22 @@
 import cn from "classnames";
 import gradients from "./gradients.module.css";
 
-export function HeroText({ children }: { children: React.ReactNode }) {
-  return (
-    <h1
-      className={cn(
-        gradients.heroHeading,
-        "font-extrabold tracking-[-0.04em] leading-none text-[40px] md:text-5xl lg:text-[80px] max-w-lg md:max-w-xl lg:max-w-4xl text-center text-transparent"
-      )}
-    >
-      {children}
-    </h1>
+export function HeroText({
+  children,
+  h1,
+}: {
+  children: React.ReactNode;
+  h1?: boolean;
+}) {
+  const className = cn(
+    gradients.heroHeading,
+    "font-extrabold tracking-[-0.04em] leading-none text-[40px] md:text-5xl lg:text-[80px] max-w-lg md:max-w-xl lg:max-w-4xl text-center text-transparent"
   );
+
+  if (h1) {
+    return <h1 className={className}>{children}</h1>;
+  }
+  return <h2 className={className}>{children}</h2>;
 }
 
 export function SectionHeader({ children }: { children: React.ReactNode }) {
@@ -39,10 +44,10 @@ export function SectionSubtext({
     : "text-[16px] lg:text-[20px]";
 
   return (
-    <h3
-      className={`font-space-grotesk leading-snug dark:text-[#FFFFFFB2] text-[#00000080] ${textClasses} max-w-sm md:max-w-md lg:max-w-2xl text-center`}
+    <p
+      className={`font-space-grotesk leading-snug dark:text-[#FFFFFFB2] text-[#00000080] ${textClasses} max-w-md md:max-w-xl lg:max-w-4xl text-center`}
     >
       {children}
-    </h3>
+    </p>
   );
 }

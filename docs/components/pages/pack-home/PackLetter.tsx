@@ -71,7 +71,7 @@ export function PackLetter() {
           </div>
           <div className="flex flex-col pb-2 gap-3">
             <Image
-              alt="Tobias Koopers hand written signature"
+              alt="Tobias Koppers hand written signature"
               src="/images/docs/pack/tobias-signature-light.svg"
               // 16 px added and offset to account for the glow
               width={173 + 16}
@@ -79,7 +79,7 @@ export function PackLetter() {
               className="-ml-3 -mb-3 block dark:hidden"
             />
             <Image
-              alt="Tobias Koopers hand written signature"
+              alt="Tobias Koppers hand written signature"
               src="/images/docs/pack/tobias-signature-dark.svg"
               // 16 px added and offset to account for the glow
               width={173 + 16}

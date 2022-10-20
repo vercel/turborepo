@@ -6,7 +6,7 @@ import { PackFeature } from "./PackFeature";
 export function PackFeatures() {
   return (
     <section className="font-sans relative px-6 pb-16 md:pb-24 lg:pb-32 gap-9 lg:gap-14 items-center flex flex-col">
-      <FadeIn className="flex flex-col gap-5 md:gap-6">
+      <FadeIn className="flex flex-col gap-5 md:gap-6 items-center">
         <SectionHeader>Why Turbopack?</SectionHeader>
         <SectionSubtext>
           With incremental behavior and adaptable bundling strategies, Turbopack

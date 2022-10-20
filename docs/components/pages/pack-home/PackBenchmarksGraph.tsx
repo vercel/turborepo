@@ -25,7 +25,7 @@ export function BenchmarksGraph({
   const longestTime = Math.max(...keys.map((key) => data[key])) * 1000;
   const roundedLongestTime = Math.ceil(longestTime / 5000) * 5000 + 5000;
   const graphRef = useRef(null);
-  const graphInView = useInView(graphRef, { once: true });
+  const graphInView = useInView(graphRef, { once: true, margin: "-128px" });
 
   return (
     <div className="flex w-full max-w-[1280px] relative px-6">

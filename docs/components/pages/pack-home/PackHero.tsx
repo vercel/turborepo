@@ -68,15 +68,15 @@ export function PackHero() {
           delay={0.2}
           className="flex justify-center flex-col items-center gap-5 lg:gap-6 text-center px-6 z-50"
         >
-          <h3
+          <span
             className={cn(
               "font-bold font-wide text-[20px] lg:text-2xl tracking-[0.07em]",
               gradients.turbopackHeaderText
             )}
           >
             TURBOPACK
-          </h3>
-          <HeroText>The Rust-based successor to Webpack</HeroText>
+          </span>
+          <HeroText h1>The Rust-based successor to Webpack</HeroText>
           <SectionSubtext hero>
             Turbo is an incremental, distributed bundler optimized for
             JavaScript and TypeScript, written in Rust.
