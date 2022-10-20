@@ -85,22 +85,69 @@ func Test_Mkdir(t *testing.T) {
 
 func TestAbsoluteSystemPath_Findup(t *testing.T) {
 	tests := []struct {
-		name     string
-		p        AbsoluteSystemPath
-		fileName RelativeSystemPath
-		want     AbsoluteSystemPath
-		wantErr  bool
+		name               string
+		fs                 []AnchoredSystemPath
+		executionDirectory AnchoredSystemPath
+		fileName           RelativeSystemPath
+		want               AnchoredSystemPath
+		wantErr            bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "hello world",
+			fs: []AnchoredSystemPath{
+				AnchoredUnixPath("one/two/three/four/.file").ToSystemPath(),
+				AnchoredUnixPath("one/two/three/four/.target").ToSystemPath(),
+			},
+			executionDirectory: AnchoredUnixPath("one/two/three/four").ToSystemPath(),
+			fileName:           RelativeUnixPath(".target").ToSystemPath(),
+			want:               AnchoredUnixPath("one/two/three/four/.target").ToSystemPath(),
+		},
+		{
+			name: "parent",
+			fs: []AnchoredSystemPath{
+				AnchoredUnixPath("one/two/three/four/.file").ToSystemPath(),
+				AnchoredUnixPath("one/two/three/.target").ToSystemPath(),
+			},
+			executionDirectory: AnchoredUnixPath("one/two/three/four").ToSystemPath(),
+			fileName:           RelativeUnixPath(".target").ToSystemPath(),
+			want:               AnchoredUnixPath("one/two/three/.target").ToSystemPath(),
+		},
+		{
+			name: "gets the closest",
+			fs: []AnchoredSystemPath{
+				AnchoredUnixPath("one/two/three/four/.file").ToSystemPath(),
+				AnchoredUnixPath("one/two/three/.target").ToSystemPath(),
+				AnchoredUnixPath("one/two/.target").ToSystemPath(),
+			},
+			executionDirectory: AnchoredUnixPath("one/two/three/four").ToSystemPath(),
+			fileName:           RelativeUnixPath(".target").ToSystemPath(),
+			want:               AnchoredUnixPath("one/two/three/.target").ToSystemPath(),
+		},
+		{
+			name: "nonexistent",
+			fs: []AnchoredSystemPath{
+				AnchoredUnixPath("one/two/three/four/.file").ToSystemPath(),
+			},
+			executionDirectory: AnchoredUnixPath("one/two/three/four").ToSystemPath(),
+			fileName:           RelativeUnixPath(".nonexistent").ToSystemPath(),
+			wantErr:            true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.p.Findup(tt.fileName)
+			fsRoot := AbsoluteSystemPath(t.TempDir())
+			for _, file := range tt.fs {
+				path := file.RestoreAnchor(fsRoot)
+				assert.NilError(t, path.Dir().MkdirAll(0777))
+				assert.NilError(t, path.WriteFile(nil, 0777))
+			}
+
+			got, err := tt.executionDirectory.RestoreAnchor(fsRoot).Findup(tt.fileName)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AbsoluteSystemPath.Findup() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
+			if got != tt.want.RestoreAnchor(fsRoot) {
 				t.Errorf("AbsoluteSystemPath.Findup() = %v, want %v", got, tt.want)
 			}
 		})
