@@ -1,8 +1,10 @@
+import { useRouter } from "next/router";
 import { Navbar } from "nextra-theme-docs";
 import { useTurboSite } from "./SiteSwitcher";
 
 function Navigation(props) {
   const site = useTurboSite();
+  const router = useRouter();
 
   /*
     Inject a dynamic docs link when NOT on root
@@ -24,6 +26,17 @@ function Navigation(props) {
   const headerItems = props.items.filter((item) => {
     return item.name !== "repo" && item.name !== "pack";
   });
+
+  // Inject showcase link when ON root
+  if (router.asPath === "/") {
+    headerItems.unshift({
+      title: "Showcase",
+      type: "page",
+      route: `/showcase`,
+      id: "showcase",
+      key: "showcase",
+    });
+  }
 
   // items last to override the default
   return <Navbar {...props} items={headerItems} />;
