@@ -102,29 +102,29 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 				// So we're single package mode at nearestPackageJson.
 				// Scenario 3A.
 				return nearestPackageJSON.Dir(), Single
-			} else {
-				// Found a package.json file, see if it has workspaces.
-				// Workspaces are not allowed to be recursive, so we know what to
-				// return the moment we find something with workspaces.
-				globs := candidateDirectoryWorkspaceGlobs(nextPackageJSON.Dir())
-				if globs != nil {
-					if isOneOfTheWorkspaces(globs, nearestPackageJSON.Dir(), nextPackageJSON.Dir()) {
-						// If it has workspaces, and nearestPackageJson is one of them, we're multi.
-						// We don't infer in this scenario.
-						// Scenario 3BI.
-						// TODO: return nextPackageJson.Dir(), Multi
-						return directory, Multi
-					} else {
-						// We found a parent with workspaces, but we're not one of them.
-						// We choose to operate in single package mode.
-						// Scenario 3BII
-						return nearestPackageJSON.Dir(), Single
-					}
-				} else {
-					// Loop around and see if we have another parent.
-					cursor = nextPackageJSON.Dir().UntypedJoin("..")
-				}
 			}
+
+			// Found a package.json file, see if it has workspaces.
+			// Workspaces are not allowed to be recursive, so we know what to
+			// return the moment we find something with workspaces.
+			globs := candidateDirectoryWorkspaceGlobs(nextPackageJSON.Dir())
+			if globs != nil {
+				if isOneOfTheWorkspaces(globs, nearestPackageJSON.Dir(), nextPackageJSON.Dir()) {
+					// If it has workspaces, and nearestPackageJson is one of them, we're multi.
+					// We don't infer in this scenario.
+					// Scenario 3BI.
+					// TODO: return nextPackageJson.Dir(), Multi
+					return directory, Multi
+				}
+
+				// We found a parent with workspaces, but we're not one of them.
+				// We choose to operate in single package mode.
+				// Scenario 3BII
+				return nearestPackageJSON.Dir(), Single
+			}
+
+			// Loop around and see if we have another parent.
+			cursor = nextPackageJSON.Dir().UntypedJoin("..")
 		}
 	} else {
 		// If there is no sibling package.json we do no inference.
@@ -138,9 +138,9 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 		if candidateDirectoryWorkspaceGlobs(nearestTurboJSON.Dir()) != nil {
 			// Scenario 1A.
 			return nearestTurboJSON.Dir(), Multi
-		} else {
-			// Scenario 1B.
-			return nearestTurboJSON.Dir(), Single
 		}
+
+		// Scenario 1B.
+		return nearestTurboJSON.Dir(), Single
 	}
 }
