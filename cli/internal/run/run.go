@@ -225,7 +225,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return err
 	}
 
-	scmInstance, err := scm.FromInRepo(r.base.RepoRoot.ToStringDuringMigration())
+	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
 			r.base.LogWarning("", err)
