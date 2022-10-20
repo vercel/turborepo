@@ -76,6 +76,30 @@ func (p AbsoluteSystemPath) Lstat() (os.FileInfo, error) {
 	return os.Lstat(p.ToString())
 }
 
+// Stat implements os.Stat for absolute path
+func (p AbsoluteSystemPath) Stat() (os.FileInfo, error) {
+	return os.Stat(p.ToString())
+}
+
+// Findup checks all parent directories for a file.
+func (p AbsoluteSystemPath) Findup(name RelativeSystemPath) (AbsoluteSystemPath, error) {
+	root := AbsoluteSystemPath(p.VolumeName() + string(os.PathSeparator))
+	checking := p
+
+	for checking != root {
+		targetPath := checking.Join(name)
+		fileInfo, _ := targetPath.Stat()
+
+		if fileInfo != nil {
+			return targetPath, nil
+		}
+
+		checking = checking.Join("..")
+	}
+
+	return "", os.ErrNotExist
+}
+
 // Exists returns true if the given path exists.
 func (p AbsoluteSystemPath) Exists() bool {
 	_, err := p.Lstat()
@@ -112,6 +136,11 @@ func (p AbsoluteSystemPath) ContainsPath(other AbsoluteSystemPath) (bool, error)
 // ReadFile reads the contents of the specified file
 func (p AbsoluteSystemPath) ReadFile() ([]byte, error) {
 	return ioutil.ReadFile(p.ToString())
+}
+
+// VolumeName returns the volume of the specified path
+func (p AbsoluteSystemPath) VolumeName() string {
+	return filepath.VolumeName(p.ToString())
 }
 
 // WriteFile writes the contents of the specified file
