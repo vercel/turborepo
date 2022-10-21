@@ -83,21 +83,10 @@ func (p AbsoluteSystemPath) Stat() (os.FileInfo, error) {
 
 // Findup checks all parent directories for a file.
 func (p AbsoluteSystemPath) Findup(name RelativeSystemPath) (AbsoluteSystemPath, error) {
-	root := AbsoluteSystemPath(p.VolumeName() + string(os.PathSeparator))
-	checking := p
+	path, err := FindupFrom(name.ToString(), p.ToString())
 
-	for checking != root {
-		targetPath := checking.Join(name)
-		fileInfo, _ := targetPath.Stat()
+	return AbsoluteSystemPath(path), err
 
-		if fileInfo != nil {
-			return targetPath, nil
-		}
-
-		checking = checking.Join("..")
-	}
-
-	return "", os.ErrNotExist
 }
 
 // Exists returns true if the given path exists.
