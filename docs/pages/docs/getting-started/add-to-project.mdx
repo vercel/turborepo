@@ -4,33 +4,13 @@ import { Tabs, Tab } from '../../../components/Tabs'
 
 Turborepo can be used in **any project** to speed up the execution of scripts in your `package.json`.
 
-After you install `turbo` globally, you'll be able to run all your `package.json` tasks from `turbo` instead of your package manager.
+After you install `turbo`, you'll be able to run all your `package.json` tasks from `turbo` instead of your package manager.
 
 By configuring your `turbo.json` correctly, you'll notice how [caching](/docs/core-concepts/caching) helps your tasks run a lot faster.
 
 ## Quickstart
 
-1. **Install `turbo` globally:**
-
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```bash
-    npm install --global turbo
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    yarn global add turbo
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    pnpm install --global turbo
-    ```
-  </Tab>
-</Tabs>
-
-2. **If you don't have one already, create a new application:**
+0. **If you don't have one already, create a new application:**
 
 <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
@@ -45,7 +25,27 @@ npm create vite@latest
   </Tab>
 </Tabs>
 
-3. **Add a `turbo.json` file at the base of your new repository:**
+1. **Install `turbo`:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --save-dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn add turbo --dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install turbo --dev
+    ```
+  </Tab>
+</Tabs>
+
+2. **Add a `turbo.json` file at the base of your new repository:**
 
 <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
@@ -102,7 +102,7 @@ This means that Turbo can schedule them separately.
   </Tab>
 </Tabs>
 
-4. **Try running `build` and `lint` with `turbo`:**
+3. **Try running `build` and `lint` with `turbo`:**
 
 ```bash
 turbo build lint
@@ -110,7 +110,7 @@ turbo build lint
 
 This runs `build` and `lint` at the same time.
 
-5. **Without making any changes to the code, try running `build` and `lint` again:**
+4. **Without making any changes to the code, try running `build` and `lint` again:**
 
 ```bash
 turbo build lint
@@ -128,6 +128,6 @@ Congratulations - **you just completed a build and lint in under 200ms**.
 
 To learn how this is possible, check out our [core concepts docs](/docs/core-concepts/caching).
 
-6. **Try running `turbo dev`:**
+5. **Try running `turbo dev`:**
 
 You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.
