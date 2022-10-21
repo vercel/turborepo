@@ -35,9 +35,12 @@ export function PackBenchmarks() {
         />
       </div>
       <div className="flex gap-3 items-center">
-        <p className="dark:text-[#888888] text-[#666666] text-sm">
+        <a
+          className="dark:text-[#888888]  hover:underline underline-offset-4 text-[#666666] text-sm"
+          href="https://github.com/vercel/turbo/blob/main/docs/components/pages/pack-home/benchmark-data"
+        >
           React Components
-        </p>
+        </a>
         <PackDropdown onOptionSelected={(value) => setNumberOfModules(value)} />
       </div>
     </FadeIn>

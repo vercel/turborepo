@@ -8,7 +8,7 @@ import {
 } from "framer-motion";
 import Image from "next/future/image";
 import { useEffect, useRef, useState } from "react";
-import benchmarkData from "./benchmark-data.json";
+import benchmarkData from "./benchmark-data/data.json";
 import { Gradient } from "../home-shared/Gradient";
 import gradients from "../home-shared/gradients.module.css";
 import { BenchmarkCategory, BenchmarkNumberOfModules } from "./PackBenchmarks";
