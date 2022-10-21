@@ -28,7 +28,11 @@ function Navigation(props) {
   });
 
   // Inject showcase link when ON root
-  if (router.asPath === "/" || router.asPath === "/showcase") {
+  if (
+    router.asPath === "/" ||
+    router.asPath === "/showcase" ||
+    router.asPath.startsWith("/blog")
+  ) {
     headerItems.unshift({
       title: "Showcase",
       type: "page",
