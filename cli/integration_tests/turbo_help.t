@@ -3,7 +3,7 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
-  The task runner that makes ship happen
+  The build system that makes ship happen
   
   Usage:
     turbo [command]
@@ -39,7 +39,7 @@ Test help flag
   Use "turbo [command] --help" for more information about a command.
 
   $ ${TURBO} --help
-  The task runner that makes ship happen
+  The build system that makes ship happen
   
   Usage:
     turbo [command]
