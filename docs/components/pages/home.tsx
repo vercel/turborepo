@@ -40,10 +40,10 @@ export default function Home() {
       </Head>
       <div className="w-auto px-4 pt-16 pb-8 mx-auto sm:pt-24 lg:px-8">
         <h1 className="max-w-5xl text-center mx-auto text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
-          Monorepos that
+          The build system that
           <br className="hidden lg:block" />
           <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-pink-gradient-start to-blue-500 ">
-            make ship happen.
+            makes ship happen.
           </span>{" "}
         </h1>
         <p className="max-w-lg mx-auto mt-6 text-xl font-medium leading-tight text-center text-gray-400 sm:max-w-4xl sm:text-2xl md:text-3xl lg:text-4xl">
@@ -53,19 +53,18 @@ export default function Home() {
         <div className="max-w-xl mx-auto mt-5 sm:flex sm:justify-center md:mt-8">
           <div className="rounded-md ">
             <Link href="/docs/getting-started">
-              <a className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:dark:hover:bg-gray-300 betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
+              <a className="flex min-w-[120px] items-center justify-center w-full px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:dark:hover:bg-gray-300 betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6">
                 Start Building →
               </a>
             </Link>
           </div>
           <div className="relative mt-3 rounded-md sm:mt-0 sm:ml-3">
-            <button
+            <a
               onClick={onClick}
-              className="flex items-center justify-center w-full px-8 py-3 font-mono text-sm font-medium text-gray-600 bg-black border border-transparent border-gray-200 rounded-md bg-opacity-5 dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 betterhover:hover:bg-gray-50 betterhover:dark:hover:bg-gray-900 md:py-3 md:text-base md:leading-6 md:px-10"
+              className="flex min-w-[200px] items-center justify-center w-full px-8 py-3  text-base font-medium text-gray-600 bg-black border border-transparent border-gray-200 rounded-md bg-opacity-5 dark:bg-white dark:text-gray-300 dark:border-gray-700 dark:bg-opacity-5 betterhover:hover:bg-gray-50 betterhover:dark:hover:bg-gray-900 md:py-3 md:text-base md:leading-6 md:px-10"
             >
-              npx create-turbo
-              <DuplicateIcon className="w-6 h-6 ml-2 -mr-3 text-gray-400" />
-            </button>
+              GitHub
+            </a>
           </div>
         </div>
       </div>
@@ -96,13 +95,19 @@ export default function Home() {
       <div className="">
         <div className="px-4 py-16 mx-auto sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
           <h2 className="max-w-4xl mx-auto pb-6 text-5xl font-extrabold  tracking-tight lg:text-6xl xl:text-7xl leading-[1.25!important] md:text-center dark:text-white">
-            Scaling your monorepo shouldn&apos;t be so difficult
+            Scaling your codebase shouldn&apos;t be so difficult
           </h2>
           <div className="max-w-2xl mx-auto lg:mt-2 dark:text-gray-400">
             <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
-              Monorepos are incredible for productivity, especially on the
-              frontend, but the tooling can be a nightmare. There&apos;s a lot
-              of stuff to do (and things to mess up). Nothing &ldquo;just
+              The bigger your project grows, the slower it gets. Tasks like
+              linting, testing, and building begin to take enormous amounts of
+              time.
+            </p>
+            <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
+              If you&apos;re serving multiple applications, you might reach for
+              a monorepo. They&apos;re incredible for productivity, especially
+              on the frontend, but the tooling can be a nightmare. There&apos;s
+              a lot of stuff to do (and things to mess up). Nothing &ldquo;just
               works.&rdquo; It&apos;s become completely normal to waste entire
               days or weeks on plumbing—tweaking configs, writing one-off
               scripts, and stitching stuff together.
@@ -121,9 +126,10 @@ export default function Home() {
               <b className="relative inline-block text-transparent bg-clip-text bg-gradient-to-r from-pink-gradient-start to-blue-500">
                 With Turborepo, we&apos;re doing just that.
               </b>{" "}
-              We&apos;re abstracting the complex configuration needed for most
-              monorepos into a single cohesive build system—giving you a world
-              class development experience without the maintenance burden.
+              We&apos;re building a build system that can keep up with your
+              team. You&apos;ll see your CI get faster, duplicated work get cut,
+              and your NPM scripts get simpler. You&apos;ll get a world-class
+              development environment, without the maintenance burden.
             </p>
           </div>
           <div className="flex items-center max-w-2xl py-4 mx-auto space-x-4">

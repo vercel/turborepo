@@ -48,6 +48,21 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
+        source: "/docs/core-concepts/running-tasks",
+        destination: "/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/why-turborepo",
+        destination: "/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/filtering",
+        destination: "/docs/core-concepts/monorepos/filtering",
+        permanent: true,
+      },
+      {
         source: "/docs/guides/workspaces",
         destination: "/docs/handbook/workspaces",
         permanent: true,
