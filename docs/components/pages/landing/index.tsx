@@ -12,7 +12,14 @@ import { AnimatePresence, motion } from "framer-motion";
 
 function Background() {
   return (
-    <div className="absolute top-0 left-0 w-full h-[480px] md:h-[450px] lg:h-full overflow-hidden pointer-events-none">
+    <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+      <div
+        className="z-[-1] absolute w-full h-full  [--gradient-stop-1:60%] [--gradient-stop-2:85%] lg:[--gradient-stop-1:50%] lg:[--gradient-stop-2:80%]"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) var(--gradient-stop-1), rgba(0,0,0,0) var(--gradient-stop-2))",
+        }}
+      />
       <span className={styles.leftLights} />
       <span className={styles.rightLights} />
       <TurboheroBackground />
@@ -143,9 +150,9 @@ function LandingPage() {
           content="Turborepo is a high-performance build system for JavaScript and TypeScript codebases"
         />
       </Head>
-      <div className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000]">
+      <div className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
-        <div className="z-100 w-full flex flex-col items-center justify-center [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
+        <div className="z-100 w-full h-full flex flex-col items-center justify-center">
           <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
             Make Ship Happen
           </h1>
@@ -157,10 +164,6 @@ function LandingPage() {
         </div>
         <div className="z-10 py-16">
           <Teams />
-        </div>
-        <div className="opacity-60 -z-50">
-          <div className={cn("block lg:hidden", styles.leftBottomLights)} />
-          <div className={cn("block lg:hidden", styles.rightBottomLights)} />
         </div>
       </div>
     </>

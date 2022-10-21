@@ -45,7 +45,7 @@ export function TurboheroBackground(): JSX.Element {
   return (
     <div
       className={cn(
-        "![perspective:800px] sm:![perspective:800px] md:![perspective:1000px] lg:![perspective:1000px]",
+        "![perspective:1000px] sm:![perspective:1000px] md:![perspective:1000px] lg:![perspective:1000px]",
         styles.container
       )}
       ref={contentRef}

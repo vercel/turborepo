@@ -39,11 +39,12 @@
   inset: -100% 0px;
   background-position-y: 100%;
   mask-position: 50% 0px;
-  animation: go-up 30s linear infinite;
+  animation: go-up 60s linear infinite;
 }
 
 @media (min-width: 1024px) {
   .lines {
+    animation-duration: 30s;
     mask-size: 80px 80px;
   }
 }
