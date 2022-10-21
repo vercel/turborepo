@@ -60,11 +60,11 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 	//    B. No workspaces, single package mode.
 	// 2. If no turbo.json find the closest package.json parent.
 	//    A. No parent package.json, default to current behavior.
-	//    B. Nearest package.json defines workspaces. Can't be in single-package mode, so we bail. (This could be changed in the future.)
+	//    B. Nearest package.json defines workspaces. Inferred root.
 	// 3. Closest package.json does not define workspaces. Traverse toward the root looking for package.jsons.
 	//    A. No parent package.json with workspaces. nearestPackageJson + single
 	//    B. Stop at the first one that has workspaces.
-	//       i. If we are one of the workspaces, directory + multi. (This could be changed in the future.)
+	//       i. If we are one of the workspaces, includesUs + multi.
 	//       ii. If we're not one of the workspaces, nearestPackageJson + single.
 
 	nearestTurboJSON, findTurboJSONErr := directory.Findup("turbo.json")
@@ -82,12 +82,9 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 		}
 
 		// If we find a package.json which has workspaces we aren't in single package mode.
-		// We let things go through our existing failure paths.
 		// Scenario 2B.
 		if candidateDirectoryWorkspaceGlobs(nearestPackageJSON.Dir()) != nil {
-			// In a future world we could maybe change this behavior.
-			// return nearestPackageJson.Dir(), Multi
-			return directory, Multi
+			return nearestPackageJSON.Dir(), Multi
 		}
 
 		// Scenario 3.
@@ -111,10 +108,8 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 			if globs != nil {
 				if isOneOfTheWorkspaces(globs, nearestPackageJSON.Dir(), nextPackageJSON.Dir()) {
 					// If it has workspaces, and nearestPackageJson is one of them, we're multi.
-					// We don't infer in this scenario.
 					// Scenario 3BI.
-					// TODO: return nextPackageJson.Dir(), Multi
-					return directory, Multi
+					return nextPackageJSON.Dir(), Multi
 				}
 
 				// We found a parent with workspaces, but we're not one of them.

@@ -16,6 +16,7 @@ import (
 	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/config"
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/ui"
 )
@@ -156,11 +157,21 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var repoRoot turbopath.AbsoluteSystemPath
+	packageType := packagemanager.Multi
+
 	cwd, err := fs.GetCwd()
 	if err != nil {
 		return nil, err
 	}
-	repoRoot := fs.ResolveUnknownPath(cwd, h.rawRepoRoot)
+
+	if flags.Changed("cwd") && h.rawRepoRoot != "" {
+		// Going to infer the root.
+		repoRoot, packageType = packagemanager.InferRoot(cwd)
+	} else {
+		repoRoot = fs.ResolveUnknownPath(cwd, h.rawRepoRoot)
+	}
 	repoRoot, err = repoRoot.EvalSymlinks()
 	if err != nil {
 		return nil, err
@@ -195,6 +206,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 		UI:           terminal,
 		Logger:       logger,
 		RepoRoot:     repoRoot,
+		PackageType:  packageType,
 		APIClient:    apiClient,
 		RepoConfig:   repoConfig,
 		UserConfig:   userConfig,
@@ -208,6 +220,7 @@ type CmdBase struct {
 	UI           cli.Ui
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
+	PackageType  packagemanager.PackageType
 	APIClient    *client.ApiClient
 	RepoConfig   *config.RepoConfig
 	UserConfig   *config.UserConfig

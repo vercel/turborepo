@@ -230,7 +230,7 @@ func TestInferRoot(t *testing.T) {
 				},
 			},
 			executionDirectory: turbopath.AnchoredUnixPath("execution/path/subdir").ToSystemPath(),
-			rootPath:           turbopath.AnchoredUnixPath("execution/path/subdir").ToSystemPath(),
+			rootPath:           turbopath.AnchoredUnixPath("").ToSystemPath(),
 			packageMode:        Multi,
 		},
 		{
@@ -239,7 +239,7 @@ func TestInferRoot(t *testing.T) {
 				{path: turbopath.AnchoredUnixPath("execution/path/subdir/.file").ToSystemPath()},
 				{
 					path:    turbopath.AnchoredUnixPath("package.json").ToSystemPath(),
-					content: []byte("{ \"workspaces\": [ \"exists\" ] }"),
+					content: []byte("{}"),
 				},
 				{
 					path:    turbopath.AnchoredUnixPath("pnpm-workspace.yaml").ToSystemPath(),
@@ -247,7 +247,7 @@ func TestInferRoot(t *testing.T) {
 				},
 			},
 			executionDirectory: turbopath.AnchoredUnixPath("execution/path/subdir").ToSystemPath(),
-			rootPath:           turbopath.AnchoredUnixPath("execution/path/subdir").ToSystemPath(),
+			rootPath:           turbopath.AnchoredUnixPath("").ToSystemPath(),
 			packageMode:        Multi,
 		},
 		// Scenario 3A
@@ -297,7 +297,7 @@ func TestInferRoot(t *testing.T) {
 				},
 			},
 			executionDirectory: turbopath.AnchoredUnixPath("one/two/three").ToSystemPath(),
-			rootPath:           turbopath.AnchoredUnixPath("one/two/three").ToSystemPath(),
+			rootPath:           turbopath.AnchoredUnixPath("").ToSystemPath(),
 			packageMode:        Multi,
 		},
 		// Scenario 3BII
