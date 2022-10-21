@@ -1,5 +1,4 @@
 import Head from "next/head";
-import { Toaster } from "react-hot-toast";
 
 import { RepoHero } from "./RepoHero";
 import { RepoFeatures } from "./RepoFeatures";
@@ -21,7 +20,6 @@ export default function Home() {
       <GradientSectionBorder>
         <RepoLetter />
       </GradientSectionBorder>
-      <Toaster position="bottom-right" />
     </>
   );
 }

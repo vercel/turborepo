@@ -6,15 +6,8 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import copy from "copy-to-clipboard";
-import toast from "react-hot-toast";
 
 export function RepoHero() {
-  const copyCreateTurbo = () => {
-    copy("npx create-turbo@latest");
-    toast.success("Copied to clipboard!");
-  };
-
   return (
     <>
       <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
@@ -102,36 +95,15 @@ export function RepoHero() {
                 <a className="">Get Started</a>
               </Link>
             </CTAButton>
-            <CTAButton outline monospace onClick={copyCreateTurbo}>
-              <span>npx create-turbo</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth="1.5"
-                aria-hidden="true"
-                className="w-6 h-6 ml-2 -mr-3 text-gray-400"
+            <CTAButton outline>
+              <a
+                target="_blank"
+                rel="noreferrer"
+                href="https://github.com/vercel/turbo"
+                className=""
               >
-                <defs>
-                  <linearGradient
-                    id="copy-linear-gradient"
-                    x1="14.2057"
-                    y1="10.5723"
-                    x2="10.8375"
-                    y2="9.2848"
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <stop stopColor="#FF1E56"></stop>
-                    <stop offset="1" stopColor="#9C51A1"></stop>
-                  </linearGradient>
-                </defs>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  stroke="url(#copy-linear-gradient)"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                ></path>
-              </svg>
+                GitHub
+              </a>
             </CTAButton>
           </div>
           <p className="text-sm text-[#666666]">License: MPL-2.0</p>

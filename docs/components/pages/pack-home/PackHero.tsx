@@ -93,9 +93,14 @@ export function PackHero() {
               </Link>
             </CTAButton>
             <CTAButton outline>
-              <Link href="https://github.com/vercel/turbo">
-                <a className="">GitHub</a>
-              </Link>
+              <a
+                target="_blank"
+                rel="noreferrer"
+                href="https://github.com/vercel/turbo"
+                className=""
+              >
+                GitHub
+              </a>
             </CTAButton>
           </div>
           <p className="text-sm text-[#666666]">License: MPL-2.0</p>
