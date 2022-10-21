@@ -68,7 +68,7 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 	//       ii. If we're not one of the workspaces, nearestPackageJson + single.
 
 	nearestTurboJSON, findTurboJSONErr := directory.Findup("turbo.json")
-	if findTurboJSONErr != nil {
+	if nearestTurboJSON == "" || findTurboJSONErr != nil {
 		// We didn't find a turbo.json. We're in situation 2 or 3.
 
 		// Unroll the first loop for Scenario 2
@@ -77,7 +77,7 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 		// If we fail to find any package.json files we aren't in single package mode.
 		// We let things go through our existing failure paths.
 		// Scenario 2A.
-		if nearestPackageJSONErr != nil {
+		if nearestPackageJSON == "" || nearestPackageJSONErr != nil {
 			return directory, Multi
 		}
 
@@ -97,7 +97,7 @@ func InferRoot(directory turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystem
 		cursor := nearestPackageJSON.Dir().UntypedJoin("..")
 		for {
 			nextPackageJSON, nextPackageJSONErr := cursor.Findup("package.json")
-			if nextPackageJSONErr != nil {
+			if nextPackageJSON == "" || nextPackageJSONErr != nil {
 				// We haven't found a parent defining workspaces.
 				// So we're single package mode at nearestPackageJson.
 				// Scenario 3A.
