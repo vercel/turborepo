@@ -197,11 +197,13 @@ You can control `turbo`'s caching behavior based on
 the values of environment variables:
 
 - Including environment variables in the `env` key in your `pipeline` definition will impact the cache fingerprint on a per-task or per-workspace-task basis.
+- Including any gitignored environment files that are read by tasks in `globalDependencies`.
 - The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```jsonc
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
@@ -366,9 +368,25 @@ Since Turborepo runs _before_ your tasks, it is possible for your tasks to creat
 }
 ```
 
-`turbo`, having calculated a task hash prior to invoking the `build` script, will be unable to discover the `NEXT_PUBLIC_GA_ID=UA-00000000-0` environment variable and thus unable to partition the cache based upon that, or any environment variable configured by `dotenv`.
+`turbo`, having calculated a task hash prior to invoking the `build` script, will be unable to discover the `NEXT_PUBLIC_GA_ID=UA-00000000-0` environment variable and thus unable to partition the cache based upon that.
 
-Be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
+When possible, be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
+
+That may not be possible if tasks read environment variables from gitignored files like `.env.local` using a tool like `dotenv`. This is common when building apps like [Next.js][1] or [Create React App][2] that rely on secrets in environment variables. `turbo` will not partition the cache based on the values in these gitignored files. In this case, use a glob pattern to match these files with `globalDependencies`.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["SOME_ENV_VAR"],
+      "outputs": [".next/**"],
+    },
+  }
+}
+```
 
 ## Force overwrite cache
 
