@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useConfig } from "nextra-theme-docs";
+import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
@@ -32,6 +32,7 @@ const theme = {
   logoLink: false,
   head: function Head() {
     const router = useRouter();
+    const { systemTheme = "dark" } = useTheme();
     const { frontMatter, title } = useConfig();
     const fullUrl =
       router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
@@ -41,26 +42,29 @@ const theme = {
         <link
           rel="apple-touch-icon"
           sizes="180x180"
-          href="/images/favicon/apple-touch-icon.png"
+          href={`/images/favicon-${systemTheme}/apple-touch-icon.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="32x32"
-          href="/images/favicon/favicon-32x32.png"
+          href={`/images/favicon-${systemTheme}/favicon-32x32.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="16x16"
-          href="/images/favicon/favicon-16x16.png"
+          href={`/images/favicon-${systemTheme}/favicon-16x16.png`}
         />
         <link
           rel="mask-icon"
-          href="/images/favicon/safari-pinned-tab.svg"
+          href={`/images/favicon-${systemTheme}/safari-pinned-tab.svg`}
           color="#000000"
         />
-        <link rel="shortcut icon" href="/images/favicon/favicon.ico" />
+        <link
+          rel="shortcut icon"
+          href={`/images/favicon-${systemTheme}/favicon.ico`}
+        />
         <meta name="msapplication-TileColor" content="#000000" />
         <meta name="theme-color" content="#000" />
         <meta name="twitter:card" content="summary_large_image" />
@@ -81,6 +85,10 @@ const theme = {
         />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turbo" />
+        <link rel="prefetch" href="/repo" as="document" />
+        <link rel="prefetch" href="/repo/docs" as="document" />
+        <link rel="prefetch" href="/pack" as="document" />
+        <link rel="prefetch" href="/pack/docs" as="document" />
       </>
     );
   },
@@ -94,13 +102,5 @@ const theme = {
   nextThemes: {
     defaultTheme: "dark",
   },
-  head: (
-    <>
-      <link rel="prefetch" href="/repo" as="document" />
-      <link rel="prefetch" href="/repo/docs" as="document" />
-      <link rel="prefetch" href="/pack" as="document" />
-      <link rel="prefetch" href="/pack/docs" as="document" />
-    </>
-  ),
 };
 export default theme;

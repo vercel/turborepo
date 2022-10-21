@@ -144,10 +144,10 @@ function LandingPage() {
   return (
     <>
       <Head>
-        <title>Turborepo</title>
+        <title>Turbo</title>
         <meta
           name="og:description"
-          content="Turborepo is a high-performance build system for JavaScript and TypeScript codebases"
+          content="Turbo is an incremental, distributed bundler and task runner optimized for JavaScript and TypeScript, written in Rust."
         />
       </Head>
       <div className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">

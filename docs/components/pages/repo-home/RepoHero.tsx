@@ -121,13 +121,13 @@ export function RepoHero() {
                     y2="9.2848"
                     gradientUnits="userSpaceOnUse"
                   >
-                    <stop stop-color="#FF1E56"></stop>
-                    <stop offset="1" stop-color="#9C51A1"></stop>
+                    <stop stopColor="#FF1E56"></stop>
+                    <stop offset="1" stopColor="#9C51A1"></stop>
                   </linearGradient>
                 </defs>
                 <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   stroke="url(#copy-linear-gradient)"
                   d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
                 ></path>
