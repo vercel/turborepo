@@ -1,12 +1,10 @@
 import { DiscordIcon, GitHubIcon } from "nextra/icons";
-import { useConfig } from "nextra-theme-docs";
 
 function Github() {
-  const { project } = useConfig();
   return (
     <a
-      href={project.link}
-      className="hidden sm:flex p-2 text-current"
+      href="https://github.com/vercel/turbo"
+      className="hidden sm:flex p-2 text-current hover:opacity-75"
       target="_blank"
       rel="noreferrer"
     >
@@ -17,11 +15,10 @@ function Github() {
 }
 
 function Discord() {
-  const { chat } = useConfig();
   return (
     <a
-      href={chat.link}
-      className="hidden sm:flex p-2 text-current"
+      href="https://turborepo.org/discord"
+      className="hidden sm:flex p-2 text-current hover:opacity-75"
       target="_blank"
       rel="noreferrer"
     >

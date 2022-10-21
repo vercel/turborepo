@@ -14,6 +14,10 @@ class MyDocument extends Document {
     return (
       <Html>
         <Head>
+          <meta
+            name="og:description"
+            content="Turbo is an incremental, distributed bundler and build system optimized for JavaScript and TypeScript, written in Rust."
+          />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link
             rel="preconnect"

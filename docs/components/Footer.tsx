@@ -73,7 +73,7 @@ const navigation = {
 
 export function FooterContent() {
   return (
-    <footer className="" aria-labelledby="footer-heading">
+    <div aria-labelledby="footer-heading">
       <h2 id="footer-heading" className="sr-only">
         Footer
       </h2>
@@ -170,7 +170,7 @@ export function FooterContent() {
           </div>
         </div>
       </div>
-    </footer>
+    </div>
   );
 }
 

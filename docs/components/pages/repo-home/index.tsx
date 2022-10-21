@@ -1,23 +1,19 @@
 import Head from "next/head";
 import { Toaster } from "react-hot-toast";
+
 import { RepoHero } from "./RepoHero";
-import { GradientSectionBorder } from "../home-shared/GradientSectionBorder";
 import { RepoFeatures } from "./RepoFeatures";
 import { RepoLetter } from "./RepoLetter";
+import { GradientSectionBorder } from "../home-shared/GradientSectionBorder";
+import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 
 export default function Home() {
   return (
     <>
       <Head>
         <title>Turborepo</title>
-        <style>
-          {`
-            .dark body {
-              background-color: black !important;
-            }
-          `}
-        </style>
       </Head>
+      <LandingPageGlobalStyles />
       <RepoHero />
       <GradientSectionBorder>
         <RepoFeatures />

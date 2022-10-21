@@ -83,12 +83,12 @@ export function RepoHero() {
             TURBOREPO
           </h3>
           <HeroText>
-            A task runner that
+            The build system that
             <br />
             makes ship happen
           </HeroText>
           <SectionSubtext hero>
-            Turborepo is a high-performance task runner for JavaScript and
+            Turborepo is a high-performance build system for JavaScript and
             TypeScript codebases.
           </SectionSubtext>
         </FadeIn>

@@ -1,14 +1,17 @@
+import React from "react";
 import Head from "next/head";
+import cn from "classnames";
+import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+
 import { Clients } from "../../clients/Clients";
 import { Marquee } from "../../clients/Marquee";
 import { TurboheroBackground } from "./TurboHeroBackground";
 import { Turborepo } from "./Turborepo";
-import styles from "./index.module.css";
 import { Turbopack } from "./Turbopack";
-import React from "react";
-import cn from "classnames";
-import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
+
+import styles from "./index.module.css";
 
 function Background() {
   return (
@@ -108,7 +111,7 @@ function SiteCards() {
           className="turborepoCardBg"
         >
           <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70">
-            High-performance task runner for JavaScript and TypeScript
+            High-performance build system for JavaScript and TypeScript
             codebases.
           </p>
         </Card>
@@ -149,11 +152,8 @@ function LandingPage() {
     <>
       <Head>
         <title>Turbo</title>
-        <meta
-          name="og:description"
-          content="Turbo is an incremental, distributed bundler and task runner optimized for JavaScript and TypeScript, written in Rust."
-        />
       </Head>
+      <LandingPageGlobalStyles />
       <div className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
         <div className="z-100 w-full h-full flex flex-col items-center justify-center">
@@ -161,7 +161,7 @@ function LandingPage() {
             Make Ship Happen
           </h1>
           <p className="mx-6 text-xl w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
-            Turbo is an incremental, distributed bundler and task runner
+            Turbo is an incremental, distributed bundler and build system
             optimized for JavaScript and TypeScript, written in Rust.
           </p>
           <SiteCards />

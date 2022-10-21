@@ -28,7 +28,7 @@ function Navigation(props) {
   });
 
   // Inject showcase link when ON root
-  if (router.asPath === "/") {
+  if (router.asPath === "/" || router.asPath === "/showcase") {
     headerItems.unshift({
       title: "Showcase",
       type: "page",

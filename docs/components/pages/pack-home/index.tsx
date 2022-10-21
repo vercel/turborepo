@@ -1,24 +1,19 @@
 import Head from "next/head";
-import { Toaster } from "react-hot-toast";
+
 import { PackBenchmarks } from "./PackBenchmarks";
 import { PackHero } from "./PackHero";
 import { PackLetter } from "./PackLetter";
 import { PackFeatures } from "./PackFeatures";
 import { GradientSectionBorder } from "../home-shared/GradientSectionBorder";
+import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 
 export default function Home() {
   return (
     <>
       <Head>
         <title>Turbopack</title>
-        <style>
-          {`
-            .dark body {
-              background-color: black !important;
-            }
-          `}
-        </style>
       </Head>
+      <LandingPageGlobalStyles />
       <PackHero />
       <GradientSectionBorder>
         <PackBenchmarks />
@@ -27,7 +22,6 @@ export default function Home() {
       <GradientSectionBorder>
         <PackLetter />
       </GradientSectionBorder>
-      <Toaster position="bottom-right" />
     </>
   );
 }
