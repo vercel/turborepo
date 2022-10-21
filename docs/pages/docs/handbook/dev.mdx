@@ -146,12 +146,12 @@ Add any environment variables you need to inject:
 DATABASE_URL=my-database-url
 ```
 
-3. Inside your root `package.json`, add a `dev` script. Prefix it with `dotenv`:
+3. Inside your root `package.json`, add a `dev` script. Prefix it with `dotenv` and the `--` argument separator:
 
 ```json
 {
   "scripts": {
-    "dev": "dotenv turbo run dev"
+    "dev": "dotenv -- turbo run dev"
   }
 }
 ```
