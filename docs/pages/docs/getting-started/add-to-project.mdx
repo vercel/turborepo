@@ -104,17 +104,45 @@ This means that Turbo can schedule them separately.
 
 3. **Try running `build` and `lint` with `turbo`:**
 
-```bash
-turbo build lint
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npx turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm turbo build lint
+    ```
+  </Tab>
+</Tabs>
 
 This runs `build` and `lint` at the same time.
 
 4. **Without making any changes to the code, try running `build` and `lint` again:**
 
-```bash
-turbo build lint
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npx turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm turbo build lint
+    ```
+  </Tab>
+</Tabs>
 
 You should see terminal output like this:
 
@@ -128,6 +156,24 @@ Congratulations - **you just completed a build and lint in under 200ms**.
 
 To learn how this is possible, check out our [core concepts docs](/docs/core-concepts/caching).
 
-5. **Try running `turbo dev`:**
+5. **Try running `dev` with `turbo`:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npx turbo dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn turbo dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm turbo dev
+    ```
+  </Tab>
+</Tabs>
 
 You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.
