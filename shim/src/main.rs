@@ -300,7 +300,7 @@ fn get_version() -> &'static str {
 
 fn main() -> Result<()> {
     let clap_args = Args::parse();
-    // Quick fix because --help doesn't work with ignore_errors in clap.
+    // --help doesn't work with ignore_errors in clap.
     if clap_args.help {
         let mut command = Args::command();
         command.print_help()?;
@@ -312,14 +312,13 @@ fn main() -> Result<()> {
         process::exit(0);
     }
 
-    let mut args: Vec<_> = env::args().skip(1).collect();
-
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
         env::current_dir()?
     };
 
+    let args: Vec<_> = env::args().skip(1).collect();
     if args.is_empty() {
         process::exit(1);
     }
