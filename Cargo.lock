@@ -1564,6 +1564,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "http"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2309,6 +2315,7 @@ dependencies = [
  "futures",
  "indexmap",
  "mime",
+ "rand",
  "regex",
  "serde",
  "serde_json",
@@ -2318,6 +2325,7 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
+ "turbo-tasks-hash",
  "turbopack",
  "turbopack-core",
  "turbopack-dev-server",
@@ -5074,6 +5082,7 @@ name = "turbo-tasks-hash"
 version = "0.1.0"
 dependencies = [
  "base16",
+ "hex",
  "md4",
  "turbo-tasks-macros",
  "twox-hash",
@@ -5254,6 +5263,7 @@ dependencies = [
  "anyhow",
  "event-listener",
  "futures",
+ "httparse",
  "hyper",
  "hyper-tungstenite",
  "indexmap",
