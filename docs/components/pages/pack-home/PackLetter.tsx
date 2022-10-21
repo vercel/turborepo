@@ -1,15 +1,15 @@
-import { HeroText } from "./Headings";
+import { HeroText } from "../home-shared/Headings";
 import Image from "next/future/image";
 import cn from "classnames";
-import gradients from "./gradients.module.css";
-import { FadeIn } from "./FadeIn";
-import { CTAButton } from "./CTAButton";
+import gradients from "../home-shared/gradients.module.css";
+import { FadeIn } from "../home-shared/FadeIn";
+import { CTAButton } from "../home-shared/CTAButton";
 import Link from "next/link";
-import { Gradient } from "./Gradient";
+import { Gradient } from "../home-shared/Gradient";
 
 export function PackLetter() {
   return (
-    <section className="font-sans relative px-6 py-16 md:py-24 lg:py-32 items-center flex flex-col gap-14">
+    <section className="relative flex flex-col items-center px-6 py-16 font-sans md:py-24 lg:py-32 gap-14">
       <FadeIn>
         <HeroText>
           Let&apos;s move
@@ -17,7 +17,7 @@ export function PackLetter() {
           the web forward
         </HeroText>
       </FadeIn>
-      <div className="flex flex-col max-w-xl md:text-lg lg:text-lg leading-6">
+      <div className="flex flex-col max-w-xl leading-6 md:text-lg lg:text-lg">
         <FadeIn className="opacity-70">
           <p>
             It&apos;s time for a new beginning in compiler infrastructure for
@@ -69,14 +69,14 @@ export function PackLetter() {
               className="rounded-full"
             />
           </div>
-          <div className="flex flex-col pb-2 gap-3">
+          <div className="flex flex-col gap-3 pb-2">
             <Image
               alt="Tobias Koppers hand written signature"
               src="/images/docs/pack/tobias-signature-light.svg"
               // 16 px added and offset to account for the glow
               width={173 + 16}
               height={91 + 16}
-              className="-ml-3 -mb-3 block dark:hidden"
+              className="block -mb-3 -ml-3 dark:hidden"
             />
             <Image
               alt="Tobias Koppers hand written signature"
@@ -84,7 +84,7 @@ export function PackLetter() {
               // 16 px added and offset to account for the glow
               width={173 + 16}
               height={91 + 16}
-              className="-ml-3 -mb-3 hidden dark:block"
+              className="hidden -mb-3 -ml-3 dark:block"
             />
             <div className="flex gap-2 flex-wrap text-sm leading-none text-[#888888] max-w-[156px] md:max-w-xl lg:max-w-xl">
               <p className="font-bold">Tobias Koppers</p>
@@ -93,7 +93,7 @@ export function PackLetter() {
           </div>
         </FadeIn>
       </div>
-      <FadeIn noVertical className="w-full flex justify-center  mt-16 relative">
+      <FadeIn noVertical className="relative flex justify-center w-full mt-16">
         <div className="max-w-[180px] w-full">
           <CTAButton>
             <Link href="/pack/docs">

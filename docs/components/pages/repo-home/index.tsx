@@ -1,16 +1,15 @@
 import Head from "next/head";
 import { Toaster } from "react-hot-toast";
-import { PackBenchmarks } from "./PackBenchmarks";
-import { PackHero } from "./PackHero";
-import { PackLetter } from "./PackLetter";
-import { PackFeatures } from "./PackFeatures";
+import { RepoHero } from "./RepoHero";
 import { GradientSectionBorder } from "../home-shared/GradientSectionBorder";
+import { RepoFeatures } from "./RepoFeatures";
+import { RepoLetter } from "./RepoLetter";
 
 export default function Home() {
   return (
     <>
       <Head>
-        <title>Turbopack</title>
+        <title>Turborepo</title>
         <style>
           {`
             .dark body {
@@ -19,13 +18,12 @@ export default function Home() {
           `}
         </style>
       </Head>
-      <PackHero />
+      <RepoHero />
       <GradientSectionBorder>
-        <PackBenchmarks />
-        <PackFeatures />
+        <RepoFeatures />
       </GradientSectionBorder>
       <GradientSectionBorder>
-        <PackLetter />
+        <RepoLetter />
       </GradientSectionBorder>
       <Toaster position="bottom-right" />
     </>

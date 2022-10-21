@@ -3,20 +3,23 @@ import gradients from "./gradients.module.css";
 
 export function HeroText({
   children,
+  className,
   h1,
 }: {
   children: React.ReactNode;
+  className?: string;
   h1?: boolean;
 }) {
-  const className = cn(
+  const combinedClassname = cn(
     gradients.heroHeading,
-    "font-extrabold tracking-[-0.04em] leading-none text-[40px] md:text-5xl lg:text-[80px] max-w-lg md:max-w-xl lg:max-w-4xl text-center text-transparent"
+    "font-extrabold tracking-[-0.04em] leading-none text-[40px] md:text-5xl lg:text-[80px] max-w-lg md:max-w-xl lg:max-w-4xl text-center text-transparent",
+    className
   );
 
   if (h1) {
-    return <h1 className={className}>{children}</h1>;
+    return <h1 className={combinedClassname}>{children}</h1>;
   }
-  return <h2 className={className}>{children}</h2>;
+  return <h2 className={combinedClassname}>{children}</h2>;
 }
 
 export function SectionHeader({ children }: { children: React.ReactNode }) {

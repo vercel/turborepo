@@ -9,8 +9,8 @@ import {
 import Image from "next/future/image";
 import { useEffect, useRef, useState } from "react";
 import benchmarkData from "./benchmark-data.json";
-import { Gradient } from "./Gradient";
-import gradients from "./gradients.module.css";
+import { Gradient } from "../home-shared/Gradient";
+import gradients from "../home-shared/gradients.module.css";
 import { BenchmarkCategory, BenchmarkNumberOfModules } from "./PackBenchmarks";
 
 export function BenchmarksGraph({

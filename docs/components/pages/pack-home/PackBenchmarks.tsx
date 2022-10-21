@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { PackBenchmarkTabs } from "./PackBenchmarkTabs";
-import { SectionHeader, SectionSubtext } from "./Headings";
+import { SectionHeader, SectionSubtext } from "../home-shared/Headings";
 import { BenchmarksGraph } from "./PackBenchmarksGraph";
 import { PackDropdown } from "./PackDropdown";
-import { FadeIn } from "./FadeIn";
+import { FadeIn } from "../home-shared/FadeIn";
 
 export type BenchmarkNumberOfModules = "1000" | "5000" | "10000" | "30000";
 export type BenchmarkCategory =
