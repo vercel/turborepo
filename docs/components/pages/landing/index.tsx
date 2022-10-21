@@ -14,10 +14,14 @@ function Background() {
   return (
     <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
       <div
-        className="z-[-1] absolute w-full h-full  [--gradient-stop-1:60%] [--gradient-stop-2:85%] lg:[--gradient-stop-1:50%] lg:[--gradient-stop-2:80%]"
+        className={cn(
+          "z-[-1] absolute w-full h-full [--gradient-color=0 0 0] [--gradient-stop-1:60%] [--gradient-stop-2:85%] lg:[--gradient-stop-1:50%] lg:[--gradient-stop-2:80%]",
+          "[--gradient-color-1=rgba(0,0,0,1)] [--gradient-color-2=rgba(0,0,0,0.8)] [--gradient-color-3=rgba(0,0,0,0)]",
+          "dark:[--gradient-color-1=rgba(255,255,255,1)] dark:[--gradient-color-2=rgba(255,255,255,0.8)] dark:[--gradient-color-3=rgba(255,255,255,0)]"
+        )}
         style={{
           background:
-            "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) var(--gradient-stop-1), rgba(0,0,0,0) var(--gradient-stop-2))",
+            "linear-gradient(180deg, var(--gradient-color-1) 0%, var(--gradient-color-2) var(--gradient-stop-1), var(--gradient-color-3) var(--gradient-stop-2))",
         }}
       />
       <span className={styles.leftLights} />
