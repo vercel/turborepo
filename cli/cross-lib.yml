@@ -1,0 +1,67 @@
+project_name: turbo
+before:
+  hooks:
+    - make compile-protos
+    - go mod tidy
+
+dist: dist-cross
+
+builds:
+  - id: turbo-linux
+    main: ./cmd/turbo
+    binary: lib/libturbo.a
+    flags:
+      - -trimpath
+      - -buildmode=c-archive
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - linux_arm64
+      - linux_amd64
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
+      - goos: linux
+        goarch: amd64
+        goamd64: v1
+        env:
+          - CC=x86_64-linux-gnu-gcc
+          - CXX=x86_64-linux-gnu-g++
+  - id: turbo-windows
+    main: ./cmd/turbo
+    binary: lib/turbo
+    flags:
+      - -trimpath
+      - -buildmode=c-archive
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=1
+    targets:
+      - windows_arm64
+      - windows_amd64
+    overrides:
+      - goos: windows
+        goarch: arm64
+        env:
+          - CC=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-gcc
+          - CXX=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-g++
+      - goos: windows
+        goarch: amd64
+        goamd64: v1
+        env:
+          - CC=x86_64-w64-mingw32-gcc
+          - CXX=x86_64-w64-mingw32-g++
+
+archives:
+  - format: binary
+
+release:
+  disable: true

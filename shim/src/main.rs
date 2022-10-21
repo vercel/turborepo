@@ -306,11 +306,13 @@ fn main() -> Result<()> {
         command.print_help()?;
         process::exit(0);
     }
-    // Quick fix because --version doesn't work with ignore_errors in clap.
+    // --version flag doesn't work with ignore_errors in clap, so we have to handle it manually
     if clap_args.version {
         println!("{}", get_version());
         process::exit(0);
     }
+
+    let mut args: Vec<_> = env::args().skip(1).collect();
 
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
@@ -318,7 +320,7 @@ fn main() -> Result<()> {
         env::current_dir()?
     };
 
-    if clap_args.command.is_none() && clap_args.tasks.is_empty() {
+    if args.is_empty() {
         process::exit(1);
     }
 

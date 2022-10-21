@@ -46,10 +46,16 @@ type NpmPackage struct {
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
 	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
 
-	Bin     map[string]string `json:"bin,omitempty"`
-	Engines map[string]string `json:"engines,omitempty"`
-	CPU     []string          `json:"cpu,omitempty"`
-	OS      []string          `json:"os,omitempty"`
+	Bin map[string]string `json:"bin,omitempty"`
+
+	// Engines has two valid formats historically, an array and an object.
+	// Since we don't use this property we just need to propagate it through.
+	//
+	// Go serializes correctly even with `interface{}`.
+	Engines interface{} `json:"engines,omitempty"`
+
+	CPU []string `json:"cpu,omitempty"`
+	OS  []string `json:"os,omitempty"`
 
 	// Only used for root level package
 	Workspaces []string `json:"workspaces,omitempty"`

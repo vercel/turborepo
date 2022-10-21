@@ -1,0 +1,192 @@
+name: Build Rust Wrapper
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Staging branch to run release from"
+
+jobs:
+  build-native:
+    name: "Build Native"
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: "x86_64-apple-darwin"
+            lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+          - host: macos-latest
+            target: "aarch64-apple-darwin"
+            lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+          - host: ubuntu-latest
+            target: "x86_64-unknown-linux-gnu"
+            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+          - host: ubuntu-latest
+            target: "aarch64-unknown-linux-gnu"
+            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+            rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
+            setup: "sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+          - host: windows-latest
+            target: x86_64-pc-windows-gnu
+            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "${{ inputs.release_branch }}"
+
+      - name: Install
+        uses: actions-rs/toolchain@v1
+        if: ${{ !matrix.settings.docker }}
+        with:
+          profile: minimal
+          override: true
+          # TODO: copied from turbo tooling, may need to make this file-driven
+          toolchain: nightly-2022-09-23
+          target: ${{ matrix.settings.target }}
+
+      # - name: Cache cargo registry
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/.cargo/registry
+      #     key: ${{ matrix.settings.target }}-cargo-registry
+
+      # - name: Cache cargo index
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/.cargo/git
+      #     key: ${{ matrix.settings.target }}-cargo-index
+
+      - name: Download artifact
+        id: download-artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          # Optional, workflow file name or ID
+          # If not specified, will be inferred from run_id (if run_id is specified), or will be the current workflow
+          workflow: build_go_lib.yml
+          # Optional, the status or conclusion of a completed workflow to search for
+          # Can be one of a workflow conclusion:
+          #   "failure", "success", "neutral", "cancelled", "skipped", "timed_out", "action_required"
+          # Or a workflow status:
+          #   "completed", "in_progress", "queued"
+          # Use the empty string ("") to ignore status or conclusion in the search
+          workflow_conclusion: success
+          # Optional, will use the specified branch. Defaults to all branches
+          branch: ${{ inputs.release_branch }}
+          # Optional, uploaded artifact name,
+          # will download all artifacts if not specified
+          # and extract them into respective subdirectories
+          # https://github.com/actions/download-artifact#download-all-artifacts
+          name: ${{ matrix.settings.lib-cache-key }}
+          # Optional, a directory where to extract artifact(s), defaults to the current directory
+          path: shim/libturbo
+          # Optional, choose how to exit the action if no artifact is found
+          # can be one of:
+          #  "fail", "warn", "ignore"
+          # default fail
+          if_no_artifact_found: fail
+
+      # TODO: re-enable this instead of the above when this runs together with the go library build
+      # - name: Download Cross-compiled Artifacts
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: ${{ matrix.settings.lib-cache-key }}
+      #     path: shim/libturbo
+      - name: Build Setup
+        if: ${{ matrix.settings.setup }}
+        run: ${{ matrix.settings.setup }}
+
+      - name: Build
+        if: ${{ !matrix.settings.docker }}
+        run: cd shim && ${{ matrix.settings.rustflags }} cargo build --release --target ${{ matrix.settings.target }}
+
+      - name: Build in Docker
+        if: ${{ matrix.settings.docker }}
+        run: cd shim && ${{ matrix.settings.rustflags }} cargo build --release --target ${{ matrix.settings.target }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: shim-${{ matrix.settings.target }}
+          path: shim/target/${{ matrix.settings.target }}/release/turbo*
+
+  final-publish:
+    name: "Publish To NPM"
+    runs-on: ubuntu-latest
+    needs: [build-native]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "${{ inputs.release_branch }}"
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
+      - name: Download Apple ARM64 Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: shim-aarch64-apple-darwin
+          path: cli/dist-darwin-arm64
+
+      - name: Download Ubuntu ARM64 Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: shim-aarch64-unknown-linux-gnu
+          path: cli/dist-linux-arm64
+
+      - name: Download Windows ARM64 (Ships as x86_64) Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: shim-x86_64-pc-windows-gnu
+          path: cli/dist-windows-arm64
+
+      - name: Download Ubuntu x86_64 Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: shim-x86_64-unknown-linux-gnu
+          path: cli/dist-linux-amd64
+
+      - name: Download Apple x86_64 Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: shim-x86_64-apple-darwin
+          path: cli/dist-darwin-amd64
+
+      - name: Download Windows x86_64 Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: shim-x86_64-pc-windows-gnu
+          path: cli/dist-windows-amd64
+
+      - name: Perform Release
+        run: cd cli && make publish-shim
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # TODO: probably don't need to upload this once we've verified the snapshots
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: shim-combined
+          path: cli/dist
