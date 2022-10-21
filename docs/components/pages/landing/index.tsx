@@ -12,6 +12,7 @@ import { Turbopack } from "./Turbopack";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 
 import styles from "./index.module.css";
+import Image from "next/future/image";
 
 function Background() {
   return (
@@ -56,7 +57,7 @@ function Card({
 }: {
   href: string;
   icon: React.ElementType;
-  title: string;
+  title: "repo" | "pack";
   className?: string;
   children: React.ReactNode;
 }) {
@@ -90,9 +91,13 @@ function Card({
           <div className="mb-7">
             <Icon />
           </div>
-          <p className="mb-3 text-xl font-bold tracking-wider uppercase font-wide md:text-3xl dark:text-white">
-            {title}
-          </p>
+          <Image
+            alt="Turbopack"
+            src={`/images/docs/${title}/${title}-type-logo.svg`}
+            width={220}
+            height={100}
+            className="w-[160px] md:w-[220px] mb-3"
+          />
           {children}
         </motion.div>
       </a>
@@ -105,7 +110,7 @@ function SiteCards() {
     <AnimatePresence>
       <div className="flex w-full container items-center justify-center gap-6 px-6 sm:mx-0 mt-8 md:!mt-14 lg:!mt-15 md:mb-0 flex-col lg:!flex-row z-10 lg:!translate-y-0">
         <Card
-          title="Turborepo"
+          title="repo"
           icon={Turborepo}
           href="/repo"
           className="turborepoCardBg"
@@ -116,7 +121,7 @@ function SiteCards() {
           </p>
         </Card>
         <Card
-          title="Turbopack"
+          title="pack"
           icon={Turbopack}
           href="/pack"
           className="turbopackCardBg"

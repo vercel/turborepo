@@ -14,7 +14,7 @@ export function PackHero() {
     <>
       <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
       <FadeIn className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
-        <div className="flex items-center justify-center w-full ">
+        <div className="flex items-center justify-center w-full mb-8">
           <div className="absolute z-50 min-w-[614px] min-h-[614px]">
             <Image
               alt="Turbopack"
@@ -68,14 +68,13 @@ export function PackHero() {
           delay={0.2}
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
         >
-          <span
-            className={cn(
-              "font-bold font-wide text-[20px] lg:text-2xl tracking-[0.07em]",
-              gradients.turbopackHeaderText
-            )}
-          >
-            TURBOPACK
-          </span>
+          <Image
+            alt="Turbopack"
+            src="/images/docs/pack/pack-type-logo.svg"
+            width={200}
+            height={100}
+            className="w-[160px] md:w-[200px]"
+          />
           <HeroText h1>The Rust-based successor to Webpack</HeroText>
           <SectionSubtext hero>
             Turbo is an incremental, distributed bundler optimized for
