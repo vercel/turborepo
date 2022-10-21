@@ -87,11 +87,21 @@ enum Command {
     /// caching.
     Link,
     /// Login to your Vercel account
-    Login,
+    Login {
+        #[clap(long = "sso-team")]
+        sso_team: Option<String>,
+    },
     /// Logout to your Vercel account
     Logout,
     /// Prepare a subset of your monorepo.
-    Prune,
+    Prune {
+        #[clap(long)]
+        scope: Option<String>,
+        #[clap(long)]
+        docker: bool,
+        #[clap(long = "out-dir", default_value = "out")]
+        output_dir: String,
+    },
     /// Run tasks across projects in your monorepo
     Run { tasks: Vec<String> },
     /// Unlink the current directory from your Vercel organization and disable
@@ -338,6 +348,45 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod test {
     use clap::Parser;
+    use rand::{seq::SliceRandom, thread_rng};
+
+    struct CommandTestCase {
+        command: &'static str,
+        command_args: Vec<Vec<&'static str>>,
+        global_args: Vec<Vec<&'static str>>,
+        expected_output: Args,
+    }
+
+    static TEST_ITERATIONS: usize = 10;
+
+    impl CommandTestCase {
+        fn test(&self) {
+            for _ in 0..TEST_ITERATIONS {
+                let command = self.create_random_permutation();
+                assert_eq!(Args::try_parse_from(command).unwrap(), self.expected_output)
+            }
+        }
+
+        fn create_random_permutation(&self) -> Vec<&'static str> {
+            let mut rng = thread_rng();
+            // First we take the command and the global args and shuffle them
+            // to get a nice combo of args before and after the command
+            let mut args = vec![vec![self.command]];
+            args.extend(self.global_args.clone());
+            args.shuffle(&mut rng);
+
+            // Then we append the command args
+            let mut command_args = self.command_args.clone();
+            command_args.shuffle(&mut rng);
+            args.extend(command_args);
+
+            // Then we put the `turbo` in front
+            let mut command = vec!["turbo"];
+            command.extend(args.into_iter().flatten());
+
+            command
+        }
+    }
 
     use crate::{Args, Command};
 
@@ -390,13 +439,214 @@ mod test {
             }
         );
 
-        assert_eq!(
-            Args::try_parse_from(&["turbo", "--cwd", "../examples/basic", "bin"]).unwrap(),
-            Args {
+        CommandTestCase {
+            command: "bin",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
                 command: Some(Command::Bin),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_login() {
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "login"]).unwrap(),
+            Args {
+                command: Some(Command::Login { sso_team: None }),
+                ..Args::default()
             }
         );
+
+        CommandTestCase {
+            command: "login",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
+                command: Some(Command::Login { sso_team: None }),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "login",
+            command_args: vec![vec!["--sso-team", "my-team"]],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
+                command: Some(Command::Login {
+                    sso_team: Some("my-team".to_string()),
+                }),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_logout() {
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "logout"]).unwrap(),
+            Args {
+                command: Some(Command::Logout),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "logout",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
+                command: Some(Command::Logout),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_unlink() {
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "unlink"]).unwrap(),
+            Args {
+                command: Some(Command::Unlink),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "unlink",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
+                command: Some(Command::Unlink),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_prune() {
+        let default_prune = Command::Prune {
+            scope: None,
+            docker: false,
+            output_dir: "out".to_string(),
+        };
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "prune"]).unwrap(),
+            Args {
+                command: Some(default_prune.clone()),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
+                command: Some(default_prune.clone()),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "prune", "--scope", "bar"]).unwrap(),
+            Args {
+                command: Some(Command::Prune {
+                    scope: Some("bar".to_string()),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "prune", "--docker"]).unwrap(),
+            Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    docker: true,
+                    output_dir: "out".to_string(),
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(&["turbo", "prune", "--out-dir", "dist"]).unwrap(),
+            Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    docker: false,
+                    output_dir: "dist".to_string(),
+                }),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["--out-dir", "dist"], vec!["--docker"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    docker: true,
+                    output_dir: "dist".to_string(),
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["--out-dir", "dist"], vec!["--docker"]],
+            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    docker: true,
+                    output_dir: "dist".to_string(),
+                }),
+                cwd: Some("../examples/basic".to_string()),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![
+                vec!["--out-dir", "dist"],
+                vec!["--docker"],
+                vec!["--scope", "foo"],
+            ],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: Some("foo".to_string()),
+                    docker: true,
+                    output_dir: "dist".to_string(),
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
     }
 }
