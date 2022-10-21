@@ -27,7 +27,7 @@ export function SectionHeader({ children }: { children: React.ReactNode }) {
     <h2
       className={cn(
         gradients.heroHeading,
-        "font-bold tracking-[-0.01em] leading-tight text-[32px] md:text-4xl lg:text-[40px] max-w-sm md:max-w-md lg:max-w-2xl text-center text-transparent"
+        "font-bold tracking-[-0.01em] pb-1 text-[32px] md:text-4xl lg:text-[40px] max-w-sm md:max-w-md lg:max-w-2xl text-center text-transparent"
       )}
     >
       {children}
