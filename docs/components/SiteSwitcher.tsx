@@ -30,15 +30,15 @@ function SiteSwitcher() {
     router.push(site === "repo" ? "/pack" : "/repo");
   };
 
-  if (!site) {
-    return null;
-  }
+  const InnerEl = !site ? "button" : "span";
 
   return (
     <label
       className={cn(
         "group relative flex items-center justify-between p-2 text-xl",
-        { "cursor-pointer": site, "cursor-not-allowed": !site }
+        {
+          "cursor-pointer": site,
+        }
       )}
     >
       <input
@@ -60,27 +60,36 @@ function SiteSwitcher() {
           }
         )}
       />
-      <span className="z-50 absolute p-1 text-sm flex justify-between text-center w-[100px] text-[#666666] dark:text-[#888888] hover:text-black dark:hover:text-white">
-        <span
+      <span
+        className={cn(
+          "z-50 absolute p-1 text-sm flex justify-between text-center w-[100px] text-[#666666] dark:text-[#888888]",
+          { "hover:text-black dark:hover:text-white": site }
+        )}
+      >
+        <InnerEl
+          onClick={() => (!site ? router.push("/repo") : undefined)}
           className={cn(
             "py-1 transition-colors duration-300 inline-block w-[50px]",
             {
               "text-black dark:text-white": site === "repo",
+              "hover:text-black dark:hover:text-white": !site,
             }
           )}
         >
           Repo
-        </span>
-        <span
+        </InnerEl>
+        <InnerEl
+          onClick={() => (!site ? router.push("/pack") : undefined)}
           className={cn(
             "inline-block w-[50px] py-1 transition-colors duration-300 ",
             {
               "text-black dark:text-white": site === "pack",
+              "hover:text-black dark:hover:text-white": !site,
             }
           )}
         >
           Pack
-        </span>
+        </InnerEl>
       </span>
     </label>
   );
