@@ -3,6 +3,7 @@ import useMeasure from "react-use-measure";
 import type { HTMLAttributes } from "react";
 import styles from "./turbohero-background.module.css";
 import cn from "classnames";
+import useIsomorphicLayoutEffect from "../../useIsomorphicLayoutEffect";
 
 const GRID_SIZE = 80;
 
@@ -12,7 +13,7 @@ type LineProps = (HTMLAttributes<HTMLSpanElement> & { key: string })[];
 export function TurboheroBackground(): JSX.Element {
   const [contentRef, { width }] = useMeasure();
   const [verticalLineProps, setVerticalLineProps] = useState<LineProps>([]);
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const props: LineProps = [];
     const gridSize = width < 1024 ? GRID_SIZE - 20 : GRID_SIZE;
     const subDivisions = Math.ceil(width / (gridSize + LINE_WIDTH));
