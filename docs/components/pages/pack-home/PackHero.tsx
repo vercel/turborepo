@@ -73,7 +73,7 @@ export function PackHero() {
             src="/images/docs/pack/pack-type-logo.svg"
             width={200}
             height={100}
-            className="w-[160px] md:w-[200px]"
+            className="w-[160px] md:w-[200px] invert dark:invert-0"
           />
           <HeroText h1>The Rust-based successor to Webpack</HeroText>
           <SectionSubtext hero>

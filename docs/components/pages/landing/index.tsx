@@ -96,7 +96,7 @@ function Card({
             src={`/images/docs/${title}/${title}-type-logo.svg`}
             width={220}
             height={100}
-            className="w-[160px] md:w-[220px] mb-3"
+            className="w-[160px] md:w-[220px] mb-3 invert dark:invert-0"
           />
           {children}
         </motion.div>

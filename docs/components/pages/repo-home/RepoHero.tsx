@@ -72,7 +72,7 @@ export function RepoHero() {
             src="/images/docs/repo/repo-type-logo.svg"
             width={200}
             height={100}
-            className="w-[160px] md:w-[200px]"
+            className="w-[160px] md:w-[200px] invert dark:invert-0"
           />
           <HeroText>
             The build system that
