@@ -3564,6 +3564,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "styled_components"
+version = "0.52.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa9bb5dc721603ce35225910c0442b552369cf9e7322a6083e0ac101cef37da2"
+dependencies = [
+ "Inflector",
+ "once_cell",
+ "regex",
+ "serde",
+ "swc_core",
+ "tracing",
+]
+
+[[package]]
 name = "styled_jsx"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5281,6 +5295,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_regex",
+ "styled_components",
  "styled_jsx",
  "swc_core",
  "tokio",
