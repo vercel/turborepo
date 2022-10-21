@@ -1,6 +1,9 @@
-name: Bug Report
-description: Create a bug report for the Turborepo team
-labels: "template: bug"
+# This is the same as the Turborepo bug report template at the moment,
+# but it's a different template in case we want to customize it further and get different inputs.
+name: Turbopack Bug Report
+description: Create a bug report for the Turbopack team
+title: "[Turbopack] "
+labels: ["kind: bug"]
 body:
   - type: markdown
     attributes:
@@ -10,7 +13,7 @@ body:
       value: If you leave out sections there is a high likelihood it will be moved to the GitHub Discussions "Help" section.
   - type: input
     attributes:
-      label: What version of Turborepo are you using?
+      label: What version of Turbopack are you using?
       description: "For example: 1.0.0"
     validations:
       required: true
@@ -40,7 +43,7 @@ body:
   - type: textarea
     attributes:
       label: Describe the Bug
-      description: A clear and concise description of what the bug is.
+      description: A clear and concise description of the bug.
     validations:
       required: true
   - type: textarea
@@ -55,6 +58,12 @@ body:
       description: Steps to reproduce the behavior, please provide a clear code snippets that always reproduces the issue or a GitHub repository. Screenshots can be provided in the issue body below.
     validations:
       required: true
+  - type: input
+    attributes:
+      label: Reproduction Repo
+      description: Include a URL to a repository that reproduces this issue. This is optional, but increases the likelihood that we can help you!
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: Before posting the issue go through the steps you've written down to make sure the steps provided are detailed and clear.

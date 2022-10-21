@@ -1,6 +1,6 @@
 name: Feature Request
-description: Create a feature request for Turborepo
-labels: "template: story"
+description: Create a feature request
+labels: ["story"]
 body:
   - type: markdown
     attributes:
@@ -8,6 +8,16 @@ body:
   - type: markdown
     attributes:
       value: 'Feature requests will be converted to the GitHub Discussions "Ideas" section.'
+  - type: dropdown
+    id: project
+    attributes:
+      multiple: false
+      label: Which project is this feature idea for?
+      options:
+        - Turborepo
+        - Turbopack
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: Describe the feature you'd like to request
