@@ -9,6 +9,7 @@ import { Marquee } from "../../clients/Marquee";
 import { TurboheroBackground } from "./TurboHeroBackground";
 import { Turborepo } from "./Turborepo";
 import { Turbopack } from "./Turbopack";
+import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 
 import styles from "./index.module.css";
@@ -19,17 +20,18 @@ function Background() {
     <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
       <div
         className={cn(
-          "z-[-1] absolute w-full h-full [--gradient-color=0 0 0] [--gradient-stop-1:60%] [--gradient-stop-2:85%] lg:[--gradient-stop-1:50%] lg:[--gradient-stop-2:80%]",
+          "z-[-1] absolute w-full h-full [--gradient-stop-1:60%] [--gradient-stop-2:85%] lg:[--gradient-stop-1:50%] lg:[--gradient-stop-2:90%]",
           "[--gradient-color-1=rgba(0,0,0,1)] [--gradient-color-2=rgba(0,0,0,0.8)] [--gradient-color-3=rgba(0,0,0,0)]",
           "dark:[--gradient-color-1=rgba(255,255,255,1)] dark:[--gradient-color-2=rgba(255,255,255,0.8)] dark:[--gradient-color-3=rgba(255,255,255,0)]"
         )}
         style={{
           background:
-            "linear-gradient(180deg, var(--gradient-color-1) 0%, var(--gradient-color-2) var(--gradient-stop-1), var(--gradient-color-3) var(--gradient-stop-2))",
+            "linear-gradient(180deg, var(--gradient-color-1) 0%, var(--gradient-color-2) var(--gradient-stop-1), var(--gradient-color-3) var(--gradient-stop-2), 100% transparent)",
         }}
       />
-      <span className={styles.leftLights} />
-      <span className={styles.rightLights} />
+      <span className={cn(styles.leftLights, "opacity-50 dark:opacity-100")} />
+      <span className={cn(styles.rightLights, "opacity-50 dark:opacity-100")} />
+      <span className="bg-gradient-to-t dark:from-black from-white to-transparent absolute bottom-0 left-0 w-full h-48" />
       <TurboheroBackground />
     </div>
   );
@@ -49,6 +51,7 @@ const variants = {
 };
 
 function Card({
+  alt,
   href,
   title,
   icon: Icon,
@@ -58,6 +61,7 @@ function Card({
   href: string;
   icon: React.ElementType;
   title: "repo" | "pack";
+  alt?: string;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -78,28 +82,27 @@ function Card({
           variants={variants}
           aria-hidden="true"
         ></motion.i>
-        <motion.div
-          key="card-body"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, ease: [0.59, 0.15, 0.18, 0.93] }}
+        <div
           className={cn(
             "relative w-full h-full max-w-full !pb-12 pt-8 md:!pb-4 md:!pt-4 p-3 rounded-xl overflow-hidden flex flex-col items-center justify-center border border-[rgba(255,255,255,0.05)]",
             className
           )}
         >
-          <div className="mb-7">
+          <div className="mb-7 md:mb-0 flex-1 flex justify-center items-center">
             <Icon />
           </div>
-          <Image
-            alt="Turbopack"
-            src={`/images/docs/${title}/${title}-type-logo.svg`}
-            width={220}
-            height={100}
-            className="w-[160px] md:w-[220px] mb-3 invert dark:invert-0"
-          />
-          {children}
-        </motion.div>
+
+          <div className="flex-1 flex flex-col items-center">
+            <Image
+              alt={alt}
+              src={`/images/docs/${title}/${title}-type-logo.svg`}
+              width={220}
+              height={22}
+              className="w-[160px] md:w-[220px] mb-3 invert dark:invert-0"
+            />
+            {children}
+          </div>
+        </div>
       </a>
     </Link>
   );
@@ -107,10 +110,11 @@ function Card({
 
 function SiteCards() {
   return (
-    <AnimatePresence>
-      <div className="flex w-full container items-center justify-center gap-6 px-6 sm:mx-0 mt-8 md:!mt-14 lg:!mt-15 md:mb-0 flex-col lg:!flex-row z-10 lg:!translate-y-0">
+    <div className="flex w-full container items-center justify-center gap-6 px-6 sm:mx-0 mt-8 md:!mt-14 lg:!mt-15 md:mb-0 flex-col lg:!flex-row z-10 lg:!translate-y-0">
+      <FadeIn delay={0.2}>
         <Card
           title="repo"
+          alt="Turborepo"
           icon={Turborepo}
           href="/repo"
           className="turborepoCardBg"
@@ -120,8 +124,11 @@ function SiteCards() {
             codebases.
           </p>
         </Card>
+      </FadeIn>
+      <FadeIn delay={0.3}>
         <Card
           title="pack"
+          alt="Turbopack"
           icon={Turbopack}
           href="/pack"
           className="turbopackCardBg"
@@ -133,8 +140,8 @@ function SiteCards() {
             The Rust-powered successor to Webpack.
           </p>
         </Card>
-      </div>
-    </AnimatePresence>
+      </FadeIn>
+    </div>
   );
 }
 
@@ -161,19 +168,23 @@ function LandingPage() {
       <LandingPageGlobalStyles />
       <div className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
-        <div className="z-100 w-full h-full flex flex-col items-center justify-center">
-          <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
-            Make Ship Happen
-          </h1>
-          <p className="mx-6 text-xl w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
-            Turbo is an incremental, distributed bundler and build system
-            optimized for JavaScript and TypeScript, written in Rust.
-          </p>
-          <SiteCards />
-        </div>
-        <div className="z-10 py-16">
-          <Teams />
-        </div>
+        <FadeIn>
+          <div className="z-100 w-full h-full flex flex-col items-center justify-center">
+            <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
+              Make Ship Happen
+            </h1>
+            <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
+              Turbo is an incremental, distributed bundler and build system
+              optimized for JavaScript and TypeScript, written in Rust.
+            </p>
+          </div>
+        </FadeIn>
+        <SiteCards />
+        <FadeIn delay={0.5}>
+          <div className="z-10 py-16">
+            <Teams />
+          </div>
+        </FadeIn>
       </div>
     </>
   );

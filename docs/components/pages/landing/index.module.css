@@ -6,13 +6,8 @@
   height: 900px;
   left: -12.5%;
   top: calc(50% - 900px / 2 + 151px);
-  opacity: 0.3;
-
-  background: linear-gradient(
-    180deg,
-    #77b8ff 0%,
-    rgba(119, 184, 255, 0.4) 100%
-  );
+  opacity: 0.2;
+  background: linear-gradient(180deg, #77b8ff 0%, rgba(42, 138, 246, 0.4) 100%);
   filter: blur(125px);
   transform: rotate(-15deg);
   border-bottom-left-radius: 25% 25%;
@@ -20,6 +15,8 @@
   border-top-left-radius: 100% 100%;
   border-top-right-radius: 100% 100%;
   z-index: 200;
+  will-change: filter;
+  mix-blend-mode: normal;
 }
 
 .leftLights::after {
@@ -30,14 +27,15 @@
   height: 422px;
   left: 0px;
   top: calc(50% - 422px / 2 + 298px);
-
-  opacity: 0.3;
+  opacity: 0.5;
   background: linear-gradient(
     180deg,
-    #77b8ff 0%,
-    rgba(119, 184, 255, 0.4) 100%
+    rgba(29, 92, 162, 0.2) 0%,
+    rgba(42, 138, 246, 0.4) 100%
   );
   filter: blur(125px);
+  will-change: filter;
+  mix-blend-mode: normal;
 }
 
 .rightLights::before {
@@ -51,8 +49,8 @@
   top: calc(50% - 900px / 2 + 151px);
   background-image: linear-gradient(
     180deg,
-    #ec97cf 0%,
-    rgba(236, 151, 207, 0.4) 100%
+    rgba(236, 151, 207, 0.4) 0%,
+    rgba(233, 42, 103, 1) 100%
   );
   filter: blur(125px);
   transform: rotate(15deg);
@@ -60,8 +58,10 @@
   border-bottom-right-radius: 25% 25%;
   border-top-left-radius: 100% 100%;
   border-top-right-radius: 100% 100%;
-  opacity: 0.25;
+  opacity: 0.2;
   overflow: hidden;
+  will-change: filter;
+  mix-blend-mode: normal;
 }
 
 .rightLights::after {
@@ -76,11 +76,13 @@
 
   background: linear-gradient(
     180deg,
-    #ec97cf 0%,
-    rgba(236, 151, 207, 0.4) 100%
+    rgba(236, 151, 207, 0.4) 0%,
+    rgba(233, 42, 103, 1) 100%
   );
-  filter: blur(125px);
   transform: matrix(-1, 0, 0, 1, 0, 0);
+  filter: blur(125px);
+  will-change: filter;
+  mix-blend-mode: normal;
 }
 
 .counter-border {
@@ -175,7 +177,8 @@
   background: linear-gradient(180deg, #58a5ff 0%, #a67af4 100%);
   mix-blend-mode: normal;
   opacity: 0.15;
-  filter: blur(53.0294px);
+  filter: blur(50px);
+  will-change: filter;
 }
 
 .rightBottomLights {
@@ -187,5 +190,6 @@
   background: linear-gradient(180deg, #ff3358 0%, #ff4fd8 100%);
   mix-blend-mode: normal;
   opacity: 0.15;
-  filter: blur(53.0294px);
+  filter: blur(50px);
+  will-change: filter;
 }
