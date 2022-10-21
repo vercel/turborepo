@@ -82,9 +82,13 @@ export function RepoHero() {
           >
             TURBOREPO
           </h3>
-          <HeroText>Monorepos that make ship happen</HeroText>
+          <HeroText>
+            A task runner that
+            <br />
+            makes ship happen
+          </HeroText>
           <SectionSubtext hero>
-            Turborepo is a high peformance build system for JavaScript and
+            Turborepo is a high-performance task runner for JavaScript and
             TypeScript codebases.
           </SectionSubtext>
         </FadeIn>
@@ -104,7 +108,7 @@ export function RepoHero() {
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
-                stroke-width="1.5"
+                strokeWidth="1.5"
                 aria-hidden="true"
                 className="w-6 h-6 ml-2 -mr-3 text-gray-400"
               >

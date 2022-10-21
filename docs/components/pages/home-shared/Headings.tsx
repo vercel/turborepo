@@ -43,7 +43,7 @@ export function SectionSubtext({
   children: React.ReactNode;
 }) {
   const textClasses = hero
-    ? "text-[20px] lg:text-2xl"
+    ? "text-[20px] lg:text-xl"
     : "text-[16px] lg:text-[20px]";
 
   return (

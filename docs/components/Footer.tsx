@@ -30,10 +30,6 @@ const navigation = {
   general: [
     { name: "Blog", href: "/blog" },
     { name: "Releases", href: "https://github.com/vercel/turborepo/releases" },
-    {
-      name: "Enterprise",
-      href: "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-enterpriseLink",
-    },
   ],
   repo: [
     { name: "Documentation", href: "/repo/docs" },
@@ -58,11 +54,15 @@ const navigation = {
     },
   ],
   company: [
+    { name: "Vercel", href: "https://vercel.com" },
     {
       name: "Open Source Software",
       href: "https://vercel.com/oss?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-ossLink",
     },
-    { name: "GitHub", href: "https://github.com/vercel" },
+    {
+      name: "Contact Sales",
+      href: "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+    },
     { name: "Twitter", href: "https://twitter.com/vercel" },
   ],
   legal: [
@@ -82,7 +82,7 @@ export function FooterContent() {
           <div className="grid grid-cols-1 gap-8 xl:col-span-2">
             <div className="grid grid-cols-2 md:grid-cols-4 md:gap-8">
               <div className="mt-12 md:!mt-0">
-                <FooterHeader>Solutions</FooterHeader>
+                <FooterHeader>Resources</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.general.map((item) => (
                     <li key={item.name}>
