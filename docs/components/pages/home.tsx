@@ -40,14 +40,14 @@ export default function Home() {
       </Head>
       <div className="w-auto px-4 pt-16 pb-8 mx-auto sm:pt-24 lg:px-8">
         <h1 className="max-w-5xl text-center mx-auto text-6xl font-extrabold tracking-tighter leading-[1.1] sm:text-7xl lg:text-8xl xl:text-8xl">
-          Monorepos that
+          A task runner that
           <br className="hidden lg:block" />
           <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-pink-gradient-start to-blue-500 ">
-            make ship happen.
+            makes ship happen.
           </span>{" "}
         </h1>
         <p className="max-w-lg mx-auto mt-6 text-xl font-medium leading-tight text-center text-gray-400 sm:max-w-4xl sm:text-2xl md:text-3xl lg:text-4xl">
-          Turborepo is a high-performance build system for JavaScript and
+          Turborepo is a high-performance task runner for JavaScript and
           TypeScript codebases.
         </p>
         <div className="max-w-xl mx-auto mt-5 sm:flex sm:justify-center md:mt-8">
@@ -96,13 +96,19 @@ export default function Home() {
       <div className="">
         <div className="px-4 py-16 mx-auto sm:pt-20 sm:pb-24 lg:pt-24 lg:px-8">
           <h2 className="max-w-4xl mx-auto pb-6 text-5xl font-extrabold  tracking-tight lg:text-6xl xl:text-7xl leading-[1.25!important] md:text-center dark:text-white">
-            Scaling your monorepo shouldn&apos;t be so difficult
+            Scaling your codebase shouldn&apos;t be so difficult
           </h2>
           <div className="max-w-2xl mx-auto lg:mt-2 dark:text-gray-400">
             <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
-              Monorepos are incredible for productivity, especially on the
-              frontend, but the tooling can be a nightmare. There&apos;s a lot
-              of stuff to do (and things to mess up). Nothing &ldquo;just
+              The bigger your project grows, the slower it gets. Tasks like
+              linting, testing, and building begin to take enormous amounts of
+              time.
+            </p>
+            <p className="mb-6 text-lg leading-normal text-current lg:text-xl">
+              If you&apos;re serving multiple applications, you might reach for
+              a monorepo. They&apos;re incredible for productivity, especially
+              on the frontend, but the tooling can be a nightmare. There&apos;s
+              a lot of stuff to do (and things to mess up). Nothing &ldquo;just
               works.&rdquo; It&apos;s become completely normal to waste entire
               days or weeks on plumbing—tweaking configs, writing one-off
               scripts, and stitching stuff together.
@@ -121,9 +127,10 @@ export default function Home() {
               <b className="relative inline-block text-transparent bg-clip-text bg-gradient-to-r from-pink-gradient-start to-blue-500">
                 With Turborepo, we&apos;re doing just that.
               </b>{" "}
-              We&apos;re abstracting the complex configuration needed for most
-              monorepos into a single cohesive build system—giving you a world
-              class development experience without the maintenance burden.
+              We&apos;re building a task runner that can keep up with your team.
+              You&apos;ll see your CI get faster, duplicated work get cut, and
+              your NPM scripts get simpler. You&apos;ll get a world-class
+              development environment, without the maintenance burden.
             </p>
           </div>
           <div className="flex items-center max-w-2xl py-4 mx-auto space-x-4">
