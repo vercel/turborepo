@@ -36,18 +36,16 @@ import { z } from 'zod';
 
 ## Dynamic Imports
 
-Can be totally dynamic:
+Turbopack supports dynamic imports via `import()`:
 
+```ts
+const getFeatureFlags = () => {
+  return import('/featureFlags').then(mod => {
+    return mod.featureFlags;
+  })
+}
 ```
-import(`./dir/${file}.js`)
-```
-
-Only in client-side code
-
-## `imports` field in `package.json`
-
-We don't support `imports` maps! But not that many people use them anyway.
 
 ## `exports` maps
 
-We support this!
+TODO - add this

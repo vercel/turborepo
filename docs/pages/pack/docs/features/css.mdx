@@ -1,5 +1,7 @@
 # CSS
 
+CSS bundling is handled by SWC, using a Rust crate called `swc_css`. We haven't yet documented `swc_css` separately, but it's integrated into Turbopack and supports several CSS features:
+
 ## Global CSS
 
 Importing CSS into global scope is supported **out-of-the-box** in Turbopack.
@@ -7,8 +9,6 @@ Importing CSS into global scope is supported **out-of-the-box** in Turbopack.
 ```ts
 import './globals.css';
 ```
-
-Transpilation is handled by SWC. TODO - is this true?
 
 ## CSS Modules
 
@@ -41,14 +41,25 @@ Turbopack handles [`postcss-nested`](https://www.npmjs.com/package/postcss-neste
 }
 ```
 
-## PostCSS Plugins
-
-Doesn't work out of the box - available further down the line via plugins.
-
 ## `@import` syntax
 
-Works
+Using the CSS `@import` syntax to import other CSS files works **out-of-the-box**. This gives you the ability to combine several CSS files together into a single module:
+
+```css filename="globals.css"
+@import './modal.css';
+@import './dark.css';
+```
+
+## PostCSS
+
+PostCSS gives you the ability to use plugins to enhance your CSS toolchain. It's been an invaluable tool for integrating libraries like Tailwind and `autoprefixer` into applications.
+
+The most common pattern is adding a `postcss.config.js` file to the root of your application, where you can import and configure your plugins.
+
+We **don't currently offer** the ability to use PostCSS plugins. We may end up adding these out-of-the-box, or make them available via a plugin.
 
 ## SCSS and LESS
 
-Don't work out of the box - available further down the line via plugins.
+`.scss` and `.less` files let you utilize SCSS and LESS - languages which enhance CSS in various ways. These languages **don't currently work** out-of-the-box with Turbopack.
+
+These are likely to be available via plugins in the future.
