@@ -1,3 +1,5 @@
+import Callout from "../../../../components/Callout";
+
 # JavaScript
 
 ## ECMAScript Support
@@ -24,6 +26,10 @@ Turbopack supports Browserslist **out-of-the-box**. We pass the information we f
 
 This means you can feel comfortable using Turbopack to target legacy browsers, or deciding to only ship code to modern browsers.
 
+<Callout type="info">
+  Turbopack is available in alpha preview with a dev server, which uses a pre-set minimal browserslist to minimize transformation during development. In a future release, Turbopack will build apps for production targetting your defined browserslist.
+</Callout>
+
 ## Top-level await
 
 Top-level await lets you `await` functions at the module scope.
@@ -34,7 +40,9 @@ const result = await fetch('/').then(res => res.json());
 console.log(result);
 ```
 
-We're **planning** to provide **out-of-the-box support** for top-level await in Turbopack, but it isn't ready quite yet.
+<Callout type="info">
+  We're **planning** to provide **out-of-the-box support** for top-level await in Turbopack, but it isn't ready quite yet.
+</Callout>
 
 ## Babel
 
