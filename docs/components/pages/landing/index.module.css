@@ -131,7 +131,7 @@
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
   z-index: -1;
-  border-radius: calc(var(--border-radius) - var(--border-size));
+  border-radius: calc(var(--border-radius) + var(--border-size));
 }
 
 .counter-border i::before {
