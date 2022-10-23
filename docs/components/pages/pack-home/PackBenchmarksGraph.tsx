@@ -174,8 +174,8 @@ function GraphBar({
   }, [duration, longestTime]);
 
   return (
-    <div className="md:flex-row md:flex w-full justify-center gap-1">
-      <div className="w-48">{Label}</div>
+    <div className="md:flex-row md:flex w-full justify-center gap-1 align-center">
+      <div className="w-48 flex items-center">{Label}</div>
       <div className="flex w-full items-center justify-between gap-4 z-10 border dark:border-[#333333] rounded-lg p-1">
         <motion.div
           animate={controls}

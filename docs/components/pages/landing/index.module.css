@@ -110,13 +110,6 @@
 }
 
 .counter-border:hover {
-  --border-bg: conic-gradient(
-    from 180deg at 50% 50%,
-    #e92a67 0deg,
-    #a853ba 112.5deg,
-    #2a8af6 228.75deg,
-    rgba(42, 138, 246, 0) 360deg
-  );
   cursor: pointer;
 }
 
@@ -147,9 +140,6 @@
   transform: translate(-50%, -50%);
   border-radius: 100%;
   z-index: -2;
-}
-
-.counter-border:hover i::before {
   animation: spin 5s linear infinite;
 }
 

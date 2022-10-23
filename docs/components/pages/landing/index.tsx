@@ -2,8 +2,7 @@ import React from "react";
 import Head from "next/head";
 import cn from "classnames";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
-
+import { motion } from "framer-motion";
 import { Clients } from "../../clients/Clients";
 import { Marquee } from "../../clients/Marquee";
 import { TurboheroBackground } from "./TurboHeroBackground";
@@ -11,7 +10,6 @@ import { Turborepo } from "./Turborepo";
 import { Turbopack } from "./Turbopack";
 import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
-
 import styles from "./index.module.css";
 import Image from "next/future/image";
 
@@ -32,6 +30,7 @@ function Background() {
       <span className={cn(styles.leftLights, "opacity-50 dark:opacity-100")} />
       <span className={cn(styles.rightLights, "opacity-50 dark:opacity-100")} />
       <span className="bg-gradient-to-t dark:from-black from-white to-transparent absolute bottom-0 left-0 w-full h-48" />
+      <span className="bg-gradient-to-b dark:from-black from-black to-transparent absolute top-[20vh] left-0 w-full h-[50vh]" />
       <TurboheroBackground />
     </div>
   );
@@ -168,16 +167,14 @@ function LandingPage() {
       <LandingPageGlobalStyles />
       <div className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
-        <FadeIn>
-          <div className="z-100 w-full h-full flex flex-col items-center justify-center">
-            <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
-              Make Ship Happen
-            </h1>
-            <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
-              Turbo is an incremental, distributed bundler and build system
-              optimized for JavaScript and TypeScript, written in Rust.
-            </p>
-          </div>
+        <FadeIn className="z-10 w-full h-full flex flex-col items-center justify-center">
+          <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
+            Make Ship Happen
+          </h1>
+          <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
+            Turbo is an incremental, distributed bundler and build system
+            optimized for JavaScript and TypeScript, written in Rust.
+          </p>
         </FadeIn>
         <SiteCards />
         <FadeIn delay={0.5}>
