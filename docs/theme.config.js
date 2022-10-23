@@ -18,7 +18,22 @@ const theme = {
     icon: Discord,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
-  titleSuffix: " | Turbo",
+  getNextSeoProps: function SEO() {
+    const router = useRouter();
+
+    console.log(router.pathname);
+
+    let title = "Turbo";
+    if (router?.pathname.startsWith("/pack")) {
+      title = "Turbopack";
+    }
+    if (router?.pathname.startsWith("/repo")) {
+      title = "Turborepo";
+    }
+    return {
+      titleTemplate: `%s – ${title}`,
+    };
+  },
   unstable_flexsearch: true,
   unstable_staticImage: true,
   toc: {
