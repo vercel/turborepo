@@ -71,18 +71,16 @@ export function RepoLetter() {
             <Image
               alt="Jared Palmer's hand written signature"
               src="/images/docs/repo/jared-signature-light.svg"
-              // 16 px added and offset to account for the glow - if swapping svg to include
-              width={209}
-              height={100 + 16}
-              className="block dark:hidden"
+              width={190}
+              height={90}
+              className="block mt-3 mb-4 ml-3 dark:hidden"
             />
             <Image
               alt="Jared Palmer's hand written signature"
               src="/images/docs/repo/jared-signature-dark.svg"
-              // 16 px added and offset to account for the glow
               width={209}
-              height={100 + 16}
-              className="hidden dark:block"
+              height={116}
+              className="hidden -mt-2 dark:block"
             />
             <div className="flex gap-2 flex-wrap text-sm leading-none text-[#888888] max-w-[156px] md:max-w-xl lg:max-w-xl">
               <p className="font-bold">Jared Palmer</p>
