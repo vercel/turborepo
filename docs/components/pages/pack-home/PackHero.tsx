@@ -15,7 +15,7 @@ export function PackHero() {
     <>
       <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
       <FadeIn className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
-        <div className="flex items-center justify-center w-full mb-8">
+        <div className="flex items-center justify-center w-full">
           <div className="absolute z-50 min-w-[614px] min-h-[614px]">
             <Image
               alt="Turbopack"
@@ -42,19 +42,19 @@ export function PackHero() {
             />
           </div>
 
-          <div className="w-[120px] h-[120px] z-50">
+          <div className="w-[120px] z-50 mt-[-8.075px] mb-[-8.075px]">
             <Image
               alt=""
               src={`/images/docs/pack/turbopack-hero-logo-dark.svg`}
               width={120}
-              height={120}
+              height={136.15}
               className="hidden dark:block"
             />
             <Image
               alt=""
               src={`/images/docs/pack/turbopack-hero-logo-light.svg`}
               width={120}
-              height={120}
+              height={136.15}
               className="block dark:hidden"
             />
           </div>
