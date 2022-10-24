@@ -181,7 +181,7 @@ function GraphBar({
           animate={controls}
           variants={graphBarWrapperVariants}
           style={{ width: `${barWidth}%` }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.1 }}
           initial="hidden"
           className={cn(
             "flex items-center h-full rounded relative dark:bg-[#ffffff06] bg-[#00000006]"
@@ -195,14 +195,14 @@ function GraphBar({
             )}
             variants={graphBarVariants}
             animate={controls}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.1 }}
           />
         </motion.div>
         <motion.div
           animate={controls}
           variants={graphBarWrapperVariants}
           className="pr-2"
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.1 }}
         >
           <GraphTimer turbo={turbo} timer={timer} />
         </motion.div>

@@ -110,7 +110,7 @@ function Card({
 function SiteCards() {
   return (
     <div className="flex w-full container items-center justify-center gap-6 px-6 sm:mx-0 mt-8 md:!mt-14 lg:!mt-15 md:mb-0 flex-col lg:!flex-row z-10 lg:!translate-y-0">
-      <FadeIn delay={0.2}>
+      <FadeIn delay={0.1}>
         <Card
           title="repo"
           alt="Turborepo"
@@ -124,7 +124,7 @@ function SiteCards() {
           </p>
         </Card>
       </FadeIn>
-      <FadeIn delay={0.3}>
+      <FadeIn delay={0.2}>
         <Card
           title="pack"
           alt="Turbopack"
@@ -188,8 +188,10 @@ function LandingPage() {
         </FadeIn>
         <Background />
         <SiteCards />
-        <FadeIn delay={0.5} className="z-10 py-16">
-          <Teams />
+        <FadeIn delay={0.3}>
+          <div className="z-10 py-16">
+            <Teams />
+          </div>
         </FadeIn>
       </div>
     </>

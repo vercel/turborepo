@@ -65,7 +65,7 @@ export function PackHero() {
           />
         </div>
         <FadeIn
-          delay={0.2}
+          delay={0.15}
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
         >
           <Image
@@ -82,7 +82,7 @@ export function PackHero() {
           </SectionSubtext>
         </FadeIn>
         <FadeIn
-          delay={0.6}
+          delay={0.3}
           className="z-50 flex flex-col items-center w-full max-w-md gap-5 px-6"
         >
           <div className="flex flex-col w-full gap-3 md:!flex-row">
@@ -104,7 +104,7 @@ export function PackHero() {
           </div>
           <p className="text-sm text-[#666666]">License: MPL-2.0</p>
         </FadeIn>
-        <FadeIn delay={0.8} className="relative w-full">
+        <FadeIn delay={0.5} className="relative w-full">
           <div className="absolute bottom-0 w-full dark:from-black from-white to-transparent h-72 bg-gradient-to-t" />
         </FadeIn>
       </FadeIn>
