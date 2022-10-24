@@ -22,7 +22,7 @@ export function CTAButton({
     <div className="relative w-full group">
       <button
         onClick={onClick}
-        className={`flex items-center justify-center w-full min-w-[120px] py-3 text-base font-medium  no-underline ${
+        className={`w-full min-w-[120px] text-base font-medium no-underline ${
           outline ? outlineClasses : filledClasses
         } rounded md:leading-6 transition-all duration-300 ${
           monospace ? "font-mono" : ""

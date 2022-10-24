@@ -93,7 +93,7 @@ export function RepoLetter() {
         <div className="max-w-[180px] w-full">
           <CTAButton>
             <Link href="/repo/docs">
-              <a className="font-sans">Start Building</a>
+              <a className="block py-3 font-sans">Start Building</a>
             </Link>
           </CTAButton>
         </div>

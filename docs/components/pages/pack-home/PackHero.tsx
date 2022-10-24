@@ -87,7 +87,7 @@ export function PackHero() {
           <div className="flex flex-col w-full gap-3 md:!flex-row">
             <CTAButton>
               <Link href="/pack/docs">
-                <a className="">Get Started</a>
+                <a className="block py-3">Get Started</a>
               </Link>
             </CTAButton>
             <CTAButton outline>
@@ -95,7 +95,7 @@ export function PackHero() {
                 target="_blank"
                 rel="noreferrer"
                 href="https://github.com/vercel/turbo"
-                className=""
+                className="block py-3"
               >
                 GitHub
               </a>
