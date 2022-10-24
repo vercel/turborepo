@@ -13,19 +13,19 @@ A new generation of native-speed bundlers were emerging, like esbuild and swc. B
 
 ## Bundling vs Native ESM
 
-Frameworks like Vite are using a technique where in development mode they _don’t_ bundle application source code. Instead, they serve it over native ESM - letting the browser take over part of the job of bundling the app. This results in a big speed boost at build time, since there is less bundling being done.
+Frameworks like Vite use a technique where they don’t bundle application source code in development mode. Instead, they rely on the browser’s native ES Modules system. This approach results in incredibly responsive updates since they only have to transform a single file.
 
-However, Vite can hit scaling issues with large number of modules in SSR’d applications. Cascading network requests in the browser can mean a relatively slow startup time. For the browser, it’s faster if it can receive the code it needs in as few network requests as possible - even on a local server.
+However, Vite can hit scaling issues with large applications made up of many modules. A flood of cascading network requests in the browser can lead to a relatively slow startup time. For the browser, it’s faster if it can receive the code it needs in as few network requests as possible - even on a local server.
 
-That’s why we decided that, like Webpack, we wanted Turbopack to _bundle_ the code in the development server. This results in a big speed-up in large applications, especially when starting up the dev server for the first time.
+That’s why we decided that, like Webpack, we wanted Turbopack to bundle the code in the development server. Turbopack can do it much faster, especially for larger applications, because it is written in Rust and skips optimization work that is only necessary for production.
 
 ## Incremental Computation
 
-There are two ways to make a process faster: do less work, and do work in parallel. We knew that to make the fastest bundler possible, we’d need to pull hard on both levers.
+There are two ways to make a process faster: do less work, and do work in parallel. We knew if we wanted to make the fastest bundler possible, we’d need to pull hard on both levers.
 
-Internally, we’d been working on a low-level incremental computation toolset called Turbo Engine. Turbo Engine works like a scheduler for function calls, allowing calls to functions to be parallelized across all available cores.
+We decided to create a reusable Turbo build engine for distributed and incremental behavior. The Turbo engine works like a scheduler for function calls, allowing calls to functions to be parallelized across all available cores.
 
-Turbo Engine also caches the result of all the functions it schedules, meaning it never needs to do the same work twice. Put simply, it does the minimum work at maximum speed.
+The Turbo engine also caches the result of all the functions it schedules, meaning it never needs to do the same work twice. Put simply, it does the minimum work at maximum speed.
 
 ### Vite and esbuild
 
@@ -41,15 +41,15 @@ Evan Wallace refers to esbuild as a [proof-of-concept for the next generation of
 
 ## Lazy bundling
 
-Early versions of Next.js tried to bundle the _entire_ web app in development mode. We quickly realised that this ‘eager’ approach was less than optimal. Modern versions of Next.js bundle only the pages requested by the dev server. For instance, if you go to `localhost:3000`, it’ll bundle only `pages/index.jsx`, and the modules it imports.
+Early versions of Next.js tried to bundle the _entire_ web app in development mode. We quickly realized that this ‘eager’ approach was less than optimal. Modern versions of Next.js bundle only the pages requested by the dev server. For instance, if you go to `localhost:3000`, it’ll bundle only `pages/index.jsx`, and the modules it imports.
 
-This more ‘lazy’ approach (only bundling assets when absolutely necessary) is key for a fast dev server. Native ESM handles this without much magic - you make a request to a module, which requests other modules. However, we wanted to build a bundler, for the reasons explained above.
+This more ‘lazy’ approach (only bundling assets when absolutely necessary) is key for a fast dev server. Native ESM handles this without much magic - you request a module, which requests other modules. However, we wanted to build a bundler, for the reasons explained above.
 
 esbuild doesn’t have a concept of ‘lazy’ bundling - it’s all-or-nothing, unless you specifically target only certain entry points.
 
-Turbopack’s development mode builds a minimal graph of your app’s imports and exports based on received requests, and only bundles the minimal code necessary. Learn more in the [core concepts docs](core-concepts).
+Turbopack’s development mode builds a minimal graph of your app’s imports and exports based on received requests and only bundles the minimal code necessary. Learn more in the [core concepts docs](core-concepts).
 
-This makes Turbopack extremely fast when first starting up the dev server. We compute only the code necessary to render the page, then ship it to the browser in a single chunk. At large scale, this ends up being significantly faster than Native ESM.
+This strategy makes Turbopack extremely fast when first starting up the dev server. We compute only the code necessary to render the page, then ship it to the browser in a single chunk. At large scale, this ends up being significantly faster than Native ESM.
 
 ## Summary
 
