@@ -55,3 +55,10 @@ code {
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0px 20px 48px rgba(0, 0, 0, 0.2);
 }
+
+.list,
+.list:focus-visible,
+.list:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}

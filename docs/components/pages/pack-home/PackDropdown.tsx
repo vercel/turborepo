@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, Fragment } from "react";
+import { Listbox, Transition } from "@headlessui/react";
 import { BenchmarkNumberOfModules } from "./PackBenchmarks";
 
 export function PackDropdown({
@@ -7,42 +7,72 @@ export function PackDropdown({
 }: {
   onOptionSelected: (option: BenchmarkNumberOfModules) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [selectedOption, setSelectedOption] =
     useState<BenchmarkNumberOfModules>("1000");
 
   const onSelect = (option: BenchmarkNumberOfModules) => {
     onOptionSelected(option);
-    setIsOpen(false);
     setSelectedOption(option);
   };
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        type="button"
-        className="flex w-24 pl-3 pr-2 py-2 gap-3 rounded !bg-[#fafafa] dark:!bg-[#111111] dark:hover:text-white hover:text-black dark:text-[#888888] text-[#666666] items-center justify-between transition-all"
-      >
-        <p className="text-sm leading-none font-medium m-0 ">
+      <Listbox value={selectedOption} onChange={onSelect}>
+        <Listbox.Button className="flex w-24 pl-3 pr-2 py-2 gap-3 rounded !bg-[#fafafa] dark:!bg-[#111111] dark:hover:text-white hover:text-black dark:text-[#888888] text-[#666666] items-center justify-between transition-all text-sm leading-none font-medium m-0">
           {Number(selectedOption).toLocaleString()}
-        </p>
+          <Arrow />
+        </Listbox.Button>
 
-        <Arrow />
-      </button>
-      {isOpen && (
-        <motion.ol
-          initial={{ y: -8, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="absolute left-0 mt-2 w-full dark:bg-[#111111] bg-[#FAFAFA] rounded py-1 z-50"
+        <Transition
+          as={Fragment}
+          leave="transition ease-in duration-100"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
         >
-          <BenchmarkOption value="1000" onSelect={onSelect} />
-          <BenchmarkOption value="5000" onSelect={onSelect} />
-          <BenchmarkOption value="10000" onSelect={onSelect} />
-          <BenchmarkOption value="30000" onSelect={onSelect} />
-        </motion.ol>
-      )}
+          <Listbox.Options className="absolute left-0 mt-2 w-full dark:bg-[#111111] bg-[#FAFAFA] rounded py-1 z-50 list">
+            <Listbox.Option
+              value="1000"
+              className={({ active }) =>
+                `relative cursor-default select-none py-1 text-sm pl-3 text-gray-400 ${
+                  active ? "bg-gray-800 text-gray-100" : "text-gray-900"
+                }`
+              }
+            >
+              1000
+            </Listbox.Option>
+            <Listbox.Option
+              className={({ active }) =>
+                `relative cursor-default select-none py-1 text-sm pl-3 text-gray-400 ${
+                  active ? "bg-gray-800 text-gray-100" : "text-gray-900"
+                }`
+              }
+              value="5000"
+            >
+              5000
+            </Listbox.Option>
+            <Listbox.Option
+              className={({ active }) =>
+                `relative cursor-default select-none py-1 text-sm pl-3 text-gray-400 ${
+                  active ? "bg-gray-800 text-gray-100" : "text-gray-900"
+                }`
+              }
+              value="10000"
+            >
+              10000
+            </Listbox.Option>
+            <Listbox.Option
+              className={({ active }) =>
+                `relative cursor-default select-none py-1 text-sm pl-3 text-gray-400 ${
+                  active ? "bg-gray-800 text-gray-100" : "text-gray-900"
+                }`
+              }
+              value="30000"
+            >
+              30000
+            </Listbox.Option>
+          </Listbox.Options>
+        </Transition>
+      </Listbox>
     </div>
   );
 }
