@@ -1,8 +1,8 @@
 use std::future::IntoFuture;
 
 use anyhow::Result;
-use turbo_tasks::primitives::{OptionStringVc, StringVc};
-use turbo_tasks_env::{DotenvProcessEnvVc, EnvMapVc, ProcessEnv, ProcessEnvVc};
+use turbo_tasks::primitives::StringVc;
+use turbo_tasks_env::{DotenvProcessEnvVc, EnvMapVc, OptionEnvValueVc, ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::FileSystemPathVc;
 
 use crate::ProcessEnvIssue;
@@ -56,7 +56,7 @@ impl ProcessEnv for TryDotenvProcessEnv {
     }
 
     #[turbo_tasks::function]
-    async fn read(&self, name: &str) -> Result<OptionStringVc> {
+    async fn read(&self, name: &str) -> Result<OptionEnvValueVc> {
         self.with_issue(|e| e.read(name)).await
     }
 }
