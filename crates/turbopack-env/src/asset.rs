@@ -1,8 +1,8 @@
-use std::fmt::Write as _;
+use std::{borrow::Cow, fmt::Write as _};
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_env::ProcessEnvVc;
+use turbo_tasks_env::{EnvValue, ProcessEnvVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -118,16 +118,19 @@ impl EcmascriptChunkItem for ProcessEnvChunkItem {
         let asset = self.inner.await?;
         let env = asset.env.read_all().await?;
 
-        // TODO this is not completely correct as env vars need to ignore casing
-        // So `process.env.path === process.env.PATH === process.env.PaTh`
-        let mut code = "const env = process.env;\n\n".to_string();
+        // TODO: In SSR, we use the native process.env, which can only contain string
+        // values. We need to inject literal values (to emulate webpack's
+        // DefinePlugin, so create a new regular object out of the old env.
+        let mut code = "const env = process.env = {...process.env};\n\n".to_string();
+
         for (name, val) in &*env {
-            writeln!(
-                code,
-                "env[{}] = {};",
-                stringify_str(name),
-                stringify_str(val),
-            )?;
+            let val = match &val {
+                EnvValue::Literal(s) => Cow::Borrowed(s),
+                EnvValue::String(s) => Cow::Owned(stringify_str(s)),
+            };
+            // TODO this is not completely correct as env vars need to ignore casing
+            // So `process.env.path === process.env.PATH === process.env.PaTh`
+            writeln!(code, "env[{}] = {};", stringify_str(name), val)?;
         }
 
         Ok(EcmascriptChunkItemContent {
