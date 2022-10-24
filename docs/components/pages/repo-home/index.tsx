@@ -13,13 +13,15 @@ export default function Home() {
         <title>Turborepo</title>
       </Head>
       <LandingPageGlobalStyles />
-      <RepoHero />
-      <GradientSectionBorder>
-        <RepoFeatures />
-      </GradientSectionBorder>
-      <GradientSectionBorder>
-        <RepoLetter />
-      </GradientSectionBorder>
+      <main className="relative">
+        <RepoHero />
+        <GradientSectionBorder>
+          <RepoFeatures />
+        </GradientSectionBorder>
+        <GradientSectionBorder>
+          <RepoLetter />
+        </GradientSectionBorder>
+      </main>
     </>
   );
 }

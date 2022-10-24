@@ -42,14 +42,14 @@ export function RepoHero() {
 
           <div className="w-[120px] h-[120px] z-50">
             <Image
-              alt="Turborepo"
+              alt=""
               src={`/images/docs/repo/repo-hero-logo-dark.svg`}
               width={120}
               height={120}
               className="hidden dark:block"
             />
             <Image
-              alt="Turborepo"
+              alt=""
               src={`/images/docs/repo/repo-hero-logo-light.svg`}
               width={120}
               height={120}
@@ -68,16 +68,16 @@ export function RepoHero() {
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
         >
           <Image
-            alt="Turborepo"
+            alt=""
             src="/images/docs/repo/repo-type-logo.svg"
             width={200}
             height={100}
             className="w-[160px] md:w-[200px] invert dark:invert-0"
           />
-          <HeroText>
+          <HeroText h1>
             The build system that
             <br />
-            makes ship happen
+            {' '}makes ship happen
           </HeroText>
           <SectionSubtext hero>
             Turborepo is a high-performance build system for JavaScript and

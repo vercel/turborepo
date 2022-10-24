@@ -15,6 +15,7 @@ export const TurboLogoCondensed = ({
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
   >
+    <title>Turborepo</title>
     <path
       d="M15.9309 7.33936C11.1933 7.33936 7.33887 11.1938 7.33887 15.9314C7.33887 20.669 11.1933 24.5234 15.9309 24.5234C20.6685 24.5234 24.5229 20.669 24.5229 15.9314C24.5229 11.1938 20.6685 7.33936 15.9309 7.33936ZM15.9309 20.3778C13.4749 20.3778 11.4845 18.3874 11.4845 15.9314C11.4845 13.4754 13.4749 11.485 15.9309 11.485C18.3869 11.485 20.3773 13.4754 20.3773 15.9314C20.3773 18.3874 18.3869 20.3778 15.9309 20.3778Z"
       className="dark:fill-white fill-black"
@@ -50,6 +51,7 @@ const Turbo = ({ height = 32, className = "" }: LogoProps) => (
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
   >
+    <title>Turborepo</title>
     <path
       d="M48.2623 11.2944V8.24418H33.5623V11.2944H39.1115V21.4374H42.713V11.2944H48.2623Z"
       className="dark:fill-white fill-black"

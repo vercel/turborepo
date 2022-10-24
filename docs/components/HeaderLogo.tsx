@@ -12,7 +12,6 @@ function HeaderLogo() {
           <TurboLogoCondensed height={32} className={styles.mobileLogo} />
         </a>
       </Link>
-      <span className="sr-only">Turborepo</span>
       <div className={styles.siteSwitcher}>
         <SiteSwitcher />
       </div>

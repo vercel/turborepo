@@ -43,14 +43,14 @@ export function PackHero() {
 
           <div className="w-[120px] h-[120px] z-50">
             <Image
-              alt="Turbopack"
+              alt=""
               src={`/images/docs/pack/turbopack-hero-logo-dark.svg`}
               width={120}
               height={120}
               className="hidden dark:block"
             />
             <Image
-              alt="Turbopack"
+              alt=""
               src={`/images/docs/pack/turbopack-hero-logo-light.svg`}
               width={120}
               height={120}
@@ -69,7 +69,7 @@ export function PackHero() {
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
         >
           <Image
-            alt="Turbopack"
+            alt=""
             src="/images/docs/pack/pack-type-logo.svg"
             width={200}
             height={100}

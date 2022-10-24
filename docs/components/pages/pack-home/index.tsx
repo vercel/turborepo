@@ -14,14 +14,16 @@ export default function Home() {
         <title>Turbopack</title>
       </Head>
       <LandingPageGlobalStyles />
-      <PackHero />
-      <GradientSectionBorder>
-        <PackBenchmarks />
-        <PackFeatures />
-      </GradientSectionBorder>
-      <GradientSectionBorder>
-        <PackLetter />
-      </GradientSectionBorder>
+      <main className="relative">
+        <PackHero />
+        <GradientSectionBorder>
+          <PackBenchmarks />
+          <PackFeatures />
+        </GradientSectionBorder>
+        <GradientSectionBorder>
+          <PackLetter />
+        </GradientSectionBorder>
+      </main>
     </>
   );
 }

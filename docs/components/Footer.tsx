@@ -212,7 +212,7 @@ function SubmitForm() {
       <div className="mt-3 rounded-md sm:mt-0 sm:ml-3 sm:flex-shrink-0">
         <button
           type="submit"
-          className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-black dark:bg-white dark:text-black border border-transparent rounded-md sm:text-sm betterhover:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-white dark:betterhover:hover:bg-gray-300"
+          className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-black border border-transparent rounded-md dark:bg-white dark:text-black sm:text-sm betterhover:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-white dark:betterhover:hover:bg-gray-300"
         >
           Subscribe
         </button>
