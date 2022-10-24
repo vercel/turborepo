@@ -20,9 +20,11 @@ const Component = () => {
 
 ### React Server Components
 
-React Server Components works **out of the box** with Turbopack.
+React Server Components let you declare certain components as 'server' components, allowing you to run backend code inside an `async` function. Next.js 13 brings [first-class support for them](https://beta.nextjs.org/docs/rendering/server-and-client-components).
 
-TODO - add more info.
+React Server Components impose unusual constraints on your bundler. The mix of client and server code means you need to ensure that server code does not get compiled to the client, and vice versa.
+
+Turbopack has been built from the ground up to solve these problems - it works with React Server Components out of the box.
 
 ## Next
 
