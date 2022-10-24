@@ -1,15 +1,17 @@
 # Dev Server
 
-Turbopack is optimized for an extremely fast development server. We considered these features indispensable.
+Turbopack is optimized to give you an extremely fast development server. We considered these features indispensable.
 
 ## HMR
 
-Turbopack supports Hot Module Reloading out of the box.
+Hot Module Replacement (HMR) gives your dev server the ability to push file updates to the browser without triggering a full refresh. This works for most static assets (including JavaScript files) enabling a smooth and fast developer experience.
 
-TODO - add breakdown of what that looks like, and what you can expect in terms of speed.
+Turbopack supports Hot Module Replacement out of the box. Because of our [incremental architecture](/pack/docs/core-concepts), we are hyper-optimized for delivering fast updates.
+
+{/* Maybe link to benchmarks here? */}
 
 ## Fast Refresh
 
-Turbopack supports Fast Refresh out of the box.
+Fast Refresh builds on top of HMR by providing a framework-level integration to preserve _state_ across updates. Changes to a `<Count />` component, for instance, would preserve the component's internal `count` across changes.
 
-TODO - add breakdown of what that looks like, and what you can expect in terms of speed.
+Turbopack supports Fast Refresh out of the box for React. Support for other frameworks will be [added over time](/pack/docs/features/frameworks).
