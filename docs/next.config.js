@@ -77,7 +77,8 @@ const nextConfig = withNextra({
       beforeFiles: [
         {
           source: "/sitemap.xml",
-          destination: "https://crawled-sitemap.vercel.sh/turbo-sitemap.xml",
+          destination:
+            "https://crawled-sitemap.vercel.sh/turbobuild-sitemap.xml",
         },
       ],
     };
