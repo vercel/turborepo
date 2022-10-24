@@ -50,7 +50,7 @@ const navigation = {
     },
     {
       name: "Discord",
-      href: "https://turborepo.org/discord",
+      href: "https://turbo.build/discord",
     },
   ],
   company: [

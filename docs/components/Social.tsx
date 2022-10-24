@@ -17,7 +17,7 @@ function Github() {
 function Discord() {
   return (
     <a
-      href="https://turborepo.org/discord"
+      href="https://turbo.build/discord"
       className="hidden p-2 text-current sm:flex hover:opacity-75"
       target="_blank"
       rel="noreferrer"
