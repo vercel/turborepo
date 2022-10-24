@@ -67,7 +67,7 @@ const navigation = {
   ],
   legal: [
     { name: "Privacy Policy", href: "/privacy" },
-    { name: "Terms of Use", href: "/terms" },
+    { name: "Terms of Service", href: "/terms" },
   ],
 };
 

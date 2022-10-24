@@ -1,5 +1,3 @@
-import Head from "next/head";
-
 import { PackBenchmarks } from "./PackBenchmarks";
 import { PackHero } from "./PackHero";
 import { PackLetter } from "./PackLetter";
@@ -10,9 +8,6 @@ import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 export default function Home() {
   return (
     <>
-      <Head>
-        <title>Turbopack</title>
-      </Head>
       <LandingPageGlobalStyles />
       <main className="relative">
         <PackHero />

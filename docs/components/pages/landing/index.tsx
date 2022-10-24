@@ -169,9 +169,6 @@ function Teams() {
 function LandingPage() {
   return (
     <>
-      <Head>
-        <title>Turbo</title>
-      </Head>
       <LandingPageGlobalStyles />
       <main className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />

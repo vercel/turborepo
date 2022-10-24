@@ -1,14 +1,10 @@
 /* eslint-disable react/no-unescaped-entities */
-import Head from "next/head";
 import { Container } from "../Container";
 import { Clients } from "../clients/Clients";
 
 export default function Showcase() {
   return (
     <main className="relative">
-      <Head>
-        <title>Showcase</title>
-      </Head>
       <div className="mx-auto">
         <div className="py-16 lg:text-center">
           <p className="text-base font-semibold leading-6 tracking-wide text-blue-600 uppercase dark:text-gray-400 font-space-grotesk">

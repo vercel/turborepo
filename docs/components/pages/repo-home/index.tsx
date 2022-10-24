@@ -1,5 +1,3 @@
-import Head from "next/head";
-
 import { RepoHero } from "./RepoHero";
 import { RepoFeatures } from "./RepoFeatures";
 import { RepoLetter } from "./RepoLetter";
@@ -9,9 +7,6 @@ import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 export default function Home() {
   return (
     <>
-      <Head>
-        <title>Turborepo</title>
-      </Head>
       <LandingPageGlobalStyles />
       <main className="relative">
         <RepoHero />

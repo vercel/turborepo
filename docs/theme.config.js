@@ -21,8 +21,6 @@ const theme = {
   getNextSeoProps: function SEO() {
     const router = useRouter();
 
-    console.log(router.pathname);
-
     let title = "Turbo";
     if (router?.pathname.startsWith("/pack")) {
       title = "Turbopack";
@@ -30,7 +28,9 @@ const theme = {
     if (router?.pathname.startsWith("/repo")) {
       title = "Turborepo";
     }
+
     return {
+      defaultTitle: title,
       titleTemplate: `%s – ${title}`,
     };
   },
@@ -48,7 +48,7 @@ const theme = {
   head: function Head() {
     const router = useRouter();
     const { systemTheme = "dark" } = useTheme();
-    const { frontMatter, title } = useConfig();
+    const { frontMatter } = useConfig();
     const fullUrl =
       router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
     return (
@@ -86,7 +86,6 @@ const theme = {
         <meta name="twitter:site" content="@turborepo" />
         <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
-        <meta name="og:title" content={title} />
         <meta name="og:description" content={frontMatter.description} />
         <meta property="og:url" content={fullUrl} />
         <link rel="canonical" href={fullUrl} />
