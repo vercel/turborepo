@@ -1,4 +1,4 @@
-package fs
+package turbopath
 
 import (
 	"io/ioutil"

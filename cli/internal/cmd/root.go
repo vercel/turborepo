@@ -103,7 +103,7 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 
 	cmd := &cobra.Command{
 		Use:              "turbo",
-		Short:            "Turbocharge your monorepo",
+		Short:            "The build system that makes ship happen",
 		TraverseChildren: true,
 		Version:          helper.TurboVersion,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

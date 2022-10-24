@@ -24,20 +24,21 @@ type Task struct {
 
 type Visitor = func(taskID string) error
 
-type Scheduler struct {
+// Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
+type Engine struct {
 	// TopologicGraph is a graph of workspaces
 	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
-	// Tasks are a map of tasks in the scheduler
+	// Tasks are a map of tasks in the engine
 	Tasks            map[string]*Task
 	PackageTaskDeps  [][]string
 	rootEnabledTasks util.Set
 }
 
-// NewScheduler creates a new scheduler given a topologic graph of workspace package names
-func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
-	return &Scheduler{
+// NewEngine creates a new engine given a topologic graph of workspace package names
+func NewEngine(topologicalGraph *dag.AcyclicGraph) *Engine {
+	return &Engine{
 		Tasks:            make(map[string]*Task),
 		TopologicGraph:   topologicalGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
@@ -46,8 +47,8 @@ func NewScheduler(topologicalGraph *dag.AcyclicGraph) *Scheduler {
 	}
 }
 
-// SchedulerExecutionOptions are options for a single scheduler execution
-type SchedulerExecutionOptions struct {
+// EngineExecutionOptions are options for a single engine execution
+type EngineExecutionOptions struct {
 	// Packages in the execution scope, if nil, all packages will be considered in scope
 	Packages []string
 	// TaskNames in the execution scope, if nil, all tasks will be executed
@@ -56,17 +57,18 @@ type SchedulerExecutionOptions struct {
 	TasksOnly bool
 }
 
-func (p *Scheduler) Prepare(options *SchedulerExecutionOptions) error {
+// Prepare constructs the Task Graph for a list of packages and tasks
+func (e *Engine) Prepare(options *EngineExecutionOptions) error {
 	pkgs := options.Packages
 	tasks := options.TaskNames
 	if len(tasks) == 0 {
 		// TODO(gsoltis): Is this behavior used?
-		for key := range p.Tasks {
+		for key := range e.Tasks {
 			tasks = append(tasks, key)
 		}
 	}
 
-	if err := p.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
+	if err := e.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
 		return err
 	}
 
@@ -82,9 +84,9 @@ type ExecOpts struct {
 }
 
 // Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
-func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
+func (e *Engine) Execute(visitor Visitor, opts ExecOpts) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
-	return p.TaskGraph.Walk(func(v dag.Vertex) error {
+	return e.TaskGraph.Walk(func(v dag.Vertex) error {
 		// Always return if it is the root node
 		if strings.Contains(dag.VertexName(v), ROOT_NODE_NAME) {
 			return nil
@@ -98,31 +100,30 @@ func (p *Scheduler) Execute(visitor Visitor, opts ExecOpts) []error {
 	})
 }
 
-func (p *Scheduler) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
-	if task, ok := p.Tasks[taskID]; ok {
+func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
+	if task, ok := e.Tasks[taskID]; ok {
 		return task, nil
 	}
-	if task, ok := p.Tasks[taskName]; ok {
+	if task, ok := e.Tasks[taskName]; ok {
 		return task, nil
 	}
 	return nil, errNoTask
 }
 
-func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
-	if p.PackageTaskDeps == nil {
-		p.PackageTaskDeps = [][]string{}
+func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
+	if e.PackageTaskDeps == nil {
+		e.PackageTaskDeps = [][]string{}
 	}
 
-	packageTasksDepsMap := getPackageTaskDepsMap(p.PackageTaskDeps)
+	packageTasksDepsMap := getPackageTaskDepsMap(e.PackageTaskDeps)
 
 	traversalQueue := []string{}
-
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
 		for _, taskName := range taskNames {
-			if !isRootPkg || p.rootEnabledTasks.Includes(taskName) {
+			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
-				if _, err := p.getTaskDefinition(pkg, taskName, taskID); err != nil {
+				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
 					// Initial, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.
@@ -136,18 +137,19 @@ func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOn
 	visited := make(util.Set)
 
 	for len(traversalQueue) > 0 {
-		taskId := traversalQueue[0]
+		taskID := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
-		pkg, taskName := util.GetPackageTaskFromId(taskId)
-		if pkg == util.RootPkgName && !p.rootEnabledTasks.Includes(taskName) {
-			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskId)
+
+		pkg, taskName := util.GetPackageTaskFromId(taskID)
+		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
+			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
-		task, err := p.getTaskDefinition(pkg, taskName, taskId)
+		task, err := e.getTaskDefinition(pkg, taskName, taskID)
 		if err != nil {
 			return err
 		}
-		if !visited.Includes(taskId) {
-			visited.Add(taskId)
+		if !visited.Includes(taskID) {
+			visited.Add(taskID)
 			deps := task.Deps
 
 			if tasksOnly {
@@ -165,53 +167,53 @@ func (p *Scheduler) generateTaskGraph(pkgs []string, taskNames []string, tasksOn
 				})
 			}
 
-			toTaskId := taskId
-			hasTopoDeps := task.TopoDeps.Len() > 0 && p.TopologicGraph.DownEdges(pkg).Len() > 0
+			toTaskID := taskID
+			hasTopoDeps := task.TopoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
 			hasDeps := deps.Len() > 0
 			hasPackageTaskDeps := false
-			if _, ok := packageTasksDepsMap[toTaskId]; ok {
+			if _, ok := packageTasksDepsMap[toTaskID]; ok {
 				hasPackageTaskDeps = true
 			}
 
 			if hasTopoDeps {
-				depPkgs := p.TopologicGraph.DownEdges(pkg)
+				depPkgs := e.TopologicGraph.DownEdges(pkg)
 				for _, from := range task.TopoDeps.UnsafeListOfStrings() {
 					// add task dep from all the package deps within repo
 					for depPkg := range depPkgs {
-						fromTaskId := util.GetTaskId(depPkg, from)
-						p.TaskGraph.Add(fromTaskId)
-						p.TaskGraph.Add(toTaskId)
-						p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
-						traversalQueue = append(traversalQueue, fromTaskId)
+						fromTaskID := util.GetTaskId(depPkg, from)
+						e.TaskGraph.Add(fromTaskID)
+						e.TaskGraph.Add(toTaskID)
+						e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+						traversalQueue = append(traversalQueue, fromTaskID)
 					}
 				}
 			}
 
 			if hasDeps {
 				for _, from := range deps.UnsafeListOfStrings() {
-					fromTaskId := util.GetTaskId(pkg, from)
-					p.TaskGraph.Add(fromTaskId)
-					p.TaskGraph.Add(toTaskId)
-					p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
-					traversalQueue = append(traversalQueue, fromTaskId)
+					fromTaskID := util.GetTaskId(pkg, from)
+					e.TaskGraph.Add(fromTaskID)
+					e.TaskGraph.Add(toTaskID)
+					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
 
 			if hasPackageTaskDeps {
-				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskId]; ok {
-					for _, fromTaskId := range pkgTaskDeps {
-						p.TaskGraph.Add(fromTaskId)
-						p.TaskGraph.Add(toTaskId)
-						p.TaskGraph.Connect(dag.BasicEdge(toTaskId, fromTaskId))
-						traversalQueue = append(traversalQueue, fromTaskId)
+				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskID]; ok {
+					for _, fromTaskID := range pkgTaskDeps {
+						e.TaskGraph.Add(fromTaskID)
+						e.TaskGraph.Add(toTaskID)
+						e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+						traversalQueue = append(traversalQueue, fromTaskID)
 					}
 				}
 			}
 
 			if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
-				p.TaskGraph.Add(ROOT_NODE_NAME)
-				p.TaskGraph.Add(toTaskId)
-				p.TaskGraph.Connect(dag.BasicEdge(toTaskId, ROOT_NODE_NAME))
+				e.TaskGraph.Add(ROOT_NODE_NAME)
+				e.TaskGraph.Add(toTaskID)
+				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, ROOT_NODE_NAME))
 			}
 		}
 	}
@@ -231,24 +233,26 @@ func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
 	return depMap
 }
 
-func (p *Scheduler) AddTask(task *Task) *Scheduler {
+// AddTask adds a task to the Engine so it can be looked up later.
+func (e *Engine) AddTask(task *Task) *Engine {
 	// If a root task is added, mark the task name as eligible for
 	// root execution. Otherwise, it will be skipped.
 	if util.IsPackageTask(task.Name) {
 		pkg, taskName := util.GetPackageTaskFromId(task.Name)
 		if pkg == util.RootPkgName {
-			p.rootEnabledTasks.Add(taskName)
+			e.rootEnabledTasks.Add(taskName)
 		}
 	}
-	p.Tasks[task.Name] = task
-	return p
+	e.Tasks[task.Name] = task
+	return e
 }
 
-func (p *Scheduler) AddDep(fromTaskId string, toTaskId string) error {
-	fromPkg, _ := util.GetPackageTaskFromId(fromTaskId)
-	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !p.TopologicGraph.HasVertex(fromPkg) {
-		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskId)
+// AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
+func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
+	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
+	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
+		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
-	p.PackageTaskDeps = append(p.PackageTaskDeps, []string{fromTaskId, toTaskId})
+	e.PackageTaskDeps = append(e.PackageTaskDeps, []string{fromTaskID, toTaskID})
 	return nil
 }

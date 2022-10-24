@@ -110,6 +110,9 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}
+			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
+			opts.runOpts.singlePackage = packageMode == packagemanager.Single
+
 			opts.runOpts.passThroughArgs = passThroughArgs
 			run := configureRun(base, opts, signalWatcher)
 			ctx := cmd.Context()
@@ -192,7 +195,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if r.opts.runOpts.singlePackage {
 		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
 	} else {
-		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, r.opts.cacheOpts.ResolveCacheDir(r.base.RepoRoot))
+		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON)
 	}
 	if err != nil {
 		var warnings *context.Warnings
@@ -225,7 +228,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return err
 	}
 
-	scmInstance, err := scm.FromInRepo(r.base.RepoRoot.ToStringDuringMigration())
+	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
 			r.base.LogWarning("", err)
@@ -288,7 +291,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		vertexSet.Add(v)
 	}
 
-	engine, err := buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
+	engine, err := buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
@@ -307,7 +310,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 				g.TopologicalGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraph(&g.TopologicalGraph, g.Pipeline, rs)
+		engine, err = buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
@@ -470,8 +473,9 @@ func filterSinglePackageGraphForDisplay(originalGraph *dag.AcyclicGraph) *dag.Ac
 	return graph
 }
 
-func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Scheduler, error) {
-	engine := core.NewScheduler(topoGraph)
+func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Engine, error) {
+	engine := core.NewEngine(topoGraph)
+
 	for taskName, taskDefinition := range pipeline {
 		topoDeps := make(util.Set)
 		deps := make(util.Set)
@@ -496,7 +500,7 @@ func buildTaskGraph(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSp
 		})
 	}
 
-	if err := engine.Prepare(&core.SchedulerExecutionOptions{
+	if err := engine.Prepare(&core.EngineExecutionOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,
 		TasksOnly: rs.Opts.runOpts.only,
@@ -577,11 +581,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 	flags.BoolVar(&opts.singlePackage, "single-package", false, "Run turbo in single-package mode")
 	// This is a no-op flag, we don't need it anymore
 	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
-	// Daemon-related flags hidden for now, we can unhide when daemon is ready.
 	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
-		panic(err)
-	}
-	if err := flags.MarkHidden("no-daemon"); err != nil {
 		panic(err)
 	}
 	if err := flags.MarkHidden("only"); err != nil {
@@ -735,7 +735,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	})
 }
 
-func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Scheduler, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Engine, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 
@@ -858,7 +858,7 @@ type hashedSinglePackageTask struct {
 	Dependents      []string `json:"dependents"`
 }
 
-func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Scheduler, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	turboCache, err := r.initCache(ctx, rs, analyticsClient)

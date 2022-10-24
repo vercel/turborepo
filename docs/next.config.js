@@ -17,11 +17,11 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/ci/gitlabci",
   "/docs/ci/travisci",
   "/docs/core-concepts/caching",
-  "/docs/core-concepts/filtering",
   "/docs/core-concepts/remote-caching",
-  "/docs/core-concepts/running-tasks",
   "/docs/core-concepts/scopes",
   "/docs/core-concepts/why-turborepo",
+  "/docs/core-concepts/monorepos/filtering",
+  "/docs/core-concepts/monorepos/running-tasks",
   "/docs/getting-started/create-new",
   "/docs/getting-started/existing-monorepo",
   "/docs/handbook",
@@ -59,7 +59,6 @@ const nextConfig = withNextra({
   reactStrictMode: true,
   experimental: {
     legacyBrowsers: false,
-    images: { allowFutureImage: true },
   },
   webpack: (config, { webpack }) => {
     config.plugins.push(
@@ -93,6 +92,21 @@ const nextConfig = withNextra({
       {
         source: "/usage",
         destination: "/reference/command-line-reference",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/why-turborepo",
+        destination: "/repo/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/filtering",
+        destination: "/repo/docs/core-concepts/monorepos/filtering",
         permanent: true,
       },
       {
