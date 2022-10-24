@@ -11,7 +11,8 @@ import { Turbopack } from "./Turbopack";
 import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 import styles from "./index.module.css";
-import Image from "next/future/image";
+import PackLogo from '../../logos/PackLogo'
+import RepoLogo from '../../logos/RepoLogo'
 
 function Background() {
   return (
@@ -92,13 +93,10 @@ function Card({
           </div>
 
           <div className="flex-1 flex flex-col items-center">
-            <Image
-              alt={alt}
-              src={`/images/docs/${title}/${title}-type-logo.svg`}
-              width={220}
-              height={22}
-              className="w-[160px] md:w-[220px] mb-3 invert dark:invert-0"
-            />
+            {title == 'pack' ?
+              <PackLogo alt={alt} className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white" /> :
+              <RepoLogo alt={alt} className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white" />
+            }
             {children}
           </div>
         </div>

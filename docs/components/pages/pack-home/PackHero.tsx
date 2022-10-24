@@ -8,6 +8,7 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
+import PackLogo from '../../logos/PackLogo'
 
 export function PackHero() {
   return (
@@ -68,12 +69,10 @@ export function PackHero() {
           delay={0.15}
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
         >
-          <Image
-            alt=""
-            src="/images/docs/pack/pack-type-logo.svg"
-            width={200}
-            height={100}
-            className="w-[160px] md:w-[200px] invert dark:invert-0"
+          <PackLogo
+            alt="Turbopack"
+            width="200"
+            className="w-[160px] md:w-[200px] fill-black dark:fill-white"
           />
           <HeroText h1>The Rust-based successor to Webpack</HeroText>
           <SectionSubtext hero>
