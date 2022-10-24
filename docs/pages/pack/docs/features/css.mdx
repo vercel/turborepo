@@ -58,8 +58,44 @@ The most common pattern is adding a `postcss.config.js` file to the root of your
 
 We **don't currently offer** the ability to use PostCSS plugins. We may end up adding these out-of-the-box, or make them available via a plugin.
 
+### Workaround for PostCSS
+
+As a workaround, we recommend running the [PostCSS CLI](https://www.npmjs.com/package/postcss-cli) in a sidecar process.
+
+```sh
+npm install --save-dev postcss postcss-cli concurrently
+```
+
+```json filename="package.json"
+{
+  "scripts": {
+    "dev": "concurrently \"next dev --turbo\" \"postcss input.css --output output.css --watch\"",
+    "build": "postcss input.css --output output.css && next build"
+  }
+}
+```
+
 ## SCSS and LESS
 
 `.scss` and `.less` files let you utilize SCSS and LESS - languages which enhance CSS in various ways. These languages **don't currently work** out-of-the-box with Turbopack.
 
 These are likely to be available via plugins in the future.
+
+## Tailwind CSS
+
+We currently don't support [Tailwind CSS](https://tailwindcss.com) out of the box. Since it can be used as a PostCSS plugin, we'll likely support it through the plugin system.
+
+It can be used today by using a sidecar process:
+
+```sh
+npm install --save-dev tailwindcss autoprefixer concurrently
+```
+
+```json filename="package.json"
+{
+  "scripts": {
+    "dev": "concurrently \"next dev --turbo\" \"tailwindcss input.css --output output.css --watch\"",
+    "build": "tailwindcss input.css --output output.css && next build"
+  }
+}
+```
