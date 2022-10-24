@@ -11,8 +11,8 @@ import { Turbopack } from "./Turbopack";
 import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 import styles from "./index.module.css";
-import PackLogo from '../../logos/PackLogo'
-import RepoLogo from '../../logos/RepoLogo'
+import PackLogo from "../../logos/PackLogo";
+import RepoLogo from "../../logos/RepoLogo";
 
 function Background() {
   return (
@@ -30,7 +30,7 @@ function Background() {
       />
       <span className={cn(styles.leftLights, "opacity-50 dark:opacity-100")} />
       <span className={cn(styles.rightLights, "opacity-50 dark:opacity-100")} />
-      <span className="bg-gradient-to-t dark:from-black from-white to-transparent absolute bottom-0 left-0 w-full h-48" />
+      <span className="absolute bottom-0 left-0 w-full h-48 bg-gradient-to-t dark:from-black from-white to-transparent" />
       <span className="bg-gradient-to-b dark:from-black from-white to-transparent absolute top-[20vh] left-0 w-full h-[50vh]" />
       <TurboheroBackground />
     </div>
@@ -88,15 +88,22 @@ function Card({
             className
           )}
         >
-          <div className="mb-7 md:mb-0 flex-1 flex justify-center items-center">
+          <div className="flex items-center justify-center flex-1 mb-7 md:mb-0">
             <Icon />
           </div>
 
-          <div className="flex-1 flex flex-col items-center">
-            {title == 'pack' ?
-              <PackLogo alt={alt} className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white" /> :
-              <RepoLogo alt={alt} className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white" />
-            }
+          <div className="flex flex-col items-center flex-1">
+            {title == "pack" ? (
+              <PackLogo
+                alt={alt}
+                className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
+              />
+            ) : (
+              <RepoLogo
+                alt={alt}
+                className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
+              />
+            )}
             {children}
           </div>
         </div>
@@ -149,7 +156,7 @@ function Teams() {
         Trusted by teams from
         <br className="inline md:hidden" /> around the world
       </p>
-      <div className="z-50 grid grid-rows-6 sm:grid-rows-3 md:grid-rows-2 lg:grid-rows-1 grid-flow-col">
+      <div className="z-50 grid grid-flow-col grid-rows-6 sm:grid-rows-3 md:grid-rows-2 lg:grid-rows-1">
         <Clients
           companyList={[
             "Vercel",
@@ -172,12 +179,13 @@ function LandingPage() {
       <LandingPageGlobalStyles />
       <main className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
-        <FadeIn className="z-10 w-full h-full flex flex-col items-center justify-center">
+        <FadeIn className="z-10 flex flex-col items-center justify-center w-full h-full">
           <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
             Make Ship Happen
           </h1>
-          <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
-            Turbo is an incremental bundler and build system optimized for JavaScript and TypeScript, written in Rust.
+          <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[660px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
+            Turbo is an incremental bundler and build system optimized for
+            JavaScript and TypeScript, written in Rust.
           </p>
         </FadeIn>
         <SiteCards />
