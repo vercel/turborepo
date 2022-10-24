@@ -301,6 +301,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         // These things are not available in ESM
                         module: true,
                         exports: true,
+                        global: true,
                         this: true,
                         ..Default::default()
                     }
