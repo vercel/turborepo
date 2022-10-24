@@ -48,7 +48,7 @@ export function SectionSubtext({
 
   return (
     <p
-      className={`font-space-grotesk leading-snug dark:text-[#FFFFFFB2] text-[#00000080] ${textClasses} max-w-md md:max-w-xl lg:max-w-[630px] text-center`}
+      className={`font-space-grotesk leading-snug dark:text-[#FFFFFFB2] text-[#00000080] ${textClasses} max-w-md md:max-w-xl lg:max-w-[640px] text-center`}
     >
       {children}
     </p>
