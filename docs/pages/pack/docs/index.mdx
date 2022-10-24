@@ -4,33 +4,54 @@ description: Start Building Web Applications with Turbopack
 ---
 
 import { TurbopackQuickstartArea } from "../../../components/TurbopackQuickstart";
+import Callout  from "../../../components/Callout";
+import { Tabs, Tab } from "../../../components/Tabs";
 
 # Getting Started with Turbopack
 
-Turbopack is a lightning-fast bundler written in Rust, built by the creators of Webpack.
+Turbopack is an incremental bundler optimized for JavaScript and TypeScript, written in Rust by the creators of Webpack and [Next.js](https://nextjs.org) at [Vercel](https://vercel.com).
 
-- Supports React Server Components
-- Deep integration with Next.js
-- Native speed
-- Incremental computation
+On large applications Turbopack updates 10x faster than Vite and 700x faster than Webpack. For the biggest applications the difference grows even more stark with updates up to 20x faster than Vite.
+
+The secret to Turbopack's performance is twofold: highly optimized machine code, and a low-level incremental computation engine that enables caching down to the level of individual functions. Once Turbopack performs a task it never does it again.
+
+<Callout type="error">  
+    Turbopack is currently in <strong>alpha</strong>. It is not yet ready for production use. We appreciate your support and feedback as we work to make it ready for everyone.
+</Callout>
+
+Our team has taken the lessons from 10 years of Webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
 
 ## Quickstart
 
-You can try Turbopack today in Next.js’s dev server:
+Turbopack can be used in Next.js 13. In the future we will be releasing a standalone CLI, plugin API, and support for other frameworks such as Svelte and Vue.
 
-1. Upgrade `next` to version 13:
-
-```bash
-npm install next@latest
-```
-
-2. Run `next dev --turbo` to start your dev server.
+1. Create a Next.js 13 project with Turbopack:
 
 ```bash
-EXAMPLE CONSOLE OUTPUT
+npx create-next-app --example with-turbopack
 ```
 
-3. Your dev server is now powered by Turbopack! It should start up near-instantly, and updates should be sent to the screen extremely fast. The larger the application, the larger the improvement should be.
+2. Start the Next.js development server (with Turbopack):
+
+  <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+    <Tab>
+      ```bash 
+      npm run dev 
+      ```
+    </Tab>
+    <Tab>
+      ```bash 
+      yarn dev 
+      ```
+    </Tab>
+    <Tab>
+      ```bash 
+      pnpm dev 
+      ```
+    </Tab>
+  </Tabs>
+
+The Next.js 13 development server is now powered by Turbopack! Startup and updates should both be near-instant. The larger the application, the larger the improvement will be.
 
 ## Next Steps
 
