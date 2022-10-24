@@ -107,22 +107,6 @@ export function PackHero() {
         <FadeIn delay={0.8} className="relative w-full">
           <div className="absolute bottom-0 w-full dark:from-black from-white to-transparent h-72 bg-gradient-to-t" />
         </FadeIn>
-        {/* Comment this out at the request of Jared */}
-        {/* <FadeIn delay={1.6} className="flex items-center justify-center w-full">
-          <p
-            className={cn(
-              "text-xs font-semibold tracking-[0.2em] text-center uppercase mt-8 lg:mt-16 max-w-[300px] lg:max-w-xl px-6",
-              gradients.turbopackHeaderText
-            )}
-          >
-            Trusted by teams from around the world
-          </p>
-        </FadeIn>
-        <FadeIn delay={1.6}>
-          <Marquee>
-            <Clients />
-          </Marquee>
-        </FadeIn> */}
       </FadeIn>
     </>
   );

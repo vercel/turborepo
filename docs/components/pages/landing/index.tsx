@@ -30,7 +30,7 @@ function Background() {
       <span className={cn(styles.leftLights, "opacity-50 dark:opacity-100")} />
       <span className={cn(styles.rightLights, "opacity-50 dark:opacity-100")} />
       <span className="bg-gradient-to-t dark:from-black from-white to-transparent absolute bottom-0 left-0 w-full h-48" />
-      <span className="bg-gradient-to-b dark:from-black from-black to-transparent absolute top-[20vh] left-0 w-full h-[50vh]" />
+      <span className="bg-gradient-to-b dark:from-black from-white to-transparent absolute top-[20vh] left-0 w-full h-[50vh]" />
       <TurboheroBackground />
     </div>
   );
@@ -151,9 +151,19 @@ function Teams() {
         Trusted by teams from
         <br className="inline md:hidden" /> around the world
       </p>
-      <Marquee>
-        <Clients />
-      </Marquee>
+      <div className="z-50 grid grid-rows-3 md:grid-rows-2 lg:grid-rows-1 grid-flow-col">
+        <Clients
+          companyList={[
+            "Vercel",
+            "AWS",
+            "Microsoft",
+            "Adobe",
+            "Disney",
+            "Netflix",
+          ]}
+          staticWidth
+        />
+      </div>
     </div>
   );
 }
@@ -176,11 +186,10 @@ function LandingPage() {
             optimized for JavaScript and TypeScript, written in Rust.
           </p>
         </FadeIn>
+        <Background />
         <SiteCards />
-        <FadeIn delay={0.5}>
-          <div className="z-10 py-16">
-            <Teams />
-          </div>
+        <FadeIn delay={0.5} className="z-10 py-16">
+          <Teams />
         </FadeIn>
       </div>
     </>
