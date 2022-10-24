@@ -36,7 +36,7 @@ export function PackLetter() {
           </p>
           <br />
           <p>
-            With that, we&apos;re excited to introduce Turbopack, our Rust-based
+            With that, we&apos;re excited to introduce Turbopack, our Rust-powered
             successor to Webpack. It will harness the power of our build system,
             Turborepo, for massive performance improvements. Turbopack is the
             new foundation of high-performance bare-metal tooling and is now

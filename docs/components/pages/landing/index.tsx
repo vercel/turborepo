@@ -134,7 +134,7 @@ function SiteCards() {
             <CardBadge>alpha</CardBadge>
           </div>
           <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70 ">
-            The Rust-powered successor to Webpack.
+            Introducing the Rust-powered successor to Webpack.
           </p>
         </Card>
       </FadeIn>
