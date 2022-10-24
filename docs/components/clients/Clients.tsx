@@ -18,7 +18,7 @@ export function Clients({
   const LogoWrapper = ({ className, children }) => {
     if (!staticWidth) return children;
     return (
-      <div className={cn("w-48 flex items-center justify-center", className)}>
+      <div className={cn("w-48 lg:w-40 flex items-center justify-center", className)}>
         {children}
       </div>
     );

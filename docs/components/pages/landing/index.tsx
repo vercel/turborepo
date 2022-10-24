@@ -149,7 +149,7 @@ function Teams() {
         Trusted by teams from
         <br className="inline md:hidden" /> around the world
       </p>
-      <div className="z-50 grid grid-rows-3 md:grid-rows-2 lg:grid-rows-1 grid-flow-col">
+      <div className="z-50 grid grid-rows-6 sm:grid-rows-3 md:grid-rows-2 lg:grid-rows-1 grid-flow-col">
         <Clients
           companyList={[
             "Vercel",
