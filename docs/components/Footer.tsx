@@ -146,8 +146,8 @@ export function FooterContent() {
           <div className="mt-12 xl:!mt-0">
             <FooterHeader>Subscribe to our newsletter</FooterHeader>
             <p className="mt-4 text-sm text-gray-600 dark:text-[#888888]">
-              Subscribe to the Turbo newsletter and stay updated on new releases and
-              features, guides, and case studies.
+              Subscribe to the Turbo newsletter and stay updated on new releases
+              and features, guides, and case studies.
             </p>
             <SubmitForm />
           </div>
@@ -163,7 +163,7 @@ export function FooterContent() {
             >
               <VercelLogo />
             </a>
-            <p className="mt-4 text-xs text-gray-500">
+            <p className="mt-4 text-xs text-gray-500 dark:text-[#888888]">
               &copy; {new Date().getFullYear()} Vercel, Inc. All rights
               reserved.
             </p>

@@ -20,18 +20,22 @@ const theme = {
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   getNextSeoProps: function SEO() {
     const router = useRouter();
+    const { frontMatter } = useConfig();
 
-    let title = "Turbo";
+    let section = "Turbo";
     if (router?.pathname.startsWith("/pack")) {
-      title = "Turbopack";
+      section = "Turbopack";
     }
     if (router?.pathname.startsWith("/repo")) {
-      title = "Turborepo";
+      section = "Turborepo";
     }
 
+    const defaultTitle = frontMatter.overrideTitle || section
+
     return {
-      defaultTitle: title,
-      titleTemplate: `%s – ${title}`,
+      description: frontMatter.description,
+      defaultTitle,
+      titleTemplate: `%s – ${section}`,
     };
   },
   unstable_flexsearch: true,
@@ -86,7 +90,6 @@ const theme = {
         <meta name="twitter:site" content="@turborepo" />
         <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
-        <meta name="og:description" content={frontMatter.description} />
         <meta property="og:url" content={fullUrl} />
         <link rel="canonical" href={fullUrl} />
         <meta
