@@ -146,7 +146,7 @@ export function FooterContent() {
           <div className="mt-12 xl:!mt-0">
             <FooterHeader>Subscribe to our newsletter</FooterHeader>
             <p className="mt-4 text-sm text-gray-600 dark:text-[#888888]">
-              Join the Turbo newsletter and stay updated on new releases and
+              Subscribe to the Turbo newsletter and stay updated on new releases and
               features, guides, and case studies.
             </p>
             <SubmitForm />
@@ -207,7 +207,7 @@ function SubmitForm() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="border-[#666666] dark:border-[#888888] w-full min-w-0 px-4 py-2 text-base text-gray-900 placeholder-gray-500 bg-white border rounded-md appearance-none dark:text-white sm:text-sm dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:border-white focus:placeholder-gray-400"
-        placeholder="you@domain.com"
+        placeholder="you@example.com"
       />
       <div className="mt-3 rounded-md sm:mt-0 sm:ml-3 sm:flex-shrink-0">
         <button
