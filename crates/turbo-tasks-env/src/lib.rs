@@ -18,10 +18,14 @@ pub use self::{
     filter::FilterProcessEnvVc,
 };
 
+/// EnvValues control how the string is injected into the resulting `.env.js`
+/// module.
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
 pub enum EnvValue {
+    /// The value is injected literally, without encoding it as a JS string.
     Literal(String),
+    /// The value is injected as a JS string, with any necessary escaping.
     String(String),
 }
 

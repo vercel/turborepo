@@ -2,8 +2,9 @@ use anyhow::Result;
 
 use crate::{EnvMapVc, ProcessEnv, ProcessEnvVc};
 
-/// Filters env variables by some prefix. Casing of the env vars is ignored for
-/// filtering.
+/// Allows providing any custom env values that you'd like, including the
+/// ability to inject Literal values (which are injected into the resulting
+/// module without string quoting).
 #[turbo_tasks::value]
 pub struct CustomProcessEnv {
     prior: ProcessEnvVc,
