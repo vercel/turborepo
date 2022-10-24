@@ -77,7 +77,7 @@ export function FooterContent() {
       <h2 id="footer-heading" className="sr-only">
         Footer
       </h2>
-      <div className="py-8 mx-auto max-w-7xl">
+      <div className="py-8 mx-auto">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
           <div className="grid grid-cols-1 gap-8 xl:col-span-2">
             <div className="grid grid-cols-2 md:grid-cols-4 md:gap-8">
@@ -223,7 +223,8 @@ function SubmitForm() {
 
 export function Footer({ menu }: { menu?: boolean }): ReactElement {
   return (
-    <footer className="bg-[#FAFAFA] pb-[env(safe-area-inset-bottom)] dark:bg-[#111111]">
+    <footer className="bg-[#FAFAFA] pb-[env(safe-area-inset-bottom)] relative dark:bg-[#111111]">
+      <div className="absolute top-0 h-12 w-full -translate-y-full bg-gradient-to-t from-[#FAFAFA] to-transparent dark:from-black" />
       <div
         className={cn(
           "mx-auto max-w-[90rem] py-2 px-4 flex gap-2",
