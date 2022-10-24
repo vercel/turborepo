@@ -29,20 +29,18 @@ export function Clients({
     .forEach((user) => {
       if (user.pinned) {
         showcaseDark.push(
-          <LogoWrapper className="flex dark:hidden">
+          <LogoWrapper key={`${user.caption}-dark`} className="flex dark:hidden">
             <Logo
               user={user}
-              key={`${user.caption}-dark`}
               theme={"dark"}
               isLink={linked}
             />
           </LogoWrapper>
         );
         showcaseLight.push(
-          <LogoWrapper className="hidden dark:flex">
+          <LogoWrapper key={`${user.caption}-light`} className="hidden dark:flex">
             <Logo
               user={user}
-              key={`${user.caption}-light`}
               theme={"light"}
               isLink={linked}
             />
