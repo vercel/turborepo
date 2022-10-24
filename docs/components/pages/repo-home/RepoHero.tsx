@@ -6,15 +6,17 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import RepoLogo from '../../logos/RepoLogo'
+import RepoLogo from "../../logos/RepoLogo";
 
 export function RepoHero() {
   return (
     <>
-      <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
-      <FadeIn className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
-        <div className="flex items-center justify-center w-full ">
-          <div className="absolute z-50 min-w-[614px] min-h-[614px]">
+      <FadeIn
+        noVertical
+        className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0"
+      >
+        <FadeIn className="z-50 flex items-center justify-center w-full ">
+          <div className="absolute min-w-[614px] min-h-[614px]">
             {/* TODO: On dark mode, there should be a "breathing" gradient inside the inner circle */}
             <Image
               alt="Turborepo"
@@ -57,13 +59,14 @@ export function RepoHero() {
               className="block dark:hidden"
             />
           </div>
-          <Gradient
-            width={1000}
-            height={1000}
-            className="top-[-500px] dark:opacity-20 opacity-[0.15]"
-            conic
-          />
-        </div>
+        </FadeIn>
+        <Gradient
+          width={1000}
+          height={1000}
+          className="top-[-500px] dark:opacity-20 opacity-[0.15]"
+          conic
+        />
+        <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
         <FadeIn
           delay={0.15}
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
@@ -75,8 +78,7 @@ export function RepoHero() {
           />
           <HeroText h1>
             The build system that
-            <br />
-            {' '}makes ship happen
+            <br /> makes ship happen
           </HeroText>
           <SectionSubtext hero>
             Turborepo is a high-performance build system for JavaScript and

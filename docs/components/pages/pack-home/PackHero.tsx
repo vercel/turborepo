@@ -8,15 +8,17 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import PackLogo from '../../logos/PackLogo'
+import PackLogo from "../../logos/PackLogo";
 
 export function PackHero() {
   return (
     <>
-      <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
-      <FadeIn className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
-        <div className="flex items-center justify-center w-full">
-          <div className="absolute z-50 min-w-[614px] min-h-[614px]">
+      <FadeIn
+        noVertical
+        className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0"
+      >
+        <FadeIn className="z-50 flex items-center justify-center w-full">
+          <div className="absolute min-w-[614px] min-h-[614px]">
             <Image
               alt="Turbopack"
               src="/images/docs/pack/turbopack-hero-hexagons-dark.svg"
@@ -58,13 +60,14 @@ export function PackHero() {
               className="block dark:hidden"
             />
           </div>
-          <Gradient
-            width={1000}
-            height={1000}
-            className="top-[-500px] dark:opacity-20 opacity-[0.15]"
-            conic
-          />
-        </div>
+        </FadeIn>
+        <Gradient
+          width={1000}
+          height={1000}
+          className="top-[-500px] dark:opacity-20 opacity-[0.15]"
+          conic
+        />
+        <div className="absolute top-0 z-10 w-full h-48 dark:from-black from-white to-transparent bg-gradient-to-b" />
         <FadeIn
           delay={0.15}
           className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6"
@@ -76,7 +79,8 @@ export function PackHero() {
           />
           <HeroText h1>The Rust-powered successor to Webpack</HeroText>
           <SectionSubtext hero>
-            Turbopack is an incremental bundler and build system optimized for JavaScript and TypeScript, written in Rust.
+            Turbopack is an incremental bundler and build system optimized for
+            JavaScript and TypeScript, written in Rust.
           </SectionSubtext>
         </FadeIn>
         <FadeIn
