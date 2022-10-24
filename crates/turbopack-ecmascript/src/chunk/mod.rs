@@ -513,6 +513,9 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
     if content.options.exports {
         args.push("e: exports");
     }
+    if content.options.global {
+        args.push("g: global");
+    }
     let mut code = Code::new();
     let args = FormatIter(|| args.iter().copied().intersperse(", "));
     if content.options.this {
@@ -1078,6 +1081,7 @@ pub struct EcmascriptChunkItemContent {
 pub struct EcmascriptChunkItemOptions {
     pub module: bool,
     pub exports: bool,
+    pub global: bool,
     pub this: bool,
     pub placeholder_for_future_extensions: (),
 }
