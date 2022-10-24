@@ -3,14 +3,14 @@ title: Running Tasks
 description: Turborepo helps you specify task dependencies declaratively.
 ---
 
-import Callout from "../../../../components/Callout";
+import Callout from "../../../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Running Tasks in a Monorepo
 
 Every monorepo has two main building blocks: **workspaces** and **tasks**. Let's imagine you have a monorepo containing **three workspaces**, each with **three tasks**:
 
-![](../../../../public/images/docs/your-monorepo-excalidraw.png)
+![](../../../../../public/images/docs/your-monorepo-excalidraw.png)
 
 Here, both `apps/web` and `apps/doc` use code from `packages/shared`. In fact, when they're built (via `build`) **they need `packages/shared` to be built _first_**.
 
@@ -26,7 +26,7 @@ yarn workspaces run build
 
 This would mean the tasks run like this:
 
-![](../../../../public/images/docs/yarn-workspaces-excalidraw.png)
+![](../../../../../public/images/docs/yarn-workspaces-excalidraw.png)
 
 As you can see, `lint` gets run in all the workspaces. Then, `build` gets run - with `shared` going first. Finally, `test` gets run.
 
@@ -68,7 +68,7 @@ Next, we can replace our `yarn workspaces` script with this:
 
 When we run it, Turborepo will **multitask as many tasks as possible over all available CPU's**, meaning our tasks run like this:
 
-![](../../../../public/images/docs/turborepo-excalidraw.png)
+![](../../../../../public/images/docs/turborepo-excalidraw.png)
 
 Both `lint` and `test` run immediately, because they have no `dependsOn` specified in `turbo.json`.
 
