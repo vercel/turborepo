@@ -9,6 +9,8 @@ use turbopack_dev_server::source::{
     ProxyResult,
 };
 
+/// Serves, resizes, optimizes, and re-encodes images to be used with
+/// next/image.
 #[turbo_tasks::value(shared)]
 pub struct NextImageContentSource {
     asset_source: ContentSourceVc,
