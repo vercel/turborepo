@@ -186,12 +186,9 @@ function LandingPage() {
             optimized for JavaScript and TypeScript, written in Rust.
           </p>
         </FadeIn>
-        <Background />
         <SiteCards />
-        <FadeIn delay={0.3}>
-          <div className="z-10 py-16">
-            <Teams />
-          </div>
+        <FadeIn delay={0.3} className="z-10 py-16">
+          <Teams />
         </FadeIn>
       </main>
     </>

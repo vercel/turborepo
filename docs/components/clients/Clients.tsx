@@ -58,11 +58,3 @@ export function Clients({
     </>
   );
 }
-
-function StaticClients() {
-  return (
-    <div className="flex flex-row flex-wrap gap-4 justify-center">
-      <Clients linked={false} />
-    </div>
-  );
-}
