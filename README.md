@@ -27,6 +27,10 @@
 
 Visit https://turbo.build to get started with Turbopack and Turborepo.
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
+
 ## Community
 
 The Turbo community can be found on [GitHub Discussions](https://github.com/vercel/turbo/discussions), where you can ask questions, voice ideas, and share your projects.

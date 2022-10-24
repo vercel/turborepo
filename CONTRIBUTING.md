@@ -73,7 +73,7 @@ Run via:
 cargo nextest run
 ```
 
-For the test cases you need to run `yarn` to install some node_modules. See [troubleshooting][] for solutions to common problems.
+For the test cases you need to run `yarn` to install some node_modules. See [Troubleshooting][] for solutions to common problems.
 
 You can also create a little demo app and run
 
@@ -81,5 +81,9 @@ You can also create a little demo app and run
 cargo run -p node-file-trace -- print demo/index.js
 ```
 
+## Troubleshooting
+
+See [Troubleshooting][].
+
 [workspaces]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
-[troubleshooting]: troubleshooting.md
+[Troubleshooting]: troubleshooting.md
