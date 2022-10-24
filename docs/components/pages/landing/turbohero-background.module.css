@@ -7,7 +7,6 @@
 }
 
 .lines {
-  --geist-foreground: #000;
   --right: #f8cde8;
   --left: #b9ddff;
   position: absolute;
@@ -22,12 +21,12 @@
   );
   mask-image: linear-gradient(
       to right,
-      var(--geist-foreground) 2px,
+      rgba(0, 0, 0, 1) 2px,
       rgba(0, 0, 0, 0) 1px
     ),
     linear-gradient(
       to bottom,
-      var(--geist-foreground) 2px,
+      rgba(0, 0, 0, 1) 2px,
       rgba(0, 0, 0, 0) 1px
     );
   mask-size: 60px 60px;
