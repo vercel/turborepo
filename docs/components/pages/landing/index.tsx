@@ -177,8 +177,7 @@ function LandingPage() {
             Make Ship Happen
           </h1>
           <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[615px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
-            Turbo is an incremental, distributed bundler and build system
-            optimized for JavaScript and TypeScript, written in Rust.
+            Turbo is an incremental bundler and build system optimized for JavaScript and TypeScript, written in Rust.
           </p>
         </FadeIn>
         <SiteCards />

@@ -76,8 +76,7 @@ export function PackHero() {
           />
           <HeroText h1>The Rust-powered successor to Webpack</HeroText>
           <SectionSubtext hero>
-            Turbopack is an incremental, distributed bundler optimized for
-            JavaScript and TypeScript, written in Rust.
+            Turbopack is an incremental bundler and build system optimized for JavaScript and TypeScript, written in Rust.
           </SectionSubtext>
         </FadeIn>
         <FadeIn
