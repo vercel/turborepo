@@ -174,6 +174,11 @@ const nextConfig = withNextra({
         permanent: true,
         destination: "/docs/core-concepts/:path*",
       },
+      {
+        source: "/docs/:path*",
+        permanent: true,
+        destination: "/repo/docs/:path*",
+      },
     ];
   },
 });
