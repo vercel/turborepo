@@ -33,7 +33,7 @@ Now imagine this in a real bundler, with thousands of files to read and transfor
 
 ### The cache
 
-The Turbo engine currently stores its cache in memory. This means the cache will last as long as the process running it - which works well for a dev server. When you run `next dev —turbo` in Next v13, you’ll start a cache with the Turbo engine. When you cancel your dev server, the cache gets cleared.
+The Turbo engine currently stores its cache in memory. This means the cache will last as long as the process running it - which works well for a dev server. When you run `next dev --turbo` in Next v13, you’ll start a cache with the Turbo engine. When you cancel your dev server, the cache gets cleared.
 
 In the future, we’re planning to persist this cache - either to the filesystem, or to a remote cache like Turborepo’s. This will mean that Turbopack could remember work done _across runs and machines._
 
