@@ -1,0 +1,48 @@
+import { DocsBenchmarksGraph } from '../../../../components/pages/pack-home/DocsBenchmarksGraph';
+import { DocsBenchmarkStat } from '../../../../components/pages/pack-home/DocsBenchmarkStat';
+
+# Turbopack vs Vite
+
+[Vite](https://vitejs.dev) is a development environment that uses Native ESM to deliver a snappy dev server. Before we built Turbopack, we considered Vite as one of several options to speed up Next's dev server.
+
+However, we decided that Vite's Native ESM architecture brought too many speed bottlenecks. To learn more about that decision, check out our docs on [why we created Turbopack](/pack/docs/why-turbopack).
+
+## Speed
+
+Turbopack can outperform Vite on several key metrics.
+
+### Dev server startup time
+
+Turbopack's dev server starts up much faster than Vite. On a 1,000 module application, Vite takes <DocsBenchmarkStat stat="vite-cold-1000" /> to start up. Turbopack starts up in <DocsBenchmarkStat stat="turbopack-cold-1000" /> - **<DocsBenchmarkStat stat="turbopack-cold-vs-vite" /> faster**.
+
+In large applications, this differential stays consistent. In a 30,000 module application, Turbopack starts up <DocsBenchmarkStat stat="turbopack-cold-vs-vite-30000" /> faster than Vite.
+
+<DocsBenchmarksGraph category="cold" bars={[
+  {
+    label: 'Turbopack',
+    turbo: true,
+    key: 'next13'
+  },
+  {
+    label: 'Vite',
+    key: 'vite',
+  }
+]} />
+
+### Code updates
+
+When a file changes, it needs to render the change to the browser. The faster it can do that, the tighter your feedback loop and the faster you'll ship.
+
+In a 1,000 module application, Turbopack can react to file changes **<DocsBenchmarkStat stat="turbopack-update-vs-vite" /> faster** than Vite.
+
+<DocsBenchmarksGraph category="file_change" bars={[
+  {
+    label: 'Turbopack',
+    turbo: true,
+    key: 'next13'
+  },
+  {
+    label: 'Vite',
+    key: 'vite',
+  }
+]} />

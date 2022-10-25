@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { PackBenchmarkTabs } from "./PackBenchmarkTabs";
+import { FadeIn } from "../home-shared/FadeIn";
 import { SectionHeader, SectionSubtext } from "../home-shared/Headings";
 import { BenchmarksGraph } from "./PackBenchmarksGraph";
-import { PackDropdown } from "./PackDropdown";
-import { FadeIn } from "../home-shared/FadeIn";
+import { PackBenchmarksPicker } from "./PackBenchmarksPicker";
+import { PackBenchmarkTabs } from "./PackBenchmarkTabs";
 
 export type BenchmarkNumberOfModules = "1000" | "5000" | "10000" | "30000";
 export type BenchmarkCategory =
@@ -12,6 +12,38 @@ export type BenchmarkCategory =
   | "file_change"
   | "code_build"
   | "build_from_cache";
+export interface BenchmarkData {
+  next13: number;
+  next12: number;
+  vite: number;
+  next11: number;
+}
+
+export interface BenchmarkBar {
+  label: string;
+  key: keyof BenchmarkData;
+  turbo?: true;
+}
+
+export const DEFAULT_BARS: BenchmarkBar[] = [
+  {
+    key: "next13",
+    label: "Next.js 13",
+    turbo: true,
+  },
+  {
+    key: "next12",
+    label: "Next.js 12",
+  },
+  {
+    key: "vite",
+    label: "Vite",
+  },
+  {
+    key: "next11",
+    label: "Next.js 11",
+  },
+];
 
 export function PackBenchmarks() {
   const [numberOfModules, setNumberOfModules] =
@@ -19,30 +51,25 @@ export function PackBenchmarks() {
   const [category, setCategory] = useState<BenchmarkCategory>("cold");
 
   return (
-    <FadeIn className="font-sans relative py-16 md:py-24 lg:py-32 w-full items-center flex flex-col gap-10 justify-center">
-      <div className="flex flex-col gap-5 md:gap-6 items-center">
+    <FadeIn className="relative flex flex-col items-center justify-center w-full gap-10 py-16 font-sans md:py-24 lg:py-32">
+      <div className="flex flex-col items-center gap-5 md:gap-6">
         <SectionHeader>Faster Than Fast</SectionHeader>
         <SectionSubtext>
           Crafted by the creators of Webpack, Turbopack delivers unparalleled
           performance at scale.
         </SectionSubtext>
       </div>
-      <div className="flex flex-col w-full items-center">
+      <div className="flex flex-col items-center w-full">
         <PackBenchmarkTabs onTabChange={setCategory} />
         <BenchmarksGraph
           category={category}
           numberOfModules={numberOfModules}
+          bars={DEFAULT_BARS}
         />
       </div>
-      <div className="flex gap-3 items-center">
-        <a
-          className="dark:text-[#888888]  hover:underline underline-offset-4 text-[#666666] text-sm"
-          href="https://github.com/vercel/turbo/blob/main/docs/components/pages/pack-home/benchmark-data"
-        >
-          React Components
-        </a>
-        <PackDropdown onOptionSelected={(value) => setNumberOfModules(value)} />
-      </div>
+      <PackBenchmarksPicker
+        setNumberOfModules={setNumberOfModules}
+      ></PackBenchmarksPicker>
     </FadeIn>
   );
 }
