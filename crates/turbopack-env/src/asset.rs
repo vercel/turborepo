@@ -1,8 +1,8 @@
-use std::{borrow::Cow, fmt::Write as _};
+use std::fmt::Write as _;
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_env::{EnvValue, ProcessEnvVc};
+use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -124,10 +124,9 @@ impl EcmascriptChunkItem for ProcessEnvChunkItem {
         let mut code = "const env = process.env = {...process.env};\n\n".to_string();
 
         for (name, val) in &*env {
-            let val = match &val {
-                EnvValue::Literal(s) => Cow::Borrowed(s),
-                EnvValue::String(s) => Cow::Owned(stringify_str(s)),
-            };
+            // It's assumed the env has passed through an EmbeddableProcessEnv, so the value
+            // is ready to be directly embedded. Values _after_ an embeddable
+            // env can be used to inject live code into the output.
             // TODO this is not completely correct as env vars need to ignore casing
             // So `process.env.path === process.env.PATH === process.env.PaTh`
             writeln!(code, "env[{}] = {};", stringify_str(name), val)?;

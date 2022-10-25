@@ -32,6 +32,7 @@ use turbopack_env::ProcessEnvAssetVc;
 
 use crate::{
     embed_js::{next_js_file, wrap_with_next_js_fs},
+    env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
         context::{
@@ -111,7 +112,7 @@ pub async fn create_server_rendered_source(
     .into();
 
     let server_runtime_entries =
-        vec![ProcessEnvAssetVc::new(project_path, env).as_ecmascript_chunk_placeable()];
+        vec![ProcessEnvAssetVc::new(project_path, env_for_js(env)).as_ecmascript_chunk_placeable()];
 
     let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 

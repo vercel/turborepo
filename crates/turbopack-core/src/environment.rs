@@ -9,7 +9,7 @@ use turbo_tasks::{
     primitives::{BoolVc, OptionStringVc, StringVc, StringsVc},
     Value,
 };
-use turbo_tasks_env::{OptionEnvValueVc, ProcessEnvVc};
+use turbo_tasks_env::ProcessEnvVc;
 
 use crate::target::CompileTargetVc;
 
@@ -196,9 +196,7 @@ impl NodeJsEnvironmentVc {
     #[turbo_tasks::function]
     pub async fn runtime_versions(self) -> Result<RuntimeVersionsVc> {
         let str = match *self.await?.node_version.await? {
-            NodeJsVersion::Current(process_env) => {
-                get_current_nodejs_version(process_env.read("PATH"))
-            }
+            NodeJsVersion::Current(process_env) => get_current_nodejs_version(process_env),
             NodeJsVersion::Static(version) => version,
         }
         .await?;
@@ -245,13 +243,13 @@ pub struct BrowserEnvironment {
 pub struct RuntimeVersions(#[turbo_tasks(trace_ignore)] pub Versions);
 
 #[turbo_tasks::function]
-pub async fn get_current_nodejs_version(path_env: OptionEnvValueVc) -> Result<StringVc> {
-    let path_env = path_env.await?;
-    let path = path_env.as_ref().context("env must have PATH")?;
+pub async fn get_current_nodejs_version(env: ProcessEnvVc) -> Result<StringVc> {
+    let path_read = env.read("PATH").await?;
+    let path = path_read.as_ref().context("env must have PATH")?;
     let mut cmd = Command::new("node");
     cmd.arg("--version");
     cmd.env_clear();
-    cmd.env("PATH", path.to_str());
+    cmd.env("PATH", path);
     cmd.stdin(Stdio::piped());
     cmd.stdout(Stdio::piped());
 
