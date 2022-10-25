@@ -76,10 +76,7 @@ export function RepoHero() {
             width="200"
             className="w-[160px] md:w-[200px] fill-black dark:fill-white"
           />
-          <HeroText h1>
-            The build system that
-            <br /> makes ship happen
-          </HeroText>
+          <HeroText h1>The build system that makes ship happen</HeroText>
           <SectionSubtext hero>
             Turborepo is a high-performance build system for JavaScript and
             TypeScript codebases.
