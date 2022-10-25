@@ -8,9 +8,7 @@ function FullTurboCTA() {
       <div className="justify-start flex-1">
         <h3 className="font-semibold leading-6 tracking-tight">
           Ready to go
-          <span className="m-2 font-mono full-turbo">
-            {">>>"} FULL TURBO
-          </span>
+          <span className="m-2 font-mono full-turbo">{">>>"} FULL TURBO</span>
           at your organization?
         </h3>
         <div className="text-base font-medium leading-7 text-gray-500 dark:text-gray-400">
@@ -39,4 +37,4 @@ function FullTurboCTA() {
   );
 }
 
-export default FullTurboCTA
+export default FullTurboCTA;

@@ -7,7 +7,12 @@ import { useTheme } from "next-themes";
 function HeaderLogo() {
   return (
     <>
-      <a href="https://vercel.com" target="_blank" rel="noreferrer" title="vercel.com homepage">
+      <a
+        href="https://vercel.com"
+        target="_blank"
+        rel="noreferrer"
+        title="vercel.com homepage"
+      >
         <svg
           height={22}
           viewBox="0 0 235 203"
