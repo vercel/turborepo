@@ -86,4 +86,4 @@ cargo run -p node-file-trace -- print demo/index.js
 See [Troubleshooting][].
 
 [workspaces]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
-[Troubleshooting]: troubleshooting.md
+[troubleshooting]: troubleshooting.md

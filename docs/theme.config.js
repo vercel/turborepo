@@ -30,7 +30,7 @@ const theme = {
       section = "Turborepo";
     }
 
-    const defaultTitle = frontMatter.overrideTitle || section
+    const defaultTitle = frontMatter.overrideTitle || section;
 
     return {
       description: frontMatter.description,
