@@ -5,46 +5,19 @@ mod custom;
 mod dotenv;
 mod filter;
 
-use std::{
-    env,
-    sync::{Mutex, MutexGuard},
-};
+use std::{env, sync::Mutex};
 
 use anyhow::Result;
 use indexmap::IndexMap;
+use turbo_tasks::primitives::OptionStringVc;
 
 pub use self::{
     command_line::CommandLineProcessEnvVc, custom::CustomProcessEnvVc, dotenv::DotenvProcessEnvVc,
     filter::FilterProcessEnvVc,
 };
 
-/// EnvValues control how the string is injected into the resulting `.env.js`
-/// module.
 #[turbo_tasks::value(transparent)]
-#[derive(Debug, Clone)]
-pub enum EnvValue {
-    /// The value is injected literally, without encoding it as a JS string.
-    Literal(String),
-    /// The value is injected as a JS string, with any necessary escaping.
-    String(String),
-}
-
-impl EnvValue {
-    pub fn to_str(&'_ self) -> &'_ str {
-        match self {
-            EnvValue::Literal(_) => {
-                unimplemented!("not possible to convert Literal into env string")
-            }
-            EnvValue::String(s) => s,
-        }
-    }
-}
-
-#[turbo_tasks::value(transparent)]
-pub struct OptionEnvValue(Option<EnvValue>);
-
-#[turbo_tasks::value(transparent)]
-pub struct EnvMap(#[turbo_tasks(trace_ignore)] IndexMap<String, EnvValue>);
+pub struct EnvMap(#[turbo_tasks(trace_ignore)] IndexMap<String, String>);
 
 #[turbo_tasks::value_impl]
 impl EnvMapVc {
@@ -65,8 +38,8 @@ pub trait ProcessEnv {
     fn read_all(&self) -> EnvMapVc;
 
     /// Reads a single env variable. Ignores casing.
-    async fn read(&self, name: &str) -> Result<OptionEnvValueVc> {
-        Ok(OptionEnvValueVc::cell(
+    async fn read(&self, name: &str) -> Result<OptionStringVc> {
+        Ok(OptionStringVc::cell(
             to_uppercase_map(self.read_all())
                 .await?
                 .get(&name.to_uppercase())
@@ -83,12 +56,6 @@ async fn to_uppercase_map(map: EnvMapVc) -> Result<EnvMapVc> {
         new.insert(k.to_uppercase(), v.clone());
     }
     Ok(EnvMapVc::cell(new))
-}
-
-fn env_snapshot(_lock: &MutexGuard<()>) -> IndexMap<String, EnvValue> {
-    env::vars()
-        .map(|(name, value)| (name, EnvValue::String(value)))
-        .collect::<IndexMap<_, _>>()
 }
 
 pub static GLOBAL_ENV_LOCK: Mutex<()> = Mutex::new(());
