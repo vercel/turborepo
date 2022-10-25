@@ -13,6 +13,7 @@ RUN turbo prune --scope=api --docker
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM node:alpine AS installer
+RUN apk add --no-cache libc6-compat
 RUN apk update
 WORKDIR /app
 
