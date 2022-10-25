@@ -59,6 +59,6 @@ That’s better, but it’s not perfect. When you navigate to `/users`, we’ll 
 
 Turbopack is smart enough to compile _only the code you request_. That means if a browser requests HTML, we compile only the HTML - not anything that is referenced by the HTML.
 
-If a browser wants some CSS, we’ll compile only that - without compiling referenced images. Got a big charting library behind `next/dynamic`? Doesn’t compile it until the tab showing the chart is shown. Turbopack even knows _to not compile source maps unless your DevTools are open_.
+If a browser wants some CSS, we’ll compile only that - without compiling referenced images. Got a big charting library behind `next/dynamic`? Doesn’t compile it until the tab showing the chart is shown. Turbopack even knows _to not compile source maps unless your Chrome DevTools are open_.
 
-If we were to use native ESM, we’d get similar behavior. Except that Native ESM produces a _lot_ of requests to the server, as discussed in our Why Turbopack section. With request-level compilation, we get to both reduce the number of re
+If we were to use native ESM, we’d get similar behavior. Except that Native ESM produces a _lot_ of requests to the server, as discussed in our [Why Turbopack](/pack/docs/why-turbopack) section. With request-level compilation, we get to both reduce the number of requests _and_ use native speed to compile them. As you can see in our [benchmarks](/pack/docs/benchmarks), this provides significant performance improvements.
