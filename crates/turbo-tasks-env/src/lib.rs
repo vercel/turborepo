@@ -38,14 +38,19 @@ pub trait ProcessEnv {
     fn read_all(&self) -> EnvMapVc;
 
     /// Reads a single env variable. Ignores casing.
-    async fn read(&self, name: &str) -> Result<OptionStringVc> {
-        Ok(OptionStringVc::cell(
-            to_uppercase_map(self.read_all())
-                .await?
-                .get(&name.to_uppercase())
-                .cloned(),
-        ))
+    fn read(&self, name: &str) -> OptionStringVc {
+        case_insensitive_read(self.read_all(), name)
     }
+}
+
+#[turbo_tasks::function]
+pub async fn case_insensitive_read(map: EnvMapVc, name: &str) -> Result<OptionStringVc> {
+    Ok(OptionStringVc::cell(
+        to_uppercase_map(map)
+            .await?
+            .get(&name.to_uppercase())
+            .cloned(),
+    ))
 }
 
 #[turbo_tasks::function]

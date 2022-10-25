@@ -1,6 +1,7 @@
 use anyhow::Result;
+use turbo_tasks::primitives::OptionStringVc;
 
-use crate::{EnvMapVc, ProcessEnv, ProcessEnvVc};
+use crate::{case_insensitive_read, EnvMapVc, ProcessEnv, ProcessEnvVc};
 
 /// Allows providing any custom env values that you'd like, deferring the prior
 /// envs if a key is not overridden.
@@ -28,5 +29,14 @@ impl ProcessEnv for CustomProcessEnv {
         let mut extended = prior.clone_value();
         extended.extend(custom.clone_value());
         Ok(EnvMapVc::cell(extended))
+    }
+
+    #[turbo_tasks::function]
+    async fn read(&self, name: &str) -> Result<OptionStringVc> {
+        let custom = case_insensitive_read(self.custom, name);
+        match &*custom.await? {
+            Some(_) => Ok(custom),
+            None => Ok(self.prior.read(name)),
+        }
     }
 }
