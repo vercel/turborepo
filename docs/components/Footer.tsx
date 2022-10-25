@@ -61,7 +61,7 @@ const navigation = {
     },
     {
       name: "Contact Sales",
-      href: "https://vercel.com/contact/turborepo?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+      href: "https://vercel.com/contact/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink",
     },
     { name: "Twitter", href: "https://twitter.com/vercel" },
   ],
@@ -159,7 +159,7 @@ export function FooterContent() {
               className="text-current"
               target="_blank"
               rel="noopener noreferrer"
-              href="https://vercel.com?utm_source=turborepo.org&utm_medium=referral&utm_campaign=footer-logoLink"
+              href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
             >
               <VercelLogo />
             </a>
