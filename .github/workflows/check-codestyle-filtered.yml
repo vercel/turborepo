@@ -141,3 +141,15 @@ jobs:
 
       - name: Format check
         run: pnpm -- turbo run check:fmt
+
+  licenses:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Check licenses 
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check licenses
