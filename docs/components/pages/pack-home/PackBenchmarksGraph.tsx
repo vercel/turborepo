@@ -238,7 +238,7 @@ const GraphTimer = ({ turbo, timer }: { turbo: boolean; timer: number }) => {
           />
         </div>
       )}
-      <p className="font-mono">{timer.toFixed(1)}s</p>
+      <p className="font-mono">{timer.toFixed(2)}s</p>
     </div>
   );
 };
