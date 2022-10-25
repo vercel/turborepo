@@ -164,7 +164,6 @@ async fn run(resource: &'static str) -> Result<()> {
         let asset_root_path = path.join("static");
         let chunking_context =
             DevChunkingContextVc::builder(project_root, path, chunk_root_path, asset_root_path)
-                .hot_module_replacment()
                 .build();
 
         let existing_dir = chunk_root_path.read_dir().await?;
