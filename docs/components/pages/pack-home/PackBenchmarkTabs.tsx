@@ -17,12 +17,6 @@ const TABS: {
     tooltip: "First run",
   },
   {
-    id: "from_cache",
-    title: "Start from Cache",
-    soon: false,
-    tooltip: "Second run",
-  },
-  {
     id: "file_change",
     title: "File Change",
     soon: false,
@@ -69,13 +63,13 @@ export function PackBenchmarkTabs({
   };
 
   return (
-    <div className="flex w-full items-center justify-center">
-      <div className="relative flex items-center pb-12 overflow-x-scroll overflow-y-clip justify-start no-scrollbar">
+    <div className="flex items-center justify-center w-full">
+      <div className="relative flex items-center justify-start pb-12 overflow-x-scroll overflow-y-clip no-scrollbar">
         <AnimatePresence>
           <div className="flex flex-row items-center rounded-full p-1 dark:bg-[#ffffff0d] bg-[#00000005] mx-5">
             {TABS.map((tab, index) => (
               <button
-                className="py-3 px-5 relative"
+                className="relative px-5 py-3"
                 key={tab.id}
                 onClick={() => onTabClick(index)}
                 disabled={tab.soon}
@@ -94,12 +88,12 @@ export function PackBenchmarkTabs({
                 <ToolTip text={tab.tooltip}>
                   <motion.div
                     animate={{ opacity: activeTab === index ? 1 : 0.4 }}
-                    className="flex flex-row items-center gap-2 justify-center whitespace-nowrap"
+                    className="flex flex-row items-center justify-center gap-2 whitespace-nowrap"
                     transition={{ ...TRANSITION, duration: 0.2 }}
                     style={{ cursor: tab.soon ? "not-allowed" : "pointer" }}
                   >
                     <span
-                      className="font-medium m-0 z-10"
+                      className="z-10 m-0 font-medium"
                       style={{ opacity: tab.soon ? 0.6 : 1 }}
                     >
                       {tab.title}
