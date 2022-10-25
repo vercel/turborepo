@@ -396,6 +396,7 @@ __turbopack_export_value__({
         l: loadChunk,
         p: _process,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        g: globalThis,
       });
     });
 

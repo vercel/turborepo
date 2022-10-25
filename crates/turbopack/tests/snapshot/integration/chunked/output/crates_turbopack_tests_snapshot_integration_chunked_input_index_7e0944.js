@@ -383,6 +383,7 @@ __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2f$tests$2f$
         l: loadChunk,
         p: _process,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        g: globalThis,
       });
     });
 

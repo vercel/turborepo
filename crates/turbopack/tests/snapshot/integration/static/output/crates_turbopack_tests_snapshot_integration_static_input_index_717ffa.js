@@ -387,6 +387,7 @@ __turbopack_export_value__("/crates/turbopack/tests/snapshot/integration/static/
         l: loadChunk,
         p: _process,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        g: globalThis,
       });
     });
 

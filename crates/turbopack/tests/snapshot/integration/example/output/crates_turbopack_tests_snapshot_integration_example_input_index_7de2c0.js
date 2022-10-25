@@ -1,6 +1,6 @@
 (self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack_tests_snapshot_integration_example_input_index_7de2c0.js", {
 
-"[project]/crates/turbopack/tests/snapshot/integration/example/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack/tests/snapshot/integration/example/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname, m: module, e: exports, g: global }) { !function() {
 
 console.log("hello world");
 
@@ -380,6 +380,7 @@ console.log("hello world");
         l: loadChunk,
         p: _process,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        g: globalThis,
       });
     });
 
@@ -1013,4 +1014,4 @@ console.log("hello world");
 })();
 
 
-//# sourceMappingURL=crates_turbopack_tests_snapshot_integration_example_input_index_7de2c0.js.dc42bac4b591c14f.map
+//# sourceMappingURL=crates_turbopack_tests_snapshot_integration_example_input_index_7de2c0.js.3f4f55cb220e2623.map

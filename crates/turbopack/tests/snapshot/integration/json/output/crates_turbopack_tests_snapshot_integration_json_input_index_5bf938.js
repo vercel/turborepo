@@ -394,6 +394,7 @@ throw new Error("An error occurred while importing a JSON module: \"File is not 
         l: loadChunk,
         p: _process,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        g: globalThis,
       });
     });
 
