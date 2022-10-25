@@ -7,13 +7,13 @@ description: Learn about the innovative architecture that powers Turbopack's spe
 
 Let’s dive deep into the internals of Turbopack to figure out why it’s so fast.
 
-## Turbo Engine
+## The Turbo Engine
 
-Turbopack is so fast because it’s built on Turbo Engine - a library for Rust which enables incremental computation. Here’s how it works:
+Turbopack is so fast because it’s built on a reusable library for Rust which enables incremental computation known as the Turbo engine. Here’s how it works:
 
 ### Function-level caching
 
-In a Turbo Engine-powered program, you can mark certain functions as ‘to be remembered’. When these functions are called, Turbo Engine will remember **what they were called with**, and **what they returned**. It’ll then save it in an in-memory cache.
+In a Turbo engine-powered program, you can mark certain functions as ‘to be remembered’. When these functions are called, the Turbo engine will remember **what they were called with**, and **what they returned**. It’ll then save it in an in-memory cache.
 
 Here’s a simplified example of what this might look like in a bundler:
 
@@ -33,7 +33,7 @@ Now imagine this in a real bundler, with thousands of files to read and transfor
 
 ### The cache
 
-Turbo Engine currently stores its cache in memory. This means the cache will last as long as the process running it - which works well for a dev server. When you run `next dev —turbo` in Next 13, you’ll start a Turbo Engine cache. When you cancel your dev server, the cache gets cleared.
+The Turbo engine currently stores its cache in memory. This means the cache will last as long as the process running it - which works well for a dev server. When you run `next dev —turbo` in Next 13, you’ll start a Turbo Engine cache. When you cancel your dev server, the cache gets cleared.
 
 In the future, we’re planning to persist this cache - either to the filesystem, or to a remote cache like Turborepo’s. This will mean that Turbopack could remember work done _across runs._
 
