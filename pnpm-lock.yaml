@@ -6,10 +6,8 @@ importers:
 
   .:
     specifiers:
-      '@headlessui/react': 1.7.3
       '@taplo/cli': ^0.4.2
       '@types/react': 18.0.21
-      docs: workspace:^1.0.0
       eslint: ^8.20.0
       eslint-config-next: ^12.3.1
       eslint-config-prettier: ^8.5.0
@@ -22,9 +20,6 @@ importers:
       semver: ^7.3.5
       simple-git-hooks: ^2.7.0
       typescript: ^4.8.4
-    dependencies:
-      '@headlessui/react': 1.7.3_biqbaboplfbrettd7655fr4n2y
-      docs: link:docs
     devDependencies:
       '@taplo/cli': 0.4.2
       '@types/react': 18.0.21
@@ -398,6 +393,7 @@ importers:
   docs:
     specifiers:
       '@babel/core': 7.19.3
+      '@headlessui/react': ^1.7.3
       '@heroicons/react': 1.0.6
       '@mdx-js/react': ^2.1.4
       '@react-aria/ssr': 3.3.0
@@ -432,6 +428,7 @@ importers:
       turbo-types: workspace:*
       typescript: 4.8.4
     dependencies:
+      '@headlessui/react': 1.7.3_biqbaboplfbrettd7655fr4n2y
       '@heroicons/react': 1.0.6_react@18.2.0
       '@mdx-js/react': 2.1.5_react@18.2.0
       '@react-aria/ssr': 3.3.0_react@18.2.0
