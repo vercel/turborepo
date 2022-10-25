@@ -55,7 +55,7 @@ Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project up
 
 **Turbopack and Turboengine**
 
-- Tobias Koppers ([@sokra](https://twitter.com/wsokra))
+- Tobias Koppers ([@wSokra](https://twitter.com/wSokra))
 - Maia Teegarden ([@padmaia](https://twitter.com/padmaia))
 
 ## Security

@@ -94,7 +94,7 @@ npm install --save-dev tailwindcss autoprefixer concurrently
 ```json filename="package.json"
 {
   "scripts": {
-    "dev": "concurrently \"next dev --turbo\" \"tailwindcss input.css --output output.css --watch\"",
+    "dev": "concurrently \"next dev --turbo\" \"tailwindcss --input input.css --output output.css --watch\"",
     "build": "tailwindcss input.css --output output.css && next build"
   }
 }
