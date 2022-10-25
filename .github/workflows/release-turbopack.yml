@@ -1,0 +1,126 @@
+name: Build release
+
+on:
+  push:
+    branches: [main, staging]
+    tags:
+      - node-file-trace*
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_LTO: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest-16-core
+            target: x86_64-unknown-linux-musl
+          - name: macos-latest
+            target: x86_64-apple-darwin
+          - name: macos-latest
+            target: aarch64-apple-darwin
+          - name: ubuntu-latest-16-core
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os.name }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install target
+        uses: actions-rs/toolchain@v1
+        with:
+          target: ${{ matrix.os.target }}
+
+      - name: Install musl tools
+        run: |
+          wget https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4011.2.1/x86_64-linux-musl-native.tgz -O musl.tgz
+          tar -xvzf musl.tgz
+          sudo mv x86_64-linux-musl-native /usr/x86_64-linux-musl
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-cc /usr/bin/musl-gcc
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-g++ /usr/bin/musl-g++
+        if: matrix.os.target == 'x86_64-unknown-linux-musl'
+
+      - name: Install Cargo xwin toolchain
+        run: |
+          cargo install cargo-xwin
+          rustup component add llvm-tools-preview
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: release-${{ matrix.os.target }}
+
+      - name: Build node-file-trace
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p node-file-trace --target ${{ matrix.os.target }}
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+
+      - name: Build node-file-trace
+        uses: actions-rs/cargo@v1
+        with:
+          command: xwin
+          args: build --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+
+      - name: Build next-dev
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p next-dev --target ${{ matrix.os.target }}
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: node-file-trace-${{ matrix.os.target }}
+          path: |
+            target/${{ matrix.os.target }}/release/node-file-trace
+            target/${{ matrix.os.target }}/release/node-file-trace.exe
+            target/${{ matrix.os.target }}/release/next-dev
+            target/${{ matrix.os.target }}/release/next-dev.exe
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/node-file-trace')
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+
+      - name: Set release name
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
+      - name: Install target
+        uses: actions-rs/toolchain@v1
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: ls -R artifacts
+        shell: bash
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: debug
+
+      - name: Write NPM_TOKEN
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc
+
+      - name: Publish
+        uses: actions-rs/cargo@v1
+        with:
+          command: xtask
+          args: npm node-file-trace

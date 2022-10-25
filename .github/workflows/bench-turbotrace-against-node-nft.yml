@@ -1,0 +1,41 @@
+name: Bench Turbo trace against @vercel/nft
+
+on:
+  push:
+    branches: [main, staging]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_LTO: true
+  RUST_BACKTRACE: 1
+
+jobs:
+  bench_vs_node_nft:
+    # for edited events it should only run on base changes
+    runs-on: ubuntu-latest
+    name: bench
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: bench_nft
+
+      - uses: ./.github/actions/setup-node
+
+      - name: Install nextest
+        run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Run benchmark
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 60
+        with:
+          command: nextest
+          args: run -j 1 --no-fail-fast -r -p turbopack --features bench_against_node_nft bench_against_node_nft
+
+      - name: Show benchmark result
+        uses: actions-rs/cargo@v1
+        with:
+          command: xtask
+          args: nft-bench-result

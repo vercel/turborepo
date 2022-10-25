@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
 )
 
 var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo")
@@ -44,10 +45,10 @@ func newFallback(repoRoot string) (SCM, error) {
 // FromInRepo produces an SCM instance, given a path within a
 // repository. It does not need to be a git repository, and if
 // it is not, the given path is assumed to be the root.
-func FromInRepo(repoRoot string) (SCM, error) {
-	dotGitDir, err := fs.FindupFrom(".git", repoRoot)
+func FromInRepo(repoRoot turbopath.AbsoluteSystemPath) (SCM, error) {
+	dotGitDir, err := repoRoot.Findup(".git")
 	if err != nil {
 		return nil, err
 	}
-	return newFallback(filepath.Dir(dotGitDir))
+	return newFallback(dotGitDir.Dir().ToStringDuringMigration())
 }

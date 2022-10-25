@@ -1,0 +1,24 @@
+---
+title: Migrate from Webpack to Turbopack
+description: Learn about how to migrate from Webpack to its Rust-powered successor, Turbopack.
+---
+
+# Migrating from Webpack to Turbopack
+
+We're planning Turbopack as the successor to Webpack. In the future, we plan to give Turbopack all the tools needed to support your Webpack app.
+
+Currently, migrating to Turbopack from Webpack is **not yet possible**. In the future, we're planning to offer a smooth migration path for all Webpack users to join the Turbopack future.
+
+## Will it be compatible with Webpack's API?
+
+Webpack has a huge API. It's extremely flexible and extensible, which is a big reason why it's so popular.
+
+We're planning on making Turbopack very flexible and extensible, but we're **not planning 1:1 compatibility with Webpack**. This lets us make choices which improve on Webpack's API, and let us optimize for speed and efficiency.
+
+## Will we be able to use Webpack plugins?
+
+Webpack plugins are a crucial part of Webpack's ecosystem. They let you customize your toolchain, giving you low-level tools to maximize your productivity.
+
+Since we're not offering 1:1 API compatibility, most Webpack plugins won't work out of the box with Turbopack.
+
+However, we're working on porting several of the most popular Webpack plugins to Turbopack.

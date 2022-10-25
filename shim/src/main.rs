@@ -1,25 +1,30 @@
 mod package_manager;
 
-use crate::package_manager::PackageManager;
-use anyhow::{anyhow, Result};
-use clap::{Parser, Subcommand};
-use std::env::current_exe;
-use std::path::{Path, PathBuf};
-
-use std::process::Stdio;
 use std::{
     env,
+    env::current_exe,
     ffi::CString,
     fs,
     os::raw::{c_char, c_int},
+    path::{Path, PathBuf},
     process,
+    process::Stdio,
 };
+
+use anyhow::{anyhow, Result};
+use clap::{Parser, Subcommand};
+
+use crate::package_manager::PackageManager;
 
 static TURBO_JSON: &str = "turbo.json";
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true)]
+#[clap(author, about, long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true, disable_version_flag = true)]
 struct Args {
+    #[clap(long, global = true)]
+    version: bool,
+    #[clap(long, short, global = true)]
+    help: bool,
     /// Current working directory
     #[clap(long, value_parser)]
     cwd: Option<String>,
@@ -29,8 +34,8 @@ struct Args {
 }
 
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
-/// we must change these as well to avoid accidentally passing the --single-package
-/// flag into non-build commands.
+/// we must change these as well to avoid accidentally passing the
+/// --single-package flag into non-build commands.
 #[derive(Subcommand, Debug)]
 enum Command {
     Bin,
@@ -68,7 +73,6 @@ extern "C" {
 /// * `args`: Arguments for turbo
 ///
 /// returns: Result<i32, Error>
-///
 fn run_current_turbo(args: Vec<String>) -> Result<i32> {
     let mut args = args
         .into_iter()
@@ -92,16 +96,15 @@ impl RepoState {
     /// * `current_dir`: Current working directory
     ///
     /// returns: Result<RepoState, Error>
-    ///
     pub fn infer(current_dir: &Path) -> Result<Self> {
-        // First we look for a `turbo.json`. This iterator returns the first ancestor that contains
-        // a `turbo.json` file.
+        // First we look for a `turbo.json`. This iterator returns the first ancestor
+        // that contains a `turbo.json` file.
         let root_path = current_dir
             .ancestors()
             .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
 
-        // If that directory exists, then we figure out if there are workspaces defined in it
-        // NOTE: This may change with multiple `turbo.json` files
+        // If that directory exists, then we figure out if there are workspaces defined
+        // in it NOTE: This may change with multiple `turbo.json` files
         if let Some(root_path) = root_path {
             let pnpm = PackageManager::Pnpm;
             let npm = PackageManager::Npm;
@@ -126,8 +129,8 @@ impl RepoState {
             .filter(|path| fs::metadata(path.join("package.json")).is_ok());
 
         let mut first_package_json_dir = None;
-        // We loop through these directories and see if there are workspaces defined in them,
-        // either in the `package.json` or `pnm-workspaces.yml`
+        // We loop through these directories and see if there are workspaces defined in
+        // them, either in the `package.json` or `pnm-workspaces.yml`
         for dir in potential_roots {
             if first_package_json_dir.is_none() {
                 first_package_json_dir = Some(dir)
@@ -173,7 +176,6 @@ impl RepoState {
 /// * `clap_args`:
 ///
 /// returns: bool
-///
 fn is_run_command(clap_args: &Args) -> bool {
     let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
     let is_implicit_run = clap_args.command.is_none() && clap_args.task.is_some();
@@ -191,12 +193,12 @@ fn is_run_command(clap_args: &Args) -> bool {
 /// * `current_dir`: Current working directory as defined by the --cwd flag
 ///
 /// returns: Result<i32, Error>
-///
 fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
     let local_turbo_path = repo_root.join("node_modules").join(".bin").join("turbo");
 
     let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
+    // If the local turbo path doesn't exist or if we are local turbo, then we go
+    // ahead and run
     if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
         return run_current_turbo(args);
     }
@@ -211,15 +213,33 @@ fn run_correct_turbo(repo_root: &Path, args: Vec<String>) -> Result<i32> {
     Ok(command.wait()?.code().unwrap_or(2))
 }
 
+fn get_version() -> &'static str {
+    include_str!("../../version.txt")
+        .split_once('\n')
+        .expect("Failed to read version from version.txt")
+        .0
+}
+
 fn main() -> Result<()> {
     let clap_args = Args::parse();
+    // --version flag doesn't work with ignore_errors in clap, so we have to handle it manually
+    if clap_args.version {
+        println!("{}", get_version());
+        process::exit(0);
+    }
+
+    let mut args: Vec<_> = env::args().skip(1).collect();
+    // Quick fix for --help.
+    if clap_args.help {
+        let exit_code = run_current_turbo(args)?;
+        process::exit(exit_code);
+    }
+
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
     } else {
         env::current_dir()?
     };
-
-    let mut args: Vec<_> = env::args().skip(1).collect();
 
     if args.is_empty() {
         process::exit(1);

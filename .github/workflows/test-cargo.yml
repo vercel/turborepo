@@ -1,0 +1,207 @@
+name: Test
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    types: [synchronize, opened, reopened, edited]
+    branches: [main, staging]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: test-${{ github.head_ref || github.run_id }}-${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+
+jobs:
+  test:
+    # for edited events it should only run on base changes
+    if: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest
+            nextest: linux
+          - name: macos-latest
+            nextest: mac
+          - name: windows-latest
+            nextest: windows-tar
+    runs-on: ${{ matrix.os.name }}
+    name: test - ${{ matrix.os.name }}
+
+    steps:
+      - name: Initialize github status
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Checkout...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows-latest'
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Report progress
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Restoring cache...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+      - name: Setup rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: test
+
+      - name: Start Redis
+        uses: supercharge/redis-github-action@1.4.0
+        with:
+          redis-version: 6
+        if: matrix.os.name == 'ubuntu-latest'
+
+      - name: Set Redis URL
+        run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
+        if: matrix.os.name == 'ubuntu-latest'
+
+      - name: Report progress
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Installing Node.js dependencies...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+      - uses: ./.github/actions/setup-node
+        if: matrix.os.name != 'windows-latest'
+
+      - name: Run node-gyp install
+        run: npx node-gyp install
+        if: matrix.os.name == 'windows-latest'
+
+      - name: install Node.js dependencies on Windows without scripts
+        uses: ./.github/actions/setup-node
+        if: matrix.os.name == 'windows-latest'
+
+      - name: Report progress
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          description: Testing...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+      - name: Install nextest
+        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Run nextest
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 120
+        with:
+          command: nextest
+          args: run --release --no-fail-fast
+
+      - name: Report github status
+        if: always() && github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test - ${{ matrix.os.name }} (pull_request)
+          status: "${{ job.status }}"
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+  test-bench:
+    # for edited events it should only run on base changes
+    if: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest
+            nextest: linux
+          - name: macos-latest
+            nextest: mac
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows-latest
+          #   nextest: windows-tar
+    runs-on: ${{ matrix.os.name }}
+    name: test-bench - ${{ matrix.os.name }}
+
+    steps:
+      - name: Initialize github status
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
+          description: Checkout...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows-latest'
+      - uses: actions/checkout@v3
+
+      - name: Report progress
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
+          description: Restoring cache...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+      - name: Setup rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: test-bench
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Report progress
+        if: github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
+          description: Testing...
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+
+      - name: Run cargo test on benchmarks
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_COUNTS: "100"
+        with:
+          command: test
+          args: --benches --release
+
+      - name: Report github status
+        if: always() && github.event_name == 'pull_request'
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
+          status: "${{ job.status }}"
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}

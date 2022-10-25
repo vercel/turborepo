@@ -1,114 +1,134 @@
 import { useRouter } from "next/router";
-import { useConfig } from "nextra-theme-docs";
+import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
-import TurboLogo from "./components/logos/Turbo";
+import Navigation from "./components/Navigation";
+import HeaderLogo from "./components/HeaderLogo";
+import { Discord, Github } from "./components/Social";
 
+const SITE_ROOT = "https://turbo.build";
+
+/**
+ * @type {import('nextra-theme-docs').DocsThemeConfig}
+ */
 const theme = {
   project: {
-    link: "https://github.com/vercel/turborepo",
+    icon: Github,
   },
-  docsRepositoryBase: "https://github.com/vercel/turborepo/blob/main/docs",
-  titleSuffix: " | Turborepo",
+  chat: {
+    icon: Discord,
+  },
+  docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
+  getNextSeoProps: function SEO() {
+    const router = useRouter();
+    const { frontMatter } = useConfig();
+
+    let section = "Turbo";
+    if (router?.pathname.startsWith("/pack")) {
+      section = "Turbopack";
+    }
+    if (router?.pathname.startsWith("/repo")) {
+      section = "Turborepo";
+    }
+
+    const defaultTitle = frontMatter.overrideTitle || section;
+
+    return {
+      description: frontMatter.description,
+      defaultTitle,
+      titleTemplate: `%s – ${section}`,
+    };
+  },
   unstable_flexsearch: true,
   unstable_staticImage: true,
   toc: {
     float: true,
   },
   font: false,
-  chat: {
-    link: "https://turborepo.org/discord",
-  },
   feedback: {
     link: "Question? Give us feedback →",
   },
-  banner: function Banner() {
-    return (
-      <a
-        href="https://vercel.com/blog/vercel-acquires-turborepo?utm_source=turbo-site&amp;utm_medium=banner&amp;utm_campaign=turbo-website"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-current no-underline"
-        title="Go to the Vercel website"
-      >
-        Turborepo has joined Vercel. Read More →
-      </a>
-    );
-  },
-  logo: function LogoActual() {
-    return (
-      <>
-        <TurboLogo height={32} />
-        <span className="sr-only">Turborepo</span>
-      </>
-    );
-  },
-  head: function () {
+  logo: HeaderLogo,
+  logoLink: false,
+  head: function Head() {
     const router = useRouter();
-    const { frontMatter, title } = useConfig();
+    const { systemTheme = "dark" } = useTheme();
+    const { frontMatter } = useConfig();
     const fullUrl =
-      router.asPath === "/"
-        ? "https://turborepo.org"
-        : `https://turborepo.org${router.asPath}`;
+      router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
+
+    const asPath = router.asPath;
+
+    let ogUrl;
+
+    if (frontMatter.ogImage || asPath === "/") {
+      ogUrl = `${SITE_ROOT}/og-image.png`;
+    } else {
+      const type = asPath.startsWith("/repo")
+        ? "repo"
+        : asPath.startsWith("/pack")
+        ? "pack"
+        : "";
+      const title = frontMatter.title
+        ? `&title=${encodeURIComponent(frontMatter.title)}`
+        : "";
+
+      ogUrl = `https://turbo-site-og.vercel.app/api/og?type=${type}${title}`;
+    }
+
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link
           rel="apple-touch-icon"
           sizes="180x180"
-          href="/images/favicon/apple-touch-icon.png"
+          href={`/images/favicon-${systemTheme}/apple-touch-icon.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="32x32"
-          href="/images/favicon/favicon-32x32.png"
+          href={`/images/favicon-${systemTheme}/favicon-32x32.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="16x16"
-          href="/images/favicon/favicon-16x16.png"
+          href={`/images/favicon-${systemTheme}/favicon-16x16.png`}
         />
         <link
           rel="mask-icon"
-          href="/images/favicon/safari-pinned-tab.svg"
+          href={`/images/favicon-${systemTheme}/safari-pinned-tab.svg`}
           color="#000000"
         />
-        <link rel="shortcut icon" href="/images/favicon/favicon.ico" />
+        <link
+          rel="shortcut icon"
+          href={`/images/favicon-${systemTheme}/favicon.ico`}
+        />
         <meta name="msapplication-TileColor" content="#000000" />
         <meta name="theme-color" content="#000" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@turborepo" />
         <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
-        <meta name="og:title" content={title} />
-        <meta name="og:description" content={frontMatter.description} />
         <meta property="og:url" content={fullUrl} />
         <link rel="canonical" href={fullUrl} />
-        <meta
-          property="twitter:image"
-          content={`https://turborepo.org${
-            frontMatter.ogImage ?? "/og-image.png"
-          }`}
-        />
-        <meta
-          property="og:image"
-          content={`https://turborepo.org${
-            frontMatter.ogImage ?? "/og-image.png"
-          }`}
-        />
+        <meta property="twitter:image" content={ogUrl} />
+        <meta property="og:image" content={ogUrl} />
         <meta property="og:locale" content="en_IE" />
-        <meta property="og:site_name" content="Turborepo" />
+        <meta property="og:site_name" content="Turbo" />
+        <link rel="prefetch" href="/repo" as="document" />
+        <link rel="prefetch" href="/repo/docs" as="document" />
+        <link rel="prefetch" href="/pack" as="document" />
+        <link rel="prefetch" href="/pack/docs" as="document" />
       </>
     );
   },
   editLink: {
     text: "Edit this page on GitHub",
   },
+  navbar: Navigation,
   footer: {
-    text: () => {
-      return <Footer />;
-    },
+    component: Footer,
   },
   nextThemes: {
     defaultTheme: "dark",

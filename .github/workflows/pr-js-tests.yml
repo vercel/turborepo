@@ -28,6 +28,8 @@ jobs:
         with:
           fetch-depth: 2
       - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"

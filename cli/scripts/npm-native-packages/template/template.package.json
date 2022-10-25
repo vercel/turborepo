@@ -2,15 +2,11 @@
   "name": "turbo-{{Os}}-{{Arch}}",
   "version": "{{Version}",
   "description": "The {{Os}}-{{Arch}} binary for turbo, a monorepo build system.",
-  "repository": "https://github.com/vercel/turborepo",
-  "bugs": "https://github.com/vercel/turborepo/issues",
+  "repository": "https://github.com/vercel/turbo",
+  "bugs": "https://github.com/vercel/turbo/issues",
   "homepage": "https://turborepo.org",
   "license": "MPL-2.0",
-  "os": [
-    "{{Os}}"
-  ],
-  "cpu": [
-    "{{Arch}}"
-  ],
+  "os": ["{{Os}}"],
+  "cpu": ["{{Arch}}"],
   "preferUnplugged": false
 }

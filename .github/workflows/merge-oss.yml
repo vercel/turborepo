@@ -1,0 +1,20 @@
+name: Scheduled Merge OSS `main` Action
+on:
+  schedule:
+    - cron: "15 * * * *"
+
+jobs:
+  merge-upstream-to-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: main # set the branch to merge to
+          fetch-depth: 0
+      - name: Merge Upstream
+        uses: exions/merge-upstream@v1
+        with:
+          upstream: vercel/turborepo # set the upstream repo
+          upstream-branch: main # set the upstream branch to merge from
+          branch: main # set the branch to merge to

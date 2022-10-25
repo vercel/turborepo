@@ -1,0 +1,119 @@
+name: Custom matrix next-dev Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Modules count"
+        default: "10000"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_LTO: true
+  RUST_BACKTRACE: 1
+  NODE_OPTIONS: "--max-old-space-size=32768"
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        bench:
+          - name: Turbopack
+            type: SSR
+          - name: Turbopack
+            type: CSR
+          - name: Next.js 12
+            type: SSR
+          - name: Next.js 11
+            type: SSR
+          - name: Vite
+            type: CSR
+          - name: Parcel
+            type: CSR
+          - name: Webpack
+            type: CSR
+
+    runs-on: ubuntu-latest-16-core
+    name: bench - ${{ matrix.bench.name }} ${{ matrix.bench.type }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: benchmark-next-dev
+
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+      - name: Run cargo bench
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_BUNDLERS: all
+          TURBOPACK_BENCH_COUNTS: 1000,${{ github.event.inputs.count }}
+        with:
+          command: bench
+          # Turbopack with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+          args: -p next-dev -- "(Turbopack ${{ matrix.bench.type }}/1000|${{ matrix.bench.name }} ${{ matrix.bench.type }}/${{ github.event.inputs.count }})"
+
+      - name: Install critcmp
+        if: always()
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
+      - name: Export results
+        if: always()
+        run: critcmp --export base > raw.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: custom ${{ matrix.bench.name }} ${{ matrix.bench.type }}
+          path: raw.json
+
+      # This avoids putting this data into the rust-cache
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+  commit_results:
+    name: Commit benchmark-data
+    needs: bench
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "::set-output name=year::$(date +'%Y')"
+          echo "::set-output name=month::$(date +'%m')"
+          echo "::set-output name=date::$(date +'%s')"
+          echo "::set-output name=pretty::$(date +'%Y-%m-%d %H:%M')"
+      - name: Checkout benchmark-data
+        uses: actions/checkout@v3
+        with:
+          ref: benchmark-data
+      - name: Download benchmark data
+        uses: actions/download-artifact@v3
+        with:
+          path: data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-16-core/${{ steps.date.outputs.date }}-${{ github.sha }}
+      - name: Git pull
+        run: git pull --depth=1 --no-tags origin benchmark-data
+      - name: Push data to branch
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})

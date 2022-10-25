@@ -1,0 +1,155 @@
+name: Check Code Style
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: check
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          # args: --features persistent_cache
+
+      - name: Run cargo check tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          # args: --tests --features test_persistent_cache
+          args: --tests
+
+      - name: Run cargo check examples
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --examples
+
+      - name: Run cargo check benches
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --benches
+
+  clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: clippy
+
+      - name: Install cargo clippy
+        run: rustup component add clippy
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets
+
+      - name: Count clippy warnings
+        run: |
+          count="0"
+          clippy_output="$(cargo clippy --all-targets 2>&1)"
+
+          # Clippy will be invoked and report on each crate individually. We need to sum manually.
+          for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings\?$/\1/p'); do
+            count=$((count + warnings))
+          done
+
+          echo $count > clippy-warnings
+          echo $count clippy warnings
+
+      - name: Cache
+        id: expected-clippy-warnings
+        uses: actions/cache@v3
+        with:
+          path: expected-clippy-warnings
+          key: expected-clippy-warnings-${{ github.sha }}
+          restore-keys: |
+            expected-clippy-warnings
+
+      - name: Update expected Clippy warnings on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mv clippy-warnings expected-clippy-warnings
+
+      - name: Check the number of Clippy warnings is ever decreasing
+        if: github.ref != 'refs/heads/main'
+        run: |
+          if [[ -f "expected-clippy-warnings" ]]; then
+            clippy_warnings=$(cat clippy-warnings)
+            expected_clippy_warnings=$(cat expected-clippy-warnings)
+            if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
+              echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
+              echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
+              exit 1
+            fi
+          fi
+
+  fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install cargo rustfmt
+        run: rustup component add rustfmt
+
+      - name: Run cargo fmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --check
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Format check
+        run: pnpm -- turbo run check:fmt
+
+  licenses:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Check licenses
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check licenses

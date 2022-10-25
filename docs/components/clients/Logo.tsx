@@ -27,7 +27,7 @@ export function Logo({
         "/logos",
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
-      alt={user.caption}
+      alt={`${user.caption}'s Logo`}
       width={styles.width}
       height={styles.height}
       priority={true}

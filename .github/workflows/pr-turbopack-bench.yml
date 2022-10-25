@@ -1,0 +1,66 @@
+name: Benchmark Turbopack at PR
+
+on:
+  pull_request:
+    types: [synchronize, opened, reopened, edited]
+    branches: [main, staging]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_LTO: true
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+
+jobs:
+  bench:
+    # for edited events it should only run on base changes
+    if: ${{ github.event.action != 'edited' || github.event.changes.base != '' }}
+    runs-on: ubuntu-latest-16-core
+
+    steps:
+      - name: Initialize github status
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Benchmark PR / bench (pull_request)
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
+
+      - uses: actions/checkout@v3
+
+      - name: Fetch the base branch
+        run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: benchmark
+
+      - uses: sokra/criterion-compare-action@main
+        timeout-minutes: 180
+        with:
+          branchName: base
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark report
+          path: target/criterion/
+      - name: Report github status
+        if: always()
+        uses: ouzi-dev/commit-status-updater@v1.0.4
+        with:
+          name: Benchmark PR / bench (pull_request)
+          status: "${{ job.status }}"
+          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}

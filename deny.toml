@@ -1,0 +1,26 @@
+[licenses]
+unlicensed = "deny"
+allow-osi-fsf-free = "neither"
+copyleft = "deny"
+# We want really high confidence when inferring licenses from text
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "MPL-2.0",
+  # enum-iterator*
+  "0BSD",
+  # base16, notify
+  "CC0-1.0",
+  # Inflector, hyper-tungstenite
+  "BSD-2-Clause",
+  # inotify*, libloading, is_ci
+  "ISC",
+  # fuchsia-zircon*, instant, sourcemap
+  "BSD-3-Clause",
+  # unicode-ident
+  "Unicode-DFS-2016",
+  # portpicker
+  "Unlicense",
+]
