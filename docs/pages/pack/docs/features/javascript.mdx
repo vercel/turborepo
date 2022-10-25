@@ -30,20 +30,6 @@ This means you can feel comfortable using Turbopack to target legacy browsers, o
   Turbopack is available in alpha preview with a dev server, which uses a pre-set minimal browserslist to minimize transformation during development. In a future release, Turbopack will build apps for production targetting your defined browserslist.
 </Callout>
 
-## Top-level await
-
-Top-level await lets you `await` functions at the module scope.
-
-```ts
-const result = await fetch('/').then(res => res.json());
-
-console.log(result);
-```
-
-<Callout type="info">
-  We're **planning** to provide **out-of-the-box support** for top-level await in Turbopack, but it isn't ready quite yet.
-</Callout>
-
 ## Babel
 
 [Babel](https://babel.dev/) allows you to add custom transformations to your code to provide custom syntax, including support for early language proposals.

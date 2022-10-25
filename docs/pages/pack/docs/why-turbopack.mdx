@@ -21,11 +21,11 @@ That’s why we decided that, like Webpack, we wanted Turbopack to bundle the co
 
 ## Incremental Computation
 
-There are two ways to make a process faster: do less work, and do work in parallel. We knew if we wanted to make the fastest bundler possible, we’d need to pull hard on both levers.
+There are two ways to make a process faster: do less work or do work in parallel. We knew if we wanted to make the fastest bundler possible, we’d need to pull hard on both levers.
 
 We decided to create a reusable Turbo build engine for distributed and incremental behavior. The Turbo engine works like a scheduler for function calls, allowing calls to functions to be parallelized across all available cores.
 
-The Turbo engine also caches the result of all the functions it schedules, meaning it never needs to do the same work twice. Put simply, it does the minimum work at maximum speed.
+The Turbo engine also caches the result of all the functions it schedules, meaning it never needs to do the same work twice. Put simply, **it does the minimum work at maximum speed**.
 
 ### Vite and esbuild
 
