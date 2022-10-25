@@ -39,7 +39,7 @@ export function BenchmarksGraph({
   const graphInView = useInView(graphRef, { once: true, margin: "-128px" });
 
   return (
-    <div className="flex w-full max-w-[1280px] relative px-6">
+    <div className="flex w-full max-w-[1248px] relative px-6">
       <div className="absolute top-0 flex items-center justify-center flex-1 w-full h-full">
         <Gradient
           gray

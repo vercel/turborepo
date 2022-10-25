@@ -14,7 +14,7 @@ Turbopack is an incremental bundler optimized for JavaScript and TypeScript, wri
 
 On large applications Turbopack updates 10x faster than Vite and 700x faster than Webpack. For the biggest applications the difference grows even more stark with updates up to 20x faster than Vite.
 
-The secret to Turbopack's performance is twofold: highly optimized machine code, and a low-level incremental computation engine that enables caching down to the level of individual functions. Once Turbopack performs a task it never does it again.
+The secret to Turbopack's performance is twofold: highly optimized machine code and a low-level incremental computation engine that enables caching down to the level of individual functions. Once Turbopack performs a task it never does it again.
 
 Our team has taken the lessons from 10 years of Webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
 
@@ -24,9 +24,9 @@ Our team has taken the lessons from 10 years of Webpack, combined with the innov
 
 ## Quickstart
 
-Turbopack can be used in Next.js 13. In the future we will be releasing a standalone CLI, plugin API, and support for other frameworks such as Svelte and Vue.
+As of today, Turbopack can be used in Next.js v13. In the future we will be releasing a standalone CLI, plugin API, and support for other frameworks such as Svelte and Vue. For now, please follow these intstuctions to get started:
 
-1. Create a Next.js 13 project with Turbopack:
+1. Create a Next.js v13 project with Turbopack:
 
 ```bash
 npx create-next-app --example with-turbopack
@@ -52,7 +52,7 @@ npx create-next-app --example with-turbopack
     </Tab>
   </Tabs>
 
-The Next.js 13 development server is now powered by Turbopack! Startup and updates should both be near-instant. The larger the application, the larger the improvement will be.
+The Next.js v13 development server is now powered by Turbopack! Startup and updates should both be near-instant. The larger the application, the larger the improvement will be.
 
 ## Next Steps
 

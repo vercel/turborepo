@@ -147,7 +147,7 @@ const nextConfig = withNextra({
       {
         source: "/docs/changelog",
         permanent: true,
-        destination: "https://github.com/vercel/turborepo/releases",
+        destination: "https://github.com/vercel/turbo/releases",
       },
       {
         source: "/docs/guides/complimentary-tools",

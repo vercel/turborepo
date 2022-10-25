@@ -29,7 +29,7 @@ function FooterHeader({ children }: { children: ReactNode }) {
 const navigation = {
   general: [
     { name: "Blog", href: "/blog" },
-    { name: "Releases", href: "https://github.com/vercel/turborepo/releases" },
+    { name: "Releases", href: "https://github.com/vercel/turbo/releases" },
   ],
   repo: [
     { name: "Documentation", href: "/repo/docs" },
@@ -73,14 +73,14 @@ const navigation = {
 
 export function FooterContent() {
   return (
-    <div aria-labelledby="footer-heading">
+    <div className="w-full" aria-labelledby="footer-heading">
       <h2 id="footer-heading" className="sr-only">
         Footer
       </h2>
-      <div className="py-8 mx-auto">
+      <div className="w-full py-8 mx-auto">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
           <div className="grid grid-cols-1 gap-8 xl:col-span-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 md:gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 md:gap-8">
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Resources</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
@@ -159,6 +159,7 @@ export function FooterContent() {
               className="text-current"
               target="_blank"
               rel="noopener noreferrer"
+              title="vercel.com homepage"
               href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
             >
               <VercelLogo />

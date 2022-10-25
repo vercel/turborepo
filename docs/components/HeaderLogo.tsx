@@ -7,7 +7,12 @@ import { useTheme } from "next-themes";
 function HeaderLogo() {
   return (
     <>
-      <a href="https://vercel.com" target="_blank" rel="noreferrer">
+      <a
+        href="https://vercel.com"
+        target="_blank"
+        rel="noreferrer"
+        title="vercel.com homepage"
+      >
         <svg
           height={22}
           viewBox="0 0 235 203"
@@ -37,7 +42,7 @@ function HeaderLogo() {
       </svg>
 
       <Link href="/" passHref>
-        <a className="hover:opacity-75">
+        <a title="Home" className="hover:opacity-75">
           <TurboLogo height={32} className={styles.desktopLogo} />
           <TurboLogoCondensed height={32} className={styles.mobileLogo} />
         </a>

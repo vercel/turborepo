@@ -31,7 +31,7 @@ jobs:
         uses: ouzi-dev/commit-status-updater@v1.0.4
         with:
           name: Benchmark PR / bench (pull_request)
-          url: https://github.com/vercel/turborepo/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - uses: actions/checkout@v3
 
