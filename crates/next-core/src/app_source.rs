@@ -253,8 +253,8 @@ pub async fn create_app_source(
         externals,
     );
 
-    let server_runtime_entries =
-        vec![ProcessEnvAssetVc::new(project_root, env_for_js(env)).as_ecmascript_chunk_placeable()];
+    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_root, env_for_js(env, false))
+        .as_ecmascript_chunk_placeable()];
 
     let fallback_page = get_fallback_page(project_root, server_root, env, browserslist_query);
 
