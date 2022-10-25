@@ -32,7 +32,7 @@ export default function Showcase() {
           </div>
           <div className="mx-auto rounded-md">
             <a
-              href="https://github.com/vercel/turborepo/edit/main/docs/components/clients/users.ts"
+              href="https://github.com/vercel/turbo/edit/main/docs/components/clients/users.ts"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-auto px-8 py-3 text-base font-medium text-white no-underline bg-black border border-transparent rounded-md dark:bg-white dark:text-black betterhover:dark:hover:bg-gray-300 betterhover:hover:bg-gray-700 md:py-3 md:text-lg md:px-10 md:leading-6"
