@@ -31,7 +31,7 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
           {description}
         </p>
       </div>
-      <style jsx global>{`
+      <style>{`
         html.dark .icon-circle {
           background: linear-gradient(
             180deg,

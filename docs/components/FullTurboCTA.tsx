@@ -22,7 +22,7 @@ function FullTurboCTA() {
           </a>
         </Link>
       </div>
-      <style jsx global>{`
+      <style>{`
         .full-turbo {
           background-image: linear-gradient(
             60deg,
