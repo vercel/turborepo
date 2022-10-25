@@ -27,21 +27,6 @@ function Navigation(props) {
     return item.name !== "repo" && item.name !== "pack";
   });
 
-  // Inject showcase link when ON root
-  if (
-    router.asPath === "/" ||
-    router.asPath === "/showcase" ||
-    router.asPath.startsWith("/blog")
-  ) {
-    headerItems.unshift({
-      title: "Showcase",
-      type: "page",
-      route: `/showcase`,
-      id: "showcase",
-      key: "showcase",
-    });
-  }
-
   // items last to override the default
   return <Navbar {...props} items={headerItems} />;
 }
