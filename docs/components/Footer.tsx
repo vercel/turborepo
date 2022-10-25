@@ -159,7 +159,7 @@ export function FooterContent() {
               className="text-current"
               target="_blank"
               rel="noopener noreferrer"
-              title="Link to vercel.com homepage"
+              title="vercel.com homepage"
               href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
             >
               <VercelLogo />

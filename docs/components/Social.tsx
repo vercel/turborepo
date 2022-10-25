@@ -5,7 +5,7 @@ function Github() {
     <a
       href="https://github.com/vercel/turbo"
       className="hidden p-2 text-current sm:flex hover:opacity-75"
-      title="Link to Turbo Github repo"
+      title="Turbo GitHub repo"
       target="_blank"
       rel="noreferrer"
     >
@@ -20,7 +20,7 @@ function Discord() {
     <a
       href="https://turbo.build/discord"
       className="hidden p-2 text-current sm:flex hover:opacity-75"
-      title="Link to Turbo Discord server"
+      title="Turbo Discord server"
       target="_blank"
       rel="noreferrer"
     >
