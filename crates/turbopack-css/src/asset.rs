@@ -13,6 +13,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::AssetContextVc,
+    environment::EnvironmentIntention,
     reference::{AssetReference, AssetReferencesVc},
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
 };
@@ -90,13 +91,20 @@ impl Asset for CssModuleAsset {
     #[turbo_tasks::function]
     async fn references(self_vc: CssModuleAssetVc) -> Result<AssetReferencesVc> {
         let this = self_vc.await?;
-        // TODO: include CSS source map
-        Ok(analyze_css_stylesheet(
-            this.source,
-            self_vc.as_resolve_origin(),
-            Value::new(this.ty),
-            this.transforms,
-        ))
+        match &*this.context.environment().intention().await? {
+            EnvironmentIntention::Api
+            | EnvironmentIntention::Middleware
+            | EnvironmentIntention::Data => Ok(AssetReferencesVc::empty()),
+            _ => {
+                // TODO: include CSS source map
+                Ok(analyze_css_stylesheet(
+                    this.source,
+                    self_vc.as_resolve_origin(),
+                    Value::new(this.ty),
+                    this.transforms,
+                ))
+            }
+        }
     }
 }
 

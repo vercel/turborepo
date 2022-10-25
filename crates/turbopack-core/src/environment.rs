@@ -167,6 +167,12 @@ impl EnvironmentVc {
             _ => OptionStringVc::cell(None),
         })
     }
+
+    #[turbo_tasks::function]
+    pub async fn intention(self) -> Result<EnvironmentIntentionVc> {
+        let env = self.await?;
+        Ok(EnvironmentIntentionVc::cell(env.intention))
+    }
 }
 
 pub enum NodeEnvironmentType {
