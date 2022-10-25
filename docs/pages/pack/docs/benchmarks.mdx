@@ -1,0 +1,37 @@
+import { DEFAULT_BARS } from '../../../components/pages/pack-home/PackBenchmarks'
+import { DocsBenchmarksGraph } from '../../../components/pages/pack-home/DocsBenchmarksGraph';
+
+# Benchmarks
+
+To track our progress and validate our assumptions, we run benchmarks regularly on the Turbopack repo against Vite and previous versions of Next.js.
+
+## Metrics
+
+Let's break down exactly what each of these metrics mean, and how they'll impact your day-to-day developer experience.
+
+### Cold startup time
+
+This test measures how fast a dev server starts up on an application of various sizes.
+
+<DocsBenchmarksGraph category="cold" bars={DEFAULT_BARS} />
+
+To measure this, we run an end-to-end test which:
+
+1. Generates an application with a set number of JS modules
+1. Runs the dev server on `localhost:3000`
+1. Visits `localhost:3000` in Chrome
+1. Waits until the site has finished loading its last module.
+
+### File updates
+
+We also measure how quickly your dev server updates when a source file changes. This helps us get a sense for how fast your dev server will respond to updates.
+
+<DocsBenchmarksGraph category="file_change" bars={DEFAULT_BARS} />
+
+This uses a similar setup:
+
+1. Generates an application with a set number of JS modules
+1. Runs the dev server on `localhost:3000`
+1. Visits `localhost:3000` in Chrome
+1. Changes a module in the file system.
+1. Waits until the site has finished loading the new module.

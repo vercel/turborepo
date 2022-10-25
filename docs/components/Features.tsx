@@ -1,11 +1,14 @@
 import React from "react";
-import { DOCS_FEATURES, HOME_FEATURES } from "../content/features";
+import {
+  LEGACY_REPO_DOCS_FEATURES,
+  LEGACY_REPO_HOME_FEATURES,
+} from "../content/legacy-features";
 import Feature from "./Feature";
 
 export function HomeFeatures() {
   return (
     <DetailedFeaturesGrid>
-      {HOME_FEATURES.map((feature) => (
+      {LEGACY_REPO_HOME_FEATURES.map((feature) => (
         <Feature
           key={feature.name.split(" ").join("-")}
           feature={feature}
@@ -19,7 +22,7 @@ export function HomeFeatures() {
 export function DocsFeatures({ detailed = true }: { detailed?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-6 my-12 sm:grid-cols-3 ">
-      {DOCS_FEATURES.map((feature) => (
+      {LEGACY_REPO_DOCS_FEATURES.map((feature) => (
         <Feature
           key={feature.name.split(" ").join("-")}
           feature={feature}

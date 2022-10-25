@@ -1,0 +1,416 @@
+---
+title: Caching
+description: Caching allows Turborepo to skip work that's already been done, for the fastest builds.
+---
+
+import Callout from "../../../../components/Callout";
+
+# Caching Tasks
+
+Every JavaScript or TypeScript codebase will need to run `package.json` scripts, like `build`, `test` and `lint`. In Turborepo, we call these **tasks**.
+
+Turborepo can cache the results and logs of your tasks - leading to enormous speedups for slow tasks.
+
+## Missing the cache
+
+Each task in your codebase has **inputs** and **outputs**.
+
+- A `build` task might have source files as inputs and outputs logs to `stderr` and `stdout` as well as bundled files.
+- A `lint` or `test` task might have source files as inputs and outputs logs to `stdout` and `stderr`.
+
+Let's say you run a `build` task with Turborepo using `turbo run build`:
+
+![](../../../../public/images/docs/cache-miss.png)
+
+1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
+
+2. **Check the local filesystem cache** for a folder named with the hash (e.g.`./node_modules/.cache/turbo/78awdk123`).
+
+3. If Turborepo doesn't find any matching artifacts for the calculated hash, Turborepo will then **execute the task**.
+
+4. Once the task is over, Turborepo **saves all the outputs** (including files and logs) into its cache under the hash.
+
+<Callout type="info">
+  Turborepo takes a lot of information into account when creating the hash -
+  source files, environment variables, and even the source files of dependent
+  workspaces. Learn more [below](/docs/core-concepts/caching#hashing).
+</Callout>
+
+## Hitting the cache
+
+Let's say that you run the task again without changing any of its inputs:
+
+![](../../../../public/images/docs/cache-hit.png)
+
+1. The **hash will be the same** because **the inputs haven't changed** (e.g. `78awdk123`)
+
+2. Turborepo will find the folder in its cache with the calculated hash (e.g. `./node_modules/.cache/turbo/78awdk123`)
+
+3. **Instead of running the task**, Turborepo will **replay the output** - printing the saved logs to `stdout` and restoring the saved output files to their respective position in the filesystem.
+
+Restoring files and logs from the cache happens near-instantaneously. This can take your build times from minutes or hours down to seconds or milliseconds. Although specific results will vary depending on the shape and granularity of your codebase's dependency graph, most teams find that they can cut their overall monthly build time by around 40-85% with Turborepo's caching.
+
+## Configuring Cache Outputs
+
+Using [`pipeline`](../reference/configuration#pipeline), you can configure cache conventions across your Turborepo.
+
+To override the default cache output behavior, pass an array of globs to a [`pipeline.<task>.outputs`](../reference/configuration#outputs) array. Any file that satisfies the glob patterns for a task will be treated as artifact.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**", ".next/**"],
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "outputs": [], // leave empty to only cache logs
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+If your task does not emit any files (e.g. unit tests with Jest), set `outputs` to an empty array (i.e. `[]`), and Turborepo will cache the logs for you.
+
+When you run `turbo run build test`, Turborepo will execute your build and test scripts,
+and cache their `output`s in `./node_modules/.cache/turbo`.
+
+<Callout type="info">
+  Pro Tip for caching ESLint: You can get a cacheable pretty terminal output
+  (even for non-errors) by setting `TIMING=1` variable before `eslint`. Learn
+  more over in the [ESLint
+  docs](https://eslint.org/docs/latest/developer-guide/working-with-rules#per-rule-performance).
+</Callout>
+
+## Configuring Cache Inputs
+
+A workspace is considered to have been updated when any of the files in that workspace have changed.
+However, for some tasks, we only want to rerun that task when relevant files have changed.
+Specifying `inputs` lets us define which files are relevant for a particular task. For example, the
+`test` configuration below declares that the `test` task only needs to execute if a `.tsx` or `.ts` file
+in the `src/` and `test/` subdirectories has changed since the last execution.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ... omitted for brevity
+
+    "test": {
+      // A workspace's `test` task depends on that workspace's
+      // own `build` task being completed first.
+      "dependsOn": ["build"],
+      "outputs": [],
+      // A workspace's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
+
+## Turn off caching
+
+Sometimes you really don't need or want this cache behavior (e.g. when you're using [`next dev`](https://nextjs.org/docs/api-reference/cli#development) or `react-scripts start` for live reloading). To entirely disable caching, append `--no-cache` to any command:
+
+```shell
+# Run `dev` npm script in all workspaces in parallel,
+# but don't cache the output
+turbo run dev --parallel --no-cache
+```
+
+You can also disable caching on specific tasks by setting the [`pipeline.<task>.cache`](../reference/configuration#pipeline-1) configuration to `false`:
+
+```json
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+## Alter Caching Based on File Changes
+
+For some tasks, you may not want a cache miss if an irrelevant file has changed. For instance, updating `README.md`
+might not need to trigger a cache miss for the `test` task. You can use `inputs` to restrict the set
+of files `turbo` considers for a particular task. In this case, only consider `.ts` and `.tsx` files relevant for
+determining a cache hit on the `test` task:
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    // ...other tasks
+    "test": {
+      "outputs": [], // leave empty to only cache logs
+      "dependsOn": ["build"],
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
+
+<Callout type="info">
+  `package.json` is *always* considered an input for tasks in the workspace it
+  lives in. This is because the *definition* of the task itself lives in
+  `package.json` in the `scripts` key. If you change that, any cached output is
+  considered invalid.
+</Callout>
+
+If you want _all_ tasks to depend on certain files, you can declare this dependency in the
+`globalDependencies` array.
+
+```diff
+{
+  "$schema": "https://turborepo.org/schema.json",
++  "globalDependencies": [".env"],
+  "pipeline": {
+    // ...other tasks
+    "test": {
+      "outputs": [], // leave empty to only cache logs
+      "dependsOn": ["build"],
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}
+```
+
+<Callout type="info">
+  `turbo.json` is *always* considered a global dependency. If you modify
+  `turbo.json`, all caches are invalidated.
+</Callout>
+
+## Altering Caching Based on Environment Variables
+
+When you use `turbo` with tools that inline environment variables at build time
+(e.g. [Next.js][1] or [Create React App][2]), it is important to tell `turbo` about it.
+Otherwise, you could ship a cached build with the wrong environment variables!
+
+You can control `turbo`'s caching behavior based on
+the values of environment variables:
+
+- Including environment variables in the `env` key in your `pipeline` definition will impact the cache fingerprint on a per-task or per-workspace-task basis.
+- The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
+
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      // env vars will impact hashes of all "build" tasks
+      "env": ["SOME_ENV_VAR"],
+      "outputs": ["dist/**"]
+    },
+
+    // override settings for the "build" task for the "web" app
+    "web#build": {
+      "dependsOn": ["^build"],
+      "env": [
+        // env vars that will impact the hash of "build" task for only "web" app
+        "STRIPE_SECRET_KEY",
+        "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "NEXT_PUBLIC_ANALYTICS_ID"
+      ],
+      "outputs": [".next/**"]
+    }
+  }
+}
+```
+
+<Callout type="info">
+  Declaring environment variables in the `dependsOn` config with a `$` prefix is
+  deprecated.
+</Callout>
+
+To alter the cache for _all_ tasks, you can declare environment variables in the
+`globalEnv` array:
+
+```diff
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      // env vars will impact hashes of all "build" tasks
+      "env": ["SOME_ENV_VAR"],
+      "outputs": ["dist/**"]
+    },
+
+    // override settings for the "build" task for the "web" app
+    "web#build": {
+      "dependsOn": ["^build"],
+      "env": [
+        // env vars that will impact the hash of "build" task for only "web" app
+        "STRIPE_SECRET_KEY",
+        "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
+        "NEXT_PUBLIC_ANALYTICS_ID"
+      ],
+      "outputs": [".next/**"],
+    },
+  },
++  "globalEnv": [
++    "GITHUB_TOKEN" // env var that will impact the hashes of all tasks,
++  ]
+}
+```
+
+### Automatic environment variable inclusion
+
+To help ensure correct caching across environments, Turborepo automatically infers and includes public environment variables when calculating cache keys for apps built with detected frameworks. You can safely omit framework-specific public environment variables from `turbo.json`:
+
+```diff filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "env": [
+-       "NEXT_PUBLIC_EXAMPLE_ENV_VAR"
+      ]
+    }
+  }
+}
+```
+
+Note that this automatic detection and inclusion only works if Turborepo successfully infers the framework your apps are built with. The supported frameworks and the environment variables that Turborepo will detect and include in the cache keys:
+
+- Astro: `PUBLIC_*`
+- Blitz: `NEXT_PUBLIC_*`
+- Create React App: `REACT_APP_*`
+- Gatsby: `GATSBY_*`
+- Next.js: `NEXT_PUBLIC_*`
+- Nuxt.js: `NUXT_ENV_*`
+- RedwoodJS: `REDWOOD_ENV_*`
+- Sanity Studio: `SANITY_STUDIO_*`
+- Solid: `VITE_*`
+- SvelteKit: `VITE_*`
+- Vite: `VITE_*`
+- Vue: `VUE_APP_*`
+
+<Callout type="info">
+  There are some exceptions to the list above. For various reasons, CI systems (including Vercel)
+  set environment variables that start with these prefixes even though they aren't part of your build
+  output. These can change unpredicably &mdash; even on every build! &mdash; invalidating Turborepo's
+  cache. To workaround this, Turborepo uses a `TURBO_CI_VENDOR_ENV_KEY` variable to
+  _exclude_ environment variables from Turborepo's inference.
+
+For example, Vercel sets the `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA`. This value changes on every build,
+so Vercel _also_ sets `TURBO_CI_VENDOR_ENV_KEY="NEXT_PUBLIC_VERCEL_"` to exclude these variables.
+
+Luckily, you only need to be aware of this on other build systems; you don't need to worry
+about these edge cases when using Turborepo on Vercel.
+
+</Callout>
+
+#### A note on monorepos
+
+The environment variables will only be included in the cache key for tasks in workspaces where that framework is used. In other words, environment variables inferred for Next.js apps will only be included in the cache key for workspaces detected as Next.js apps. Tasks in other workspaces in the monorepo will not be impacted.
+
+For example, consider a monorepo with three workspaces: a Next.js project, a Create React App project, and a TypeScript package. Each has a `build` script, and both apps depend on the TypeScript project. Let's say that this Turborepo has a standard `turbo.json` pipeline that builds them all in order:
+
+```jsonc filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+As of 1.4, when you run `turbo run build`, Turborepo will not consider any build time environment variables relevant when building the TypeScript package. However, when building the Next.js app, Turborepo will infer that environment variables starting with `NEXT_PUBLIC_` could alter the output of the `.next` folder and should thus be included when calculating the hash. Similarly, when calculating the hash of the Create React App's `build` script, all build time environment variables starting with `REACT_APP_PUBLIC_` will be included.
+
+### `eslint-config-turbo`
+
+To further assist in detecting unseen dependencies creeping into your builds, and to help ensure that your Turborepo cache is correctly shared across every environment, use the [`eslint-config-turbo`](https://www.npmjs.com/package/eslint-config-turbo) package. While automatic environment variable inclusion should cover most situations with most frameworks, this ESLint config will provide just-in-time feedback for teams using other build time inlined environment variables. This will also help support teams using in-house frameworks that we cannot detect automatically.
+
+To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](https://eslint.org/docs/latest/user-guide/configuring/configuration-files#configuration-file-formats) file:
+
+```jsonc
+{
+  // Automatically flag env vars missing from turbo.json
+  "extends": ["turbo"]
+}
+```
+
+For more control over the rules, you can install and configure the [`eslint-plugin-turbo`](https://www.npmjs.com/package/eslint-plugin-turbo) _plugin_ directly by first adding it to plugins and then configuring the desired rules:
+
+```jsonc
+{
+  "plugins": ["turbo"],
+  "rules": {
+    // Automatically flag env vars missing from turbo.json
+    "turbo/no-undeclared-env-vars": "error"
+  }
+}
+```
+
+The plugin will warn you if you are using non-framework-related environment variables in your code that have not been declared in your `turbo.json`.
+
+### Invisible Environment Variables
+
+Since Turborepo runs _before_ your tasks, it is possible for your tasks to create or mutate environment variables after `turbo` has already calculated the hash for a particular task. For example, consider this `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "NEXT_PUBLIC_GA_ID=UA-00000000-0 next build",
+    "test": "node -r dotenv/config test.js"
+  }
+}
+```
+
+`turbo`, having calculated a task hash prior to invoking the `build` script, will be unable to discover the `NEXT_PUBLIC_GA_ID=UA-00000000-0` environment variable and thus unable to partition the cache based upon that, or any environment variable configured by `dotenv`.
+
+Be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
+
+## Force overwrite cache
+
+Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
+
+```shell
+# Run `build` npm script in all workspaces,
+# ignoring cache hits.
+turbo run build --force
+```
+
+## Logs
+
+Not only does `turbo` cache the output of your tasks, it also records the terminal output (i.e. combined `stdout` and `stderr`) to (`<package>/.turbo/run-<command>.log`). When `turbo` encounters a cached task, it will replay the output as if it happened again, but instantly, with the package name slightly dimmed.
+
+## Hashing
+
+By now, you're probably wondering how `turbo` decides what constitutes a cache hit vs. miss for a given task. Good question!
+
+First, `turbo` constructs a hash of the current global state of the codebase:
+
+- The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](../reference/configuration#globalDependencies-1)
+- The sorted list environment variable key-value pairs that include `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
+
+Then it adds more factors relevant to a given workspace's task:
+
+- Hash the contents of all version-controlled files in the workspace folder or the files matching the `inputs` globs, if present
+- The hashes of all internal dependencies
+- The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
+- The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a workspace's `package.json` from the root lockfile
+- The workspace task's name
+- The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in applicable [`pipeline.<task-or-package-task>.dependsOn`](../reference/configuration#dependson) list.
+
+Once `turbo` encounters a given workspace's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
+
+The hash of a given task is injected at execution time as an environment variable `TURBO_HASH`. This value can be useful in stamping outputs or tagging Dockerfile etc.
+
+<Callout>
+  As of `turbo` v0.6.10, `turbo`'s hashing algorithm when using `npm` or `pnpm`
+  differs slightly from the above. When using either of these package managers,
+  `turbo` will include the hashed contents of the lockfile in its hash algorithm
+  for each workspace's task. It will _not_ parse/figure out the resolved set of
+  all dependencies like the current `yarn` implementation.
+</Callout>
+
+[1]: https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser
+[2]: https://create-react-app.dev/docs/adding-custom-environment-variables/

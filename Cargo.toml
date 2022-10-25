@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+
+members = [
+  "crates/next-core",
+  "crates/next-dev",
+  "crates/node-file-trace",
+  "crates/swc-ast-explorer",
+  "crates/turbo-malloc",
+  "crates/turbo-tasks-build",
+  "crates/turbo-tasks-env",
+  "crates/turbo-tasks-fs",
+  "crates/turbo-tasks-hash",
+  "crates/turbo-tasks-macros",
+  "crates/turbo-tasks-macros-shared",
+  "crates/turbo-tasks-memory",
+  "crates/turbo-tasks-testing",
+  "crates/turbo-tasks",
+  "crates/turbopack-cli-utils",
+  "crates/turbopack-core",
+  "crates/turbopack-create-test-app",
+  "crates/turbopack-css",
+  "crates/turbopack-dev-server",
+  "crates/turbopack-ecmascript",
+  "crates/turbopack-env",
+  "crates/turbopack-json",
+  "crates/turbopack-static",
+  "crates/turbopack-swc-utils",
+  "crates/turbopack",
+  "xtask",
+]
+
+[profile.release]
+# We use CARGO_PROFILE_RELEASE_LTO instead
+# lto = true
+
+[profile.bench]
+# We want correct benchmark results
+lto = true
+
+[profile.dev.package.turbo-tasks-macros]
+opt-level = 3
+
+# Set the settings for build scripts and proc-macros.
+[profile.dev.build-override]
+opt-level = 3
+
+# Declare dependencies used across workspace packages requires single version bump.
+# ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
+[workspace.dependencies]
+# This version pin is workaround for https://github.com/tkaitchuck/aHash/issues/95
+indexmap = "=1.6.2"
+swc_core = "0.40.16"

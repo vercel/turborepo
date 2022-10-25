@@ -1,0 +1,78 @@
+---
+title: Upgrading to v1
+description: Learn how to upgrade to Turborepo v1, now open-source and part of Vercel.
+---
+
+# Upgrading to Turborepo v1.x
+
+Turborepo has been acquired by Vercel! With this announcement, **Vercel is open sourcing the `turbo` CLI and offering Remote Caching for free on all accounts during the transition period.**
+
+Existing Turborepo customers should upgrade their `turbo` CLI to v1.x as soon as possible and migrate to Vercel (instructions below). Earlier versions of `turbo` CLI prior to 1.x will no longer be maintained going forward. New account creation on beta.turborepo.com has been disabled. The beta.turborepo.com dashboard and remote caching service will be shutdown on January 15th, 2022 and older versions will not be installable.
+
+**All existing Remote Cache artifacts will also be deleted at this time**.
+
+Below is a step-by-step migration guide for existing Turborepo users. If you get stuck, please reach out in the community [Discord](https://turbo.build/discord) or file an issue on [GitHub](https://github.com/vercel/turbo). Thank you again for your continued support as we begin this awesome new chapter of Turborepo together.
+
+---
+
+## 1. Cleaning up
+
+For good hygiene, ensure you logout of `turbo` to remove old credentials:
+
+```sh
+yarn turbo logout
+```
+
+If it exists, also delete the `.turbo` directory from the root of your monorepo:
+
+```sh
+rm -rf .turbo
+```
+
+## 2. Install the latest release of `turbo`
+
+Install the latest version version of `turbo`:
+
+```sh
+yarn add turbo --save-dev --ignore-workspace-root-check
+```
+
+## 3. Setup Remote Caching
+
+As mentioned, Turborepo now provides zero-config Remote Caching through [Vercel](https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=docs-link). Remote Caching is free for all Vercel plans during this transition period. Each Vercel account has a shared Remote Cache. This cache is shared across all environments (Development, Preview, and Production).
+
+**Important**: turborepo.com allowed multiple caches (i.e. projects) per team (denoted through `--project` flag). With v1.x caching on Vercel, each Vercel account (user or team) has a single shared Remote Cache. If you were actively using multiple turborepo.com projects for your team, please let us know in [Discord](https://turbo.build/discord).
+
+Please note that we are not migrating cache artifacts to Vercel. We apologize for the slower builds during your migration as you rehydrate your remote cache on Vercel or custom cache infra.
+
+## 4. Local Development
+
+If you were using Remote Caching for local development, upgrading will take a minute or two. To get started, login to the Vercel CLI:
+
+```sh
+npx turbo login
+```
+
+Now we can set up Remote Caching through Vercel by running:
+
+```sh
+npx turbo link
+```
+
+Follow the prompts and select the Vercel account (user or team) to wish to connect to.
+
+### On Vercel
+
+- If you already used Turborepo and Vercel together, remove `TURBO_TOKEN`, `TURBO_TEAM`, and `TURBO_PROJECT` environment variables from all projects. These are now automatically set on your behalf by Vercel.
+
+- Remove the usage of `--team`, `--token`, and `--project` CLI flags in your Vercel project settings and/or `package.json` scripts.
+
+### On other CI/CD
+
+- Replace your turborepo.com personal access token with a new [Vercel personal access token](https://vercel.com/account/tokens) and update `TURBO_TOKEN` environment variable or equivalent usage of the `--token` CLI flag.
+- Remove the `TURBO_PROJECT` environment variable and remove all usage of the `--project` CLI flag. This has been deprecated.
+- Update the value of the `TURBO_TEAM` environment variable and `--team` CLI flag to be your Vercel account slug (i.e. `https://vercel.com/<slug>`).
+
+### Getting Help
+
+If you are having difficulty upgrading please file an issue on [GitHub](https://github.com/vercel/turbo). If you are having difficulty with your remote caching on Vercel, please reach out in [Discord](https://turbo.build/discord).

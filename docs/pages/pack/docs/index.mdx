@@ -1,0 +1,63 @@
+---
+title: Turbopack Quickstart
+description: Start Building Web Applications with Turbopack
+---
+
+import { TurbopackQuickstartArea } from "../../../components/TurbopackQuickstart";
+import Callout  from "../../../components/Callout";
+import { Tabs, Tab } from "../../../components/Tabs";
+import FullTurboCTA from "../../../components/FullTurboCTA";
+
+# Getting Started with Turbopack
+
+Turbopack is an incremental bundler optimized for JavaScript and TypeScript, written in Rust by the creators of Webpack and [Next.js](https://nextjs.org) at [Vercel](https://vercel.com).
+
+On large applications Turbopack updates 10x faster than Vite and 700x faster than Webpack. For the biggest applications the difference grows even more stark with updates up to 20x faster than Vite.
+
+The secret to Turbopack's performance is twofold: highly optimized machine code and a low-level incremental computation engine that enables caching down to the level of individual functions. Once Turbopack performs a task it never does it again.
+
+Our team has taken the lessons from 10 years of Webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
+
+<Callout type="error">
+    Turbopack is currently in <strong>alpha</strong>. It is not yet ready for production use. We appreciate your support and feedback as we work to make it ready for everyone.
+</Callout>
+
+## Quickstart
+
+As of today, Turbopack can be used in Next.js v13. In the future we will be releasing a standalone CLI, plugin API, and support for other frameworks such as Svelte and Vue. For now, please follow these intstuctions to get started:
+
+1. Create a Next.js v13 project with Turbopack:
+
+```bash
+npx create-next-app --example with-turbopack
+```
+
+2. Start the Next.js development server (with Turbopack):
+
+  <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+    <Tab>
+      ```bash
+      npm run dev
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      yarn dev
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      pnpm dev
+      ```
+    </Tab>
+  </Tabs>
+
+The Next.js v13 development server is now powered by Turbopack! Startup and updates should both be near-instant. The larger the application, the larger the improvement will be.
+
+## Next Steps
+
+Want to learn more about Turbopack? Here's a deep dive on what we think makes it special.
+
+<TurbopackQuickstartArea />
+
+<FullTurboCTA />

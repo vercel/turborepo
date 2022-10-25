@@ -8,18 +8,21 @@ ogImage: /images/blog/turbo-1-2-0/twitter-card.png
 
 # Turborepo 1.2
 
-import { Authors } from '../../components/Authors'
+import { Authors } from "../../components/Authors";
+import Date from "../../components/blog/Date";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Friday, April 8th, 2022</div>
+<Date>
+  Friday, April 8th, 2022
+</Date>
 
-<Authors authors={['jaredpalmer', 'becca__z', 'gaspargarcia_', 'gsoltis']} />
+<Authors authors={["jaredpalmer", "becca__z", "gaspargarcia_", "gsoltis"]} />
 
 Since releasing Turborepo v1.1 in late January, we've seen incredible adoption and community growth:
 
-- **6.5k+** [GitHub Stars](https://github.com/vercel/turborepo)
+- **6.5k+** [GitHub Stars](https://github.com/vercel/turbo)
 - **140k+** weekly npm downloads (doubling since our [last blog post for v1.1](/blog/turbo-1-1-0))
 - **95+** OSS contributors
-- **900+** members of the [Turborepo Community Discord](https://turborepo.org/discord)
+- **900+** members of the [Turborepo Community Discord](https://turbo.build/discord)
 - **1.6 years** of Time Saved through Remote Caching on Vercel, saving more than 2.5 months every week
 
 We've further improved ergonomics, observability, and security with Turborepo v1.2 featuring:
@@ -68,7 +71,7 @@ Dry runs are incredibly useful for two situations:
 - Debugging and testing run options
 - Using `turbo` filtering and task graphs for building automations
 
-import { Bleed } from 'nextra-theme-docs'
+import { Bleed } from "nextra-theme-docs";
 
 <Bleed>
   <div className="lg:rounded-xl overflow-hidden">

@@ -1,0 +1,179 @@
+import { Tabs, Tab } from '../../../../components/Tabs'
+
+# Add Turborepo to your existing project
+
+Turborepo can be used in **any project** to speed up the execution of scripts in your `package.json`.
+
+After you install `turbo`, you'll be able to run all your `package.json` tasks from `turbo` instead of your package manager.
+
+By configuring your `turbo.json` correctly, you'll notice how [caching](/docs/core-concepts/caching) helps your tasks run a lot faster.
+
+## Quickstart
+
+0. **If you don't have one already, create a new application:**
+
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+  <Tab>
+```bash
+npx create-next-app@latest
+```
+  </Tab>
+  <Tab>
+```bash
+npm create vite@latest
+```
+  </Tab>
+</Tabs>
+
+1. **Install `turbo`:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --save-dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn add turbo --dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install turbo --save-dev
+    ```
+  </Tab>
+</Tabs>
+
+2. **Add a `turbo.json` file at the base of your new repository:**
+
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Some Vite starters ship with a `package.json` that looks like this:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "tsc && vite build"
+  }
+}
+```
+
+We recommend splitting these into a `lint` and `build` script.
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "vite build",
+    "lint": "tsc"
+  }
+}
+```
+
+This means that Turbo can schedule them separately.
+
+  </Tab>
+</Tabs>
+
+3. **Try running `build` and `lint` with `turbo`:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npx turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm turbo build lint
+    ```
+  </Tab>
+</Tabs>
+
+This runs `build` and `lint` at the same time.
+
+4. **Without making any changes to the code, try running `build` and `lint` again:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npx turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn turbo build lint
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm turbo build lint
+    ```
+  </Tab>
+</Tabs>
+
+You should see terminal output like this:
+
+```
+ Tasks:    2 successful, 2 total
+Cached:    2 cached, 2 total
+  Time:    185ms >>> FULL TURBO
+```
+
+Congratulations - **you just completed a build and lint in under 200ms**.
+
+To learn how this is possible, check out our [core concepts docs](/docs/core-concepts/caching).
+
+5. **Try running `dev` with `turbo`:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npx turbo dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn turbo dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm turbo dev
+    ```
+  </Tab>
+</Tabs>
+
+You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.

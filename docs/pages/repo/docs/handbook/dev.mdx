@@ -1,0 +1,185 @@
+import { Tabs, Tab } from '../../../../components/Tabs'
+import Callout from '../../../../components/Callout'
+
+# Development tasks in a Monorepo
+
+The vast majority of development workflows look like this:
+
+1. Open a repository
+2. Run a `dev` task while they develop
+3. At the end of the day, shut down the `dev` task and close the repository.
+
+`dev` will likely be the most frequently run task in your repository, so getting it right is important.
+
+## Types of `dev` tasks
+
+`dev` tasks come in many shapes and sizes:
+
+1. Running a local development server for a web app
+1. Running [`nodemon`](https://www.npmjs.com/package/nodemon) to re-run a backend process every time code changes
+1. Running tests in `--watch` mode
+
+## Setup with Turborepo
+
+You should specify your `dev` task like this in your `turbo.json`.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+Since `dev` tasks don't produce outputs, `outputs` is empty. `dev` tasks are also unique in that you rarely want to [cache](/repo/docs/core-concepts/caching) them, so we set `cache` as `false`.
+
+### Setting up `package.json`
+
+You should also provide a `dev` task in your root `package.json`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "dev": "turbo run dev"
+  }
+}
+```
+
+This enables developers to run the task directly from their normal task runner.
+
+## Running tasks _before_ `dev`
+
+In some workflows, you'll want to run tasks _before_ you run your `dev` task. For instance, generating code or running a `db:migrate` task.
+
+In these cases, use [`dependsOn`](/repo/docs/core-concepts/running-tasks#in-the-same-workspace) to say that any `codegen` or `db:migrate` tasks should be run _before_ `dev` is run.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "dependsOn": ["codegen", "db:migrate"],
+      "cache": false,
+    },
+    "codegen": {
+      "outputs": ["./codegen-outputs/**"]
+    },
+    "db:migrate": {
+      "cache": false
+    }
+  }
+}
+```
+
+Then, in your app's `package.json`:
+
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    // For example, starting the Next.js dev server
+    "dev": "next",
+    // For example, running a custom code generation task
+    "codegen": "node ./my-codegen-script.js",
+    // For example, using Prisma
+    "db:migrate": "prisma db push"
+  }
+}
+```
+
+This means that users of your `dev` task _don't need to worry about codegen or migrating their database_ - it gets handled for them before their development server even starts.
+
+## Running `dev` only in certain workspaces
+
+To run a `dev` task in only certain workspaces, you should use the [`--filter` syntax](/repo/docs/core-concepts/filtering). For example:
+
+```bash
+turbo run dev --filter docs
+```
+
+Will only run `dev` in the workspace named `docs`.
+
+## Using environment variables
+
+While developing, you'll often need to use environment variables. These let you customize the behavior of your program - for instance, pointing to a different `DATABASE_URL` in development and production.
+
+We recommend using a library called [`dotenv-cli`](https://www.npmjs.com/package/dotenv-cli) to solve this problem.
+
+### Tutorial
+
+1. Install `dotenv-cli` in your [root workspace](/docs/handbook/what-is-a-monorepo#the-root-workspace):
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    npm add dotenv-cli
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    yarn add dotenv-cli --ignore-workspace-root-check
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    pnpm add dotenv-cli --ignore-workspace-root-check
+    ```
+  </Tab>
+</Tabs>
+
+2. Add a `.env` file to your root workspace:
+
+```diff
+  ├── apps/
+  ├── packages/
++ ├── .env
+  ├── package.json
+  └── turbo.json
+```
+
+Add any environment variables you need to inject:
+
+```txt filename=".env"
+DATABASE_URL=my-database-url
+```
+
+3. Inside your root `package.json`, add a `dev` script. Prefix it with `dotenv` and the `--` argument separator:
+
+```json
+{
+  "scripts": {
+    "dev": "dotenv -- turbo run dev"
+  }
+}
+```
+
+This will extract the environment variables from `.env` before running `turbo run dev`.
+
+4. Now, you can run your dev script:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm run dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm dev
+    ```
+  </Tab>
+</Tabs>
+
+And your environment variables will be populated! In Node.js, these are available on `process.env.DATABASE_URL`.
+
+<Callout>
+  You should also [add your environment variables](/docs/core-concepts/caching#altering-caching-based-on-environment-variables) to your `turbo.json` if you're using them to build your app.
+</Callout>

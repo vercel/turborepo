@@ -1,0 +1,245 @@
+import Callout from "../../../../../components/Callout";
+
+import { Tabs, Tab } from "../../../../../components/Tabs";
+
+# Internal Packages
+
+Internal packages are [packages](/repo/docs/handbook/sharing-code) which are only intended to be used _inside_ your monorepo. They're extremely useful for sharing code between apps in closed-source monorepos.
+
+Internal packages are quick to create, and can be turned into [external packages](/repo/docs/handbook/publishing-packages) if you end up wanting to publish them to `npm`.
+
+## What makes a package _internal?_
+
+External packages **run their files through a bundler** before putting them on a package registry. This means they need a _lot_ of tooling to handle.
+
+- **Bundlers**: to build the package
+- **Versioning**: to help with versioning and releases
+- **Publishing**: to publish the package
+
+If you want to use those files locally, you'll also need:
+
+- **Dev scripts**: for bundling the package locally when files change
+
+Because internal packages are not published, we can skip _all_ of these steps. Instead of bundling our package ourselves, we're going to make the **app which imports the package bundle it for us**.
+
+This sounds complex, but it's extremely easy to set up.
+
+## Our first internal package
+
+We're going to create a shared `math-helpers` package inside our monorepo.
+
+### 1. Create your monorepo
+
+If you don't have an existing monorepo, create one [using our guide](/repo/docs/getting-started/create-new).
+
+### 2. Create a new package
+
+Inside `/packages`, create a new folder called `math-helpers`.
+
+```bash
+mkdir packages/math-helpers
+```
+
+Create a `package.json`:
+
+```json filename="packages/math-helpers/package.json"
+{
+  "name": "math-helpers",
+  "dependencies": {
+    // Use whatever version of TypeScript you're using
+    "typescript": "latest"
+  }
+}
+```
+
+Create a `src` folder, and add a TypeScript file at `packages/math-helpers/src/index.ts`.
+
+```ts filename="packages/math-helpers/src/index.ts"
+export const add = (a: number, b: number) => {
+  return a + b;
+};
+
+export const subtract = (a: number, b: number) => {
+  return a - b;
+};
+```
+
+You'll also need to add a `tsconfig.json` at `packages/math-helpers/tsconfig.json`:
+
+```json filename="packages/math-helpers/tsconfig.json"
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "moduleResolution": "node",
+    "preserveWatchOutput": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": true
+  },
+  "exclude": ["node_modules"]
+}
+```
+
+Great! We've now got all the files we need for our internal package.
+
+### 3. Import the package
+
+We're now going to import the package and see what happens. Go into one of your apps, and add `math-helpers` into the dependencies of its package.json:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "math-helpers": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "math-helpers": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "math-helpers": "workspace:*"
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+[Install all packages from root](/repo/docs/handbook/package-installation) to ensure that dependency works.
+
+Now add an import from `math-helpers` into one of your app's source files:
+
+```diff
++ import { add } from "math-helpers";
+
++ add(1, 2);
+```
+
+You'll likely see an error!
+
+```
+Cannot find module 'math-helpers' or its corresponding type declarations.
+```
+
+That's because we've missed a step. We haven't told our `math-helpers/package.json` what the entry point to our package is.
+
+### 4. Fix `main` and `types`
+
+Go back to `packages/math-helpers/package.json` and add two fields, `main` and `types`:
+
+```json filename="packages/math-helpers/package.json"
+{
+  "name": "math-helpers",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "typescript": "latest"
+  }
+}
+```
+
+Now, anything that imports our `math-helpers` module will be pointed directly towards the `src/index.ts` file - _that's_ the file that they will import.
+
+Go back to `apps/web/pages/index.tsx`. The error should be gone!
+
+### 5. Try running the app
+
+Now, try running that app's dev script. In the default turborepo, this will be as easy as:
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab>```bash npm run dev ```</Tab>
+  <Tab>```bash yarn dev ```</Tab>
+  <Tab>```bash pnpm run dev ```</Tab>
+</Tabs>
+
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+  <Tab>
+
+When it starts running, you'll likely see an error in your web browser:
+
+```
+../../packages/math-helpers/src/index.ts
+Module parse failed: Unexpected token (1:21)
+You may need an appropriate loader to handle this file type,
+currently no loaders are configured to process this file.
+See https://webpack.js.org/concepts#loaders
+
+> export const add = (a: number, b: number) => {
+|   return a + b;
+| };
+```
+
+This is what happens when you try and import an un-bundled file into a Next.js app.
+
+The fix is simple - we need to tell Next.js to bundle the files from certain packages it imports.
+
+  </Tab>
+  <Tab>
+    Because `vite` transpiles modules by default, there's no more setup needed! Skip to step 7.
+  </Tab>
+</Tabs>
+
+### 6. Configuring your app
+
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+  <Tab>
+
+    We can do that using [`next-transpile-modules`](https://www.npmjs.com/package/next-transpile-modules).
+
+    Install `next-transpile-modules` to your app. For a refresher, see our [package installation](/repo/docs/handbook/package-installation) docs.
+
+    Inside your app's `next.config.js`, add `next-transpile-modules`:
+
+    ```ts filename="apps/web/next.config.js"
+    const withTM = require("next-transpile-modules")([
+      // Add "math-helpers" to this array:
+      "math-helpers",
+    ]);
+
+    module.exports = withTM({
+      // Any additional config for next goes in here
+    });
+    ```
+
+    Restart your dev script, and go to the browser.
+
+    **The error has disappeared!**
+
+  </Tab>
+  <Tab>
+    No configuration is needed!
+  </Tab>
+</Tabs>
+
+### 7. Summary
+
+We are now able to add any amount of code into our `math-helpers` package, and use it in any app in our monorepo. We don't even need to build our package - it just works.
+
+This pattern is extremely powerful for creating pieces of code that can be easily shared between teams.
+
+### Quick Reference
+
+#### Quick reference - creating a new internal package
+
+1. Create a new folder in `packages/<folder>`
+1. Add a `package.json`, with `name` and `types` pointing at `src/index.ts` (or `src/index.tsx`)
+1. Add `src/index.tsx`, with at least one named export
+1. [Install your packages](/repo/docs/handbook/package-installation) from root
+
+#### Quick reference - importing an internal package
+
+1. Ensure that you're [importing it correctly](/repo/docs/handbook/sharing-code/internal-packages/#3-import-the-package)
+2. Ensure that you've [configured your app to transpile it](/repo/docs/handbook/sharing-code/internal-packages/#6-configuring-your-app)
