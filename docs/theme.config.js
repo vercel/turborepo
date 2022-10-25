@@ -55,6 +55,26 @@ const theme = {
     const { frontMatter } = useConfig();
     const fullUrl =
       router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
+
+    const asPath = router.asPath;
+
+    let ogUrl;
+
+    if (frontMatter.ogImage || asPath === "/") {
+      ogUrl = `${SITE_ROOT}/og-image.png`;
+    } else {
+      const type = asPath.startsWith("/repo")
+        ? "repo"
+        : asPath.startsWith("/pack")
+        ? "pack"
+        : "";
+      const title = frontMatter.title
+        ? `&title=${encodeURIComponent(frontMatter.title)}`
+        : "";
+
+      ogUrl = `https://turbo-site-og.vercel.app/api/og?type=${type}${title}`;
+    }
+
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -92,14 +112,8 @@ const theme = {
         <meta property="og:type" content="website" />
         <meta property="og:url" content={fullUrl} />
         <link rel="canonical" href={fullUrl} />
-        <meta
-          property="twitter:image"
-          content={`${SITE_ROOT}${frontMatter.ogImage ?? "/og-image.png"}`}
-        />
-        <meta
-          property="og:image"
-          content={`${SITE_ROOT}${frontMatter.ogImage ?? "/og-image.png"}`}
-        />
+        <meta property="twitter:image" content={ogUrl} />
+        <meta property="og:image" content={ogUrl} />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turbo" />
         <link rel="prefetch" href="/repo" as="document" />
