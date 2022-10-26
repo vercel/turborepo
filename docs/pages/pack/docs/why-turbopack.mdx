@@ -13,9 +13,9 @@ A new generation of native-speed bundlers were emerging, like esbuild and swc. B
 
 ## Bundling vs Native ESM
 
-Frameworks like Vite use a technique where they don’t bundle application source code in development mode. Instead, they rely on the browser’s native ES Modules system. This approach results in incredibly responsive updates since they only have to transform a single file.
+Tooling frameworks like Vite use a technique where they don’t bundle application source code in development mode. Instead, they rely on the browser’s native ES Modules system. This approach results in incredibly responsive updates since they only have to transform a single file.
 
-However, Vite can hit scaling issues with large applications made up of many modules. A flood of cascading network requests in the browser can lead to a relatively slow startup time. For the browser, it’s faster if it can receive the code it needs in as few network requests as possible - even on a local server.
+However, those tooling frameworks can hit scaling issues with large applications made up of many modules. A flood of cascading network requests in the browser can lead to a relatively slow startup time. For the browser, it’s faster if it can receive the code it needs in as few network requests as possible - even on a local server.
 
 That’s why we decided that, like Webpack, we wanted Turbopack to bundle the code in the development server. Turbopack can do it much faster, especially for larger applications, because it is written in Rust and skips optimization work that is only necessary for production.
 
