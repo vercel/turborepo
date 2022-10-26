@@ -36,6 +36,7 @@ use turbopack_core::{
     reference::all_referenced_assets,
     source_asset::SourceAssetVc,
 };
+use turbopack_ecmascript::chunk::source_map::EcmascriptChunkSourceMapAssetVc;
 use turbopack_env::ProcessEnvAssetVc;
 
 // Updates the existing snapshot outputs with the actual outputs of this run.
@@ -246,18 +247,26 @@ fn remove_file(root: &str, path: &str) -> Result<()> {
 /// If the hash changes whenever the contents of the file changes, then git will
 /// show it as a brand new file instead of a diff of an exsting file. This makes
 /// reviewing changes extremely difficult.
-async fn remove_hash_fingerprint(path: FileSystemPathVc) -> Result<FileSystemPathVc> {
-    let mut p = PathBuf::from(&path.await?.path);
-    // .map files have a hash like foo.js.abc123.map.
-    if p.extension() == Some(OsStr::new("map")) {
-        p.set_extension("");
-        debug_assert_ne!(p.extension(), Some(OsStr::new("js")));
-        p.set_extension("abc123.map");
-    }
+async fn remove_hash_fingerprint(asset: AssetVc) -> Result<FileSystemPathVc> {
+    let path = asset.path();
 
-    Ok(path
-        .root()
-        .join(p.to_str().context("path is expected to be normal")?))
+    if EcmascriptChunkSourceMapAssetVc::resolve_from(asset)
+        .await?
+        .is_some()
+    {
+        // .map files have a hash like foo.js.abc123.map.
+        let mut p = PathBuf::from(&path.await?.path);
+        if p.extension() == Some(OsStr::new("map")) {
+            p.set_extension("");
+            debug_assert_ne!(p.extension(), Some(OsStr::new("js")));
+            p.set_extension("abc123.map");
+        }
+
+        return Ok(path
+            .root()
+            .join(p.to_str().context("path is expected to be normal")?));
+    }
+    Ok(path)
 }
 
 async fn walk_asset(
@@ -265,7 +274,8 @@ async fn walk_asset(
     seen: &mut HashSet<String>,
     queue: &mut VecDeque<AssetVc>,
 ) -> Result<()> {
-    let path = remove_hash_fingerprint(asset.path()).await?;
+    dbg!(asset.dbg().await?);
+    let path = remove_hash_fingerprint(asset).await?;
     let path_str = path.await?.path.clone();
 
     if !seen.insert(path_str.to_string()) {
