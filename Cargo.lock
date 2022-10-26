@@ -5440,22 +5440,12 @@ name = "turbopack-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "criterion",
- "difference",
- "futures",
- "lazy_static",
- "rand",
- "regex",
- "rstest",
- "rstest_reuse",
+ "once_cell",
  "serde",
  "serde_json",
- "serde_regex",
  "similar",
- "swc_core",
  "test-generator",
  "tokio",
- "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
@@ -5463,12 +5453,7 @@ dependencies = [
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-core",
- "turbopack-css",
- "turbopack-ecmascript",
  "turbopack-env",
- "turbopack-json",
- "turbopack-static",
- "url",
 ]
 
 [[package]]

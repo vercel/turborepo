@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use similar::TextDiff;
 use test_generator::test_resources;
@@ -38,11 +38,9 @@ use turbopack_core::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 
-lazy_static! {
-    // Updates the existing snapshot outputs with the actual outputs of this run.
-    // `UPDATE=1 cargo test -p turbopack -- test_my_pattern`
-    static ref UPDATE: bool = env::var("UPDATE").unwrap_or_default() == "1" ;
-}
+// Updates the existing snapshot outputs with the actual outputs of this run.
+// `UPDATE=1 cargo test -p turbopack -- test_my_pattern`
+static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
 
 #[derive(Debug, Deserialize)]
 struct SnapshotOptions {
