@@ -30,6 +30,8 @@ members = [
   "xtask",
 ]
 
+exclude = ["shim"]
+
 [profile.release]
 # We use CARGO_PROFILE_RELEASE_LTO instead
 # lto = true
