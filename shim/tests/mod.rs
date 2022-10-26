@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 
 static TURBO_HELP: &str = "turbo 
-Turbocharge your monorepo
+The build system that makes ship happen
 
 USAGE:
     turbo [OPTIONS] [TASKS]... [SUBCOMMAND]
@@ -23,8 +23,8 @@ OPTIONS:
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --version                    
-    -V, --verbosity <VERBOSITY>      verbosity
+    -v, --verbosity <VERBOSITY>      verbosity
+        --version                    
 
 SUBCOMMANDS:
     bin           Get the path to the Turbo binary

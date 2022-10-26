@@ -63,7 +63,7 @@ struct Args {
     #[clap(long, global = true, value_parser)]
     trace: Option<String>,
     /// verbosity
-    #[clap(short = 'V', long, global = true, value_parser)]
+    #[clap(short, long, global = true, value_parser)]
     verbosity: Option<u8>,
     #[clap(subcommand)]
     command: Option<Command>,
