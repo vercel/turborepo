@@ -274,7 +274,6 @@ async fn walk_asset(
     seen: &mut HashSet<String>,
     queue: &mut VecDeque<AssetVc>,
 ) -> Result<()> {
-    dbg!(asset.dbg().await?);
     let path = remove_hash_fingerprint(asset).await?;
     let path_str = path.await?.path.clone();
 
