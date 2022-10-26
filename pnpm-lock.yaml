@@ -400,6 +400,7 @@ importers:
       '@sentry/nextjs': ^7.14.1
       '@types/node': ^16.11.12
       '@types/react': 18.0.21
+      '@vercel/analytics': ^0.1.1
       autoprefixer: 10.4.12
       axios: 0.27.2
       classnames: 2.3.2
@@ -433,6 +434,7 @@ importers:
       '@mdx-js/react': 2.1.5_react@18.2.0
       '@react-aria/ssr': 3.3.0_react@18.2.0
       '@sentry/nextjs': 7.15.0_next@12.3.1+react@18.2.0
+      '@vercel/analytics': 0.1.1_react@18.2.0
       axios: 0.27.2
       classnames: 2.3.2
       copy-to-clipboard: 3.3.2
@@ -5911,6 +5913,14 @@ packages:
       '@typescript-eslint/types': 5.36.0
       eslint-visitor-keys: 3.3.0
     dev: true
+
+  /@vercel/analytics/0.1.1_react@18.2.0:
+    resolution: {integrity: sha512-34on7YtVt/yT8+QX7c5K2bcKYXnax06sQiK2PUdlQ1ABg5699mPdLGOSpS1gF//kR1s9oig4MCJ+N9nOjpaS6g==}
+    peerDependencies:
+      react: ^16.8||^17||^18
+    dependencies:
+      react: 18.2.0
+    dev: false
 
   /@vercel/ncc/0.34.0:
     resolution: {integrity: sha512-G9h5ZLBJ/V57Ou9vz5hI8pda/YQX5HQszCs3AmIus3XzsmRn/0Ptic5otD3xVST8QLKk7AMk7AqpsyQGN7MZ9A==}
