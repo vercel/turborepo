@@ -28,7 +28,7 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-react-native-web with-react-native-web
+npx degit vercel/turbo/examples/with-react-native-web with-react-native-web
 cd with-react-native-web
 yarn install
 git init . && git add . && git commit -m "Init"
