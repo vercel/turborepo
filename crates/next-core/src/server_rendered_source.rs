@@ -21,7 +21,7 @@ use turbopack_dev_server::{
         asset_graph::AssetGraphContentSourceVc,
         combined::{CombinedContentSource, CombinedContentSourceVc},
         specificity::SpecificityVc,
-        ContentSourceData, ContentSourceVc, NoContentSourceVc,
+        ContentSourceData, ContentSourceVc, NoContentSourceVc, OptionContentSourceVc,
     },
 };
 use turbopack_ecmascript::{
@@ -62,7 +62,7 @@ pub async fn create_server_rendered_source(
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
-) -> Result<ContentSourceVc> {
+) -> Result<OptionContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_root);
 
     let pages = project_path.join("pages");
@@ -72,7 +72,7 @@ pub async fn create_server_rendered_source(
     } else if *src_pages.get_type().await? == FileSystemEntryType::Directory {
         src_pages
     } else {
-        return Ok(NoContentSourceVc::new().into());
+        return Ok(OptionContentSourceVc::cell(None));
     };
 
     let ty = Value::new(ContextType::Pages { pages_dir });
@@ -132,11 +132,13 @@ pub async fn create_server_rendered_source(
     let fallback_source =
         AssetGraphContentSourceVc::new_eager(server_root, fallback_page.as_asset());
 
-    Ok(CombinedContentSource {
-        sources: vec![server_rendered_source.into(), fallback_source.into()],
-    }
-    .cell()
-    .into())
+    Ok(OptionContentSourceVc::cell(Some(
+        CombinedContentSource {
+            sources: vec![server_rendered_source.into(), fallback_source.into()],
+        }
+        .cell()
+        .into(),
+    )))
 }
 
 /// Handles a single page file in the pages directory

@@ -9,7 +9,7 @@ use turbopack_core::{
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
-    source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
+    source::{asset_graph::AssetGraphContentSourceVc, OptionContentSourceVc},
 };
 
 use crate::{
@@ -28,7 +28,7 @@ pub async fn create_web_entry_source(
     env: ProcessEnvVc,
     eager_compile: bool,
     browserslist_query: &str,
-) -> Result<ContentSourceVc> {
+) -> Result<OptionContentSourceVc> {
     let project_root = wrap_with_next_js_fs(project_root);
 
     let ty = Value::new(ContextType::Other);
@@ -51,6 +51,7 @@ pub async fn create_web_entry_source(
         })
         .try_join()
         .await?;
+
     let chunks: Vec<_> = entries
         .into_iter()
         .flatten()
@@ -74,6 +75,10 @@ pub async fn create_web_entry_source(
         .try_join()
         .await?;
 
+    if chunks.is_empty() {
+        return Ok(OptionContentSourceVc::cell(None));
+    }
+
     let entry_asset = DevHtmlAssetVc::new(
         server_root.join("index.html"),
         chunks.into_iter().map(ChunkGroupVc::from_chunk).collect(),
@@ -86,5 +91,5 @@ pub async fn create_web_entry_source(
         AssetGraphContentSourceVc::new_lazy(server_root, entry_asset)
     }
     .into();
-    Ok(graph)
+    Ok(OptionContentSourceVc::cell(Some(graph)))
 }

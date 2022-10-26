@@ -6,6 +6,7 @@ mod app_source;
 mod embed_js;
 pub mod env;
 mod fallback;
+pub mod issue;
 pub mod next_client;
 mod next_client_component;
 mod next_import_map;

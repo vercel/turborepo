@@ -327,3 +327,6 @@ impl ContentSource for NoContentSource {
         ContentSourceResultVc::not_found()
     }
 }
+
+#[turbo_tasks::value(transparent)]
+pub struct OptionContentSource(Option<ContentSourceVc>);

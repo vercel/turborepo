@@ -18,14 +18,16 @@ use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
 use next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
-    source_map::NextSourceMapTraceContentSourceVc,
+    issue::NextAppIssue, source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
 use turbo_tasks::{
-    primitives::StringsVc, util::FormatDuration, RawVc, TransientInstance, TransientValue,
-    TurboTasks, Value,
+    primitives::{BoolVc, StringVc, StringsVc},
+    util::FormatDuration,
+    RawVc, TransientInstance, TransientValue, TurboTasks, Value,
 };
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
+use turbo_tasks_env::ProcessEnvVc;
+use turbo_tasks_fs::{DiskFileSystemVc, FileSystemPathVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
 use turbopack_core::{issue::IssueSeverity, resolve::parse::RequestVc};
@@ -34,7 +36,7 @@ use turbopack_dev_server::{
     introspect::IntrospectionSource,
     source::{
         combined::CombinedContentSource, router::RouterContentSource,
-        static_assets::StaticAssetsContentSourceVc, ContentSourceVc,
+        static_assets::StaticAssetsContentSourceVc, ContentSourceVc, NoContentSourceVc,
     },
     DevServer,
 };
@@ -280,68 +282,31 @@ async fn source(
     let dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
 
-    let web_source = create_web_entry_source(
-        project_path,
-        entry_requests
-            .iter()
-            .map(|a| RequestVc::relative(Value::new(a.to_string().into()), false))
-            .collect(),
-        dev_server_root,
-        env,
-        eager_compile,
-        &browserslist_query,
-    );
-    let rendered_source = create_server_rendered_source(
-        project_path,
-        output_root.join("pages"),
-        dev_server_root,
-        env,
-        &browserslist_query,
-    );
-    let app_source = create_app_source(
-        project_path,
-        output_root.join("app"),
-        dev_server_root,
-        env,
-        &browserslist_query,
-        StringsVc::cell(server_component_externals),
-    );
     let viz = turbo_tasks_viz::TurboTasksSource {
         turbo_tasks: turbo_tasks.into(),
     }
     .cell()
     .into();
-    let static_source =
-        StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
-    let main_source = CombinedContentSource {
-        sources: vec![static_source, app_source, rendered_source, web_source],
-    }
-    .cell();
-    let introspect = IntrospectionSource {
-        roots: HashSet::from([main_source.into()]),
-    }
-    .cell()
-    .into();
-    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source.into()).into();
-    let source = RouterContentSource {
-        routes: vec![
-            ("__turbopack__/".to_string(), introspect),
-            ("__turbo_tasks__/".to_string(), viz),
-            (
-                "__nextjs_original-stack-frame".to_string(),
-                source_map_trace,
-            ),
-        ],
-        fallback: main_source.into(),
-    }
-    .cell()
-    .into();
+
+    let root_source = get_root_source(
+        project_path,
+        output_root,
+        dev_server_root,
+        env,
+        StringVc::cell(browserslist_query),
+        BoolVc::cell(eager_compile),
+        StringsVc::cell(server_component_externals),
+        entry_requests
+            .iter()
+            .map(|a| RequestVc::relative(Value::new(a.to_string().into()), false))
+            .collect(),
+        viz,
+    );
 
     handle_issues(dev_server_fs, console_ui).await?;
-    handle_issues(web_source, console_ui).await?;
-    handle_issues(rendered_source, console_ui).await?;
+    handle_issues(root_source, console_ui).await?;
 
-    Ok(source)
+    Ok(root_source)
 }
 
 pub fn register() {
@@ -448,6 +413,97 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     join!(stats_future, async { server.future.await.unwrap() }).await;
 
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+#[turbo_tasks::function]
+pub async fn get_root_source(
+    project_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    dev_server_root: FileSystemPathVc,
+    env: ProcessEnvVc,
+    browserslist_query: StringVc,
+    eager_compile: BoolVc,
+    server_component_externals: StringsVc,
+    entry_requests: Vec<RequestVc>,
+    viz: ContentSourceVc,
+) -> Result<ContentSourceVc> {
+    let browserslist_query = &*browserslist_query.await?;
+    let eager_compile = *eager_compile.await?;
+
+    let app_source_vc = create_app_source(
+        project_path,
+        output_root.join("app"),
+        dev_server_root,
+        env,
+        browserslist_query,
+        server_component_externals,
+    );
+    let app_source = *app_source_vc.await?;
+
+    let web_source_vc = create_web_entry_source(
+        project_path,
+        entry_requests,
+        dev_server_root,
+        env,
+        eager_compile,
+        browserslist_query,
+    );
+    let web_source = *web_source_vc.await?;
+
+    let rendered_source_vc = create_server_rendered_source(
+        project_path,
+        output_root.join("pages"),
+        dev_server_root,
+        env,
+        browserslist_query,
+    );
+    let rendered_source = *rendered_source_vc.await?;
+
+    if web_source.is_none() && rendered_source.is_none() && app_source.is_none() {
+        NextAppIssue {
+            severity: IssueSeverity::Error.into(),
+            path: project_path,
+            message: StringVc::cell(
+                "Missing Next.js entry file(s): src/index.js, pages/*.js, and app/**/page.js are \
+                 missing."
+                    .into(),
+            ),
+        }
+        .cell()
+        .as_issue()
+        .emit();
+    }
+
+    let web_source = web_source.unwrap_or_else(|| NoContentSourceVc::new().into());
+    let rendered_source = rendered_source.unwrap_or_else(|| NoContentSourceVc::new().into());
+    let app_source = app_source.unwrap_or_else(|| NoContentSourceVc::new().into());
+    let static_source =
+        StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
+    let main_source = CombinedContentSource {
+        sources: vec![static_source, app_source, rendered_source, web_source],
+    }
+    .cell();
+    let introspect = IntrospectionSource {
+        roots: HashSet::from([main_source.into()]),
+    }
+    .cell()
+    .into();
+
+    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source.into()).into();
+    Ok(RouterContentSource {
+        routes: vec![
+            ("__turbopack__/".to_string(), introspect),
+            ("__turbo_tasks__/".to_string(), viz),
+            (
+                "__nextjs_original-stack-frame".to_string(),
+                source_map_trace,
+            ),
+        ],
+        fallback: main_source.into(),
+    }
+    .cell()
+    .into())
 }
 
 #[cfg(feature = "profile")]
