@@ -1,6 +1,5 @@
 ---
-title: Blog
-description: The latest updates and releases from the Turborepo team at Vercel.
+description: The latest updates and releases from the Turbo team at Vercel.
 type: posts
 ---
 
@@ -14,13 +13,18 @@ export function BlogIndex({ more = "Read more" }) {
     return (
       <div key={page.route} className="mb-10">
         <Link href={page.route}>
-          <A style={{ color: "inherit", textDecoration: "none" }} className="block font-semibold mt-8 text-2xl">
+          <A
+            style={{ color: "inherit", textDecoration: "none" }}
+            className="block font-semibold mt-8 text-2xl"
+          >
             {page.meta?.title || page.frontMatter?.title || page.name}
           </A>
         </Link>
-        <p className="opacity-80" style={{marginTop: ".5rem" }}>
+        <p className="opacity-80" style={{ marginTop: ".5rem" }}>
           {page.frontMatter?.description}{" "}
-          <span className="inline-block"><Link href={page.route}>{more + " →"}</Link></span>
+          <span className="inline-block">
+            <Link href={page.route}>{more + " →"}</Link>
+          </span>
         </p>
         {page.frontMatter?.date ? (
           <p className="opacity-50 text-sm">{page.frontMatter.date}</p>
@@ -31,8 +35,12 @@ export function BlogIndex({ more = "Read more" }) {
 }
 
 <div className="max-w-screen-lg mx-auto pt-4 pb-8 mb-16 border-b border-gray-400 border-opacity-20">
-  <h1><span className="font-bold leading-tight lg:text-5xl">Blog</span></h1>
-  <p className="text-center text-gray-500 dark:text-gray-400">The latest updates and releases from the Turborepo team at Vercel.</p>
+  <h1>
+    <span className="font-bold leading-tight lg:text-5xl">Blog</span>
+  </h1>
+  <p className="text-center text-gray-500 dark:text-gray-400 font-space-grotesk">
+    The latest updates and releases from the Turbo team at Vercel.
+  </p>
 </div>
 
-<BlogIndex/>
+<BlogIndex />

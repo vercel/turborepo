@@ -1,0 +1,557 @@
+---
+title: Getting Started with Turborepo
+description: Create your first monorepo or add Turborepo to an existing project.
+---
+
+import Callout from "../../../../components/Callout";
+import { Tabs, Tab } from "../../../../components/Tabs";
+
+# Creating a new monorepo
+
+## Quickstart
+
+To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package/create-turbo) npm package:
+
+```sh
+npx create-turbo@latest
+```
+
+You can also clone a Turborepo starter repository to get a head start on your monorepo. To see Turborepo examples and starters, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turbo/tree/main/examples).
+
+## Full tutorial
+
+This tutorial will walk you through using the Turborepo [`basic` example](https://github.com/vercel/turbo/tree/main/examples/basic). By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
+
+<Callout type="info">
+
+During this tutorial, some lines of code are omitted from the code samples. For instance, when showing a `package.json` we won't show _all_ of the keys - only the ones that matter.
+
+</Callout>
+
+### 1. Running `create-turbo`
+
+First, run:
+
+```sh
+npx create-turbo@latest
+```
+
+This installs the [`create-turbo`](https://www.npmjs.com/package/create-turbo) CLI, and runs it. You'll be asked several questions:
+
+#### Where would you like to create your turborepo?
+
+Choose anywhere you like. The default is `./my-turborepo`.
+
+#### Which package manager do you want to use?
+
+Turborepo doesn't handle installing packages, so you'll need to choose either:
+
+- [npm](https://npmjs.com/)
+- [pnpm](https://pnpm.io/)
+- [yarn](https://yarnpkg.com/)
+
+If you're not sure, we recommend choosing `pnpm`. If you don't have it installed, cancel `create-turbo` (via `ctrl-C`) and take a look at the [installation instructions](https://pnpm.io/installation).
+
+#### Installation
+
+Once you've picked a package manager, `create-turbo` will create a bunch of new files inside the folder name you picked. It'll also install all the dependencies that come with the `basic` example by default.
+
+### 2. Exploring your new repo
+
+You might have noticed something in the terminal. `create-turbo` gave you a description of all of the things it was adding.
+
+```
+>>> Creating a new turborepo with the following:
+
+ - apps/web: Next.js with TypeScript
+ - apps/docs: Next.js with TypeScript
+ - packages/ui: Shared React component library
+ - packages/eslint-config-custom: Shared configuration (ESLint)
+ - packages/tsconfig: Shared TypeScript `tsconfig.json`
+```
+
+Each of these is a _workspace_ - a folder containing a `package.json`. Each workspace can declare its own dependencies, run its own scripts, and export code for other workspaces to use.
+
+Open the root folder - `./my-turborepo` - in your favourite code editor.
+
+#### Understanding `packages/ui`
+
+First, open `./packages/ui/package.json`. You'll notice that the package's name is `"name": "ui"` - right at the top of the file.
+
+Next, open `./apps/web/package.json`. You'll notice that this package's name is `"name": "web"`. But also - take a look in its dependencies.
+
+You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
+
+```json filename="apps/web/package.json"
+{
+  "dependencies": {
+    "ui": "workspace:*"
+  }
+}
+```
+
+This means that our **web app depends on our local `ui` package**.
+
+If you look inside `apps/docs/package.json`, you'll see the same thing. Both `web` and `docs` depend on `ui` - a shared component library.
+
+This pattern of sharing code across applications is extremely common in monorepos - and means that multiple apps can share a single design system.
+
+#### Understanding imports and exports
+
+Take a look inside `./apps/docs/pages/index.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
+
+```tsx filename="apps/docs/pages/index.tsx"
+import { Button } from "ui";
+//       ^^^^^^         ^^
+
+export default function Docs() {
+  return (
+    <div>
+      <h1>Docs</h1>
+      <Button />
+    </div>
+  );
+}
+```
+
+They're importing `Button` directly from a dependency called `ui`! How does that work? Where is `Button` coming from?
+
+Open `packages/ui/package.json`. You'll notice these two attributes:
+
+```json filename="packages/ui/package.json"
+{
+  "main": "./index.tsx",
+  "types": "./index.tsx"
+}
+```
+
+When workspaces import from `ui`, `main` tells them where to access the code they're importing. `types` tells them where the TypeScript types are located.
+
+So, let's look inside `packages/ui/index.tsx`:
+
+```tsx filename="packages/ui/index.tsx"
+import * as React from "react";
+export * from "./Button";
+```
+
+Everything inside this file will be able to be used by workspaces that depend on `ui`.
+
+`index.tsx` is exporting everything from a file called `./Button`, so let's go there:
+
+```tsx filename="packages/ui/Button.tsx"
+import * as React from "react";
+
+export const Button = () => {
+  return <button>Boop</button>;
+};
+```
+
+We've found our button! Any changes we make in this file will be shared across `web` and `docs`. Pretty cool!
+
+<Callout type="idea">
+
+Try experimenting with exporting a different function from this file. Perhaps `add(a, b)` for adding two numbers together.
+
+This can then be imported by `web` and `docs`.
+
+</Callout>
+
+#### Understanding `tsconfig`
+
+We have two more workspaces to look at, `tsconfig` and `eslint-config-custom`. Each of these allow for shared configuration across the monorepo. Let's look in `tsconfig`:
+
+```json filename="packages/tsconfig/package.json"
+{
+  "name": "tsconfig",
+  "files": ["base.json", "nextjs.json", "react-library.json"]
+}
+```
+
+Here, we specify three files to be exported, inside `files`. Packages which depend on `tsconfig` can then import them directly.
+
+For instance, `packages/ui` depends on `tsconfig`:
+
+```json filename="packages/ui/package.json"
+{
+  "devDependencies": {
+    "tsconfig": "workspace:*"
+  }
+}
+```
+
+And inside its `tsconfig.json` file, it imports it using `extends`:
+
+```json filename="packages/ui/tsconfig.json"
+{
+  "extends": "tsconfig/react-library.json"
+}
+```
+
+This pattern allows for a monorepo to share a single `tsconfig.json` across all its workspaces, reducing code duplication.
+
+#### Understanding `eslint-config-custom`
+
+Our final workspace is `eslint-config-custom`.
+
+You'll notice that this is named slightly differently to the other workspaces. It's not as concise as `ui` or `tsconfig`. Let's take a look inside `.eslintrc.js` in the root of the monorepo to figure out why.
+
+```ts filename=".eslintrc.js"
+module.exports = {
+  // This tells ESLint to load the config from the workspace `eslint-config-custom`
+  extends: ["custom"],
+};
+```
+
+[ESLint](https://eslint.org/) resolves configuration files by looking for workspaces with the name `eslint-config-*`. This lets us write `extends: ['custom']` and have ESLint find our local workspace.
+
+But why is this in the root of the monorepo?
+
+The way ESLint finds its configuration file is by looking at the closest `.eslintrc.js`. If it can't find one in the current directory, it'll look in the directory above until it finds one.
+
+So that means that if we're working on code inside `packages/ui` (which doesn't have a `.eslintrc.js`) it'll refer to the _root_ instead.
+
+Apps that _do_ have an `.eslintrc.js` can refer to `custom` in the same way. For instance, in `docs`:
+
+```ts filename="apps/docs/.eslintrc.js"
+module.exports = {
+  root: true,
+  extends: ["custom"],
+};
+```
+
+Just like `tsconfig`, `eslint-config-custom` lets us share ESLint configs across our entire monorepo, keeping things consistent no matter what project you're working on.
+
+#### Summary
+
+It's important to understand the dependencies between these workspaces. Let's map them out:
+
+{/* Could be worth a diagram here? */}
+
+- `web` - depends on `ui`, `tsconfig` and `eslint-config-custom`
+- `docs` - depends on `ui`, `tsconfig` and `eslint-config-custom`
+- `ui` - depends on `tsconfig` and `eslint-config-custom`
+- `tsconfig` - no dependencies
+- `eslint-config-custom` - no dependencies
+
+Note that **the Turborepo CLI is not responsible for managing these dependencies**. All of the things above are handled by the package manager you chose (`npm`, `pnpm` or `yarn`).
+
+### 3. Understanding `turbo.json`
+
+We now understand our repository and its dependencies. How does Turborepo help?
+
+Turborepo helps by making running tasks simpler and _much_ more efficient.
+
+Let's take a look inside our root `package.json`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  }
+}
+```
+
+We've got three tasks specified here in `scripts` which use `turbo run`. You'll notice that each of them is specified in `turbo.json`:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      //   ^^^^^
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+      //   ^^^^
+      "outputs": []
+    },
+    "dev": {
+      //   ^^^
+      "cache": false
+    }
+  }
+}
+```
+
+What we're seeing here is that we've _registered_ three tasks with `turbo` - `lint`, `dev` and `build`. Every task that's registered inside `turbo.json` can be run with `turbo run <task>`.
+
+To see this in action, let's add a script to the root `package.json`:
+
+```diff filename="package.json"
+{
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
++   "hello": "turbo run hello"
+  }
+}
+```
+
+Now, let's run `hello`.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run hello
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn hello
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run hello
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll see this error in the console:
+
+```
+task `hello` not found in turbo `pipeline` in "turbo.json".
+Are you sure you added it?
+```
+
+That's worth remembering - **in order for `turbo` to run a task, it must be in `turbo.json`**.
+
+Let's investigate the scripts we already have in place.
+
+### 4. Linting with Turborepo
+
+Try running our `lint` script:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run lint
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn lint
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run lint
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll notice several things happen in the terminal.
+
+1. Several scripts will be run at the same time, each prefixed with either `docs:lint`, `ui:lint` or `web:lint`.
+2. They'll each succeed, and you'll see `3 successful` in the terminal.
+3. You'll also see `0 cached, 3 total`. We'll cover what this means later.
+
+The scripts that each run come from each workspace's `package.json`. Each workspace can optionally specify its own `lint` script:
+
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "lint": "next lint"
+  }
+}
+```
+
+```json filename="apps/docs/package.json"
+{
+  "scripts": {
+    "lint": "next lint"
+  }
+}
+```
+
+```json filename="packages/ui/package.json"
+{
+  "scripts": {
+    "lint": "eslint *.ts*"
+  }
+}
+```
+
+When we run `turbo run lint`, Turborepo looks at each `lint` script in each workspace and runs it. For more details, see our [pipelines](/docs/core-concepts/pipelines) docs.
+
+#### Using the cache
+
+Let's run our `lint` script one more time. You'll notice a few new things appear in the terminal:
+
+1. `cache hit, replaying output` appears for `docs:lint`, `web:lint` and `ui:lint`.
+2. You'll see `3 cached, 3 total`.
+3. The total runtime should be under `100ms`, and `>>> FULL TURBO` appears.
+
+Something interesting just happened. Turborepo realised that **our code hadn't changed since the last time we ran the lint script**.
+
+It had saved the logs from the previous run, so it just replayed them.
+
+Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
+
+```diff filename="apps/docs/pages/index.tsx"
+import { Button } from "ui";
+
+export default function Docs() {
+  return (
+    <div>
+-     <h1>Docs</h1>
++     <h1>My great docs</h1>
+      <Button />
+    </div>
+  );
+}
+```
+
+Now, run the `lint` script again. You'll notice that:
+
+1. `docs:lint` has a comment saying `cache miss, executing`. This means that `docs` is running its linting.
+2. `2 cached, 3 total` appears at the bottom.
+
+This means that **the results of our previous tasks were still cached**. Only the `lint` script inside `docs` actually ran - again, speeding things up. To learn more, check out our [caching docs](/docs/core-concepts/caching).
+
+### 5. Building with Turborepo
+
+Let's try running our `build` script:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run build
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn build
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run build
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll see similar outputs to when we ran our lint script. Only `apps/docs` and `apps/web` specify a `build` script in their `package.json`, so only those are run.
+
+Take a look inside `build` in `turbo.json`. There's some interesting config there.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    }
+  }
+}
+```
+
+You'll notice that some `outputs` have been specified. Declaring outputs will mean that when `turbo` finishes running your task, it'll save the output you specify in its cache.
+
+Both `apps/docs` and `apps/web` are Next.js apps, and they output builds to the `./.next` folder.
+
+Let's try something. Delete the `apps/docs/.next` build folder.
+
+Run the `build` script again. You'll notice:
+
+1. We hit `FULL TURBO` - the builds complete in under `100ms`.
+2. The `.next` folder re-appears!
+
+Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/docs/core-concepts/caching#configuring-cache-outputs).
+
+### 6. Running dev scripts
+
+Let's now try running `dev`.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run dev
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dev
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run dev
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll notice some information in the terminal:
+
+1. Only two scripts will execute - `docs:dev` and `web:dev`. These are the only two workspaces which specify `dev`.
+2. Both `dev` scripts are run simultaneously, starting your Next.js apps on ports `3000` and `3001`.
+3. In the terminal, you'll see `cache bypass, force executing`.
+
+Try quitting out of the script, and re-running it. You'll notice we don't go `FULL TURBO`. Why is that?
+
+Take a look at `turbo.json`:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    }
+  }
+}
+```
+
+Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so caching it makes no sense. Learn more about in our docs on [turning off caching](/docs/core-concepts/caching#turn-off-caching).
+
+#### Running `dev` on only one workspace at a time
+
+By default, `turbo run dev` will run `dev` on all workspaces at once. But sometimes, we might only want to choose one workspace.
+
+To handle this, we can add a `--filter` flag to our command. This `--filter` gets passed to the `turbo` CLI.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npm run dev -- --filter docs
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dev --filter docs
+    ```
+
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm run dev --filter docs
+    ```
+
+  </Tab>
+</Tabs>
+
+You'll notice that it now only runs `docs:dev`. Learn more about [filtering workspaces](/docs/core-concepts/filtering) from our docs.
+
+### Summary
+
+Well done! You've learned all about your new monorepo, and how Turborepo makes handling your tasks easier.
+
+#### Next steps
+
+- Need to add more tasks? Learn more about using [pipelines](/docs/core-concepts/pipelines)
+- Want to speed up your CI? Set up [remote caching](/docs/core-concepts/remote-caching).
+- Want some inspiration? Take a look at our directory of [examples](https://github.com/vercel/turbo/tree/main/examples)

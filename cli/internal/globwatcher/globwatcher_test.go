@@ -10,7 +10,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setup(t *testing.T, repoRoot turbopath.AbsolutePath) {
+func setup(t *testing.T, repoRoot turbopath.AbsoluteSystemPath) {
 	// Directory layout:
 	// <repoRoot>/
 	//   my-pkg/
@@ -21,27 +21,27 @@ func setup(t *testing.T, repoRoot turbopath.AbsolutePath) {
 	//         child-file
 	//     .next/
 	//       next-file
-	distPath := repoRoot.Join("my-pkg", "dist")
-	childFilePath := distPath.Join("distChild", "child-file")
+	distPath := repoRoot.UntypedJoin("my-pkg", "dist")
+	childFilePath := distPath.UntypedJoin("distChild", "child-file")
 	err := childFilePath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
 	f, err := childFilePath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
 	assert.NilError(t, err, "Close")
-	distFilePath := repoRoot.Join("my-pkg", "dist", "dist-file")
+	distFilePath := repoRoot.UntypedJoin("my-pkg", "dist", "dist-file")
 	f, err = distFilePath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
 	assert.NilError(t, err, "Close")
-	nextFilePath := repoRoot.Join("my-pkg", ".next", "next-file")
+	nextFilePath := repoRoot.UntypedJoin("my-pkg", ".next", "next-file")
 	err = nextFilePath.EnsureDir()
 	assert.NilError(t, err, "EnsureDir")
 	f, err = nextFilePath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
 	assert.NilError(t, err, "Close")
-	irrelevantPath := repoRoot.Join("my-pkg", "irrelevant")
+	irrelevantPath := repoRoot.UntypedJoin("my-pkg", "irrelevant")
 	f, err = irrelevantPath.Create()
 	assert.NilError(t, err, "Create")
 	err = f.Close()
@@ -60,41 +60,55 @@ func TestTrackOutputs(t *testing.T) {
 	logger := hclog.Default()
 
 	repoRootRaw := t.TempDir()
-	repoRoot := fs.AbsolutePathFromUpstream(repoRootRaw)
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(repoRootRaw)
 
 	setup(t, repoRoot)
 
 	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
 
-	globs := []string{
-		"my-pkg/dist/**",
-		"my-pkg/.next/**",
+	globs := fs.TaskOutputs{
+		Inclusions: []string{
+			"my-pkg/dist/**",
+			"my-pkg/.next/**",
+		},
+		Exclusions: []string{"my-pkg/.next/cache/**"},
 	}
+
 	hash := "the-hash"
 	err := globWatcher.WatchGlobs(hash, globs)
 	assert.NilError(t, err, "WatchGlobs")
 
-	changed, err := globWatcher.GetChangedGlobs(hash, globs)
+	changed, err := globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
 	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make an irrelevant change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", "irrelevant"),
+		Path:      repoRoot.UntypedJoin("my-pkg", "irrelevant"),
 	})
 
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	// Make an excluded change
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.Join("my-pkg", ".next", "cache", "foo"),
+	})
+
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
 	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
 	// Make a relevant change
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", "dist", "foo"),
+		Path:      repoRoot.UntypedJoin("my-pkg", "dist", "foo"),
 	})
 
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
 	assert.Equal(t, 1, len(changed), "Expected one changed path remaining")
 	expected := "my-pkg/dist/**"
@@ -103,7 +117,7 @@ func TestTrackOutputs(t *testing.T) {
 	// Change a file matching the other glob
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", ".next", "foo"),
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "foo"),
 	})
 	// We should no longer be watching anything, since both globs have
 	// registered changes
@@ -113,22 +127,88 @@ func TestTrackOutputs(t *testing.T) {
 
 	// Both globs have changed, we should have stopped tracking
 	// this hash
-	changed, err = globWatcher.GetChangedGlobs(hash, globs)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
-	assert.DeepEqual(t, globs, changed)
+	assert.DeepEqual(t, globs.Inclusions, changed)
+}
+
+func TestTrackMultipleHashes(t *testing.T) {
+	logger := hclog.Default()
+
+	repoRootRaw := t.TempDir()
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(repoRootRaw)
+
+	setup(t, repoRoot)
+
+	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
+
+	globs := fs.TaskOutputs{
+		Inclusions: []string{
+			"my-pkg/dist/**",
+			"my-pkg/.next/**",
+		},
+	}
+
+	hash := "the-hash"
+	err := globWatcher.WatchGlobs(hash, globs)
+	assert.NilError(t, err, "WatchGlobs")
+
+	secondGlobs := fs.TaskOutputs{
+		Inclusions: []string{
+			"my-pkg/.next/**",
+		},
+		Exclusions: []string{"my-pkg/.next/cache/**"},
+	}
+
+	secondHash := "the-second-hash"
+	err = globWatcher.WatchGlobs(secondHash, secondGlobs)
+	assert.NilError(t, err, "WatchGlobs")
+
+	changed, err := globWatcher.GetChangedGlobs(hash, globs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	changed, err = globWatcher.GetChangedGlobs(secondHash, secondGlobs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	// Make a change that is excluded in one of the hashes but not in the other
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "cache", "foo"),
+	})
+
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 1, len(changed), "Expected one changed path remaining")
+
+	changed, err = globWatcher.GetChangedGlobs(secondHash, secondGlobs.Inclusions)
+	assert.NilError(t, err, "GetChangedGlobs")
+	assert.Equal(t, 0, len(changed), "Expected no changed paths")
+
+	assert.Equal(t, 1, len(globWatcher.globStatus["my-pkg/.next/**"]), "Expected to be still watching `my-pkg/.next/**`")
+
+	// Make a change for secondHash
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileAdded,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "bar"),
+	})
+
+	assert.Equal(t, 0, len(globWatcher.globStatus["my-pkg/.next/**"]), "Expected to be no longer watching `my-pkg/.next/**`")
 }
 
 func TestWatchSingleFile(t *testing.T) {
 	logger := hclog.Default()
 
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	setup(t, repoRoot)
 
 	//watcher := newTestWatcher()
 	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
-	globs := []string{
-		"my-pkg/.next/next-file",
+	globs := fs.TaskOutputs{
+		Inclusions: []string{"my-pkg/.next/next-file"},
+		Exclusions: []string{},
 	}
 	hash := "the-hash"
 	err := globWatcher.WatchGlobs(hash, globs)
@@ -139,14 +219,14 @@ func TestWatchSingleFile(t *testing.T) {
 	// A change to an irrelevant file
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", ".next", "foo"),
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "foo"),
 	})
 	assert.Equal(t, 1, len(globWatcher.hashGlobs))
 
 	// Change the watched file
 	globWatcher.OnFileWatchEvent(filewatcher.Event{
 		EventType: filewatcher.FileAdded,
-		Path:      repoRoot.Join("my-pkg", ".next", "next-file"),
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "next-file"),
 	})
 	assert.Equal(t, 0, len(globWatcher.hashGlobs))
 }

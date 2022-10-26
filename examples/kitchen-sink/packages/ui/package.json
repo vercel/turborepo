@@ -14,7 +14,7 @@
     "build": "tsup src/index.tsx --format esm,cjs --dts --external react",
     "clean": "rm -rf dist",
     "dev": "tsup src/index.tsx --format esm,cjs --watch --dts --external react",
-    "lint": "TIMING=1 eslint src/**/*.ts* --fix",
+    "lint": "TIMING=1 eslint \"src/**/*.ts*\"",
     "test": "jest"
   },
   "jest": {
@@ -28,9 +28,12 @@
     "eslint-config-custom": "*",
     "jest": "^26.6.3",
     "jest-presets": "*",
-    "react": "^17.0.2",
+    "react": "^18.2.0",
     "tsconfig": "*",
-    "tsup": "^5.10.1",
-    "typescript": "^4.5.3"
+    "tsup": "^6.2.3",
+    "typescript": "^4.8.3"
+  },
+  "dependencies": {
+    "react-dom": "^18.2.0"
   }
 }

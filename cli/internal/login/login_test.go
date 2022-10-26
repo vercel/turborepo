@@ -55,7 +55,7 @@ func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.Ve
 }
 
 type testResult struct {
-	repoRoot            turbopath.AbsolutePath
+	repoRoot            turbopath.AbsoluteSystemPath
 	userConfig          *config.UserConfig
 	repoConfig          *config.RepoConfig
 	clientErr           error
@@ -96,12 +96,12 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 	config.AddRepoConfigFlags(flags)
 	assert.NilError(t, flags.Set("login", "login-url"))
 	assert.NilError(t, flags.Set("api", "api-url"))
-	userConfigPath := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo")
+	userConfigPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo")
 	userConfig, err := config.ReadUserConfigFile(userConfigPath, flags)
 	if err != nil {
 		t.Fatalf("setting up user config: %v", err)
 	}
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), flags)
 	if err != nil {
 		t.Fatalf("setting up repo config: %v", err)

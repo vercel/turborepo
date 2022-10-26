@@ -11,6 +11,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: [`"Inter"`, "sans-serif"],
+        "space-grotesk": ["Space Grotesk", "monospace"],
         mono: [
           "Menlo",
           "Monaco",
@@ -30,6 +31,7 @@ module.exports = {
         green: colors.green,
         red: colors.red,
         yellow: colors.yellow,
+        "pink-gradient-start": "rgba(255, 30, 86, 1)",
       },
       screens: {
         sm: "640px",

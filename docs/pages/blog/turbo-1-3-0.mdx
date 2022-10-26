@@ -8,12 +8,24 @@ ogImage: /images/blog/turbo-1-3-0/twitter-card.png
 
 # Turborepo 1.3
 
-import { Authors } from '../../components/Authors'
-import Callout from '../../components/Callout'
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
+import Date from "../../components/blog/Date";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Thursday, June 23rd, 2022</div>
+<Date>
+  Thursday, June 23rd, 2022
+</Date>
 
-<Authors authors={[ 'gsoltis', 'nathanhammond', 'tknickman', 'jaredpalmer', 'gaspargarcia_', 'becca__z', ]} />
+<Authors
+  authors={[
+    "gsoltis",
+    "nathanhammond",
+    "tknickman",
+    "jaredpalmer",
+    "gaspargarcia_",
+    "becca__z",
+  ]}
+/>
 
 With Turborepo 1.3 we are bringing improved caching and flexibility which includes:
 
@@ -65,11 +77,11 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     // ... omitted for brevity
-	 "build": {
+    "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"],
-   },
-   "docs#build": {
+      "outputs": [".next/**", "dist/**"]
+    },
+    "docs#build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**"],
       // Define set of relevant globs which impact caching of docs site
@@ -123,7 +135,7 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": [],
+      "outputs": []
     },
     // This will cause the "test" script from all workspace package.json's
     // AND the root package.json to be included when "turbo run test" is run
@@ -147,8 +159,8 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
         "examples/**/*.yaml",
         "cli/**/*.ts",
         "./scripts/run-example.sh"
-       ]
-    },
+      ]
+    }
   }
 }
 ```
@@ -164,7 +176,7 @@ We added recipes for using Turborepo and Remote Caching with:
 - [Gitlab CI](/docs/ci/gitlabci)
 - [Travis CI](/docs/ci/travisci)
 
-If there are other recipes you would like to see here please let us know by opening up a [GitHub Discussion](https://github.com/vercel/turborepo/discussions/categories/ideas).
+If there are other recipes you would like to see here please let us know by opening up a [GitHub Discussion](https://github.com/vercel/turbo/discussions/categories/ideas).
 
 ## Other Bug Fixes and Improvements
 
@@ -178,9 +190,9 @@ If there are other recipes you would like to see here please let us know by open
 
 Since releasing [Turborepo v1.2 in early April](/blog/turbo-1-2-0), we've seen incredible adoption and community growth:
 
-- [8.1k+ GitHub Stars](https://github.com/vercel/turborepo)
+- [8.1k+ GitHub Stars](https://github.com/vercel/turbo)
 - 275k+ weekly NPM downloads (up ~2x)
-- 1,200+ members of the [Turborepo Community Discord](https://turborepo.org/discord)
+- 1,200+ members of the [Turborepo Community Discord](https://turbo.build/discord)
 - 5.8 years of compute time saved through Remote Caching on Vercel (up ~5x), saving +7 months per week now
 
 Turborepo is the result of the combined work of over 136 contributors including our core team.

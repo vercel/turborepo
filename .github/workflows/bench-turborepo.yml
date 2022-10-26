@@ -1,0 +1,70 @@
+name: Large Repo Benchmark
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types:
+      - completed
+
+jobs:
+  build:
+    name: Run Benchmarks
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Build
+        run: cd cli && make turbo
+
+      - name: Download previous benchmark results
+        # continue on error so that we handle the bootstrap case where there is no previous data
+        continue-on-error: true
+        run: mkdir -p raw-data/${{ runner.os }} && curl -f -o raw-data/${{ runner.os }}/benchmark-data.json https://raw.githubusercontent.com/vercel/turborepo/gh-pages/${{ runner.os }}/benchmark-data.json
+
+      - name: Run benchmarks
+        run: cd benchmark && pnpm benchmark
+
+      - name: Save to Tinybird
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl \
+            -i \
+            -F "ndjson=@./benchmark/tinybird.ndjson" \
+            -X POST \
+            -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
+            'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
+
+      - name: Store Benchmark Result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: "${{ runner.os }} Benchmark"
+          # What benchmark tool the output is formatted as
+          tool: "customSmallerIsBetter"
+          output-file-path: ./benchmark/benchmarks.json
+          external-data-json-path: ./raw-data/${{ runner.os }}/benchmark-data.json
+          auto-push: false
+          # GitHub API token to make a commit
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-fetch-gh-pages: true
+
+      - name: Deploy
+        if: github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4.4.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gh-pages
+          folder: raw-data
+          clean: false
+          single-commit: false
+          git-config-email: github-bot@turborepo.org
+          repository-name: vercel/turborepo
+          commit-message: "Update"

@@ -44,8 +44,9 @@ func RunWithArgs(args []string, turboVersion string) int {
 	signalWatcher := signals.NewWatcher()
 	helper := cmdutil.NewHelper(turboVersion)
 	root := getCmd(helper, signalWatcher)
+	resolvedArgs := resolveArgs(root, args)
 	defer helper.Cleanup(root.Flags())
-	root.SetArgs(args)
+	root.SetArgs(resolvedArgs)
 
 	doneCh := make(chan struct{})
 	var execErr error
@@ -73,13 +74,36 @@ func RunWithArgs(args []string, turboVersion string) int {
 	}
 }
 
+const _defaultCmd string = "run"
+
+// resolveArgs adds a default command to the supplied arguments if none exists.
+func resolveArgs(root *cobra.Command, args []string) []string {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" || arg == "--version" || arg == "completion" {
+			return args
+		}
+	}
+	cmd, _, err := root.Traverse(args)
+	if err != nil {
+		// The command is going to error, but defer to cobra
+		// to handle it
+		return args
+	} else if cmd.Name() == root.Name() {
+		// We resolved to the root, and this is not help or version,
+		// so prepend our default command
+		return append([]string{_defaultCmd}, args...)
+	}
+	// We resolved to something other than the root command, no need for a default
+	return args
+}
+
 // getCmd returns the root cobra command
 func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
 	execOpts := &execOpts{}
 
 	cmd := &cobra.Command{
 		Use:              "turbo",
-		Short:            "Turbo charge your monorepo",
+		Short:            "The build system that makes ship happen",
 		TraverseChildren: true,
 		Version:          helper.TurboVersion,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

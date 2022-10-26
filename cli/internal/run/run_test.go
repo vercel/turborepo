@@ -264,14 +264,14 @@ func TestParseConfig(t *testing.T) {
 		},
 		{
 			"absolute cache dir",
-			[]string{"foo", "--continue", "--cache-dir=" + defaultCwd.Join("bar").ToString()},
+			[]string{"foo", "--continue", "--cache-dir=" + defaultCwd.UntypedJoin("bar").ToString()},
 			&Opts{
 				runOpts: runOpts{
 					continueOnError: true,
 					concurrency:     10,
 				},
 				cacheOpts: cache.Opts{
-					OverrideDir: defaultCwd.Join("bar").ToString(),
+					OverrideDir: defaultCwd.UntypedJoin("bar").ToString(),
 					Workers:     10,
 				},
 				runcacheOpts: runcache.Opts{},
@@ -306,14 +306,14 @@ func Test_dontSquashTasks(t *testing.T) {
 
 	pipeline := map[string]fs.TaskDefinition{
 		"build": {
-			Outputs:          []string{},
+			Outputs:          fs.TaskOutputs{},
 			TaskDependencies: []string{"generate"},
 		},
 		"generate": {
-			Outputs: []string{},
+			Outputs: fs.TaskOutputs{Inclusions: []string{}, Exclusions: []string{}},
 		},
 		"b#build": {
-			Outputs: []string{},
+			Outputs: fs.TaskOutputs{Inclusions: []string{}, Exclusions: []string{}},
 		},
 	}
 	filteredPkgs := make(util.Set)
@@ -324,7 +324,7 @@ func Test_dontSquashTasks(t *testing.T) {
 		Targets:      []string{"build"},
 		Opts:         &Opts{},
 	}
-	engine, err := buildTaskGraph(topoGraph, pipeline, rs)
+	engine, err := buildTaskGraphEngine(topoGraph, pipeline, rs)
 	if err != nil {
 		t.Fatalf("failed to build task graph: %v", err)
 	}
@@ -357,7 +357,7 @@ func Test_taskSelfRef(t *testing.T) {
 		Targets:      []string{"build"},
 		Opts:         &Opts{},
 	}
-	_, err := buildTaskGraph(topoGraph, pipeline, rs)
+	_, err := buildTaskGraphEngine(topoGraph, pipeline, rs)
 	if err == nil {
 		t.Fatalf("expected to failed to build task graph: %v", err)
 	}

@@ -1,0 +1,209 @@
+---
+title: Turborepo 1.6
+date: 2022/10/21
+description: Turborepo 1.6 lets you use Turborepo in non-monorepos, prune for npm, and improves cache performance.
+tag: "web development"
+ogImage: /images/blog/turbo-1-6-0/twitter-card.png
+---
+
+import { Tabs, Tab } from '../../components/Tabs'
+
+# Turborepo 1.6
+
+import { Authors } from '../../components/Authors'
+import Callout from '../../components/Callout'
+
+<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Wednesday, October 19th, 2022</div>
+
+<Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+
+Turborepo 1.6 changes the game for Turborepo - you can now use it in **any project**.
+
+- [**Turborepo in non-monorepos**](#any-codebase-can-use-turborepo): Seeing slow builds on your project? You can now use Turborepo to speed up builds in any codebase with a `package.json`.
+- [**`turbo prune` now supports npm**](#prune-now-supported-on-npm): Pruning your monorepo is now supported in monorepos using `npm`, completing support for all major workspace managers.
+- [**Faster caching**](#performance-improvements-in-the-cache): We've improved the way we handle local file writes, meaning a big speed-up of Turborepo's cache.
+
+Update today by running `npm install turbo@latest`.
+
+## Any codebase can use Turborepo
+
+Turborepo helps speed up tasks in your codebase. Until now, we'd built Turborepo specifically for monorepos - codebases which contain multiple applications and packages.
+
+Turborepo is fantastic in monorepos because they have so many tasks to handle. Each package and app needs to be built, linted, and tested.
+
+But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of tasks. Most CI/CD processes do a lot of duplicated work that would benefit from a [cache](/docs/core-concepts/caching).
+
+So we're excited to announce that **any codebase can now use Turborepo**. Try it out now:
+
+### Add Turborepo to your project
+
+1. **Install `turbo`:**
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --save-dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn add turbo --dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install turbo --save-dev
+    ```
+  </Tab>
+</Tabs>
+
+2. **Add a `turbo.json` file at the base of your new repository:**
+
+<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Some Vite starters ship with a `package.json` that looks like this:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "tsc && vite build"
+  }
+}
+```
+
+We recommend splitting these into a `lint` and `build` script.
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "vite build",
+    "lint": "tsc"
+  }
+}
+```
+
+This enables `turbo` to schedule them separately.
+
+  </Tab>
+</Tabs>
+
+3. **Try running `build` and `lint` with `turbo`:**
+
+```bash
+turbo build lint
+```
+
+Congratulations - **you just ran your first build with `turbo`**. You can try:
+
+- Running through the full [Quickstart](/docs/getting-started/add-to-project).
+- Check out our updated [Core Concepts docs](/docs/core-concepts/caching) to understand what makes Turborepo special.
+
+## When should I use Turborepo?
+
+Turborepo being available for non-monorepos opens up a lot of new use cases. But when is it at its best?
+
+### When scripts depend on each other
+
+You should use `turbo` to run your `package.json` scripts. If you've got multiple scripts which all rely on each other, you can express them as Turborepo tasks:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      // 'build' should be run before 'lint'
+      "dependsOn": ["build"]
+    },
+    "test": {
+      // 'build' should be run before 'test'
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+Then, you can run:
+
+```sh
+turbo run lint test
+```
+
+Because you've said that `build` should be run before `lint` and `test`, it'll _automatically run `build` for you_ when you run `lint` or `test`.
+
+Not only that, but it'll figure out the optimal schedule for you. Head to our core concepts doc on [optimizing for speed](/docs/core-concepts/monorepos/running-tasks#most-tools-dont-optimize-for-speed).
+
+### When you want to run tasks in parallel
+
+Imagine you're running a [Next.js](https://nextjs.org/) app, and also running the [Tailwind CLI](https://tailwindcss.com/docs). You might have two scripts - `dev` and `dev:css`:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "dev": "next",
+    "dev:css": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+  }
+}
+```
+
+Without anything being added to your `turbo.json`, you can run:
+
+```sh
+turbo run dev dev:css
+```
+
+Just like tools like [`concurrently`](https://www.npmjs.com/package/concurrently), Turborepo will automatically run the two scripts in parallel.
+
+This is extremely useful for dev mode, but can also be used to speed up tasks on CI - imagine you have multiple scripts to run:
+
+```sh
+turbo run lint unit:test e2e:test integration:test
+```
+
+Turborepo will figure out the fastest possible way to run all your tasks in parallel.
+
+## Prune now supported on npm
+
+Over the last several releases, we've been adding support for [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
+
+We're delighted to announce that `turbo prune` now works for `npm`, completing support for all major package managers. This means that if your monorepo uses `npm`, `yarn`, `yarn 2+` or `pnpm`, you'll be able to deploy to Docker with ease.
+
+Check out our previous [blog on `turbo prune`](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
+
+## Performance improvements in the cache
+
+Before 1.6, Turborepo's local cache was a recursive copy of files on the system to another place on disk. This was _slow_. It meant that for every file that we needed to cache, we'd need to perform six system calls: open, read, and close on the source file; open, write, and close on the destination file.
+
+In 1.6, we've cut that nearly in half. Now, when creating a cache, we create a single `.tar` file (_one_ open), we write to it in 1mb chunks (_batched_ writes), and then close it (_one_ close). The halving of system calls _also_ happens on the way back out of cache.
+
+And we didn't stop there. Over the past month we've invested significantly in our build toolchain to enable CGO which unlocks usage of best-in-class libraries written in C. This enabled us to adopt [Zstandard](http://facebook.github.io/zstd/)'s `libzstd` for compression which gets us an algorithmic 3x performance improvement for compression.
+
+After all of these changes we're regularly seeing performance improvements of more than 2x on local cache creation and more than 3x on remote cache creation. This gets even better the bigger your repository is, or the slower your device is (looking at you, CI). This means we've been able to deliver performance wins precisely to those who needed it the most.

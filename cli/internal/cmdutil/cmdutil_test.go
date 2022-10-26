@@ -12,7 +12,7 @@ import (
 func TestTokenEnvVar(t *testing.T) {
 
 	// Set up an empty config so we're just testing environment variables
-	userConfigPath := fs.AbsolutePathFromUpstream(t.TempDir()).Join("turborepo", "config.json")
+	userConfigPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	expectedPrefix := "my-token"
 	vars := []string{"TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"}
 	for _, v := range vars {

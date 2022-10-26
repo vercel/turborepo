@@ -1,0 +1,233 @@
+---
+title: Using Turborepo with GitHub Actions
+description: How to use GitHub Actions with Turborepo to optimize your CI workflow
+---
+
+import { Tabs, Tab } from "../../../../components/Tabs";
+
+# Using Turborepo with GitHub Actions
+
+The following example shows how to use Turborepo with [GitHub Actions](https://github.com/features/actions).
+
+For a given root `package.json`:
+
+```json
+{
+  "name": "my-turborepo",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "1.2.5"
+  }
+}
+```
+
+And a `turbo.json`:
+
+```json
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}
+```
+
+Create file called `.github/workflows/ci.yml` in your repository with the following contents:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```yaml
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+          name: Build and Test
+          timeout-minutes: 15
+          runs-on: ubuntu-latest
+          # To use Remote Caching, uncomment the next lines and follow the steps below.
+          # env:
+          #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          #  TURBO_REMOTE_ONLY: true
+
+          steps:
+            - name: Check out code
+              uses: actions/checkout@v3
+              with:
+                fetch-depth: 2
+
+            - name: Setup Node.js environment
+              uses: actions/setup-node@v3
+              with:
+                node-version: 16
+                cache: 'npm'
+
+            - name: Install dependencies
+              run: npm install
+
+            - name: Build
+              run: npm run build
+
+            - name: Test
+              run: npm run test
+    ```
+
+  </Tab>
+  <Tab>
+    ```yaml
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+          name: Build and Test
+          timeout-minutes: 15
+          runs-on: ubuntu-latest
+          # To use Remote Caching, uncomment the next lines and follow the steps below.
+          # env:
+          #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+          steps:
+            - name: Check out code
+              uses: actions/checkout@v3
+              with:
+                fetch-depth: 2
+
+            - name: Setup Node.js environment
+              uses: actions/setup-node@v3
+              with:
+                node-version: 16
+                cache: 'yarn'
+
+            - name: Install dependencies
+              run: yarn
+
+            - name: Build
+              run: yarn build
+
+            - name: Test
+              run: yarn test
+    ```
+
+  </Tab>
+  <Tab>
+    ```yaml
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+          name: Build and Test
+          timeout-minutes: 15
+          runs-on: ubuntu-latest
+          # To use Remote Caching, uncomment the next lines and follow the steps below.
+          # env:
+          #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+          steps:
+            - name: Check out code
+              uses: actions/checkout@v3
+              with:
+                fetch-depth: 2
+
+            - uses: pnpm/action-setup@v2.0.1
+              with:
+                version: 6.32.2
+
+            - name: Setup Node.js environment
+              uses: actions/setup-node@v3
+              with:
+                node-version: 16
+                cache: 'pnpm'
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build
+              run: pnpm build
+
+            - name: Test
+              run: pnpm test
+    ```
+
+  </Tab>
+</Tabs>
+
+## Remote Caching
+
+To use Remote Caching with GitHub Actions, add the following environment variables to your GitHub Actions workflow
+to make them available to your `turbo` commands.
+
+- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
+- `TURBO_TEAM` - The account to which the monorepo belongs
+
+To use Vercel Remote Caching, you can get the value of these variables in a few steps:
+
+1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
+
+![Vercel Access Tokens](/images/docs/vercel-tokens.png)
+![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+
+Copy the value to a safe place. You'll need it in a moment.
+
+2. Go to your GitHub repository settings and click on the **Secrets** and then **Actions** tab. Create a new secret called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+
+![GitHub Secrets](/images/docs/github-actions-secrets.png)
+![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
+
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
+
+   If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
+
+![Vercel Account Slug](/images/docs/vercel-slug.png)
+
+4. At the top of your GitHub Actions workflow, provide the following environment variables to jobs that use `turbo`:
+
+```yaml highlight="6-8"
+# ...
+
+jobs:
+  build:
+    name: Build and Test
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    # To use Turborepo Remote Caching, set the following environment variables for the job.
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+    # ...
+```

@@ -11,55 +11,49 @@ import (
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/globby"
 	"github.com/vercel/turborepo/cli/internal/hashing"
+	"github.com/vercel/turborepo/cli/internal/lockfile"
 	"github.com/vercel/turborepo/cli/internal/packagemanager"
 	"github.com/vercel/turborepo/cli/internal/turbopath"
 	"github.com/vercel/turborepo/cli/internal/util"
 )
 
-const _globalCacheKey = "Real G's move in silence like lasagna"
+const _globalCacheKey = "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo"
 
 // Variables that we always include
 var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-func calculateGlobalHash(rootpath turbopath.AbsolutePath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, externalGlobalDependencies []string, packageManager *packagemanager.PackageManager, logger hclog.Logger, env []string) (string, error) {
-	// Calculate the global hash
-	globalDeps := make(util.Set)
-
+func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (string, error) {
+	// Calculate env var dependencies
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}
-	// Calculate global file and env var dependencies
 	for _, builtinEnvVar := range _defaultEnvVars {
 		globalHashableEnvNames = append(globalHashableEnvNames, builtinEnvVar)
 		globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", builtinEnvVar, os.Getenv(builtinEnvVar)))
 	}
-	if len(externalGlobalDependencies) > 0 {
-		var globs []string
-		for _, v := range externalGlobalDependencies {
-			if strings.HasPrefix(v, "$") {
-				trimmed := strings.TrimPrefix(v, "$")
-				globalHashableEnvNames = append(globalHashableEnvNames, trimmed)
-				globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", trimmed, os.Getenv(trimmed)))
-			} else {
-				globs = append(globs, v)
-			}
+
+	// Calculate global env var dependencies
+	for _, v := range envVarDependencies {
+		globalHashableEnvNames = append(globalHashableEnvNames, v)
+		globalHashableEnvPairs = append(globalHashableEnvPairs, fmt.Sprintf("%v=%v", v, os.Getenv(v)))
+	}
+
+	// Calculate global file dependencies
+	globalDeps := make(util.Set)
+	if len(globalFileDependencies) > 0 {
+		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
+		if err != nil {
+			return "", err
 		}
 
-		if len(globs) > 0 {
-			ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
-			if err != nil {
-				return "", err
-			}
+		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
+		if err != nil {
+			return "", err
+		}
 
-			f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globs, ignores)
-			if err != nil {
-				return "", err
-			}
-
-			for _, val := range f {
-				globalDeps.Add(val)
-			}
+		for _, val := range f {
+			globalDeps.Add(val)
 		}
 	}
 
@@ -73,8 +67,8 @@ func calculateGlobalHash(rootpath turbopath.AbsolutePath, rootPackageJSON *fs.Pa
 	sort.Strings(globalHashableEnvPairs)
 	logger.Debug("global hash env vars", "vars", globalHashableEnvNames)
 
-	if !util.IsYarn(packageManager.Name) {
-		// If we are not in Yarn, add the specfile and lockfile to global deps
+	if lockFile == nil {
+		// If we don't have lockfile information available, add the specfile and lockfile to global deps
 		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
 		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
 	}

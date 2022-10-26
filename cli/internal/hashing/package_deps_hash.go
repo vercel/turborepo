@@ -27,12 +27,12 @@ type PackageDepsOptions struct {
 }
 
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath turbopath.AbsolutePath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
-	pkgPath := rootPath.Join(p.PackagePath.ToStringDuringMigration())
+func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
+	pkgPath := rootPath.UntypedJoin(p.PackagePath.ToStringDuringMigration())
 	// Add all the checked in hashes.
 	var result map[turbopath.AnchoredUnixPath]string
 
-	// make a copy of the inputPatterns array, becase we may be appending to it later.
+	// make a copy of the inputPatterns array, because we may be appending to it later.
 	calculatedInputs := make([]string, len(p.InputPatterns))
 	copy(calculatedInputs, p.InputPatterns)
 
@@ -50,7 +50,20 @@ func GetPackageDeps(rootPath turbopath.AbsolutePath, p *PackageDepsOptions) (map
 		// Note this package.json will be resolved relative to the pkgPath.
 		calculatedInputs = append(calculatedInputs, "package.json")
 
-		absoluteFilesToHash, err := globby.GlobFiles(pkgPath.ToStringDuringMigration(), calculatedInputs, nil)
+		// The input patterns are relative to the package.
+		// However, we need to change the globbing to be relative to the repo root.
+		// Prepend the package path to each of the input patterns.
+		prefixedInputPatterns := make([]string, len(calculatedInputs))
+		for index, pattern := range calculatedInputs {
+			rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern))
+			if err != nil {
+				return nil, err
+			}
+			prefixedInputPatterns[index] = rerooted
+		}
+
+		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, nil)
+
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
 		}
@@ -117,7 +130,7 @@ func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.
 
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath turbopath.AbsolutePath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+func GetHashableDeps(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	output := make([]turbopath.AnchoredSystemPath, len(files))
 	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
@@ -286,7 +299,7 @@ func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *g
 
 // gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
 // that are present in the `git` index at a particular revision.
-func gitLsTree(rootPath turbopath.AbsolutePath) (map[turbopath.AnchoredUnixPath]string, error) {
+func gitLsTree(rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	cmd := exec.Command(
 		"git",     // Using `git` from $PATH,
 		"ls-tree", // list the contents of the git index,
@@ -377,7 +390,7 @@ func (s statusCode) isDelete() bool {
 // We need to calculate where the repository's location is in order to determine what the full path is
 // before we can return those paths relative to the calling directory, normalizing to the behavior of
 // `ls-files` and `ls-tree`.
-func gitStatus(rootPath turbopath.AbsolutePath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
+func gitStatus(rootPath turbopath.AbsoluteSystemPath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
 	cmd := exec.Command(
 		"git",               // Using `git` from $PATH,
 		"status",            // tell me about the status of the working tree,

@@ -1,4 +1,7 @@
 import execa from "execa";
+import tar from "tar";
+import { Readable } from "stream";
+import { ZstdCodec } from "zstd-codec";
 import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import { Monorepo } from "../monorepo";
@@ -17,7 +20,7 @@ const basicPipeline = {
     },
     build: {
       dependsOn: ["^build"],
-      outputs: ["dist/**"],
+      outputs: ["dist/**", "!dist/cache/**"],
     },
     "//#build": {
       dependsOn: [],
@@ -40,9 +43,10 @@ const basicPipeline = {
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
 
-let suites = [];
+let suites: uvu.uvu.Test<uvu.Context>[] = [];
 for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   const Suite = uvu.suite(`${npmClient}`);
+
   const repo = new Monorepo("basics");
   repo.init(npmClient, basicPipeline);
   repo.install();
@@ -52,6 +56,7 @@ for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   repo.linkPackages();
   repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient);
+
   const sub = new Monorepo("in-subdirectory");
   sub.init(npmClient, basicPipeline, "js");
   sub.install();
@@ -59,15 +64,17 @@ for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
   sub.addPackage("b");
   sub.addPackage("c");
   sub.linkPackages();
+
   runSmokeTests(Suite, sub, npmClient, {
-    cwd: path.join(sub.root, sub.subdir),
+    cwd: sub.subdir ? path.join(sub.root, sub.subdir) : sub.root,
   });
+
   suites.push(Suite);
   // test that turbo can run from a subdirectory
 }
 
-for (let s of suites) {
-  s.run();
+for (let suite of suites) {
+  suite.run();
 }
 
 type Task = {
@@ -175,15 +182,19 @@ function runSmokeTests<T>(
     async () => {
       const results = repo.turbo(
         "run",
-        ["test", "--stream", "--profile=chrometracing"],
+        ["test", "--profile=chrometracing"],
         options
       );
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
       assert.ok(!!hash, "No hash for c#test");
+
+      const cacheItemPath = getCacheItemForHash(repo, hash);
+      await extractZst(path.join(repo.root, cacheItemPath), repo.root);
+
       const cachedLogFilePath = getCachedLogFilePathForTask(
-        getCachedDirForHash(repo, hash),
+        repo,
         path.join("packages", "c"),
         "test"
       );
@@ -208,13 +219,17 @@ function runSmokeTests<T>(
       options.cwd ? " from " + options.cwd : ""
     }`,
     async () => {
-      const results = repo.turbo("run", ["lint", "--stream"], options);
+      const results = repo.turbo("run", ["lint"], options);
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#lint");
       assert.ok(!!hash, "No hash for c#lint");
+
+      const cacheItemPath = getCacheItemForHash(repo, hash);
+      await extractZst(path.join(repo.root, cacheItemPath), repo.root);
+
       const cachedLogFilePath = getCachedLogFilePathForTask(
-        getCachedDirForHash(repo, hash),
+        repo,
         path.join("packages", "c"),
         "lint"
       );
@@ -236,11 +251,7 @@ function runSmokeTests<T>(
         [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
       });
       const sinceCommandOutputNoCache = getCommandOutputAsArray(
-        repo.turbo(
-          "run",
-          ["test", "--since=main", "--stream", "--no-cache"],
-          options
-        )
+        repo.turbo("run", ["test", "--since=main", "--no-cache"], options)
       );
 
       assert.fixture(
@@ -267,7 +278,7 @@ function runSmokeTests<T>(
       const sinceCommandOutput = getCommandOutputAsArray(
         repo.turbo(
           "run",
-          ["test", "--since=main", "--stream", "--output-logs=hash-only"],
+          ["test", "--since=main", "--output-logs=hash-only"],
           options
         )
       );
@@ -297,7 +308,7 @@ function runSmokeTests<T>(
       const sinceCommandSecondRunOutput = getCommandOutputAsArray(
         repo.turbo(
           "run",
-          ["test", "--since=main", "--stream", "--output-logs=hash-only"],
+          ["test", "--since=main", "--output-logs=hash-only"],
           options
         )
       );
@@ -341,7 +352,7 @@ function runSmokeTests<T>(
       const lintOutput = getCommandOutputAsArray(
         repo.turbo(
           "run",
-          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          ["lint", "--filter=a", "--output-logs=hash-only"],
           options
         )
       );
@@ -368,7 +379,7 @@ function runSmokeTests<T>(
       const secondLintRun = getCommandOutputAsArray(
         repo.turbo(
           "run",
-          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          ["lint", "--filter=a", "--output-logs=hash-only"],
           options
         )
       );
@@ -395,7 +406,7 @@ function runSmokeTests<T>(
       const thirdLintRun = getCommandOutputAsArray(
         repo.turbo(
           "run",
-          ["lint", "--filter=a", "--stream", "--output-logs=hash-only"],
+          ["lint", "--filter=a", "--output-logs=hash-only"],
           options
         )
       );
@@ -416,7 +427,7 @@ function runSmokeTests<T>(
       );
 
       const commandOnceBHasChangedOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["test", "--stream"], options)
+        repo.turbo("run", ["test"], options)
       );
 
       assert.fixture(
@@ -449,7 +460,7 @@ function runSmokeTests<T>(
       );
 
       const scopeCommandOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["test", '--scope="!b"', "--stream"], options)
+        repo.turbo("run", ["test", '--scope="!b"'], options)
       );
 
       assert.fixture(
@@ -550,10 +561,11 @@ function runSmokeTests<T>(
     }
   );
 
-  if (["yarn", "pnpm6", "pnpm"].includes(npmClient)) {
+  if (["npm", "yarn", "pnpm6", "pnpm", "berry"].includes(npmClient)) {
     // Test `turbo prune --scope=a`
     // @todo refactor with other package managers
-    const installArgs = ["--frozen-lockfile"];
+    const [installCmd, ...installArgs] =
+      getImmutableInstallForPackageManager(npmClient);
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
@@ -588,7 +600,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", installArgs, {
+        const install = repo.run(installCmd, installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -612,7 +624,7 @@ function runSmokeTests<T>(
         assert.fixture(pruneCommandOutput[1], " - Added a");
         assert.fixture(pruneCommandOutput[2], " - Added b");
 
-        let files = [];
+        let files: string[] = [];
         assert.not.throws(() => {
           files = repo.globbySync("out/**/*", {
             cwd: options.cwd ?? repo.root,
@@ -640,7 +652,7 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
-        const install = repo.run("install", installArgs, {
+        const install = repo.run(installCmd, installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
             : path.join(repo.root, "out"),
@@ -675,6 +687,22 @@ function getLockfileForPackageManager(ws: PackageManager) {
   }
 }
 
+function getImmutableInstallForPackageManager(ws: PackageManager): string[] {
+  switch (ws) {
+    case "yarn":
+      return ["install", "--frozen-lockfile"];
+    case "pnpm":
+      return ["install", "--frozen-lockfile"];
+    case "pnpm6":
+      return ["install", "--frozen-lockfile"];
+    case "npm":
+      return ["ci"];
+    case "berry":
+      return ["install", "--immutable"];
+    default:
+      throw new Error(`Unknown package manager: ${ws}`);
+  }
+}
 function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
@@ -691,20 +719,53 @@ function getHashFromOutput(lines: string[], taskId: string): string {
   return hash;
 }
 
-function getCachedDirForHash(repo: Monorepo, hash: string): string {
+function getCacheItemForHash(repo: Monorepo, hash: string): string {
   return path.join(
     repo.subdir ? repo.subdir : ".",
     "node_modules",
     ".cache",
     "turbo",
-    hash
+    `${hash}.tar.zst`
   );
 }
 
 function getCachedLogFilePathForTask(
-  cacheDir: string,
+  repo: Monorepo,
   pathToPackage: string,
   taskName: string
 ): string {
-  return path.join(cacheDir, pathToPackage, ".turbo", `turbo-${taskName}.log`);
+  return path.join(
+    repo.subdir ? repo.subdir : "",
+    pathToPackage,
+    ".turbo",
+    `turbo-${taskName}.log`
+  );
+}
+
+function createDecoder() {
+  return new Promise((resolve) => {
+    ZstdCodec.run((zstd) => resolve(new zstd.Streaming()));
+  });
+}
+
+async function extractZst(zst, dest) {
+  let decoder = await createDecoder();
+  const fileBuffer = fs.readFileSync(zst);
+  const data = new Uint8Array(
+    fileBuffer.buffer.slice(
+      fileBuffer.byteOffset,
+      fileBuffer.byteOffset + fileBuffer.byteLength
+    )
+  );
+  const decompressed = decoder.decompress(data);
+  const stream = Readable.from(Buffer.from(decompressed));
+  const output = stream.pipe(
+    tar.x({
+      cwd: dest,
+    })
+  );
+
+  return new Promise((resolve) => {
+    output.on("finish", resolve);
+  });
 }

@@ -33,12 +33,12 @@ func testBin() string {
 	return "node"
 }
 
-func getUnixSocket(dir turbopath.AbsolutePath) turbopath.AbsolutePath {
-	return dir.Join("turbod-test.sock")
+func getUnixSocket(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return dir.UntypedJoin("turbod-test.sock")
 }
 
-func getPidFile(dir turbopath.AbsolutePath) turbopath.AbsolutePath {
-	return dir.Join("turbod-test.pid")
+func getPidFile(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return dir.UntypedJoin("turbod-test.pid")
 }
 
 func TestConnectFailsWithoutGrpcServer(t *testing.T) {
@@ -47,7 +47,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	// failures, followed by ErrTooManyAttempts
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -68,7 +68,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 func TestKillDeadServerNoPid(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -87,7 +87,7 @@ func TestKillDeadServerNoPid(t *testing.T) {
 func TestKillDeadServerNoProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -115,7 +115,7 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 func TestKillDeadServerWithProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -158,7 +158,7 @@ type mockServer struct {
 	turbodprotocol.UnimplementedTurbodServer
 	helloErr     error
 	shutdownResp *turbodprotocol.ShutdownResponse
-	pidFile      turbopath.AbsolutePath
+	pidFile      turbopath.AbsoluteSystemPath
 }
 
 // Simulates server exiting by cleaning up the pid file
@@ -179,7 +179,7 @@ func (s *mockServer) Hello(ctx context.Context, req *turbodprotocol.HelloRequest
 func TestKillLiveServer(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)

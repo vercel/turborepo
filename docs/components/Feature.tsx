@@ -1,5 +1,6 @@
+import classNames from "classnames";
 import Link from "next/link";
-import type { Feature } from "../content/features";
+import type { Feature } from "../content/legacy-features";
 
 type FeatureProps = {
   feature: Omit<Feature, "page">;
@@ -12,22 +13,38 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
   return (
     <>
       <div className="inline-flex items-center space-x-3">
-        <Icon
-          className="h-8 w-8 dark:text-white  rounded-full p-1.5 dark:bg-white dark:bg-opacity-10 bg-black bg-opacity-5 text-black block"
-          aria-hidden="true"
-        />
-        <h3 className="m-0 text-lg font-medium dark:text-white">{name}</h3>
+        <div className="flex items-center justify-center bg-black rounded-full bg-opacity-5 w-9 h-9 icon-circle">
+          <Icon
+            className={classNames(
+              "h-8 w-8 dark:text-white flex-shrink-0 p-1.5 text-black block dark:stroke-[url(#pink-gradient)]",
+              Icon.requiresFill && "dark:fill-[url(#pink-gradient)]"
+            )}
+            aria-hidden="true"
+          />
+        </div>
+        <h3 className="m-0 text-lg font-semibold leading-6 tracking-tight text-gray-900 dark:text-white">
+          {name}
+        </h3>
       </div>
       <div>
-        <p className="mt-2 text-base font-medium text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-base font-medium leading-7 text-gray-500 dark:text-gray-400">
           {description}
         </p>
       </div>
+      <style jsx global>{`
+        html.dark .icon-circle {
+          background: linear-gradient(
+            180deg,
+            rgba(50, 134, 241, 0.2) 0%,
+            rgba(195, 58, 195, 0.2) 100%
+          );
+        }
+      `}</style>
     </>
   );
 };
 
-const featureWrapperClasses = `block p-10 bg-white shadow-lg rounded-xl dark:bg-opacity-5 no-underline text-black dark:text-white`;
+const featureWrapperClasses = `relative block overflow-hidden p-10 bg-white shadow-lg rounded-xl dark:bg-opacity-5 no-underline text-black dark:text-white`;
 
 export const DetailedFeatureLink = (props: {
   href: string;
@@ -44,7 +61,7 @@ export const DetailedFeatureLink = (props: {
 
 export default function Feature(props: FeatureProps) {
   const { feature, detailed = false } = props;
-  const { Icon, name, description } = feature;
+  const { Icon, name } = feature;
 
   if (detailed) {
     return (

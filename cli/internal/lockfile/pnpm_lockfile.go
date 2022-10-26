@@ -5,7 +5,8 @@ import (
 	"io"
 
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/yaml"
 )
 
 // PnpmLockfile Go representation of the contents of 'pnpm-lock.yaml'
@@ -32,6 +33,20 @@ type ProjectSnapshot struct {
 	DevDependencies      map[string]string           `yaml:"devDependencies,omitempty"`
 	DependenciesMeta     map[string]DependenciesMeta `yaml:"dependenciesMeta,omitempty"`
 	PublishDirectory     string                      `yaml:"publishDirectory,omitempty"`
+}
+
+// Will try to find a resolution in any of the dependency fields
+func (p *ProjectSnapshot) findResolution(dependency string) (string, bool) {
+	if resolution, ok := p.Dependencies[dependency]; ok {
+		return resolution, true
+	}
+	if resolution, ok := p.DevDependencies[dependency]; ok {
+		return resolution, true
+	}
+	if resolution, ok := p.OptionalDependencies[dependency]; ok {
+		return resolution, true
+	}
+	return "", false
 }
 
 // PackageSnapshot Snapshot used to represent a package in the packages setion
@@ -126,12 +141,12 @@ func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
 }
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (p *PnpmLockfile) ResolvePackage(name string, version string) (string, string, bool) {
-	resolvedVersion, ok := p.resolveSpecifier(name, version)
-	if !ok {
-		return "", "", false
+func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
+	resolvedVersion, ok, err := p.resolveSpecifier(workspacePath, name, version)
+	if !ok || err != nil {
+		return Package{}, err
 	}
-	key := fmt.Sprintf("/%s/%s", name, resolvedVersion)
+	key := formatPnpmKey(name, resolvedVersion)
 	if entry, ok := (p.Packages)[key]; ok {
 		var version string
 		if entry.Version != "" {
@@ -139,10 +154,10 @@ func (p *PnpmLockfile) ResolvePackage(name string, version string) (string, stri
 		} else {
 			version = resolvedVersion
 		}
-		return key, version, true
+		return Package{Key: key, Version: version, Found: true}, nil
 	}
 
-	return "", "", false
+	return Package{}, nil
 }
 
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
@@ -161,15 +176,13 @@ func (p *PnpmLockfile) AllDependencies(key string) (map[string]string, bool) {
 		deps[name] = version
 	}
 
-	for name, version := range entry.PeerDependencies {
-		deps[name] = version
-	}
+	// Peer dependencies appear in the Dependencies map resolved
 
 	return deps, true
 }
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (p *PnpmLockfile) Subgraph(packages []string) (Lockfile, error) {
+func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
 	lockfilePackages := make(map[string]PackageSnapshot, len(packages))
 	for _, key := range packages {
 		entry, ok := p.Packages[key]
@@ -180,18 +193,80 @@ func (p *PnpmLockfile) Subgraph(packages []string) (Lockfile, error) {
 		}
 	}
 
+	importers, err := pruneImporters(p.Importers, workspacePackages)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, importer := range importers {
+		for dependency, meta := range importer.DependenciesMeta {
+			if meta.Injected {
+				resolution, ok := importer.findResolution(dependency)
+				if !ok {
+					return nil, fmt.Errorf("Unable to find %s other than reference in dependenciesMeta", dependency)
+				}
+				entry, ok := p.Packages[resolution]
+				if !ok {
+					return nil, fmt.Errorf("Unable to find package entry for %s", resolution)
+				}
+
+				lockfilePackages[resolution] = entry
+			}
+		}
+	}
+
 	lockfile := PnpmLockfile{
 		Version:                   p.Version,
-		Importers:                 p.Importers,
+		Importers:                 importers,
 		Packages:                  lockfilePackages,
 		NeverBuiltDependencies:    p.NeverBuiltDependencies,
 		OnlyBuiltDependencies:     p.OnlyBuiltDependencies,
 		Overrides:                 p.Overrides,
 		PackageExtensionsChecksum: p.PackageExtensionsChecksum,
-		PatchedDependencies:       p.PatchedDependencies,
+		PatchedDependencies:       prunePatches(p.PatchedDependencies, lockfilePackages),
 	}
 
 	return &lockfile, nil
+}
+
+// Prune imports to only those have all of their dependencies in the packages list
+func pruneImporters(importers map[string]ProjectSnapshot, workspacePackages []turbopath.AnchoredSystemPath) (map[string]ProjectSnapshot, error) {
+	prunedImporters := map[string]ProjectSnapshot{}
+
+	// Copy over root level importer
+	if root, ok := importers["."]; ok {
+		prunedImporters["."] = root
+	}
+
+	for _, workspacePath := range workspacePackages {
+		workspace := workspacePath.ToUnixPath().ToString()
+		importer, ok := importers[workspace]
+
+		if !ok {
+			return nil, fmt.Errorf("Unable to find import entry for workspace package %s", workspace)
+		}
+
+		prunedImporters[workspace] = importer
+	}
+
+	return prunedImporters, nil
+}
+
+func prunePatches(patches map[string]PatchFile, packages map[string]PackageSnapshot) map[string]PatchFile {
+	if len(patches) == 0 {
+		return nil
+	}
+
+	patchPackages := make(map[string]PatchFile, len(patches))
+	for dependency, entry := range patches {
+		dependencyString := fmt.Sprintf("%s_%s", dependency, entry.Hash)
+		_, inPackages := packages[dependencyString]
+		if inPackages {
+			patchPackages[dependency] = entry
+		}
+	}
+
+	return patchPackages
 }
 
 // Encode encode the lockfile representation and write it to the given writer
@@ -209,28 +284,54 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 	return nil
 }
 
-func (p *PnpmLockfile) resolveSpecifier(name string, specifier string) (string, bool) {
-	// Check if the specifier is already a resolved version
-	_, ok := p.Packages[fmt.Sprintf("/%s/%s", name, specifier)]
-	if ok {
-		return specifier, true
+// Patches return a list of patches used in the lockfile
+func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
+	if len(p.PatchedDependencies) == 0 {
+		return nil
 	}
-	for workspacePkg, importer := range p.Importers {
-		for pkgName, pkgSpecifier := range importer.Specifiers {
-			if name == pkgName && specifier == pkgSpecifier {
-				if resolvedVersion, ok := importer.Dependencies[name]; ok {
-					return resolvedVersion, true
-				}
-				if resolvedVersion, ok := importer.DevDependencies[name]; ok {
-					return resolvedVersion, true
-				}
-				if resolvedVersion, ok := importer.OptionalDependencies[name]; ok {
-					return resolvedVersion, true
-				}
+	patches := make([]turbopath.AnchoredUnixPath, len(p.PatchedDependencies))
+	i := 0
+	for _, patch := range p.PatchedDependencies {
+		patches[i] = turbopath.AnchoredUnixPath(patch.Path)
+		i++
+	}
+	return patches
+}
 
-				panic(fmt.Sprintf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePkg))
-			}
-		}
+func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
+	// Check if the specifier is already a resolved version
+	_, ok := p.Packages[formatPnpmKey(name, specifier)]
+	if ok {
+		return specifier, true, nil
 	}
-	return "", false
+	pnpmWorkspacePath := workspacePath.ToString()
+	if pnpmWorkspacePath == "" {
+		// For pnpm, the root is named "."
+		pnpmWorkspacePath = "."
+	}
+	importer, ok := p.Importers[pnpmWorkspacePath]
+	if !ok {
+		return "", false, fmt.Errorf("no workspace '%v' found in lockfile", workspacePath)
+	}
+	foundSpecifier, ok := importer.Specifiers[name]
+	if !ok {
+		return "", false, nil
+	}
+	if foundSpecifier != specifier {
+		return "", false, nil
+	}
+	if resolvedVersion, ok := importer.Dependencies[name]; ok {
+		return resolvedVersion, true, nil
+	}
+	if resolvedVersion, ok := importer.DevDependencies[name]; ok {
+		return resolvedVersion, true, nil
+	}
+	if resolvedVersion, ok := importer.OptionalDependencies[name]; ok {
+		return resolvedVersion, true, nil
+	}
+	return "", false, fmt.Errorf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath)
+}
+
+func formatPnpmKey(name string, version string) string {
+	return fmt.Sprintf("/%s/%s", name, version)
 }

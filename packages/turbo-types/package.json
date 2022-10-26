@@ -1,0 +1,16 @@
+{
+  "name": "turbo-types",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "version": "0.0.0",
+  "bin": {
+    "turbo-gen": "./src/scripts/codegen.js"
+  },
+  "private": true,
+  "dependencies": {
+    "ts-json-schema-generator": "1.1.2"
+  },
+  "devDependencies": {
+    "tsconfig": "workspace:*"
+  }
+}

@@ -1,0 +1,52 @@
+# Linting in a monorepo
+
+Linting in a monorepo can be tricky. Most of your workspaces will likely contain code that needs to be linted - so working out the most efficient way to lint them is tough.
+
+In this guide, we'll propose a method that plays to Turborepo's strengths:
+
+- Running lint tasks _inside_ the workspaces, not from root
+- Sharing as much config as possible between workspaces
+
+## Running tasks
+
+We recommend specifying a single `lint` task inside your `turbo.json`.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Then, inside **each workspace that needs to be linted**, add a `lint` script. We'll use TypeScript as an example:
+
+```json filename="packages/*/package.json"
+{
+  "scripts": {
+    "lint": "tsc"
+  }
+}
+```
+
+This pattern has two benefits:
+
+- [**Parallelization**](/repo/docs/core-concepts/running-tasks): the lint tasks will be run concurrently, speeding them up
+- [**Caching**](/repo/docs/core-concepts/caching): `lint` tasks will only be re-run on workspaces that have changed
+
+This means you can lint your entire repo using one command:
+
+```bash
+turbo run lint
+```
+
+## Sharing config files
+
+Sharing configuration across a monorepo helps keep the development experience consistent. Most linters will have a system for sharing config, or extending config across different files.
+
+So far, we've built guides for sharing config in:
+
+- [TypeScript](/repo/docs/handbook/linting/typescript)
+- [ESLint](/repo/docs/handbook/linting/eslint)

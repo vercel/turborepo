@@ -5,7 +5,7 @@
   "main": "./index.tsx",
   "types": "./index.tsx",
   "scripts": {
-    "lint": "eslint *.ts*"
+    "lint": "TIMING=1 eslint \"**/*.ts*\""
   },
   "devDependencies": {
     "@types/react": "^17.0.37",
