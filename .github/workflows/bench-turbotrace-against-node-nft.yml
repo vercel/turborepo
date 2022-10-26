@@ -22,6 +22,14 @@ jobs:
           key: bench_nft
 
       - uses: ./.github/actions/setup-node
+        with:
+          no-install: true
+
+      - name: Install dependencies
+        working-directory: crates/turbopack/tests/node-file-trace
+        run: |
+          echo 'node-linker = "hoisted"' > .npmrc
+          pnpm install -r --side-effects-cache false
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin

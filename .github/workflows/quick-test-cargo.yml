@@ -33,6 +33,11 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
+      - name: Install tests dependencies
+        working-directory: crates/turbopack/tests/node-file-trace
+        run: |
+          pnpm install -r --side-effects-cache false
+
       - name: Start Redis
         uses: supercharge/redis-github-action@1.4.0
         with:
