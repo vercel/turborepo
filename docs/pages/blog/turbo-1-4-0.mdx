@@ -8,12 +8,24 @@ ogImage: /images/blog/turbo-1-4-0/twitter-card.png
 
 # Turborepo 1.4
 
-import { Authors } from '../../components/Authors'
-import Callout from '../../components/Callout'
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
+import Date from "../../components/blog/Date";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Tuesday, August 9th, 2022</div>
+<Date>
+  Tuesday, August 9th, 2022
+</Date>
 
-<Authors authors={[ 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+<Authors
+  authors={[
+    "gsoltis",
+    "nathanhammond",
+    "tknickman",
+    "anthonyshewdev",
+    "jaredpalmer",
+    "mehulkar",
+  ]}
+/>
 
 Turborepo 1.4 brings:
 
@@ -52,9 +64,7 @@ For example, consider a monorepo with three workspaces: a Next.js project, a Cre
 {
   "pipeline": {
     "build": {
-      "dependsOn": [
-        "^build",
-      ]
+      "dependsOn": ["^build"]
     }
   }
 }
@@ -73,7 +83,7 @@ To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](http
 ```jsonc
 {
   // Automatically flag env vars missing from turbo.json
-  "extends": ["next/core-web-vitals", "turbo"],
+  "extends": ["next/core-web-vitals", "turbo"]
 }
 ```
 
@@ -100,25 +110,25 @@ Learn more about ESLint configs and plugins in the [ESLint docs](https://eslint.
 
 Based on your feedback and suggestions, we've created new examples to integrate Turborepo into your workflow:
 
-- [Svelte](https://github.com/vercel/turborepo/tree/main/examples/with-svelte)
-- [Docker](https://github.com/vercel/turborepo/tree/main/examples/with-docker)
-- [Create React App](https://github.com/vercel/turborepo/tree/main/examples/with-create-react-app)
-- [React Native](https://github.com/vercel/turborepo/tree/main/examples/with-react-native-web)
-- [Prisma](https://github.com/vercel/turborepo/tree/main/examples/with-prisma)
-- [Tailwind](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind)
-- … [and more!](https://github.com/vercel/turborepo/tree/main/examples)
+- [Svelte](https://github.com/vercel/turbo/tree/main/examples/with-svelte)
+- [Docker](https://github.com/vercel/turbo/tree/main/examples/with-docker)
+- [Create React App](https://github.com/vercel/turbo/tree/main/examples/with-create-react-app)
+- [React Native](https://github.com/vercel/turbo/tree/main/examples/with-react-native-web)
+- [Prisma](https://github.com/vercel/turbo/tree/main/examples/with-prisma)
+- [Tailwind](https://github.com/vercel/turbo/tree/main/examples/with-tailwind)
+- … [and more!](https://github.com/vercel/turbo/tree/main/examples)
 
 ## Other bug fixes and improvements
 
-- Allow both sides of git comparison ([#1442](https://github.com/vercel/turborepo/pull/1442))
-- Properly rebuild packages that share a name prefix ([#1538](https://github.com/vercel/turborepo/pull/1538))
-- Cache files with the correct file permissions ([#1429](https://github.com/vercel/turborepo/pull/1429))
+- Allow both sides of git comparison ([#1442](https://github.com/vercel/turbo/pull/1442))
+- Properly rebuild packages that share a name prefix ([#1538](https://github.com/vercel/turbo/pull/1538))
+- Cache files with the correct file permissions ([#1429](https://github.com/vercel/turbo/pull/1429))
 
 ## Community
 
 Since releasing [Turborepo v1.3 in June](notion://www.notion.so/blog/turbo-1-3-0), we've seen incredible adoption and community growth:
 
-- [8.65k+ GitHub Stars](https://github.com/vercel/turborepo)
+- [8.65k+ GitHub Stars](https://github.com/vercel/turbo)
 - 365k weekly NPM downloads, up 2x since late April
 - 10 years of compute time saved through Remote Caching on Vercel, saving 10 months per week
 

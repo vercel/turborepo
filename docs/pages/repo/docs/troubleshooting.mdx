@@ -1,0 +1,41 @@
+---
+title: Troubleshooting
+description: This guide aims to help you debug issues with your Turborepo builds and configuration.
+---
+
+# Troubleshooting
+
+This guide aims to help you debug issues with your Turborepo builds and configuration.
+
+## My dependency isn't being built correctly
+
+- Are you properly bundling and transpiling the dependency before building the application?
+  - For example, libraries like `tsc`, `tsup`, `esbuild`, `babel`, and `swc` will convert newer JavaScript features back to “pure” JavaScript.
+  - If you are using Next.js, you might be using `next-transpile-modules`. Ensure you add the name of the dependency inside `next.config.js` ([example](https://github.com/vercel/turbo/blob/main/examples/basic/apps/docs/next.config.js#L1)).
+- Have you listed `files` in the dependency's `package.json` to point to the correct files?
+
+## My types are not being found
+
+- Did you specify `types` or `typing` inside the dependency's `package.json` to point to the `.d.ts` file?
+- Have you altered or set custom `tsconfig.json` `paths`?
+  - Do they have the correct folder structure for your application?
+  - Are they properly configured for the meta framework, bundler, or transpilation tool?
+
+## I'm not seeing any cache hits
+
+- Is any source code being generated during the build that isn't checked into git?
+  - This would change the fingerprint Turborepo uses to store build outputs.
+- Are [cache outputs correctly specified](./core-concepts/caching#configuring-cache-outputs) in your Turborepo [pipeline](./core-concepts/pipelines#defining-a-pipeline)?
+  - Pipeline settings are not inherited or merged, so they need to be re-specified in [workspace-specific tasks](./core-concepts/pipelines#implicit-dependencies-and-specific-package-tasks) (e.g. `web#build` does **not** inherit pipeline settings from `build`).
+- [Are relevant inlined environment variables accounted for?](./core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+  - To verify, run `turbo` in verbose mode by adding `-vvv` to `turbo run <task>` and look at which environment variables are included in the hashes.
+
+## I'm seeing cache hits, but my build is broken
+
+- Are [cache outputs properly specified](./core-concepts/caching#configuring-cache-outputs) in your Turborepo [pipeline](./core-concepts/pipelines#defining-a-pipeline)?
+  - Pipeline settings are not inherited or merged, so they need to be re-specified in [workspace-specific tasks](./core-concepts/pipelines#implicit-dependencies-and-specific-package-tasks) (e.g. `web#build` does **not** inherit pipeline settings from `build`).
+
+## My build is caching the wrong environment variables
+
+- [Are relevant inlined environment variables accounted for?](./core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+  - To verify, run `turbo` in verbose mode by adding `-vvv` to `turbo run <task>` and look at which environment variables are included in the hashes.

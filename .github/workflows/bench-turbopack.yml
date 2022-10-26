@@ -1,0 +1,153 @@
+name: Benchmark Turbopack
+
+on:
+  push:
+    branches: [main, staging]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_LTO: true
+  RUST_BACKTRACE: 1
+  NODE_OPTIONS: "--max-old-space-size=32768"
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        bench:
+          # One of Turbopack CSR or SSR with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This runs all the non next-dev benchmarks
+          - name: generic
+            cache_key: all
+            TURBOPACK_BENCH_COUNTS: 1000
+
+          # This measures Turbopack CSR and SSR
+          - name: turbopack
+            cache_key: next-dev
+            args: -p next-dev
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+
+          # This measures Turbopack CSR and SSR with larger apps
+          - name: turbopack-large
+            cache_key: next-dev
+            args: -p next-dev
+            TURBOPACK_BENCH_COUNTS: 1000,2000,3000
+
+          # This measures Next.js 12
+          - name: next 12
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 12)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Next.js 11
+          - name: next 11
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 11)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Vite
+          - name: vite
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Vite)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Parcel
+          - name: parcel
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Parcel)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Webpack
+          - name: webpack
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Webpack)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+    runs-on: ubuntu-latest-16-core
+    name: bench - ${{ matrix.bench.name }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: benchmark-${{ matrix.bench.cache_key }}
+
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+      - name: Run cargo bench
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 90
+        env:
+          TURBOPACK_BENCH_BUNDLERS: ${{ matrix.bench.TURBOPACK_BENCH_BUNDLERS }}
+          TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
+        with:
+          command: bench
+          args: ${{ matrix.bench.args }}
+
+      - name: Install critcmp
+        if: always()
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
+      - name: Export results
+        if: always()
+        run: critcmp --export base > raw.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.bench.name }}
+          path: raw.json
+
+      # This avoids putting this data into the rust-cache
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+  commit_results:
+    name: Commit benchmark-data
+    needs: bench
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "::set-output name=year::$(date +'%Y')"
+          echo "::set-output name=month::$(date +'%m')"
+          echo "::set-output name=date::$(date +'%s')"
+          echo "::set-output name=pretty::$(date +'%Y-%m-%d %H:%M')"
+      - name: Checkout benchmark-data
+        uses: actions/checkout@v3
+        with:
+          ref: benchmark-data
+      - name: Download benchmark data
+        uses: actions/download-artifact@v3
+        with:
+          path: data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-16-core/${{ steps.date.outputs.date }}-${{ github.sha }}
+      - name: Git pull
+        run: git pull --depth=1 --no-tags origin benchmark-data
+      - name: Push data to branch
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})

@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import type { FC, ReactElement } from "react";
 
 import { Tabs as NextraTabs, Tab } from "nextra-theme-docs";
 import useSWR from "swr";
@@ -8,6 +8,7 @@ export { Tab };
 export const Tabs: FC<{
   storageKey?: string;
   items: string[];
+  children: ReactElement;
 }> = function ({ storageKey = "tab-index", items, children = null, ...props }) {
   // Use SWR so all tabs with the same key can sync their states.
   const { data, mutate } = useSWR(storageKey, (key) => {

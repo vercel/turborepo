@@ -2,31 +2,27 @@ mod commands;
 mod ffi;
 mod package_manager;
 
-use crate::ffi::nativeRunWithArgs;
-use crate::package_manager::PackageManager;
-use anyhow::{anyhow, Result};
-use clap::{CommandFactory, Parser, Subcommand};
-use serde::Serialize;
-use std::env::current_exe;
-use std::path::{Path, PathBuf};
-
-use std::process::Stdio;
 use std::{
     env,
+    env::current_exe,
     ffi::CString,
     fs,
     os::raw::{c_char, c_int},
+    path::{Path, PathBuf},
     process,
+    process::Stdio,
 };
 
-#[derive(Parser, Debug, Serialize, Default, PartialEq)]
-#[clap(author, about = "Turbocharge your monorepo", long_about = None)]
-#[clap(
-    disable_help_subcommand = true,
-    disable_help_flag = true,
-    disable_version_flag = true,
-    ignore_errors = true
-)]
+use anyhow::{anyhow, Result};
+use clap::{CommandFactory, Parser, Subcommand};
+use serde::Serialize;
+
+use crate::{ffi::nativeRunWithArgs, package_manager::PackageManager};
+
+static TURBO_JSON: &str = "turbo.json";
+
+#[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
+#[clap(author, about = "The build system that makes ship happen", long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true, disable_version_flag = true)]
 struct Args {
     #[clap(long, short, global = true)]
     help: bool,
@@ -53,7 +49,8 @@ struct Args {
     /// Suppress color usage in the terminal
     #[clap(long, global = true)]
     no_color: bool,
-    /// When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+    /// When enabled, turbo will precede HTTP requests with an OPTIONS request
+    /// for authorization
     #[clap(long, global = true)]
     preflight: bool,
     /// Set the team slug for API calls
@@ -73,12 +70,10 @@ struct Args {
     tasks: Vec<String>,
 }
 
-static TURBO_JSON: &str = "turbo.json";
-
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
-/// we must change these as well to avoid accidentally passing the --single-package
-/// flag into non-build commands.
-#[derive(Subcommand, Debug, Serialize, PartialEq)]
+/// we must change these as well to avoid accidentally passing the
+/// --single-package flag into non-build commands.
+#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 enum Command {
     /// Get the path to the Turbo binary
     Bin,
@@ -88,7 +83,8 @@ enum Command {
     Daemon,
     /// Help about any command
     Help,
-    /// Link your local directory to a Vercel organization and enable remote caching.
+    /// Link your local directory to a Vercel organization and enable remote
+    /// caching.
     Link,
     /// Login to your Vercel account
     Login,
@@ -98,7 +94,8 @@ enum Command {
     Prune,
     /// Run tasks across projects in your monorepo
     Run { tasks: Vec<String> },
-    /// Unlink the current directory from your Vercel organization and disable Remote Caching
+    /// Unlink the current directory from your Vercel organization and disable
+    /// Remote Caching
     Unlink,
 }
 
@@ -125,10 +122,10 @@ struct TurboState {
 ///
 /// # Arguments
 ///
-/// * `args`: Arguments for turbo
+/// * `clap_args`: Parsed arguments from clap
+/// * `args`: Raw un-parsed arguments
 ///
 /// returns: Result<i32, Error>
-///
 fn run_current_turbo(clap_args: Args, args: Vec<String>) -> Result<i32> {
     if let Some(Command::Bin) = clap_args.command {
         commands::bin::run()?;
@@ -157,16 +154,15 @@ impl RepoState {
     /// * `current_dir`: Current working directory
     ///
     /// returns: Result<RepoState, Error>
-    ///
     pub fn infer(current_dir: &Path) -> Result<Self> {
-        // First we look for a `turbo.json`. This iterator returns the first ancestor that contains
-        // a `turbo.json` file.
+        // First we look for a `turbo.json`. This iterator returns the first ancestor
+        // that contains a `turbo.json` file.
         let root_path = current_dir
             .ancestors()
             .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
 
-        // If that directory exists, then we figure out if there are workspaces defined in it
-        // NOTE: This may change with multiple `turbo.json` files
+        // If that directory exists, then we figure out if there are workspaces defined
+        // in it NOTE: This may change with multiple `turbo.json` files
         if let Some(root_path) = root_path {
             let pnpm = PackageManager::Pnpm;
             let npm = PackageManager::Npm;
@@ -191,8 +187,8 @@ impl RepoState {
             .filter(|path| fs::metadata(path.join("package.json")).is_ok());
 
         let mut first_package_json_dir = None;
-        // We loop through these directories and see if there are workspaces defined in them,
-        // either in the `package.json` or `pnm-workspaces.yml`
+        // We loop through these directories and see if there are workspaces defined in
+        // them, either in the `package.json` or `pnm-workspaces.yml`
         for dir in potential_roots {
             if first_package_json_dir.is_none() {
                 first_package_json_dir = Some(dir)
@@ -238,7 +234,6 @@ impl RepoState {
 /// * `clap_args`:
 ///
 /// returns: bool
-///
 fn is_run_command(clap_args: &Args) -> bool {
     let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
     let is_implicit_run = clap_args.command.is_none() && !clap_args.tasks.is_empty();
@@ -256,7 +251,6 @@ fn is_run_command(clap_args: &Args) -> bool {
 /// * `turbo_state`: state for current execution
 ///
 /// returns: Result<i32, Error>
-///
 fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
     let local_turbo_path = turbo_state
         .repo_state
@@ -273,8 +267,8 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
     }
 
     let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-    // If the local turbo path doesn't exist or if we are local turbo, then we go ahead and run
-    // the Go code linked in the current binary.
+    // If the local turbo path doesn't exist or if we are local turbo, then we go
+    // ahead and run the Go code linked in the current binary.
     if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
         return run_current_turbo(turbo_state.cli_args, args);
     }
@@ -306,7 +300,8 @@ fn main() -> Result<()> {
         command.print_help()?;
         process::exit(0);
     }
-    // --version flag doesn't work with ignore_errors in clap, so we have to handle it manually
+    // --version flag doesn't work with ignore_errors in clap, so we have to handle
+    // it manually
     if clap_args.version {
         println!("{}", get_version());
         process::exit(0);
@@ -342,8 +337,9 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::{Args, Command};
     use clap::Parser;
+
+    use crate::{Args, Command};
 
     #[test]
     fn test_parse_run() {

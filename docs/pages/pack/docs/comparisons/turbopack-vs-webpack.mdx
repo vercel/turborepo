@@ -1,0 +1,50 @@
+import { DocsBenchmarksGraph } from '../../../../components/pages/pack-home/DocsBenchmarksGraph';
+import { DocsBenchmarkStat } from '../../../../components/pages/pack-home/DocsBenchmarkStat';
+
+# Turbopack vs Webpack
+
+We've built Turbopack as the successor of Webpack - the bundler that's at the heart of many beloved frameworks. Any successor to Webpack would need to be **faster** and just as **flexible and extensible**.
+
+## Speed
+
+Turbopack's incremental architecture outstrips Webpack's speed on several key metrics:
+
+### Dev server startup time
+
+Turbopack's dev server starts up much faster than Webpack. Next.js 12, which uses Webpack under the hood, can start up a build server on a 1,000 module application in <DocsBenchmarkStat stat="next12-cold-1000" />. Turbopack starts up in <DocsBenchmarkStat stat="turbopack-cold-1000" /> - **<DocsBenchmarkStat stat="turbopack-cold-vs-next12" /> faster**.
+
+<DocsBenchmarksGraph category="cold" bars={[
+  {
+    label: 'Turbopack',
+    turbo: true,
+    key: 'next13'
+  },
+  {
+    label: 'Webpack',
+    key: 'next12',
+  }
+]} />
+
+### Code updates
+
+The most common action you'll perform on a dev server is changing files. When a file changes, it needs to render the change to the browser. The faster it can do that, the tighter your feedback loop and the faster you'll ship.
+
+In a 1,000 module application, Turbopack can react to file changes **<DocsBenchmarkStat stat="turbopack-update-vs-next12" /> faster** than Webpack:
+
+<DocsBenchmarksGraph category="file_change" bars={[
+  {
+    label: 'Turbopack',
+    turbo: true,
+    key: 'next13'
+  },
+  {
+    label: 'Webpack',
+    key: 'next12',
+  }
+]} />
+
+## Extensibility
+
+Webpack has an extraordinary collection of [plugins](https://webpack.js.org/plugins) to customize its behavior. Composing plugins lets you create custom toolchains which can support a huge variety of bundler features.
+
+In its alpha state, Turbopack cannot currently be configured with plugins. In the future, we plan to make Turbopack just as extensible as Webpack - though likely with an altered API.

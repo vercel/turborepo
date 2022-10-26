@@ -10,6 +10,48 @@ const sentryWebpackPluginOptions = {
   silent: true,
 };
 
+const OLD_TURBOREPO_ROUTES = [
+  "/docs",
+  "/docs/ci/circleci",
+  "/docs/ci/github-actions",
+  "/docs/ci/gitlabci",
+  "/docs/ci/travisci",
+  "/docs/core-concepts/caching",
+  "/docs/core-concepts/remote-caching",
+  "/docs/core-concepts/scopes",
+  "/docs/core-concepts/why-turborepo",
+  "/docs/core-concepts/monorepos/filtering",
+  "/docs/core-concepts/monorepos/running-tasks",
+  "/docs/getting-started/create-new",
+  "/docs/getting-started/existing-monorepo",
+  "/docs/handbook",
+  "/docs/handbook/building-your-app",
+  "/docs/handbook/deploying-with-docker",
+  "/docs/handbook/dev",
+  "/docs/handbook/linting",
+  "/docs/handbook/migrating-to-a-monorepo",
+  "/docs/handbook/package-installation",
+  "/docs/handbook/publishing-packages",
+  "/docs/handbook/sharing-code",
+  "/docs/handbook/testing",
+  "/docs/handbook/troubleshooting",
+  "/docs/handbook/what-is-a-monorepo",
+  "/docs/handbook/workspaces",
+  "/docs/handbook/linting/eslint",
+  "/docs/handbook/linting/typescript",
+  "/docs/handbook/publishing-packages/bundling",
+  "/docs/handbook/publishing-packages/versioning-and-publishing",
+  "/docs/handbook/sharing-code/internal-packages",
+  "/docs/reference/codemods",
+  "/docs/reference/command-line-reference",
+  "/docs/reference/configuration",
+  "/docs/acknowledgements",
+  "/docs/ci",
+  "/docs/faq",
+  "/docs/troubleshooting",
+  "/docs/upgrading-to-v1",
+];
+
 const nextConfig = withNextra({
   sentry: {
     hideSourceMaps: true,
@@ -17,7 +59,6 @@ const nextConfig = withNextra({
   reactStrictMode: true,
   experimental: {
     legacyBrowsers: false,
-    images: { allowFutureImage: true },
   },
   webpack: (config, { webpack }) => {
     config.plugins.push(
@@ -35,13 +76,19 @@ const nextConfig = withNextra({
       beforeFiles: [
         {
           source: "/sitemap.xml",
-          destination: "https://crawled-sitemap.vercel.sh/turbo-sitemap.xml",
+          destination:
+            "https://crawled-sitemap.vercel.sh/turbobuild-sitemap.xml",
         },
       ],
     };
   },
   async redirects() {
     return [
+      ...OLD_TURBOREPO_ROUTES.map((route) => ({
+        source: route,
+        destination: `/repo${route}`,
+        permanent: true,
+      })),
       {
         source: "/usage",
         destination: "/reference/command-line-reference",
@@ -49,17 +96,17 @@ const nextConfig = withNextra({
       },
       {
         source: "/docs/core-concepts/running-tasks",
-        destination: "/docs/core-concepts/monorepos/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
         permanent: true,
       },
       {
         source: "/docs/core-concepts/why-turborepo",
-        destination: "/docs/core-concepts/monorepos",
+        destination: "/repo/docs/core-concepts/monorepos",
         permanent: true,
       },
       {
         source: "/docs/core-concepts/filtering",
-        destination: "/docs/core-concepts/monorepos/filtering",
+        destination: "/repo/docs/core-concepts/monorepos/filtering",
         permanent: true,
       },
       {
@@ -95,7 +142,7 @@ const nextConfig = withNextra({
       {
         source: "/docs/changelog",
         permanent: true,
-        destination: "https://github.com/vercel/turborepo/releases",
+        destination: "https://github.com/vercel/turbo/releases",
       },
       {
         source: "/docs/guides/complimentary-tools",

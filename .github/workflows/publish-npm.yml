@@ -1,0 +1,39 @@
+name: Publish npm packages
+
+on:
+  push:
+    branches: [main, staging]
+
+jobs:
+  publish-npm:
+    # crates/xtask/src/publish.rs:359
+    if: "startsWith(github.event.head_commit.message, 'chore: release npm packages')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--filter=!@vercel/nft-tests"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        # Don't care the Cargo.lock, just cache it
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: publish-npm-cargo-cache
+
+      - name: Build packages
+        run: pnpx turbo@canary run build:ts
+
+      - name: Write NPM_TOKEN
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc
+
+      - name: Publish
+        uses: actions-rs/cargo@v1
+        with:
+          command: xtask
+          args: workspace --publish
