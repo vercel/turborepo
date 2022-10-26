@@ -1,24 +1,22 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/13a8f_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_b0c8e6.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/1cdd0_tests_snapshot_styled_components_styled_components_input_index_ee92b9.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/preset_env/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/styled_components/styled_components/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
 
-(()=>{
-    const e = new Error("Cannot find module '@swc/helpers/src/_class_call_check.mjs'");
-    e.code = 'MODULE_NOT_FOUND';
-    throw e;
-})();
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$styled$2d$components$40$5$2e$3$2e$6_7i5myeigehqah43i5u7wbekgba$2f$node_modules$2f$styled$2d$components$2f$dist$2f$styled$2d$components$2e$cjs$2e$js__ = __turbopack_import__("[project]/node_modules/.pnpm/styled-components@5.3.6_7i5myeigehqah43i5u7wbekgba/node_modules/styled-components/dist/styled-components.cjs.js (ecmascript)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
-var Foo = function Foo() {
-    "use strict";
-    _class_call_check(this, Foo);
-};
-console.log(Foo, [].includes("foo"));
+const MyButton = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$styled$2d$components$40$5$2e$3$2e$6_7i5myeigehqah43i5u7wbekgba$2f$node_modules$2f$styled$2d$components$2f$dist$2f$styled$2d$components$2e$cjs$2e$js__["default"].button.withConfig({
+    displayName: "MyButton",
+    componentId: "sc-39afcc54-0"
+})`
+  background: blue;
+`;
+console.log(MyButton);
 
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/13a8f_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_55bfde.js"))) return true;
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/preset_env/input/index.js (ecmascript)");
+    if(!(true && loadedChunks.has("output/_a63c49.js") && loadedChunks.has("output/node_modules__56ee81.pnpm.js") && loadedChunks.has("output/node_modules__509a48.pnpm.js") && loadedChunks.has("output/node_modules__ada459.pnpm.js") && loadedChunks.has("output/node_modules__98d4c7.pnpm.js") && loadedChunks.has("output/c6fe1_react-is_index.js"))) return true;
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/styled_components/styled_components/input/index.js (ecmascript)");
 }]);
 (() => {
   // When a chunk is executed, it will either register itself with the current
@@ -1024,4 +1022,4 @@ console.log(Foo, [].includes("foo"));
 })();
 
 
-//# sourceMappingURL=13a8f_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_b0c8e6.js.c40fd582b8fb589a.map
+//# sourceMappingURL=1cdd0_tests_snapshot_styled_components_styled_components_input_index_ee92b9.js.f9da39fd3abd4bb1.map
