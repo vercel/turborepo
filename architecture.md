@@ -141,7 +141,7 @@ The string is the global identifier:
 The hash will allow invalidating the cache, but also being able to differentiate
 between versions when accessing a remote cache.
 
-[registry]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/registry.rs
-[new_with_any_serialization]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/value_type.rs#L138
-[any_as_serialize]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/value_type.rs#L89-L99
-[anydeserializeseed]: https://github.com/vercel/turbo-tooling/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/magic_any.rs#L174-L207
+[registry]: https://github.com/vercel/turbo/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/registry.rs
+[new_with_any_serialization]: https://github.com/vercel/turbo/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/value_type.rs#L138
+[any_as_serialize]: https://github.com/vercel/turbo/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/value_type.rs#L89-L99
+[anydeserializeseed]: https://github.com/vercel/turbo/blob/678639772cadac8e96b5ccde3c2865678d1263c1/crates/turbo-tasks/src/magic_any.rs#L174-L207

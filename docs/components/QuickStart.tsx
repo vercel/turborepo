@@ -51,7 +51,7 @@ export const MonoreposArea = () => {
           description: `Understand why monorepos don't scale - and why Turborepo is the solution.`,
           name: "Why Turborepo?",
         }}
-        href="/repo/docs/core-concepts/why-turborepo"
+        href="/repo/docs/core-concepts/monorepos"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
