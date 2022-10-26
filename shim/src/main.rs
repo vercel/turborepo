@@ -348,7 +348,7 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod test {
     use clap::Parser;
-    use rand::{seq::SliceRandom, thread_rng};
+    use itertools::Itertools;
 
     struct CommandTestCase {
         command: &'static str,
@@ -357,34 +357,35 @@ mod test {
         expected_output: Args,
     }
 
-    static TEST_ITERATIONS: usize = 10;
-
     impl CommandTestCase {
         fn test(&self) {
-            for _ in 0..TEST_ITERATIONS {
-                let command = self.create_random_permutation();
+            let permutations = self.create_all_arg_permutations();
+            for command in permutations {
                 assert_eq!(Args::try_parse_from(command).unwrap(), self.expected_output)
             }
         }
 
-        fn create_random_permutation(&self) -> Vec<&'static str> {
-            let mut rng = thread_rng();
-            // First we take the command and the global args and shuffle them
-            // to get a nice combo of args before and after the command
-            let mut args = vec![vec![self.command]];
-            args.extend(self.global_args.clone());
-            args.shuffle(&mut rng);
+        fn create_all_arg_permutations(&self) -> Vec<Vec<&'static str>> {
+            let mut permutations = Vec::new();
+            let mut global_args = vec![vec![self.command]];
+            global_args.extend(self.global_args.clone());
+            let global_args_len = global_args.len();
+            let command_args_len = self.command_args.len();
 
-            // Then we append the command args
-            let mut command_args = self.command_args.clone();
-            command_args.shuffle(&mut rng);
-            args.extend(command_args);
+            // Iterate through all the different permutations of args
+            for global_args_permutation in global_args.into_iter().permutations(global_args_len) {
+                let command_args = self.command_args.clone();
+                for command_args_permutation in
+                    command_args.into_iter().permutations(command_args_len)
+                {
+                    let mut command = vec![vec!["turbo"]];
+                    command.extend(global_args_permutation.clone());
+                    command.extend(command_args_permutation);
+                    permutations.push(command.into_iter().flatten().collect())
+                }
+            }
 
-            // Then we put the `turbo` in front
-            let mut command = vec!["turbo"];
-            command.extend(args.into_iter().flatten());
-
-            command
+            permutations
         }
     }
 
