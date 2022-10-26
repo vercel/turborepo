@@ -20,7 +20,8 @@ fn test_find_correct_turbo() {
         )
         .append_context(
             "expect",
-            "`turbo --cwd ../../examples/basic bin` should print out local turbo binary installed in examples/basic",
+            "`turbo --cwd ../../examples/basic bin` should print out local turbo binary installed \
+             in examples/basic",
         )
         .success()
         .stdout(predicates::str::ends_with(

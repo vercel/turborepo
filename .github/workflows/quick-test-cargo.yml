@@ -1,0 +1,75 @@
+name: Quick Test
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches-ignore: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: quick-test-${{ github.head_ref || github.run_id }}-true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: quick test - ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: test
+
+      - uses: ./.github/actions/setup-node
+
+      - name: Start Redis
+        uses: supercharge/redis-github-action@1.4.0
+        with:
+          redis-version: 6
+
+      - name: Set Redis URL
+        run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
+
+      - name: Install nextest
+        run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 60
+        with:
+          command: nextest
+          args: run --release
+
+  test-bench:
+    runs-on: ubuntu-latest
+    name: quick test bench - ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: test-bench
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 60
+        with:
+          command: test
+          args: --benches --release

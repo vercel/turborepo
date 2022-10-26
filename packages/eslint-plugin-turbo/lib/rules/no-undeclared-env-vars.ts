@@ -10,7 +10,7 @@ const meta: Rule.RuleMetaData = {
       "Do not allow the use of `process.env` without including the env key in turbo.json",
     category: "Configuration Issues",
     recommended: true,
-    url: `https://github.com/vercel/turborepo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
+    url: `https://github.com/vercel/turbo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
   },
   schema: [
     {

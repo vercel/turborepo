@@ -1,40 +1,40 @@
+@tailwind base;
+@tailwind components;
 @tailwind utilities;
+@tailwind variants;
 
 /* Override the Tailwind preflight */
 button[type="submit"] {
   @apply bg-black;
 }
 
-body {
-  background: linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 1) 300px
-    ),
-    fixed 0 0 / 20px 20px radial-gradient(#d1d1d1 1px, transparent 0),
-    fixed 10px 10px / 20px 20px radial-gradient(#d1d1d1 1px, transparent 0);
-}
-
-.dark body {
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, #111 300px),
-    fixed 0 0 / 20px 20px radial-gradient(#313131 1px, transparent 0),
-    fixed 10px 10px / 20px 20px radial-gradient(#313131 1px, transparent 0);
-}
-
-@keyframes slidein {
-  from {
-    transform: translate3d(0, 0, 0);
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
-  to {
-    transform: translate3d(-100%, 0, 0);
+  /* Hide scrollbar for Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none; /* Edge */
+    scrollbar-width: none; /* Firefox */
   }
-}
 
-.wrapper {
-  position: relative;
-  white-space: nowrap;
-  display: inline-block;
-  animation: slidein 120s linear infinite;
-  filter: grayscale(100%);
+  @keyframes slidein {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      transform: translate3d(-100%, 0, 0);
+    }
+  }
+
+  .wrapper {
+    position: relative;
+    white-space: nowrap;
+    display: inline-block;
+    animation: slidein 120s linear infinite;
+    filter: grayscale(100%);
+  }
 }

@@ -1,3 +1,5 @@
+# Turborepo
+
 ## Setup
 
 Dependencies
@@ -54,3 +56,34 @@ To manually run a release:
 2. Add `GORELEASER_KEY` env var with the GoReleaser Pro key (ask @turbo-oss to get access to the key)
 3. Update `version.txt` (do not commit this change to git manually)
 4. `cd cli && make publish`
+
+# Turbo Tooling
+
+`turbo-tooling` uses a [Cargo workspaces][workspaces] monorepo. You'll find
+several workspaces inside the `crates/` directory. In order to run a particular
+crate, you can use the `cargo run -p [CRATE_NAME]` command.
+
+## Testing
+
+Install `cargo-nextest` (https://nexte.st/)
+
+Run via:
+
+```shell
+cargo nextest run
+```
+
+For the test cases you need to run `yarn` to install some node_modules. See [Troubleshooting][] for solutions to common problems.
+
+You can also create a little demo app and run
+
+```shell
+cargo run -p node-file-trace -- print demo/index.js
+```
+
+## Troubleshooting
+
+See [Troubleshooting][].
+
+[workspaces]: https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
+[troubleshooting]: troubleshooting.md

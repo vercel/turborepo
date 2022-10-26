@@ -3,7 +3,7 @@ include .env
 REGISTRY           ?= ghcr.io
 TAG_VERSION        ?= snapshot
 OWNER              ?= goreleaser
-GIT_REPO           ?= https://github.com/vercel/turborepo
+GIT_REPO           ?= https://github.com/vercel/turbo
 
 ifeq ($(REGISTRY),)
 	IMAGE_BASE_NAME  := $(OWNER)/goreleaser-cross-base:$(TAG_VERSION)

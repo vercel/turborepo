@@ -28,6 +28,7 @@ jobs:
           token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
+          extra-flags: "--filter=!@vercel/nft-tests"
           enable-corepack: false
       - name: Configure git
         run: |
