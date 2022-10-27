@@ -463,4 +463,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://rocket.chat",
     pinned: true,
   },
+  {
+    caption: "Backpack",
+    image: "/images/logos/backpack.svg",
+    infoLink: "https://backpack.app",
+    pinned: true,
+  },
 ];
