@@ -320,13 +320,13 @@ async fn diff(
             println!("updated contents of {}", path_str);
         } else {
             if expected.is_none() {
-                println!("new file {path_str} detected:");
+                eprintln!("new file {path_str} detected:");
             } else {
-                println!("contents of {path_str} did not match:");
+                eprintln!("contents of {path_str} did not match:");
             }
             let expected = expected.unwrap_or_default();
             let diff = TextDiff::from_lines(&expected, &actual);
-            println!(
+            eprintln!(
                 "{}",
                 diff.unified_diff()
                     .context_radius(3)
