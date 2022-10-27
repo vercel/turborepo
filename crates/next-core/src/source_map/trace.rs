@@ -1,7 +1,10 @@
 use anyhow::Result;
 use serde_json::json;
 use turbo_tasks_fs::File;
-use turbopack_core::{asset::AssetContentVc, source_map::SourceMapVc};
+use turbopack_core::{
+    asset::AssetContentVc,
+    source_map::{SourceMapVc, Token},
+};
 
 /// An individual stack frame, as parsed by the stacktrace-parser npm module.
 ///
@@ -26,8 +29,8 @@ impl StackFrame {
     }
 }
 
-/// Source Map Trace implmements the actual source map tracing logic, by parsing
-/// the source map and calling the appropriate methods.
+/// Source Map Trace is a convenient wrapper to perform and consume a source map
+/// trace's token.
 #[turbo_tasks::value(shared)]
 #[derive(Debug)]
 pub struct SourceMapTrace {
@@ -46,7 +49,6 @@ pub enum TraceResult {
 }
 
 #[turbo_tasks::value_impl]
-#[turbo_tasks::function]
 impl SourceMapTraceVc {
     #[turbo_tasks::function]
     pub async fn new(map: SourceMapVc, line: usize, column: usize, name: Option<String>) -> Self {
@@ -77,24 +79,17 @@ impl SourceMapTraceVc {
             .map
             .lookup_token(this.line.saturating_sub(1), this.column)
             .await?;
-        let token = match &*token {
-            Some(t) if t.has_source() => t,
-            _ => return Ok(TraceResult::NotFound.cell()),
+        let result = match &*token {
+            Some(Token::Original(t)) => TraceResult::Found(StackFrame {
+                file: t.original_file.clone(),
+                line: Some(t.original_line.saturating_add(1)),
+                column: Some(t.original_column),
+                name: t.name.clone().or_else(|| this.name.clone()),
+            }),
+            _ => TraceResult::NotFound,
         };
 
-        Ok(TraceResult::Found(StackFrame {
-            file: token
-                .get_source()
-                .expect("token was unwraped already")
-                .to_string(),
-            line: token.get_source_line().map(|l| l.saturating_add(1)),
-            column: token.get_source_column(),
-            name: token
-                .get_name()
-                .map(|s| s.to_string())
-                .or_else(|| this.name.clone()),
-        })
-        .cell())
+        Ok(result.cell())
     }
 
     /// Takes the trace and generates a (possibly valid) JSON asset content.
