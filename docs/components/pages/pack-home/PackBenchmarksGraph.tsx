@@ -183,7 +183,7 @@ function GraphBar({
           transition={{ duration: 0.1 }}
           initial="hidden"
           className={cn(
-            "flex items-center h-full rounded relative dark:bg-[#ffffff06] bg-[#00000006]"
+            "flex items-center h-full rounded relative dark:bg-[#383838] bg-[#E6E6E6]"
           )}
         >
           <motion.div
