@@ -442,7 +442,7 @@ async fn trace_stack(
                         SourceMapTraceVc::new(map.content(), line, column, frame.name.clone());
                     let trace = map_trace.trace().await?;
                     if let TraceResult::Found(f) = &*trace {
-                        write_frame!(f, path)?;
+                        write_frame!(f, f.file)?;
                         continue;
                     }
                 }
