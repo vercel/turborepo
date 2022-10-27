@@ -55,6 +55,7 @@ type RemoteConfig struct {
 	TeamID   string
 	TeamSlug string
 	APIURL   string
+	Timeout  uint64
 }
 
 // Opts holds values for configuring the behavior of the API client
@@ -74,7 +75,7 @@ func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion stri
 		turboVersion: turboVersion,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(20 * time.Second),
+				Timeout: time.Duration(time.Duration(remoteConfig.Timeout) * time.Second),
 			},
 			RetryWaitMin: 2 * time.Second,
 			RetryWaitMax: 10 * time.Second,

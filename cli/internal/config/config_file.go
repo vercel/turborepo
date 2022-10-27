@@ -41,6 +41,7 @@ func (rc *RepoConfig) GetRemoteConfig(token string) client.RemoteConfig {
 		TeamID:   rc.repoViper.GetString("teamid"),
 		TeamSlug: rc.repoViper.GetString("teamslug"),
 		APIURL:   rc.repoViper.GetString("apiurl"),
+		Timeout:  rc.repoViper.GetUint64("timeout"),
 	}
 }
 
@@ -128,6 +129,7 @@ func DefaultUserConfigPath() turbopath.AbsoluteSystemPath {
 
 const (
 	_defaultAPIURL   = "https://vercel.com/api"
+	_defaultTimeout  = uint64(20)
 	_defaultLoginURL = "https://vercel.com"
 )
 
@@ -141,10 +143,12 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet)
 	repoViper.SetConfigType("json")
 	repoViper.SetEnvPrefix("turbo")
 	repoViper.MustBindEnv("apiurl", "TURBO_API")
+	repoViper.MustBindEnv("timeout", "TURBO_TIMEOUT")
 	repoViper.MustBindEnv("loginurl", "TURBO_LOGIN")
 	repoViper.MustBindEnv("teamslug", "TURBO_TEAM")
 	repoViper.MustBindEnv("teamid")
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
+	repoViper.SetDefault("timeout", _defaultTimeout)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
 	if err := repoViper.BindPFlag("loginurl", flags.Lookup("login")); err != nil {
 		return nil, err
@@ -153,6 +157,9 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet)
 		return nil, err
 	}
 	if err := repoViper.BindPFlag("teamslug", flags.Lookup("team")); err != nil {
+		return nil, err
+	}
+	if err := repoViper.BindPFlag("timeout", flags.Lookup("timeout")); err != nil {
 		return nil, err
 	}
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
@@ -174,6 +181,7 @@ func AddRepoConfigFlags(flags *pflag.FlagSet) {
 	flags.String("team", "", "Set the team slug for API calls")
 	flags.String("api", "", "Override the endpoint for API calls")
 	flags.String("login", "", "Override the login endpoint")
+	flags.String("timeout", "20", "Override the timeout")
 }
 
 // GetRepoConfigPath reads the user-specific configuration values
