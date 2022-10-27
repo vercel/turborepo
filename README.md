@@ -23,7 +23,7 @@
   </a>
 </p>
 
-Turbo is an next-generation toolchain for frontend development, written in Rust. It consists of 3 major parts:
+Turbo is an next-generation, Blazingly Fast™, toolchain for frontend development, written in Rust. It consists of 3 major parts:
 
 - [**Turbopack:**](https://turbo.build/pack) an incremental bundler (the successor to Webpack)
 - [**Turborepo:**](https://turbo.build/repo) an incremental build system
