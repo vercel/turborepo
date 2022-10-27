@@ -32,7 +32,7 @@ download and run this example, like the other examples.
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/basic basic
+npx degit vercel/turbo/examples/basic basic
 cd basic
 yarn install
 git init . && git add . && git commit -m "Init"

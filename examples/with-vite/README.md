@@ -30,7 +30,7 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-vite with-vite
+npx degit vercel/turbo/examples/with-vite with-vite
 cd with-vite
 yarn install
 git init . && git add . && git commit -m "Init"

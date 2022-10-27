@@ -34,7 +34,7 @@ export function BenchmarksGraph({
   const data: BenchmarkData = benchmarkData[category][numberOfModules];
   const keys = bars.map((bar) => bar.key);
   const longestTime = Math.max(...keys.map((key) => data[key])) * 1000;
-  const roundedLongestTime = Math.ceil(longestTime / 5000) * 5000 + 5000;
+  const longestTimeWithPadding = longestTime * 1.15;
   const graphRef = useRef(null);
   const graphInView = useInView(graphRef, { once: true, margin: "-128px" });
 
@@ -59,7 +59,7 @@ export function BenchmarksGraph({
               turbo={bar.turbo}
               Label={<GraphLabel label={bar.label} turbo={bar.turbo} />}
               duration={data[bar.key] * 1000}
-              longestTime={roundedLongestTime}
+              longestTime={longestTimeWithPadding}
               inView={graphInView}
               pinTime={pinTime}
             ></GraphBar>
@@ -183,7 +183,7 @@ function GraphBar({
           transition={{ duration: 0.1 }}
           initial="hidden"
           className={cn(
-            "flex items-center h-full rounded relative dark:bg-[#ffffff06] bg-[#00000006]"
+            "flex items-center h-full rounded relative dark:bg-[#383838] bg-[#E6E6E6]"
           )}
         >
           <motion.div

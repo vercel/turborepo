@@ -39,8 +39,6 @@ jobs:
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
 
       - uses: ./.github/actions/setup-node
-        with:
-          extra-flags: "--filter=!@vercel/nft-tests"
 
       - uses: Swatinem/rust-cache@v1
         with:

@@ -90,16 +90,15 @@ jobs:
           description: Installing Node.js dependencies...
           url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
 
-      - uses: ./.github/actions/setup-node
-        if: matrix.os.name != 'windows-latest'
-
       - name: Run node-gyp install
         run: npx node-gyp install
         if: matrix.os.name == 'windows-latest'
 
-      - name: install Node.js dependencies on Windows without scripts
-        uses: ./.github/actions/setup-node
-        if: matrix.os.name == 'windows-latest'
+      - uses: ./.github/actions/setup-node
+
+      - name: Install tests dependencies
+        working-directory: crates/turbopack/tests/node-file-trace
+        run: pnpm install -r --side-effects-cache false
 
       - name: Report progress
         if: github.event_name == 'pull_request'
