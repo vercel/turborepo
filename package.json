@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm -- turbo run build --filter=docs",
+    "build": "pnpm -- turbo run build --filter=-docs",
     "build:ts": "tsc -b tsconfig.project.json",
     "check:prettier": "prettier -c .",
     "check:toml": "taplo format --check",
