@@ -139,7 +139,11 @@ fn sectioned_lookup(map: &DecodedMap, line: u32, column: u32) -> Option<Token> {
         }
         None
     } else if let DecodedMap::Regular(sm) = map {
-        sm.lookup_token(line, column)
+        match sm.lookup_token(line, column) {
+            // The sourcemap package incorrectly returns the last token for large lookup lines.
+            Some(t) if t.get_dst_line() == line => Some(t),
+            _ => None,
+        }
     } else {
         unimplemented!("we should only be using the standard source map types");
     }
