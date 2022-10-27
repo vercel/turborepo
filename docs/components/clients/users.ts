@@ -469,4 +469,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://backpack.app",
     pinned: true,
   },
+  {
+    caption: "EPAM",
+    image: "/images/logos/epam.svg",
+    infoLink: "https://epam.com",
+    pinned: true,
+  },
 ];
