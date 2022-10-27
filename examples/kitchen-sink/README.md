@@ -33,7 +33,7 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/kitchen-sink kitchen-sink
+npx degit vercel/turbo/examples/kitchen-sink kitchen-sink
 cd kitchen-sink
 yarn install
 git init . && git add . && git commit -m "Init"

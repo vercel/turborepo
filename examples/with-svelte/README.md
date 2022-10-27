@@ -28,7 +28,7 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-svelte with-svelte
+npx degit vercel/turbo/examples/with-svelte with-svelte
 cd with-svelte
 yarn install
 git init . && git add . && git commit -m "Init"
