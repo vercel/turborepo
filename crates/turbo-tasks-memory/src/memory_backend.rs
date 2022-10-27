@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
     future::Future,
+    hash::BuildHasherDefault,
     pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
@@ -11,6 +12,7 @@ use std::{
 use anyhow::{bail, Result};
 use dashmap::{mapref::entry::Entry, DashMap};
 use event_listener::EventListener;
+use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
 use turbo_tasks::{
     backend::{
@@ -37,7 +39,7 @@ pub struct MemoryBackend {
     pub(crate) initial_scope: TaskScopeId,
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
-    task_cache: DashMap<PersistentTaskType, TaskId>,
+    task_cache: DashMap<PersistentTaskType, TaskId, BuildHasherDefault<FxHasher>>,
     scope_generation: AtomicUsize,
 }
 
