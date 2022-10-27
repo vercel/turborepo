@@ -113,13 +113,15 @@ in the `src/` and `test/` subdirectories has changed since the last execution.
 
 ## Turn off caching
 
-Sometimes you really don't need or want this cache behavior (e.g. when you're using [`next dev`](https://nextjs.org/docs/api-reference/cli#development) or `react-scripts start` for live reloading). To entirely disable caching, append `--no-cache` to any command:
+Sometimes you really don't want to write the cache output (e.g. when you're using [`next dev`](https://nextjs.org/docs/api-reference/cli#development) or `react-scripts start` for live reloading). To disable cache writes, append `--no-cache` to any command:
 
 ```shell
 # Run `dev` npm script in all workspaces in parallel,
 # but don't cache the output
 turbo run dev --parallel --no-cache
 ```
+
+Note that `--no-cache` disables cache writes but does not disable cache reads. If you want to disable cache reads, use the `--force` flag.
 
 You can also disable caching on specific tasks by setting the [`pipeline.<task>.cache`](../reference/configuration#pipeline-1) configuration to `false`:
 
@@ -370,13 +372,15 @@ Be careful to ensure that all of your environment variables are configured prior
 
 ## Force overwrite cache
 
-Conversely, if you want to force `turbo` to re-execute a previously cached task, add the `--force` flag:
+Conversely, if you want to disable reading the cache and force `turbo` to re-execute a previously cached task, add the `--force` flag:
 
 ```shell
 # Run `build` npm script in all workspaces,
 # ignoring cache hits.
 turbo run build --force
 ```
+
+Note that `--force` disables cache reads but does not disable cache writes. If you want to disable cache writes, use the `--no-cache` flag.
 
 ## Logs
 
