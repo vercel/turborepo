@@ -525,7 +525,7 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
     } else {
         write!(code, "(({{ {} }}) => (() => {{\n\n", args,)?;
     }
-    let source_map = content.source_map.map(|sm| sm.as_encoded_source_map());
+    let source_map = content.source_map.map(|sm| sm.as_generate_source_map());
     code.push_source(&content.inner_code, source_map);
     if content.options.this {
         code += "\n}.call(this) })";
