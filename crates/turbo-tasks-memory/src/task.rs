@@ -194,7 +194,7 @@ impl MaybeCollectibles {
     }
 
     /// Returns a reference to the collectibles (if any).
-    fn as_ref(&mut self) -> Option<&Box<Collectibles>> {
+    fn as_ref(&self) -> Option<&Box<Collectibles>> {
         self.inner.as_ref()
     }
 
