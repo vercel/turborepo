@@ -41,7 +41,6 @@ impl Asset for EcmascriptChunkSourceMapAsset {
         let sm = self
             .chunk
             .chunk_content()
-            .code()
             .generate_source_map()
             .to_bytes()
             .await?;

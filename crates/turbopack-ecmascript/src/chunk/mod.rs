@@ -29,6 +29,7 @@ use turbopack_core::{
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::{AssetReferenceVc, AssetReferencesVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
     version::{
         PartialUpdate, TotalUpdate, Update, UpdateVc, Version, VersionVc, VersionedContent,
         VersionedContentVc,
@@ -734,6 +735,14 @@ impl VersionedContent for EcmascriptChunkContent {
         };
 
         Ok(update.into())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for EcmascriptChunkContent {
+    #[turbo_tasks::function]
+    fn generate_source_map(self_vc: EcmascriptChunkContentVc) -> SourceMapVc {
+        self_vc.code().generate_source_map()
     }
 }
 

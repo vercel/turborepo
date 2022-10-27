@@ -20,6 +20,107 @@ pub enum SourceMap {
     Sectioned(#[turbo_tasks(trace_ignore)] SectionedSourceMap),
 }
 
+#[turbo_tasks::value]
+pub enum Token {
+    Sourceless {
+        generated_line: usize,
+        generated_column: usize,
+    },
+    Sourced {
+        generated_line: usize,
+        generated_column: usize,
+        original_file: String,
+        original_line: usize,
+        original_column: usize,
+    },
+    Named {
+        generated_line: usize,
+        generated_column: usize,
+        original_file: String,
+        original_line: usize,
+        original_column: usize,
+        name: String,
+    },
+}
+
+impl Token {
+    pub fn has_source(&self) -> bool {
+        !matches!(self, Token::Sourceless { .. })
+    }
+
+    pub fn get_source(&'_ self) -> Option<&'_ str> {
+        match self {
+            Token::Sourced {
+                ref original_file, ..
+            } => Some(original_file),
+            Token::Named {
+                ref original_file, ..
+            } => Some(original_file),
+            _ => None,
+        }
+    }
+
+    pub fn get_source_line(&self) -> Option<usize> {
+        match self {
+            Token::Sourced { original_line, .. } => Some(*original_line),
+            Token::Named { original_line, .. } => Some(*original_line),
+            _ => None,
+        }
+    }
+
+    pub fn get_source_column(&self) -> Option<usize> {
+        match self {
+            Token::Sourced {
+                original_column, ..
+            } => Some(*original_column),
+            Token::Named {
+                original_column, ..
+            } => Some(*original_column),
+            _ => None,
+        }
+    }
+
+    pub fn get_name(&'_ self) -> Option<&'_ str> {
+        match self {
+            Token::Named { ref name, .. } => Some(name),
+            _ => None,
+        }
+    }
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct OptionToken(Option<Token>);
+
+impl<'a> From<sourcemap::Token<'a>> for Token {
+    fn from(t: sourcemap::Token) -> Self {
+        if t.has_source() {
+            if t.has_name() {
+                Token::Named {
+                    generated_line: t.get_dst_line() as usize,
+                    generated_column: t.get_dst_col() as usize,
+                    original_file: t.get_source().unwrap().to_string(),
+                    original_line: t.get_src_line() as usize,
+                    original_column: t.get_src_col() as usize,
+                    name: t.get_name().unwrap().to_string(),
+                }
+            } else {
+                Token::Sourced {
+                    generated_line: t.get_dst_line() as usize,
+                    generated_column: t.get_dst_col() as usize,
+                    original_file: t.get_source().unwrap().to_string(),
+                    original_line: t.get_src_line() as usize,
+                    original_column: t.get_src_col() as usize,
+                }
+            }
+        } else {
+            Token::Sourceless {
+                generated_line: t.get_dst_line() as usize,
+                generated_column: t.get_dst_col() as usize,
+            }
+        }
+    }
+}
+
 impl SourceMap {
     #[async_recursion]
     async fn encode<W: Write + Send>(&self, w: &mut W) -> Result<()> {
@@ -86,6 +187,55 @@ impl SourceMapVc {
         let mut bytes = vec![];
         self.await?.encode(&mut bytes).await?;
         Ok(BytesVc::cell(bytes))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn lookup_token(self, line: usize, column: usize) -> Result<OptionTokenVc> {
+        let token = match &*self.await? {
+            SourceMap::Regular(map) => {
+                match map.lookup_token(line as u32, column as u32) {
+                    // The sourcemap package incorrectly returns the last token for large lookup
+                    // lines.
+                    Some(t) if t.get_dst_line() == line as u32 => Some::<Token>(t.into()),
+                    _ => None,
+                }
+            }
+            SourceMap::Sectioned(map) => {
+                let len = map.sections.len();
+                let mut low = 0;
+                let mut high = len;
+                let pos = SourcePos { line, column };
+
+                // A "greatest lower bound" binary search. We're looking for the closest section
+                // line/col <= to our line/col.
+                while low < high {
+                    let mid = (low + high) / 2;
+                    if pos < map.sections[mid].offset {
+                        high = mid;
+                    } else {
+                        low = mid + 1;
+                    }
+                }
+                if low > 0 && low <= len {
+                    let section = &map.sections[low - 1];
+                    let offset = &section.offset;
+                    // We're looking for the position `l` lines into region spanned by this
+                    // sourcemap s section.
+                    let l = line - offset.line;
+                    // The source map starts if offset by the column only on its first line. On
+                    // the 2nd+ line, the sourcemap spans starting at
+                    // column 0.
+                    let c = if line == offset.line {
+                        column - offset.column
+                    } else {
+                        column
+                    };
+                    return Ok(section.map.lookup_token(l, c));
+                }
+                None
+            }
+        };
+        Ok(OptionToken(token).cell())
     }
 }
 
