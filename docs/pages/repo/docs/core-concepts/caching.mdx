@@ -294,7 +294,7 @@ Note that this automatic detection and inclusion only works if Turborepo success
 <Callout type="info">
   There are some exceptions to the list above. For various reasons, CI systems (including Vercel)
   set environment variables that start with these prefixes even though they aren't part of your build
-  output. These can change unpredicably &mdash; even on every build! &mdash; invalidating Turborepo's
+  output. These can change unpredictably &mdash; even on every build! &mdash; invalidating Turborepo's
   cache. To workaround this, Turborepo uses a `TURBO_CI_VENDOR_ENV_KEY` variable to
   _exclude_ environment variables from Turborepo's inference.
 

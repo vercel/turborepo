@@ -134,7 +134,7 @@ const PACK_FEATURES: Features = [
     page: "all",
   },
   {
-    name: "Simulaneous Multiple Env Targets",
+    name: "Simultaneous Multiple Env Targets",
     description: `Build and optimize for multiple environments together (Browser, Server, Edge, SSR, React Server Components).`,
     iconDark: MultiEnvTargetsIconDark,
     iconLight: MultiEnvTargetsIconLight,
