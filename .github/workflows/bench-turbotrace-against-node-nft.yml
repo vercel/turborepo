@@ -23,7 +23,7 @@ jobs:
 
       - uses: ./.github/actions/setup-node
         with:
-          no-install: true
+          package-install: false
 
       - name: Install dependencies
         working-directory: crates/turbopack/tests/node-file-trace

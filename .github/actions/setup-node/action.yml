@@ -9,10 +9,10 @@ inputs:
     description: "Extra flags to pass to the pnpm install."
     required: false
     default: ""
-  no-install:
+  package-install:
     description: "Don't run the install step."
     required: false
-    default: false
+    default: true
 runs:
   using: "composite"
   steps:
@@ -42,6 +42,6 @@ runs:
       run: |
         corepack enable
     - name: pnpm install
-      if: ${{ inputs.no-install == 'false' }}
+      if: ${{ inputs.package-install == 'true' }}
       shell: bash
       run: pnpm install ${{ inputs.extra-flags }}
