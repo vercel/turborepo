@@ -60,9 +60,6 @@ func (b *BerryLockfileEntry) possibleDescriptors() []_Descriptor {
 	for dep, version := range b.Dependencies {
 		addDescriptor(dep, version)
 	}
-	for dep, version := range b.PeerDependencies {
-		addDescriptor(dep, version)
-	}
 
 	return descriptors
 }
