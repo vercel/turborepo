@@ -9,8 +9,8 @@ use std::{
 };
 
 use anyhow::{bail, Result};
+use dashmap::{mapref::entry::Entry, DashMap};
 use event_listener::EventListener;
-use flurry::HashMap as FHashMap;
 use tokio::task::futures::TaskLocalFuture;
 use turbo_tasks::{
     backend::{
@@ -37,7 +37,7 @@ pub struct MemoryBackend {
     pub(crate) initial_scope: TaskScopeId,
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
-    task_cache: FHashMap<PersistentTaskType, TaskId>,
+    task_cache: DashMap<PersistentTaskType, TaskId>,
     scope_generation: AtomicUsize,
 }
 
@@ -62,7 +62,7 @@ impl MemoryBackend {
             initial_scope,
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
-            task_cache: FHashMap::new(),
+            task_cache: DashMap::default(),
             scope_generation: AtomicUsize::new(0),
         }
     }
@@ -100,7 +100,7 @@ impl MemoryBackend {
     }
 
     pub fn with_all_cached_tasks(&self, mut func: impl FnMut(TaskId)) {
-        for id in self.task_cache.pin().values() {
+        for id in self.task_cache.clone().into_read_only().values() {
             func(*id);
         }
     }
@@ -441,14 +441,13 @@ impl Backend for MemoryBackend {
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
-        let map = self.task_cache.pin();
-        let result = if let Some(task) = map.get(&task_type).copied() {
+        let result = if let Some(task) = self.task_cache.get(&task_type) {
             // fast pass without creating a new task
-            self.connect_task_child(parent_task, task, turbo_tasks);
+            self.connect_task_child(parent_task, *task, turbo_tasks);
 
             // TODO maybe force (background) scheduling to avoid inactive tasks hanging in
             // "in progress" until they become active
-            task
+            *task
         } else {
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
@@ -465,30 +464,28 @@ impl Backend for MemoryBackend {
                     Task::new_resolve_trait(id, *trait_type, trait_fn_name.clone(), inputs.clone())
                 }
             };
-            // SAFETY: We have a fresh task id where nobody knows about yet
+            // Safety: We have a fresh task id that nobody knows about yet
             unsafe {
                 self.memory_tasks.insert(*id, task);
             }
-            let result_task = match map.try_insert(task_type, id) {
-                Ok(_) => {
+            let result_task = match self.task_cache.entry(task_type) {
+                Entry::Vacant(entry) => {
                     // This is the most likely case
+                    entry.insert(id);
                     id
                 }
-                Err(r) => {
-                    // SAFETY: We have a fresh task id where nobody knows about yet
+                Entry::Occupied(entry) => {
+                    // Safety: We have a fresh task id that nobody knows about yet
                     unsafe {
                         self.memory_tasks.remove(*id);
                         turbo_tasks.reuse_task_id(id);
                     }
-                    *r.current
+                    *entry.get()
                 }
             };
             self.connect_task_child(parent_task, result_task, turbo_tasks);
             result_task
         };
-        // keep the guard alive over the whole function
-        // to avoid load on GC
-        drop(map);
         result
     }
 
