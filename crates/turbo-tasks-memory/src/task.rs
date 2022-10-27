@@ -620,7 +620,7 @@ impl Task {
                 let mut active = false;
                 for scope in state.scopes.iter() {
                     backend.with_scope(scope, |scope| {
-                        scope.increment_unfinished_tasks();
+                        scope.increment_unfinished_tasks(backend);
                         log_scope_update!("add unfinished task: {} -> {}", *scope.id, *self.id);
                         let mut scope = scope.state.lock();
                         if scope.is_active() {
@@ -674,8 +674,11 @@ impl Task {
                     return;
                 }
 
-                if let Some(ScopeChildChangeEffect { notify, active }) =
-                    backend.with_scope(id, |scope| scope.state.lock().add_child(root))
+                if let Some(ScopeChildChangeEffect {
+                    notify,
+                    active,
+                    parent,
+                }) = backend.with_scope(id, |scope| scope.state.lock().add_child(root))
                 {
                     drop(state);
                     if !notify.is_empty() {
@@ -683,6 +686,11 @@ impl Task {
                     }
                     if active {
                         backend.increase_scope_active(root, turbo_tasks);
+                    }
+                    if parent {
+                        backend.with_scope(root, |parent| {
+                            parent.add_parent(id, backend);
+                        })
                     }
                 }
             }
@@ -758,7 +766,7 @@ impl Task {
         backend.with_scope(id, |scope| {
             scope.increment_tasks();
             if !matches!(state.state_type, TaskStateType::Done) {
-                scope.increment_unfinished_tasks();
+                scope.increment_unfinished_tasks(backend);
                 log_scope_update!("add unfinished task (added): {} -> {}", *scope.id, *self.id);
                 if state.state_type == TaskStateType::Dirty {
                     let mut scope = scope.state.lock();
@@ -848,8 +856,11 @@ impl Task {
         match state.scopes {
             TaskScopes::Root(root) => {
                 if root != id {
-                    if let Some(ScopeChildChangeEffect { notify, active }) =
-                        backend.with_scope(id, |scope| scope.state.lock().remove_child(root))
+                    if let Some(ScopeChildChangeEffect {
+                        notify,
+                        active,
+                        parent,
+                    }) = backend.with_scope(id, |scope| scope.state.lock().remove_child(root))
                     {
                         drop(state);
                         if !notify.is_empty() {
@@ -857,6 +868,11 @@ impl Task {
                         }
                         if active {
                             backend.decrease_scope_active(root, turbo_tasks);
+                        }
+                        if parent {
+                            backend.with_scope(root, |parent| {
+                                parent.remove_parent(id, backend);
+                            })
                         }
                     }
                 }
@@ -953,28 +969,42 @@ impl Task {
             );
             let mut active_counter = 0isize;
             let mut tasks = HashSet::new();
-            for (scope, count) in scopes.iter() {
-                backend.with_scope(*scope, |scope| {
+            let mut scopes_to_add_parent = Vec::new();
+            let mut scopes_to_remove_parent = Vec::new();
+            for (scope_id, count) in scopes.iter() {
+                backend.with_scope(*scope_id, |scope| {
                     // add the new root scope as child of old scopes
                     let mut state = scope.state.lock();
                     match count.cmp(&0) {
                         Ordering::Greater => {
-                            if let Some(ScopeChildChangeEffect { notify, active }) =
-                                state.add_child_count(root_scope, *count as usize)
+                            if let Some(ScopeChildChangeEffect {
+                                notify,
+                                active,
+                                parent,
+                            }) = state.add_child_count(root_scope, *count as usize)
                             {
                                 tasks.extend(notify);
                                 if active {
                                     active_counter += 1;
                                 }
+                                if parent {
+                                    scopes_to_add_parent.push(*scope_id);
+                                }
                             }
                         }
                         Ordering::Less => {
-                            if let Some(ScopeChildChangeEffect { notify, active }) =
-                                state.remove_child_count(root_scope, (-*count) as usize)
+                            if let Some(ScopeChildChangeEffect {
+                                notify,
+                                active,
+                                parent,
+                            }) = state.remove_child_count(root_scope, (-*count) as usize)
                             {
                                 tasks.extend(notify);
                                 if active {
                                     active_counter -= 1;
+                                }
+                                if parent {
+                                    scopes_to_remove_parent.push(*scope_id);
                                 }
                             }
                         }
@@ -985,6 +1015,14 @@ impl Task {
             if !tasks.is_empty() {
                 turbo_tasks.schedule_notify_tasks_set(&tasks);
             }
+            backend.with_scope(root_scope, |scope| {
+                for parent in scopes_to_add_parent {
+                    scope.add_parent(parent, backend);
+                }
+                for parent in scopes_to_remove_parent {
+                    scope.remove_parent(parent, backend);
+                }
+            });
 
             // We collected how often the new root scope is considered as active by the old
             // scopes and increase the active counter by that.
@@ -1342,7 +1380,7 @@ impl Task {
             }
             if let TaskScopes::Root(root) = state.scopes {
                 if let Some(listener) = backend.with_scope(root, |scope| {
-                    if let Some(listener) = scope.has_unfinished_tasks(root, backend) {
+                    if let Some(listener) = scope.has_unfinished_tasks() {
                         return Some(listener);
                     }
                     None
@@ -1385,7 +1423,7 @@ impl Task {
         }
         if let TaskScopes::Root(scope_id) = state.scopes {
             backend.with_scope(scope_id, |scope| {
-                if let Some(l) = scope.has_unfinished_tasks(scope_id, backend) {
+                if let Some(l) = scope.has_unfinished_tasks() {
                     return Ok(Err(l));
                 }
                 let set = scope.read_collectibles(scope_id, trait_id, reader, backend);

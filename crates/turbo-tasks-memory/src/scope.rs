@@ -114,12 +114,9 @@ pub struct TaskScope {
     pub id: TaskScopeId,
     /// Total number of tasks
     tasks: AtomicUsize,
-    /// Number of tasks that are not Done
+    /// Number of tasks that are not Done, unfinished child scopes also count as
+    /// unfinished tasks
     unfinished_tasks: AtomicUsize,
-    /// Event that will be notified when all unfinished tasks are done
-    event: Event,
-    /// last (max) generation when an update to unfinished_tasks happened
-    last_task_finish_generation: AtomicUsize,
     /// State that requires locking
     pub state: Mutex<TaskScopeState>,
 }
@@ -136,6 +133,13 @@ pub struct TaskScopeState {
     /// All child scopes, when the scope becomes active, child scopes need to
     /// become active too
     children: CountHashSet<TaskScopeId, BuildNoHashHasher<TaskScopeId>>,
+    /// flag if this scope has unfinished tasks
+    has_unfinished_tasks: bool,
+    /// Event that will be notified when all unfinished tasks and children are
+    /// done
+    event: Event,
+    /// All parent scopes
+    parents: CountHashSet<TaskScopeId, BuildNoHashHasher<TaskScopeId>>,
     /// Tasks that have read children
     /// When they change these tasks are invalidated
     dependent_tasks: HashSet<TaskId>,
@@ -151,8 +155,6 @@ impl TaskScope {
             id,
             tasks: AtomicUsize::new(tasks),
             unfinished_tasks: AtomicUsize::new(0),
-            event: Event::new(),
-            last_task_finish_generation: AtomicUsize::new(0),
             state: Mutex::new(TaskScopeState {
                 #[cfg(feature = "print_scope_updates")]
                 id,
@@ -161,6 +163,9 @@ impl TaskScope {
                 children: CountHashSet::new(),
                 collectibles: HashMap::new(),
                 dependent_tasks: HashSet::new(),
+                event: Event::new(),
+                has_unfinished_tasks: false,
+                parents: CountHashSet::new(),
             }),
         }
     }
@@ -172,8 +177,6 @@ impl TaskScope {
             id,
             tasks: AtomicUsize::new(tasks),
             unfinished_tasks: AtomicUsize::new(unfinished),
-            event: Event::new(),
-            last_task_finish_generation: AtomicUsize::new(0),
             state: Mutex::new(TaskScopeState {
                 #[cfg(feature = "print_scope_updates")]
                 id,
@@ -182,6 +185,9 @@ impl TaskScope {
                 children: CountHashSet::new(),
                 collectibles: HashMap::new(),
                 dependent_tasks: HashSet::new(),
+                event: Event::new(),
+                has_unfinished_tasks: false,
+                parents: CountHashSet::new(),
             }),
         }
     }
@@ -194,115 +200,90 @@ impl TaskScope {
         self.tasks.fetch_sub(1, Ordering::Relaxed);
     }
 
-    pub fn increment_unfinished_tasks(&self) {
-        self.unfinished_tasks.fetch_add(1, Ordering::AcqRel);
+    pub fn increment_unfinished_tasks(&self, backend: &MemoryBackend) {
+        let old_count = self.unfinished_tasks.fetch_add(1, Ordering::AcqRel);
+        if old_count == 0 {
+            self.update_unfinished_state(backend);
+        }
+    }
+
+    fn increment_unfinished_tasks_internal(&self) -> bool {
+        self.unfinished_tasks.fetch_add(1, Ordering::AcqRel) == 0
     }
 
     pub fn decrement_unfinished_tasks(&self, backend: &MemoryBackend) {
         let old_count = self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel);
         debug_assert!(old_count > 0);
         if old_count == 1 {
-            let value = backend.flag_scope_change();
-            let _ = self.last_task_finish_generation.fetch_update(
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-                |v| {
-                    if v < value {
-                        Some(value)
-                    } else {
-                        None
-                    }
-                },
-            );
-            self.event.notify(usize::MAX);
+            self.update_unfinished_state(backend);
         }
     }
 
-    pub fn has_unfinished_tasks(
-        &self,
-        self_id: TaskScopeId,
-        backend: &MemoryBackend,
-    ) -> Option<EventListener> {
-        'restart: loop {
-            // There would be a race condition when we check scopes in a certain
-            // order. e. g. we check A before B, without locking both at the same
-            // time. But it can happen that a change propagates from B to A in the
-            // meantime, which means we would miss the unfinished work. In this case
-            // we would not get the strongly consistent guarantee. To counter that
-            // we introduce a global generation counter, which is incremented before
-            // checking. When a task finishes (resp. unfinished_tasks is decreased) we must
-            // also update the local generation counter to the global one. When
-            // all tasks are finished the scope can no longer influence the unfinished work
-            // of other scopes. By ensuring that all work has been finished before the start
-            // of checking the whole tree, we ensure that all scopes are either done, or
-            // contain unfinished work.
-            // Note that a change can propagate into any direction: from parent to child,
-            // from child to parent and from siblings. Also through multiple
-            // layers.
-            let start_generation = backend.acquire_scope_generation();
-            let mut checked_scopes = HashSet::new();
-            if self.unfinished_tasks.load(Ordering::Acquire) != 0 {
-                let listener = self.event.listen();
-                if self.unfinished_tasks.load(Ordering::Relaxed) != 0 {
-                    return Some(listener);
+    fn decrement_unfinished_tasks_internal(&self) -> bool {
+        self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel) == 1
+    }
+
+    pub fn add_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
+        let mut state = self.state.lock();
+        if state.parents.add(parent) && state.has_unfinished_tasks {
+            backend.with_scope(parent, |parent| {
+                let update = parent.increment_unfinished_tasks_internal();
+
+                drop(state);
+
+                if update {
+                    parent.update_unfinished_state(backend);
                 }
-            }
-            if self.last_task_finish_generation.load(Ordering::Relaxed) > start_generation {
-                continue 'restart;
-            }
-            checked_scopes.insert(self_id);
-            let mut queue = self
-                .state
-                .lock()
-                .children
-                .iter()
-                .copied()
-                .inspect(|i| {
-                    checked_scopes.insert(*i);
-                })
-                .collect::<Vec<_>>();
-            log_scope_update!("has_unfinished_tasks {} -> {:?}", *self.id, queue);
-            while let Some(id) = queue.pop() {
-                match backend.with_scope(id, |scope| {
-                    if scope.unfinished_tasks.load(Ordering::Acquire) != 0 {
-                        let listener = scope.event.listen();
-                        if scope.unfinished_tasks.load(Ordering::Relaxed) != 0 {
-                            return Ok(Some(listener));
-                        }
-                    }
-                    if scope.last_task_finish_generation.load(Ordering::Relaxed) > start_generation
-                    {
-                        return Err(());
-                    }
-                    let scope = scope.state.lock();
-                    queue.extend(
-                        scope
-                            .children
-                            .iter()
-                            .copied()
-                            .filter(|i| checked_scopes.insert(*i)),
-                    );
-                    log_scope_update!(
-                        "has_unfinished_tasks {} -> {:?}",
-                        *scope.id,
-                        scope
-                            .children
-                            .iter()
-                            .copied()
-                            .filter(|i| !checked_scopes.contains(i))
-                            .collect::<Vec<_>>()
-                    );
-                    Ok(None)
-                }) {
-                    Ok(Some(listener)) => {
-                        return Some(listener);
-                    }
-                    Ok(None) => {}
-                    Err(()) => continue 'restart,
+            });
+        }
+    }
+
+    pub fn remove_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
+        let mut state = self.state.lock();
+        if state.parents.remove(parent) && state.has_unfinished_tasks {
+            backend.with_scope(parent, |parent| {
+                let update = parent.decrement_unfinished_tasks_internal();
+
+                drop(state);
+
+                if update {
+                    parent.update_unfinished_state(backend);
                 }
+            });
+        }
+    }
+
+    fn update_unfinished_state(&self, backend: &MemoryBackend) {
+        let mut state = self.state.lock();
+        let count = self.unfinished_tasks.load(Ordering::Acquire);
+        let flag = count > 0;
+        let mut to_update = Vec::new();
+        if state.has_unfinished_tasks != flag {
+            state.has_unfinished_tasks = flag;
+            if flag {
+                to_update.extend(state.parents.iter().copied().filter(|parent| {
+                    backend.with_scope(*parent, |scope| scope.increment_unfinished_tasks_internal())
+                }));
+            } else {
+                state.event.notify(usize::MAX);
+                to_update.extend(state.parents.iter().copied().filter(|parent| {
+                    backend.with_scope(*parent, |scope| scope.decrement_unfinished_tasks_internal())
+                }));
             }
-            log_scope_update!("has_unfinished_tasks done {}", *self.id);
-            return None;
+        }
+        drop(state);
+
+        for scope in to_update {
+            backend.with_scope(scope, |scope| scope.update_unfinished_state(backend));
+        }
+    }
+
+    pub fn has_unfinished_tasks(&self) -> Option<EventListener> {
+        let state = self.state.lock();
+        if state.has_unfinished_tasks {
+            Some(state.event.listen())
+        } else {
+            None
         }
     }
 
@@ -383,6 +364,8 @@ impl TaskScope {
 pub struct ScopeChildChangeEffect {
     pub notify: HashSet<TaskId>,
     pub active: bool,
+    /// The child to parent relationship need to be updated
+    pub parent: bool,
 }
 
 pub struct ScopeCollectibleChangeEffect {
@@ -453,6 +436,7 @@ impl TaskScopeState {
             Some(ScopeChildChangeEffect {
                 notify: self.take_dependent_tasks(),
                 active: self.active > 0,
+                parent: true,
             })
         } else {
             None
@@ -479,6 +463,7 @@ impl TaskScopeState {
             Some(ScopeChildChangeEffect {
                 notify: self.take_dependent_tasks(),
                 active: self.active > 0,
+                parent: true,
             })
         } else {
             None
