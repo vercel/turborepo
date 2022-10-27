@@ -52,7 +52,7 @@ impl Drop for RunningNodeJsPoolProcess {
     }
 }
 
-const CONNECT_TIMEOUT: Duration = Duration::from_millis(10);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl NodeJsPoolProcess {
     async fn new(cwd: &Path, env: &HashMap<String, String>, entrypoint: &Path) -> Result<Self> {
