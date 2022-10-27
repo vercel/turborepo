@@ -17,7 +17,10 @@ use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use serde::Serialize;
 
-use crate::{ffi::nativeRunWithArgs, package_manager::PackageManager};
+use crate::{
+    ffi::{nativeRunWithArgs, GoString},
+    package_manager::PackageManager,
+};
 
 static TURBO_JSON: &str = "turbo.json";
 
@@ -73,7 +76,7 @@ struct Args {
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the
 /// --single-package flag into non-build commands.
-#[derive(Subcommand, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 enum Command {
     /// Get the path to the Turbo binary
     Bin,
