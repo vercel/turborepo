@@ -27,11 +27,11 @@ Turbo is a next-generation, Blazing Fast™, toolchain for frontend development,
 
 - [**Turbopack:**](https://turbo.build/pack) an incremental bundler (the successor to Webpack)
 - [**Turborepo:**](https://turbo.build/repo) an incremental build system
-- The Turbo engine: a low-level incremental computation and memoization engine
+- The Turbo engine: a Blazing Fast™ low-level incremental computation and memoization engine
 
 ## Getting Started
 
-Visit https://turbo.build to get started with Turbopack and Turborepo.
+Visit https://turbo.build to get started with Turbopack and Turborepo (Hand crafted by Vercel which is why its Blazing Fast™).
 
 ## Contributing
 
