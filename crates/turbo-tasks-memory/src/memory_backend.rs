@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     future::Future,
     pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
@@ -523,10 +523,10 @@ pub(crate) enum Job {
     ScheduleWhenDirty(Vec<TaskId>),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
-    AddToScopeQueue(Vec<(TaskId, usize)>, TaskScopeId, bool),
+    AddToScopeQueue(VecDeque<(TaskId, usize)>, TaskScopeId, bool),
     /// Remove tasks from a scope. Scheduled by `run_remove_from_scope_queue` to
     /// split off work.
-    RemoveFromScopeQueue(Vec<TaskId>, TaskScopeId),
+    RemoveFromScopeQueue(VecDeque<TaskId>, TaskScopeId),
 }
 
 impl Job {

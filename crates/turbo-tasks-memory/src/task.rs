@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     cmp::Ordering,
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     fmt::{self, Debug, Display, Formatter, Write},
     future::Future,
     hash::Hash,
@@ -657,7 +657,7 @@ impl Task {
         depth: usize,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-        queue: &mut Vec<(TaskId, usize)>,
+        queue: &mut VecDeque<(TaskId, usize)>,
     ) {
         let mut state = self.state.write();
         let TaskState {
@@ -730,7 +730,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut queue = vec![];
+        let mut queue = VecDeque::new();
         self.add_to_scope_internal_shallow(
             id,
             is_optimization_scope,
@@ -838,7 +838,7 @@ impl Task {
         id: TaskScopeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-        queue: &mut Vec<TaskId>,
+        queue: &mut VecDeque<TaskId>,
     ) {
         let mut state = self.state.write();
         match state.scopes {
@@ -873,7 +873,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut queue = vec![];
+        let mut queue = VecDeque::new();
         self.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
     }
@@ -917,7 +917,7 @@ impl Task {
                 let initial = backend.initial_scope;
                 if set.remove(initial) {
                     self.remove_self_from_scope(&mut state, initial, backend, turbo_tasks);
-                    let children = state.children.iter().copied().collect::<Vec<_>>();
+                    let children = state.children.iter().copied().collect::<VecDeque<_>>();
                     drop(state);
 
                     if !children.is_empty() {
@@ -1449,13 +1449,13 @@ const SPLIT_OFF_QUEUE_AT: usize = 100;
 
 /// Adds a list of tasks and their children to a scope, recursively.
 pub fn run_add_to_scope_queue(
-    mut queue: Vec<(TaskId, usize)>,
+    mut queue: VecDeque<(TaskId, usize)>,
     id: TaskScopeId,
     is_optimization_scope: bool,
     backend: &MemoryBackend,
     turbo_tasks: &dyn TurboTasksBackendApi,
 ) {
-    while let Some((child, depth)) = queue.pop() {
+    while let Some((child, depth)) = queue.pop_front() {
         backend.with_task(child, |child| {
             child.add_to_scope_internal_shallow(
                 id,
@@ -1477,12 +1477,12 @@ pub fn run_add_to_scope_queue(
 
 /// Removes a list of tasks and their children from a scope, recursively.
 pub fn run_remove_from_scope_queue(
-    mut queue: Vec<TaskId>,
+    mut queue: VecDeque<TaskId>,
     id: TaskScopeId,
     backend: &MemoryBackend,
     turbo_tasks: &dyn TurboTasksBackendApi,
 ) {
-    while let Some(child) = queue.pop() {
+    while let Some(child) = queue.pop_front() {
         backend.with_task(child, |child| {
             child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         });
