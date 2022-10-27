@@ -24,7 +24,7 @@ Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-docker with-docker
+npx degit vercel/turbo/examples/with-docker with-docker
 cd with-docker
 yarn install
 git init . && git add . && git commit -m "Init"

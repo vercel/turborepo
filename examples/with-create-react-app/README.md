@@ -30,7 +30,7 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-create-react-app with-create-react-app
+npx degit vercel/turbo/examples/with-create-react-app with-create-react-app
 cd with-create-react-app
 yarn install
 git init . && git add . && git commit -m "Init"
