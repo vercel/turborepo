@@ -160,7 +160,7 @@ struct TaskState {
     /// children are only modified from execution
     children: HashSet<TaskId>,
 
-    /// colletibles are only modified from execution
+    /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,
 
     output: Output,
