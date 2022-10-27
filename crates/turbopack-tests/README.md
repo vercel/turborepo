@@ -12,12 +12,12 @@ cargo nextest run -E 'test(snapshot)'
 ```
 
 The filter supports any substring, and only test names which contain
-that substring will run. Eg,
+that substring will run.
 
 ## Updating Snapshot
 
 If you've made a change that requires many snapshot updates, you can
-autmaotcially update all outputs using the `UPDATE` command line env:
+automatically update all outputs using the `UPDATE` command line env:
 
 ```bash
 UPDATE=1 cargo nextest run -E 'test(snapshot)'
