@@ -1,9 +1,26 @@
 # Learn how to add code owners here:
 # https://help.github.com/en/articles/about-code-owners
 
-* @vercel/turbo-oss
-/crates
-/Cargo.lock
-/Cargo.toml
-/rust-toolchain
-/pnpm-lock.yaml
+# Default to both teams
+* @vercel/turbo-oss @vercel/web-tooling
+
+# Turborepo-specific things
+
+/cli @vercel/turbo-oss
+/benchmark @vercel/turbo-oss
+/buildcontainer @vercel/turbo-oss
+/examples @vercel/turbo-oss
+/packages @vercel/turbo-oss
+/shim @vercel/turbo-oss
+/docs/pages/repo @vercel/turbo-oss
+
+
+# Turbopack-specific things
+
+/crates @vercel/web-tooling
+/Cargo.lock @vercel/web-tooling
+/Cargo.toml @vercel/web-tooling
+/rust-toolchain @vercel/web-tooling
+.rustfmt.toml @vercel/web-tooling
+.taplo.toml @vercel/web-tooling
+/docs/pages/pack @vercel/web-tooling
