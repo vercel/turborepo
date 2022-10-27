@@ -1,8 +1,19 @@
 # Learn how to add code owners here:
 # https://help.github.com/en/articles/about-code-owners
 
-# Default to turborepo team
-* @vercel/turbo-oss
+# Default to both teams
+* @vercel/turbo-oss @vercel/web-tooling
+
+# Turborepo-specific things
+
+/cli @vercel/turborepo
+/benchmark @vercel/turborepo
+/buildcontainer @vercel/turborepo
+/examples @vercel/turborepo
+/packages @vercel/turborepo
+/shim @vercel/turborepo
+/docs/pages/repo @vercel/turborepo
+
 
 # Turbopack-specific things
 
@@ -12,3 +23,4 @@
 /rust-toolchain @vercel/web-tooling
 .rustfmt.toml @vercel/web-tooling
 .taplo.toml @vercel/web-tooling
+/docs/pages/pack @vercel/web-tooling
