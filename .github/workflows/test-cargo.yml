@@ -90,15 +90,24 @@ jobs:
           description: Installing Node.js dependencies...
           url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - uses: ./.github/actions/setup-node
 
       - name: Run node-gyp install
         run: pnpx node-gyp install
+
         if: matrix.os.name == 'windows-latest'
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
         run: pnpm install -r --side-effects-cache false
+
+      - name: Install tests dependencies in examples/basic
+        working-directory: examples/basic
+        run: npm install
 
       - name: Report progress
         if: github.event_name == 'pull_request'
@@ -113,11 +122,15 @@ jobs:
         shell: bash
 
       - name: Run nextest
-        uses: actions-rs/cargo@v1
         timeout-minutes: 120
-        with:
-          command: nextest
-          args: run --release --no-fail-fast
+        if: matrix.os.name != 'windows-latest'
+        run: cargo nextest run --release --no-fail-fast
+
+      - name: Run nextest
+        timeout-minutes: 120
+        if: matrix.os.name == 'windows-latest'
+        # Can't build turbo.lib on Windows
+        run: cargo nextest run --workspace --exclude turbo --release --no-fail-fast
 
       - name: Report github status
         if: always() && github.event_name == 'pull_request'
@@ -179,6 +192,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 16
+
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Report progress
         if: github.event_name == 'pull_request'

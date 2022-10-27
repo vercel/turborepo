@@ -26,6 +26,7 @@ runs:
       with:
         node-version: 16
         cache: pnpm
+        check-latest: true
 
     - name: Configure corepack
       # Forcibly upgrade our available version of corepack.

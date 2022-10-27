@@ -65,7 +65,7 @@ fn test_help() {
 }
 
 #[test]
-fn test_find_correct_turbo() {
+fn test_no_arguments() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
     cmd.assert()
         .append_context("turbo", "no arguments")
@@ -74,9 +74,12 @@ fn test_find_correct_turbo() {
             "`turbo` with no arguments should exit with code 1",
         )
         .code(1);
+}
 
+#[test]
+fn test_find_turbo_in_example() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
-    cmd.args(&["--cwd", "../examples/basic", "bin"])
+    cmd.args(["--cwd", "../examples/basic", "bin"])
         .assert()
         .append_context(
             "turbo",
@@ -91,9 +94,12 @@ fn test_find_correct_turbo() {
         .stdout(predicates::str::ends_with(
             "examples/basic/node_modules/.bin/turbo\n",
         ));
+}
 
+#[test]
+fn test_find_correct_turbo() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
-    cmd.args(&["--cwd", "..", "bin"])
+    cmd.args(["--cwd", "..", "bin"])
         .assert()
         .append_context(
             "turbo",

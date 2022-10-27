@@ -1262,6 +1262,9 @@ impl Task {
                     #[cfg(feature = "report_expensive")]
                     {
                         use std::time::Instant;
+
+                        use turbo_tasks::util::FormatDuration;
+
                         let start = Instant::now();
                         child.add_to_scope_internal(scope, false, backend, turbo_tasks);
                         let elapsed = start.elapsed();
@@ -1290,6 +1293,9 @@ impl Task {
             #[cfg(feature = "report_expensive")]
             let result = {
                 use std::time::Instant;
+
+                use turbo_tasks::util::FormatDuration;
+
                 let start = Instant::now();
                 let result = self.make_root_scoped_internal(state, backend, turbo_tasks);
                 let elapsed = start.elapsed();

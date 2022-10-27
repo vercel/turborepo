@@ -2,7 +2,7 @@ use std::{env, ffi::OsStr, path::PathBuf, process::Command};
 
 fn main() {
     let is_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
-    let lib_search_path = if is_release {
+    let lib_search_path = if is_release && env::var("RELEASE_TURBO_CLI") == Ok("true".to_string()) {
         expect_release_lib()
     } else {
         build_debug_libturbo()
@@ -43,20 +43,24 @@ fn expect_release_lib() -> String {
         _ => panic!("unsupported target {}", target.triple),
     };
     let mut dir = PathBuf::from("libturbo");
-    // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons, turbo-${OS}
+    // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons,
+    // turbo-${OS}
     dir.push(format!("turbo-{platform}_{platform}_{arch}"));
     dir.push("lib");
     dir.to_string_lossy().to_string()
 }
 
 fn build_debug_libturbo() -> String {
-    let cli_path = "../cli";
+    let cli_path = env::var_os("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .unwrap()
+        .join("cli");
     let mut cmd = new_command("make");
-    cmd.current_dir(cli_path);
+    cmd.current_dir(&cli_path);
     cmd.arg("libturbo.a");
     let mut child = cmd.spawn().expect("failed to spawn make libturbo.a");
     child.wait().expect("failed to build libturbo.a");
-    cli_path.to_string()
+    cli_path.to_string_lossy().to_string()
 }
 
 fn new_command(program: impl AsRef<OsStr>) -> Command {
