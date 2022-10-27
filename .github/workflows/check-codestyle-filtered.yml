@@ -132,8 +132,6 @@ jobs:
           args: --check
 
       - uses: ./.github/actions/setup-node
-        with:
-          extra-flags: "--filter=!@vercel/nft-tests"
 
       - uses: ./.github/actions/setup-go
         with:
