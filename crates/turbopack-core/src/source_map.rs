@@ -239,13 +239,13 @@ impl PartialEq for RegularSourceMap {
 }
 
 /// Wraps the CrateMap struct so that it can be cached in a Vc.
-///
-/// CrateMap contains a raw pointer, which isn't Send, which is required to
-/// cache in a Vc. So, we have wrap it in 4 layers of cruft to do it. We don't
-/// actually use the pointer, because we don't perform sourcesContent lookups,
-/// so it's fine.
 #[derive(Debug)]
 pub struct CrateMapWrapper(sourcemap::SourceMap);
+
+// Safety: CrateMap contains a raw pointer, which isn't Send, which is required
+// to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it. We don't
+// actually use the pointer, because we don't perform sourcesContent lookups,
+// so it's fine.
 unsafe impl Send for CrateMapWrapper {}
 unsafe impl Sync for CrateMapWrapper {}
 
