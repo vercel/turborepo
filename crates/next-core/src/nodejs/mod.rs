@@ -429,8 +429,8 @@ async fn trace_stack(
     for frame in &error.stack {
         if let Some((line, column)) = frame.get_pos() {
             if let Some(path) = frame.file.strip_prefix(&root) {
-                if let Some(gen) = assets.get(path) {
-                    let trace = SourceMapTraceVc::new(*gen, line, column, frame.name.clone())
+                if let Some(map) = assets.get(path) {
+                    let trace = SourceMapTraceVc::new(*map, line, column, frame.name.clone())
                         .trace()
                         .await?;
                     if let TraceResult::Found(f) = &*trace {
