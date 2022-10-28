@@ -45,7 +45,7 @@ jobs:
         with:
           name: Test / test - ${{ matrix.os.name }} (pull_request)
           description: Checkout...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Set git to use LF line endings
         run: |
@@ -62,7 +62,7 @@ jobs:
         with:
           name: Test / test - ${{ matrix.os.name }} (pull_request)
           description: Restoring cache...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Setup rust
         uses: actions-rs/toolchain@v1
@@ -88,7 +88,7 @@ jobs:
         with:
           name: Test / test - ${{ matrix.os.name }} (pull_request)
           description: Installing Node.js dependencies...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Run node-gyp install
         run: npx node-gyp install
@@ -106,7 +106,7 @@ jobs:
         with:
           name: Test / test - ${{ matrix.os.name }} (pull_request)
           description: Testing...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -125,7 +125,7 @@ jobs:
         with:
           name: Test / test - ${{ matrix.os.name }} (pull_request)
           status: "${{ job.status }}"
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
   test-bench:
     # for edited events it should only run on base changes
@@ -151,7 +151,7 @@ jobs:
         with:
           name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
           description: Checkout...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
       - name: Set git to use LF
         run: |
           git config --global core.autocrlf false
@@ -165,7 +165,7 @@ jobs:
         with:
           name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
           description: Restoring cache...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Setup rust
         uses: actions-rs/toolchain@v1
@@ -186,7 +186,7 @@ jobs:
         with:
           name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
           description: Testing...
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Run cargo test on benchmarks
         uses: actions-rs/cargo@v1
@@ -203,4 +203,4 @@ jobs:
         with:
           name: Test / test-bench - ${{ matrix.os.name }} (pull_request)
           status: "${{ job.status }}"
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
