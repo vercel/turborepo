@@ -17,6 +17,7 @@ fxhash = "0.2.1"
 indexmap = { workspace = true }
 lazy_static = "1.4.0"
 once_cell = "1.13.0"
+pin-project-lite = "0.2.9"
 rand = "0.8.5"
 regex = "1.5.4"
 serde = "1.0.136"
@@ -59,7 +60,6 @@ version = "0.4"
 
 [dev-dependencies]
 criterion = { version = "0.3.5", features = ["async_tokio"] }
-difference = "2.0"
 rstest = "0.12.0"
 turbo-tasks-memory = { path = "../turbo-tasks-memory" }
 turbo-tasks-testing = { path = "../turbo-tasks-testing" }
