@@ -3,6 +3,7 @@ import { DocsBenchmarksGraph } from '../../../components/pages/pack-home/DocsBen
 import Callout from '../../../components/Callout';
 import { ThemedImageFigure } from '../../../components/image/ThemedImageFigure';
 import { HMR_BARS } from '../../../components/pages/pack-home/PackBenchmarks'
+import BenchmarkHeading from '../../../components/pages/pack-home/BenchmarkHeading';
 
 # Benchmarks
 
@@ -39,7 +40,7 @@ Let's break down exactly what each of these metrics mean, and how they'll impact
   Curious about how these benchmarks are implemented, or want to run them yourself? Check out [our benchmark suite documentation in the Turbo monorepo](https://github.com/vercel/turbo/blob/main/crates/next-dev/benches/README.md).
 </Callout>
 
-### Cold startup time
+<BenchmarkHeading name="Cold startup time" href="https://github.com/vercel/turbo/blob/main/crates/next-dev/benches/mod.rs"></BenchmarkHeading>
 
 This test measures how fast a local development server starts up on an application of various sizes. We measure this as the time from startup (without cache) until the app is rendered in the browser. We do not wait for the app to be interactive or hydrated in the browser for this dataset.
 
@@ -90,7 +91,7 @@ bench_startup/Vite CSR/10000 modules                  37.2±0.29s
 bench_startup/Vite CSR/30000 modules                 109.5±1.14s
 ```
 
-### File updates (HMR)
+<BenchmarkHeading name="File updates (HMR)" href="https://github.com/vercel/turbo/blob/main/crates/next-dev/benches/mod.rs"></BenchmarkHeading>
 
 We also measure how quickly the development server works from when an update is applied to a source file to when we receive a custom browser event that the modified code was executed.
 
