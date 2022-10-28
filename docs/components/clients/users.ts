@@ -469,4 +469,13 @@ export const users: Array<TurboUser> = [
     infoLink: "https://backpack.app",
     pinned: true,
   },
+  {
+    caption: "Supernova.io",
+    image: "/images/logos/supernova.svg",
+    infoLink: "https://supernova.io",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
 ];
