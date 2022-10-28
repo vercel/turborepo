@@ -116,7 +116,7 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
             // The Custom filename surrounds the name with <>.
-            FileName::Custom(s) => s.to_string(),
+            FileName::Custom(s) => format!("/{}", s),
             _ => f.to_string(),
         }
     }
