@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, io::Write};
 
 use anyhow::{anyhow, Context, Result};
 use turbo_tasks::{
@@ -495,7 +495,7 @@ impl NodeEntry for AppRenderer {
             .try_join()
             .await?;
         let mut result =
-            "import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n".to_string();
+            Vec::from(*b"import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n");
         for (_, import) in segments.iter() {
             if let Some((p, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -518,7 +518,7 @@ import BOOTSTRAP from {};
                 stringify_str(&page)
             )?;
         }
-        result.push_str("const LAYOUT_INFO = [");
+        result.extend(b"const LAYOUT_INFO = [");
         for (segment_str_lit, import) in segments.iter() {
             if let Some((_, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -530,13 +530,13 @@ import BOOTSTRAP from {};
                 writeln!(result, "  {{ segment: {segment_str_lit} }},",)?
             }
         }
-        result.push_str("];\n\n");
+        result.extend(b"];\n\n");
         let base_code = next_js_file("entry/app-renderer.tsx");
-        let mut file = File::from(result);
         if let FileContent::Content(base_file) = &*base_code.await? {
-            file.push_content(base_file.content());
+            result.extend(base_file.content());
         }
-        let asset = VirtualAssetVc::new(path.join("entry"), FileContent::Content(file).into());
+        let file = File::from(result);
+        let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
             (self.context, self.intermediate_output_path.join("__rsc__"))
         } else {

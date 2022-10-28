@@ -90,6 +90,13 @@ impl SourceMap {
             SourceMap::Regular(r) => r.0.to_writer(w)?,
 
             SourceMap::Sectioned(s) => {
+                if s.sections.len() == 1 {
+                    let s = &s.sections[0];
+                    if s.offset == (0, 0) {
+                        return s.map.await?.encode(w).await;
+                    }
+                }
+
                 // My kingdom for a decent dedent macro with interpolation!
                 write!(
                     w,

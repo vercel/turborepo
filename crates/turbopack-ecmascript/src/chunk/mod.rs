@@ -2,7 +2,7 @@ pub mod loader;
 pub(crate) mod optimize;
 pub mod source_map;
 
-use std::{fmt::Write as _, slice::Iter};
+use std::{fmt::Write, io::Write as _, slice::Iter};
 
 use anyhow::{anyhow, bail, Context, Result};
 use indexmap::{IndexMap, IndexSet};
@@ -473,7 +473,7 @@ impl EcmascriptChunkContentEntry {
         &self.code
     }
 
-    fn source_code(&self) -> &str {
+    fn source_code(&self) -> &[u8] {
         self.code.source_code()
     }
 }
@@ -486,7 +486,7 @@ impl EcmascriptChunkContentEntryVc {
         let factory = module_factory(content);
         let id = chunk_item.id().await?;
         let code = factory.await?;
-        let hash = hash_xxh3_hash64(code.source_code().as_bytes());
+        let hash = hash_xxh3_hash64(code.source_code());
         Ok(EcmascriptChunkContentEntry {
             chunk_item,
             id,
@@ -743,7 +743,7 @@ impl GenerateSourceMap for EcmascriptChunkContent {
 
 #[derive(serde::Serialize)]
 struct HmrUpdateEntry<'a> {
-    code: &'a str,
+    code: &'a [u8],
     map: Option<String>,
 }
 
@@ -1113,7 +1113,8 @@ impl EcmascriptChunkPlaceablesVc {
 #[turbo_tasks::value(shared)]
 #[derive(Default)]
 pub struct EcmascriptChunkItemContent {
-    pub inner_code: String,
+    // TODO
+    pub inner_code: Vec<u8>,
     pub source_map: Option<ParseResultSourceMapVc>,
     pub options: EcmascriptChunkItemOptions,
     pub placeholder_for_future_extensions: (),

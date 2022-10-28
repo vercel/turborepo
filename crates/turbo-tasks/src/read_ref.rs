@@ -34,6 +34,13 @@ impl<T, U> std::ops::Deref for ReadRef<T, U> {
     }
 }
 
+impl<T, U> From<ReadRef<T, U>> for Arc<U> {
+    fn from(r: ReadRef<T, U>) -> Self {
+        let arc: Arc<U> = unsafe { std::mem::transmute(r.0) };
+        arc
+    }
+}
+
 impl<T, U: Display> Display for ReadRef<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&**self, f)

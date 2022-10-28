@@ -126,7 +126,7 @@ __turbopack_export_value__((__turbopack_import__) => {{
         )?;
 
         Ok(EcmascriptChunkItemContent {
-            inner_code: code,
+            inner_code: code.into(),
             ..Default::default()
         }
         .into())
@@ -277,7 +277,7 @@ __turbopack_export_value__(Promise.all(chunks.map(__turbopack_load__)));"
         )?;
 
         Ok(EcmascriptChunkItemContent {
-            inner_code: code,
+            inner_code: code.into(),
             ..Default::default()
         }
         .into())

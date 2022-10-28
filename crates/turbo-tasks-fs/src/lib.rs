@@ -43,7 +43,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
 };
 use turbo_tasks::{
-    primitives::{BoolVc, StringReadRef, StringVc},
+    primitives::{BoolVc, BytesReadRef, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
@@ -1181,7 +1181,7 @@ pub enum LinkContent {
 pub struct File {
     meta: FileMeta,
     #[turbo_tasks(debug_ignore)]
-    content: Vec<u8>,
+    content: Arc<Vec<u8>>,
 }
 
 impl File {
@@ -1195,7 +1195,7 @@ impl File {
 
         Ok(File {
             meta: metadata.into(),
-            content: output,
+            content: Arc::new(output),
         })
     }
 
@@ -1203,7 +1203,7 @@ impl File {
     fn from_bytes(content: Vec<u8>) -> Self {
         File {
             meta: FileMeta::default(),
-            content,
+            content: Arc::new(content),
         }
     }
 
@@ -1238,6 +1238,15 @@ impl From<StringReadRef> for File {
     }
 }
 
+impl From<BytesReadRef> for File {
+    fn from(content: BytesReadRef) -> Self {
+        File {
+            meta: FileMeta::default(),
+            content: content.into(),
+        }
+    }
+}
+
 impl From<&str> for File {
     fn from(s: &str) -> Self {
         File::from_bytes(s.as_bytes().to_vec())
@@ -1258,7 +1267,10 @@ impl From<&[u8]> for File {
 
 impl File {
     pub fn new(meta: FileMeta, content: Vec<u8>) -> Self {
-        Self { meta, content }
+        Self {
+            meta,
+            content: Arc::new(content),
+        }
     }
 
     pub fn meta(&self) -> &FileMeta {
@@ -1267,10 +1279,6 @@ impl File {
 
     pub fn content(&self) -> &[u8] {
         &self.content
-    }
-
-    pub fn push_content(&mut self, content: &[u8]) {
-        self.content.extend_from_slice(content);
     }
 }
 
