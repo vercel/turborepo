@@ -634,12 +634,7 @@ impl EcmascriptChunkContentVc {
 
         if code.has_source_map() {
             let filename = chunk_path.file_name();
-            let version = self.version().id().await?;
-            write!(
-                code,
-                "\n\n//# sourceMappingURL={}.{}.map",
-                filename, version
-            )?;
+            write!(code, "\n\n//# sourceMappingURL={}.map", filename)?;
         }
 
         Ok(code.cell())
