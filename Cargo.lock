@@ -2929,14 +2929,14 @@ dependencies = [
 
 [[package]]
 name = "pretty_assertions"
-version = "1.2.1"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c89f989ac94207d048d92db058e4f6ec7342b0971fc58d1271ca148b799b3563"
+checksum = "a25e9bcb20aa780fd0bb16b72403a9064d6b3f22f026946029acb941a50af755"
 dependencies = [
- "ansi_term",
  "ctor",
  "diff",
  "output_vt100",
+ "yansi",
 ]
 
 [[package]]
@@ -3458,6 +3458,12 @@ checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "similar"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62ac7f900db32bf3fd12e0117dd3dc4da74bc52ebaac97f39668446d89694803"
 
 [[package]]
 name = "siphasher"
@@ -5057,6 +5063,7 @@ dependencies = [
  "mopa",
  "nohash-hasher",
  "once_cell",
+ "pin-project-lite",
  "regex",
  "serde",
  "serde_json",
@@ -5340,13 +5347,13 @@ dependencies = [
  "anyhow",
  "async-trait",
  "criterion",
- "difference",
  "easy-error",
  "fxhash",
  "indexmap",
  "lazy_static",
  "num-bigint",
  "once_cell",
+ "pin-project-lite",
  "rand",
  "regex",
  "rstest",
@@ -5428,6 +5435,28 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbopack-core",
+]
+
+[[package]]
+name = "turbopack-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "similar",
+ "test-generator",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-env",
+ "turbo-tasks-fs",
+ "turbo-tasks-memory",
+ "turbopack",
+ "turbopack-core",
+ "turbopack-ecmascript",
+ "turbopack-env",
 ]
 
 [[package]]
@@ -5894,6 +5923,12 @@ dependencies = [
  "tabled",
  "walkdir",
 ]
+
+[[package]]
+name = "yansi"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "yeslogic-fontconfig-sys"
