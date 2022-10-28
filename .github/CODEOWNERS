@@ -10,10 +10,8 @@
 /benchmark @vercel/turbo-oss
 /buildcontainer @vercel/turbo-oss
 /examples @vercel/turbo-oss
-/packages @vercel/turbo-oss
 /shim @vercel/turbo-oss
 /docs/pages/repo @vercel/turbo-oss
-
 
 # Turbopack-specific things
 
@@ -24,3 +22,19 @@
 .rustfmt.toml @vercel/web-tooling
 .taplo.toml @vercel/web-tooling
 /docs/pages/pack @vercel/web-tooling
+
+# packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages
+# Separate section in this file, so we can add new entries more easily.
+# Note: Some packages may be omitted to indicate shared ownership.
+
+/packages/create-turbo                  @vercel/turbo-oss
+/packages/eslint-config-turbo           @vercel/turbo-oss
+/packages/eslint-plugin-turbo           @vercel/turbo-oss
+/packages/node-module-trace             @vercel/web-tooling
+/packages/turbo                     	  @vercel/turbo-oss
+/packages/turbo-codemod                 @vercel/turbo-oss
+/packages/turbo-ignore                  @vercel/turbo-oss
+/packages/turbo-tracing-next-plugin     @vercel/web-tooling
+/packages/turbo-types                   @vercel/turbo-oss
+/packages/turbo-utils                   @vercel/turbo-oss
+/packages/webpack-nmt                   @vercel/web-tooling
