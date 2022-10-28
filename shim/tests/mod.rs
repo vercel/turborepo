@@ -96,7 +96,8 @@ fn test_find_turbo_in_example() {
 #[test]
 fn test_find_correct_turbo() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
-    cmd.args(["--cwd", "..", "bin"])
+    let assertion = cmd
+        .args(["--cwd", "..", "bin"])
         .assert()
         .append_context(
             "turbo",
@@ -106,6 +107,11 @@ fn test_find_correct_turbo() {
             "expect",
             "`turbo --cwd .. bin` should print out current turbo binary",
         )
-        .success()
-        .stdout(predicates::str::ends_with("target/debug/turbo\n"));
+        .success();
+
+    if cfg!(debug_assertions) {
+        assertion.stdout(predicates::str::ends_with("target/debug/turbo\n"));
+    } else {
+        assertion.stdout(predicates::str::ends_with("target/release/turbo\n"));
+    }
 }
