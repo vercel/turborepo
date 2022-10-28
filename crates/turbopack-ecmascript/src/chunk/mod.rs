@@ -1017,6 +1017,14 @@ impl Introspectable for EcmascriptChunk {
     }
 }
 
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for EcmascriptChunk {
+    #[turbo_tasks::function]
+    fn generate_source_map(self_vc: EcmascriptChunkVc) -> SourceMapVc {
+        self_vc.chunk_content().generate_source_map()
+    }
+}
+
 #[turbo_tasks::value]
 struct EcmascriptChunkContentEvaluate {
     chunks_server_paths: StringsVc,
