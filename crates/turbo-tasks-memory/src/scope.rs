@@ -229,6 +229,7 @@ impl TaskScope {
             backend.with_scope(parent, |parent| {
                 let update = parent.increment_unfinished_tasks_internal();
 
+                // lock need to include increment_unfinished_tasks
                 drop(state);
 
                 if update {
@@ -244,6 +245,7 @@ impl TaskScope {
             backend.with_scope(parent, |parent| {
                 let update = parent.decrement_unfinished_tasks_internal();
 
+                // lock need to include decrement_unfinished_tasks
                 drop(state);
 
                 if update {
@@ -256,11 +258,11 @@ impl TaskScope {
     fn update_unfinished_state(&self, backend: &MemoryBackend) {
         let mut state = self.state.lock();
         let count = self.unfinished_tasks.load(Ordering::Acquire);
-        let flag = count > 0;
+        let has_unfinished_tasks = count > 0;
         let mut to_update = Vec::new();
-        if state.has_unfinished_tasks != flag {
-            state.has_unfinished_tasks = flag;
-            if flag {
+        if state.has_unfinished_tasks != has_unfinished_tasks {
+            state.has_unfinished_tasks = has_unfinished_tasks;
+            if has_unfinished_tasks {
                 to_update.extend(state.parents.iter().copied().filter(|parent| {
                     backend.with_scope(*parent, |scope| scope.increment_unfinished_tasks_internal())
                 }));
@@ -364,7 +366,7 @@ impl TaskScope {
 pub struct ScopeChildChangeEffect {
     pub notify: HashSet<TaskId>,
     pub active: bool,
-    /// The child to parent relationship need to be updated
+    /// `true` when the child to parent relationship needs to be updated
     pub parent: bool,
 }
 
