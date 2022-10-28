@@ -214,7 +214,7 @@ impl NodeJsEnvironmentVc {
 
         if version < default_version {
             return Err(anyhow!(format!(
-                "Node.js version should be above {DEFAULT_NODEJS_VERSION}"
+                "Node.js version should be above or equal to {DEFAULT_NODEJS_VERSION}"
             )));
         }
 
