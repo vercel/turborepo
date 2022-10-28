@@ -443,13 +443,13 @@ impl Backend for MemoryBackend {
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
-        let result = if let Some(task) = self.task_cache.get(&task_type) {
+        let result = if let Some(task) = self.task_cache.get(&task_type).map(|task| *task) {
             // fast pass without creating a new task
-            self.connect_task_child(parent_task, *task, turbo_tasks);
+            self.connect_task_child(parent_task, task, turbo_tasks);
 
             // TODO maybe force (background) scheduling to avoid inactive tasks hanging in
             // "in progress" until they become active
-            *task
+            task
         } else {
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
