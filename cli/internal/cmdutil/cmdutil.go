@@ -77,8 +77,8 @@ func (h *Helper) Cleanup(flags *pflag.FlagSet) {
 	}
 }
 
-// Cleanup runs the register cleanup handlers. It requires the flags
-// to the root command so that it can construct a UI if necessary
+// CleanupWithArgs runs the register cleanup handlers. It requires the parsed args
+// from Rust so that it can construct a UI if necessary
 func (h *Helper) CleanupWithArgs(args *turbostate.Args) {
 	h.cleanupsMu.Lock()
 	defer h.cleanupsMu.Unlock()
@@ -275,7 +275,7 @@ func (h *Helper) GetCmdBaseFromArgs(args *turbostate.Args) (*CmdBase, error) {
 	}
 	fmt.Println("5")
 
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), args.Login, args.Api, args.Team)
+	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), args.Login, args.API, args.Team)
 	if err != nil {
 		return nil, err
 	}

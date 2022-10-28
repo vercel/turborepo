@@ -103,8 +103,8 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 		}
 		helper.RegisterCleanup(cleanup)
 	}
-	if state.ParsedArgs.Cpuprofile != nil {
-		cleanup, err := createCpuprofileFile(*state.ParsedArgs.Cpuprofile)
+	if state.ParsedArgs.CPUProfile != nil {
+		cleanup, err := createCpuprofileFile(*state.ParsedArgs.CPUProfile)
 		if err != nil {
 			fmt.Printf("Failed to create CPU profile file: %v\n", err)
 			return 1
@@ -120,7 +120,7 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 		command := state.ParsedArgs.Command
 		fmt.Printf("Running command: %+v\n", command.Login)
 		if command.Daemon != nil {
-			execErr = daemon.Run(helper, &state.ParsedArgs, ctx, signalWatcher)
+			execErr = daemon.Run(ctx, helper, &state.ParsedArgs, signalWatcher)
 		} else if command.Link != nil {
 			execErr = login.RunLink(helper, &state.ParsedArgs)
 		} else if command.Login != nil {

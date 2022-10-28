@@ -31,6 +31,7 @@ func UnlinkCmd(helper *cmdutil.Helper) *cobra.Command {
 	return cmd
 }
 
+// RunUnlink executes the `unlink` command directly instead of via cobra.
 func RunUnlink(helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {

@@ -13,7 +13,8 @@ import (
 	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
 )
 
-func Start(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context) error {
+// Start starts the daemon directly instead of via cobra.
+func Start(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err
@@ -52,7 +53,8 @@ func addStartCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	root.AddCommand(cmd)
 }
 
-func Stop(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context) error {
+// Stop stops the daemon directly instead of via cobra.
+func Stop(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err
@@ -91,6 +93,7 @@ func addStopCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	root.AddCommand(cmd)
 }
 
+// Restart restarts the daemon directly instead of via cobra.
 func Restart(helper *cmdutil.Helper, args *turbostate.Args, ctx *context.Context) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {

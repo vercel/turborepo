@@ -1,3 +1,6 @@
+// Package turbostate holds all of the state given from the Rust CLI
+// that is necessary to execute turbo. We transfer this state from Rust
+// to Go via a JSON payload.
 package turbostate
 
 import "time"
@@ -45,10 +48,10 @@ type Command struct {
 // Args are the parsed command line arguments passed
 // from the Rust shim
 type Args struct {
-	Api        *string  `json:"api"`
+	API        *string  `json:"api"`
 	Color      bool     `json:"color"`
-	Cpuprofile *string  `json:"cpuprofile"`
-	Cwd        *string  `json:"cwd"`
+	CPUProfile *string  `json:"cpuprofile"`
+	CWD        *string  `json:"cwd"`
 	Heap       *string  `json:"heap"`
 	Login      *string  `json:"login"`
 	NoColor    bool     `json:"noColor"`

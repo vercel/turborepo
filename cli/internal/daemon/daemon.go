@@ -77,7 +77,8 @@ func (d *daemon) logError(err error) {
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-func Run(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context, signalWatcher *signals.Watcher) error {
+// Run executes the `daemon` command directly instead of via cobra.
+func Run(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args, signalWatcher *signals.Watcher) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err

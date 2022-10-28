@@ -38,6 +38,7 @@ func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
 	}
 }
 
+// Run executes the `prune` command directly instead of via cobra.
 func Run(helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
