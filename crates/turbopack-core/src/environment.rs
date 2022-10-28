@@ -207,10 +207,19 @@ impl NodeJsEnvironmentVc {
         }
         .await?;
 
+        let version =
+            Version::from_str(&str).map_err(|_| anyhow!("Node.js version parse error"))?;
+
+        let default_version = Version::from_str(&DEFAULT_NODEJS_VERSION).unwrap();
+
+        if version < default_version {
+            return Err(anyhow!(format!(
+                "Node.js version should be above {DEFAULT_NODEJS_VERSION}"
+            )));
+        }
+
         Ok(RuntimeVersionsVc::cell(Versions {
-            node: Some(
-                Version::from_str(&str).map_err(|_| anyhow!("Node.js version parse error"))?,
-            ),
+            node: Some(version),
             ..Default::default()
         }))
     }
