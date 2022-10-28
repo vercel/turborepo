@@ -1,43 +1,40 @@
 use assert_cmd::Command;
 
-static TURBO_HELP: &str = "turbo 
-The build system that makes ship happen
+static TURBO_HELP: &str = "The build system that makes ship happen
 
-USAGE:
-    turbo [OPTIONS] [TASKS]... [SUBCOMMAND]
+Usage: turbo [OPTIONS] [TASKS]... [COMMAND]
 
-ARGS:
-    <TASKS>...    
+Commands:
+  bin         Get the path to the Turbo binary
+  completion  Generate the autocompletion script for the specified shell
+  daemon      Runs the Turborepo background daemon
+  help        Help about any command
+  link        Link your local directory to a Vercel organization and enable remote caching
+  login       Login to your Vercel account
+  logout      Logout to your Vercel account
+  prune       Prepare a subset of your monorepo
+  run         Run tasks across projects in your monorepo
+  unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
 
-OPTIONS:
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpuprofile <CPUPROFILE>    Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-    -h, --help                       
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS
-                                     request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
-        --version                    
+Arguments:
+  [TASKS]...  
 
-SUBCOMMANDS:
-    bin           Get the path to the Turbo binary
-    completion    Generate the autocompletion script for the specified shell
-    daemon        Runs the Turborepo background daemon
-    help          Help about any command
-    link          Link your local directory to a Vercel organization and enable remote caching
-    login         Login to your Vercel account
-    logout        Logout to your Vercel account
-    prune         Prepare a subset of your monorepo
-    run           Run tasks across projects in your monorepo
-    unlink        Unlink the current directory from your Vercel organization and disable Remote
-                      Caching
+Options:
+  -h, --help                     
+      --version                  
+      --api <API>                Override the endpoint for API calls
+      --color                    Force color usage in the terminal
+      --cpuprofile <CPUPROFILE>  Specify a file to save a cpu profile
+      --cwd <CWD>                The directory in which to run turbo
+      --heap <HEAP>              Specify a file to save a pprof heap profile
+      --login <LOGIN>            Override the login endpoint
+      --no-color                 Suppress color usage in the terminal
+      --preflight                When enabled, turbo will precede HTTP requests with an OPTIONS \
+                           request for authorization
+      --team <TEAM>              Set the team slug for API calls
+      --token <TOKEN>            Set the auth token for API calls
+      --trace <TRACE>            Specify a file to save a pprof trace
+  -v, --verbosity <VERBOSITY>    verbosity
 ";
 
 fn get_version() -> &'static str {
