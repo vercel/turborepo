@@ -1,6 +1,8 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    ffi::OsStr,
     fmt::Write as _,
+    path::PathBuf,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -12,8 +14,7 @@ pub use node_entry::{NodeEntry, NodeEntryVc};
 pub use node_rendered_source::create_node_rendered_source;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{primitives::StringVc, CompletionVc, CompletionsVc, TryJoinIterExt};
-use turbo_tasks_fs::{DiskFileSystemVc, File, FileContent, FileSystemPathVc};
-use turbopack::ecmascript::EcmascriptModuleAssetVc;
+use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkingContextVc},
@@ -23,7 +24,10 @@ use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{query::Query, BodyVc, HeaderValue, ProxyResult, ProxyResultVc},
 };
-use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
+use turbopack_ecmascript::{
+    chunk::{source_map::EcmascriptChunkSourceMapAssetVc, EcmascriptChunkPlaceablesVc},
+    EcmascriptModuleAssetVc,
+};
 
 use self::{
     bootstrap::NodeJsBootstrapAsset,
@@ -200,9 +204,7 @@ async fn get_renderer_pool(
 
     emit(intermediate_asset, intermediate_output_path).await?;
 
-    if let Some(fs) = DiskFileSystemVc::resolve_from(intermediate_output_path.fs()).await? {
-        let disk = fs.await?;
-        let dir = disk.to_sys_path(intermediate_output_path).await?;
+    if let Some(dir) = to_sys_path(intermediate_output_path).await? {
         let entrypoint = dir.join("index.js");
         let pool = NodeJsPool::new(dir, entrypoint, HashMap::new(), 4);
         Ok(pool.cell())
@@ -286,9 +288,7 @@ async fn render_static(
     let pool = renderer_pool.strongly_consistent().await?;
     let mut operation = match pool.operation().await {
         Ok(operation) => operation,
-        Err(err) => {
-            return Ok(static_error(path, err, None, fallback_page).await?);
-        }
+        Err(err) => return static_error(path, err, None, fallback_page).await,
     };
 
     match run_static_operation(
@@ -300,7 +300,7 @@ async fn render_static(
     .await
     {
         Ok(asset) => Ok(asset),
-        Err(err) => Ok(static_error(path, err, Some(operation), fallback_page).await?),
+        Err(err) => static_error(path, err, Some(operation), fallback_page).await,
     }
 }
 
@@ -349,10 +349,9 @@ async fn static_error(
         None => None,
     };
 
-    let html_status = if let Some(status) = status {
-        format!("<h2>Exit status</h2><pre>{status}</pre>")
-    } else {
-        format!("<h3>No exit status</pre>")
+    let html_status = match status {
+        Some(status) => format!("<h2>Exit status</h2><pre>{status}</pre>"),
+        None => "<h3>No exit status</pre>".to_owned(),
     };
 
     let body = format!(
@@ -383,34 +382,40 @@ async fn trace_stack(
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<String> {
-    let fs = match DiskFileSystemVc::resolve_from(intermediate_output_path.fs()).await? {
-        Some(fs) => fs,
-        _ => bail!("couldn't extract disk fs from path"),
-    }
-    .await?;
-    let root = fs
-        .to_sys_path(intermediate_output_path.root())
-        .await?
-        .to_string_lossy()
-        .to_string();
+    let root = match to_sys_path(intermediate_output_path.root()).await? {
+        Some(r) => r.to_string_lossy().to_string(),
+        None => bail!("couldn't extract disk fs from path"),
+    };
 
+    let map_ext = OsStr::new("map");
     let assets = internal_assets(intermediate_asset, intermediate_output_path.root())
         .await?
         .iter()
         .map(|a| async {
-            Ok(if *a.path().extension().await? == "map" {
-                // The path is something like "foo.js.abc123.map
-                let mut p = fs.to_sys_path(a.path()).await?;
-                p.set_extension("");
-                // The next extension is the hash
-                debug_assert!(p.extension().is_some());
-                debug_assert_ne!(p.extension().unwrap(), "js");
-                p.set_extension("");
-                let p = p.strip_prefix(&root).unwrap();
-                Some((p.to_str().unwrap().to_string(), *a))
-            } else {
-                None
-            })
+            let mut path = match to_sys_path(a.path()).await? {
+                Some(p) => p,
+                None => PathBuf::from(&a.path().await?.path),
+            };
+
+            if path.extension() != Some(map_ext) {
+                return Ok(None);
+            }
+
+            // Strip the .map
+            path.set_extension("");
+
+            if EcmascriptChunkSourceMapAssetVc::resolve_from(*a)
+                .await?
+                .is_some()
+            {
+                // The path was something like "foo.js.abc123.map, and the next extension is the
+                // hash
+                debug_assert!(path.extension().is_some());
+                debug_assert_ne!(path.extension().unwrap(), "js");
+                path.set_extension("");
+            };
+            let p = path.strip_prefix(&root).unwrap();
+            Ok(Some((p.to_str().unwrap().to_string(), *a)))
         })
         .try_join()
         .await?
@@ -442,7 +447,7 @@ async fn trace_stack(
                         SourceMapTraceVc::new(map.content(), line, column, frame.name.clone());
                     let trace = map_trace.trace().await?;
                     if let TraceResult::Found(f) = &*trace {
-                        write_frame!(f, path)?;
+                        write_frame!(f, f.file)?;
                         continue;
                     }
                 }
@@ -509,7 +514,7 @@ async fn render_proxy(
     let mut operation = match pool.operation().await {
         Ok(operation) => operation,
         Err(err) => {
-            return Ok(proxy_error(path, err, None).await?);
+            return proxy_error(path, err, None).await;
         }
     };
 
@@ -537,7 +542,7 @@ async fn run_proxy_operation(
     let data = data.await?;
     // First, send the render data.
     operation
-        .send(RenderProxyOutgoingMessage::Headers { data: &*data })
+        .send(RenderProxyOutgoingMessage::Headers { data: &data })
         .await?;
 
     let body = body.await?;
