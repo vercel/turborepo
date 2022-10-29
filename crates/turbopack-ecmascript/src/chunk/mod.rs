@@ -749,18 +749,12 @@ struct HmrUpdateEntry<'a> {
 
 impl<'a> HmrUpdateEntry<'a> {
     fn new(entry: &'a EcmascriptChunkContentEntry, chunk_path: &str) -> Self {
-        // This logic is the same as in source_map.rs
-        let mut hasher = Xxh3Hash64Hasher::new();
-        hasher.write_ref(&*entry.id);
-        let hash = encode_hex(hasher.finish());
-        let truncated_hash = &hash[..6];
-
         HmrUpdateEntry {
             code: entry.source_code(),
             map: entry
                 .code
                 .has_source_map()
-                .then(|| format!("{}.{}.map", chunk_path, truncated_hash)),
+                .then(|| format!("{}.{}.map", chunk_path, entry.id.to_truncated_hash())),
         }
     }
 }
