@@ -297,7 +297,11 @@ async fn merge_by_size(chunks: &[EcmascriptChunkVc]) -> Result<Vec<EcmascriptChu
         }
     }
     if !current.is_empty() {
-        merged.push(merge_chunks(*current.first().unwrap(), &current).await?);
+        if current.len() == 1 {
+            merged.push(current.pop().unwrap());
+        } else {
+            merged.push(merge_chunks(*current.first().unwrap(), &current).await?);
+        }
     }
     Ok(merged)
 }
