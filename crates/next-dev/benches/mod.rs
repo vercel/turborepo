@@ -215,9 +215,8 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                             },
                             |mut guard| async move {
                                 // Make 5 changes to warm up.
-                                let timeout = Duration::from_secs(10);
                                 for _ in 0..5 {
-                                    let _ = make_change(&mut guard, location, timeout).await;
+                                    let _ = make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await;
                                 }
                                 Ok(guard)
                             },
