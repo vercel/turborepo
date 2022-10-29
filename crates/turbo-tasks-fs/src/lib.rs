@@ -14,16 +14,20 @@ mod retry;
 pub mod util;
 
 use std::{
+    cmp::min,
     collections::{HashMap, HashSet},
     fmt::{self, Debug, Display, Formatter},
     fs::FileType,
-    io::{self, ErrorKind},
+    hash::{Hash, Hasher},
+    io::{self, ErrorKind, Read},
     mem::take,
     path::{Path, PathBuf, MAIN_SEPARATOR},
+    pin::Pin,
     sync::{
         mpsc::{channel, RecvError, TryRecvError},
         Arc, Mutex,
     },
+    task::{Context as TaskContext, Poll},
     time::Duration,
 };
 
@@ -40,7 +44,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{
     fs,
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, ReadBuf},
 };
 use turbo_tasks::{
     primitives::{BoolVc, BytesReadRef, StringReadRef, StringVc},
@@ -48,7 +52,7 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
-use turbo_tasks_hash::hash_xxh3_hash64;
+use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
 use crate::retry::{retry_blocking, retry_future};
@@ -489,7 +493,8 @@ impl FileSystem for DiskFileSystem {
                     let full_path = full_path_to_write.clone();
                     async move {
                         let mut f = fs::File::create(&full_path).await?;
-                        f.write_all(&file.content).await?;
+                        tokio::io::copy(&mut file.content.read(), &mut f).await?;
+                        // f.write_all(file.content.as_slice()).await?;
                         #[cfg(target_family = "unix")]
                         f.set_permissions(file.meta.permissions.into()).await?;
                         Ok::<(), io::Error>(())
@@ -1181,7 +1186,152 @@ pub enum LinkContent {
 pub struct File {
     meta: FileMeta,
     #[turbo_tasks(debug_ignore)]
-    content: Arc<Vec<u8>>,
+    content: Rope,
+}
+
+#[turbo_tasks::value(shared, eq = "manual")]
+#[derive(Clone)]
+pub enum Rope {
+    Flat(Arc<Vec<u8>>, usize),
+    Concat(Vec<Rope>, usize),
+}
+
+impl Rope {
+    pub fn read(&'_ self) -> RopeReader<'_> {
+        RopeReader {
+            stack: vec![RopeReaderState::new(self)],
+        }
+    }
+
+    pub fn to_string(&self) -> Option<String> {
+        let mut read = self.read();
+        let mut string = String::new();
+        match <RopeReader as Read>::read_to_string(&mut read, &mut string) {
+            Ok(_) => Some(string),
+            Err(_) => None,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Rope::Flat(_, l) => *l,
+            Rope::Concat(_, l) => *l,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl DeterministicHash for &Rope {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        match self {
+            Rope::Flat(f, _) => f.deterministic_hash(state),
+            Rope::Concat(c, _) => {
+                for v in c {
+                    v.deterministic_hash(state);
+                }
+            }
+        }
+    }
+}
+
+impl Hash for Rope {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Rope::Flat(f, _) => f.hash(state),
+            Rope::Concat(c, _) => {
+                for v in c {
+                    v.hash(state);
+                }
+            }
+        }
+    }
+}
+
+impl PartialEq for Rope {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        hash_xxh3_hash64(self) == hash_xxh3_hash64(other)
+    }
+}
+impl Eq for Rope {}
+
+pub struct RopeReader<'a> {
+    stack: Vec<RopeReaderState<'a>>,
+}
+
+impl<'a> RopeReader<'a> {
+    fn read_internal(&mut self, buf: &mut ReadBuf<'_>) -> usize {
+        let mut remaining = buf.remaining();
+        let old = remaining;
+        while remaining > 0 {
+            let mut last = match self.stack.last_mut() {
+                None => break,
+                Some(l) => l,
+            };
+
+            match last.inner {
+                Rope::Flat(f, _) => {
+                    let pos = last.index;
+                    let len = min(f.len() - pos, remaining);
+                    if len > 0 {
+                        let end = pos + len;
+                        buf.put_slice(&f[pos..end]);
+                        last.index = end;
+                        remaining -= len;
+                    } else {
+                        // We know remaining > 0 (because the loop), but we couldn't read anything.
+                        // That means the vec is now empty.
+                        self.stack.pop();
+                    }
+                }
+
+                Rope::Concat(c, _) => match c.get(last.index) {
+                    None => {
+                        self.stack.pop();
+                    }
+                    Some(v) => {
+                        last.index += 1;
+                        self.stack.push(RopeReaderState::new(v));
+                    }
+                },
+            }
+        }
+        old - remaining
+    }
+}
+
+struct RopeReaderState<'a> {
+    inner: &'a Rope,
+    index: usize,
+}
+
+impl<'a> RopeReaderState<'a> {
+    fn new(inner: &'a Rope) -> Self {
+        RopeReaderState { inner, index: 0 }
+    }
+}
+
+impl<'a> Read for RopeReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        Ok(self.read_internal(&mut ReadBuf::new(buf)))
+    }
+}
+
+impl<'a> AsyncRead for RopeReader<'a> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut TaskContext<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+        this.read_internal(buf);
+        Poll::Ready(Ok(()))
+    }
 }
 
 impl File {
@@ -1195,7 +1345,7 @@ impl File {
 
         Ok(File {
             meta: metadata.into(),
-            content: Arc::new(output),
+            content: Rope::Flat(Arc::new(output), 0),
         })
     }
 
@@ -1203,7 +1353,7 @@ impl File {
     fn from_bytes(content: Vec<u8>) -> Self {
         File {
             meta: FileMeta::default(),
-            content: Arc::new(content),
+            content: Rope::Flat(Arc::new(content), 0),
         }
     }
 
@@ -1214,6 +1364,10 @@ impl File {
     pub fn with_content_type(mut self, content_type: Mime) -> Self {
         self.meta.content_type = Some(content_type);
         self
+    }
+
+    pub fn read(&'_ self) -> RopeReader<'_> {
+        self.content.read()
     }
 }
 
@@ -1242,7 +1396,7 @@ impl From<BytesReadRef> for File {
     fn from(content: BytesReadRef) -> Self {
         File {
             meta: FileMeta::default(),
-            content: content.into(),
+            content: Rope::Flat(content.into(), 0),
         }
     }
 }
@@ -1269,7 +1423,7 @@ impl File {
     pub fn new(meta: FileMeta, content: Vec<u8>) -> Self {
         Self {
             meta,
-            content: Arc::new(content),
+            content: Rope::Flat(Arc::new(content), 0),
         }
     }
 
@@ -1277,13 +1431,7 @@ impl File {
         &self.meta
     }
 
-    pub fn content(&self) -> &[u8] {
-        &self.content
-    }
-}
-
-impl AsRef<[u8]> for File {
-    fn as_ref(&self) -> &[u8] {
+    pub fn content(&self) -> &Rope {
         &self.content
     }
 }
@@ -1367,11 +1515,8 @@ impl FileContent {
 
     pub fn parse_json(&self) -> FileJsonContent {
         match self {
-            FileContent::Content(file) => match std::str::from_utf8(&file.content) {
-                Ok(string) => match serde_json::from_str(string) {
-                    Ok(data) => FileJsonContent::Content(data),
-                    Err(_) => FileJsonContent::Unparseable,
-                },
+            FileContent::Content(file) => match serde_json::from_reader(file.content.read()) {
+                Ok(data) => FileJsonContent::Content(data),
                 Err(_) => FileJsonContent::Unparseable,
             },
             FileContent::NotFound => FileJsonContent::NotFound,
@@ -1380,9 +1525,9 @@ impl FileContent {
 
     pub fn parse_json_with_comments(&self) -> FileJsonContent {
         match self {
-            FileContent::Content(file) => match std::str::from_utf8(&file.content) {
-                Ok(string) => match parse_to_serde_value(
-                    string,
+            FileContent::Content(file) => match file.content.to_string() {
+                Some(string) => match parse_to_serde_value(
+                    &string,
                     &ParseOptions {
                         allow_comments: true,
                         allow_trailing_commas: true,
@@ -1395,7 +1540,7 @@ impl FileContent {
                     },
                     Err(_) => FileJsonContent::Unparseable,
                 },
-                Err(_) => FileJsonContent::Unparseable,
+                None => FileJsonContent::Unparseable,
             },
             FileContent::NotFound => FileJsonContent::NotFound,
         }
@@ -1403,8 +1548,8 @@ impl FileContent {
 
     pub fn lines(&self) -> FileLinesContent {
         match self {
-            FileContent::Content(file) => match std::str::from_utf8(&file.content) {
-                Ok(string) => {
+            FileContent::Content(file) => match file.content.to_string() {
+                Some(string) => {
                     let mut bytes_offset = 0;
                     FileLinesContent::Lines(
                         string
@@ -1420,7 +1565,7 @@ impl FileContent {
                             .collect(),
                     )
                 }
-                Err(_) => FileLinesContent::Unparseable,
+                None => FileLinesContent::Unparseable,
             },
             FileContent::NotFound => FileLinesContent::NotFound,
         }

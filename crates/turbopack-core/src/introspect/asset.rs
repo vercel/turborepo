@@ -62,9 +62,9 @@ pub async fn content_to_details(content: AssetContentVc) -> Result<StringVc> {
         AssetContent::File(file_content) => match &*file_content.await? {
             FileContent::Content(file) => {
                 let content = file.content();
-                match std::str::from_utf8(content) {
-                    Ok(str) => StringVc::cell(str.to_string()),
-                    Err(_) => StringVc::cell(format!("{} binary bytes", content.len())),
+                match content.to_string() {
+                    Some(str) => StringVc::cell(str),
+                    None => StringVc::cell(format!("{} binary bytes", content.len())),
                 }
             }
             FileContent::NotFound => StringVc::cell("not found".to_string()),
