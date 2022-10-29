@@ -862,7 +862,17 @@ impl EcmascriptChunkVc {
     #[turbo_tasks::function]
     async fn chunk_items_count(self) -> Result<UsizeVc> {
         Ok(UsizeVc::cell(
-            self.chunk_content_result().await?.chunk_items.await?.len(),
+            self.chunk_content_result()
+                .await?
+                .chunk_items
+                .await?
+                .iter()
+                .map(|chunk| chunk)
+                .try_join()
+                .await?
+                .into_iter()
+                .map(|chunk| chunk.len())
+                .sum(),
         ))
     }
 
