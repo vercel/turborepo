@@ -1,13 +1,13 @@
 (self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_async_chunk_input_index_9be35c.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname, g: global, m: module, e: exports }) { !function() {
 
 __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/import.js/manifest-loader.js")(__turbopack_import__).then(({ foo  })=>{
     foo(true);
 });
 
 }.call(this) }),
-"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/import.js/manifest-loader.js": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/import.js/manifest-loader.js": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
 
 
 __turbopack_export_value__((__turbopack_import__) => {
@@ -390,6 +390,7 @@ __turbopack_export_value__((__turbopack_import__) => {
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        g: globalThis,
       });
     });
 

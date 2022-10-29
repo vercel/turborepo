@@ -515,14 +515,14 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
         // HACK
         "__dirname",
     ];
+    if content.options.global {
+        args.push("g: global");
+    }
     if content.options.module {
         args.push("m: module");
     }
     if content.options.exports {
         args.push("e: exports");
-    }
-    if content.options.global {
-        args.push("g: global");
     }
     let mut code = CodeBuilder::default();
     let args = FormatIter(|| args.iter().copied().intersperse(", "));
