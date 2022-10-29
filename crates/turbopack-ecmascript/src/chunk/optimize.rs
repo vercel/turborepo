@@ -275,13 +275,25 @@ async fn merge_by_size(chunks: &[EcmascriptChunkVc]) -> Result<Vec<EcmascriptChu
     let mut current_items = 0;
     for &chunk in chunks {
         let chunk_items = *chunk.chunk_items_count().await?;
-        if current_items == 0 || current_items + chunk_items < MAX_CHUNK_ITEMS_PER_CHUNK {
+        if chunk_items >= MAX_CHUNK_ITEMS_PER_CHUNK {
+            // chunk is too big, keep it separate
+            merged.push(chunk);
+        } else if current_items + chunk_items < MAX_CHUNK_ITEMS_PER_CHUNK {
+            // fits in this chunk
             current.push(chunk);
             current_items += chunk_items;
         } else {
-            merged.push(merge_chunks(*current.first().unwrap(), &current).await?);
-            current.clear();
-            current_items = 0;
+            // doesn't fit in this chunk, merge current and start a new one
+            if !current.is_empty() {
+                if current.len() == 1 {
+                    merged.push(current.pop().unwrap());
+                } else {
+                    merged.push(merge_chunks(*current.first().unwrap(), &current).await?);
+                    current.clear();
+                }
+            }
+            current.push(chunk);
+            current_items = chunk_items;
         }
     }
     if !current.is_empty() {
