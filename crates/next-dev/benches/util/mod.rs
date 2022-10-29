@@ -166,10 +166,11 @@ pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
 }
 
 pub trait AsyncBencherExtension {
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+    fn try_iter_async<I, O, S, SF, W, WF, B, BF, R, F, T, TF>(
         &mut self,
         setup: S,
         warmup: W,
+        overhead: B,
         routine: R,
         teardown: T,
     ) where
@@ -177,6 +178,8 @@ pub trait AsyncBencherExtension {
         SF: Future<Output = Result<I>>,
         W: Fn(I) -> WF,
         WF: Future<Output = Result<I>>,
+        B: Fn(I) -> BF,
+        BF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
         T: Fn(O) -> TF,
@@ -185,10 +188,11 @@ pub trait AsyncBencherExtension {
 
 impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A, WallTime> {
     #[inline(never)]
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+    fn try_iter_async<I, O, S, SF, W, WF, B, BF, R, F, T, TF>(
         &mut self,
         setup: S,
         warmup: W,
+        overhead: B,
         routine: R,
         teardown: T,
     ) where
@@ -196,6 +200,8 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
         SF: Future<Output = Result<I>>,
         W: Fn(I) -> WF,
         WF: Future<Output = Result<I>>,
+        B: Fn(I) -> BF,
+        BF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
         T: Fn(O) -> TF,
@@ -209,6 +215,7 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
 
         let setup = &setup;
         let warmup = &warmup;
+        let overhead = &overhead;
         let routine = &routine;
         let teardown = &teardown;
         self.iter_custom(|iters| async move {
@@ -225,7 +232,14 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
                             .await
                             .expect("failed to setup"),
                     );
-                    let input = black_box(warmup(input).await).expect("failed to warmup");
+                    let mut input = black_box(warmup(input).await).expect("failed to warmup");
+
+                    // Measure overhead that shouldn't go into the measurement
+                    let start = early_start.unwrap_or_else(|| measurement.start());
+                    for _ in 0..100 {
+                        input = overhead(input).await.expect("failed to measure overhead");
+                    }
+                    let overhead_duration = measurement.end(start) / 100;
 
                     let start = early_start.unwrap_or_else(|| measurement.start());
                     match routine(input).await {
@@ -238,7 +252,7 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
                                 duration = measurement.end(start);
                                 teardown(black_box(output)).await;
                             }
-                            value = measurement.add(&value, &duration);
+                            value = measurement.add(&value, &duration) - overhead_duration;
                             iter += 1;
                             break;
                         }

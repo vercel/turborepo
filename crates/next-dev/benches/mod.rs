@@ -72,6 +72,7 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                                 PreparedApp::new(bundler, test_app.path().to_path_buf()).await
                             },
                             |app| async { Ok(app) },
+                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
@@ -98,12 +99,20 @@ enum CodeLocation {
     Evaluation,
 }
 
+fn bench_hmr_bundler(c: &mut Criterion) {
+    let mut g = c.benchmark_group("bench_hmr_bundler");
+    g.sample_size(10);
+    g.measurement_time(Duration::from_secs(60));
+
+    bench_hmr_internal(g, CodeLocation::Evaluation, false);
+}
+
 fn bench_hmr_to_eval(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_hmr_to_eval");
     g.sample_size(10);
     g.measurement_time(Duration::from_secs(60));
 
-    bench_hmr_internal(g, CodeLocation::Evaluation);
+    bench_hmr_internal(g, CodeLocation::Evaluation, true);
 }
 
 fn bench_hmr_to_commit(c: &mut Criterion) {
@@ -111,10 +120,14 @@ fn bench_hmr_to_commit(c: &mut Criterion) {
     g.sample_size(10);
     g.measurement_time(Duration::from_secs(60));
 
-    bench_hmr_internal(g, CodeLocation::Effect);
+    bench_hmr_internal(g, CodeLocation::Effect, true);
 }
 
-fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
+fn bench_hmr_internal(
+    mut g: BenchmarkGroup<WallTime>,
+    location: CodeLocation,
+    include_browser_overhead: bool,
+) {
     let runtime = Runtime::new().unwrap();
     let browser = &runtime.block_on(create_browser());
 
@@ -248,6 +261,25 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 Ok(guard)
                             },
                             |mut guard| async move {
+                                if !include_browser_overhead {
+                                    static MEASURE: &str = "TURBOPACK_BENCH_MEASURE_OVERHEAD";
+                                    guard
+                                        .page()
+                                        .evaluate_expression(format!(
+                                            "globalThis.{BINDING_NAME}(\"{MEASURE}\")"
+                                        ))
+                                        .await?;
+                                    timeout(
+                                        Duration::from_secs(10),
+                                        guard.wait_for_binding(&MEASURE),
+                                    )
+                                    .await
+                                    .context("measuring overhead didn't work")??;
+                                }
+                                // Defer the dropping of the guard to `teardown`.
+                                Ok(guard)
+                            },
+                            |mut guard| async move {
                                 make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
 
                                 // Defer the dropping of the guard to `teardown`.
@@ -340,6 +372,7 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                 Ok(app)
                             },
                             |app| async { Ok(app) },
+                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
@@ -375,6 +408,6 @@ fn get_module_counts() -> Vec<usize> {
 criterion_group!(
     name = benches;
     config = Criterion::default();
-    targets = bench_startup, bench_hydration, bench_startup_cached, bench_hydration_cached, bench_hmr_to_eval, bench_hmr_to_commit
+    targets = bench_startup, bench_hydration, bench_startup_cached, bench_hydration_cached, bench_hmr_bundler, bench_hmr_to_eval, bench_hmr_to_commit
 );
 criterion_main!(benches);
