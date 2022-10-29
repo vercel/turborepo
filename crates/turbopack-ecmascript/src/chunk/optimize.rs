@@ -321,10 +321,7 @@ async fn optimize_ecmascript(
         let mut local = local.await?.iter().copied().map(ecma).try_join().await?;
         // Merge all local chunks when they are too many
         if local.len() > LOCAL_CHUNK_MERGE_THRESHOLD {
-            let merged = take(&mut local);
-            if let Some(first) = merged.first().copied() {
-                local.push(merge_chunks(first, &merged).await?);
-            }
+            local = merge_by_size(&local).await?;
         }
         for chunk in local.iter_mut() {
             let content = (*chunk).await?;
