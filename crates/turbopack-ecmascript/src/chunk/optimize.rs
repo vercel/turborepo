@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashSet, mem::take};
+use std::{cmp::Ordering, collections::HashSet};
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
