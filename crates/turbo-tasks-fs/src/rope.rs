@@ -42,24 +42,33 @@ impl Rope {
     }
 
     pub fn push_bytes(&mut self, bytes: Bytes) {
-        match self {
-            Flat(f) => match Arc::get_mut(f) {
-                Some(flat) => flat.extend(bytes),
+        let last = match self {
+            Flat(f) => Some(f),
+            Concat(_, c) => c.last_mut(),
+        };
 
-                None => {
-                    let len = f.len() + bytes.len();
-                    *self = Concat(len, vec![f.clone(), Arc::new(bytes)]);
+        if let Some(last) = last {
+            if let Some(last) = Arc::get_mut(last) {
+                let len = bytes.len();
+                last.extend(bytes);
+                if let Concat(l, _) = self {
+                    *l += len;
                 }
-            },
+                return;
+            }
+        }
+        self.push_shared_bytes(Arc::new(bytes));
+    }
+
+    pub fn push_shared_bytes(&mut self, bytes: Arc<Bytes>) {
+        match self {
+            Flat(f) => {
+                let len = f.len() + bytes.len();
+                *self = Concat(len, vec![f.clone(), bytes]);
+            }
             Concat(len, c) => {
                 *len += bytes.len();
-                let last = c.last_mut().expect("always have one");
-                match Arc::get_mut(last) {
-                    Some(last) => last.extend(bytes),
-                    None => {
-                        c.push(Arc::new(bytes));
-                    }
-                }
+                c.push(bytes);
             }
         }
     }
