@@ -22,4 +22,4 @@ module.exports = _extends, module.exports.__esModule = true, module.exports["def
 }]);
 
 
-//# sourceMappingURL=2b6df_@babel_runtime_helpers_extends.js.3a0fac537faf33b2.map
+//# sourceMappingURL=2b6df_@babel_runtime_helpers_extends.js.map
