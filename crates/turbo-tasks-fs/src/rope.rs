@@ -1,21 +1,23 @@
 use std::{
+    borrow::Cow,
     cmp::min,
     hash::{Hash, Hasher},
     io::{self, Read, Result as IoResult, Write},
+    ops,
     pin::Pin,
     sync::Arc,
     task::{Context as TaskContext, Poll},
 };
 
-use anyhow::Result;
-use serde::{Deserialize, Serialize, Serializer};
+use anyhow::{Context, Result};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
 
 type Bytes = Vec<u8>;
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum Rope {
     Flat(Arc<Bytes>),
     Concat(usize, Vec<Arc<Bytes>>),
@@ -28,10 +30,15 @@ impl Rope {
         Flat(Arc::new(bytes))
     }
 
-    pub fn flatten(&self) -> Bytes {
-        let mut buf = Vec::with_capacity(self.len());
-        self.flatten_internal(&mut buf);
-        buf
+    pub fn flatten(&self) -> Cow<'_, Bytes> {
+        match self {
+            Rope::Flat(v) => Cow::Borrowed(v),
+            Rope::Concat(..) => {
+                let mut buf = Vec::with_capacity(self.len());
+                self.flatten_internal(&mut buf);
+                Cow::Owned(buf)
+            }
+        }
     }
 
     pub fn push_bytes(&mut self, bytes: Bytes) {
@@ -102,13 +109,12 @@ impl Rope {
         RopeReader::new_full(self)
     }
 
-    pub fn to_string(&self) -> Option<String> {
+    pub fn to_string(&self) -> Result<String> {
         let mut read = self.read();
         let mut string = String::new();
-        match <RopeReader as Read>::read_to_string(&mut read, &mut string) {
-            Ok(_) => Some(string),
-            Err(_) => None,
-        }
+        <RopeReader as Read>::read_to_string(&mut read, &mut string)
+            .map(|_| string)
+            .context("failed to convert rope into string")
     }
 
     fn flatten_internal(&self, buf: &mut Bytes) {
@@ -135,6 +141,24 @@ impl From<Bytes> for Rope {
     }
 }
 
+impl From<&[u8]> for Rope {
+    fn from(content: &[u8]) -> Self {
+        Flat(Arc::new(content.to_vec()))
+    }
+}
+
+impl From<&str> for Rope {
+    fn from(content: &str) -> Self {
+        Flat(Arc::new(content.as_bytes().to_vec()))
+    }
+}
+
+impl From<String> for Rope {
+    fn from(content: String) -> Self {
+        Flat(Arc::new(content.into_bytes()))
+    }
+}
+
 impl Write for Rope {
     fn write(&mut self, bytes: &[u8]) -> IoResult<usize> {
         self.push_bytes(bytes.to_owned());
@@ -143,6 +167,12 @@ impl Write for Rope {
 
     fn flush(&mut self) -> IoResult<()> {
         Ok(())
+    }
+}
+
+impl ops::AddAssign<&str> for Rope {
+    fn add_assign(&mut self, rhs: &str) {
+        self.push_bytes(rhs.as_bytes().to_vec());
     }
 }
 
@@ -188,15 +218,22 @@ impl PartialEq for Rope {
 }
 impl Eq for Rope {}
 
-/// Ropes are always serialized into flat vecs, because we don't the
-/// deserialization won't deduplicate and share the ARCs (being the only
-/// possible owner of a bunch doesn't make sense).
+/// Ropes are always serialized into flat strings, because deserialization won't
+/// deduplicate and share the ARCs (being the only possible owner of a bunch
+/// doesn't make sense).
 impl Serialize for Rope {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeTupleVariant;
-        let mut flat = serializer.serialize_tuple_variant("Rope", 0, "Flat", 1)?;
-        flat.serialize_field(&self.flatten())?;
-        flat.end()
+        use serde::ser::Error;
+        let mut s = String::new();
+        self.read().read_to_string(&mut s).map_err(Error::custom)?;
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for Rope {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let bytes = <Vec<u8>>::deserialize(deserializer)?;
+        Ok(Rope::new(bytes))
     }
 }
 

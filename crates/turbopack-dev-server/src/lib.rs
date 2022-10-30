@@ -130,7 +130,7 @@ async fn process_request_with_content_source(
                             |m| m.to_string(),
                         );
 
-                        let bytes = content.content().to_vec();
+                        let bytes = content.content().flatten().into_owned();
                         return Ok(Response::builder()
                             .status(200)
                             .header("Content-Type", content_type)

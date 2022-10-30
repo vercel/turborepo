@@ -7,8 +7,8 @@ use turbo_tasks::{
 };
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc, FileSystemEntryType,
-    FileSystemPathVc,
+    rope::Rope, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
+    FileSystemEntryType, FileSystemPathVc,
 };
 use turbopack::{
     ecmascript::EcmascriptInputTransform,
@@ -495,7 +495,7 @@ impl NodeEntry for AppRenderer {
             .try_join()
             .await?;
         let mut result =
-            Vec::from(*b"import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n");
+            Rope::from("import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n");
         for (_, import) in segments.iter() {
             if let Some((p, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -518,7 +518,7 @@ import BOOTSTRAP from {};
                 stringify_str(&page)
             )?;
         }
-        result.extend(b"const LAYOUT_INFO = [");
+        result += "const LAYOUT_INFO = [";
         for (segment_str_lit, import) in segments.iter() {
             if let Some((_, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -530,10 +530,10 @@ import BOOTSTRAP from {};
                 writeln!(result, "  {{ segment: {segment_str_lit} }},",)?
             }
         }
-        result.extend(b"];\n\n");
+        result += "];\n\n";
         let base_code = next_js_file("entry/app-renderer.tsx");
         if let FileContent::Content(base_file) = &*base_code.await? {
-            result.extend(base_file.content());
+            result.concat(base_file.content())
         }
         let file = File::from(result);
         let asset = VirtualAssetVc::new(path.join("entry"), file.into());

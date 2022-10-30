@@ -4,7 +4,7 @@ pub mod source_map;
 
 use std::{fmt::Write, io::Write as _, slice::Iter};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
@@ -475,7 +475,7 @@ impl EcmascriptChunkContentEntry {
         &self.code
     }
 
-    fn source_code(&self) -> &[u8] {
+    fn source_code(&self) -> &Rope {
         self.code.source_code()
     }
 }
@@ -641,8 +641,8 @@ impl EcmascriptChunkContentVc {
 
     #[turbo_tasks::function]
     async fn content(self) -> Result<AssetContentVc> {
-        let code = self.code().source_code().await?;
-        Ok(File::from(code).into())
+        let code = self.code().await?;
+        Ok(File::from(code.source_code()).into())
     }
 }
 
@@ -742,7 +742,7 @@ impl GenerateSourceMap for EcmascriptChunkContent {
 
 #[derive(serde::Serialize)]
 struct HmrUpdateEntry<'a> {
-    code: &'a [u8],
+    code: &'a Rope,
     map: Option<String>,
 }
 

@@ -290,8 +290,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
 
             Ok(EcmascriptChunkItemContent {
-                // TODO
-                inner_code: bytes,
+                inner_code: bytes.into(),
                 source_map: Some(srcmap),
                 options: if eval_context.is_esm() {
                     EcmascriptChunkItemOptions {

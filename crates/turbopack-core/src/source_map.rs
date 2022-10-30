@@ -4,7 +4,8 @@ use anyhow::Result;
 use async_recursion::async_recursion;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sourcemap::SourceMap as CrateMap;
-use turbo_tasks::{primitives::BytesVc, TryJoinIterExt};
+use turbo_tasks::TryJoinIterExt;
+use turbo_tasks_fs::rope::RopeVc;
 
 use crate::source_pos::SourcePos;
 
@@ -159,10 +160,10 @@ impl SourceMapVc {
 impl SourceMapVc {
     /// Stringifies the source map into JSON bytes.
     #[turbo_tasks::function]
-    pub async fn to_bytes(self) -> Result<BytesVc> {
+    pub async fn to_rope(self) -> Result<RopeVc> {
         let mut bytes = vec![];
         self.await?.encode(&mut bytes).await?;
-        Ok(BytesVc::cell(bytes))
+        Ok(RopeVc::cell(bytes.into()))
     }
 
     /// Traces a generated line/column into an mapping token representing either
@@ -274,7 +275,7 @@ impl Serialize for CrateMapWrapper {
 }
 
 impl<'de> Deserialize<'de> for CrateMapWrapper {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<CrateMapWrapper, D::Error> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
         let bytes = <&[u8]>::deserialize(deserializer)?;
         let map = CrateMap::from_slice(bytes).map_err(Error::custom)?;
