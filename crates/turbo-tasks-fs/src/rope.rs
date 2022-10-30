@@ -32,7 +32,7 @@ impl Rope {
 
     pub fn flatten(&self) -> Cow<'_, Bytes> {
         match self {
-            Rope::Flat(v) => Cow::Borrowed(v),
+            Rope::Flat(f) => Cow::Borrowed(f),
             Rope::Concat(..) => {
                 let mut buf = Vec::with_capacity(self.len());
                 self.flatten_internal(&mut buf);
@@ -43,16 +43,16 @@ impl Rope {
 
     pub fn push_bytes(&mut self, bytes: Bytes) {
         match self {
-            Flat(v) => match Arc::get_mut(v) {
+            Flat(f) => match Arc::get_mut(f) {
                 Some(flat) => flat.extend(bytes),
 
                 None => {
-                    let l = v.len() + bytes.len();
-                    *self = Concat(l, vec![v.clone(), Arc::new(bytes)]);
+                    let len = f.len() + bytes.len();
+                    *self = Concat(len, vec![f.clone(), Arc::new(bytes)]);
                 }
             },
-            Concat(l, c) => {
-                *l += bytes.len();
+            Concat(len, c) => {
+                *len += bytes.len();
                 let last = c.last_mut().expect("always have one");
                 match Arc::get_mut(last) {
                     Some(last) => last.extend(bytes),
@@ -65,28 +65,32 @@ impl Rope {
     }
 
     pub fn concat(&mut self, other: &Rope) {
-        let l = self.len() + other.len();
         match self {
             Flat(left) => match other {
                 Flat(right) => {
-                    *self = Concat(l, vec![left.clone(), right.clone()]);
+                    let len = left.len() + other.len();
+                    *self = Concat(len, vec![left.clone(), right.clone()]);
                 }
-                Concat(_, right) => {
+                Concat(l, right) => {
+                    let len = left.len() + l;
                     let mut v = Vec::with_capacity(right.len() + 1);
                     v.push(left.clone());
                     v.extend(right.clone());
-                    *self = Concat(l, v);
+                    *self = Concat(len, v);
                 }
             },
 
-            Concat(_, left) => match other {
-                Flat(right) => {
-                    left.push(right.clone());
+            Concat(old, left) => {
+                *old += other.len();
+                match other {
+                    Flat(right) => {
+                        left.push(right.clone());
+                    }
+                    Concat(_, right) => {
+                        left.extend(right.clone());
+                    }
                 }
-                Concat(_, right) => {
-                    left.extend(right.clone());
-                }
-            },
+            }
         }
     }
 
@@ -119,7 +123,7 @@ impl Rope {
 
     fn flatten_internal(&self, buf: &mut Bytes) {
         match self {
-            Flat(v) => buf.extend(&**v),
+            Flat(f) => buf.extend(&**f),
             Concat(_, c) => {
                 for v in c {
                     buf.extend(&**v);
