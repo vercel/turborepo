@@ -1,7 +1,6 @@
 use std::{
     io::{Result as IoResult, Write},
     ops,
-    sync::Arc,
 };
 
 use anyhow::Result;
@@ -17,7 +16,7 @@ use crate::{
 #[turbo_tasks::value(shared)]
 #[derive(Debug, Clone, Default)]
 pub struct Code {
-    code: Arc<Rope>,
+    code: Rope,
 
     /// A mapping of byte-offset in the code string to an associated source map.
     mappings: Vec<(usize, Option<GenerateSourceMapVc>)>,
@@ -61,7 +60,7 @@ impl Code {
     /// Pushes original user code with an optional source map if one is
     /// available. If it's not, this is no different than pushing Synthetic
     /// code.
-    pub fn push_source(&mut self, code: Arc<Rope>, map: Option<GenerateSourceMapVc>) {
+    pub fn push_source(&mut self, code: &Rope, map: Option<GenerateSourceMapVc>) {
         self.push_map(map);
         self.code.concat(code);
     }
@@ -88,7 +87,7 @@ impl Code {
             self.push_map(None);
         }
 
-        self.code.concat(prebuilt.code);
+        self.code.concat(&prebuilt.code);
     }
 
     /// Tests if any code in this CodeBuilder contains an associated source map.
@@ -106,11 +105,11 @@ impl ops::AddAssign<&str> for Code {
 impl Write for Code {
     fn write(&mut self, bytes: &[u8]) -> IoResult<usize> {
         self.push_bytes(bytes.to_owned());
-        IoResult::Ok(bytes.len())
+        Ok(bytes.len())
     }
 
     fn flush(&mut self) -> IoResult<()> {
-        IoResult::Ok(())
+        Ok(())
     }
 }
 
@@ -129,21 +128,18 @@ impl GenerateSourceMap for Code {
         let mut pos = SourcePos::new();
         let mut last_byte_pos = 0;
 
-        let sections = self
-            .mappings
-            .iter()
-            .map(|(byte_pos, map)| {
-                pos.update_from_read(&mut self.code.slice(last_byte_pos, *byte_pos));
-                last_byte_pos = *byte_pos;
+        let mut sections = Vec::with_capacity(self.mappings.len());
+        for (byte_pos, map) in &self.mappings {
+            pos.update_from_read(&mut self.code.slice(last_byte_pos, *byte_pos))?;
+            last_byte_pos = *byte_pos;
 
-                let encoded = match map {
-                    None => empty_map(),
-                    Some(map) => map.generate_source_map(),
-                };
+            let encoded = match map {
+                None => empty_map(),
+                Some(map) => map.generate_source_map(),
+            };
 
-                SourceMapSection::new(pos, encoded)
-            })
-            .collect();
+            sections.push(SourceMapSection::new(pos, encoded))
+        }
 
         Ok(SourceMapVc::new_sectioned(sections))
     }

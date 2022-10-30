@@ -1196,7 +1196,7 @@ impl File {
 
         Ok(File {
             meta: metadata.into(),
-            content: Rope::Flat(output),
+            content: Rope::new(output),
         })
     }
 
@@ -1204,7 +1204,15 @@ impl File {
     fn from_bytes(content: Vec<u8>) -> Self {
         File {
             meta: FileMeta::default(),
-            content: Rope::Flat(content),
+            content: Rope::new(content),
+        }
+    }
+
+    /// Creates a [File] from a rope.
+    fn from_rope(content: &Rope) -> Self {
+        File {
+            meta: FileMeta::default(),
+            content: content.clone(),
         }
     }
 
@@ -1261,11 +1269,17 @@ impl From<&[u8]> for File {
     }
 }
 
+impl From<&Rope> for File {
+    fn from(rope: &Rope) -> Self {
+        File::from_rope(rope)
+    }
+}
+
 impl File {
     pub fn new(meta: FileMeta, content: Vec<u8>) -> Self {
         Self {
             meta,
-            content: Rope::Flat(content),
+            content: Rope::new(content),
         }
     }
 

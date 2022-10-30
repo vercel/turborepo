@@ -12,7 +12,9 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     TryJoinIterExt, ValueToString, ValueToStringVc,
 };
-use turbo_tasks_fs::{embed_file, File, FileContent, FileSystemPathOptionVc, FileSystemPathVc};
+use turbo_tasks_fs::{
+    embed_file, rope::Rope, File, FileContent, FileSystemPathOptionVc, FileSystemPathVc,
+};
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -623,13 +625,10 @@ impl EcmascriptChunkContentVc {
         code += "]);\n";
         if this.evaluate.is_some() {
             let runtime_code = embed_file!("js/src/runtime.js").await?;
-            let runtime_code = match &*runtime_code {
+            match &*runtime_code {
                 FileContent::NotFound => return Err(anyhow!("runtime code is not found")),
-                FileContent::Content(file) => String::from_utf8(file.content().to_vec())
-                    .context("runtime code is invalid UTF-8")?,
+                FileContent::Content(file) => code.push_source(file.content(), None),
             };
-            // Add the turbopack runtime to the chunk.
-            code += runtime_code.as_str();
         }
 
         if code.has_source_map() {
@@ -642,7 +641,7 @@ impl EcmascriptChunkContentVc {
 
     #[turbo_tasks::function]
     async fn content(self) -> Result<AssetContentVc> {
-        let code = self.code().await?.code.clone();
+        let code = self.code().source_code().await?;
         Ok(File::from(code).into())
     }
 }
@@ -1114,7 +1113,7 @@ impl EcmascriptChunkPlaceablesVc {
 #[derive(Default)]
 pub struct EcmascriptChunkItemContent {
     // TODO
-    pub inner_code: Arc<Vec<u8>>,
+    pub inner_code: Rope,
     pub source_map: Option<ParseResultSourceMapVc>,
     pub options: EcmascriptChunkItemOptions,
     pub placeholder_for_future_extensions: (),
