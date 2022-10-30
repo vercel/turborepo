@@ -10,25 +10,12 @@ PlainIssue {
         PlainIssueSource {
             asset: PlainAsset {
                 path: FileSystemPath {
-                    fs: FileSystemVc {
-                        node: TaskCell(
-                            TaskId {
-                                id: 6,
-                            },
-                            0,
-                        ),
-                    },
+                    fs: FileSystem(DiskFileSystem {
+                        name: "project",
+                        root: "WORKSPACE_ROOT",
+                    }),
                     path: "crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js",
                 },
-                content: Content(
-                    File {
-                        meta: FileMeta {
-                            permissions: Writable,
-                            content_type: None,
-                        },
-                        content (hash): 11994987504214196432,
-                    },
-                ),
             },
             start: SourcePos {
                 line: 0,

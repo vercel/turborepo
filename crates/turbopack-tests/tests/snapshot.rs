@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use similar::TextDiff;
 use test_generator::test_resources;
-use turbo_tasks::{NothingVc, TryJoinIterExt, TurboTasks, Value};
+use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value};
 use turbo_tasks_env::DotenvProcessEnvVc;
 use turbo_tasks_fs::{
     util::sys_to_unix, DirectoryContent, DirectoryEntry, DiskFileSystemVc, File, FileContent,
@@ -45,6 +45,18 @@ fn register() {
 // Updates the existing snapshot outputs with the actual outputs of this run.
 // `UPDATE=1 cargo test -p turbopack -- test_my_pattern`
 static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
+
+static WORKSPACE_ROOT: Lazy<String> = Lazy::new(|| {
+    let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    package_root
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
+});
 
 #[derive(Debug, Deserialize)]
 struct SnapshotOptions {
@@ -109,22 +121,13 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         test_path.to_str().unwrap()
     );
 
-    let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = package_root
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_str()
-        .unwrap();
-
     let options_file = fs::read_to_string(test_path.join("options.json"));
     let options = match options_file {
         Err(_) => SnapshotOptions::default(),
         Ok(options_str) => serde_json::from_str(&options_str).unwrap(),
     };
-    let root_fs = DiskFileSystemVc::new("workspace".to_string(), workspace_root.to_owned());
-    let project_fs = DiskFileSystemVc::new("project".to_string(), workspace_root.to_owned());
+    let root_fs = DiskFileSystemVc::new("workspace".to_string(), WORKSPACE_ROOT.clone());
+    let project_fs = DiskFileSystemVc::new("project".to_string(), WORKSPACE_ROOT.clone());
     let project_root = project_fs.root();
 
     let fs_path = Path::new(&resource);
@@ -384,12 +387,18 @@ async fn handle_issues(source: FileSystemPathVc) -> Result<()> {
         .await?;
 
     for issue in issues.iter() {
-        let plain_issue_vc = issue.into_plain();
-        let plain_issue = plain_issue_vc.await?;
-        let hash = encode_hex(*plain_issue_vc.internal_hash().await?);
-        let path = issues_path.join(&format!("{}-{}.txt", plain_issue.title, &hash[0..6]));
+        let plain_issue = issue.into_plain();
+        let hash = encode_hex(*plain_issue.internal_hash().await?);
+
+        let path = issues_path.join(&format!("{}-{}.txt", plain_issue.await?.title, &hash[0..6]));
         seen.insert(path);
-        let asset = File::from(format!("{:#?}", plain_issue)).into();
+
+        // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->
+        // PlainAsset.path -> FileSystemPath.fs -> DiskFileSystem.root changes
+        // for everyone.
+        let content =
+            format!("{}", plain_issue.dbg().await?).replace(&*WORKSPACE_ROOT, "WORKSPACE_ROOT");
+        let asset = File::from(content).into();
 
         diff(path, asset).await?;
     }
