@@ -1,11 +1,12 @@
 use std::{
     io::{Result as IoResult, Write},
     ops,
+    sync::Arc,
 };
 
 use anyhow::Result;
 use sourcemap::SourceMapBuilder;
-use turbo_tasks::primitives::BytesVc;
+use turbo_tasks_fs::rope::Rope;
 
 use crate::{
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapSection, SourceMapVc},
@@ -16,7 +17,7 @@ use crate::{
 #[turbo_tasks::value(shared)]
 #[derive(Debug, Clone, Default)]
 pub struct Code {
-    code: Vec<u8>,
+    code: Arc<Rope>,
 
     /// A mapping of byte-offset in the code string to an associated source map.
     mappings: Vec<(usize, Option<GenerateSourceMapVc>)>,
@@ -27,7 +28,7 @@ impl Code {
         Default::default()
     }
 
-    pub fn source_code(&self) -> &[u8] {
+    pub fn source_code(&self) -> &Rope {
         &self.code
     }
 
@@ -52,16 +53,17 @@ impl Code {
     /// Pushes synthetic runtime code without an associated source map. This is
     /// the default concatenation operation, but it's designed to be used
     /// with the `+=` operator.
-    fn push_bytes(&mut self, code: &[u8]) {
-        self.push_source(code, None);
+    fn push_bytes(&mut self, code: Vec<u8>) {
+        self.push_map(None);
+        self.code.push_bytes(code);
     }
 
     /// Pushes original user code with an optional source map if one is
     /// available. If it's not, this is no different than pushing Synthetic
     /// code.
-    pub fn push_source(&mut self, code: &[u8], map: Option<GenerateSourceMapVc>) {
+    pub fn push_source(&mut self, code: Arc<Rope>, map: Option<GenerateSourceMapVc>) {
         self.push_map(map);
-        self.code.extend(code);
+        self.code.concat(code);
     }
 
     /// Copies the Synthetic/Original code of an already constructed CodeBuilder
@@ -86,7 +88,7 @@ impl Code {
             self.push_map(None);
         }
 
-        self.code.extend(&prebuilt.code);
+        self.code.concat(prebuilt.code);
     }
 
     /// Tests if any code in this CodeBuilder contains an associated source map.
@@ -97,26 +99,18 @@ impl Code {
 
 impl ops::AddAssign<&str> for Code {
     fn add_assign(&mut self, rhs: &str) {
-        self.push_bytes(rhs.as_bytes());
+        self.push_bytes(rhs.as_bytes().to_owned());
     }
 }
 
 impl Write for Code {
     fn write(&mut self, bytes: &[u8]) -> IoResult<usize> {
-        self.push_bytes(bytes);
+        self.push_bytes(bytes.to_owned());
         IoResult::Ok(bytes.len())
     }
 
     fn flush(&mut self) -> IoResult<()> {
         IoResult::Ok(())
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl CodeVc {
-    #[turbo_tasks::function]
-    pub async fn source_code(self) -> Result<BytesVc> {
-        Ok(BytesVc::cell(Vec::from(self.await?.source_code())))
     }
 }
 
@@ -139,7 +133,7 @@ impl GenerateSourceMap for Code {
             .mappings
             .iter()
             .map(|(byte_pos, map)| {
-                pos.update(&self.code[last_byte_pos..*byte_pos]);
+                pos.update_from_read(&mut self.code.slice(last_byte_pos, *byte_pos));
                 last_byte_pos = *byte_pos;
 
                 let encoded = match map {

@@ -11,23 +11,20 @@ pub mod glob;
 mod invalidator_map;
 mod read_glob;
 mod retry;
+pub mod rope;
 pub mod util;
 
 use std::{
-    cmp::min,
     collections::{HashMap, HashSet},
     fmt::{self, Debug, Display, Formatter},
     fs::FileType,
-    hash::{Hash, Hasher},
-    io::{self, ErrorKind, Read},
+    io::{self, ErrorKind},
     mem::take,
     path::{Path, PathBuf, MAIN_SEPARATOR},
-    pin::Pin,
     sync::{
         mpsc::{channel, RecvError, TryRecvError},
         Arc, Mutex,
     },
-    task::{Context as TaskContext, Poll},
     time::Duration,
 };
 
@@ -42,22 +39,21 @@ use read_glob::read_glob;
 pub use read_glob::{ReadGlobResult, ReadGlobResultVc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::{
-    fs,
-    io::{AsyncRead, AsyncReadExt, ReadBuf},
-};
+use tokio::{fs, io::AsyncReadExt};
 use turbo_tasks::{
-    primitives::{BoolVc, BytesReadRef, StringReadRef, StringVc},
+    primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
-use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
-use crate::retry::{retry_blocking, retry_future};
 #[cfg(target_family = "windows")]
 use crate::util::is_windows_raw_path;
+use crate::{
+    retry::{retry_blocking, retry_future},
+    rope::{Rope, RopeReader},
+};
 
 #[turbo_tasks::value_trait]
 pub trait FileSystem: ValueToString {
@@ -1189,151 +1185,6 @@ pub struct File {
     content: Rope,
 }
 
-#[turbo_tasks::value(shared, eq = "manual")]
-#[derive(Clone)]
-pub enum Rope {
-    Flat(Arc<Vec<u8>>, usize),
-    Concat(Vec<Rope>, usize),
-}
-
-impl Rope {
-    pub fn read(&'_ self) -> RopeReader<'_> {
-        RopeReader {
-            stack: vec![RopeReaderState::new(self)],
-        }
-    }
-
-    pub fn to_string(&self) -> Option<String> {
-        let mut read = self.read();
-        let mut string = String::new();
-        match <RopeReader as Read>::read_to_string(&mut read, &mut string) {
-            Ok(_) => Some(string),
-            Err(_) => None,
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            Rope::Flat(_, l) => *l,
-            Rope::Concat(_, l) => *l,
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
-
-impl DeterministicHash for &Rope {
-    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
-        match self {
-            Rope::Flat(f, _) => f.deterministic_hash(state),
-            Rope::Concat(c, _) => {
-                for v in c {
-                    v.deterministic_hash(state);
-                }
-            }
-        }
-    }
-}
-
-impl Hash for Rope {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            Rope::Flat(f, _) => f.hash(state),
-            Rope::Concat(c, _) => {
-                for v in c {
-                    v.hash(state);
-                }
-            }
-        }
-    }
-}
-
-impl PartialEq for Rope {
-    fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        hash_xxh3_hash64(self) == hash_xxh3_hash64(other)
-    }
-}
-impl Eq for Rope {}
-
-pub struct RopeReader<'a> {
-    stack: Vec<RopeReaderState<'a>>,
-}
-
-impl<'a> RopeReader<'a> {
-    fn read_internal(&mut self, buf: &mut ReadBuf<'_>) -> usize {
-        let mut remaining = buf.remaining();
-        let old = remaining;
-        while remaining > 0 {
-            let mut last = match self.stack.last_mut() {
-                None => break,
-                Some(l) => l,
-            };
-
-            match last.inner {
-                Rope::Flat(f, _) => {
-                    let pos = last.index;
-                    let len = min(f.len() - pos, remaining);
-                    if len > 0 {
-                        let end = pos + len;
-                        buf.put_slice(&f[pos..end]);
-                        last.index = end;
-                        remaining -= len;
-                    } else {
-                        // We know remaining > 0 (because the loop), but we couldn't read anything.
-                        // That means the vec is now empty.
-                        self.stack.pop();
-                    }
-                }
-
-                Rope::Concat(c, _) => match c.get(last.index) {
-                    None => {
-                        self.stack.pop();
-                    }
-                    Some(v) => {
-                        last.index += 1;
-                        self.stack.push(RopeReaderState::new(v));
-                    }
-                },
-            }
-        }
-        old - remaining
-    }
-}
-
-struct RopeReaderState<'a> {
-    inner: &'a Rope,
-    index: usize,
-}
-
-impl<'a> RopeReaderState<'a> {
-    fn new(inner: &'a Rope) -> Self {
-        RopeReaderState { inner, index: 0 }
-    }
-}
-
-impl<'a> Read for RopeReader<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        Ok(self.read_internal(&mut ReadBuf::new(buf)))
-    }
-}
-
-impl<'a> AsyncRead for RopeReader<'a> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        _cx: &mut TaskContext<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        let this = self.get_mut();
-        this.read_internal(buf);
-        Poll::Ready(Ok(()))
-    }
-}
-
 impl File {
     /// Reads a [File] from the given path
     async fn from_path(p: PathBuf) -> io::Result<Self> {
@@ -1345,7 +1196,7 @@ impl File {
 
         Ok(File {
             meta: metadata.into(),
-            content: Rope::Flat(Arc::new(output), 0),
+            content: Rope::Flat(output),
         })
     }
 
@@ -1353,7 +1204,7 @@ impl File {
     fn from_bytes(content: Vec<u8>) -> Self {
         File {
             meta: FileMeta::default(),
-            content: Rope::Flat(Arc::new(content), 0),
+            content: Rope::Flat(content),
         }
     }
 
@@ -1392,15 +1243,6 @@ impl From<StringReadRef> for File {
     }
 }
 
-impl From<BytesReadRef> for File {
-    fn from(content: BytesReadRef) -> Self {
-        File {
-            meta: FileMeta::default(),
-            content: Rope::Flat(content.into(), 0),
-        }
-    }
-}
-
 impl From<&str> for File {
     fn from(s: &str) -> Self {
         File::from_bytes(s.as_bytes().to_vec())
@@ -1423,7 +1265,7 @@ impl File {
     pub fn new(meta: FileMeta, content: Vec<u8>) -> Self {
         Self {
             meta,
-            content: Rope::Flat(Arc::new(content), 0),
+            content: Rope::Flat(content),
         }
     }
 

@@ -642,7 +642,7 @@ impl EcmascriptChunkContentVc {
 
     #[turbo_tasks::function]
     async fn content(self) -> Result<AssetContentVc> {
-        let code = self.code().source_code().await?;
+        let code = self.code().await?.code.clone();
         Ok(File::from(code).into())
     }
 }
@@ -1114,7 +1114,7 @@ impl EcmascriptChunkPlaceablesVc {
 #[derive(Default)]
 pub struct EcmascriptChunkItemContent {
     // TODO
-    pub inner_code: Vec<u8>,
+    pub inner_code: Arc<Vec<u8>>,
     pub source_map: Option<ParseResultSourceMapVc>,
     pub options: EcmascriptChunkItemOptions,
     pub placeholder_for_future_extensions: (),
