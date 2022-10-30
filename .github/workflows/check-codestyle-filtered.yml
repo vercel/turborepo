@@ -88,6 +88,8 @@ jobs:
           echo $count > clippy-warnings
           echo $count clippy warnings
 
+          echo $clippy_output > clippy-warnings-raw
+
       - name: Cache
         id: expected-clippy-warnings
         uses: actions/cache@v3
@@ -101,6 +103,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           mv clippy-warnings expected-clippy-warnings
+          mv clippy-warnings-raw expected-clippy-warnings-raw
 
       - name: Check the number of Clippy warnings is ever decreasing
         if: github.ref != 'refs/heads/main'
