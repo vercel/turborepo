@@ -1,0 +1,44 @@
+PlainIssue {
+    severity: Error,
+    context: "[project]/crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js",
+    category: "parse",
+    title: "Parsing ecmascript source code failed",
+    description: "pragma cannot be set when runtime is automatic",
+    detail: "",
+    documentation_link: "",
+    source: Some(
+        PlainIssueSource {
+            asset: PlainAsset {
+                path: FileSystemPath {
+                    fs: FileSystemVc {
+                        node: TaskCell(
+                            TaskId {
+                                id: 6,
+                            },
+                            0,
+                        ),
+                    },
+                    path: "crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js",
+                },
+                content: Content(
+                    File {
+                        meta: FileMeta {
+                            permissions: Writable,
+                            content_type: None,
+                        },
+                        content (hash): 11994987504214196432,
+                    },
+                ),
+            },
+            start: SourcePos {
+                line: 0,
+                column: 0,
+            },
+            end: SourcePos {
+                line: 0,
+                column: 0,
+            },
+        },
+    ),
+    sub_issues: [],
+}
