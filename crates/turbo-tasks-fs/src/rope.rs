@@ -73,7 +73,7 @@ impl Rope {
                 }
                 Concat(_, right) => {
                     let mut v = Vec::with_capacity(right.len() + 1);
-                    v[0] = left.clone();
+                    v.push(left.clone());
                     v.extend(right.clone());
                     *self = Concat(l, v);
                 }
