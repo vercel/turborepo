@@ -99,10 +99,18 @@ jobs:
           url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Run node-gyp install
-        run: npx node-gyp install
-        if: matrix.os.name == 'windows-latest'
+        run: npm install -g node-gyp
 
       - uses: ./.github/actions/setup-node
+
+      # ref: https://github.com/vladimiry/ElectronMail/blob/25520bad3adb5e57a047de7f96d1ec3e4bf9b174/scripts/ci/github/install-vs-build-tools.ps1
+      - name: Setup gyp with vs2017 toolset
+        shell: powershell
+        if: matrix.os.name == 'windows-2019'
+        run: |
+          ./.github/actions/setup-node/install-node-gyp.ps1
+          ./.github/actions/setup-node/install-vs-build-tools.ps1 -IncludeWin81Sdk $true
+          npm config set msvs_version 2017
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
