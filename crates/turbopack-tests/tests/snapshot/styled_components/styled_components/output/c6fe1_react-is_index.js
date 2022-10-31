@@ -284,4 +284,4 @@ if (process.env.NODE_ENV !== "production") {
 }]);
 
 
-//# sourceMappingURL=c6fe1_react-is_index.js.4cc47f20e21525e9.map
+//# sourceMappingURL=c6fe1_react-is_index.js.map
