@@ -130,12 +130,13 @@ async fn process_request_with_content_source(
                             |m| m.to_string(),
                         );
 
-                        let bytes = content.content().flatten().into_owned();
+                        let content = content.content();
+                        let bytes = content.stream();
                         return Ok(Response::builder()
                             .status(200)
                             .header("Content-Type", content_type)
-                            .header("Content-Length", bytes.len().to_string())
-                            .body(hyper::Body::from(bytes))?);
+                            .header("Content-Length", content.len().to_string())
+                            .body(hyper::Body::wrap_stream(bytes))?);
                     }
                 }
             }

@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
@@ -134,6 +135,10 @@ impl Rope {
 
     pub fn read(&'_ self) -> RopeReader<'_> {
         RopeReader::new_full(self)
+    }
+
+    pub fn stream(&self) -> RopeStream {
+        RopeStream::new(self)
     }
 
     pub fn to_string(&self) -> Result<String> {
@@ -386,5 +391,54 @@ impl<'a> AsyncRead for RopeReader<'a> {
         let this = self.get_mut();
         this.read_internal(buf.remaining(), &mut Some(buf));
         Poll::Ready(Ok(()))
+    }
+}
+
+pub struct RopeStream {
+    rope: Rope,
+    concat_index: usize,
+    size_hint: usize,
+}
+
+impl RopeStream {
+    fn new(rope: &Rope) -> Self {
+        RopeStream {
+            rope: rope.clone(),
+            concat_index: 0,
+            size_hint: rope.len(),
+        }
+    }
+}
+
+impl Stream for RopeStream {
+    type Item = Result<Bytes>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        let bytes = match &this.rope {
+            Flat(v) => {
+                if this.concat_index > 0 {
+                    None
+                } else {
+                    this.concat_index += 1;
+                    this.size_hint = 0;
+                    Some(Ok((*v.0).clone()))
+                }
+            }
+
+            Concat { data, .. } => match data.get(this.concat_index) {
+                None => None,
+                Some(v) => {
+                    this.concat_index += 1;
+                    this.size_hint -= v.len();
+                    Some(Ok((*v.0).clone()))
+                }
+            },
+        };
+        Poll::Ready(bytes)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.size_hint, Some(self.size_hint))
     }
 }
