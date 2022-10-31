@@ -535,6 +535,7 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
     } else {
         code += "\n})())";
     }
+    code.freeze();
     Ok(code.cell())
 }
 
@@ -636,6 +637,7 @@ impl EcmascriptChunkContentVc {
             write!(code, "\n\n//# sourceMappingURL={}.map", filename)?;
         }
 
+        code.freeze();
         Ok(code.cell())
     }
 

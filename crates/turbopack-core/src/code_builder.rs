@@ -31,6 +31,10 @@ impl Code {
         &self.code
     }
 
+    pub fn freeze(&mut self) {
+        self.code.freeze()
+    }
+
     /// Setting breakpoints on synthetic code can cause weird behaviors
     /// because Chrome will treat the location as belonging to the previous
     /// original code section. By inserting an empty source map when reaching a
@@ -52,7 +56,7 @@ impl Code {
     /// Pushes synthetic runtime code without an associated source map. This is
     /// the default concatenation operation, but it's designed to be used
     /// with the `+=` operator.
-    fn push_bytes(&mut self, code: Vec<u8>) {
+    fn push_bytes(&mut self, code: &[u8]) {
         self.push_map(None);
         self.code.push_bytes(code);
     }
@@ -98,13 +102,13 @@ impl Code {
 
 impl ops::AddAssign<&str> for Code {
     fn add_assign(&mut self, rhs: &str) {
-        self.push_bytes(rhs.as_bytes().to_owned());
+        self.push_bytes(rhs.as_bytes());
     }
 }
 
 impl Write for Code {
     fn write(&mut self, bytes: &[u8]) -> IoResult<usize> {
-        self.push_bytes(bytes.to_owned());
+        self.push_bytes(bytes);
         Ok(bytes.len())
     }
 

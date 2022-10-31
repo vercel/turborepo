@@ -106,7 +106,7 @@ impl SourceMapVc {
             SourceMap::Regular(r) => {
                 let mut bytes = vec![];
                 r.0.to_writer(&mut bytes)?;
-                Rope::new(bytes)
+                Rope::frozen(bytes)
             }
 
             SourceMap::Sectioned(s) => {
@@ -117,7 +117,7 @@ impl SourceMapVc {
                     }
                 }
 
-                let mut rope = Rope::default();
+                let mut rope = Rope::empty();
 
                 // My kingdom for a decent dedent macro with interpolation!
                 write!(
@@ -159,6 +159,7 @@ impl SourceMapVc {
 }}"#
                 )?;
 
+                rope.freeze();
                 rope
             }
         };

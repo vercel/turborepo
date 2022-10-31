@@ -1196,7 +1196,7 @@ impl File {
 
         Ok(File {
             meta: metadata.into(),
-            content: Rope::new(output),
+            content: Rope::frozen(output),
         })
     }
 
@@ -1204,7 +1204,7 @@ impl File {
     fn from_bytes(content: Vec<u8>) -> Self {
         File {
             meta: FileMeta::default(),
-            content: Rope::new(content),
+            content: Rope::frozen(content),
         }
     }
 
@@ -1291,7 +1291,7 @@ impl File {
     pub fn new(meta: FileMeta, content: Vec<u8>) -> Self {
         Self {
             meta,
-            content: Rope::new(content),
+            content: Rope::frozen(content),
         }
     }
 
