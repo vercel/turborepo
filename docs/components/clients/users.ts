@@ -403,7 +403,7 @@ export const users: Array<TurboUser> = [
   {
     caption: "Expo",
     image: "/images/logos/expo.svg",
-    infoLink: "https://expo.io",
+    infoLink: "https://expo.dev/",
     pinned: true,
   },
   {
