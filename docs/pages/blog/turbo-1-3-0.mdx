@@ -37,7 +37,7 @@ Update today by running `npm install turbo@latest`.
 
 ## Pipeline `inputs`
 
-In addition to [environment variables, dependencies, and pipeline configurations,](/docs/core-concepts/caching#hashing) `turbo` will consider all non-gitignored files in package folder when calculating each `package.json` script's hash fingerprint (the key that `turbo` uses to index its cache and to determine if a script needs to be re-executed). **With Turborepo 1.3+, you can now specify globs of `inputs` in your `turbo.json` `pipeline` to control which files are relevant for a particular script for caching.** This means that you can now express the following in `turbo.json`
+In addition to [environment variables, dependencies, and pipeline configurations,](/repo/docs/core-concepts/caching#hashing) `turbo` will consider all non-gitignored files in package folder when calculating each `package.json` script's hash fingerprint (the key that `turbo` uses to index its cache and to determine if a script needs to be re-executed). **With Turborepo 1.3+, you can now specify globs of `inputs` in your `turbo.json` `pipeline` to control which files are relevant for a particular script for caching.** This means that you can now express the following in `turbo.json`
 
 - Ignore changes to all markdown files in a package or app's folder.
 - Don't bother rebuilding an app if only its test files have changed.
@@ -171,10 +171,10 @@ Note: We suggest specifying `inputs` whenever declaring a root task in your `pip
 
 We added recipes for using Turborepo and Remote Caching with:
 
-- [CircleCI](/docs/ci/circleci)
-- [GitHub Actions](/docs/ci/github-actions)
-- [Gitlab CI](/docs/ci/gitlabci)
-- [Travis CI](/docs/ci/travisci)
+- [CircleCI](/repo/docs/ci/circleci)
+- [GitHub Actions](/repo/docs/ci/github-actions)
+- [Gitlab CI](/repo/docs/ci/gitlabci)
+- [Travis CI](/repo/docs/ci/travisci)
 
 If there are other recipes you would like to see here please let us know by opening up a [GitHub Discussion](https://github.com/vercel/turbo/discussions/categories/ideas).
 

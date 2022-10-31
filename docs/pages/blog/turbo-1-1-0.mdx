@@ -44,12 +44,12 @@ Codemods are transformations that run on your codebase programmatically. This sa
 npx @turbo/codemod <transform> <path>
 ```
 
-- `transform` - the name of transform, [see available transforms in the docs](/docs/reference/codemods#turborepo-1x).
+- `transform` - the name of transform, [see available transforms in the docs](/repo/docs/reference/codemods#turborepo-1x).
 - `path` - files or directory to transform.
 - `--dry` - Do a dry run, no code will be edited.
 - `--print` - Prints the changed output for comparison.
 
-For more information about specific transforms, check out the [new Codemods documentation](/docs/reference/codemods#turborepo-1x).
+For more information about specific transforms, check out the [new Codemods documentation](/repo/docs/reference/codemods#turborepo-1x).
 
 ## `turbo.json` Support
 
@@ -61,7 +61,7 @@ To automatically migrate from your current configuration in `package.json`, chec
 npx @turbo/codemod create-turbo-config .
 ```
 
-For more information on this transformation, [check out the documentation](/docs/reference/codemods#create-turbo-config).
+For more information on this transformation, [check out the documentation](/repo/docs/reference/codemods#create-turbo-config).
 
 ## Faster Package Manager Detection
 
@@ -71,13 +71,13 @@ Turborepo now supports the recently established `packageManager` field in `packa
 npx @turbo/codemod add-package-manager .
 ```
 
-For more information on this transformation, [check out the documentation](/docs/reference/codemods#add-package-manager).
+For more information on this transformation, [check out the documentation](/repo/docs/reference/codemods#add-package-manager).
 
 ## Environment Variable Dependencies
 
 When you use `turbo` with tools that inline environment variables at build time (e.g. Next.js or Create React App), it is important you tell `turbo` about it to avoid shipping a cached artifact with the wrong environment variables.
 
-You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/docs/core-concepts/caching#hashing) behavior based on the values of both environment variables and the contents of files:
+You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/repo/docs/core-concepts/caching#hashing) behavior based on the values of both environment variables and the contents of files:
 
 - Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-package-task basis.
 - Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
@@ -126,7 +126,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/docs/core
 
 Note: In most monorepos, you don't often use environment variables in shared packages, but mostly in applications. Thus, to get higher cache hit rates, you should only include environment variables in the app-specific tasks where they are used/inlined.
 
-For more information, read the [caching and hashing documentation](/docs/core-concepts/caching).
+For more information, read the [caching and hashing documentation](/repo/docs/core-concepts/caching).
 
 ## Partial Yarn v2/v3 support
 

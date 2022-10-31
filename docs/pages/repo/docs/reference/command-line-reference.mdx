@@ -84,7 +84,7 @@ Run npm scripts across all workspaces in specified scope. Tasks must be specifie
 
 `turbo` can run multiple tasks, and any arguments following `--` will be passed through
 to the tasks to be executed. Note that these additional arguments will _not_ be passed to
-any additional tasks that are run due to dependencies from the [pipeline](/docs/reference/configuration#pipeline) configuration.
+any additional tasks that are run due to dependencies from the [pipeline](/repo/docs/reference/configuration#pipeline) configuration.
 
 ### Options
 
@@ -131,7 +131,7 @@ turbo run build --cwd=./somewhere/else
 
 <Callout type="error">
   `--deps` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#include-dependents-of-matched-packages)
+  [`--filter`](/repo/docs/core-concepts/filtering#include-dependents-of-matched-packages)
   instead.
 </Callout>
 
@@ -174,7 +174,7 @@ Multiple filters can be combined to select distinct sets of targets. Additionall
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
 be in the final entrypoint selection.
 
-For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/core-concepts/filtering)
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/filtering)
 
 ```sh
 turbo run build --filter=my-pkg
@@ -260,7 +260,7 @@ Just a quick overview.
 
 <Callout type="error">
   `--include-dependencies` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#include-dependencies-of-matched-packages)
+  [`--filter`](/repo/docs/core-concepts/filtering#include-dependencies-of-matched-packages)
   instead.
 </Callout>
 
@@ -347,7 +347,7 @@ The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment v
 
 <Callout type="error">
   `--scope` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#filter-by-package) instead.
+  [`--filter`](/repo/docs/core-concepts/filtering#filter-by-package) instead.
 </Callout>
 
 `type: string[]`
@@ -376,7 +376,7 @@ turbo run build --serial
 
 <Callout type="error">
   `--since` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#filter-by-changed-packages)
+  [`--filter`](/repo/docs/core-concepts/filtering#filter-by-changed-packages)
   instead.
 </Callout>
 
