@@ -153,7 +153,7 @@ async fn process_request_with_content_source(
                     );
                 }
 
-                return Ok(response.body(hyper::Body::from(proxy_result.body.clone()))?);
+                return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.stream()))?);
             }
             ContentSourceResult::NeedData { source, path, vary } => {
                 resolved_source = source.resolve_strongly_consistent().await?;
