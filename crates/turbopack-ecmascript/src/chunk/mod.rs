@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    primitives::{JsonValueVc, StringReadRef, StringVc, StringsVc},
+    primitives::{JsonValueVc, StringReadRef, StringVc, StringsVc, UsizeVc},
     trace::TraceRawVcs,
     TryJoinIterExt, ValueToString, ValueToStringVc,
 };
@@ -849,6 +849,33 @@ impl ValueToString for EcmascriptChunk {
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkVc {
+    #[turbo_tasks::function]
+    async fn chunk_content_result(self) -> Result<EcmascriptChunkContentResultVc> {
+        let this = self.await?;
+        Ok(ecmascript_chunk_content(
+            this.context,
+            this.main_entries,
+            this.omit_entries,
+        ))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunk_items_count(self) -> Result<UsizeVc> {
+        Ok(UsizeVc::cell(
+            self.chunk_content_result()
+                .await?
+                .chunk_items
+                .await?
+                .iter()
+                .map(|chunk| chunk)
+                .try_join()
+                .await?
+                .into_iter()
+                .map(|chunk| chunk.len())
+                .sum(),
+        ))
+    }
+
     #[turbo_tasks::function]
     async fn chunk_content(self) -> Result<EcmascriptChunkContentVc> {
         let this = self.await?;

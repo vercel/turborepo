@@ -11,9 +11,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
