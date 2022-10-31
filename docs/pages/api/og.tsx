@@ -1,12 +1,13 @@
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
+import { withSentryAPI } from "@sentry/nextjs";
 
 import PackLogo from "../../components/logos/og/PackLogo";
 import RepoLogo from "../../components/logos/og/RepoLogo";
 import TurboLogo from "../../components/logos/og/TurboLogo";
 import VercelLogo from "../../components/logos/og/VercelLogo";
 
-import type { NextRequest } from "next/server";
+import type { NextApiRequest } from "next/index";
 
 function _arrayBufferToBase64(buffer) {
   var binary = "";
@@ -63,8 +64,8 @@ export const config = {
   runtime: "experimental-edge",
 };
 
-export default async function openGraphImage(
-  req: NextRequest
+export default withSentryAPI(async function openGraphImage(
+  req: NextApiRequest
 ): Promise<ImageResponse> {
   const [fonts, bg] = await loadAssets();
   try {
@@ -95,7 +96,8 @@ export default async function openGraphImage(
     }
     return new Response("Failed to generate image", { status: 500 });
   }
-}
+},
+"api/og");
 
 export function OGImage({
   title,
