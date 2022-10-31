@@ -1,6 +1,5 @@
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
-import { withSentryAPI } from "@sentry/nextjs";
 
 import PackLogo from "../../components/logos/og/PackLogo";
 import RepoLogo from "../../components/logos/og/RepoLogo";

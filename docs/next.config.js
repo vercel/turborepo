@@ -8,7 +8,7 @@ const withNextra = require("nextra")({
 
 const sentryWebpackPluginOptions = {
   silent: true,
-  ignore: ["**/og.tsx"],
+  autoInstrumentServerFunctions: false,
 };
 
 const OLD_TURBOREPO_ROUTES = [
