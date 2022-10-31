@@ -1,10 +1,14 @@
 {
   "name": "ui",
   "version": "0.0.0",
-  "main": "./index.tsx",
-  "types": "./index.tsx",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist"
+  },
   "license": "MIT",
   "scripts": {
+    "build": "tsup ./index.tsx --format esm,cjs --dts --external react",
     "lint": "TIMING=1 eslint \"**/*.ts*\""
   },
   "devDependencies": {
@@ -14,6 +18,7 @@
     "eslint-config-custom": "*",
     "react": "^18.2.0",
     "tsconfig": "*",
+    "tsup": "^6.3.0",
     "typescript": "^4.5.2"
   }
 }
