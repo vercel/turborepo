@@ -8,6 +8,7 @@ const withNextra = require("nextra")({
 
 const sentryWebpackPluginOptions = {
   silent: true,
+  ignore: ["**/pages/api/og.tsx", "pages/api/og.tsx", "./pages/api/og.tsx"],
 };
 
 const OLD_TURBOREPO_ROUTES = [
