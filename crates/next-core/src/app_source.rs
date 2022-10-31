@@ -7,7 +7,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
-    rope::Rope, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
+    rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
     FileSystemEntryType, FileSystemPathVc,
 };
 use turbopack::{
@@ -494,15 +494,16 @@ impl NodeEntry for AppRenderer {
             .into_iter()
             .try_join()
             .await?;
-        let mut result =
-            b"import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n".to_vec();
+        let mut result = RopeBuilder::default();
+        result += "import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n";
+
         for (_, import) in segments.iter() {
             if let Some((p, identifier, chunks_identifier)) = import {
+                result += r#"("TURBOPACK {{ transition: next-layout-entry; chunking-type: parallel }}");
+"#;
                 writeln!(
                     result,
-                    r#"("TURBOPACK {{ transition: next-layout-entry; chunking-type: parallel }}");
-import {}, {{ chunks as {} }} from {};
-"#,
+                    "import {}, {{ chunks as {} }} from {};\n",
                     identifier,
                     chunks_identifier,
                     stringify_str(p)
@@ -518,7 +519,8 @@ import BOOTSTRAP from {};
                 stringify_str(&page)
             )?;
         }
-        result.extend(b"const LAYOUT_INFO = [");
+
+        result += "const LAYOUT_INFO = [";
         for (segment_str_lit, import) in segments.iter() {
             if let Some((_, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -530,15 +532,14 @@ import BOOTSTRAP from {};
                 writeln!(result, "  {{ segment: {segment_str_lit} }},",)?
             }
         }
-        result.extend(b"];\n\n");
+        result += "];\n\n";
 
-        let mut result = Rope::from(result);
         let base_code = next_js_file("entry/app-renderer.tsx");
         if let FileContent::Content(base_file) = &*base_code.await? {
             result.concat(base_file.content())
         }
 
-        let file = File::from(result);
+        let file = File::from(result.build());
         let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
             (self.context, self.intermediate_output_path.join("__rsc__"))

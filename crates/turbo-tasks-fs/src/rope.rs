@@ -3,7 +3,7 @@ use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
     io::{self, Read, Result as IoResult, Write},
-    mem, ops,
+    ops,
     pin::Pin,
     task::{Context as TaskContext, Poll},
 };
@@ -16,71 +16,28 @@ use tokio::io::{AsyncRead, ReadBuf};
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Rope {
     length: usize,
 
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    frozen: Vec<Bytes>,
+    data: Vec<Bytes>,
+}
 
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    mutable: Option<BytesMut>,
+#[derive(Default)]
+pub struct RopeBuilder {
+    length: usize,
+
+    committed: Vec<Bytes>,
+
+    writable: BytesMut,
 }
 
 impl Rope {
     pub fn new(bytes: Vec<u8>) -> Self {
         Rope {
             length: bytes.len(),
-            frozen: vec![bytes.into()],
-            mutable: Some(BytesMut::default()),
-        }
-    }
-
-    pub fn empty() -> Self {
-        Rope {
-            length: 0,
-            frozen: vec![],
-            mutable: Some(BytesMut::default()),
-        }
-    }
-
-    pub fn frozen(bytes: Vec<u8>) -> Self {
-        Rope {
-            length: bytes.len(),
-            frozen: vec![bytes.into()],
-            mutable: None,
-        }
-    }
-
-    pub fn push_bytes(&mut self, bytes: &[u8]) {
-        debug_assert!(self.mutable.is_some(), "rope is already frozen");
-        self.length += bytes.len();
-        self.mutable.as_mut().unwrap().extend_from_slice(bytes);
-    }
-
-    pub fn concat(&mut self, other: &Rope) {
-        debug_assert!(self.mutable.is_some(), "rope is already frozen");
-        debug_assert!(
-            other.mutable.is_none(),
-            "rope contains mutable data, must be frozen before reading"
-        );
-
-        self.length += other.len();
-        let mutable = self.mutable.as_mut().unwrap();
-        if !mutable.is_empty() {
-            let mutable = mem::take(mutable);
-            self.frozen.push(mutable.freeze());
-        }
-        self.frozen.extend(other.frozen.clone());
-    }
-
-    pub fn freeze(&mut self) {
-        debug_assert!(self.mutable.is_some(), "rope is already frozen");
-
-        if let Some(mutable) = self.mutable.take() {
-            if !mutable.is_empty() {
-                self.frozen.push(mutable.freeze());
-            }
+            data: vec![bytes.into()],
         }
     }
 
@@ -89,7 +46,7 @@ impl Rope {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.length == 0
     }
 
     pub fn slice(&'_ self, start: usize, end: usize) -> RopeReader<'_> {
@@ -113,50 +70,99 @@ impl Rope {
     }
 }
 
-impl Default for Rope {
-    fn default() -> Self {
-        Rope::empty()
+impl From<&'static [u8]> for Rope {
+    fn from(content: &'static [u8]) -> Self {
+        Rope {
+            length: content.len(),
+            data: vec![Bytes::from_static(content)],
+        }
     }
 }
 
-impl From<&[u8]> for Rope {
-    fn from(content: &[u8]) -> Self {
-        Rope::frozen(content.to_vec())
+impl From<&'static str> for Rope {
+    fn from(content: &'static str) -> Self {
+        Rope::from(content.as_bytes())
     }
 }
 
 impl From<Vec<u8>> for Rope {
     fn from(content: Vec<u8>) -> Self {
-        Rope::frozen(content)
-    }
-}
-
-impl From<&str> for Rope {
-    fn from(content: &str) -> Self {
-        Rope::frozen(content.as_bytes().to_vec())
+        Rope::new(content)
     }
 }
 
 impl From<String> for Rope {
     fn from(content: String) -> Self {
-        Rope::frozen(content.into_bytes())
+        Rope::from(content.into_bytes())
     }
 }
 
-impl Write for Rope {
+impl RopeBuilder {
+    pub fn push_bytes(&mut self, bytes: &[u8]) {
+        self.length += bytes.len();
+        self.writable.extend_from_slice(bytes);
+    }
+
+    pub fn push_static_bytes(&mut self, bytes: &'static [u8]) {
+        self.length += bytes.len();
+        self.finish();
+        self.committed.push(Bytes::from_static(bytes));
+    }
+
+    pub fn concat(&mut self, other: &Rope) {
+        self.length += other.len();
+        self.finish();
+        self.committed.extend(other.data.clone());
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
+    pub fn finish(&mut self) {
+        if !self.writable.is_empty() {
+            self.committed.push(self.writable.split().freeze());
+        }
+    }
+
+    pub fn build(mut self) -> Rope {
+        self.finish();
+        Rope {
+            length: self.length,
+            data: self.committed,
+        }
+    }
+}
+
+impl From<Vec<u8>> for RopeBuilder {
+    fn from(bytes: Vec<u8>) -> Self {
+        RopeBuilder {
+            length: bytes.len(),
+            committed: vec![],
+            writable: bytes.as_slice().into(),
+        }
+    }
+}
+
+impl Write for RopeBuilder {
     fn write(&mut self, bytes: &[u8]) -> IoResult<usize> {
         self.push_bytes(bytes);
         Ok(bytes.len())
     }
 
     fn flush(&mut self) -> IoResult<()> {
+        self.finish();
         Ok(())
     }
 }
 
-impl ops::AddAssign<&str> for Rope {
-    fn add_assign(&mut self, rhs: &str) {
-        self.push_bytes(rhs.as_bytes());
+impl ops::AddAssign<&'static str> for RopeBuilder {
+    fn add_assign(&mut self, rhs: &'static str) {
+        self.push_static_bytes(rhs.as_bytes());
     }
 }
 
@@ -164,11 +170,9 @@ impl DeterministicHash for Rope {
     /// Ropes with similar contents hash the same, regardless of their
     /// structure.
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
-        for v in &self.frozen {
+        state.write_usize(self.len());
+        for v in &self.data {
             state.write_bytes(v.as_ref());
-        }
-        if let Some(m) = &self.mutable {
-            state.write_bytes(m.as_ref());
         }
     }
 }
@@ -177,11 +181,9 @@ impl Hash for Rope {
     /// Ropes with similar contents hash the same, regardless of their
     /// structure.
     fn hash<H: Hasher>(&self, state: &mut H) {
-        for v in &self.frozen {
+        state.write_usize(self.len());
+        for v in &self.data {
             state.write(v.as_ref());
-        }
-        if let Some(m) = &self.mutable {
-            state.write(m.as_ref());
         }
     }
 }
@@ -211,12 +213,12 @@ impl Serialize for Rope {
 impl<'de> Deserialize<'de> for Rope {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let bytes = <Vec<u8>>::deserialize(deserializer)?;
-        Ok(Rope::frozen(bytes))
+        Ok(Rope::new(bytes))
     }
 }
 
 pub struct RopeReader<'a> {
-    rope: &'a Rope,
+    data: &'a Vec<Bytes>,
     byte_pos: usize,
     concat_index: usize,
     max_bytes: usize,
@@ -225,7 +227,7 @@ pub struct RopeReader<'a> {
 impl<'a> RopeReader<'a> {
     fn new_full(rope: &'a Rope) -> Self {
         RopeReader {
-            rope,
+            data: &rope.data,
             byte_pos: 0,
             concat_index: 0,
             max_bytes: rope.len(),
@@ -240,14 +242,9 @@ impl<'a> RopeReader<'a> {
     }
 
     fn read_internal(&mut self, want: usize, buf: &mut Option<&mut ReadBuf<'_>>) -> usize {
-        debug_assert!(
-            self.rope.mutable.is_none(),
-            "rope contains mutable data, must be frozen before reading"
-        );
-
         let mut remaining = want;
         while remaining > 0 {
-            let bytes = match self.rope.frozen.get(self.concat_index) {
+            let bytes = match self.data.get(self.concat_index) {
                 Some(el) => el,
                 None => break,
             };
@@ -305,7 +302,7 @@ impl<'a> AsyncRead for RopeReader<'a> {
 }
 
 pub struct RopeStream {
-    rope: Rope,
+    data: Vec<Bytes>,
     concat_index: usize,
     size_hint: usize,
 }
@@ -313,7 +310,7 @@ pub struct RopeStream {
 impl RopeStream {
     fn new(rope: &Rope) -> Self {
         RopeStream {
-            rope: rope.clone(),
+            data: rope.data.clone(),
             concat_index: 0,
             size_hint: rope.len(),
         }
@@ -325,12 +322,8 @@ impl Stream for RopeStream {
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        debug_assert!(
-            this.rope.mutable.is_none(),
-            "rope contains mutable data, must be frozen before reading"
-        );
 
-        match this.rope.frozen.get(this.concat_index) {
+        match this.data.get(this.concat_index) {
             None => Poll::Ready(None),
             Some(bytes) => {
                 this.concat_index += 1;

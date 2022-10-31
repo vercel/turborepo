@@ -114,7 +114,7 @@ impl SourcePos {
         // It's possible we've only read a 1 byte of a multi-byte char. So we return how
         // many we need to eat on the next go around.
         let mut eat = 0;
-        let mut buf = [0; 1024];
+        let mut buf = [0; 1024 * 8];
         loop {
             let len = reader.read(&mut buf)?;
             if len == 0 {

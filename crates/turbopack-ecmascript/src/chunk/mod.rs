@@ -25,7 +25,7 @@ use turbopack_core::{
         ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
         FromChunkableAsset, ModuleId, ModuleIdReadRef, ModuleIdVc, ModuleIdsVc,
     },
-    code_builder::{Code, CodeReadRef, CodeVc},
+    code_builder::{Code, CodeBuilder, CodeReadRef, CodeVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -521,13 +521,14 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
     if content.options.exports {
         args.push("e: exports");
     }
-    let mut code = Code::new();
+    let mut code = CodeBuilder::default();
     let args = FormatIter(|| args.iter().copied().intersperse(", "));
     if content.options.this {
         write!(code, "(function({{ {} }}) {{ !function() {{\n\n", args,)?;
     } else {
         write!(code, "(({{ {} }}) => (() => {{\n\n", args,)?;
     }
+
     let source_map = content.source_map.map(|sm| sm.as_generate_source_map());
     code.push_source(&content.inner_code, source_map);
     if content.options.this {
@@ -535,8 +536,7 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
     } else {
         code += "\n})())";
     }
-    code.freeze();
-    Ok(code.cell())
+    Ok(code.build().cell())
 }
 
 #[derive(Serialize)]
@@ -566,7 +566,6 @@ impl EcmascriptChunkContentVc {
     #[turbo_tasks::function]
     async fn code(self) -> Result<CodeVc> {
         let this = self.await?;
-        let mut code = Code::new();
         let chunk_path = &*this.chunk_path.await?;
         let chunk_server_path = if let Some(path) = this.output_root.await?.get_path_to(chunk_path)
         {
@@ -578,17 +577,17 @@ impl EcmascriptChunkContentVc {
                 this.output_root.to_string().await?
             );
         };
-        writeln!(
-            code,
-            "(self.TURBOPACK = self.TURBOPACK || []).push([{}, {{",
-            stringify_str(chunk_server_path)
-        )?;
+        let mut code = CodeBuilder::default();
+        code += "(self.TURBOPACK = self.TURBOPACK || []).push([";
+
+        writeln!(code, "{}, {{", stringify_str(chunk_server_path))?;
         for entry in &this.module_factories {
             write!(code, "\n{}: ", &stringify_module_id(entry.id()))?;
             code.push_code(entry.code());
             code += ",";
         }
         code += "\n}";
+
         if let Some(evaluate) = &this.evaluate {
             let evaluate = evaluate.await?;
             let condition = evaluate
@@ -637,8 +636,7 @@ impl EcmascriptChunkContentVc {
             write!(code, "\n\n//# sourceMappingURL={}.map", filename)?;
         }
 
-        code.freeze();
-        Ok(code.cell())
+        Ok(code.build().cell())
     }
 
     #[turbo_tasks::function]

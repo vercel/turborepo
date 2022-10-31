@@ -4,7 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sourcemap::SourceMap as CrateMap;
 use turbo_tasks::TryJoinIterExt;
-use turbo_tasks_fs::rope::{Rope, RopeVc};
+use turbo_tasks_fs::rope::{Rope, RopeBuilder, RopeVc};
 
 use crate::source_pos::SourcePos;
 
@@ -106,7 +106,7 @@ impl SourceMapVc {
             SourceMap::Regular(r) => {
                 let mut bytes = vec![];
                 r.0.to_writer(&mut bytes)?;
-                Rope::frozen(bytes)
+                Rope::from(bytes)
             }
 
             SourceMap::Sectioned(s) => {
@@ -117,15 +117,12 @@ impl SourceMapVc {
                     }
                 }
 
-                let mut rope = Rope::empty();
+                let mut rope = RopeBuilder::default();
 
                 // My kingdom for a decent dedent macro with interpolation!
-                write!(
-                    rope,
-                    r#"{{
+                rope += r#"{
   "version": 3,
-  "sections": ["#
-                )?;
+  "sections": ["#;
 
                 let sections = s
                     .sections
@@ -159,8 +156,7 @@ impl SourceMapVc {
 }}"#
                 )?;
 
-                rope.freeze();
-                rope
+                rope.build()
             }
         };
         Ok(rope.cell())
