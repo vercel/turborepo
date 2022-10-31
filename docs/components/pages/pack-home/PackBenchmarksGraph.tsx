@@ -269,8 +269,6 @@ const Time = ({
   value: number;
   maxValue: number;
 }): JSX.Element => {
-  const ROUND_DECIMALS = 1;
-
   let unitValue: string;
   let unit: string;
   if (maxValue < 1000) {
