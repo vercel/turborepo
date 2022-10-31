@@ -99,8 +99,7 @@ jobs:
           url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
       - name: Run node-gyp install
-        run: npx node-gyp install
-        if: matrix.os.name == 'windows-latest'
+        run: npm install -g node-gyp
 
       - uses: ./.github/actions/setup-node
 
@@ -123,9 +122,18 @@ jobs:
       - name: Run nextest
         uses: actions-rs/cargo@v1
         timeout-minutes: 120
+        if: matrix.os.name != 'windows-2019'
         with:
           command: nextest
           args: run --release --no-fail-fast
+
+      - name: Run test
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 120
+        if: matrix.os.name == 'windows-2019'
+        with:
+          command: test
+          args: --release
 
       - name: Report github status
         if: always() && github.event_name == 'pull_request'
