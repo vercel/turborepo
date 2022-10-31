@@ -22,10 +22,12 @@ pub struct Code {
     mappings: Vec<(usize, Option<GenerateSourceMapVc>)>,
 }
 
+/// CodeBuilder provides a mutable container to append source code.
 #[derive(Default)]
 pub struct CodeBuilder {
     code: RopeBuilder,
 
+    /// A mapping of byte-offset in the code string to an associated source map.
     mappings: Vec<(usize, Option<GenerateSourceMapVc>)>,
 }
 
@@ -57,8 +59,8 @@ impl CodeBuilder {
         self.code.concat(code);
     }
 
-    /// Copies the Synthetic/Original code of an already constructed Code
-    /// into this instance.
+    /// Copies the Synthetic/Original code of an already constructed Code into
+    /// this instance.
     pub fn push_code(&mut self, prebuilt: &Code) {
         if let Some((index, _)) = prebuilt.mappings.first() {
             if *index > 0 {
