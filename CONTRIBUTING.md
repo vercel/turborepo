@@ -31,17 +31,17 @@ To run a single test, you can run `go test ./[path/to/package/]`. See more [in t
 You might need to update `packages/turbo` in order to support a new platform. When you do that you will need to link the module in order to be able to continue working. As an example, with `npm link`:
 
 ```sh
-cd ~/repos/vercel/turborepo/packages/turbo
+cd ~/repos/vercel/turbo/packages/turbo
 npm link
 
 # Run your build, e.g. `go build ./cmd/turbo` if you're on the platform you're adding.
-cd ~/repos/vercel/turborepo/cli
+cd ~/repos/vercel/turbo/cli
 go build ./cmd/turbo
 
 # You can then run the basic example specifying the build asset path.
-cd ~/repos/vercel/turborepo/examples/basic
-TURBO_BINARY_PATH=~/repos/vercel/turborepo/cli/turbo.exe npm install
-TURBO_BINARY_PATH=~/repos/vercel/turborepo/cli/turbo.exe npm link turbo
+cd ~/repos/vercel/turbo/examples/basic
+TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm install
+TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm link turbo
 ```
 
 If you're using a different package manager replace npm accordingly.

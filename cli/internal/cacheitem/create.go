@@ -11,8 +11,8 @@ import (
 	"github.com/DataDog/zstd"
 
 	"github.com/moby/sys/sequential"
-	"github.com/vercel/turborepo/cli/internal/tarpatch"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/tarpatch"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // Create makes a new CacheItem at the specified path.

@@ -8,7 +8,7 @@ import (
 	"reflect"
 
 	"github.com/adrg/xdg"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // CheckedToAbsoluteSystemPath inspects a string and determines if it is an absolute path.

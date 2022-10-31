@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/signals"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/signals"
 )
 
 func TestDefaultCmd(t *testing.T) {
