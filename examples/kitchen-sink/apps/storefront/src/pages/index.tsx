@@ -16,7 +16,7 @@ export default function Store() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <NewTabLink href="https://turborepo.org/">Turborepo</NewTabLink> +{" "}
+        <NewTabLink href="https://turbo.build/repo">Turborepo</NewTabLink> +{" "}
         <NewTabLink href="https://nextjs.org/">Next.js</NewTabLink>
       </p>
     </div>

@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/filewatcher"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/filewatcher"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 

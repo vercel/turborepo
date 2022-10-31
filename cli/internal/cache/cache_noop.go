@@ -1,6 +1,6 @@
 package cache
 
-import "github.com/vercel/turborepo/cli/internal/turbopath"
+import "github.com/vercel/turbo/cli/internal/turbopath"
 
 type noopCache struct{}
 

@@ -5,7 +5,7 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/vercel/turborepo/cli/internal/cmd"
+	"github.com/vercel/turbo/cli/internal/cmd"
 )
 
 func main() {

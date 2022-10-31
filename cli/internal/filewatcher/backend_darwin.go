@@ -14,9 +14,9 @@ import (
 
 	"github.com/fsnotify/fsevents"
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 type fseventsBackend struct {

@@ -12,7 +12,7 @@ function App() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <NewTabLink href="https://turborepo.org/">Turborepo</NewTabLink> +{" "}
+        <NewTabLink href="https://turbo.build/repo">Turborepo</NewTabLink> +{" "}
         <NewTabLink href="https://vitejs.dev/">Vite</NewTabLink>
       </p>
     </div>
