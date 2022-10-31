@@ -37,7 +37,6 @@ use mime::Mime;
 use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use read_glob::read_glob;
 pub use read_glob::{ReadGlobResult, ReadGlobResultVc};
-use rope::RopeReadRef;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{fs, io::AsyncReadExt};
@@ -53,7 +52,7 @@ use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 use crate::util::is_windows_raw_path;
 use crate::{
     retry::{retry_blocking, retry_future},
-    rope::{Rope, RopeReader},
+    rope::{Rope, RopeReadRef, RopeReader},
 };
 
 #[turbo_tasks::value_trait]

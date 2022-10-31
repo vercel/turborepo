@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     cmp::min,
+    fmt::{Debug, Error as FmtError, Formatter},
     hash::{Hash, Hasher},
     io::{self, Read, Result as IoResult, Write},
     ops,
@@ -19,21 +20,25 @@ type Bytes = Vec<u8>;
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 #[derive(Clone, Debug)]
 pub enum Rope {
-    Flat(Arc<Bytes>),
-    Concat(usize, Vec<Arc<Bytes>>),
+    Flat(RopeElem),
+    Concat { length: usize, data: Vec<RopeElem> },
 }
+
+#[turbo_tasks::value(shared)]
+#[derive(Clone)]
+pub struct RopeElem(#[turbo_tasks(debug_ignore)] Arc<Bytes>);
 
 use Rope::{Concat, Flat};
 
 impl Rope {
     pub fn new(bytes: Bytes) -> Self {
-        Flat(Arc::new(bytes))
+        Flat(RopeElem::new(bytes))
     }
 
     pub fn flatten(&self) -> Cow<'_, Bytes> {
         match self {
-            Rope::Flat(f) => Cow::Borrowed(f),
-            Rope::Concat(..) => {
+            Rope::Flat(data) => Cow::Borrowed(data),
+            Rope::Concat { .. } => {
                 let mut buf = Vec::with_capacity(self.len());
                 self.flatten_internal(&mut buf);
                 Cow::Owned(buf)
@@ -42,33 +47,36 @@ impl Rope {
     }
 
     pub fn push_bytes(&mut self, bytes: Bytes) {
-        let last = match self {
-            Flat(f) => Some(f),
-            Concat(_, c) => c.last_mut(),
-        };
-
-        if let Some(last) = last {
-            if let Some(last) = Arc::get_mut(last) {
-                let len = bytes.len();
-                last.extend(bytes);
-                if let Concat(l, _) = self {
-                    *l += len;
-                }
-                return;
-            }
+        let last_mut = match self {
+            Flat(data) => Some(data),
+            Concat { data, .. } => data.last_mut(),
         }
-        self.push_shared_bytes(Arc::new(bytes));
+        .and_then(|l| Arc::get_mut(l));
+
+        if let Some(last) = last_mut {
+            let l = bytes.len();
+            last.extend(bytes);
+
+            if let Concat { length, .. } = self {
+                *length += l;
+            }
+        } else {
+            self.push_shared_bytes(Arc::new(bytes));
+        }
     }
 
     pub fn push_shared_bytes(&mut self, bytes: Arc<Bytes>) {
         match self {
-            Flat(f) => {
-                let len = f.len() + bytes.len();
-                *self = Concat(len, vec![f.clone(), bytes]);
+            Flat(data) => {
+                let length = data.len() + bytes.len();
+                *self = Concat {
+                    length,
+                    data: vec![data.clone(), RopeElem(bytes)],
+                };
             }
-            Concat(len, c) => {
-                *len += bytes.len();
-                c.push(bytes);
+            Concat { length, data } => {
+                *length += bytes.len();
+                data.push(RopeElem(bytes));
             }
         }
     }
@@ -77,25 +85,31 @@ impl Rope {
         match self {
             Flat(left) => match other {
                 Flat(right) => {
-                    let len = left.len() + other.len();
-                    *self = Concat(len, vec![left.clone(), right.clone()]);
+                    let length = left.len() + other.len();
+                    *self = Concat {
+                        length,
+                        data: vec![left.clone(), right.clone()],
+                    };
                 }
-                Concat(l, right) => {
-                    let len = left.len() + l;
-                    let mut v = Vec::with_capacity(right.len() + 1);
-                    v.push(left.clone());
-                    v.extend(right.clone());
-                    *self = Concat(len, v);
+                Concat {
+                    length: rlen,
+                    data: right,
+                } => {
+                    let length = left.len() + rlen;
+                    let mut data = Vec::with_capacity(right.len() + 1);
+                    data.push(left.clone());
+                    data.extend(right.clone());
+                    *self = Concat { length, data };
                 }
             },
 
-            Concat(old, left) => {
-                *old += other.len();
+            Concat { length, data: left } => {
+                *length += other.len();
                 match other {
                     Flat(right) => {
                         left.push(right.clone());
                     }
-                    Concat(_, right) => {
+                    Concat { data: right, .. } => {
                         left.extend(right.clone());
                     }
                 }
@@ -105,8 +119,8 @@ impl Rope {
 
     pub fn len(&self) -> usize {
         match self {
-            Flat(f) => f.len(),
-            Concat(l, _) => *l,
+            Flat(data) => data.len(),
+            Concat { length, .. } => *length,
         }
     }
 
@@ -132,10 +146,10 @@ impl Rope {
 
     fn flatten_internal(&self, buf: &mut Bytes) {
         match self {
-            Flat(f) => buf.extend(&**f),
-            Concat(_, c) => {
-                for v in c {
-                    buf.extend(&**v);
+            Flat(data) => buf.extend(&***data),
+            Concat { data, .. } => {
+                for v in data {
+                    buf.extend(&***v);
                 }
             }
         }
@@ -150,25 +164,25 @@ impl Default for Rope {
 
 impl From<Bytes> for Rope {
     fn from(bytes: Bytes) -> Self {
-        Flat(Arc::new(bytes))
+        Rope::new(bytes)
     }
 }
 
 impl From<&[u8]> for Rope {
     fn from(content: &[u8]) -> Self {
-        Flat(Arc::new(content.to_vec()))
+        Rope::new(content.to_vec())
     }
 }
 
 impl From<&str> for Rope {
     fn from(content: &str) -> Self {
-        Flat(Arc::new(content.as_bytes().to_vec()))
+        Rope::new(content.as_bytes().to_vec())
     }
 }
 
 impl From<String> for Rope {
     fn from(content: String) -> Self {
-        Flat(Arc::new(content.into_bytes()))
+        Rope::new(content.into_bytes())
     }
 }
 
@@ -195,9 +209,8 @@ impl DeterministicHash for Rope {
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         match self {
             Flat(f) => state.write_bytes(f.as_slice()),
-
-            Concat(_, c) => {
-                for v in c {
+            Concat { data, .. } => {
+                for v in data {
                     v.deterministic_hash(state);
                 }
             }
@@ -211,8 +224,8 @@ impl Hash for Rope {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Flat(f) => state.write(f.as_slice()),
-            Concat(_, c) => {
-                for v in c {
+            Concat { data, .. } => {
+                for v in data {
                     v.hash(state);
                 }
             }
@@ -247,6 +260,38 @@ impl<'de> Deserialize<'de> for Rope {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let bytes = <Vec<u8>>::deserialize(deserializer)?;
         Ok(Rope::new(bytes))
+    }
+}
+
+impl ops::Deref for RopeElem {
+    type Target = Arc<Bytes>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ops::DerefMut for RopeElem {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Debug for RopeElem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
+        let ty = if Arc::strong_count(self) > 1 {
+            "Shared"
+        } else {
+            "Owned"
+        };
+        let data = std::str::from_utf8(self).unwrap_or("[u8 bytes]");
+        f.debug_tuple(ty).field(&data).finish()
+    }
+}
+
+impl RopeElem {
+    fn new(bytes: Bytes) -> Self {
+        Self(Arc::new(bytes))
     }
 }
 
@@ -286,7 +331,7 @@ impl<'a> RopeReader<'a> {
                     el
                 }
 
-                Concat(_, c) => match c.get(self.concat_index) {
+                Concat { data, .. } => match data.get(self.concat_index) {
                     Some(el) => el,
                     None => break,
                 },

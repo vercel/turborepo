@@ -1112,7 +1112,6 @@ impl EcmascriptChunkPlaceablesVc {
 #[turbo_tasks::value(shared)]
 #[derive(Default)]
 pub struct EcmascriptChunkItemContent {
-    // TODO
     pub inner_code: Rope,
     pub source_map: Option<ParseResultSourceMapVc>,
     pub options: EcmascriptChunkItemOptions,
