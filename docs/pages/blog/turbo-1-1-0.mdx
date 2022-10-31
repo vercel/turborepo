@@ -17,7 +17,7 @@ Since releasing Turborepo v1.0 in mid-December, we've seen incredible adoption:
 - 5.5k+ GitHub Stars
 - 70k+ weekly npm downloads
 - 65+ OSS contributors
-- In production at [Vercel](https://github.com/vercel/next.js), [AWS](https://github.com/aws-amplify/amplify-ui), [PayPal](https://twitter.com/jaredpalmer/status/1485617973477978121?s=20&t=E5K-_H-Uo0Q1qIB_uAvdXw), [Twilio](https://github.com/twilio-labs/function-templates), [Contentful](https://github.com/contentful/forma-36), [Miro](https://github.com/miroapp/app-examples), [Framer](https://github.com/framer/motion), [Discord.js](https://github.com/discordjs/discord.js), [Rocket.chat](https://github.com/RocketChat/Rocket.Chat.Fuselage), [Astro.build](https://github.com/withastro/astro)
+- In production at [Vercel](https://github.com/vercel/next.js), [AWS](https://github.com/aws-amplify/amplify-ui), [PayPal](https://twitter.com/jaredpalmer/status/1485617973477978121), [Twilio](https://github.com/twilio-labs/function-templates), [Contentful](https://github.com/contentful/forma-36), [Miro](https://github.com/miroapp/app-examples), [Framer](https://github.com/framer/motion), [Discord.js](https://github.com/discordjs/discord.js), [Rocket.chat](https://github.com/RocketChat/fuselage), [Astro.build](https://github.com/withastro/astro)
 - 585+ members of the [Turborepo Community Discord](https://turbo.build/discord)
 
 ![Weekly npm downloads of `turbo`](../../public/images/blog/turbo-1-1-0/turborepo-weekly-npm-downloads.png)
@@ -44,12 +44,12 @@ Codemods are transformations that run on your codebase programmatically. This sa
 npx @turbo/codemod <transform> <path>
 ```
 
-- `transform` - the name of transform, [see available transforms in the docs](https://turborepo.org/docs/reference/codemods#turborepo-1x).
+- `transform` - the name of transform, [see available transforms in the docs](/repo/docs/reference/codemods#turborepo-1x).
 - `path` - files or directory to transform.
 - `--dry` - Do a dry run, no code will be edited.
 - `--print` - Prints the changed output for comparison.
 
-For more information about specific transforms, check out the [new Codemods documentation](https://turborepo.org/docs/reference/codemods#turborepo-1x).
+For more information about specific transforms, check out the [new Codemods documentation](/repo/docs/reference/codemods#turborepo-1x).
 
 ## `turbo.json` Support
 
@@ -61,7 +61,7 @@ To automatically migrate from your current configuration in `package.json`, chec
 npx @turbo/codemod create-turbo-config .
 ```
 
-For more information on this transformation, [check out the documentation](https://turborepo.org/docs/reference/codemods#create-turbo-config).
+For more information on this transformation, [check out the documentation](/repo/docs/reference/codemods#create-turbo-config).
 
 ## Faster Package Manager Detection
 
@@ -71,13 +71,13 @@ Turborepo now supports the recently established `packageManager` field in `packa
 npx @turbo/codemod add-package-manager .
 ```
 
-For more information on this transformation, [check out the documentation](https://turborepo.org/docs/reference/codemods#add-package-manager).
+For more information on this transformation, [check out the documentation](/repo/docs/reference/codemods#add-package-manager).
 
 ## Environment Variable Dependencies
 
 When you use `turbo` with tools that inline environment variables at build time (e.g. Next.js or Create React App), it is important you tell `turbo` about it to avoid shipping a cached artifact with the wrong environment variables.
 
-You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](https://turborepo.org/docs/core-concepts/caching#hashing) behavior based on the values of both environment variables and the contents of files:
+You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/repo/docs/core-concepts/caching#hashing) behavior based on the values of both environment variables and the contents of files:
 
 - Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-package-task basis.
 - Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
@@ -126,7 +126,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](https://tu
 
 Note: In most monorepos, you don't often use environment variables in shared packages, but mostly in applications. Thus, to get higher cache hit rates, you should only include environment variables in the app-specific tasks where they are used/inlined.
 
-For more information, read the [caching and hashing documentation](https://turborepo.org/docs/core-concepts/caching).
+For more information, read the [caching and hashing documentation](/repo/docs/core-concepts/caching).
 
 ## Partial Yarn v2/v3 support
 
@@ -134,8 +134,8 @@ In addition to Yarn v1, npm, and pnpm package managers, Turborepo now supports Y
 
 ## What's next?
 
-[Since our launch](https://turborepo.org/blog/joining-vercel), Turborepo has focused on seamless incremental adoption/migration and speeding up CI/CD. We are committed to both of those values, but now we'll also be focusing on improving Turborepo's day-to-day ergonomics for local development and observability. We're really excited about this next chapter and will be sharing more details soon.
+[Since our launch](/blog/joining-vercel), Turborepo has focused on seamless incremental adoption/migration and speeding up CI/CD. We are committed to both of those values, but now we'll also be focusing on improving Turborepo's day-to-day ergonomics for local development and observability. We're really excited about this next chapter and will be sharing more details soon.
 
 ## We're hiring!
 
-The Turborepo team at [Vercel](https://vercel.com) is hiring! We're specifically looking for full time [Senior Full Stack Software Engineers](https://vercel.com/careers/senior-full-stack-engineer-amer) and [Senior DevOps/Infrastructure Engineers](https://vercel.com/careers/senior-infrastructure-engineer-amer) to help us make Turborepo even better.
+The Turborepo team at [Vercel](https://vercel.com/) is hiring! We're specifically looking for full time [Senior Full Stack Software Engineers](https://vercel.com/careers) and [Senior DevOps/Infrastructure Engineers](https://vercel.com/careers) to help us make Turborepo even better.
