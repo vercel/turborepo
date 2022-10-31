@@ -1,0 +1,10 @@
+name: CLI Linter
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: 'echo "No lint run required"'

@@ -1,0 +1,12 @@
+name: CLI E2E tests
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: 'echo "No test run required"'
