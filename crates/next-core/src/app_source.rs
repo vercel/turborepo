@@ -495,7 +495,7 @@ impl NodeEntry for AppRenderer {
             .try_join()
             .await?;
         let mut result =
-            Rope::from("import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n");
+            b"import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n".to_vec();
         for (_, import) in segments.iter() {
             if let Some((p, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -518,7 +518,7 @@ import BOOTSTRAP from {};
                 stringify_str(&page)
             )?;
         }
-        result += "const LAYOUT_INFO = [";
+        result.extend(b"const LAYOUT_INFO = [");
         for (segment_str_lit, import) in segments.iter() {
             if let Some((_, identifier, chunks_identifier)) = import {
                 writeln!(
@@ -530,11 +530,14 @@ import BOOTSTRAP from {};
                 writeln!(result, "  {{ segment: {segment_str_lit} }},",)?
             }
         }
-        result += "];\n\n";
+        result.extend(b"];\n\n");
+
+        let mut result = Rope::from(result);
         let base_code = next_js_file("entry/app-renderer.tsx");
         if let FileContent::Content(base_file) = &*base_code.await? {
             result.concat(base_file.content())
         }
+
         let file = File::from(result);
         let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
