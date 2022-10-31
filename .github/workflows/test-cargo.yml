@@ -76,7 +76,7 @@ jobs:
         uses: actions-rs/toolchain@v1
 
       - name: Setup rust cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
         with:
           key: test
 
@@ -179,7 +179,7 @@ jobs:
         uses: actions-rs/toolchain@v1
 
       - name: Setup rust cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
         with:
           key: test-bench
 
