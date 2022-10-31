@@ -53,7 +53,7 @@ This enables developers to run the task directly from their normal task runner.
 
 In some workflows, you'll want to run tasks _before_ you run your `dev` task. For instance, generating code or running a `db:migrate` task.
 
-In these cases, use [`dependsOn`](/repo/docs/core-concepts/running-tasks#in-the-same-workspace) to say that any `codegen` or `db:migrate` tasks should be run _before_ `dev` is run.
+In these cases, use [`dependsOn`](/repo/docs/core-concepts/monorepos/running-tasks#in-the-same-workspace) to say that any `codegen` or `db:migrate` tasks should be run _before_ `dev` is run.
 
 ```json filename="turbo.json"
 {

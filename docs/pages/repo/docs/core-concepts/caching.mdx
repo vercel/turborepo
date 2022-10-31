@@ -58,7 +58,7 @@ To override the default cache output behavior, pass an array of globs to a [`pip
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**"],
@@ -94,7 +94,7 @@ in the `src/` and `test/` subdirectories has changed since the last execution.
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     // ... omitted for brevity
 
@@ -127,7 +127,7 @@ You can also disable caching on specific tasks by setting the [`pipeline.<task>.
 
 ```json
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "dev": {
       "cache": false
@@ -145,7 +145,7 @@ determining a cache hit on the `test` task:
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     // ...other tasks
     "test": {
@@ -169,7 +169,7 @@ If you want _all_ tasks to depend on certain files, you can declare this depende
 
 ```diff
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
 +  "globalDependencies": [".env"],
   "pipeline": {
     // ...other tasks
@@ -201,7 +201,7 @@ the values of environment variables:
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
@@ -235,7 +235,7 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
 
 ```diff
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],

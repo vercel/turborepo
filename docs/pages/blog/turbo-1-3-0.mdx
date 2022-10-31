@@ -74,7 +74,7 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
 
 ```jsonc filename="./turbo.json"
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     // ... omitted for brevity
     "build": {
@@ -128,7 +128,7 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
 
 ```jsonc filename="./turbo.json" highlight="20"
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]

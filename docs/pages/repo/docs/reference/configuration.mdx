@@ -21,7 +21,7 @@ This is useful for busting the cache based on `.env` files (not in Git) or any r
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     // ... omitted for brevity
   },
@@ -43,7 +43,7 @@ A list of environment variables for implicit global hash dependencies. The conte
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     // ... omitted for brevity
   },
@@ -60,7 +60,7 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]
@@ -99,7 +99,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       // "A workspace's `build` command depends on its dependencies'
@@ -132,7 +132,7 @@ The list of environment variables a task depends on.
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
@@ -177,7 +177,7 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       // "Cache all files emitted to workspace's dist/** or .next
@@ -215,7 +215,7 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]
@@ -245,7 +245,7 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     // ... omitted for brevity
 
@@ -279,7 +279,7 @@ Set type of output logging.
 
 ```jsonc
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],

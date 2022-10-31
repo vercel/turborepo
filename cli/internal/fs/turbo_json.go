@@ -154,7 +154,7 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	}
 
 	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct

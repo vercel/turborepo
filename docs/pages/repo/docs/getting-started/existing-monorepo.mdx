@@ -87,7 +87,7 @@ In the root of your monorepo, create an empty file named `turbo.json`. This will
 
 ```json filename="./turbo.json"
 {
-  "$schema": "https://turborepo.org/schema.json"
+  "$schema": "https://turbo.build/schema.json"
 }
 ```
 
@@ -101,7 +101,7 @@ Workspaces that do not have the specified script defined in their `package.json`
 
 ```jsonc filename="./turbo.json"
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       // A package's `build` script depends on that package's

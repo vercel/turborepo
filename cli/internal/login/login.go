@@ -222,7 +222,7 @@ func (l *login) loginSSO(ctx context.Context, ssoTeam string) error {
 		l.base.UI.Info("  all your team’s Vercel projects. It also can share outputs")
 		l.base.UI.Info("  with other services that enable Remote Caching, like CI/CD systems.")
 		l.base.UI.Info("  This results in faster build times and deployments for your team.")
-		l.base.UI.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+		l.base.UI.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turbo.build/repo/docs/core-concepts/remote-caching${RESET}"))
 		l.base.UI.Info("")
 		l.base.UI.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {

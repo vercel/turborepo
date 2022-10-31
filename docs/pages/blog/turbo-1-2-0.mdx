@@ -52,7 +52,7 @@ Take a look at some examples of what you can accomplish with the new `--filter` 
 
 You can use multiple filters together to get even more granular filtering as well as combine each part of the above patterns `{}`, `[]` , `^` , and `...` to express more complex behavior.
 
-For example, if you had an app located in `./apps/web` directory with local packages used as dependencies, and a Turborepo pipeline where `test` depends on `^build` [topologically](https://turborepo.org/docs/glossary#topological-order), running:
+For example, if you had an app located in `./apps/web` directory with local packages used as dependencies, and a Turborepo pipeline where `test` depends on `^build` topologically, running:
 
 ```sh
 turbo run test --filter={./apps/web}[HEAD^1]^...
@@ -95,7 +95,7 @@ To enable this feature, set the `remoteCache` options in your `turbo.json` confi
 
 ```jsonc
 {
-  "$schema": "[https://turborepo.org/schema.json](https://turborepo.org/schema.json)",
+  "$schema": "[https://turbo.build/schema.json](https://turbo.build/schema.json)",
   "remoteCache": {
     // Indicates if signature verification is enabled.
     "signature": true
