@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // NpmLockfile representation of package-lock.json

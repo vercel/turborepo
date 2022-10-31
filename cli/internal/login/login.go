@@ -10,11 +10,11 @@ import (
 	"os/signal"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/client"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/browser"
+	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util/browser"
 
 	"github.com/spf13/cobra"
 )
