@@ -12,6 +12,7 @@ use crate::code_gen::VisitorFactory;
 
 pub type AstPath = Vec<AstParentKind>;
 
+// Invariant: Each [AstPath] in `visitors` contains a value at position `index`.
 pub struct ApplyVisitors<'a, 'b> {
     /// `VisitMut` should be shallow. In other words, it should not visit
     /// children of the node.
@@ -51,6 +52,7 @@ fn find_range<'a, 'b>(
 }
 
 impl<'a, 'b> ApplyVisitors<'a, 'b> {
+    /// `visitors` must have an non-empty [AstPath].
     pub fn new(mut visitors: Vec<(&'a AstPath, &'a dyn VisitorFactory)>) -> Self {
         assert!(!visitors.is_empty());
         visitors.sort_by_key(|(path, _)| *path);
@@ -85,6 +87,8 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                     if nested_visitors_start < visitors.len() {
                         n.visit_mut_children_with_path(
                             &mut ApplyVisitors {
+                                // We only select visitors starting from `nested_visitors_start`
+                                // which maintains the invariant.
                                 visitors: Cow::Borrowed(&visitors[nested_visitors_start..]),
                                 index,
                             },
