@@ -74,7 +74,8 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern unsigned int nativeRunWithArgs(int argc, char** argv, GoString turboStateString);
+extern unsigned int nativeRunWithArgs(int argc, char** argv);
+extern unsigned int nativeRunWithTurboState(GoString turboStateString);
 
 #ifdef __cplusplus
 }

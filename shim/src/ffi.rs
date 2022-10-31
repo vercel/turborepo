@@ -58,6 +58,8 @@ extern "C" {
     pub fn nativeRunWithArgs(
         argc: ::std::os::raw::c_int,
         argv: *mut *mut ::std::os::raw::c_char,
-        turboStateString: GoString,
     ) -> ::std::os::raw::c_uint;
+}
+extern "C" {
+    pub fn nativeRunWithTurboState(turboStateString: GoString) -> ::std::os::raw::c_uint;
 }

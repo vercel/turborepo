@@ -17,6 +17,7 @@ fn main() {
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .allowlist_function("nativeRunWithArgs")
+        .allowlist_function("nativeRunWithTurboState")
         .allowlist_type("GoString")
         .generate()
         .expect("Unable to generate bindings");
@@ -45,7 +46,8 @@ fn expect_release_lib() -> String {
         _ => panic!("unsupported target {}", target.triple),
     };
     let mut dir = PathBuf::from("libturbo");
-    // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons, turbo-${OS}
+    // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons,
+    // turbo-${OS}
     dir.push(format!("turbo-{platform}_{platform}_{arch}"));
     dir.push("lib");
     dir.to_string_lossy().to_string()

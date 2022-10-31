@@ -17,12 +17,19 @@ func main() {
 }
 
 //export nativeRunWithArgs
-func nativeRunWithArgs(argc C.int, argv **C.char, turboStateString string) C.uint {
+func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
 	arglen := int(argc)
 	args := make([]string, arglen)
 	for i, arg := range unsafe.Slice(argv, arglen) {
 		args[i] = C.GoString(arg)
 	}
+
+	exitCode := cmd.RunWithArgs(args, turboVersion)
+	return C.uint(exitCode)
+}
+
+//export nativeRunWithTurboState
+func nativeRunWithTurboState(turboStateString string) C.uint {
 	turboState := turbostate.TurboState{}
 	err := json.Unmarshal([]byte(turboStateString), &turboState)
 	if err != nil {

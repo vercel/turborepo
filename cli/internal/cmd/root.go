@@ -78,8 +78,7 @@ func RunWithArgs(args []string, turboVersion string) int {
 	}
 }
 
-// RunWithTurboState runs turbo with the specified arguments. The arguments should not
-// include the binary being invoked (e.g. "turbo").
+// RunWithTurboState runs turbo with the TurboState that is passed from the Rust side.
 func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
@@ -118,7 +117,6 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 	var execErr error
 	go func() {
 		command := state.ParsedArgs.Command
-		fmt.Printf("Running command: %+v\n", command.Login)
 		if command.Daemon != nil {
 			execErr = daemon.Run(ctx, helper, &state.ParsedArgs, signalWatcher)
 		} else if command.Link != nil {
@@ -131,8 +129,8 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 			execErr = prune.Run(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
 			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
-		} else {
-			fmt.Printf("COMMAND NOT HANDLED %v\n", command)
+		} else if command.Run != nil {
+			execErr = fmt.Errorf("Command not handled %v\n", command)
 		}
 		close(doneCh)
 	}()

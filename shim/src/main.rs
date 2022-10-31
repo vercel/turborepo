@@ -18,7 +18,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use serde::Serialize;
 
 use crate::{
-    ffi::{nativeRunWithArgs, GoString},
+    ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
     package_manager::PackageManager,
 };
 
@@ -158,25 +158,31 @@ impl TurboState {
     ///
     /// returns: Result<i32, Error>
     fn run_current_turbo(self) -> Result<i32> {
-        if matches!(self.parsed_args.command, Some(Command::Bin)) {
-            commands::bin::run()?;
-            return Ok(0);
+        match self.parsed_args.command {
+            Some(Command::Bin) => {
+                commands::bin::run()?;
+                Ok(0)
+            }
+            Some(Command::Link { .. }) | Some(Command::Login { .. }) | Some(Command::Logout) => {
+                let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
+                Ok(exit_code.try_into()?)
+            }
+            _ => {
+                let mut args = self
+                    .raw_args
+                    .iter()
+                    .map(|s| {
+                        let c_string = CString::new(s.as_str())?;
+                        Ok(c_string.into_raw())
+                    })
+                    .collect::<Result<Vec<*mut c_char>>>()?;
+                args.shrink_to_fit();
+                let argc: c_int = args.len() as c_int;
+                let argv = args.as_mut_ptr();
+                let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
+                Ok(exit_code.try_into()?)
+            }
         }
-
-        let mut args = self
-            .raw_args
-            .iter()
-            .map(|s| {
-                let c_string = CString::new(s.as_str())?;
-                Ok(c_string.into_raw())
-            })
-            .collect::<Result<Vec<*mut c_char>>>()?;
-        args.shrink_to_fit();
-        let argc: c_int = args.len() as c_int;
-        let argv = args.as_mut_ptr();
-
-        let exit_code = unsafe { nativeRunWithArgs(argc, argv, self.try_into()?) };
-        Ok(exit_code.try_into().unwrap())
     }
 
     /// Attempts to run correct turbo by finding nearest package.json,

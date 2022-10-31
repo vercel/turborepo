@@ -34,6 +34,9 @@ type PrunePayload struct {
 	OutputDir string `json:"output_dir"`
 }
 
+type RunPayload struct {
+}
+
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
@@ -42,6 +45,7 @@ type Command struct {
 	Login  *LoginPayload  `json:"login"`
 	Logout *struct{}      `json:"logout"`
 	Prune  *PrunePayload  `json:"prune"`
+	Run    *RunPayload    `json:"run"`
 	Unlink *struct{}      `json:"unlink"`
 }
 
