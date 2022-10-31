@@ -1,6 +1,15 @@
-# Turborepo
+# Contributing to Turbo
 
-## Setup
+Thanks for your interest in contributing to Turbo!
+
+**Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
+
+- [Contributing to Turborepo](#contributing-to-turborepo)
+- [Contributing to Turbopack](#contributing-to-turbopack)
+
+## Contributing to Turborepo
+
+### Building Turborepo
 
 Dependencies
 
@@ -12,7 +21,7 @@ Building
 - Building `turbo` CLI: In `cli` run `make turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
-## Testing
+### Testing Turborepo
 
 From the `cli/` directory, you can
 
@@ -21,10 +30,15 @@ From the `cli/` directory, you can
 
 To run a single test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
 
-## Debugging
+## Debugging Turborepo
 
 1. Install `go install github.com/go-delve/delve/cmd/dlv@latest`
-2. In VS Code's "Run and Debug" tab, select `Build Basic` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example. This task is configured in [launch.json](./.vscode/launch.json).
+1. In VS Code's "Run and Debug" tab, select `Build Basic` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example. This task is configured in [launch.json](./.vscode/launch.json).
+
+## Benchmarking Turborepo
+
+1. Build Turborepo [as described above](#Setup)
+1. From the `benchmark/` directory, run `pnpm run benchmark`.
 
 ## Updating `turbo`
 
@@ -57,15 +71,17 @@ To manually run a release:
 3. Update `version.txt` (do not commit this change to git manually)
 4. `cd cli && make publish`
 
-# Turbo Tooling
+## Contributing to Turbopack
 
-`turbo-tooling` uses a [Cargo workspaces][workspaces] monorepo. You'll find
+Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
 crate, you can use the `cargo run -p [CRATE_NAME]` command.
 
-## Testing
+### Testing Turbopack
 
-Install `cargo-nextest` (https://nexte.st/)
+Install `cargo-nextest` (https://nexte.st/):
+
+`cargo install cargo-nextest`
 
 Run via:
 
@@ -80,6 +96,10 @@ You can also create a little demo app and run
 ```shell
 cargo run -p node-file-trace -- print demo/index.js
 ```
+
+### Benchmarking Turbopack
+
+See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
 
 ## Troubleshooting
 
