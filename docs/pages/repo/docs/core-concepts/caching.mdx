@@ -123,7 +123,7 @@ turbo run dev --parallel --no-cache
 
 Note that `--no-cache` disables cache writes but does not disable cache reads. If you want to disable cache reads, use the `--force` flag.
 
-You can also disable caching on specific tasks by setting the [`pipeline.<task>.cache`](/repo/docs/reference/configuration#pipeline-1) configuration to `false`:
+You can also disable caching on specific tasks by setting the [`pipeline.<task>.cache`](/repo/docs/reference/configuration#cache) configuration to `false`:
 
 ```json
 {
@@ -392,7 +392,7 @@ By now, you're probably wondering how `turbo` decides what constitutes a cache h
 
 First, `turbo` constructs a hash of the current global state of the codebase:
 
-- The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](/repo/docs/reference/configuration#globalDependencies-1)
+- The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](/repo/docs/reference/configuration#globalDependencies)
 - The sorted list environment variable key-value pairs that include `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
 
 Then it adds more factors relevant to a given workspace's task:
