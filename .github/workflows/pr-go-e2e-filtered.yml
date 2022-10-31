@@ -10,7 +10,8 @@ on:
   pull_request:
     types: [opened, edited, synchronize]
     paths-ignore:
-      - "README.md"
+      - "**.md"
+      - "**.mdx"
       - "docs/**"
 
 jobs:
