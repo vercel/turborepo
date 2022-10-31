@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 	"gotest.tools/v3/assert"
 
 	"github.com/pyr-sh/dag"

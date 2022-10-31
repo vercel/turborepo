@@ -10,13 +10,13 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
-	"github.com/vercel/turborepo/cli/internal/context"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/packagemanager"
-	"github.com/vercel/turborepo/cli/internal/scm"
-	scope_filter "github.com/vercel/turborepo/cli/internal/scope/filter"
-	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/filter"
+	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
+	"github.com/vercel/turbo/cli/internal/scm"
+	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
+	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util/filter"
 )
 
 // LegacyFilter holds the options in use before the filter syntax. They have their own rules
@@ -58,7 +58,7 @@ var (
 	_filterHelp = `Use the given selector to specify package(s) to act as
 entry points. The syntax mirrors pnpm's syntax, and
 additional documentation and examples can be found in
-turbo's documentation https://turborepo.org/docs/reference/command-line-reference#--filter
+turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
 --filter can be specified multiple times. Packages that
 match any filter will be included.`
 	_ignoreHelp    = `Files to ignore when calculating changed files (i.e. --since). Supports globs.`

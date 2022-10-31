@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 func setMatches(t *testing.T, name string, s util.Set, expected []string) {

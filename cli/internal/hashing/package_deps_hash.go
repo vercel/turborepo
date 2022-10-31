@@ -10,11 +10,11 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/encoding/gitoutput"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/globby"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/globby"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // PackageDepsOptions are parameters for getting git hashes for a filesystem
