@@ -1,6 +1,5 @@
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
-import { withSentryAPI } from "@sentry/nextjs";
 
 import PackLogo from "../../components/logos/og/PackLogo";
 import RepoLogo from "../../components/logos/og/RepoLogo";
@@ -64,7 +63,7 @@ export const config = {
   runtime: "experimental-edge",
 };
 
-export default withSentryAPI(async function openGraphImage(
+export default async function openGraphImage(
   req: NextApiRequest
 ): Promise<ImageResponse> {
   const [fonts, bg] = await loadAssets();
@@ -96,8 +95,7 @@ export default withSentryAPI(async function openGraphImage(
     }
     return new Response("Failed to generate image", { status: 500 });
   }
-},
-"api/og");
+}
 
 export function OGImage({
   title,
