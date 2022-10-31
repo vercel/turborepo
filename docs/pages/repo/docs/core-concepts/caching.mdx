@@ -52,9 +52,9 @@ Restoring files and logs from the cache happens near-instantaneously. This can t
 
 ## Configuring Cache Outputs
 
-Using [`pipeline`](../reference/configuration#pipeline), you can configure cache conventions across your Turborepo.
+Using [`pipeline`](/repo/docs/reference/configuration#pipeline), you can configure cache conventions across your Turborepo.
 
-To override the default cache output behavior, pass an array of globs to a [`pipeline.<task>.outputs`](../reference/configuration#outputs) array. Any file that satisfies the glob patterns for a task will be treated as artifact.
+To override the default cache output behavior, pass an array of globs to a [`pipeline.<task>.outputs`](/repo/docs/reference/configuration#outputs) array. Any file that satisfies the glob patterns for a task will be treated as artifact.
 
 ```jsonc
 {
@@ -123,7 +123,7 @@ turbo run dev --parallel --no-cache
 
 Note that `--no-cache` disables cache writes but does not disable cache reads. If you want to disable cache reads, use the `--force` flag.
 
-You can also disable caching on specific tasks by setting the [`pipeline.<task>.cache`](../reference/configuration#pipeline-1) configuration to `false`:
+You can also disable caching on specific tasks by setting the [`pipeline.<task>.cache`](/repo/docs/reference/configuration#pipeline-1) configuration to `false`:
 
 ```json
 {
@@ -392,17 +392,17 @@ By now, you're probably wondering how `turbo` decides what constitutes a cache h
 
 First, `turbo` constructs a hash of the current global state of the codebase:
 
-- The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](../reference/configuration#globalDependencies-1)
+- The contents of any files that satisfy the glob patterns and any the values of environment variables listed in [`globalDependencies`](/repo/docs/reference/configuration#globalDependencies-1)
 - The sorted list environment variable key-value pairs that include `THASH` _anywhere_ in their names (e.g. `STRIPE_PUBLIC_THASH_SECRET_KEY`, but not `STRIPE_PUBLIC_KEY`)
 
 Then it adds more factors relevant to a given workspace's task:
 
 - Hash the contents of all version-controlled files in the workspace folder or the files matching the `inputs` globs, if present
 - The hashes of all internal dependencies
-- The `outputs` option specified in the [`pipeline`](../reference/configuration#pipeline)
+- The `outputs` option specified in the [`pipeline`](/repo/docs/reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a workspace's `package.json` from the root lockfile
 - The workspace task's name
-- The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in applicable [`pipeline.<task-or-package-task>.dependsOn`](../reference/configuration#dependson) list.
+- The sorted list of environment variable key-value pairs that correspond to the environment variable names listed in applicable [`pipeline.<task-or-package-task>.dependsOn`](/repo/docs/reference/configuration#dependson) list.
 
 Once `turbo` encounters a given workspace's task in its execution, it checks the cache (both locally and remotely) for a matching hash. If it's a match, it skips executing that task, moves or downloads the cached output into place and replays the previously recorded logs instantly. If there isn't anything in the cache (either locally or remotely) that matches the calculated hash, `turbo` will execute the task locally and then cache the specified `outputs` using the hash as an index.
 

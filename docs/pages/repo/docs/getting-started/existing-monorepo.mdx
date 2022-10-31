@@ -19,7 +19,7 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 ## Configure workspaces
 
-`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](../handbook/workspaces) documentation.
+`turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](/repo/docs/handbook/workspaces) documentation.
 
 You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
@@ -93,9 +93,9 @@ In the root of your monorepo, create an empty file named `turbo.json`. This will
 
 ## Create a `pipeline`
 
-To define your monorepo's task dependency graph, use the [`pipeline`](../core-concepts/monorepos/running-tasks) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
+To define your monorepo's task dependency graph, use the [`pipeline`](/repo/docs/core-concepts/monorepos/running-tasks) key in the `turbo.json` configuration file at the root of monorepo. `turbo` interprets this configuration to optimally schedule, execute, and cache the outputs of each of the `package.json` scripts defined in your workspaces.
 
-Each key in the [`pipeline`](../core-concepts/monorepos/running-tasks) object is the name of a `package.json` script that can be executed by [`turbo run`](../reference/command-line-reference#turbo-run-task). You can specify its dependencies with the [`dependsOn`](../reference/configuration#dependson) key inside it as well as some other options related to [caching](../core-concepts/caching). For more information on configuring your pipeline, see the [`Pipelines`](../core-concepts/monorepos/running-tasks) documentation.
+Each key in the [`pipeline`](/repo/docs/core-concepts/monorepos/running-tasks) object is the name of a `package.json` script that can be executed by [`turbo run`](/repo/docs/reference/command-line-reference#turbo-run-task). You can specify its dependencies with the [`dependsOn`](/repo/docs/reference/configuration#dependson) key inside it as well as some other options related to [caching](/repo/docs/core-concepts/caching). For more information on configuring your pipeline, see the [`Pipelines`](/repo/docs/core-concepts/monorepos/running-tasks) documentation.
 
 Workspaces that do not have the specified script defined in their `package.json`'s list of `scripts` will be ignored by `turbo`.
 
@@ -249,8 +249,8 @@ npx turbo login --sso-team=<team-slug>
 
 You're now up and running with Turborepo, but there are still a few things to do:
 
-- [Understand how Turborepo caching works](../core-concepts/caching)
-- [Correctly handle environment variables](../core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
-- [Learn to orchestrate task running with pipelines](../core-concepts/monorepos/running-tasks)
-- [Efficiently filter package tasks](../core-concepts/filtering)
-- [Configure Turborepo with your CI provider](../ci)
+- [Understand how Turborepo caching works](/repo/docs/core-concepts/caching)
+- [Correctly handle environment variables](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables)
+- [Learn to orchestrate task running with pipelines](/repo/docs/core-concepts/monorepos/running-tasks)
+- [Efficiently filter package tasks](/repo/docs/core-concepts/monorepos/filtering)
+- [Configure Turborepo with your CI provider](/repo/docs/ci)
