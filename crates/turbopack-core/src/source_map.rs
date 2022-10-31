@@ -1,11 +1,10 @@
 use std::{io::Write, ops::Deref, sync::Arc};
 
 use anyhow::Result;
-use async_recursion::async_recursion;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sourcemap::SourceMap as CrateMap;
 use turbo_tasks::TryJoinIterExt;
-use turbo_tasks_fs::rope::RopeVc;
+use turbo_tasks_fs::rope::{Rope, RopeVc};
 
 use crate::source_pos::SourcePos;
 
@@ -83,65 +82,6 @@ impl<'a> From<sourcemap::Token<'a>> for Token {
     }
 }
 
-impl SourceMap {
-    /// Encoding a SourceMap stringifies it into JSON.
-    #[async_recursion]
-    async fn encode<W: Write + Send>(&self, w: &mut W) -> Result<()> {
-        match self {
-            SourceMap::Regular(r) => r.0.to_writer(w)?,
-
-            SourceMap::Sectioned(s) => {
-                if s.sections.len() == 1 {
-                    let s = &s.sections[0];
-                    if s.offset == (0, 0) {
-                        return s.map.await?.encode(w).await;
-                    }
-                }
-
-                // My kingdom for a decent dedent macro with interpolation!
-                write!(
-                    w,
-                    r#"{{
-  "version": 3,
-  "sections": ["#
-                )?;
-
-                let sections = s
-                    .sections
-                    .iter()
-                    .map(async move |s| Ok((s.offset, s.map.await?)))
-                    .try_join()
-                    .await?;
-
-                let mut first_section = true;
-                for (offset, map) in sections {
-                    if !first_section {
-                        write!(w, ",")?;
-                    }
-                    first_section = false;
-
-                    write!(
-                        w,
-                        r#"
-    {{"offset": {{"line": {}, "column": {}}}, "map": "#,
-                        offset.line, offset.column,
-                    )?;
-
-                    map.encode(w).await?;
-                    write!(w, r#"}}"#)?;
-                }
-
-                write!(
-                    w,
-                    r#"]
-}}"#
-                )?;
-            }
-        }
-        Ok(())
-    }
-}
-
 impl SourceMapVc {
     /// Creates a new SourceMap::Regular Vc out of a sourcemap::SourceMap
     /// ("CrateMap") instance.
@@ -161,9 +101,68 @@ impl SourceMapVc {
     /// Stringifies the source map into JSON bytes.
     #[turbo_tasks::function]
     pub async fn to_rope(self) -> Result<RopeVc> {
-        let mut bytes = vec![];
-        self.await?.encode(&mut bytes).await?;
-        Ok(RopeVc::cell(bytes.into()))
+        let this = self.await?;
+        let rope = match &*this {
+            SourceMap::Regular(r) => {
+                let mut bytes = vec![];
+                r.0.to_writer(&mut bytes)?;
+                Rope::new(bytes)
+            }
+
+            SourceMap::Sectioned(s) => {
+                if s.sections.len() == 1 {
+                    let s = &s.sections[0];
+                    if s.offset == (0, 0) {
+                        return Ok(s.map.to_rope());
+                    }
+                }
+
+                let mut rope = Rope::default();
+
+                // My kingdom for a decent dedent macro with interpolation!
+                write!(
+                    rope,
+                    r#"{{
+  "version": 3,
+  "sections": ["#
+                )?;
+
+                let sections = s
+                    .sections
+                    .iter()
+                    .map(|s| async move { Ok((s.offset, s.map.to_rope().await?)) })
+                    .try_join()
+                    .await?;
+
+                let mut first_section = true;
+                for (offset, section_map) in sections {
+                    if !first_section {
+                        write!(rope, ",")?;
+                    }
+                    first_section = false;
+
+                    write!(
+                        rope,
+                        r#"
+    {{"offset": {{"line": {}, "column": {}}}, "map": "#,
+                        offset.line, offset.column,
+                    )?;
+
+                    rope.concat(&section_map);
+
+                    write!(rope, r#"}}"#)?;
+                }
+
+                write!(
+                    rope,
+                    r#"]
+}}"#
+                )?;
+
+                rope
+            }
+        };
+        Ok(rope.cell())
     }
 
     /// Traces a generated line/column into an mapping token representing either
