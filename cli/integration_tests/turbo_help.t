@@ -99,7 +99,7 @@ Test help flag for shim
           --team <TEAM>                Set the team slug for API calls
           --token <TOKEN>              Set the auth token for API calls
           --trace <TRACE>              Specify a file to save a pprof trace
-      -V, --verbosity <VERBOSITY>      verbosity
+      -v, --verbosity <VERBOSITY>      verbosity
           --version                    
   
   SUBCOMMANDS:
@@ -139,7 +139,7 @@ Test help flag for shim
           --team <TEAM>                Set the team slug for API calls
           --token <TOKEN>              Set the auth token for API calls
           --trace <TRACE>              Specify a file to save a pprof trace
-      -V, --verbosity <VERBOSITY>      verbosity
+      -v, --verbosity <VERBOSITY>      verbosity
           --version                    
   
   SUBCOMMANDS:

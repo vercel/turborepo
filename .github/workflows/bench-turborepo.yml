@@ -16,8 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
-        with:
-          extra-flags: "--filter=!@vercel/nft-tests"
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -58,7 +56,7 @@ jobs:
 
       - name: Deploy
         if: github.ref == 'refs/heads/main'
-        uses: JamesIves/github-pages-deploy-action@v4.4.0
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: gh-pages
