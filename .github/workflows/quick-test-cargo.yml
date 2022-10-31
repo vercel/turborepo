@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: test
 
@@ -63,7 +63,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: test-bench
 

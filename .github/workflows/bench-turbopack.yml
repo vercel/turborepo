@@ -79,7 +79,7 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: benchmark-${{ matrix.bench.cache_key }}
 
