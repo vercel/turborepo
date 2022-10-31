@@ -27,6 +27,7 @@ export function ThemedImageFigure(
           "relative inline-block max-w-full overflow-hidden border-box text-[0px]",
           {
             "rounded-md": borderRadius,
+            "shadow-lg": shadow,
           }
         )}
       >
