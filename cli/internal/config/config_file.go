@@ -94,6 +94,14 @@ func (uc *UserConfig) Delete() error {
 	return uc.path.Remove()
 }
 
+func ReadUserConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
+	token, err := flags.GetString("token")
+	if err != nil {
+		return nil, err
+	}
+	return ReadUserConfigFile(path, &token)
+}
+
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
@@ -127,6 +135,23 @@ const (
 	_defaultAPIURL   = "https://vercel.com/api"
 	_defaultLoginURL = "https://vercel.com"
 )
+
+func ReadRepoConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
+	login, err := flags.GetString("login")
+	if err != nil {
+		return nil, err
+	}
+	api, err := flags.GetString("api")
+	if err != nil {
+		return nil, err
+	}
+	team, err := flags.GetString("team")
+	if err != nil {
+		return nil, err
+	}
+
+	return ReadRepoConfigFile(path, &login, &api, &team)
+}
 
 // ReadRepoConfigFile creates a RepoConfig using the
 // specified path as the repo config file. Note that the path or its

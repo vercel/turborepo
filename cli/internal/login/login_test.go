@@ -97,12 +97,12 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 	assert.NilError(t, flags.Set("login", "login-url"))
 	assert.NilError(t, flags.Set("api", "api-url"))
 	userConfigPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo")
-	userConfig, err := config.ReadUserConfigFile(userConfigPath, flags)
+	userConfig, err := config.ReadUserConfigFileFromFlags(userConfigPath, flags)
 	if err != nil {
 		t.Fatalf("setting up user config: %v", err)
 	}
 	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), flags)
+	repoConfig, err := config.ReadRepoConfigFileFromFlags(config.GetRepoConfigPath(repoRoot), flags)
 	if err != nil {
 		t.Fatalf("setting up repo config: %v", err)
 	}
