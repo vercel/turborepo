@@ -88,9 +88,16 @@ fn test_find_turbo_in_example() {
              in examples/basic",
         )
         .success()
-        .stdout(predicates::str::ends_with(
-            "examples/basic/node_modules/.bin/turbo\n",
-        ));
+        .stdout(predicates::str::ends_with({
+            #[cfg(target_os = "linux")]
+            {
+                "examples/basic/node_modules/turbo/bin/turbo\n"
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                "examples/basic/node_modules/.bin/turbo\n"
+            }
+        }));
 }
 
 #[test]
