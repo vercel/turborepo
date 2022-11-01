@@ -402,12 +402,17 @@ impl Stream for RopeReader {
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        let bytes = match this.next() {
+        let mut bytes = match this.next() {
             None => return Poll::Ready(None),
             Some(b) => b,
         };
 
-        this.max_bytes -= bytes.len();
+        if bytes.len() > this.max_bytes {
+            bytes.truncate(this.max_bytes);
+            this.max_bytes = 0;
+        } else {
+            this.max_bytes -= bytes.len();
+        }
         Poll::Ready(Some(Ok(bytes)))
     }
 
