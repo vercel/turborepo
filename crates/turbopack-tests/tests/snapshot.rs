@@ -176,11 +176,16 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
     .into();
 
     let chunk_root_path = path.join("output");
-    let asset_root_path = path.join("static");
+    let static_root_path = path.join("static");
     let chunking_context =
-        DevChunkingContextVc::builder(project_root, path, chunk_root_path, asset_root_path).build();
+        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path)
+            .build();
 
-    let expected_paths = expected(chunk_root_path).await?;
+    let expected_paths = expected(chunk_root_path)
+        .await?
+        .union(&expected(static_root_path).await?)
+        .copied()
+        .collect();
 
     let modules = entry_paths
         .into_iter()
