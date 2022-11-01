@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/yaml"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/yaml"
 	"gotest.tools/v3/assert"
 )
 

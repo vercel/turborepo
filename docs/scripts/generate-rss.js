@@ -13,11 +13,11 @@ function dateSortDesc(a, b) {
 
 async function generate() {
   const feed = new RSS({
-    title: "Turborepo Blog",
-    description: "Turborepo news, updates, and announcements.",
-    site_url: "https://turborepo.org",
-    feed_url: "https://turborepo.org/feed.xml",
-    image_url: "https://turborepo.org/og-image.png",
+    title: "Turbo Blog",
+    description: "Turbo news, updates, and announcements.",
+    site_url: "https://turbo.build",
+    feed_url: "https://turbo.build/feed.xml",
+    image_url: "https://turbo.build/og-image.png",
   });
 
   const posts = await fs.readdir(path.join(__dirname, "..", "pages", "blog"));
@@ -41,11 +41,11 @@ async function generate() {
     );
     feed.item({
       title: frontmatter.data.title,
-      url: "https://turborepo.org/blog/" + frontmatter.slug, // intentionally including slash here
+      url: "https://turbo.build/blog/" + frontmatter.slug, // intentionally including slash here
       date: frontmatter.data.date,
       description: frontmatter.data.description,
       enclosure: {
-        url: "https://turborepo.org" + frontmatter.data.ogImage, // intentionally omitting slash here
+        url: "https://turbo.build" + frontmatter.data.ogImage, // intentionally omitting slash here
         type: "image/png",
         size: stat.size,
       },

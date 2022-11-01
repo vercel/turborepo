@@ -25,17 +25,17 @@ This guide aims to help you debug issues with your Turborepo builds and configur
 
 - Is any source code being generated during the build that isn't checked into git?
   - This would change the fingerprint Turborepo uses to store build outputs.
-- Are [cache outputs correctly specified](./core-concepts/caching#configuring-cache-outputs) in your Turborepo [pipeline](./core-concepts/monorepos/running-tasks#defining-a-pipeline)?
-  - Pipeline settings are not inherited or merged, so they need to be re-specified in [workspace-specific tasks](./core-concepts/monorepos/running-tasks#specific-workspace-tasks) (e.g. `web#build` does **not** inherit pipeline settings from `build`).
-- [Are relevant inlined environment variables accounted for?](./core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+- Are [cache outputs correctly specified](/repo/docs/core-concepts/caching#configuring-cache-outputs) in your Turborepo [pipeline](/repo/docs/core-concepts/monorepos/running-tasks#defining-a-pipeline)?
+  - Pipeline settings are not inherited or merged, so they need to be re-specified in [workspace-specific tasks](/repo/docs/core-concepts/monorepos/running-tasks#specific-workspace-tasks) (e.g. `web#build` does **not** inherit pipeline settings from `build`).
+- [Are relevant inlined environment variables accounted for?](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables)
   - To verify, run `turbo` in verbose mode by adding `-vvv` to `turbo run <task>` and look at which environment variables are included in the hashes.
 
 ## I'm seeing cache hits, but my build is broken
 
-- Are [cache outputs properly specified](./core-concepts/caching#configuring-cache-outputs) in your Turborepo [pipeline](./core-concepts/monorepos/running-tasks#defining-a-pipeline)?
-  - Pipeline settings are not inherited or merged, so they need to be re-specified in [workspace-specific tasks](./core-concepts/monorepos/running-tasks#specific-workspace-tasks) (e.g. `web#build` does **not** inherit pipeline settings from `build`).
+- Are [cache outputs properly specified](/repo/docs/core-concepts/caching#configuring-cache-outputs) in your Turborepo [pipeline](/repo/docs/core-concepts/monorepos/running-tasks#defining-a-pipeline)?
+  - Pipeline settings are not inherited or merged, so they need to be re-specified in [workspace-specific tasks](/repo/docs/core-concepts/monorepos/running-tasks#specific-workspace-tasks) (e.g. `web#build` does **not** inherit pipeline settings from `build`).
 
 ## My build is caching the wrong environment variables
 
-- [Are relevant inlined environment variables accounted for?](./core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+- [Are relevant inlined environment variables accounted for?](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables)
   - To verify, run `turbo` in verbose mode by adding `-vvv` to `turbo run <task>` and look at which environment variables are included in the hashes.

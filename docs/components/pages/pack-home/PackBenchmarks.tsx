@@ -44,6 +44,25 @@ export const DEFAULT_BARS: BenchmarkBar[] = [
     label: "Next.js 11",
   },
 ];
+export const HMR_BARS: BenchmarkBar[] = [
+  {
+    key: "next13",
+    label: "Next.js 13",
+    turbo: true,
+  },
+  {
+    key: "vite",
+    label: "Vite",
+  },
+  {
+    key: "next12",
+    label: "Next.js 12",
+  },
+  {
+    key: "next11",
+    label: "Next.js 11",
+  },
+];
 
 export function PackBenchmarks() {
   const [numberOfModules, setNumberOfModules] =
