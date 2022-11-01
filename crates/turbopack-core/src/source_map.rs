@@ -117,12 +117,12 @@ impl SourceMapVc {
                     }
                 }
 
-                let mut rope = RopeBuilder::default();
-
                 // My kingdom for a decent dedent macro with interpolation!
-                rope += r#"{
+                let mut rope = RopeBuilder::from(
+                    r#"{
   "version": 3,
-  "sections": ["#;
+  "sections": ["#,
+                );
 
                 let sections = s
                     .sections

@@ -180,12 +180,23 @@ impl RopeBuilder {
     }
 }
 
+impl<T: Into<Bytes> + 'static> From<T> for RopeBuilder {
+    default fn from(bytes: T) -> Self {
+        let bytes = bytes.into();
+        RopeBuilder {
+            length: bytes.len(),
+            committed: vec![Local(bytes)],
+            writable: vec![],
+        }
+    }
+}
+
 impl From<Vec<u8>> for RopeBuilder {
     fn from(bytes: Vec<u8>) -> Self {
         RopeBuilder {
             length: bytes.len(),
             committed: vec![],
-            writable: bytes.as_slice().into(),
+            writable: bytes,
         }
     }
 }
@@ -250,7 +261,7 @@ impl DeterministicHash for InnerRope {
 
 impl From<Bytes> for InnerRope {
     fn from(bytes: Bytes) -> Self {
-        InnerRope(Arc::new(vec![Local(bytes)]))
+        InnerRope::from(vec![Local(bytes)])
     }
 }
 
