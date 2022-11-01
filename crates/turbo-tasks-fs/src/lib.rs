@@ -571,7 +571,9 @@ impl FileSystem for DiskFileSystem {
                     }
                 })
                 .await
-                .with_context(|| format!("create symlink to {}", target))?;
+                .with_context(|| {
+                    format!("create symlink to {}, link type {:?}", target, link_type)
+                })?;
             }
             LinkContent::Invalid => {
                 return Err(anyhow!("invalid symlink target: {}", full_path.display()));
