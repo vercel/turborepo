@@ -21,6 +21,7 @@ pub use page_guard::PageGuard;
 pub use prepared_app::PreparedApp;
 use regex::Regex;
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
+use turbo_tasks::util::FormatDuration;
 use turbopack_create_test_app::test_app_builder::{PackageJsonConfig, TestApp, TestAppBuilder};
 
 use crate::bundlers::Bundler;
@@ -166,10 +167,17 @@ pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
 }
 
 pub trait AsyncBencherExtension {
-    fn try_iter_async<I, O, S, SF, R, F, T, TF>(&mut self, setup: S, routine: R, teardown: T)
-    where
+    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+        &mut self,
+        setup: S,
+        warmup: W,
+        routine: R,
+        teardown: T,
+    ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
+        W: Fn(I) -> WF,
+        WF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
         T: Fn(O) -> TF,
@@ -178,10 +186,17 @@ pub trait AsyncBencherExtension {
 
 impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A, WallTime> {
     #[inline(never)]
-    fn try_iter_async<I, O, S, SF, R, F, T, TF>(&mut self, setup: S, routine: R, teardown: T)
-    where
+    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+        &mut self,
+        setup: S,
+        warmup: W,
+        routine: R,
+        teardown: T,
+    ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
+        W: Fn(I) -> WF,
+        WF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
         T: Fn(O) -> TF,
@@ -192,8 +207,13 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
             config.as_deref(),
             None | Some("") | Some("no") | Some("false")
         );
+        let log_progress = !matches!(
+            std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
+            None | Some("") | Some("no") | Some("false")
+        );
 
         let setup = &setup;
+        let warmup = &warmup;
         let routine = &routine;
         let teardown = &teardown;
         self.iter_custom(|iters| async move {
@@ -210,6 +230,7 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
                             .await
                             .expect("failed to setup"),
                     );
+                    let input = black_box(warmup(input).await).expect("failed to warmup");
 
                     let start = early_start.unwrap_or_else(|| measurement.start());
                     match routine(input).await {
@@ -221,6 +242,9 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
                             } else {
                                 duration = measurement.end(start);
                                 teardown(black_box(output)).await;
+                            }
+                            if log_progress {
+                                eprint!(" {} ", FormatDuration(duration));
                             }
                             value = measurement.add(&value, &duration);
                             iter += 1;

@@ -1,4 +1,4 @@
-The following turborepo examples contain [Next.js](https://nextjs.org) applications:
+The following turborepo examples contain [Next.js](https://nextjs.org/) applications:
 
 1. [basic](../basic/)
 1. [kitchen-sink](../kitchen-sink/)

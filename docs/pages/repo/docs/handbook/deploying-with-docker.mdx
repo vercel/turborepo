@@ -56,7 +56,7 @@ npm-debug.log
 
 ### The lockfile changes too often
 
-Docker is pretty smart about how it deploys your apps. Just like Turbo, it tries to do as [little work as possible](http://bitjudo.com/blog/2014/03/13/building-efficient-dockerfiles-node-dot-js/).
+Docker is pretty smart about how it deploys your apps. Just like Turbo, it tries to do as [little work as possible](https://bitjudo.com/blog/2014/03/13/building-efficient-dockerfiles-node-dot-js/).
 
 In our Dockerfile's case, it will only run `npm install` if the files it has in its image are _different_ from the previous run. If not, it'll restore the `node_modules` directory it had before.
 

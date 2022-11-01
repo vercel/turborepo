@@ -7,11 +7,11 @@ import (
 
 	"github.com/pyr-sh/dag"
 	"github.com/spf13/pflag"
-	"github.com/vercel/turborepo/cli/internal/cache"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/runcache"
-	"github.com/vercel/turborepo/cli/internal/scope"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/cache"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/scope"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )

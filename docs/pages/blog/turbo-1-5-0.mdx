@@ -44,13 +44,13 @@ Setting up a monorepo for the first time often means navigating a lot of new con
 
 This often meant that folks who wanted to set up a monorepo from scratch had to piece information together from different documentation sites. First `pnpm`, then `tsup`, then back to `changesets`, then back to Turborepo for dessert.
 
-We want to fill this gap with [the Monorepo Handbook](/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
+We want to fill this gap with [the Monorepo Handbook](/repo/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
 
-- [Installing Packages](/docs/handbook/package-installation)
-- [Linting](/docs/handbook/linting)
-- [Development Tasks](/docs/handbook/dev)
-- [Building Apps](/docs/handbook/building-your-app)
-- [Publishing Packages](/docs/handbook/publishing-packages)
+- [Installing Packages](/repo/docs/handbook/package-installation)
+- [Linting](/repo/docs/handbook/linting)
+- [Development Tasks](/repo/docs/handbook/dev)
+- [Building Apps](/repo/docs/handbook/building-your-app)
+- [Publishing Packages](/repo/docs/handbook/publishing-packages)
 
 ## Drop the `run`
 
@@ -79,11 +79,11 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 ## Prune now supported on pnpm and yarn 2+
 
-We're delighted to announce that [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
+We're delighted to announce that [`turbo prune`](/repo/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
 
 You can use `turbo prune` to create a pruned subset of your monorepo with a dedicated lockfile--with the correct dependencies needed for a given target application and its dependencies. This is especially useful for using efficiently Turborepo within a Docker image.
 
-As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/handbook/deploying-with-docker).
+As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/repo/docs/handbook/deploying-with-docker).
 
 Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
 
@@ -112,7 +112,7 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 }
 ```
 
-`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
 
 To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod migrate-env-var-dependencies`.
 

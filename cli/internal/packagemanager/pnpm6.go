@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/Masterminds/semver"
-	"github.com/vercel/turborepo/cli/internal/lockfile"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/lockfile"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // Pnpm6Workspaces is a representation of workspace package globs found

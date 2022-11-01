@@ -40,7 +40,7 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: benchmark
 
@@ -61,4 +61,4 @@ jobs:
         with:
           name: Benchmark PR / bench (pull_request)
           status: "${{ job.status }}"
-          url: https://github.com/vercel/the-three-body/actions/runs/${{ github.run_id }}
+          url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}

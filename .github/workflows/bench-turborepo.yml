@@ -26,7 +26,7 @@ jobs:
       - name: Download previous benchmark results
         # continue on error so that we handle the bootstrap case where there is no previous data
         continue-on-error: true
-        run: mkdir -p raw-data/${{ runner.os }} && curl -f -o raw-data/${{ runner.os }}/benchmark-data.json https://raw.githubusercontent.com/vercel/turborepo/gh-pages/${{ runner.os }}/benchmark-data.json
+        run: mkdir -p raw-data/${{ runner.os }} && curl -f -o raw-data/${{ runner.os }}/benchmark-data.json https://raw.githubusercontent.com/vercel/turbo/gh-pages/${{ runner.os }}/benchmark-data.json
 
       - name: Run benchmarks
         run: cd benchmark && pnpm benchmark
@@ -56,7 +56,7 @@ jobs:
 
       - name: Deploy
         if: github.ref == 'refs/heads/main'
-        uses: JamesIves/github-pages-deploy-action@v4.4.0
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: gh-pages
@@ -64,5 +64,5 @@ jobs:
           clean: false
           single-commit: false
           git-config-email: github-bot@turborepo.org
-          repository-name: vercel/turborepo
+          repository-name: vercel/turbo
           commit-message: "Update"

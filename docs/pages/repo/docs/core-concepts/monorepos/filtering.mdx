@@ -25,7 +25,7 @@ You can use it to:
 - Filter by [changes in git history](#filter-by-changed-workspaces)
 - [Exclude workspaces](#excluding-workspaces) from selection
 
-Turborepo will run each task against each matched workspace, ensuring that any tasks which depend on it are run first, according to the `pipeline` specification in [`turbo.json`](/docs/reference/configuration#pipeline).
+Turborepo will run each task against each matched workspace, ensuring that any tasks which depend on it are run first, according to the `pipeline` specification in [`turbo.json`](/repo/docs/reference/configuration#pipeline).
 
 ## Filter Syntax
 
@@ -144,7 +144,7 @@ turbo run test --filter=[main...my-feature]
 
 #### Ignoring changed files
 
-You can use [`--ignore`](/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which workspaces have changed.
+You can use [`--ignore`](/repo/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which workspaces have changed.
 
 #### Combining with other syntaxes
 
