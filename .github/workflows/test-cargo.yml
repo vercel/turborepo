@@ -33,15 +33,7 @@ jobs:
             nextest: linux
           - name: macos-latest
             nextest: mac
-            # Using the `windows-2019` runner instead of latest(`windows-2022`)
-            # because the build was last known working on that version of runner and
-            # `prebuild` fails to find the 2022 Visual Studio install because
-            # it's internally using an old version of `node-gyp`, see
-            # https://github.com/prebuild/prebuild/issues/286
-            #
-            # ref: https://github.com/MadLittleMods/node-usb-detection/blob/ae2fc13e9ad6a09927f4516358dea4c4ca2ceb92/.github/workflows/ci.yml#L18
-            version: 2019
-          - name: windows-2019
+          - name: windows-latest
             nextest: windows-tar
     runs-on: ${{ matrix.os.name }}
     name: test - ${{ matrix.os.name }}
@@ -59,7 +51,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-        if: matrix.os.name == 'windows-2019'
+        if: matrix.os.name == 'windows-latest'
 
       - name: Checkout
         uses: actions/checkout@v3
