@@ -18,7 +18,7 @@ Turbopack handles CSS Modules out-of-the-box. Any file with a `.module.css` exte
 import cssExports from './phone.module.css'
 ```
 
-This follows the same rules set out by [Next.js](https://nextjs.org/docs/basic-features/built-in-css-support#adding-component-level-css) - letting you easiy distinguish between global and scoped CSS.
+This follows the same rules set out by [Next.js](https://nextjs.org/docs/basic-features/built-in-css-support#adding-component-level-css) - letting you easily distinguish between global and scoped CSS.
 
 ## `postcss-nested`
 
@@ -83,7 +83,7 @@ These are likely to be available via plugins in the future.
 
 ## Tailwind CSS
 
-We currently don't support [Tailwind CSS](https://tailwindcss.com) out of the box. Since it can be used as a PostCSS plugin, we'll likely support it through the plugin system.
+We currently don't support [Tailwind CSS](https://tailwindcss.com/) out of the box. Since it can be used as a PostCSS plugin, we'll likely support it through the plugin system.
 
 It can be used today by using a sidecar process:
 
@@ -94,7 +94,7 @@ npm install --save-dev tailwindcss autoprefixer concurrently
 ```json filename="package.json"
 {
   "scripts": {
-    "dev": "concurrently \"next dev --turbo\" \"tailwindcss input.css --output output.css --watch\"",
+    "dev": "concurrently \"next dev --turbo\" \"tailwindcss --input input.css --output output.css --watch\"",
     "build": "tailwindcss input.css --output output.css && next build"
   }
 }

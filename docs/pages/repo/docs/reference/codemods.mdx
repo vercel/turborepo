@@ -102,7 +102,7 @@ For example:
 
 // After, turbo.json
 +{
-+  "$schema": "https://turborepo.org/schema.json",
++  "$schema": "https://turbo.build/schema.json",
 +  "pipeline": {
 +    ...
 +  }
@@ -125,14 +125,14 @@ npx @turbo/codemod create-turbo-config
 
 ### `migrate-env-var-dependencies`
 
-Migrates all environment variable dependencies in `turbo.json` from `dependsOn` and `globalDependencies` to `env` and `globalEnv` respecively.
+Migrates all environment variable dependencies in `turbo.json` from `dependsOn` and `globalDependencies` to `env` and `globalEnv` respectively.
 
 For example:
 
 ```json
 // Before, turbo.json
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env", "$CI_ENV"],
   "pipeline": {
     "build": {
@@ -152,7 +152,7 @@ For example:
 ````diff
 // After, turbo.json
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
 - "globalDependencies": [".env", "$CI_ENV"],
 + "globalDependencies": [".env"],
 + "globalEnv": ["CI_ENV"],

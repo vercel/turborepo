@@ -46,7 +46,7 @@ Choose anywhere you like. The default is `./my-turborepo`.
 
 Turborepo doesn't handle installing packages, so you'll need to choose either:
 
-- [npm](https://npmjs.com/)
+- [npm](https://www.npmjs.com//)
 - [pnpm](https://pnpm.io/)
 - [yarn](https://yarnpkg.com/)
 
@@ -381,7 +381,7 @@ The scripts that each run come from each workspace's `package.json`. Each worksp
 }
 ```
 
-When we run `turbo run lint`, Turborepo looks at each `lint` script in each workspace and runs it. For more details, see our [pipelines](/docs/core-concepts/pipelines) docs.
+When we run `turbo run lint`, Turborepo looks at each `lint` script in each workspace and runs it. For more details, see our [pipelines](/repo/docs/core-concepts/monorepos/running-tasks#defining-a-pipeline) docs.
 
 #### Using the cache
 
@@ -416,7 +416,7 @@ Now, run the `lint` script again. You'll notice that:
 1. `docs:lint` has a comment saying `cache miss, executing`. This means that `docs` is running its linting.
 2. `2 cached, 3 total` appears at the bottom.
 
-This means that **the results of our previous tasks were still cached**. Only the `lint` script inside `docs` actually ran - again, speeding things up. To learn more, check out our [caching docs](/docs/core-concepts/caching).
+This means that **the results of our previous tasks were still cached**. Only the `lint` script inside `docs` actually ran - again, speeding things up. To learn more, check out our [caching docs](/repo/docs/core-concepts/caching).
 
 ### 5. Building with Turborepo
 
@@ -468,7 +468,7 @@ Run the `build` script again. You'll notice:
 1. We hit `FULL TURBO` - the builds complete in under `100ms`.
 2. The `.next` folder re-appears!
 
-Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/docs/core-concepts/caching#configuring-cache-outputs).
+Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching#configuring-cache-outputs).
 
 ### 6. Running dev scripts
 
@@ -515,7 +515,7 @@ Take a look at `turbo.json`:
 }
 ```
 
-Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so caching it makes no sense. Learn more about in our docs on [turning off caching](/docs/core-concepts/caching#turn-off-caching).
+Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so caching it makes no sense. Learn more about in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
 
 #### Running `dev` on only one workspace at a time
 
@@ -544,7 +544,7 @@ To handle this, we can add a `--filter` flag to our command. This `--filter` get
   </Tab>
 </Tabs>
 
-You'll notice that it now only runs `docs:dev`. Learn more about [filtering workspaces](/docs/core-concepts/filtering) from our docs.
+You'll notice that it now only runs `docs:dev`. Learn more about [filtering workspaces](/repo/docs/core-concepts/monorepos/filtering) from our docs.
 
 ### Summary
 
@@ -552,6 +552,6 @@ Well done! You've learned all about your new monorepo, and how Turborepo makes h
 
 #### Next steps
 
-- Need to add more tasks? Learn more about using [pipelines](/docs/core-concepts/pipelines)
-- Want to speed up your CI? Set up [remote caching](/docs/core-concepts/remote-caching).
+- Need to add more tasks? Learn more about using [pipelines](/repo/docs/core-concepts/monorepos/running-tasks#defining-a-pipeline)
+- Want to speed up your CI? Set up [remote caching](/repo/docs/core-concepts/remote-caching).
 - Want some inspiration? Take a look at our directory of [examples](https://github.com/vercel/turbo/tree/main/examples)

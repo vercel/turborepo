@@ -53,14 +53,14 @@ This enables developers to run the task directly from their normal task runner.
 
 In some workflows, you'll want to run tasks _before_ you run your `dev` task. For instance, generating code or running a `db:migrate` task.
 
-In these cases, use [`dependsOn`](/repo/docs/core-concepts/running-tasks#in-the-same-workspace) to say that any `codegen` or `db:migrate` tasks should be run _before_ `dev` is run.
+In these cases, use [`dependsOn`](/repo/docs/core-concepts/monorepos/running-tasks#in-the-same-workspace) to say that any `codegen` or `db:migrate` tasks should be run _before_ `dev` is run.
 
 ```json filename="turbo.json"
 {
   "pipeline": {
     "dev": {
       "dependsOn": ["codegen", "db:migrate"],
-      "cache": false,
+      "cache": false
     },
     "codegen": {
       "outputs": ["./codegen-outputs/**"]
@@ -91,7 +91,7 @@ This means that users of your `dev` task _don't need to worry about codegen or m
 
 ## Running `dev` only in certain workspaces
 
-To run a `dev` task in only certain workspaces, you should use the [`--filter` syntax](/repo/docs/core-concepts/filtering). For example:
+To run a `dev` task in only certain workspaces, you should use the [`--filter` syntax](/repo/docs/core-concepts/monorepos/filtering). For example:
 
 ```bash
 turbo run dev --filter docs
@@ -107,7 +107,7 @@ We recommend using a library called [`dotenv-cli`](https://www.npmjs.com/package
 
 ### Tutorial
 
-1. Install `dotenv-cli` in your [root workspace](/docs/handbook/what-is-a-monorepo#the-root-workspace):
+1. Install `dotenv-cli` in your [root workspace](/repo/docs/handbook/what-is-a-monorepo#the-root-workspace):
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -181,5 +181,5 @@ This will extract the environment variables from `.env` before running `turbo ru
 And your environment variables will be populated! In Node.js, these are available on `process.env.DATABASE_URL`.
 
 <Callout>
-  You should also [add your environment variables](/docs/core-concepts/caching#altering-caching-based-on-environment-variables) to your `turbo.json` if you're using them to build your app.
+  You should also [add your environment variables](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables) to your `turbo.json` if you're using them to build your app.
 </Callout>

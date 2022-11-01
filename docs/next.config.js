@@ -110,11 +110,6 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
-        source: "/docs/:path*",
-        permanent: true,
-        destination: "/repo/docs/:path*",
-      },
-      {
         source: "/docs/guides/workspaces",
         destination: "/docs/handbook/workspaces",
         permanent: true,
@@ -173,6 +168,11 @@ const nextConfig = withNextra({
         source: "/docs/features/:path*",
         permanent: true,
         destination: "/docs/core-concepts/:path*",
+      },
+      {
+        source: "/docs/:path*",
+        permanent: true,
+        destination: "/repo/docs/:path*",
       },
     ];
   },

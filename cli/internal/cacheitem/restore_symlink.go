@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // restoreSymlink restores a symlink and errors if the target is missing.

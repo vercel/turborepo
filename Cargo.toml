@@ -27,16 +27,15 @@ members = [
   "crates/turbopack-static",
   "crates/turbopack-swc-utils",
   "crates/turbopack",
+  "crates/turbopack-tests",
   "xtask",
 ]
 
+exclude = ["shim"]
+
 [profile.release]
-# We use CARGO_PROFILE_RELEASE_LTO instead
-# lto = true
 
 [profile.bench]
-# We want correct benchmark results
-lto = true
 
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3

@@ -191,7 +191,7 @@ impl TaskScope {
     }
 
     pub fn decrement_tasks(&self) {
-        self.tasks.fetch_add(1, Ordering::Relaxed);
+        self.tasks.fetch_sub(1, Ordering::Relaxed);
     }
 
     pub fn increment_unfinished_tasks(&self) {
@@ -433,15 +433,15 @@ impl TaskScopeState {
         }
     }
 
-    /// Add a child scope. Returns true, when the child scope need to have it's
-    /// active counter increased.
+    /// Add a child scope. Returns a [ScopeChildChangeEffect] when the child
+    /// scope need to have its active counter increased.
     #[must_use]
     pub fn add_child(&mut self, child: TaskScopeId) -> Option<ScopeChildChangeEffect> {
         self.add_child_count(child, 1)
     }
 
-    /// Add a child scope. Returns true, when the child scope need to have it's
-    /// active counter increased.
+    /// Add a child scope. Returns a [ScopeChildChangeEffect] when the child
+    /// scope need to have its active counter increased.
     #[must_use]
     pub fn add_child_count(
         &mut self,
