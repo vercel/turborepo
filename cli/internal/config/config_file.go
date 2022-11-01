@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -36,6 +37,7 @@ func (rc *RepoConfig) SetTeamID(teamID string) error {
 
 // GetRemoteConfig produces the necessary values for an API client configuration
 func (rc *RepoConfig) GetRemoteConfig(token string) client.RemoteConfig {
+	fmt.Printf("API URL: |%v|\n", rc.repoViper.GetString("apiurl"))
 	return client.RemoteConfig{
 		Token:    token,
 		TeamID:   rc.repoViper.GetString("teamid"),
@@ -100,21 +102,23 @@ func ReadUserConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag
 	if err != nil {
 		return nil, err
 	}
-	return ReadUserConfigFile(path, &token)
+	return ReadUserConfigFile(path, token)
 }
 
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, token *string) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, token string) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
-	userViper.Set("token", token)
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
+	}
+	if token != "" {
+		userViper.Set("token", token)
 	}
 	return &UserConfig{
 		userViper: userViper,
@@ -153,14 +157,14 @@ func ReadRepoConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag
 		return nil, err
 	}
 
-	return ReadRepoConfigFile(path, &login, &api, &team)
+	return ReadRepoConfigFile(path, login, api, team)
 }
 
 // ReadRepoConfigFile creates a RepoConfig using the
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL *string, apiURL *string, teamSlug *string) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL string, apiURL string, teamSlug string) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -172,13 +176,13 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL *string, api
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
 
-	if loginURL != nil {
+	if loginURL != "" {
 		repoViper.Set("loginurl", loginURL)
 	}
-	if apiURL != nil {
+	if apiURL != "" {
 		repoViper.Set("apiurl", apiURL)
 	}
-	if teamSlug != nil {
+	if teamSlug != "" {
 		repoViper.Set("teamslug", teamSlug)
 	}
 
@@ -187,7 +191,7 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL *string, api
 	}
 	// If team was set via commandline, don't read the teamId from the config file, as it
 	// won't necessarily match.
-	if teamSlug != nil {
+	if teamSlug != "" {
 		repoViper.Set("teamid", "")
 	}
 	return &RepoConfig{

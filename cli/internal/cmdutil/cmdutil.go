@@ -201,6 +201,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("userConfig.Token() = |%v|\n", userConfig.Token())
 	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
 	if remoteConfig.Token == "" && ui.IsCI {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
@@ -257,6 +258,7 @@ func (h *Helper) GetCmdBaseFromArgs(args *turbostate.Args) (*CmdBase, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, args.Token)
 	if err != nil {
 		return nil, err

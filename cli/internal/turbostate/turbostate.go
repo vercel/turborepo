@@ -32,16 +32,16 @@ type Command struct {
 // Args are the parsed command line arguments passed
 // from the Rust shim
 type Args struct {
-	API        *string  `json:"api"`
+	API        string   `json:"api"`
 	Color      bool     `json:"color"`
 	CPUProfile *string  `json:"cpuprofile"`
 	CWD        *string  `json:"cwd"`
 	Heap       *string  `json:"heap"`
-	Login      *string  `json:"login"`
+	Login      string   `json:"login"`
 	NoColor    bool     `json:"noColor"`
 	Preflight  bool     `json:"preflight"`
-	Team       *string  `json:"team"`
-	Token      *string  `json:"token"`
+	Team       string   `json:"team"`
+	Token      string   `json:"token"`
 	Trace      *string  `json:"trace"`
 	Verbosity  *uint8   `json:"verbosity"`
 	Command    *Command `json:"command"`
