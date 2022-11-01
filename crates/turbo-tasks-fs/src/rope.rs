@@ -2,11 +2,11 @@ use std::{
     borrow::Cow,
     cmp::min,
     fmt::Debug,
-    hash::{Hash, Hasher},
     io::{self, Read, Result as IoResult, Write},
     mem::size_of,
     ops,
     pin::Pin,
+    sync::Arc,
     task::{Context as TaskContext, Poll},
 };
 
@@ -16,21 +16,35 @@ use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
+use RopeElem::{Local, Shared};
 
 /// A Rope provides an efficient structure for sharing bytes/strings between
-/// multiple sources. Cloning a Rope is cheapish (clone of Vec<4 usizes>), and
-/// the contents of one Rope can be shared with another using that clone.
+/// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
+/// the sharing contents of one Rope can be shared by just cloning an Arc.
 ///
 /// Ropes are immutable, in order to construct one see [RopeBuilder].
-#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+#[turbo_tasks::value(shared, serialization = "none")]
 #[derive(Clone, Debug, Default)]
 pub struct Rope {
-    /// Total length of all contained bytes.
     length: usize,
 
-    /// Stores all bytes committed to this rope.
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    data: Vec<Bytes>,
+    data: InnerRope,
+}
+
+/// An Arc container for ropes. This indirection allows for easy sharing
+/// sharing of the contents between Ropes (and also RopeReaders).
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+#[derive(Clone, Debug, Default)]
+pub struct InnerRope(#[turbo_tasks(debug_ignore, trace_ignore)] Arc<Vec<RopeElem>>);
+
+/// Differentiates the types of stored bytes in a rope.
+#[derive(Clone, Debug)]
+pub enum RopeElem {
+    /// Local bytes are created directly by this rope.
+    Local(Bytes),
+
+    /// Shared holds the Arc contents of another rope.
+    Shared(InnerRope),
 }
 
 /// RopeBuilder provides a mutable container to append bytes/strings. This can
@@ -43,7 +57,7 @@ pub struct RopeBuilder {
 
     /// Immutable bytes references that have been appended to this builder. The
     /// rope's is the combination of all these committed bytes.
-    committed: Vec<Bytes>,
+    committed: Vec<RopeElem>,
 
     /// Mutable bytes collection where non-static/non-shared bytes are written.
     /// This builds until the next time a static or shared bytes is
@@ -61,31 +75,25 @@ impl Rope {
         self.length == 0
     }
 
-    /// Returns a Read/AsyncRead instance over all bytes.
-    pub fn read(&'_ self) -> RopeReader<'_> {
+    /// Returns a Read/AsyncRead/Stream instance over all bytes.
+    pub fn read(&self) -> RopeReader {
         self.slice(0, self.len())
     }
 
-    /// Returns a Read/AsyncRead instance over a slice of bytes.
-    pub fn slice(&'_ self, start: usize, end: usize) -> RopeReader<'_> {
+    /// Returns a Read/AsyncRead/Stream instance over a slice of bytes.
+    pub fn slice(&self, start: usize, end: usize) -> RopeReader {
         RopeReader::new(self, start, end)
-    }
-
-    /// Returns Stream instance over all bytes.
-    ///
-    /// This is different than a Read, as we return our bytes references
-    /// direclty intead of reading them into a provided buffer.
-    pub fn stream(&self) -> RopeStream {
-        RopeStream::new(self)
     }
 
     /// Returns a String instance of all bytes.
     pub fn to_string(&self) -> Result<Cow<'_, str>> {
         if self.data.len() == 1 {
-            let utf8 = std::str::from_utf8(&self.data[0]);
-            return utf8
-                .map(Cow::Borrowed)
-                .context("failed to convert rope into string");
+            if let Local(bytes) = &self.data[0] {
+                let utf8 = std::str::from_utf8(bytes);
+                return utf8
+                    .map(Cow::Borrowed)
+                    .context("failed to convert rope into string");
+            }
         }
 
         let mut read = self.read();
@@ -96,33 +104,13 @@ impl Rope {
     }
 }
 
-impl From<&'static [u8]> for Rope {
-    fn from(content: &'static [u8]) -> Self {
-        Rope {
-            length: content.len(),
-            data: vec![Bytes::from_static(content)],
-        }
-    }
-}
-
-impl From<&'static str> for Rope {
-    fn from(content: &'static str) -> Self {
-        Rope::from(content.as_bytes())
-    }
-}
-
-impl From<Vec<u8>> for Rope {
-    fn from(bytes: Vec<u8>) -> Self {
+impl<T: Into<Bytes>> From<T> for Rope {
+    fn from(bytes: T) -> Self {
+        let bytes = bytes.into();
         Rope {
             length: bytes.len(),
-            data: vec![bytes.into()],
+            data: InnerRope::from(bytes),
         }
-    }
-}
-
-impl From<String> for Rope {
-    fn from(content: String) -> Self {
-        Rope::from(content.into_bytes())
     }
 }
 
@@ -150,7 +138,7 @@ impl RopeBuilder {
         self.finish();
 
         self.length += bytes.len();
-        self.committed.push(Bytes::from_static(bytes));
+        self.committed.push(Local(bytes.into()));
     }
 
     /// Concatenate another Rope instance into our builder. This is much more
@@ -161,7 +149,7 @@ impl RopeBuilder {
         self.finish();
 
         self.length += other.len();
-        self.committed.extend(other.data.clone());
+        self.committed.push(Shared(other.data.clone()));
     }
 
     pub fn len(&self) -> usize {
@@ -177,7 +165,7 @@ impl RopeBuilder {
     /// This may be called multiple times without issue.
     pub fn finish(&mut self) {
         if !self.writable.is_empty() {
-            self.committed.push(self.writable.split().freeze());
+            self.committed.push(Local(self.writable.split().freeze()));
         }
     }
 
@@ -186,7 +174,7 @@ impl RopeBuilder {
         self.finish();
         Rope {
             length: self.length,
-            data: self.committed,
+            data: self.committed.into(),
         }
     }
 }
@@ -224,33 +212,9 @@ impl DeterministicHash for Rope {
     /// structure.
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         state.write_usize(self.len());
-        for v in &self.data {
-            state.write_bytes(v.as_ref());
-        }
+        self.data.deterministic_hash(state);
     }
 }
-
-impl Hash for Rope {
-    /// Ropes with similar contents hash the same, regardless of their
-    /// structure.
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_usize(self.len());
-        for v in &self.data {
-            state.write(v.as_ref());
-        }
-    }
-}
-
-impl PartialEq for Rope {
-    /// Ropes with similar contents are equals, regardless of their structure.
-    fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        hash_xxh3_hash64(self) == hash_xxh3_hash64(other)
-    }
-}
-impl Eq for Rope {}
 
 impl Serialize for Rope {
     /// Ropes are always serialized into contiguous strings, because
@@ -271,21 +235,80 @@ impl<'de> Deserialize<'de> for Rope {
     }
 }
 
-/// Implements the Read/AsyncRead trait over a Rope.
-pub struct RopeReader<'a> {
-    data: &'a Vec<Bytes>,
-    byte_pos: usize,
-    concat_index: usize,
-    max_bytes: usize,
+impl DeterministicHash for InnerRope {
+    /// Ropes with similar contents hash the same, regardless of their
+    /// structure. Notice the InnerRope does not contain a length (and any
+    /// shared InnerRopes won't either), so the exact structure isn't
+    /// relevant at this point.
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        for v in self.0.iter() {
+            v.deterministic_hash(state);
+        }
+    }
 }
 
-impl<'a> RopeReader<'a> {
-    fn new(rope: &'a Rope, start: usize, end: usize) -> Self {
+impl From<Bytes> for InnerRope {
+    fn from(bytes: Bytes) -> Self {
+        InnerRope(Arc::new(vec![Local(bytes)]))
+    }
+}
+
+impl From<Vec<RopeElem>> for InnerRope {
+    fn from(els: Vec<RopeElem>) -> Self {
+        InnerRope(Arc::new(els))
+    }
+}
+
+impl PartialEq for InnerRope {
+    /// Ropes with similar contents are equals, regardless of their structure.
+    fn eq(&self, other: &Self) -> bool {
+        hash_xxh3_hash64(self) == hash_xxh3_hash64(other)
+    }
+}
+impl Eq for InnerRope {}
+
+impl ops::Deref for InnerRope {
+    type Target = Arc<Vec<RopeElem>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DeterministicHash for RopeElem {
+    /// Ropes with similar contents hash the same, regardless of their
+    /// structure. Notice the Bytes length is not hashed, and shared InnerRopes
+    /// do not contain a length.
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        match self {
+            Local(bytes) => state.write_bytes(bytes),
+            Shared(rope) => rope.deterministic_hash(state),
+        }
+    }
+}
+
+/// Implements the Read/AsyncRead/Stream trait over a Rope.
+///
+/// The Rope's tree is kept as a cloned stack, allowing us to accomplish
+/// incremental yielding.
+pub struct RopeReader {
+    max_bytes: usize,
+    stack: Vec<StackElem>,
+}
+
+/// A StackElem holds the current index into either a Bytes or a shared Rope.
+/// When the index reaches the end of the associated data, it is removed and we
+/// continue onto the next item in the stack.
+enum StackElem {
+    Local(Bytes, usize),
+    Shared(InnerRope, usize),
+}
+
+impl RopeReader {
+    fn new(rope: &Rope, start: usize, end: usize) -> Self {
         let mut reader = RopeReader {
-            data: &rope.data,
-            byte_pos: 0,
-            concat_index: 0,
             max_bytes: end,
+            stack: vec![StackElem::from(rope)],
         };
 
         if start > 0 {
@@ -295,59 +318,66 @@ impl<'a> RopeReader<'a> {
         reader
     }
 
-    /// A shared implemenation for reading bytes. This takes the basic
+    /// A shared implementation for reading bytes. This takes the basic
     /// operations needed for both Read and AsyncRead.
     fn read_internal(&mut self, want: usize, buf: &mut Option<&mut ReadBuf<'_>>) -> usize {
-        let mut remaining = want;
+        let mut max_bytes = self.max_bytes;
+        let mut remaining = min(want, max_bytes);
+
         while remaining > 0 {
-            let bytes = match self.data.get(self.concat_index) {
-                Some(el) => el,
+            let (bytes, index) = match self.next() {
                 None => break,
+                Some(e) => e,
             };
 
-            let got = self.read_bytes(bytes, remaining, buf);
-            if got == 0 {
-                break;
+            let amount = min(bytes.len() - index, remaining);
+            let end = index + amount;
+
+            if let Some(buf) = buf.as_mut() {
+                buf.put_slice(&bytes[index..end]);
             }
-            remaining -= got;
-            self.max_bytes -= got;
+
+            if end < bytes.len() {
+                self.stack.push(StackElem::Local(bytes, end))
+            }
+            remaining -= amount;
+            max_bytes -= amount;
         }
+
+        self.max_bytes = max_bytes;
         want - remaining
     }
 
-    /// A helper to isolate how many bytes we can read and copying the dat over.
-    fn read_bytes(
-        &mut self,
-        bytes: &Bytes,
-        remaining: usize,
-        buf: &mut Option<&mut ReadBuf<'_>>,
-    ) -> usize {
-        let pos = self.byte_pos;
-        let amount = min(min(bytes.len() - pos, remaining), self.max_bytes);
-        let end = pos + amount;
+    /// A shared implementation for traversing the Rope's tree structure. We
+    /// continue descending through shared InnerRopes until we hit our next
+    /// Bytes.
+    fn next(&mut self) -> Option<(Bytes, usize)> {
+        loop {
+            let (rope, mut index) = match self.stack.pop() {
+                None => return None,
+                Some(StackElem::Local(b, i)) => return Some((b, i)),
+                Some(StackElem::Shared(r, i)) => (r, i),
+            };
 
-        if end == bytes.len() {
-            self.byte_pos = 0;
-            self.concat_index += 1;
-        } else {
-            self.byte_pos = end;
-        }
+            let el = rope[index].clone();
+            index += 1;
+            if index < rope.len() {
+                self.stack.push(StackElem::Shared(rope, index));
+            }
 
-        if let Some(buf) = buf.as_mut() {
-            buf.put_slice(&bytes[pos..end]);
+            self.stack.push(StackElem::from(el));
         }
-        amount
     }
 }
 
-impl<'a> Read for RopeReader<'a> {
+impl Read for RopeReader {
     /// Reads the Rope into the provided buffer.
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         Ok(self.read_internal(buf.len(), &mut Some(&mut ReadBuf::new(buf))))
     }
 }
 
-impl<'a> AsyncRead for RopeReader<'a> {
+impl AsyncRead for RopeReader {
     /// Reads the Rope into the provided buffer, asynchronously.
     fn poll_read(
         self: Pin<&mut Self>,
@@ -360,24 +390,7 @@ impl<'a> AsyncRead for RopeReader<'a> {
     }
 }
 
-/// Implements the Stream trait over a Rope.
-pub struct RopeStream {
-    data: Vec<Bytes>,
-    concat_index: usize,
-    size_hint: usize,
-}
-
-impl RopeStream {
-    fn new(rope: &Rope) -> Self {
-        RopeStream {
-            data: rope.data.clone(),
-            concat_index: 0,
-            size_hint: rope.len(),
-        }
-    }
-}
-
-impl Stream for RopeStream {
+impl Stream for RopeReader {
     /// The Result<Bytes> item type is required for this to be streamable into a
     /// [Hyper::Body].
     type Item = Result<Bytes>;
@@ -387,18 +400,31 @@ impl Stream for RopeStream {
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        match this.data.get(this.concat_index) {
-            None => Poll::Ready(None),
-            Some(bytes) => {
-                this.concat_index += 1;
-                this.size_hint -= bytes.len();
+        let bytes = match this.next() {
+            None => return Poll::Ready(None),
+            Some((b, _)) => b,
+        };
 
-                Poll::Ready(Some(Ok(bytes.clone())))
-            }
-        }
+        this.max_bytes -= bytes.len();
+        Poll::Ready(Some(Ok(bytes)))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.size_hint, Some(self.size_hint))
+        (self.max_bytes, Some(self.max_bytes))
+    }
+}
+
+impl From<&Rope> for StackElem {
+    fn from(rope: &Rope) -> Self {
+        Self::Shared(rope.data.clone(), 0)
+    }
+}
+
+impl From<RopeElem> for StackElem {
+    fn from(el: RopeElem) -> Self {
+        match el {
+            Local(bytes) => Self::Local(bytes, 0),
+            Shared(rope) => Self::Shared(rope, 0),
+        }
     }
 }

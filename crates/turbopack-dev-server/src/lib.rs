@@ -131,7 +131,7 @@ async fn process_request_with_content_source(
                         );
 
                         let content = content.content();
-                        let bytes = content.stream();
+                        let bytes = content.read();
                         return Ok(Response::builder()
                             .status(200)
                             .header("Content-Type", content_type)
@@ -153,7 +153,7 @@ async fn process_request_with_content_source(
                     );
                 }
 
-                return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.stream()))?);
+                return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))?);
             }
             ContentSourceResult::NeedData { source, path, vary } => {
                 resolved_source = source.resolve_strongly_consistent().await?;

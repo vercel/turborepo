@@ -100,7 +100,7 @@ pub async fn resolve_node_pre_gyp_files(
                 let config_file_path = config_path.path();
                 let config_file_dir = config_file_path.parent();
                 let node_pre_gyp_config: NodePreGypConfigJson =
-                    serde_json::from_reader(config_file.content().read())?;
+                    serde_json::from_reader(config_file.read())?;
                 let mut assets: IndexSet<AssetVc> = IndexSet::new();
                 for version in node_pre_gyp_config.binary.napi_versions.iter() {
                     let native_binding_path = NAPI_VERSION_TEMPLATE.replace(

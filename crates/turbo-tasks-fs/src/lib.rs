@@ -489,7 +489,7 @@ impl FileSystem for DiskFileSystem {
                     let full_path = full_path_to_write.clone();
                     async move {
                         let mut f = fs::File::create(&full_path).await?;
-                        tokio::io::copy(&mut file.content.read(), &mut f).await?;
+                        tokio::io::copy(&mut file.read(), &mut f).await?;
                         // f.write_all(file.content.as_slice()).await?;
                         #[cfg(target_family = "unix")]
                         f.set_permissions(file.meta.permissions.into()).await?;
@@ -1225,7 +1225,7 @@ impl File {
         self
     }
 
-    pub fn read(&'_ self) -> RopeReader<'_> {
+    pub fn read(&self) -> RopeReader {
         self.content.read()
     }
 }
@@ -1383,7 +1383,7 @@ impl FileContent {
 
     pub fn parse_json(&self) -> FileJsonContent {
         match self {
-            FileContent::Content(file) => match serde_json::from_reader(file.content.read()) {
+            FileContent::Content(file) => match serde_json::from_reader(file.read()) {
                 Ok(data) => FileJsonContent::Content(data),
                 Err(_) => FileJsonContent::Unparseable,
             },
