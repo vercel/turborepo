@@ -1,6 +1,6 @@
 package inference
 
-import "github.com/vercel/turborepo/cli/internal/fs"
+import "github.com/vercel/turbo/cli/internal/fs"
 
 // Framework is an identifier for something that we wish to inference against.
 type Framework struct {

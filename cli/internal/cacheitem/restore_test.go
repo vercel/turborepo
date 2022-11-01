@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/DataDog/zstd"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
