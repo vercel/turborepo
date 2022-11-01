@@ -153,10 +153,11 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		visited.Add(taskID)
-		deps := task.Deps
 
+		// Filter down the tasks if there's a filter in place
+		// https: //turbo.build/repo/docs/reference/command-line-reference#--only
 		if tasksOnly {
-			deps = deps.Filter(func(d interface{}) bool {
+			task.Deps = task.Deps.Filter(func(d interface{}) bool {
 				for _, target := range taskNames {
 					return fmt.Sprintf("%v", d) == target
 				}
@@ -171,8 +172,18 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		toTaskID := taskID
+
+		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
+		// E.g. `dev: { dependsOn: [^dev] }`
 		hasTopoDeps := task.TopoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
-		hasDeps := deps.Len() > 0
+
+		// hasDeps will be true if the task depends on any tasks from its own package
+		// E.g. `build: { dependsOn: [dev] }`
+		hasDeps := task.Deps.Len() > 0
+
+		// hasPackageTaskDeps will be true if this is a workspace-specific task, and
+		// it depends on another workspace-specific tasks
+		// E.g. `my-package#build: { dependsOn: [my-package#beforebuild] }`.
 		hasPackageTaskDeps := false
 		if _, ok := packageTasksDepsMap[toTaskID]; ok {
 			hasPackageTaskDeps = true
@@ -193,7 +204,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasDeps {
-			for _, from := range deps.UnsafeListOfStrings() {
+			for _, from := range task.Deps.UnsafeListOfStrings() {
 				fromTaskID := util.GetTaskId(pkg, from)
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
