@@ -112,6 +112,7 @@ func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, token *string) (*User
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
+	userViper.Set("token", token)
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -168,19 +169,17 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL *string, api
 	repoViper.MustBindEnv("loginurl", "TURBO_LOGIN")
 	repoViper.MustBindEnv("teamslug", "TURBO_TEAM")
 	repoViper.MustBindEnv("teamid")
+	repoViper.SetDefault("apiurl", _defaultAPIURL)
+	repoViper.SetDefault("loginurl", _defaultLoginURL)
 
 	if loginURL != nil {
-		repoViper.SetDefault("loginurl", loginURL)
-	} else {
-		repoViper.SetDefault("loginurl", _defaultLoginURL)
+		repoViper.Set("loginurl", loginURL)
 	}
 	if apiURL != nil {
-		repoViper.SetDefault("apiurl", apiURL)
-	} else {
-		repoViper.SetDefault("apiurl", _defaultAPIURL)
+		repoViper.Set("apiurl", apiURL)
 	}
 	if teamSlug != nil {
-		repoViper.SetDefault("teamslug", teamSlug)
+		repoViper.Set("teamslug", teamSlug)
 	}
 
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {

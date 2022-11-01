@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
