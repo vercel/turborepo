@@ -256,9 +256,7 @@ async fn get_contents(file: AssetContentVc) -> Result<Option<String>> {
     Ok(match &*file.await? {
         AssetContent::File(file) => match &*file.await? {
             FileContent::NotFound => None,
-            FileContent::Content(expected) => {
-                Some(expected.content().to_string()?.trim().to_string())
-            }
+            FileContent::Content(expected) => Some(expected.content().to_str()?.trim().to_string()),
         },
         AssetContent::Redirect { target, link_type } => Some(format!(
             "Redirect {{ target: {target}, link_type: {:?} }}",

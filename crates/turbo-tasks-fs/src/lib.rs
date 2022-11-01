@@ -1393,7 +1393,7 @@ impl FileContent {
 
     pub fn parse_json_with_comments(&self) -> FileJsonContent {
         match self {
-            FileContent::Content(file) => match file.content.to_string() {
+            FileContent::Content(file) => match file.content.to_str() {
                 Ok(string) => match parse_to_serde_value(
                     &string,
                     &ParseOptions {
@@ -1416,7 +1416,7 @@ impl FileContent {
 
     pub fn lines(&self) -> FileLinesContent {
         match self {
-            FileContent::Content(file) => match file.content.to_string() {
+            FileContent::Content(file) => match file.content.to_str() {
                 Ok(string) => {
                     let mut bytes_offset = 0;
                     FileLinesContent::Lines(

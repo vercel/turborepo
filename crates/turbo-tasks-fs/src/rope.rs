@@ -85,7 +85,7 @@ impl Rope {
     }
 
     /// Returns a String instance of all bytes.
-    pub fn to_string(&self) -> Result<Cow<'_, str>> {
+    pub fn to_str(&self) -> Result<Cow<'_, str>> {
         if self.data.len() == 1 {
             if let Local(bytes) = &self.data[0] {
                 let utf8 = std::str::from_utf8(bytes);
@@ -223,7 +223,7 @@ impl Serialize for Rope {
     /// possible owner of a individual "shared" data doesn't make sense).
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
-        let s = self.to_string().map_err(Error::custom)?;
+        let s = self.to_str().map_err(Error::custom)?;
         serializer.serialize_str(&s)
     }
 }

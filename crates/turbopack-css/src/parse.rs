@@ -60,7 +60,7 @@ pub async fn parse(
         AssetContent::Redirect { .. } => ParseResult::Unparseable.cell(),
         AssetContent::File(file) => match &*file.await? {
             FileContent::NotFound => ParseResult::NotFound.cell(),
-            FileContent::Content(file) => match file.content().to_string() {
+            FileContent::Content(file) => match file.content().to_str() {
                 Err(_err) => ParseResult::Unparseable.cell(),
                 Ok(string) => {
                     let transforms = &*transforms.await?;

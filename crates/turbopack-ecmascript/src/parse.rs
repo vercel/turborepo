@@ -139,7 +139,7 @@ pub async fn parse(
     Ok(match &*content.await? {
         AssetContent::File(file) => match &*file.await? {
             FileContent::NotFound => ParseResult::NotFound.cell(),
-            FileContent::Content(file) => match file.content().to_string() {
+            FileContent::Content(file) => match file.content().to_str() {
                 Ok(string) => {
                     let transforms = &*transforms.await?;
                     parse_content(

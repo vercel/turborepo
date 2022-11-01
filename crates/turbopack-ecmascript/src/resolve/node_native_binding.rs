@@ -236,7 +236,7 @@ pub async fn resolve_node_gyp_build_files(
         if let AssetContent::File(file) = &*binding_gyp.content().await? {
             if let FileContent::Content(config_file) = &*file.await? {
                 if let Some(captured) =
-                    GYP_BUILD_TARGET_NAME.captures(&config_file.content().to_string()?)
+                    GYP_BUILD_TARGET_NAME.captures(&config_file.content().to_str()?)
                 {
                     let mut resolved: IndexSet<AssetVc> = IndexSet::with_capacity(captured.len());
                     for found in captured.iter().skip(1).flatten() {
