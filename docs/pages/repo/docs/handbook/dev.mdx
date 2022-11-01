@@ -60,7 +60,7 @@ In these cases, use [`dependsOn`](/repo/docs/core-concepts/monorepos/running-tas
   "pipeline": {
     "dev": {
       "dependsOn": ["codegen", "db:migrate"],
-      "cache": false,
+      "cache": false
     },
     "codegen": {
       "outputs": ["./codegen-outputs/**"]
