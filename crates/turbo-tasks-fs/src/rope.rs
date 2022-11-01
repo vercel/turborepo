@@ -3,15 +3,14 @@ use std::{
     cmp::min,
     fmt::Debug,
     io::{self, Read, Result as IoResult, Write},
-    mem::size_of,
-    ops,
+    mem, ops,
     pin::Pin,
     sync::Arc,
     task::{Context as TaskContext, Poll},
 };
 
 use anyhow::{Context, Result};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
@@ -63,7 +62,7 @@ pub struct RopeBuilder {
     /// This builds until the next time a static or shared bytes is
     /// appended, in which case we split the buffer and commit. Finishing
     /// the builder also commits these bytes.
-    writable: BytesMut,
+    writable: Vec<u8>,
 }
 
 impl Rope {
@@ -122,7 +121,7 @@ impl RopeBuilder {
     /// bytes.
     pub fn push_bytes(&mut self, bytes: &[u8]) {
         self.length += bytes.len();
-        self.writable.extend_from_slice(bytes);
+        self.writable.extend(bytes);
     }
 
     /// Push static bytes into the Rope.
@@ -130,7 +129,7 @@ impl RopeBuilder {
         // If the string is smaller than the cost of a Bytes reference (4 usizes), then
         // it's more efficient to own the bytes in a new buffer. We may be able to reuse
         // that buffer when more bytes are pushed.
-        if bytes.len() < size_of::<Bytes>() {
+        if bytes.len() < mem::size_of::<Bytes>() {
             return self.push_bytes(bytes);
         }
 
@@ -165,7 +164,9 @@ impl RopeBuilder {
     /// This may be called multiple times without issue.
     pub fn finish(&mut self) {
         if !self.writable.is_empty() {
-            self.committed.push(Local(self.writable.split().freeze()));
+            let mut writable = mem::take(&mut self.writable);
+            writable.shrink_to_fit();
+            self.committed.push(Local(writable.into()));
         }
     }
 
