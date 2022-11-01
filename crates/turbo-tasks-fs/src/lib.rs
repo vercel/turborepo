@@ -1221,7 +1221,7 @@ impl Debug for File {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("File")
             .field("meta", &self.meta)
-            .field("content (hash)", &hash_xxh3_hash64(&self.content))
+            .field("content (hash)", &hash_xxh3_hash64(self.content.as_slice()))
             .finish()
     }
 }
