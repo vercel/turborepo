@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
@@ -301,7 +301,7 @@ pub struct RopeReader {
 /// When the index reaches the end of the associated data, it is removed and we
 /// continue onto the next item in the stack.
 enum StackElem {
-    Local(Bytes, usize),
+    Local(Bytes),
     Shared(InnerRope, usize),
 }
 
@@ -323,23 +323,24 @@ impl RopeReader {
     /// operations needed for both Read and AsyncRead.
     fn read_internal(&mut self, want: usize, buf: &mut Option<&mut ReadBuf<'_>>) -> usize {
         let mut max_bytes = self.max_bytes;
-        let mut remaining = min(want, max_bytes);
+        let want = min(want, max_bytes);
+        let mut remaining = want;
 
         while remaining > 0 {
-            let (bytes, index) = match self.next() {
+            let mut bytes = match self.next() {
                 None => break,
-                Some(e) => e,
+                Some(b) => b,
             };
 
-            let amount = min(bytes.len() - index, remaining);
-            let end = index + amount;
+            let amount = min(bytes.len(), remaining);
 
             if let Some(buf) = buf.as_mut() {
-                buf.put_slice(&bytes[index..end]);
+                buf.put_slice(&bytes[0..amount]);
             }
 
-            if end < bytes.len() {
-                self.stack.push(StackElem::Local(bytes, end))
+            if amount < bytes.len() {
+                bytes.advance(amount);
+                self.stack.push(StackElem::Local(bytes))
             }
             remaining -= amount;
             max_bytes -= amount;
@@ -352,11 +353,11 @@ impl RopeReader {
     /// A shared implementation for traversing the Rope's tree structure. We
     /// continue descending through shared InnerRopes until we hit our next
     /// Bytes.
-    fn next(&mut self) -> Option<(Bytes, usize)> {
+    fn next(&mut self) -> Option<Bytes> {
         loop {
             let (rope, mut index) = match self.stack.pop() {
                 None => return None,
-                Some(StackElem::Local(b, i)) => return Some((b, i)),
+                Some(StackElem::Local(b)) => return Some(b),
                 Some(StackElem::Shared(r, i)) => (r, i),
             };
 
@@ -403,7 +404,7 @@ impl Stream for RopeReader {
 
         let bytes = match this.next() {
             None => return Poll::Ready(None),
-            Some((b, _)) => b,
+            Some(b) => b,
         };
 
         this.max_bytes -= bytes.len();
@@ -424,7 +425,7 @@ impl From<&Rope> for StackElem {
 impl From<RopeElem> for StackElem {
     fn from(el: RopeElem) -> Self {
         match el {
-            Local(bytes) => Self::Local(bytes, 0),
+            Local(bytes) => Self::Local(bytes),
             Shared(rope) => Self::Shared(rope, 0),
         }
     }
