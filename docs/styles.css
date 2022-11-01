@@ -38,3 +38,11 @@ button[type="submit"] {
     filter: grayscale(100%);
   }
 }
+
+/* Override Nextra defaults */
+article.nextra-body-typesetting-article {
+  line-height: 1.75;
+}
+article.nextra-body-typesetting-article p {
+  line-height: 1.75 !important;
+}
