@@ -472,7 +472,7 @@ export const users: Array<TurboUser> = [
   {
     caption: "Supernova.io",
     image: "/images/logos/supernova.svg",
-    infoLink: "https://supernova.io",
+    infoLink: "https://www.supernova.io/",
     pinned: true,
     style: {
       width: 150,
