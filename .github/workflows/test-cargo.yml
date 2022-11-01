@@ -103,7 +103,7 @@ jobs:
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
-        run: pnpm install -r --side-effects-cache false
+        run: pnpm install -r --side-effects-cache false --child-concurrency 1
 
       - name: Install tests dependencies in examples/basic
         working-directory: examples/basic

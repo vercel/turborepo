@@ -523,6 +523,7 @@ impl FileSystem for DiskFileSystem {
         target: LinkContentVc,
     ) -> Result<CompletionVc> {
         let full_path = self.to_sys_path(fs_path).await?;
+        let full_path_to_error_context = full_path.clone();
         let old_content = fs_path
             .read_link()
             .await
@@ -572,7 +573,11 @@ impl FileSystem for DiskFileSystem {
                 })
                 .await
                 .with_context(|| {
-                    format!("create symlink to {}, link type {:?}", target, link_type)
+                    format!(
+                        "create symlink from {} to {}",
+                        full_path_to_error_context.display(),
+                        target_path.display(),
+                    )
                 })?;
             }
             LinkContent::Invalid => {
