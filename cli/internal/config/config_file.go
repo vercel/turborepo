@@ -152,9 +152,6 @@ func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
-	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
 
 	token, err := cliConfig.GetToken()
 	if err != nil {
@@ -164,6 +161,9 @@ func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 		userViper.Set("token", token)
 	}
 
+	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
 	return &UserConfig{
 		userViper: userViper,
 		path:      path,
