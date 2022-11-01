@@ -1,18 +1,15 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
 )
 
 const ROOT_NODE_NAME = "___ROOT___"
-
-var errNoTask = errors.New("the given task has not been registered")
 
 type Task struct {
 	Name string
@@ -107,7 +104,8 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 	if task, ok := e.Tasks[taskName]; ok {
 		return task, nil
 	}
-	return nil, errNoTask
+
+	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
 }
 
 func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {

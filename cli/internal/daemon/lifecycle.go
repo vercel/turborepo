@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/turbostate"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/daemon/connector"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 )
 
 // Start starts the daemon directly instead of via cobra.

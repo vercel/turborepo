@@ -7,9 +7,8 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/vercel/turborepo/cli/internal/turbostate"
-
-	"github.com/vercel/turborepo/cli/internal/cmd"
+	"github.com/vercel/turbo/cli/internal/cmd"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
 func main() {

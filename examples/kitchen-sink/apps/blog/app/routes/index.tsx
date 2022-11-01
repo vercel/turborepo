@@ -10,7 +10,7 @@ export default function Index() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <NewTabLink href="https://turborepo.org/">Turborepo</NewTabLink> +{" "}
+        <NewTabLink href="https://turbo.build/repo">Turborepo</NewTabLink> +{" "}
         <NewTabLink href="https://remix.run/">Remix</NewTabLink>
       </p>
     </div>

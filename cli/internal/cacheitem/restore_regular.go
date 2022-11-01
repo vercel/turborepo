@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // restoreRegular restores a file.

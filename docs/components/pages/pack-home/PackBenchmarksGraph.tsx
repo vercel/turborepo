@@ -139,7 +139,7 @@ function GraphBar({
       .then(() => {
         setFinished(true);
       });
-    const timerAnimationRef = animate(0, duration / 1000, {
+    const timerAnimationRef = animate(0, duration, {
       ...transition,
       ease: "linear",
       onUpdate(value) {
@@ -203,14 +203,26 @@ function GraphBar({
           className="pr-2"
           transition={{ duration: 0.1 }}
         >
-          <GraphTimer turbo={turbo} timer={pinTime ? duration / 1000 : timer} />
+          <GraphTimer
+            turbo={turbo}
+            timer={pinTime ? duration : timer}
+            duration={duration}
+          />
         </motion.div>
       </div>
     </div>
   );
 }
 
-const GraphTimer = ({ turbo, timer }: { turbo: boolean; timer: number }) => {
+const GraphTimer = ({
+  turbo,
+  timer,
+  duration,
+}: {
+  turbo: boolean;
+  timer: number;
+  duration: number;
+}) => {
   return (
     <div className={`flex flex-row gap-2 w-24 justify-end items-center z-10`}>
       {turbo && (
@@ -238,8 +250,41 @@ const GraphTimer = ({ turbo, timer }: { turbo: boolean; timer: number }) => {
           />
         </div>
       )}
-      <p className="font-mono">{timer.toFixed(2)}s</p>
+      <p className="font-mono">
+        <Time value={timer} maxValue={duration} />
+      </p>
     </div>
+  );
+};
+
+function roundTo(num: number, decimals: number) {
+  const factor = Math.pow(10, decimals);
+  return Math.round(num * factor) / factor;
+}
+
+const Time = ({
+  value,
+  maxValue,
+}: {
+  value: number;
+  maxValue: number;
+}): JSX.Element => {
+  let unitValue: string;
+  let unit: string;
+  if (maxValue < 1000) {
+    unitValue = Math.round(value).toFixed(0);
+    unit = "ms";
+  } else {
+    const roundedValue = roundTo(value / 1000, 1);
+    unitValue = roundedValue.toFixed(1);
+    unit = "s";
+  }
+
+  return (
+    <>
+      {unitValue}
+      {unit}
+    </>
   );
 };
 

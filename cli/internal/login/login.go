@@ -10,14 +10,14 @@ import (
 	"os/signal"
 
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/turbostate"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/client"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/browser"
+	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/turbostate"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util/browser"
 )
 
 const defaultHostname = "127.0.0.1"
@@ -144,6 +144,7 @@ func (l *login) run(ctx context.Context) error {
 	l.base.Logger.Debug(fmt.Sprintf("login url: %v", loginURLBase))
 	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
 	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", loginURLBase, redirectURL)
+
 	l.base.UI.Info(util.Sprintf(">>> Opening browser to %v", loginURL))
 
 	rootctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
@@ -260,7 +261,7 @@ func (l *login) loginSSO(ctx context.Context, ssoTeam string) error {
 		l.base.UI.Info("  all your team’s Vercel projects. It also can share outputs")
 		l.base.UI.Info("  with other services that enable Remote Caching, like CI/CD systems.")
 		l.base.UI.Info("  This results in faster build times and deployments for your team.")
-		l.base.UI.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turborepo.org/docs/features/remote-caching${RESET}"))
+		l.base.UI.Info(util.Sprintf("  For more info, see ${UNDERLINE}https://turbo.build/repo/docs/core-concepts/remote-caching${RESET}"))
 		l.base.UI.Info("")
 		l.base.UI.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {

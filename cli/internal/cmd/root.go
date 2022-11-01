@@ -8,21 +8,20 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 
-	"github.com/vercel/turborepo/cli/internal/turbostate"
-
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/vercel/turborepo/cli/internal/cmd/auth"
-	"github.com/vercel/turborepo/cli/internal/cmd/info"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/daemon"
-	"github.com/vercel/turborepo/cli/internal/login"
-	"github.com/vercel/turborepo/cli/internal/process"
-	"github.com/vercel/turborepo/cli/internal/prune"
-	"github.com/vercel/turborepo/cli/internal/run"
-	"github.com/vercel/turborepo/cli/internal/signals"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/cmd/auth"
+	"github.com/vercel/turbo/cli/internal/cmd/info"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/daemon"
+	"github.com/vercel/turbo/cli/internal/login"
+	"github.com/vercel/turbo/cli/internal/process"
+	"github.com/vercel/turbo/cli/internal/prune"
+	"github.com/vercel/turbo/cli/internal/run"
+	"github.com/vercel/turbo/cli/internal/signals"
+	"github.com/vercel/turbo/cli/internal/turbostate"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type execOpts struct {

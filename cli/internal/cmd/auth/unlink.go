@@ -2,9 +2,9 @@ package auth
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/turbostate"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/turbostate"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // UnlinkCmd returns the Cobra unlink command

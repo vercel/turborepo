@@ -33,7 +33,7 @@ Then, inside **each workspace that needs to be linted**, add a `lint` script. We
 
 This pattern has two benefits:
 
-- [**Parallelization**](/repo/docs/core-concepts/running-tasks): the lint tasks will be run concurrently, speeding them up
+- [**Parallelization**](/repo/docs/core-concepts/monorepos/running-tasks): the lint tasks will be run concurrently, speeding them up
 - [**Caching**](/repo/docs/core-concepts/caching): `lint` tasks will only be re-run on workspaces that have changed
 
 This means you can lint your entire repo using one command:
