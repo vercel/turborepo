@@ -90,11 +90,11 @@ jobs:
           description: Installing Node.js dependencies...
           url: https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}
 
-      - name: Run node-gyp install
-        run: npx node-gyp install
-        if: matrix.os.name == 'windows-latest'
-
       - uses: ./.github/actions/setup-node
+
+      - name: Run node-gyp install
+        run: pnpx node-gyp install
+        if: matrix.os.name == 'windows-latest'
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
