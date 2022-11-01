@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/config"
 	"time"
+
+	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"

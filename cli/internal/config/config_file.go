@@ -11,6 +11,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+// CLIConfigProvider is an interface for providing configuration values from the CLI
+// It can be implemented by either a pflag.FlagSet struct or a turbostate.Args struct.
 type CLIConfigProvider interface {
 	GetColor() bool
 	GetNoColor() bool
@@ -20,30 +22,38 @@ type CLIConfigProvider interface {
 	GetToken() (string, error)
 }
 
+// FlagSet is a wrapper so that the CLIConfigProvider interface can be implemented
+// on pflag.FlagSet.
 type FlagSet struct {
 	*pflag.FlagSet
 }
 
+// GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetColor() bool {
 	return p.Changed("color")
 }
 
+// GetNoColor returns the value of the `no-color` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetNoColor() bool {
 	return p.Changed("no-color")
 }
 
+// GetLogin returns the value of the `login` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetLogin() (string, error) {
 	return p.GetString("login")
 }
 
+// GetAPI returns the value of the `api` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetAPI() (string, error) {
 	return p.GetString("api")
 }
 
+// GetTeam returns the value of the `team` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetTeam() (string, error) {
 	return p.GetString("team")
 }
 
+// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetToken() (string, error) {
 	return p.GetString("token")
 }
@@ -137,10 +147,6 @@ func (uc *UserConfig) Delete() error {
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
 func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*UserConfig, error) {
-	token, err := cliConfig.GetToken()
-	if err != nil {
-		return nil, err
-	}
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
@@ -149,9 +155,15 @@ func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+
+	token, err := cliConfig.GetToken()
+	if err != nil {
+		return nil, err
+	}
 	if token != "" {
 		userViper.Set("token", token)
 	}
+
 	return &UserConfig{
 		userViper: userViper,
 		path:      path,
@@ -179,19 +191,6 @@ const (
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
 func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*RepoConfig, error) {
-	login, err := cliConfig.GetLogin()
-	if err != nil {
-		return nil, err
-	}
-	api, err := cliConfig.GetAPI()
-	if err != nil {
-		return nil, err
-	}
-	team, err := cliConfig.GetTeam()
-	if err != nil {
-		return nil, err
-	}
-
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -203,11 +202,25 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
 
+	login, err := cliConfig.GetLogin()
+	if err != nil {
+		return nil, err
+	}
 	if login != "" {
 		repoViper.Set("loginurl", login)
 	}
+
+	api, err := cliConfig.GetAPI()
+	if err != nil {
+		return nil, err
+	}
 	if api != "" {
 		repoViper.Set("apiurl", api)
+	}
+
+	team, err := cliConfig.GetTeam()
+	if err != nil {
+		return nil, err
 	}
 	if team != "" {
 		repoViper.Set("teamslug", team)

@@ -2,9 +2,10 @@ package cmdutil
 
 import (
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/config"
 	"os"
 	"testing"
+
+	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"

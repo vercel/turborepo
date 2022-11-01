@@ -4,7 +4,6 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/config"
 	"log"
 	"os"
 	"os/exec"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
+
+	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"

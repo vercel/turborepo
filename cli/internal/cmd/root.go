@@ -4,10 +4,11 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/config"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
+
+	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"

@@ -54,12 +54,12 @@ type TurboState struct {
 	RawArgs    []string  `json:"raw_args"`
 }
 
-// GetToken returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
+// GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
 func (a Args) GetColor() bool {
 	return a.Color
 }
 
-// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
+// GetNoColor returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
 func (a Args) GetNoColor() bool {
 	return a.NoColor
 }

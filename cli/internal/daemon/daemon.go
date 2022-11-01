@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/config"
 	"io"
 	"net"
 	"os"
 	"time"
+
+	"github.com/vercel/turbo/cli/internal/config"
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
