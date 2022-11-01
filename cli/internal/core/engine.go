@@ -29,7 +29,7 @@ type Engine struct {
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the engine
 	Tasks            map[string]*Task
-	PackageTaskDeps  [][]string
+	PackageTaskDeps  map[string][]string
 	rootEnabledTasks util.Set
 }
 
@@ -39,7 +39,7 @@ func NewEngine(topologicalGraph *dag.AcyclicGraph) *Engine {
 		Tasks:            make(map[string]*Task),
 		TopologicGraph:   topologicalGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
-		PackageTaskDeps:  [][]string{},
+		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
 	}
 }
@@ -109,12 +109,6 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 }
 
 func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
-	if e.PackageTaskDeps == nil {
-		e.PackageTaskDeps = [][]string{}
-	}
-
-	packageTasksDepsMap := getPackageTaskDepsMap(e.PackageTaskDeps)
-
 	traversalQueue := []string{}
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
@@ -185,7 +179,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		// it depends on another workspace-specific tasks
 		// E.g. `my-package#build: { dependsOn: [my-package#beforebuild] }`.
 		hasPackageTaskDeps := false
-		if _, ok := packageTasksDepsMap[toTaskID]; ok {
+		if _, ok := e.PackageTaskDeps[toTaskID]; ok {
 			hasPackageTaskDeps = true
 		}
 
@@ -214,7 +208,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasPackageTaskDeps {
-			if pkgTaskDeps, ok := packageTasksDepsMap[toTaskID]; ok {
+			if pkgTaskDeps, ok := e.PackageTaskDeps[toTaskID]; ok {
 				for _, fromTaskID := range pkgTaskDeps {
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
@@ -232,19 +226,6 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 	}
 
 	return nil
-}
-
-func getPackageTaskDepsMap(packageTaskDeps [][]string) map[string][]string {
-	depMap := make(map[string][]string)
-	for _, packageTaskDep := range packageTaskDeps {
-		from := packageTaskDep[0]
-		to := packageTaskDep[1]
-		if _, ok := depMap[to]; !ok {
-			depMap[to] = []string{}
-		}
-		depMap[to] = append(depMap[to], from)
-	}
-	return depMap
 }
 
 // AddTask adds a task to the Engine so it can be looked up later.
@@ -267,6 +248,12 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
-	e.PackageTaskDeps = append(e.PackageTaskDeps, []string{fromTaskID, toTaskID})
+
+	if _, ok := e.PackageTaskDeps[fromTaskID]; !ok {
+		e.PackageTaskDeps[toTaskID] = []string{}
+	}
+
+	e.PackageTaskDeps[toTaskID] = append(e.PackageTaskDeps[toTaskID], fromTaskID)
+
 	return nil
 }
