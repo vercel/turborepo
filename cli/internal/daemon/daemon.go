@@ -10,9 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
-
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -22,7 +21,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/server"
 	"github.com/vercel/turbo/cli/internal/signals"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/turbostate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -76,52 +74,6 @@ func (d *daemon) logError(err error) {
 // we're only appending, and we're creating the file if it doesn't exist.
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
-
-// Run executes the `daemon` command directly instead of via cobra.
-func Run(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args, signalWatcher *signals.Watcher) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
-	if err != nil {
-		return err
-	}
-	logFilePath, err := getLogFilePath(base.RepoRoot)
-	if err != nil {
-		return err
-	}
-	if err := logFilePath.EnsureDir(); err != nil {
-		return err
-	}
-	logFile, err := logFilePath.OpenFile(_logFileFlags, 0644)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = logFile.Close() }()
-	logger := hclog.New(&hclog.LoggerOptions{
-		Output: io.MultiWriter(logFile, os.Stdout),
-		Level:  hclog.Info,
-		Color:  hclog.ColorOff,
-		Name:   "turbod",
-	})
-	d := &daemon{
-		logger:     logger,
-		repoRoot:   base.RepoRoot,
-		timeout:    args.Command.Daemon.IdleTimeout,
-		reqCh:      make(chan struct{}),
-		timedOutCh: make(chan struct{}),
-	}
-	serverName := getRepoHash(base.RepoRoot)
-	turboServer, err := server.New(serverName, d.logger.Named("rpc server"), base.RepoRoot, base.TurboVersion, logFilePath)
-	if err != nil {
-		d.logError(err)
-		return err
-	}
-	defer func() { _ = turboServer.Close() }()
-	err = d.runTurboServer(ctx, turboServer, signalWatcher)
-	if err != nil {
-		d.logError(err)
-		return err
-	}
-	return nil
-}
 
 // GetCmd returns the root daemon command
 func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {

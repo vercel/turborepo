@@ -4,30 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spf13/cobra"
-	"github.com/vercel/turbo/cli/internal/turbostate"
-
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 )
-
-// Start starts the daemon directly instead of via cobra.
-func Start(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
-	if err != nil {
-		return err
-	}
-	l := &lifecycle{
-		base,
-	}
-	if err := l.ensureStarted(ctx); err != nil {
-		l.logError(err)
-		return err
-	}
-	return nil
-}
 
 func addStartCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	cmd := &cobra.Command{
@@ -53,22 +35,6 @@ func addStartCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	root.AddCommand(cmd)
 }
 
-// Stop stops the daemon directly instead of via cobra.
-func Stop(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
-	if err != nil {
-		return err
-	}
-	l := &lifecycle{
-		base,
-	}
-	if err := l.ensureStopped(ctx); err != nil {
-		l.logError(err)
-		return err
-	}
-	return nil
-}
-
 func addStopCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	cmd := &cobra.Command{
 		Use:           "stop",
@@ -91,26 +57,6 @@ func addStopCmd(root *cobra.Command, helper *cmdutil.Helper) {
 		},
 	}
 	root.AddCommand(cmd)
-}
-
-// Restart restarts the daemon directly instead of via cobra.
-func Restart(helper *cmdutil.Helper, args *turbostate.Args, ctx *context.Context) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
-	if err != nil {
-		return err
-	}
-	l := &lifecycle{
-		base,
-	}
-	if err := l.ensureStopped(*ctx); err != nil {
-		l.logError(err)
-		return err
-	}
-	if err := l.ensureStarted(*ctx); err != nil {
-		l.logError(err)
-		return err
-	}
-	return nil
 }
 
 func addRestartCmd(root *cobra.Command, helper *cmdutil.Helper) {

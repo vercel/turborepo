@@ -116,20 +116,14 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 	var execErr error
 	go func() {
 		command := state.ParsedArgs.Command
-		if command.Daemon != nil {
-			execErr = daemon.Run(ctx, helper, &state.ParsedArgs, signalWatcher)
-		} else if command.Link != nil {
+		if command.Link != nil {
 			execErr = login.RunLink(helper, &state.ParsedArgs)
 		} else if command.Login != nil {
 			execErr = login.RunLogin(helper, &state.ParsedArgs, ctx)
 		} else if command.Logout != nil {
 			execErr = auth.RunLogout(helper, &state.ParsedArgs)
-		} else if command.Prune != nil {
-			execErr = prune.Run(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
 			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
-		} else if command.Run != nil {
-			execErr = fmt.Errorf("Command not handled %v\n", command)
 		}
 		close(doneCh)
 	}()
