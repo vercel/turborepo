@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/config"
 	"io"
 	"net"
 	"os"
@@ -84,7 +85,8 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flags := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flags)
 			if err != nil {
 				return err
 			}

@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/config"
 	"log"
 	"os"
 	"os/exec"
@@ -102,11 +103,12 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flags := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flags)
 			if err != nil {
 				return err
 			}
-			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, flags)
+			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}

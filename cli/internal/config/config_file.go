@@ -11,6 +11,43 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+type CLIConfigProvider interface {
+	GetColor() bool
+	GetNoColor() bool
+	GetLogin() (string, error)
+	GetAPI() (string, error)
+	GetTeam() (string, error)
+	GetToken() (string, error)
+}
+
+type FlagSet struct {
+	*pflag.FlagSet
+}
+
+func (p FlagSet) GetColor() bool {
+	return p.Changed("color")
+}
+
+func (p FlagSet) GetNoColor() bool {
+	return p.Changed("no-color")
+}
+
+func (p FlagSet) GetLogin() (string, error) {
+	return p.GetString("login")
+}
+
+func (p FlagSet) GetAPI() (string, error) {
+	return p.GetString("api")
+}
+
+func (p FlagSet) GetTeam() (string, error) {
+	return p.GetString("team")
+}
+
+func (p FlagSet) GetToken() (string, error) {
+	return p.GetString("token")
+}
+
 // RepoConfig is a configuration object for the logged-in turborepo.com user
 type RepoConfig struct {
 	repoViper *viper.Viper
@@ -96,19 +133,14 @@ func (uc *UserConfig) Delete() error {
 	return uc.path.Remove()
 }
 
-// ReadUserConfigFileFromFlags creates a RepoConfig using a pflag.FlagSet for configuration
-func ReadUserConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
-	token, err := flags.GetString("token")
-	if err != nil {
-		return nil, err
-	}
-	return ReadUserConfigFile(path, token)
-}
-
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, token string) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*UserConfig, error) {
+	token, err := cliConfig.GetToken()
+	if err != nil {
+		return nil, err
+	}
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
@@ -142,29 +174,24 @@ const (
 	_defaultLoginURL = "https://vercel.com"
 )
 
-// ReadRepoConfigFileFromFlags creates a RepoConfig using a pflag.FlagSet for configuration
-func ReadRepoConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
-	login, err := flags.GetString("login")
-	if err != nil {
-		return nil, err
-	}
-	api, err := flags.GetString("api")
-	if err != nil {
-		return nil, err
-	}
-	team, err := flags.GetString("team")
-	if err != nil {
-		return nil, err
-	}
-
-	return ReadRepoConfigFile(path, login, api, team)
-}
-
 // ReadRepoConfigFile creates a RepoConfig using the
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL string, apiURL string, teamSlug string) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*RepoConfig, error) {
+	login, err := cliConfig.GetLogin()
+	if err != nil {
+		return nil, err
+	}
+	api, err := cliConfig.GetAPI()
+	if err != nil {
+		return nil, err
+	}
+	team, err := cliConfig.GetTeam()
+	if err != nil {
+		return nil, err
+	}
+
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -176,14 +203,14 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL string, apiU
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
 
-	if loginURL != "" {
-		repoViper.Set("loginurl", loginURL)
+	if login != "" {
+		repoViper.Set("loginurl", login)
 	}
-	if apiURL != "" {
-		repoViper.Set("apiurl", apiURL)
+	if api != "" {
+		repoViper.Set("apiurl", api)
 	}
-	if teamSlug != "" {
-		repoViper.Set("teamslug", teamSlug)
+	if team != "" {
+		repoViper.Set("teamslug", team)
 	}
 
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
@@ -191,7 +218,7 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL string, apiU
 	}
 	// If team was set via commandline, don't read the teamId from the config file, as it
 	// won't necessarily match.
-	if teamSlug != "" {
+	if team != "" {
 		repoViper.Set("teamid", "")
 	}
 	return &RepoConfig{

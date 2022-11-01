@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/config"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
@@ -48,7 +49,8 @@ func RunWithArgs(args []string, turboVersion string) int {
 	helper := cmdutil.NewHelper(turboVersion)
 	root := getCmd(helper, signalWatcher)
 	resolvedArgs := resolveArgs(root, args)
-	defer helper.Cleanup(root.Flags())
+	flags := config.FlagSet{FlagSet: root.Flags()}
+	defer helper.Cleanup(flags)
 	root.SetArgs(resolvedArgs)
 
 	doneCh := make(chan struct{})
@@ -110,7 +112,7 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 		helper.RegisterCleanup(cleanup)
 	}
 
-	defer helper.CleanupWithArgs(&state.ParsedArgs)
+	defer helper.Cleanup(&state.ParsedArgs)
 
 	doneCh := make(chan struct{})
 	var execErr error

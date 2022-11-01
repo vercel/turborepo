@@ -53,3 +53,33 @@ type TurboState struct {
 	ParsedArgs Args      `json:"parsed_args"`
 	RawArgs    []string  `json:"raw_args"`
 }
+
+// GetToken returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
+func (a Args) GetColor() bool {
+	return a.Color
+}
+
+// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
+func (a Args) GetNoColor() bool {
+	return a.NoColor
+}
+
+// GetLogin returns the value of the `login` flag. Used to implement CLIConfigProvider interface.
+func (a Args) GetLogin() (string, error) {
+	return a.Login, nil
+}
+
+// GetAPI returns the value of the `api` flag. Used to implement CLIConfigProvider interface.
+func (a Args) GetAPI() (string, error) {
+	return a.API, nil
+}
+
+// GetTeam returns the value of the `team` flag. Used to implement CLIConfigProvider interface.
+func (a Args) GetTeam() (string, error) {
+	return a.Team, nil
+}
+
+// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
+func (a Args) GetToken() (string, error) {
+	return a.Token, nil
+}

@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/config"
 	"os"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestTokenEnvVar(t *testing.T) {
 				t.Fatalf("setenv %v", err)
 			}
 
-			base, err := h.GetCmdBase(flags)
+			base, err := h.GetCmdBase(config.FlagSet{FlagSet: flags})
 			if err != nil {
 				t.Fatalf("failed to get command base %v", err)
 			}

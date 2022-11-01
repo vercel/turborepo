@@ -42,7 +42,7 @@ type linkAPIClient interface {
 
 // RunLink executes the `link` command.
 func RunLink(helper *cmdutil.Helper, args *turbostate.Args) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
+	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err
 	}

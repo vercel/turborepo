@@ -8,7 +8,7 @@ import (
 
 // RunUnlink executes the `unlink` command directly instead of via cobra.
 func RunUnlink(helper *cmdutil.Helper, args *turbostate.Args) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
+	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err
 	}

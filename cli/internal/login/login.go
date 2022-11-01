@@ -24,7 +24,7 @@ const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
 // RunLogin executes the `login` command.
 func RunLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
+	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err
 	}
