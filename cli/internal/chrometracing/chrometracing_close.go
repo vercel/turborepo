@@ -15,7 +15,7 @@ func Close() error {
 	if _, err := trace.file.Write([]byte{']'}); err != nil {
 		return err
 	}
-	// TODO desc
+	// Force the filesystem to write to disk
 	if err := trace.file.Sync(); err != nil {
 		return err
 	}
