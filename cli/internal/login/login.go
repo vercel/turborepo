@@ -9,8 +9,6 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/spf13/cobra"
-
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
@@ -24,7 +22,8 @@ const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
-func RunLogin(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context) error {
+// RunLogin executes the `login` command.
+func RunLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
 		return err
@@ -59,56 +58,6 @@ func RunLogin(helper *cmdutil.Helper, args *turbostate.Args, ctx context.Context
 		}
 	}
 	return nil
-}
-
-// NewLoginCommand returns the cobra subcommand for turbo login
-func NewLoginCommand(helper *cmdutil.Helper) *cobra.Command {
-	var ssoTeam string
-	cmd := &cobra.Command{
-		Use:           "login",
-		Short:         "Login to your Vercel account",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			base, err := helper.GetCmdBase(cmd.Flags())
-			if err != nil {
-				return err
-			}
-			login := login{
-				base:                base,
-				openURL:             browser.OpenBrowser,
-				client:              base.APIClient,
-				promptEnableCaching: promptEnableCaching,
-			}
-			if ssoTeam != "" {
-				err := login.loginSSO(ctx, ssoTeam)
-				if err != nil {
-					if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
-						base.UI.Info("Canceled. Turborepo not set up.")
-					} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
-						base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
-					} else {
-						base.LogError("SSO login failed: %v", err)
-					}
-					return err
-				}
-			} else {
-				err := login.run(ctx)
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
-						base.UI.Info("Canceled. Turborepo not set up.")
-					} else {
-						base.LogError("login failed: %v", err)
-					}
-					return err
-				}
-			}
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&ssoTeam, "sso-team", "", "attempt to authenticate to the specified team using SSO")
-	return cmd
 }
 
 type browserClient = func(url string) error

@@ -3,18 +3,11 @@
 // to Go via a JSON payload.
 package turbostate
 
-import "time"
-
 // RepoState is the state for repository. Consists of the root for the repo
 // along with the mode (single package or multi package)
 type RepoState struct {
 	Root string `json:"root"`
 	Mode string `json:"mode"`
-}
-
-// DaemonPayload is the extra flags passed for the `daemon` subcommand
-type DaemonPayload struct {
-	IdleTimeout time.Duration `json:"idle_timeout"`
 }
 
 // LinkPayload is the extra flags passed for the `link` subcommand
@@ -27,26 +20,13 @@ type LoginPayload struct {
 	SsoTeam string `json:"sso_team"`
 }
 
-// PrunePayload is the extra flags passed for the `prune` subcommand
-type PrunePayload struct {
-	Scope     string `json:"scope"`
-	Docker    bool   `json:"docker"`
-	OutputDir string `json:"output_dir"`
-}
-
-type RunPayload struct {
-}
-
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
-	Daemon *DaemonPayload `json:"daemon"`
-	Link   *LinkPayload   `json:"link"`
-	Login  *LoginPayload  `json:"login"`
-	Logout *struct{}      `json:"logout"`
-	Prune  *PrunePayload  `json:"prune"`
-	Run    *RunPayload    `json:"run"`
-	Unlink *struct{}      `json:"unlink"`
+	Link   *LinkPayload  `json:"link"`
+	Login  *LoginPayload `json:"login"`
+	Logout *struct{}     `json:"logout"`
+	Unlink *struct{}     `json:"unlink"`
 }
 
 // Args are the parsed command line arguments passed

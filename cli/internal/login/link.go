@@ -8,7 +8,6 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/mitchellh/go-homedir"
-	"github.com/spf13/cobra"
 
 	"github.com/pkg/errors"
 
@@ -41,11 +40,7 @@ type linkAPIClient interface {
 	GetCachingStatus() (util.CachingStatus, error)
 }
 
-// NewLinkCommand returns the cobra subcommand for turbo link
-func NewLinkCommand(helper *cmdutil.Helper) *cobra.Command {
-	return getCmd(helper)
-}
-
+// RunLink executes the `link` command.
 func RunLink(helper *cmdutil.Helper, args *turbostate.Args) error {
 	base, err := helper.GetCmdBaseFromArgs(args)
 	if err != nil {
@@ -73,45 +68,6 @@ func RunLink(helper *cmdutil.Helper, args *turbostate.Args) error {
 		return err
 	}
 	return nil
-}
-
-func getCmd(helper *cmdutil.Helper) *cobra.Command {
-	var dontModifyGitIgnore bool
-	cmd := &cobra.Command{
-		Use:           "link",
-		Short:         "Link your local directory to a Vercel organization and enable remote caching.",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
-			if err != nil {
-				return err
-			}
-			link := &link{
-				base:                base,
-				modifyGitIgnore:     !dontModifyGitIgnore,
-				apiClient:           base.APIClient,
-				promptSetup:         promptSetup,
-				promptTeam:          promptTeam,
-				promptEnableCaching: promptEnableCaching,
-				openBrowser:         browser.OpenBrowser,
-			}
-			err = link.run()
-			if err != nil {
-				if errors.Is(err, errUserCanceled) {
-					base.UI.Info("Canceled. Turborepo not set up.")
-				} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
-					base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
-				} else {
-					link.logError(err)
-				}
-				return err
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&dontModifyGitIgnore, "no-gitignore", false, "Do not create or modify .gitignore (default false)")
-	return cmd
 }
 
 var errUserCanceled = errors.New("canceled")

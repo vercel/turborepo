@@ -119,7 +119,7 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 		if command.Link != nil {
 			execErr = login.RunLink(helper, &state.ParsedArgs)
 		} else if command.Login != nil {
-			execErr = login.RunLogin(helper, &state.ParsedArgs, ctx)
+			execErr = login.RunLogin(ctx, helper, &state.ParsedArgs)
 		} else if command.Logout != nil {
 			execErr = auth.RunLogout(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
@@ -208,10 +208,6 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	flags := cmd.PersistentFlags()
 	helper.AddFlags(flags)
 	execOpts.addFlags(flags)
-	cmd.AddCommand(login.NewLinkCommand(helper))
-	cmd.AddCommand(login.NewLoginCommand(helper))
-	cmd.AddCommand(auth.LogoutCmd(helper))
-	cmd.AddCommand(auth.UnlinkCmd(helper))
 	cmd.AddCommand(info.BinCmd(helper))
 	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
 	cmd.AddCommand(prune.GetCmd(helper))

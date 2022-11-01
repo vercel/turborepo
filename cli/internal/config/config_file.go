@@ -94,6 +94,7 @@ func (uc *UserConfig) Delete() error {
 	return uc.path.Remove()
 }
 
+// ReadUserConfigFileFromFlags creates a RepoConfig using a pflag.FlagSet for configuration
 func ReadUserConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
 	token, err := flags.GetString("token")
 	if err != nil {
@@ -136,6 +137,7 @@ const (
 	_defaultLoginURL = "https://vercel.com"
 )
 
+// ReadRepoConfigFileFromFlags creates a RepoConfig using a pflag.FlagSet for configuration
 func ReadRepoConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
 	login, err := flags.GetString("login")
 	if err != nil {
@@ -157,7 +159,7 @@ func ReadRepoConfigFileFromFlags(path turbopath.AbsoluteSystemPath, flags *pflag
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginUrl *string, apiUrl *string, teamSlug *string) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginURL *string, apiURL *string, teamSlug *string) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -167,13 +169,13 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, loginUrl *string, api
 	repoViper.MustBindEnv("teamslug", "TURBO_TEAM")
 	repoViper.MustBindEnv("teamid")
 
-	if loginUrl != nil {
-		repoViper.SetDefault("loginurl", loginUrl)
+	if loginURL != nil {
+		repoViper.SetDefault("loginurl", loginURL)
 	} else {
 		repoViper.SetDefault("loginurl", _defaultLoginURL)
 	}
-	if apiUrl != nil {
-		repoViper.SetDefault("apiurl", apiUrl)
+	if apiURL != nil {
+		repoViper.SetDefault("apiurl", apiURL)
 	} else {
 		repoViper.SetDefault("apiurl", _defaultAPIURL)
 	}
