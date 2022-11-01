@@ -163,7 +163,10 @@ impl TurboState {
                 commands::bin::run()?;
                 Ok(0)
             }
-            Some(Command::Link { .. }) | Some(Command::Login { .. }) | Some(Command::Logout) => {
+            Some(Command::Link { .. })
+            | Some(Command::Login { .. })
+            | Some(Command::Logout)
+            | Some(Command::Unlink) => {
                 let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
                 Ok(exit_code.try_into()?)
             }

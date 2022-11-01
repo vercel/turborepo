@@ -4,18 +4,16 @@ import (
 	"bufio"
 	"fmt"
 
-	"github.com/hashicorp/go-hclog"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 
 	"github.com/fatih/color"
+	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
@@ -36,33 +34,6 @@ func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
 		// Fail fast if we have misconfigured our flags
 		panic(err)
 	}
-}
-
-// Run executes the `prune` command directly instead of via cobra.
-func Run(helper *cmdutil.Helper, args *turbostate.Args) error {
-	base, err := helper.GetCmdBaseFromArgs(args)
-	if err != nil {
-		return err
-	}
-
-	if args.Command.Prune.Scope == "" {
-		err := errors.New("at least one target must be specified")
-		base.LogError(err.Error())
-		return err
-	}
-	p := &prune{
-		base,
-	}
-	opts := &opts{
-		scope:     args.Command.Prune.Scope,
-		docker:    args.Command.Prune.Docker,
-		outputDir: args.Command.Prune.OutputDir,
-	}
-	if err := p.prune(opts); err != nil {
-		logError(p.base.Logger, p.base.UI, err)
-		return err
-	}
-	return nil
 }
 
 // GetCmd returns the prune subcommand for use with cobra
