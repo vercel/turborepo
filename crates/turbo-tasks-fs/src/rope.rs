@@ -180,14 +180,11 @@ impl RopeBuilder {
     }
 }
 
-impl<T: Into<Bytes> + 'static> From<T> for RopeBuilder {
-    default fn from(bytes: T) -> Self {
-        let bytes = bytes.into();
-        RopeBuilder {
-            length: bytes.len(),
-            committed: vec![Local(bytes)],
-            writable: vec![],
-        }
+impl From<&'static str> for RopeBuilder {
+    default fn from(bytes: &'static str) -> Self {
+        let mut r = RopeBuilder::default();
+        r.push_static_bytes(bytes.as_bytes());
+        r
     }
 }
 
