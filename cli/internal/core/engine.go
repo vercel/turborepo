@@ -146,75 +146,80 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		if err != nil {
 			return err
 		}
-		if !visited.Includes(taskID) {
-			visited.Add(taskID)
-			deps := task.Deps
 
-			if tasksOnly {
-				deps = deps.Filter(func(d interface{}) bool {
-					for _, target := range taskNames {
-						return fmt.Sprintf("%v", d) == target
-					}
-					return false
-				})
-				task.TopoDeps = task.TopoDeps.Filter(func(d interface{}) bool {
-					for _, target := range taskNames {
-						return fmt.Sprintf("%v", d) == target
-					}
-					return false
-				})
-			}
+		// Skip this iteration of the loop if we've already seen this taskID
+		if visited.Includes(taskID) {
+			continue
+		}
 
-			toTaskID := taskID
-			hasTopoDeps := task.TopoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
-			hasDeps := deps.Len() > 0
-			hasPackageTaskDeps := false
-			if _, ok := packageTasksDepsMap[toTaskID]; ok {
-				hasPackageTaskDeps = true
-			}
+		visited.Add(taskID)
+		deps := task.Deps
 
-			if hasTopoDeps {
-				depPkgs := e.TopologicGraph.DownEdges(pkg)
-				for _, from := range task.TopoDeps.UnsafeListOfStrings() {
-					// add task dep from all the package deps within repo
-					for depPkg := range depPkgs {
-						fromTaskID := util.GetTaskId(depPkg, from)
-						e.TaskGraph.Add(fromTaskID)
-						e.TaskGraph.Add(toTaskID)
-						e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-						traversalQueue = append(traversalQueue, fromTaskID)
-					}
+		if tasksOnly {
+			deps = deps.Filter(func(d interface{}) bool {
+				for _, target := range taskNames {
+					return fmt.Sprintf("%v", d) == target
 				}
-			}
+				return false
+			})
+			task.TopoDeps = task.TopoDeps.Filter(func(d interface{}) bool {
+				for _, target := range taskNames {
+					return fmt.Sprintf("%v", d) == target
+				}
+				return false
+			})
+		}
 
-			if hasDeps {
-				for _, from := range deps.UnsafeListOfStrings() {
-					fromTaskID := util.GetTaskId(pkg, from)
+		toTaskID := taskID
+		hasTopoDeps := task.TopoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
+		hasDeps := deps.Len() > 0
+		hasPackageTaskDeps := false
+		if _, ok := packageTasksDepsMap[toTaskID]; ok {
+			hasPackageTaskDeps = true
+		}
+
+		if hasTopoDeps {
+			depPkgs := e.TopologicGraph.DownEdges(pkg)
+			for _, from := range task.TopoDeps.UnsafeListOfStrings() {
+				// add task dep from all the package deps within repo
+				for depPkg := range depPkgs {
+					fromTaskID := util.GetTaskId(depPkg, from)
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
 					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
+		}
 
-			if hasPackageTaskDeps {
-				if pkgTaskDeps, ok := packageTasksDepsMap[toTaskID]; ok {
-					for _, fromTaskID := range pkgTaskDeps {
-						e.TaskGraph.Add(fromTaskID)
-						e.TaskGraph.Add(toTaskID)
-						e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-						traversalQueue = append(traversalQueue, fromTaskID)
-					}
-				}
-			}
-
-			if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
-				e.TaskGraph.Add(ROOT_NODE_NAME)
+		if hasDeps {
+			for _, from := range deps.UnsafeListOfStrings() {
+				fromTaskID := util.GetTaskId(pkg, from)
+				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
-				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, ROOT_NODE_NAME))
+				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+				traversalQueue = append(traversalQueue, fromTaskID)
 			}
 		}
+
+		if hasPackageTaskDeps {
+			if pkgTaskDeps, ok := packageTasksDepsMap[toTaskID]; ok {
+				for _, fromTaskID := range pkgTaskDeps {
+					e.TaskGraph.Add(fromTaskID)
+					e.TaskGraph.Add(toTaskID)
+					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
+					traversalQueue = append(traversalQueue, fromTaskID)
+				}
+			}
+		}
+
+		if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
+			e.TaskGraph.Add(ROOT_NODE_NAME)
+			e.TaskGraph.Add(toTaskID)
+			e.TaskGraph.Connect(dag.BasicEdge(toTaskID, ROOT_NODE_NAME))
+		}
 	}
+
 	return nil
 }
 
