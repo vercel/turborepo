@@ -63,7 +63,7 @@ pub async fn content_to_details(content: AssetContentVc) -> Result<StringVc> {
             FileContent::Content(file) => {
                 let content = file.content();
                 match content.to_string() {
-                    Ok(str) => StringVc::cell(str),
+                    Ok(str) => StringVc::cell(str.into_owned()),
                     Err(_) => StringVc::cell(format!("{} binary bytes", content.len())),
                 }
             }

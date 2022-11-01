@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     cmp::min,
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -78,13 +79,19 @@ impl Rope {
         RopeStream::new(self)
     }
 
-    // TODO
     /// Returns a String instance of all bytes.
-    pub fn to_string(&self) -> Result<String> {
+    pub fn to_string(&self) -> Result<Cow<'_, str>> {
+        if self.data.len() == 1 {
+            let utf8 = std::str::from_utf8(&self.data[0]);
+            return utf8
+                .map(Cow::Borrowed)
+                .context("failed to convert rope into string");
+        }
+
         let mut read = self.read();
         let mut string = String::with_capacity(self.len());
-        <RopeReader as Read>::read_to_string(&mut read, &mut string)
-            .map(|_| string)
+        let res = <RopeReader as Read>::read_to_string(&mut read, &mut string);
+        res.map(|_| Cow::Owned(string))
             .context("failed to convert rope into string")
     }
 }
@@ -375,8 +382,8 @@ impl Stream for RopeStream {
     /// [Hyper::Body].
     type Item = Result<Bytes>;
 
-    /// Returns a "result" of reading the next shared bytes reference. This differes from
-    /// [Read::read] by not copying any memory.
+    /// Returns a "result" of reading the next shared bytes reference. This
+    /// differes from [Read::read] by not copying any memory.
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 

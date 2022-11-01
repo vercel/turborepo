@@ -142,7 +142,15 @@ pub async fn parse(
             FileContent::Content(file) => match file.content().to_string() {
                 Ok(string) => {
                     let transforms = &*transforms.await?;
-                    parse_content(string, fs_path, file_path_hash, source, ty, transforms).await?
+                    parse_content(
+                        string.into_owned(),
+                        fs_path,
+                        file_path_hash,
+                        source,
+                        ty,
+                        transforms,
+                    )
+                    .await?
                 }
                 // FIXME: report error
                 Err(_) => ParseResult::Unparseable.cell(),

@@ -64,7 +64,15 @@ pub async fn parse(
                 Err(_err) => ParseResult::Unparseable.cell(),
                 Ok(string) => {
                     let transforms = &*transforms.await?;
-                    parse_content(string, fs_path, fs_path_str, source, ty, transforms).await?
+                    parse_content(
+                        string.into_owned(),
+                        fs_path,
+                        fs_path_str,
+                        source,
+                        ty,
+                        transforms,
+                    )
+                    .await?
                 }
             },
         },
