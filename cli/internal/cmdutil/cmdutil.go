@@ -181,7 +181,6 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
-
 	if err != nil {
 		return nil, err
 	}
@@ -194,27 +193,11 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 	if err != nil {
 		return nil, err
 	}
-	login, err := flags.GetString("login")
+	repoConfig, err := config.ReadRepoConfigFileFromFlags(config.GetRepoConfigPath(repoRoot), flags)
 	if err != nil {
 		return nil, err
 	}
-	api, err := flags.GetString("api")
-	if err != nil {
-		return nil, err
-	}
-	team, err := flags.GetString("team")
-	if err != nil {
-		return nil, err
-	}
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), &login, &api, &team)
-	if err != nil {
-		return nil, err
-	}
-	token, err := flags.GetString("token")
-	if err != nil {
-		return nil, err
-	}
-	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, &token)
+	userConfig, err := config.ReadUserConfigFileFromFlags(h.UserConfigPath, flags)
 	if err != nil {
 		return nil, err
 	}
