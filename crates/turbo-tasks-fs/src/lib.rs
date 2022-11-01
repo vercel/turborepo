@@ -256,7 +256,7 @@ impl DiskFileSystem {
     }
 
     pub async fn to_sys_path(&self, fs_path: FileSystemPathVc) -> Result<PathBuf> {
-        let path = Path::new(&self.root).join(&*unix_to_sys(&fs_path.await?.path));
+        let path = Path::new(&*unix_to_sys(&self.root)).join(&*unix_to_sys(&fs_path.await?.path));
         Ok(path)
     }
 }
@@ -523,7 +523,6 @@ impl FileSystem for DiskFileSystem {
         target: LinkContentVc,
     ) -> Result<CompletionVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        let full_path_to_error_context = full_path.clone();
         let old_content = fs_path
             .read_link()
             .await
@@ -551,9 +550,10 @@ impl FileSystem for DiskFileSystem {
             LinkContent::Link { target, link_type } => {
                 let link_type = *link_type;
                 let target_path = if link_type.contains(LinkType::ABSOLUTE) {
-                    Path::new(&self.root).join(unix_to_sys(target).as_ref())
+                    let sys_root = unix_to_sys(&self.root);
+                    Path::new(&*sys_root).join(&*unix_to_sys(target))
                 } else {
-                    PathBuf::from(unix_to_sys(target).as_ref())
+                    PathBuf::from(&*unix_to_sys(target))
                 };
                 retry_blocking(&target_path, move |target_path| {
                     // we use the sync std method here because `symlink` is fast
@@ -572,13 +572,7 @@ impl FileSystem for DiskFileSystem {
                     }
                 })
                 .await
-                .with_context(|| {
-                    format!(
-                        "create symlink from {} to {}",
-                        full_path_to_error_context.display(),
-                        target_path.display(),
-                    )
-                })?;
+                .with_context(|| format!("create symlink to {}", target_path.display(),))?;
             }
             LinkContent::Invalid => {
                 return Err(anyhow!("invalid symlink target: {}", full_path.display()));
