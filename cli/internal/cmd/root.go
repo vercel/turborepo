@@ -127,6 +127,8 @@ func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
 			execErr = auth.RunLogout(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
 			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
+		} else {
+			execErr = fmt.Errorf("unknown command: %v", command)
 		}
 		close(doneCh)
 	}()
