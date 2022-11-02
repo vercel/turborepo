@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -84,7 +83,6 @@ func (rc *RepoConfig) SetTeamID(teamID string) error {
 
 // GetRemoteConfig produces the necessary values for an API client configuration
 func (rc *RepoConfig) GetRemoteConfig(token string) client.RemoteConfig {
-	fmt.Printf("API URL: |%v|\n", rc.repoViper.GetString("apiurl"))
 	return client.RemoteConfig{
 		Token:    token,
 		TeamID:   rc.repoViper.GetString("teamid"),

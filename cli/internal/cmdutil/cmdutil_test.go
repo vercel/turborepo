@@ -1,7 +1,6 @@
 package cmdutil
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -38,8 +37,6 @@ func TestTokenEnvVar(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get command base %v", err)
 			}
-			fmt.Printf("base: %v\n", base.RemoteConfig.Token)
-			fmt.Printf("expected: %v\n", expectedToken)
 			assert.Equal(t, base.RemoteConfig.Token, expectedToken)
 		})
 	}

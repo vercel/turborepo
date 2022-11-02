@@ -80,32 +80,32 @@ func RunWithArgs(args []string, turboVersion string) int {
 	}
 }
 
-// RunWithTurboState runs turbo with the TurboState that is passed from the Rust side.
-func RunWithTurboState(state turbostate.TurboState, turboVersion string) int {
+// RunWithTurboState runs turbo with the CLIExecutionStateFromRust that is passed from the Rust side.
+func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
 	helper := cmdutil.NewHelper(turboVersion)
 	ctx := context.Background()
 
-	if state.ParsedArgs.Trace != nil {
-		cleanup, err := createTraceFile(*state.ParsedArgs.Trace)
+	if state.ParsedArgs.Trace != "" {
+		cleanup, err := createTraceFile(state.ParsedArgs.Trace)
 		if err != nil {
 			fmt.Printf("Failed to create trace file: %v\n", err)
 			return 1
 		}
 		helper.RegisterCleanup(cleanup)
 	}
-	if state.ParsedArgs.Heap != nil {
-		cleanup, err := createHeapFile(*state.ParsedArgs.Heap)
+	if state.ParsedArgs.Heap != "" {
+		cleanup, err := createHeapFile(state.ParsedArgs.Heap)
 		if err != nil {
 			fmt.Printf("Failed to create heap file: %v\n", err)
 			return 1
 		}
 		helper.RegisterCleanup(cleanup)
 	}
-	if state.ParsedArgs.CPUProfile != nil {
-		cleanup, err := createCpuprofileFile(*state.ParsedArgs.CPUProfile)
+	if state.ParsedArgs.CPUProfile != "" {
+		cleanup, err := createCpuprofileFile(state.ParsedArgs.CPUProfile)
 		if err != nil {
 			fmt.Printf("Failed to create CPU profile file: %v\n", err)
 			return 1

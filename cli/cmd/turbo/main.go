@@ -29,7 +29,7 @@ func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
 
 //export nativeRunWithTurboState
 func nativeRunWithTurboState(turboStateString string) C.uint {
-	turboState := turbostate.TurboState{}
+	turboState := turbostate.CLIExecutionStateFromRust{}
 	err := json.Unmarshal([]byte(turboStateString), &turboState)
 	if err != nil {
 		fmt.Printf("Error unmarshalling turboState: %v\n", err)

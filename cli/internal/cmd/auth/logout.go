@@ -9,7 +9,7 @@ import (
 )
 
 // RunLogout executes the `logout` command directly instead of via cobra.
-func RunLogout(helper *cmdutil.Helper, args *turbostate.Args) error {
+func RunLogout(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err

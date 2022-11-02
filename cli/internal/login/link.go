@@ -41,7 +41,7 @@ type linkAPIClient interface {
 }
 
 // RunLink executes the `link` command.
-func RunLink(helper *cmdutil.Helper, args *turbostate.Args) error {
+func RunLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err
