@@ -1,5 +1,7 @@
 use std::alloc::{GlobalAlloc, Layout};
 
+/// Turbo's preferred global allocator. This is a new type instead of a type
+/// alias because you can't use type aliases to instantiate unit types (E0423).
 pub struct TurboMalloc;
 
 #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
