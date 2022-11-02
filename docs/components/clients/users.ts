@@ -469,4 +469,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.backpack.app/",
     pinned: true,
   },
+  {
+    caption: "BuildPass",
+    image: "/images/logos/buildpass.svg",
+    infoLink: "https://www.buildpass.com.au/",
+    pinned: true,
+  },
 ];
