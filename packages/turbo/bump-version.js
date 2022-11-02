@@ -18,4 +18,4 @@ pkg.optionalDependencies = Object.fromEntries(
     .map((x) => [x, pkg.version])
 );
 
-fs.writeFileSync(file, JSON.stringify(pkg, null, 2)+ "\n");
+fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
