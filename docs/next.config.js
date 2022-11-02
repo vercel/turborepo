@@ -54,6 +54,7 @@ const OLD_TURBOREPO_ROUTES = [
 
 const nextConfig = withNextra({
   sentry: {
+    autoInstrumentServerFunctions: false,
     hideSourceMaps: true,
   },
   reactStrictMode: true,
