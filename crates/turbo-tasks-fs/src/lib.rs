@@ -528,6 +528,7 @@ impl FileSystem for DiskFileSystem {
             .await
             .with_context(|| format!("reading old symlink target of {}", full_path.display()))?;
         let target_link = target.await?;
+        let original_file_type = fs_path.get_type().await?;
         if target_link == old_content {
             return Ok(CompletionVc::new());
         }
@@ -545,32 +546,8 @@ impl FileSystem for DiskFileSystem {
                         )
                     })?;
             }
-        } else if matches!(file_type, FileSystemEntryType::Directory)
-            || matches!(file_type, FileSystemEntryType::File)
-        {
-            let full_path_in_remove = full_path.clone();
-            retry_future(move || {
-                let full_path = full_path_in_remove.clone();
-                async move {
-                    let full_path = full_path.clone();
-                    if matches!(file_type, FileSystemEntryType::Directory) {
-                        fs::remove_dir_all(full_path).await?;
-                    } else {
-                        fs::remove_file(full_path).await?;
-                    }
-                    Ok(())
-                }
-            })
-            .await
-            .or_else(|err| {
-                if err.kind() == ErrorKind::NotFound {
-                    Ok(())
-                } else {
-                    Err(err)
-                }
-            })
-            .with_context(|| anyhow!("removing {} failed", full_path.display()))?;
         }
+
         match &*target_link {
             LinkContent::Link { target, link_type } => {
                 let link_type = *link_type;
@@ -599,9 +576,10 @@ impl FileSystem for DiskFileSystem {
                 .await
                 .with_context(|| {
                     format!(
-                        "create symlink to {}, old file type {:?}",
+                        "create symlink to {}, old file type {:?}, original file type {:?}",
                         target_path.display(),
-                        file_type
+                        file_type,
+                        original_file_type,
                     )
                 })?;
             }
