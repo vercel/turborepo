@@ -292,11 +292,14 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to store files in HTTP cache: %w", err)
+		return fmt.Errorf("[ERROR] Failed to store files in HTTP cache: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusForbidden {
 		return c.handle403(resp.Body)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("[ERROR] Failed to store files in HTTP cache: %s against URL %s", resp.Status, requestURL)
 	}
 	return nil
 }
