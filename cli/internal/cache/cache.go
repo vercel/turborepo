@@ -86,7 +86,7 @@ allow reading and caching artifacts using the remote cache.`
 func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	// skipping remote caching not currently a flag
 	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
-	flags.StringVar(&opts.OverrideDir, "cache-dir", "", "Override the filesystem cache directoryy.")
+	flags.StringVar(&opts.OverrideDir, "cache-dir", "", "Override the filesystem cache directory.")
 	flags.IntVar(&opts.Workers, "cache-workers", 10, "Set the number of concurrent cache operations")
 }
 
