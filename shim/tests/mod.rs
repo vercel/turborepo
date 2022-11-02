@@ -93,9 +93,20 @@ fn test_find_turbo_in_example() {
             {
                 "examples/basic/node_modules/turbo/bin/turbo\n"
             }
-            #[cfg(not(target_os = "linux"))]
+            #[cfg(target_os = "macos")]
             {
                 "examples/basic/node_modules/.bin/turbo\n"
+            }
+            #[cfg(target_os = "windows")]
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    "examples\\basic\\node_modules\\turbo-windows-64\\bin\\turbo.exe\n"
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    "examples\\basic\\node_modules\\turbo-windows-arm64\\bin\\turbo.exe\n"
+                }
             }
         }));
 }
@@ -117,8 +128,16 @@ fn test_find_correct_turbo() {
         .success();
 
     if cfg!(debug_assertions) {
-        assertion.stdout(predicates::str::ends_with("target/debug/turbo\n"));
+        if cfg!(windows) {
+            assertion.stdout(predicates::str::ends_with("target\\debug\\turbo.exe\n"));
+        } else {
+            assertion.stdout(predicates::str::ends_with("target/debug/turbo\n"));
+        }
     } else {
-        assertion.stdout(predicates::str::ends_with("target/release/turbo\n"));
+        if cfg!(windows) {
+            assertion.stdout(predicates::str::ends_with("target\\release\\turbo.exe\n"));
+        } else {
+            assertion.stdout(predicates::str::ends_with("target/release/turbo\n"));
+        }
     }
 }

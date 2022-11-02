@@ -22,8 +22,8 @@ fn main() {
     bindings
         .write_to_file("src/ffi.rs")
         .expect("Couldn't write bindings!");
-
-    if cfg!(target_os = "macos") {
+    let target = build_target::target().unwrap();
+    if target.os == build_target::Os::MacOs {
         println!("cargo:rustc-link-lib=framework=cocoa");
         println!("cargo:rustc-link-lib=framework=security");
     }
@@ -55,11 +55,45 @@ fn build_debug_libturbo() -> String {
         .map(PathBuf::from)
         .unwrap()
         .join("cli");
-    let mut cmd = new_command("make");
-    cmd.current_dir(&cli_path);
-    cmd.arg("libturbo.a");
-    let mut child = cmd.spawn().expect("failed to spawn make libturbo.a");
-    child.wait().expect("failed to build libturbo.a");
+    let target = build_target::target().unwrap();
+    if target.os == build_target::Os::Windows {
+        let output_dir = env::var_os("OUT_DIR").map(PathBuf::from).unwrap();
+        let output_deps = output_dir
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("deps");
+        // workaround to make increment build works
+        for ext in ["pdb", "exe", "d", "lib"].iter() {
+            let _ = std::fs::remove_file(output_deps.join(&format!("turbo.{ext}"))).unwrap_or(());
+        }
+        let mut cmd = Command::new("go");
+        assert!(
+            cmd.current_dir(&cli_path)
+                .env("CGO_ENABLED", "1")
+                .env("CC", "clang")
+                .env("CXX", "clang++")
+                .arg("build")
+                .arg("-buildmode=c-archive")
+                .arg("-o")
+                .arg("turbo.lib")
+                .arg("./cmd/turbo/...")
+                .stdout(std::process::Stdio::inherit())
+                .status()
+                .expect("failed to build turbo.lib")
+                .success(),
+            "failed to build turbo.lib"
+        );
+    } else {
+        let mut cmd = new_command("make");
+        cmd.current_dir(&cli_path);
+        cmd.arg("libturbo.a");
+        let mut child = cmd.spawn().expect("failed to spawn make libturbo.a");
+        child.wait().expect("failed to build libturbo.a");
+    }
     cli_path.to_string_lossy().to_string()
 }
 

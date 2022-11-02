@@ -267,7 +267,16 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
         .root
         .join("node_modules")
         .join(".bin")
-        .join("turbo");
+        .join({
+            #[cfg(windows)]
+            {
+                "turbo.cmd"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        });
 
     let mut args: Vec<_> = env::args().skip(1).collect();
     if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
@@ -285,12 +294,15 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
 
     // Otherwise, we spawn a process that executes the local turbo
     // that we've found in node_modules/.bin/turbo.
-    let mut command = process::Command::new(local_turbo_path)
+    let mut command = process::Command::new(&local_turbo_path)
         .args(&args)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
-        .expect("Failed to execute turbo.");
+        .expect(&format!(
+            "Failed to execute turbo {}.",
+            local_turbo_path.display()
+        ));
 
     Ok(command.wait()?.code().unwrap_or(2))
 }
