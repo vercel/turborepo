@@ -10,6 +10,9 @@ const U8_LF: u8 = 0x0A;
 /// CARRIAGE RETURN (CR), one of the basic JS line terminators.
 const U8_CR: u8 = 0x0D;
 
+// https://github.com/rust-lang/rust/blob/6250d5a08cf0870d3655fa98b83718bc01ff6f45/library/std/src/sys_common/io.rs#L3
+const DEFAULT_BUF_SIZE: usize = 1024 * 8;
+
 #[derive(
     Default,
     Debug,
@@ -54,8 +57,14 @@ impl SourcePos {
             mut line,
             mut column,
         } = self;
+
         let mut i = 0;
         while i < code.len() {
+            // This is not a UTF-8 validator, but it's likely close enough. It's assumed
+            // that the input is valid (and if it isn't than what are you doing trying to
+            // embed it into source code anyways?). The important part is that we process in
+            // order, and use the first octet's bit pattern to decode the octet length of
+            // the char.
             match code[i] {
                 U8_LF => {
                     i += 1;
@@ -72,23 +81,34 @@ impl SourcePos {
                     line += 1;
                     column = 0;
                 }
+
+                // 1 octet chars do not have the high bit set. If it's not a LF or CR, then it's
+                // just a regular ASCII.
                 b if b & 0b10000000 == 0 => {
                     i += 1;
                     column += 1;
                 }
+
+                // 2 octet chars have a leading `110` bit pattern. None are considered line
+                // terminators.
                 b if b & 0b11100000 == 0b11000000 => {
-                    // eat 1 octet
+                    // eat this byte and the next.
                     i += 2;
                     column += 1;
                 }
+
+                // 3 octet chars have a leading `1110` bit pattern. Both the LINE/PARAGRAPH
+                // SEPARATOR exist in 3 octets.
                 b if b & 0b11110000 == 0b11100000 => {
+                    // The LINE and PARAGRAPH have the bits `11100010 10000000 1010100X`, with the X
+                    // denoting either line or paragraph.
                     let mut separator = false;
-                    if code.get(i + 1) == Some(&0b10000000) {
-                        if let Some(b) = code.get(i + 2) {
-                            separator = (b & 0b11111110) == 0b10101000
-                        }
+                    if b == 0b11100010 && code.get(i + 1) == Some(&0b10000000) {
+                        let last = code.get(i + 2).cloned().unwrap_or_default();
+                        separator = (last & 0b11111110) == 0b10101000
                     }
-                    // eat 2 octets
+
+                    // eat this byte and the next 2.
                     i += 3;
                     if separator {
                         line += 1;
@@ -97,31 +117,38 @@ impl SourcePos {
                         column += 1;
                     }
                 }
+
+                // 4 octet chars have a leading `11110` pattern, but we don't need to check because
+                // none of the other patterns matched.
                 _ => {
-                    // eat 3 octets
+                    // eat this byte and the next 3.
                     i += 4;
-                    // Surrogate pair
-                    column += 2;
+                    column += 1;
                 }
             }
         }
         self.line = line;
         self.column = column;
+
+        // It's possible we've only the buffer only contained 1 octet of a multi-octet
+        // char. So we return how many we need to eat on the next go around.
         i - code.len()
     }
 
     pub fn update_from_read<R: Read>(&mut self, reader: &mut R) -> Result<()> {
-        // It's possible we've only read a 1 byte of a multi-byte char. So we return how
-        // many we need to eat on the next go around.
         let mut eat = 0;
-        let mut buf = [0; 1024 * 8];
+        let mut buf = [0; DEFAULT_BUF_SIZE];
         loop {
             let len = reader.read(&mut buf)?;
             if len == 0 {
                 break;
             }
 
-            eat = self.update(&buf[eat..len]);
+            if len <= eat {
+                eat -= len
+            } else {
+                eat = self.update(&buf[eat..len]);
+            }
         }
         Ok(())
     }
