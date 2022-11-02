@@ -1,5 +1,6 @@
+import classNames from "classnames";
 import Link from "next/link";
-import type { Feature } from "../content/features";
+import type { Feature } from "../content/legacy-features";
 
 type FeatureProps = {
   feature: Omit<Feature, "page">;
@@ -14,7 +15,10 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
       <div className="inline-flex items-center space-x-3">
         <div className="flex items-center justify-center bg-black rounded-full bg-opacity-5 w-9 h-9 icon-circle">
           <Icon
-            className="h-8 w-8 dark:text-white flex-shrink-0 rounded-full p-1.5 text-black block dark:stroke-[url(#pink-gradient)]"
+            className={classNames(
+              "h-8 w-8 dark:text-white flex-shrink-0 p-1.5 text-black block dark:stroke-[url(#pink-gradient)]",
+              Icon.requiresFill && "dark:fill-[url(#pink-gradient)]"
+            )}
             aria-hidden="true"
           />
         </div>
@@ -29,7 +33,11 @@ const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
       </div>
       <style jsx global>{`
         html.dark .icon-circle {
-          background: linear-gradient(180deg, rgba(50, 134, 241, 0.2) 0%, rgba(195, 58, 195, 0.2) 100%);
+          background: linear-gradient(
+            180deg,
+            rgba(50, 134, 241, 0.2) 0%,
+            rgba(195, 58, 195, 0.2) 100%
+          );
         }
       `}</style>
     </>

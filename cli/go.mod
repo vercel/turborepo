@@ -1,4 +1,4 @@
-module github.com/vercel/turborepo/cli
+module github.com/vercel/turbo/cli
 
 go 1.18
 

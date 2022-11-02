@@ -6,9 +6,9 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/daemon/connector"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 )
 
 func addStartCmd(root *cobra.Command, helper *cmdutil.Helper) {

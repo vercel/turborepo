@@ -36,7 +36,7 @@ export default function Callout({
 }: {
   children: ReactNode;
   type: keyof typeof THEMES;
-  icon: ReactElement;
+  icon?: ReactElement;
 }) {
   return (
     <div className={`${THEMES[type].classes} flex rounded-lg callout mt-6`}>

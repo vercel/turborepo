@@ -9,7 +9,7 @@ This Turborepo includes the following packages/apps:
 ### Apps and Packages
 
 - `native`: a [react-native](https://reactnative.dev/) app built with [expo](https://docs.expo.dev/)
-- `web`: a [Next.js](https://nextjs.org) app built with [react-native-web](https://necolas.github.io/react-native-web/)
+- `web`: a [Next.js](https://nextjs.org/) app built with [react-native-web](https://necolas.github.io/react-native-web/)
 - `ui`: a stub [react-native](https://reactnative.dev/) component library shared by both `web` and `native` applications
 - `tsconfig`: `tsconfig.json`s used throughout the monorepo
 
@@ -28,7 +28,7 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-react-native-web with-react-native-web
+npx degit vercel/turbo/examples/with-react-native-web with-react-native-web
 cd with-react-native-web
 yarn install
 git init . && git add . && git commit -m "Init"

@@ -19,9 +19,9 @@ import (
 
 	"github.com/DataDog/zstd"
 
-	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/tarpatch"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/analytics"
+	"github.com/vercel/turbo/cli/internal/tarpatch"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 type client interface {

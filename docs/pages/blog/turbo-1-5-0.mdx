@@ -8,12 +8,25 @@ ogImage: /images/blog/turbo-1-5-0/twitter-card.png
 
 # Turborepo 1.5
 
-import { Authors } from '../../components/Authors'
-import Callout from '../../components/Callout'
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
+import Date from "../../components/blog/Date";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Monday, September 19th, 2022</div>
+<Date>
+  Monday, September 19th, 2022
+</Date>
 
-<Authors authors={[ 'mattpocock', 'gsoltis', 'nathanhammond', 'tknickman', 'anthonyshewdev', 'jaredpalmer', 'mehulkar' ]} />
+<Authors
+  authors={[
+    "mattpocock",
+    "gsoltis",
+    "nathanhammond",
+    "tknickman",
+    "anthonyshewdev",
+    "jaredpalmer",
+    "mehulkar",
+  ]}
+/>
 
 Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well as bringing big improvements to `turbo prune`:
 
@@ -31,17 +44,23 @@ Setting up a monorepo for the first time often means navigating a lot of new con
 
 This often meant that folks who wanted to set up a monorepo from scratch had to piece information together from different documentation sites. First `pnpm`, then `tsup`, then back to `changesets`, then back to Turborepo for dessert.
 
-We want to fill this gap with [the Monorepo Handbook](/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
+We want to fill this gap with [the Monorepo Handbook](/repo/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
 
-- [Installing Packages](/docs/handbook/package-installation)
-- [Linting](/docs/handbook/linting)
-- [Development Tasks](/docs/handbook/dev)
-- [Building Apps](/docs/handbook/building-your-app)
-- [Publishing Packages](/docs/handbook/publishing-packages)
+- [Installing Packages](/repo/docs/handbook/package-installation)
+- [Linting](/repo/docs/handbook/linting)
+- [Development Tasks](/repo/docs/handbook/dev)
+- [Building Apps](/repo/docs/handbook/building-your-app)
+- [Publishing Packages](/repo/docs/handbook/publishing-packages)
 
 ## Drop the `run`
 
-<iframe className="max-w-xl h-72 sm:h-96 w-full mt-6" src="https://www.youtube.com/embed/PEgk2v6KntY" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+<iframe
+  className="max-w-xl h-72 sm:h-96 w-full mt-6"
+  src="https://www.youtube.com/embed/PEgk2v6KntY"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+></iframe>
 
 You can now run tasks with the Turborepo CLI using `turbo <task>`.
 
@@ -60,11 +79,11 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 ## Prune now supported on pnpm and yarn 2+
 
-We're delighted to announce that [`turbo prune`](/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
+We're delighted to announce that [`turbo prune`](/repo/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
 
 You can use `turbo prune` to create a pruned subset of your monorepo with a dedicated lockfile--with the correct dependencies needed for a given target application and its dependencies. This is especially useful for using efficiently Turborepo within a Docker image.
 
-As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/handbook/deploying-with-docker).
+As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/repo/docs/handbook/deploying-with-docker).
 
 Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
 
@@ -93,7 +112,7 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 }
 ```
 
-`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
 
 To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod migrate-env-var-dependencies`.
 
@@ -111,7 +130,7 @@ This helps make Turborepo's cache a bit smarter, and less likely to trip up when
 
 Since releasing [Turborepo v1.4 in August](/blog/turbo-1-4-0), we've seen incredible adoption and community growth:
 
-- [9.5k+ GitHub Stars](https://github.com/vercel/turborepo)
+- [9.5k+ GitHub Stars](https://github.com/vercel/turbo)
 - [440k weekly NPM downloads](https://www.npmjs.com/package/turbo)
 - 15 years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching), saving over a 1 year per week, up 2x since July
 

@@ -5,19 +5,32 @@
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
     },
-    "lint": {
+    "//#lint": {
       "outputs": []
     },
     "check-types": {
       "outputs": [],
-      "dependsOn": ["^build"]
+      "dependsOn": ["//#build:ts", "^build"]
     },
     "dev": {
       "cache": false
     },
+    "//#build:ts": {
+      "outputs": ["packages/**/dist"],
+      "dependsOn": []
+    },
     "build": {
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
+    },
+    "//#check:prettier": {
+      "dependsOn": []
+    },
+    "//#check:toml": {
+      "dependsOn": []
+    },
+    "//#check:fmt": {
+      "dependsOn": ["//#check:prettier", "//#check:toml", "//#lint"]
     },
     "cli#build": {
       "outputs": ["turbo", "turbo.exe"],
@@ -34,7 +47,13 @@
       "outputs": []
     },
     "docs#build": {
-      "env": ["SENTRY_DSN", "TURBOREPO_SFDC_CAMPAIGN_ID", "TRAY_URL", "CONVERTKIT_API_KEY", "CONVERTKIT_API_SECRET"],
+      "env": [
+        "SENTRY_DSN",
+        "TURBOREPO_SFDC_CAMPAIGN_ID",
+        "TRAY_URL",
+        "CONVERTKIT_API_KEY",
+        "CONVERTKIT_API_SECRET"
+      ],
       "outputs": [".next/**"],
       "dependsOn": ["^build", "docs#rss", "docs#schema"]
     },

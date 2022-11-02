@@ -1,0 +1,11 @@
+[env]
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+
+[alias]
+xtask = "run --package xtask --"

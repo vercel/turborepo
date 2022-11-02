@@ -11,6 +11,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: [`"Inter"`, "sans-serif"],
+        "space-grotesk": ["Space Grotesk", "monospace"],
         mono: [
           "Menlo",
           "Monaco",
