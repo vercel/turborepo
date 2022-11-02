@@ -70,9 +70,21 @@ After configuring your workspaces, re-run your package manager's `install` comma
 Add [`turbo`](https://www.npmjs.com/package/turbo) as a development dependency at the root of your monorepo.
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```bash npm install turbo -D ```</Tab>
-  <Tab>```bash yarn add turbo -DW ```</Tab>
-  <Tab>```bash pnpm add turbo -Dw ```</Tab>
+  <Tab>
+```bash 
+npm install turbo -D 
+```
+  </Tab>
+  <Tab>
+```bash 
+yarn add turbo -DW 
+```
+  </Tab>
+  <Tab>
+```bash 
+pnpm add turbo -Dw 
+```
+  </Tab>
 </Tabs>
 
 The `turbo` package is a shell script that will install the proper `turbo-<os>-<arch>` package for your operating system and architecture.
@@ -189,9 +201,21 @@ Add or update `scripts` in your monorepo's root `package.json` file and have the
 ## Build your monorepo
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```sh npm run build ```</Tab>
-  <Tab>```sh yarn build ```</Tab>
-  <Tab>```sh pnpm build ```</Tab>
+  <Tab>
+```sh 
+npm run build 
+```
+  </Tab>
+  <Tab>
+```sh 
+yarn build 
+```
+  </Tab>
+  <Tab>
+```sh 
+pnpm build 
+```
+  </Tab>
 </Tabs>
 
 Depending on your monorepo setup, some artifacts might already be caching properly. In the next sections, we'll show how `turbo` works, how `scope` works, and then how to get caching working after that.
