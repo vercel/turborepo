@@ -32,4 +32,3 @@ jobs:
       - name: Integration Tests
         if: matrix.os != 'windows-latest'
         run: pnpm -- turbo run integration-tests --filter=cli
-

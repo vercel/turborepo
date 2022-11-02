@@ -1,0 +1,39 @@
+import Callout from "../../../../components/Callout";
+
+# JavaScript
+
+## ECMAScript Support
+
+Turbopack uses [SWC](https://swc.rs/) to bundle JavaScript and TypeScript files. So, we match SWC's support for ECMAScript versions - anything that SWC supports, Turbopack will support.
+
+This means that by default **we support all syntax in ESNext**.
+
+## Browserslist
+
+[Browserslist](https://github.com/browserslist/browserslist) has become an industry standard for defining which browsers you plan to target. To make use of it, you can add a `browserslist` field to your `package.json`:
+
+```json filename="package.json"
+{
+  "browserslist": [
+    "last 1 version",
+    "> 1%",
+    "not dead"
+  ]
+}
+```
+
+Turbopack supports Browserslist **out-of-the-box**. We pass the information we find in your `package.json` to SWC, which handles [`browserslist` support](https://swc.rs/docs/configuration/supported-browsers) for us.
+
+This means you can feel comfortable using Turbopack to target legacy browsers, or deciding to only ship code to modern browsers.
+
+<Callout type="info">
+  Turbopack is available in alpha preview with a dev server, which uses a pre-set minimal browserslist to minimize transformation during development. In a future release, Turbopack will build apps for production targeting your defined browserslist.
+</Callout>
+
+## Babel
+
+[Babel](https://babel.dev/) allows you to add custom transformations to your code to provide custom syntax, including support for early language proposals.
+
+Babel plugins are currently **not supported** on Turbopack. In our default configuration, we don't use Babel to compile JavaScript or TypeScript code.
+
+In the future, Babel support will be provided via plugins.

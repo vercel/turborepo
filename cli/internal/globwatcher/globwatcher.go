@@ -7,11 +7,11 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/filewatcher"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/filewatcher"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // ErrClosed is returned when attempting to get changed globs after glob watching has closed

@@ -3,27 +3,68 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "build": "pnpm -- turbo run build --filter=docs",
+    "build:ts": "tsc -b tsconfig.project.json",
+    "check:prettier": "prettier -c .",
+    "check:toml": "taplo format --check",
+    "format": "run-p format:prettier format:rs format:toml",
+    "format:prettier": "prettier -w .",
+    "format:rs": "cargo fmt --all",
+    "format:toml": "taplo format",
+    "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.js",
     "turbo": "cd cli && make turbo && cd .. && node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
-    "build": "pnpm -- turbo run build --filter=docs",
     "run-example": "./scripts/run-example.sh"
   },
   "devDependencies": {
-    "lint-staged": "^13.0.1",
-    "prettier": "^2.5.0",
+    "@taplo/cli": "^0.4.2",
+    "@types/react": "18.0.21",
+    "eslint": "^8.20.0",
+    "eslint-config-next": "^12.3.1",
+    "eslint-config-prettier": "^8.5.0",
+    "husky": "^8.0.1",
+    "lint-staged": "^13.0.3",
+    "next": "^12.3.1",
+    "node-gyp": "^9.1.0",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^2.7.1",
     "semver": "^7.3.5",
-    "simple-git-hooks": "^2.7.0"
+    "simple-git-hooks": "^2.7.0",
+    "typescript": "^4.8.4"
   },
   "lint-staged": {
-    "*.{ts,tsx,md,mdx,js,jsx}": [
+    "*.@(js|ts)": [
+      "eslint --quiet --fix"
+    ],
+    "*.{ts,tsx,md,mdx,js,jsx,mjs,yml,yaml,css}": [
       "prettier --write"
     ],
     "*.go": [
       "pnpm --filter cli format"
+    ],
+    "*.toml": [
+      "taplo format"
+    ],
+    "*.rs": [
+      "cargo fmt --"
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm exec lint-staged"
+    "pre-commit": "pnpm exec lint-staged && cargo fmt --all"
   },
-  "packageManager": "pnpm@7.2.1"
+  "pnpm": {
+    "packageExtensions": {
+      "@tensorflow/tfjs": {
+        "peerDependencies": {
+          "long": "^5.2.0"
+        }
+      },
+      "@tensorflow/tfjs-node": {
+        "peerDependencies": {
+          "@tensorflow/tfjs-core": "^3.20.0"
+        }
+      }
+    }
+  },
+  "packageManager": "pnpm@7.13.5"
 }

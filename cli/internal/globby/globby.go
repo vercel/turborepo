@@ -8,10 +8,10 @@ import (
 
 	iofs "io/fs"
 
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs"
 
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // GlobAll returns an array of files and folders that match the specified set of glob patterns.

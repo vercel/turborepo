@@ -1,7 +1,10 @@
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
-use std::fs;
-use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspaces {
@@ -35,7 +38,8 @@ pub struct Globs {
 impl PackageManager {
     /// Returns a list of globs for the package workspace.
     /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
-    /// may need to iterate through these globs and a `GlobSet` doesn't allow that.
+    /// may need to iterate through these globs and a `GlobSet` doesn't allow
+    /// that.
     ///
     /// # Arguments
     ///
@@ -46,7 +50,6 @@ impl PackageManager {
     /// # Examples
     ///
     /// ```
-    ///
     /// ```
     pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Globs> {
         let globs = match self {
@@ -54,7 +57,11 @@ impl PackageManager {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
                 let workspaces: PnpmWorkspaces = serde_yaml::from_str(&workspace_yaml)?;
                 if workspaces.packages.is_empty() {
-                    return Err(anyhow!("pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and thus packages to be defined in the root pnpm-workspace.yaml"));
+                    return Err(anyhow!(
+                        "pnpm-workspace.yaml: no packages found. Turborepo requires pnpm \
+                         workspaces and thus packages to be defined in the root \
+                         pnpm-workspace.yaml"
+                    ));
                 } else {
                     workspaces.packages
                 }
@@ -64,7 +71,10 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.is_empty() {
-                    return Err(anyhow!("package.json: no packages found. Turborepo requires packages to be defined in the root package.json"));
+                    return Err(anyhow!(
+                        "package.json: no packages found. Turborepo requires packages to be \
+                         defined in the root package.json"
+                    ));
                 } else {
                     package_json.workspaces
                 }
@@ -91,8 +101,9 @@ impl PackageManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn test_get_workspace_globs() {
