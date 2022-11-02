@@ -118,7 +118,7 @@ Sometimes you really don't want to write the cache output (e.g. when you're usin
 ```shell
 # Run `dev` npm script in all workspaces in parallel,
 # but don't cache the output
-turbo run dev --parallel --no-cache
+turbo run dev --no-cache
 ```
 
 Note that `--no-cache` disables cache writes but does not disable cache reads. If you want to disable cache reads, use the `--force` flag.
@@ -130,7 +130,8 @@ You can also disable caching on specific tasks by setting the [`pipeline.<task>.
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }

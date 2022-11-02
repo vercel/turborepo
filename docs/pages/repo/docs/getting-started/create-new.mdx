@@ -283,7 +283,7 @@ To see this in action, let's add a script to the root `package.json`:
 {
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev",
     "lint": "turbo run lint",
 +   "hello": "turbo run hello"
   }
@@ -509,13 +509,19 @@ Take a look at `turbo.json`:
 {
   "pipeline": {
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
 ```
 
-Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so caching it makes no sense. Learn more about in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the
+results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so there
+is nothing to cache. Learn more about in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+Additionally, we set `"persistent": true`, to let turbo know that this is a long-running dev server,
+so that turbo can ensure that no other tasks depend on it. You can read more in the [docs for the
+`persistent` option](/repo/docs/reference/configuration#persistent).
 
 #### Running `dev` on only one workspace at a time
 

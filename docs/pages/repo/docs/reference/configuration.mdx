@@ -72,7 +72,8 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
       "outputMode": "full"
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -199,7 +200,8 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
     "dev": {
       // Never cache anything (including logs) emitted by a
       // `dev` task
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -225,7 +227,8 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
       "dependsOn": ["build"]
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -288,6 +291,28 @@ Set type of output logging.
     "test": {
       "outputs": [],
       "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+### `persistent`
+
+`type: boolean`
+
+Label a task as `persistent` if it is a long-running process, such as a dev server or `--watch` mode.
+Turbo will prevent other tasks from depending on persistent tasks. Without setting this
+config, if any other task depends on `dev`, it will never run, because `dev` never exits. With this
+option, `turbo` can warn you about an invalid configuration.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "dev": {
+      "persistent": true
     }
   }
 }
