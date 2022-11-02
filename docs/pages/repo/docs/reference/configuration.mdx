@@ -292,3 +292,23 @@ Set type of output logging.
   }
 }
 ```
+
+### `persistent`
+
+`type: boolean`
+
+Label a task as `persistent` if it is a long-running process, such as a dev server or `--watch` mode.
+Turbo will prevent persistent tasks from depending on each other.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "dev": {
+      "persistent": true,
+    }
+  }
+}
+```
