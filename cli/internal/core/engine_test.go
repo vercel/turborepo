@@ -55,7 +55,7 @@ func TestEngineDefault(t *testing.T) {
 		t.Fatal("AddTask is not adding tasks (test)")
 	}
 
-	err := p.Prepare(&EngineExecutionOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"a", "b", "c"},
 		TaskNames: []string{"test"},
 		TasksOnly: false,
@@ -65,7 +65,7 @@ func TestEngineDefault(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	errs := p.Execute(testVisitor, ExecOpts{
+	errs := p.Execute(testVisitor, EngineExecutionOptions{
 		Concurrency: 10,
 	})
 
@@ -135,14 +135,14 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	// but the combination of that package and task causes
 	// dependencies to also get run. This is the equivalent of
 	// turbo run test --filter=app2
-	err := p.Prepare(&EngineExecutionOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app2"},
 		TaskNames: []string{"test"},
 	})
 	if err != nil {
 		t.Fatalf("failed to prepare engine: %v", err)
 	}
-	errs := p.Execute(testVisitor, ExecOpts{
+	errs := p.Execute(testVisitor, EngineExecutionOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -188,12 +188,12 @@ func TestRunPackageTask(t *testing.T) {
 	})
 	// equivalent to "turbo run special", without an entry for
 	// "special" in turbo.json. Only "app1#special" is defined.
-	err := p.Prepare(&EngineExecutionOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1", "libA"},
 		TaskNames: []string{"special"},
 	})
 	assert.NilError(t, err, "Prepare")
-	errs := p.Execute(testVisitor, ExecOpts{
+	errs := p.Execute(testVisitor, EngineExecutionOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -219,7 +219,7 @@ func TestRunWithNoTasksFound(t *testing.T) {
 	dependOnBuild := make(util.Set)
 	dependOnBuild.Add("build")
 
-	err := p.Prepare(&EngineExecutionOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app", "lib"},
 		TaskNames: []string{"build"},
 	})
@@ -251,14 +251,14 @@ func TestIncludeRootTasks(t *testing.T) {
 		TopoDeps: make(util.Set),
 		Deps:     make(util.Set),
 	})
-	err := p.Prepare(&EngineExecutionOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{util.RootPkgName, "app1", "libA"},
 		TaskNames: []string{"build", "test"},
 	})
 	if err != nil {
 		t.Fatalf("failed to prepare engine: %v", err)
 	}
-	errs := p.Execute(testVisitor, ExecOpts{
+	errs := p.Execute(testVisitor, EngineExecutionOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -307,12 +307,12 @@ func TestDependOnRootTask(t *testing.T) {
 	err := p.AddDep("//#root-task", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&EngineExecutionOptions{
+	err = p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
 	assert.NilError(t, err, "Prepare")
-	errs := p.Execute(testVisitor, ExecOpts{
+	errs := p.Execute(testVisitor, EngineExecutionOptions{
 		Concurrency: 10,
 	})
 	for _, err := range errs {
@@ -347,7 +347,7 @@ func TestDependOnMissingRootTask(t *testing.T) {
 	err := p.AddDep("//#root-task", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&EngineExecutionOptions{
+	err = p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -379,7 +379,7 @@ func TestDependOnUnenabledRootTask(t *testing.T) {
 	err := p.AddDep("//#foo", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&EngineExecutionOptions{
+	err = p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -423,7 +423,7 @@ func TestEngineTasksOnly(t *testing.T) {
 		t.Fatal("AddTask is not adding tasks (test)")
 	}
 
-	err := p.Prepare(&EngineExecutionOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"a", "b", "c"},
 		TaskNames: []string{"test"},
 		TasksOnly: true,
@@ -433,7 +433,7 @@ func TestEngineTasksOnly(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	errs := p.Execute(testVisitor, ExecOpts{
+	errs := p.Execute(testVisitor, EngineExecutionOptions{
 		Concurrency: 10,
 	})
 
