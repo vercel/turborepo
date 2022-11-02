@@ -478,4 +478,10 @@ export const users: Array<TurboUser> = [
       width: 150,
     },
   },
+  {
+    caption: "BuildPass",
+    image: "/images/logos/buildpass.svg",
+    infoLink: "https://www.buildpass.com.au/",
+    pinned: true,
+  },
 ];
