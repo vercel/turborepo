@@ -33,7 +33,7 @@ impl Bundler for Vite {
             install_dir,
             &[
                 NpmPackage::new("vite", "3.0.9"),
-                NpmPackage::new("@vitejs/plugin-react", "2.1.0"),
+                NpmPackage::new("vite-plugin-swc-react-refresh", "2.2.0"),
             ],
         )
         .context("failed to install from npm")?;
