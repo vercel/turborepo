@@ -3,14 +3,18 @@ package prune
 import (
 	"bufio"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/vercel/turbo/cli/internal/cmdutil"
-	"github.com/vercel/turbo/cli/internal/context"
-	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turborepo/cli/internal/cmdutil"
+	"github.com/vercel/turborepo/cli/internal/context"
+	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turborepo/cli/internal/packagemanager"
+	"github.com/vercel/turborepo/cli/internal/scm"
+	"github.com/vercel/turborepo/cli/internal/scope"
+	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turborepo/cli/internal/ui"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -19,13 +23,14 @@ import (
 )
 
 type opts struct {
-	scope     string
-	docker    bool
-	outputDir string
+	scopeOpts     scope.Opts
+	singlePackage bool
+	docker        bool
+	outputDir     string
 }
 
 func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
-	flags.StringVar(&opts.scope, "scope", "", "Specify package to act as entry point for pruned monorepo (required).")
+	scope.AddFlags(&opts.scopeOpts, flags)
 	flags.BoolVar(&opts.docker, "docker", false, "Output pruned workspace into 'full' and 'json' directories optimized for Docker layer caching.")
 	flags.StringVar(&opts.outputDir, "out-dir", "out", "Set the root directory for files output by this command")
 	// No-op the cwd flag while the root level command is not yet cobra
@@ -40,7 +45,7 @@ func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
 func GetCmd(helper *cmdutil.Helper) *cobra.Command {
 	opts := &opts{}
 	cmd := &cobra.Command{
-		Use:                   "prune --scope=<package name> [<flags>]",
+		Use:                   "prune [<flags>]",
 		Short:                 "Prepare a subset of your monorepo.",
 		SilenceUsage:          true,
 		SilenceErrors:         true,
@@ -50,11 +55,8 @@ func GetCmd(helper *cmdutil.Helper) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if opts.scope == "" {
-				err := errors.New("at least one target must be specified")
-				base.LogError(err.Error())
-				return err
-			}
+			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
+			opts.singlePackage = packageMode == packagemanager.Single
 			p := &prune{
 				base,
 			}
@@ -90,10 +92,34 @@ func (p *prune) prune(opts *opts) error {
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
-	p.base.Logger.Trace("scope", "value", opts.scope)
-	target, scopeIsValid := ctx.PackageInfos[opts.scope]
-	if !scopeIsValid {
-		return errors.Errorf("invalid scope: package %v not found", opts.scope)
+
+	var pkgDepGraph *context.Context
+	if opts.singlePackage {
+		pkgDepGraph, err = context.SinglePackageGraph(p.base.RepoRoot, rootPackageJSON)
+	} else {
+		pkgDepGraph, err = context.BuildPackageGraph(p.base.RepoRoot, rootPackageJSON)
+	}
+	if err != nil {
+		var warnings *context.Warnings
+		if errors.As(err, &warnings) {
+			p.base.LogWarning("Issues occurred when constructing package graph. Turbo will function, but some features may not be available", err)
+		} else {
+			return err
+		}
+	}
+
+	scmInstance, err := scm.FromInRepo(p.base.RepoRoot)
+	if err != nil {
+		if errors.Is(err, scm.ErrFallback) {
+			p.base.LogWarning("", err)
+		} else {
+			return errors.Wrap(err, "failed to create SCM")
+		}
+	}
+	filteredPkgs, _, err := scope.ResolvePackages(&opts.scopeOpts, p.base.RepoRoot.ToStringDuringMigration(), scmInstance, pkgDepGraph, p.base.UI, p.base.Logger)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to resolve packages to run")
 	}
 	outDir := p.base.RepoRoot.UntypedJoin(opts.outputDir)
 	fullDir := outDir
@@ -101,12 +127,21 @@ func (p *prune) prune(opts *opts) error {
 		fullDir = fullDir.UntypedJoin("full")
 	}
 
-	p.base.Logger.Trace("target", "value", target.Name)
-	p.base.Logger.Trace("directory", "value", target.Dir)
-	p.base.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
-	p.base.Logger.Trace("internal deps", "value", target.InternalDeps)
+	p.base.Logger.Trace("filtered packages", "value", strings.Join(filteredPkgs.UnsafeListOfStrings(), ", "))
 	p.base.Logger.Trace("docker", "value", opts.docker)
 	p.base.Logger.Trace("out dir", "value", outDir.ToString())
+
+	for _, pkg := range filteredPkgs {
+		p.base.Logger.Trace("package", "value", pkg)
+		target, scopeIsValid := ctx.PackageInfos[pkg]
+		if !scopeIsValid {
+			return errors.Errorf("invalid scope: package %v not found", pkg)
+		}
+		p.base.Logger.Trace("target", "value", target.Name)
+		p.base.Logger.Trace("directory", "value", target.Dir)
+		p.base.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
+		p.base.Logger.Trace("internal deps", "value", target.InternalDeps)
+	}
 
 	canPrune, err := ctx.PackageManager.CanPrune(p.base.RepoRoot)
 	if err != nil {
@@ -119,7 +154,7 @@ func (p *prune) prune(opts *opts) error {
 		return errors.New("Cannot prune without parsed lockfile")
 	}
 
-	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
+	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(strings.Join(filteredPkgs.UnsafeListOfStrings(), ", ")), ui.Bold(outDir.ToString())))
 
 	packageJSONPath := outDir.UntypedJoin("package.json")
 	if err := packageJSONPath.EnsureDir(); err != nil {
@@ -140,12 +175,18 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	targets := []interface{}{opts.scope}
-	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
-	if err != nil {
-		return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
+
+	targets := filteredPkgs.Copy()
+	for _, pkg := range filteredPkgs {
+		internalDeps, err := ctx.TopologicalGraph.Ancestors(pkg)
+		if err != nil {
+			return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
+		}
+		for _, internalDep := range internalDeps {
+			targets.Add(internalDep)
+		}
 	}
-	targets = append(targets, internalDeps.List()...)
+	p.base.Logger.Trace("targets", "value", targets)
 
 	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
 	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
