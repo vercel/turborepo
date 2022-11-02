@@ -22,13 +22,21 @@ impl ContentSource for CombinedContentSource {
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
+        let mut custom_not_found: Option<ContentSourceResultVc> = None;
+
         for source in self.sources.iter() {
             let result = source.get(path, data.clone());
             if !matches!(&*result.await?, ContentSourceResult::NotFound) {
                 return Ok(result);
             }
+
+            let result = source.get("404", data.clone());
+            if !matches!(&*result.await?, ContentSourceResult::NotFound) {
+                custom_not_found = Some(result);
+            }
         }
-        Ok(ContentSourceResult::NotFound.cell())
+
+        Ok(custom_not_found.unwrap_or_else(|| ContentSourceResult::NotFound.cell()))
     }
 }
 
