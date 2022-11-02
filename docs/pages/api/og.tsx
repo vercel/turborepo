@@ -67,7 +67,6 @@ export default async function openGraphImage(
   req: NextApiRequest
 ): Promise<ImageResponse> {
   try {
-    throw new Error()
     const [fonts, bg] = await loadAssets();
     const { searchParams } = new URL(req.url);
 
