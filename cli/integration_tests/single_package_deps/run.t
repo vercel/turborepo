@@ -6,12 +6,12 @@ Check
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 997dfab9b5f7d011
+  build: cache miss, executing 08d0a37ad9eee1e5
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache miss, executing eb8693ff43bebba1
+  test: cache miss, executing cb5a64e4f86a6543
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -25,12 +25,12 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying output 997dfab9b5f7d011
+  build: cache hit, replaying output 08d0a37ad9eee1e5
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache hit, replaying output eb8693ff43bebba1
+  test: cache hit, replaying output cb5a64e4f86a6543
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]

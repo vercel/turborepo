@@ -12,14 +12,14 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/env"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/hashing"
-	"github.com/vercel/turborepo/cli/internal/inference"
-	"github.com/vercel/turborepo/cli/internal/nodes"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/hashing"
+	"github.com/vercel/turbo/cli/internal/inference"
+	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -293,7 +293,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
-		outputs:              outputs,
+		outputs:              outputs.Sort(),
 		passThruArgs:         args,
 		hashableEnvPairs:     hashableEnvPairs,
 		globalHash:           th.globalHash,

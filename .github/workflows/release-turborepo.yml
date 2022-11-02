@@ -19,7 +19,6 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
-          extra-flags: "--filter=!@vercel/nft-tests"
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -38,7 +37,6 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
-          extra-flags: "--filter=!@vercel/nft-tests"
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -75,7 +73,6 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
-          extra-flags: "--filter=!@vercel/nft-tests"
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -107,7 +104,6 @@ jobs:
       - run: git fetch origin --tags
       - uses: ./.github/actions/setup-node
         with:
-          extra-flags: "--filter=!@vercel/nft-tests"
           enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:

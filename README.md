@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a aria-label="Vercel logo" href="https://vercel.com">
+  <a aria-label="Vercel logo" href="https://vercel.com/">
     <img src="https://img.shields.io/badge/MADE%20BY%20Vercel-000000.svg?style=for-the-badge&logo=Vercel&labelColor=000">
   </a>
   <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo">
@@ -23,11 +23,10 @@
   </a>
 </p>
 
-
-Turbo is an next-generation toolchain for frontend development, written in Rust. It consists of 3 major parts:
+Turbo is a next-generation toolchain for frontend development, written in Rust. It consists of 3 major parts:
 
 - [**Turbopack:**](https://turbo.build/pack) an incremental bundler (the successor to Webpack)
-- [**Turborepo:**](https://turbo.build/repo) an incremental build system 
+- [**Turborepo:**](https://turbo.build/repo) an incremental build system
 - The Turbo engine: a low-level incremental computation and memoization engine
 
 ## Getting Started

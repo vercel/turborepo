@@ -8,7 +8,7 @@ import (
 	"github.com/andybalholm/crlf"
 	"github.com/iseki0/go-yarnlock"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 var _crlfLiteral = []byte("\r\n")

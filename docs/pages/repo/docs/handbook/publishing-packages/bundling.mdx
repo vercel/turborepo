@@ -27,7 +27,7 @@ At the end of that tutorial, we had a package set up under `/packages`, which lo
 └── turbo.json
 ```
 
-We're going to add a `build` script to `math-helpers`, using a bundler. If you're unsure which one to choose, we recommend [`tsup`](https://tsup.egoist.dev).
+We're going to add a `build` script to `math-helpers`, using a bundler. If you're unsure which one to choose, we recommend [`tsup`](https://tsup.egoist.dev/).
 
 <Tabs items={['tsup']} storageKey="selected-bundler">
   <Tab>
@@ -81,7 +81,7 @@ Bundling is a complicated topic, and we don't have space here to cover everythin
 
 ### Building our package before our app
 
-Before we can run `turbo run build`, there's one thing we need to consider. We've just added a [task dependency](/repo/docs/core-concepts/running-tasks) into our monorepo. The `build` of `packages/math-helpers` needs to run **before** the `build` of `apps/web`.
+Before we can run `turbo run build`, there's one thing we need to consider. We've just added a [task dependency](/repo/docs/core-concepts/monorepos/running-tasks) into our monorepo. The `build` of `packages/math-helpers` needs to run **before** the `build` of `apps/web`.
 
 Fortunately, we can use `dependsOn` to easily configure this.
 
