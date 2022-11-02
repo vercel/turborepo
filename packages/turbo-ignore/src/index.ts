@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+import meow from "meow";
 import { exec } from "child_process";
 import { getTurboRoot, getScopeFromPath, getScopeFromArgs } from "turbo-utils";
 import { getComparison } from "./getComparison";
@@ -10,7 +10,26 @@ run()
     process.exit(1);
   });
 
+const helpText = `
+  Usage:
+    $ npx turbo-ignore
+
+  Flags:
+    --help, -h          Show this help message
+    --version, -v       Show the version of this script
+`;
+
 async function run() {
+  let { flags, input, showHelp, showVersion } = meow(helpText, {
+    flags: {
+      help: { type: "boolean", default: false, alias: "h" },
+    },
+  });
+
+  // these helper functions will process.exit()
+  if (flags.help) showHelp();
+  if (flags.version) showVersion();
+
   console.log(
     "\u226B Using Turborepo to determine if this project is affected by the commit..."
   );
@@ -34,6 +53,7 @@ async function run() {
   }
 
   // Find the scope of the project
+
   const argsScope = getScopeFromArgs({ args: process.argv.slice(2) });
   const pathScope = getScopeFromPath({ cwd: process.cwd() });
   const { context, scope } = argsScope.scope ? argsScope : pathScope;
