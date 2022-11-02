@@ -523,15 +523,11 @@ impl FileSystem for DiskFileSystem {
         target: LinkContentVc,
     ) -> Result<CompletionVc> {
         let raw_path_file_type = fs_path.get_type().await?;
-
-        let full_path = self.to_sys_path(fs_path).await?;
-
+        // return if the link target is not existed
         if matches!(&*raw_path_file_type, FileSystemEntryType::NotFound) {
-            return Err(anyhow!(
-                "the linked target is not existed {}",
-                full_path.display()
-            ));
+            return Ok(CompletionVc::new());
         }
+        let full_path = self.to_sys_path(fs_path).await?;
         let old_content = fs_path
             .read_link()
             .await

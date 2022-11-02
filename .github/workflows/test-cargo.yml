@@ -96,9 +96,10 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
-      - name: Run node-gyp install
-        run: pnpx node-gyp install
-
+      - name: Prepare toolchain on Windows
+        run: |
+          pnpx node-gyp install
+          choco install protoc -y
         if: matrix.os.name == 'windows-latest'
 
       - name: Install tests dependencies
