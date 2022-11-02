@@ -41,6 +41,26 @@ func getPidFile(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	return dir.UntypedJoin("turbod-test.pid")
 }
 
+func TestGetOrStartDaemonInvalidPIDFile(t *testing.T) {
+	logger := hclog.Default()
+	dir := t.TempDir()
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
+
+	pidPath := getPidFile(dirPath)
+	writeFileErr := pidPath.WriteFile(nil, 0777)
+	assert.NilError(t, writeFileErr, "WriteFile")
+
+	c := &Connector{
+		Logger:  logger,
+		Opts:    Opts{},
+		PidPath: pidPath,
+	}
+
+	pid, err := c.getOrStartDaemon()
+	assert.Equal(t, pid, 0)
+	assert.ErrorContains(t, err, "issue was encountered with the pid file")
+}
+
 func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	// We aren't starting a server that is going to write
 	// to our socket file, so we should see a series of connection
