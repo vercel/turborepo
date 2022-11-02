@@ -9,6 +9,8 @@ assert_cmd = "2.0.4"
 
 [dependencies]
 anyhow = { version = "1.0.65", features = ["backtrace"] }
+# clap cannot be upgraded to v4 due to a bug with ignore_errors:
+# https://github.com/clap-rs/clap/issues/4391
 clap = { version = "3.2.22", features = ["derive"] }
 globset = "0.4.9"
 predicates = "2.1.1"
