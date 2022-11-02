@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 	"muzzammil.xyz/jsonc"
 )
 
@@ -121,6 +121,17 @@ type TaskOutputs struct {
 	Exclusions []string
 }
 
+// Sort contents of task outputs
+func (to TaskOutputs) Sort() TaskOutputs {
+	var inclusions []string
+	var exclusions []string
+	copy(inclusions, to.Inclusions)
+	copy(exclusions, to.Exclusions)
+	sort.Strings(inclusions)
+	sort.Strings(exclusions)
+	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
+}
+
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
 
@@ -154,7 +165,7 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	}
 
 	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turborepo.org/docs/getting-started to create one", configFile)
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct

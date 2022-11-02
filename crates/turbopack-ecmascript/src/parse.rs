@@ -19,15 +19,12 @@ use swc_core::{
         visit::VisitMutWith,
     },
 };
-use turbo_tasks::{
-    primitives::{StringVc, U64Vc},
-    Value, ValueToString,
-};
+use turbo_tasks::{primitives::U64Vc, Value};
 use turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
 use turbo_tasks_hash::{DeterministicHasher, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{AssetContent, AssetVc},
-    code_builder::{EncodedSourceMap, EncodedSourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -97,19 +94,16 @@ impl ParseResultSourceMap {
 }
 
 #[turbo_tasks::value_impl]
-impl EncodedSourceMap for ParseResultSourceMap {
+impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn encoded_map(&self) -> Result<StringVc> {
-        let source_map = self.source_map.build_source_map_with_config(
+    fn generate_source_map(&self) -> SourceMapVc {
+        let map = self.source_map.build_source_map_with_config(
             // SWC expects a mutable vec, but it never modifies. Seems like an oversight.
             &mut self.mappings.clone(),
             None,
             InlineSourcesContentConfig {},
         );
-        let mut bytes = vec![];
-        source_map.to_writer(&mut bytes)?;
-        let s = String::from_utf8(bytes)?;
-        Ok(StringVc::cell(s))
+        SourceMapVc::new_regular(map)
     }
 }
 
@@ -122,7 +116,7 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
             // The Custom filename surrounds the name with <>.
-            FileName::Custom(s) => String::from("/") + s,
+            FileName::Custom(s) => format!("/{}", s),
             _ => f.to_string(),
         }
     }
@@ -140,7 +134,6 @@ pub async fn parse(
 ) -> Result<ParseResultVc> {
     let content = source.content();
     let fs_path = &*source.path().await?;
-    let fs_path_str = &*source.path().to_string().await?;
     let file_path_hash = *hash_file_path(source.path()).await? as u128;
     let ty = ty.into_value();
     Ok(match &*content.await? {
@@ -149,16 +142,7 @@ pub async fn parse(
             FileContent::Content(file) => match String::from_utf8(file.content().to_vec()) {
                 Ok(string) => {
                     let transforms = &*transforms.await?;
-                    parse_content(
-                        string,
-                        fs_path,
-                        fs_path_str,
-                        file_path_hash,
-                        source,
-                        ty,
-                        transforms,
-                    )
-                    .await?
+                    parse_content(string, fs_path, file_path_hash, source, ty, transforms).await?
                 }
                 // FIXME: report error
                 Err(_err) => ParseResult::Unparseable.cell(),
@@ -171,7 +155,6 @@ pub async fn parse(
 async fn parse_content(
     string: String,
     fs_path: &FileSystemPath,
-    fs_path_str: &str,
     file_path_hash: u128,
     source: AssetVc,
     ty: EcmascriptModuleAssetType,
@@ -197,7 +180,7 @@ async fn parse_content(
             })
         },
         async {
-            let file_name = FileName::Custom(fs_path_str.to_string());
+            let file_name = FileName::Custom(fs_path.path.clone());
             let fm = source_map.new_source_file(file_name.clone(), string);
 
             let comments = SwcComments::default();

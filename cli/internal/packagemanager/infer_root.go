@@ -3,8 +3,8 @@ package packagemanager
 import (
 	"path/filepath"
 
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // PackageType represents the mode in which turbo is running.

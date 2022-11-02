@@ -3,7 +3,7 @@ title: You might not need TypeScript project references
 date: 2021/04/23
 description: As it turns out, you might not even references or even an interim TypeScript build step with a pattern I am about to show you, which I dub "internal packages."
 tag: web development
-ogImage: /images/blog/og-project-references.png
+ogImage: /images/blog/you-might-not-need-typescript-project-references/twitter-card.png
 ---
 
 # You might not need TypeScript project references
@@ -12,7 +12,7 @@ import { Authors } from "../../components/Authors";
 
 <Authors authors={["jaredpalmer"]} />
 
-If you've worked in a larger TypeScript codebase or monorepo, you are likely familiar with [project references](https://www.typescriptlang.org/docs/handbook/project-references.html "TypeScript Project References Documentation"). They are indeed fairly powerful.
+If you've worked in a larger TypeScript codebase or monorepo, you are likely familiar with [project references](https://www.typescriptlang.org/docs/handbook/project-references.html). They are indeed fairly powerful.
 
 When you reference a project in your `tsconfig.json`, new things happen:
 
@@ -64,7 +64,7 @@ Internal packages just work. No extra config is needed.
 
 ### React Native
 
-If you use [Expo](https://expo.io) and use the [`expo-yarn-workspaces`](https://github.com/expo/expo/tree/master/packages/expo-yarn-workspaces) or [`@turborepo/adapter-expo`](https://www.npmjs.com/package/@turborepo/adapter-expo) package, you can use internal packages as long as you are targeting iOS or Android. When you run Expo for these platforms, all of `node_modules` are automatically transpiled with [Metro](https://facebook.github.io/metro/). However, if you are targeting Expo for web, internal packages will not work because `node_modules` are oddly not transpiled for web.
+If you use [Expo](https://expo.dev/) and use the [`expo-yarn-workspaces`](https://github.com/expo/expo/tree/master/packages/expo-yarn-workspaces) or [`@turborepo/adapter-expo`](https://www.npmjs.com/package/@turborepo/adapter-expo) package, you can use internal packages as long as you are targeting iOS or Android. When you run Expo for these platforms, all of `node_modules` are automatically transpiled with [Metro](https://facebook.github.io/metro/). However, if you are targeting Expo for web, internal packages will not work because `node_modules` are oddly not transpiled for web.
 
 _I reached out to the Expo team about this inconsistency. They are aware of it. It's a legacy wart I'm told._
 

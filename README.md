@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a aria-label="Vercel logo" href="https://vercel.com">
+  <a aria-label="Vercel logo" href="https://vercel.com/">
     <img src="https://img.shields.io/badge/MADE%20BY%20Vercel-000000.svg?style=for-the-badge&logo=Vercel&labelColor=000">
   </a>
   <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo">
@@ -23,7 +23,7 @@
   </a>
 </p>
 
-Turbo is an next-generation toolchain for frontend development, written in Rust. It consists of 3 major parts:
+Turbo is a next-generation toolchain for frontend development, written in Rust. It consists of 3 major parts:
 
 - [**Turbopack:**](https://turbo.build/pack) an incremental bundler (the successor to Webpack)
 - [**Turborepo:**](https://turbo.build/repo) an incremental build system
@@ -41,7 +41,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
 
 The Turbo community can be found on [GitHub Discussions](https://github.com/vercel/turbo/discussions), where you can ask questions, voice ideas, and share your projects.
 
-To chat with other community members, you can join the [Turbo Discord](https://turbo.build/discord)
+To chat with other community members, you can join the [Turbo Discord](https://turbo.build/discord).
 
 Our [Code of Conduct](https://github.com/vercel/turbo/blob/main/CODE_OF_CONDUCT.md) applies to all Turbo community channels.
 
@@ -51,7 +51,7 @@ Turbo is used by the world's leading companies. Check out the [Turbo Showcase](h
 
 ## Updates
 
-Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates
+Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates.
 
 ## Authors
 

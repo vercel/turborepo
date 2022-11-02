@@ -71,6 +71,7 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                             || async {
                                 PreparedApp::new(bundler, test_app.path().to_path_buf()).await
                             },
+                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
@@ -210,24 +211,14 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                     .page()
                                     .evaluate_expression("globalThis.HMR_IS_HAPPENING = true")
                                     .await?;
-
-                                // Make warmup change
-                                for i in (0..MAX_UPDATE_TIMEOUT.as_secs() / 5).rev() {
-                                    match make_change(&mut guard, location, Duration::from_secs(5))
-                                        .await
-                                    {
-                                        Ok(_) => break,
-                                        Err(err) => {
-                                            if i != 0
-                                                && err.to_string().contains(CHANGE_TIMEOUT_MESSAGE)
-                                            {
-                                                continue;
-                                            }
-                                            return Err(err);
-                                        }
-                                    }
+                                Ok(guard)
+                            },
+                            |mut guard| async move {
+                                // Make 5 changes to warm up.
+                                for _ in 0..5 {
+                                    let _ =
+                                        make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await;
                                 }
-
                                 Ok(guard)
                             },
                             |mut guard| async move {
@@ -322,6 +313,7 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                 app.stop_server()?;
                                 Ok(app)
                             },
+                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;

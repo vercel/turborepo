@@ -82,7 +82,7 @@ export const LearnMoreArea = () => {
           description: `The way you run your tasks is probably not optimized. Turborepo speeds them up with smart scheduling, minimising idle CPU's.`,
           name: "Maximum Multitasking",
         }}
-        href="/repo/docs/core-concepts/running-tasks"
+        href="/repo/docs/core-concepts/monorepos/running-tasks"
       ></DetailedFeatureLink>
     </div>
   );

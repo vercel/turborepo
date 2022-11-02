@@ -13,9 +13,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/karrick/godirwalk"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // watchAddMode is used to indicate whether watchRecursively should synthesize events

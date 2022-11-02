@@ -8,12 +8,12 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/context"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/packagemanager"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type mockSCM struct {
@@ -248,7 +248,7 @@ func TestResolvePackages(t *testing.T) {
 		},
 		{
 			// make sure multiple apps with the same prefix are handled separately.
-			// prevents this issue: https://github.com/vercel/turborepo/issues/1528
+			// prevents this issue: https://github.com/vercel/turbo/issues/1528
 			name:     "Two apps with an overlapping prefix changed",
 			changed:  []string{"app/app2/src/index.js", "app/app2-a/src/index.js"},
 			expected: []string{"app2", "app2-a"},

@@ -60,8 +60,10 @@ const theme = {
 
     let ogUrl;
 
-    if (frontMatter.ogImage || asPath === "/") {
-      ogUrl = `${SITE_ROOT}/og-image.png`;
+    if (asPath === "/") {
+      ogUrl = `${SITE_ROOT}/api/og`;
+    } else if (frontMatter?.ogImage) {
+      ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
     } else {
       const type = asPath.startsWith("/repo")
         ? "repo"
@@ -72,7 +74,7 @@ const theme = {
         ? `&title=${encodeURIComponent(frontMatter.title)}`
         : "";
 
-      ogUrl = `https://turbo-site-og.vercel.app/api/og?type=${type}${title}`;
+      ogUrl = `${SITE_ROOT}/api/og?type=${type}${title}`;
     }
 
     return (

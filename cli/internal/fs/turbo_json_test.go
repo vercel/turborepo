@@ -8,8 +8,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func assertIsSorted(t *testing.T, arr []string, msg string) {
@@ -232,6 +233,16 @@ func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	// check global env vars also
 	assert.EqualValues(t, sortedArray([]string{"FOO", "BAR", "BAZ", "QUX"}), sortedArray(turboJSON.GlobalEnv))
 	assert.EqualValues(t, sortedArray([]string{"somefile.txt"}), sortedArray(turboJSON.GlobalDeps))
+}
+
+func Test_TaskOutputsSort(t *testing.T) {
+	inclusions := []string{"foo/**", "bar"}
+	exclusions := []string{"special-file", ".hidden/**"}
+	taskOutputs := TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
+	sortedOutputs := taskOutputs.Sort()
+	assertIsSorted(t, sortedOutputs.Inclusions, "Inclusions")
+	assertIsSorted(t, sortedOutputs.Exclusions, "Exclusions")
+	assert.False(t, cmp.DeepEqual(taskOutputs, sortedOutputs)().Success())
 }
 
 // Helpers

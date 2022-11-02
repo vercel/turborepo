@@ -31,6 +31,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bitflags::bitflags;
 use glob::GlobVc;
 use invalidator_map::InvalidatorMap;
+use jsonc_parser::{parse_to_serde_value, ParseOptions};
 use mime::Mime;
 use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use read_glob::read_glob;
@@ -1014,14 +1015,18 @@ impl FileSystemPathVc {
         let mut symlinks = Vec::new();
         for segment in segments {
             current = current.join(segment);
-            while let LinkContent::Link { target, link_type } = &*current.read_link().await? {
-                symlinks.push(current.resolve().await?);
-                current = if link_type.contains(LinkType::ABSOLUTE) {
-                    current.root()
+            while let FileSystemEntryType::Symlink = &*current.get_type().await? {
+                if let LinkContent::Link { target, link_type } = &*current.read_link().await? {
+                    symlinks.push(current.resolve().await?);
+                    current = if link_type.contains(LinkType::ABSOLUTE) {
+                        current.root()
+                    } else {
+                        current.parent()
+                    }
+                    .join(target);
                 } else {
-                    current.parent()
+                    break;
                 }
-                .join(target);
             }
         }
         if symlinks.is_empty() {
@@ -1358,8 +1363,18 @@ impl FileContent {
     pub fn parse_json_with_comments(&self) -> FileJsonContent {
         match self {
             FileContent::Content(file) => match std::str::from_utf8(&file.content) {
-                Ok(string) => match serde_json::from_str(&skip_json_comments(string)) {
-                    Ok(data) => FileJsonContent::Content(data),
+                Ok(string) => match parse_to_serde_value(
+                    string,
+                    &ParseOptions {
+                        allow_comments: true,
+                        allow_trailing_commas: true,
+                        allow_loose_object_property_names: false,
+                    },
+                ) {
+                    Ok(data) => match data {
+                        Some(value) => FileJsonContent::Content(value),
+                        None => FileJsonContent::Unparseable,
+                    },
                     Err(_) => FileJsonContent::Unparseable,
                 },
                 Err(_) => FileJsonContent::Unparseable,
@@ -1392,91 +1407,6 @@ impl FileContent {
             FileContent::NotFound => FileLinesContent::NotFound,
         }
     }
-}
-
-fn skip_json_comments(input: &str) -> String {
-    enum Mode {
-        Normal,
-        NormalSlash,
-        String,
-        StringEscaped,
-        SingleLineComment,
-        MultiLineComment,
-        MultiLineCommentStar,
-    }
-    let mut o = String::with_capacity(input.len());
-    let mut mode = Mode::Normal;
-    for c in input.chars() {
-        match mode {
-            Mode::Normal => match c {
-                '/' => {
-                    mode = Mode::NormalSlash;
-                }
-                '\"' => {
-                    mode = Mode::String;
-                }
-                _ => {}
-            },
-            Mode::NormalSlash => match c {
-                '/' => {
-                    mode = Mode::SingleLineComment;
-                    o.pop();
-                    continue;
-                }
-                '*' => {
-                    mode = Mode::MultiLineComment;
-                    o.pop();
-                    continue;
-                }
-                '\"' => {
-                    mode = Mode::String;
-                }
-                _ => {}
-            },
-            Mode::String => match c {
-                '\\' => {
-                    mode = Mode::StringEscaped;
-                }
-                '\"' => {
-                    mode = Mode::Normal;
-                }
-                _ => {}
-            },
-            Mode::StringEscaped => {
-                mode = Mode::String;
-            }
-            Mode::SingleLineComment => match c {
-                '\n' => {
-                    mode = Mode::Normal;
-                    continue;
-                }
-                _ => continue,
-            },
-            Mode::MultiLineComment => match c {
-                '*' => {
-                    mode = Mode::MultiLineCommentStar;
-                    continue;
-                }
-                _ => continue,
-            },
-            Mode::MultiLineCommentStar => match c {
-                '*' => {
-                    mode = Mode::MultiLineCommentStar;
-                    continue;
-                }
-                '/' => {
-                    mode = Mode::Normal;
-                    continue;
-                }
-                _ => {
-                    mode = Mode::MultiLineComment;
-                    continue;
-                }
-            },
-        }
-        o.push(c);
-    }
-    o
 }
 
 #[turbo_tasks::value_impl]
@@ -1633,6 +1563,14 @@ impl ValueToString for NullFileSystem {
     fn to_string(&self) -> StringVc {
         StringVc::cell(String::from("null"))
     }
+}
+
+pub async fn to_sys_path(path: FileSystemPathVc) -> Result<Option<PathBuf>> {
+    if let Some(fs) = DiskFileSystemVc::resolve_from(path.fs()).await? {
+        let sys_path = fs.await?.to_sys_path(path).await?;
+        return Ok(Some(sys_path));
+    }
+    Ok(None)
 }
 
 pub fn register() {

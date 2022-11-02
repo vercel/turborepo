@@ -49,7 +49,7 @@ jobs:
           rustup component add llvm-tools-preview
         if: matrix.os.target == 'x86_64-pc-windows-msvc'
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.os.target }}
 
@@ -110,7 +110,7 @@ jobs:
         run: ls -R artifacts
         shell: bash
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: debug
 

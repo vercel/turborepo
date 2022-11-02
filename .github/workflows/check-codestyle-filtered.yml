@@ -26,7 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: check
 
@@ -62,7 +62,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: clippy
 
@@ -88,6 +88,8 @@ jobs:
           echo $count > clippy-warnings
           echo $count clippy warnings
 
+          echo $clippy_output > clippy-warnings-raw
+
       - name: Cache
         id: expected-clippy-warnings
         uses: actions/cache@v3
@@ -101,6 +103,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           mv clippy-warnings expected-clippy-warnings
+          mv clippy-warnings-raw expected-clippy-warnings-raw
 
       - name: Check the number of Clippy warnings is ever decreasing
         if: github.ref != 'refs/heads/main'
@@ -111,6 +114,11 @@ jobs:
             if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
               echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
               echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
+
+              if [[ -f "expected-clippy-warnings-raw" ]]; then
+                clippy_warnings_raw=$(cat clippy-warnings-raw)
+                diff clippy-warnings-raw clippy-warnings
+              fi
               exit 1
             fi
           fi
