@@ -123,14 +123,7 @@ jobs:
 
       - name: Run nextest
         timeout-minutes: 120
-        if: matrix.os.name != 'windows-latest'
         run: cargo nextest run --release --no-fail-fast
-
-      - name: Run nextest
-        timeout-minutes: 120
-        if: matrix.os.name == 'windows-latest'
-        # Can't build turbo.lib on Windows
-        run: cargo nextest run --workspace --exclude turbo --release --no-fail-fast
 
       - name: Report github status
         if: always() && github.event_name == 'pull_request'
