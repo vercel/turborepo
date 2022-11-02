@@ -66,8 +66,9 @@ export const config = {
 export default async function openGraphImage(
   req: NextApiRequest
 ): Promise<ImageResponse> {
-  const [fonts, bg] = await loadAssets();
   try {
+    throw new Error()
+    const [fonts, bg] = await loadAssets();
     const { searchParams } = new URL(req.url);
 
     const type = searchParams.get("type");
@@ -88,12 +89,12 @@ export default async function openGraphImage(
       fonts,
     });
   } catch (e: unknown) {
-    if (e instanceof Error) {
-      return new Response(`Failed to generate the image: ${e.message}`, {
-        status: 500,
-      });
-    }
-    return new Response("Failed to generate image", { status: 500 });
+    return new Response(undefined, {
+      status: 302,
+      headers: {
+        "Location": "https://turbo.build/og-image.png",
+      },
+    });
   }
 }
 
