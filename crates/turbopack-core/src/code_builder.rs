@@ -1,5 +1,6 @@
 use std::{
-    io::{Result as IoResult, Write},
+    cmp::min,
+    io::{BufRead, Result as IoResult, Write},
     ops,
 };
 
@@ -148,8 +149,19 @@ impl GenerateSourceMap for Code {
         let mut last_byte_pos = 0;
 
         let mut sections = Vec::with_capacity(self.mappings.len());
+        let mut read = self.code.read();
         for (byte_pos, map) in &self.mappings {
-            pos.update_from_read(&mut self.code.slice(last_byte_pos, *byte_pos))?;
+            let mut want = byte_pos - last_byte_pos;
+            while want > 0 {
+                let buf = read.fill_buf()?;
+                debug_assert!(!buf.is_empty());
+
+                let end = min(want, buf.len());
+                pos.update(&buf[0..end]);
+
+                read.consume(end);
+                want -= end;
+            }
             last_byte_pos = *byte_pos;
 
             let encoded = match map {

@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     cmp::min,
     fmt::Debug,
-    io::{self, Read, Result as IoResult, Write},
+    io::{self, BufRead, Read, Result as IoResult, Write},
     mem, ops,
     pin::Pin,
     sync::Arc,
@@ -16,6 +16,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
 use RopeElem::{Local, Shared};
+
+static EMPTY_BUF: &[u8] = &[];
 
 /// A Rope provides an efficient structure for sharing bytes/strings between
 /// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
@@ -74,14 +76,9 @@ impl Rope {
         self.length == 0
     }
 
-    /// Returns a Read/AsyncRead/Stream instance over all bytes.
+    /// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
     pub fn read(&self) -> RopeReader {
-        self.slice(0, self.len())
-    }
-
-    /// Returns a Read/AsyncRead/Stream instance over a slice of bytes.
-    pub fn slice(&self, start: usize, end: usize) -> RopeReader {
-        RopeReader::new(self, start, end)
+        RopeReader::new(self)
     }
 
     /// Returns a String instance of all bytes.
@@ -296,12 +293,11 @@ impl DeterministicHash for RopeElem {
     }
 }
 
-/// Implements the Read/AsyncRead/Stream trait over a Rope.
+/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
 ///
 /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
 /// incremental yielding.
 pub struct RopeReader {
-    max_bytes: usize,
     stack: Vec<StackElem>,
 }
 
@@ -314,24 +310,15 @@ enum StackElem {
 }
 
 impl RopeReader {
-    fn new(rope: &Rope, start: usize, end: usize) -> Self {
-        let mut reader = RopeReader {
-            max_bytes: end,
+    fn new(rope: &Rope) -> Self {
+        RopeReader {
             stack: vec![StackElem::from(rope)],
-        };
-
-        if start > 0 {
-            reader.read_internal(start, &mut None);
         }
-
-        reader
     }
 
     /// A shared implementation for reading bytes. This takes the basic
     /// operations needed for both Read and AsyncRead.
-    fn read_internal(&mut self, want: usize, buf: &mut Option<&mut ReadBuf<'_>>) -> usize {
-        let mut max_bytes = self.max_bytes;
-        let want = min(want, max_bytes);
+    fn read_internal(&mut self, want: usize, buf: &mut ReadBuf<'_>) -> usize {
         let mut remaining = want;
 
         while remaining > 0 {
@@ -342,26 +329,25 @@ impl RopeReader {
 
             let amount = min(bytes.len(), remaining);
 
-            if let Some(buf) = buf.as_mut() {
-                buf.put_slice(&bytes[0..amount]);
-            }
+            buf.put_slice(&bytes[0..amount]);
 
             if amount < bytes.len() {
                 bytes.advance(amount);
                 self.stack.push(StackElem::Local(bytes))
             }
             remaining -= amount;
-            max_bytes -= amount;
         }
 
-        self.max_bytes = max_bytes;
         want - remaining
     }
+}
 
-    /// A shared implementation for traversing the Rope's tree structure. We
-    /// continue descending through shared InnerRopes until we hit our next
-    /// Bytes.
-    fn next(&mut self) -> Option<Bytes> {
+impl Iterator for RopeReader {
+    type Item = Bytes;
+
+    /// Iterates the rope's element recursively until we find the next Local
+    /// section, returning its Bytes.
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (rope, mut index) = match self.stack.pop() {
                 None => return None,
@@ -383,7 +369,7 @@ impl RopeReader {
 impl Read for RopeReader {
     /// Reads the Rope into the provided buffer.
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        Ok(self.read_internal(buf.len(), &mut Some(&mut ReadBuf::new(buf))))
+        Ok(self.read_internal(buf.len(), &mut ReadBuf::new(buf)))
     }
 }
 
@@ -395,8 +381,41 @@ impl AsyncRead for RopeReader {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         let this = self.get_mut();
-        this.read_internal(buf.remaining(), &mut Some(buf));
+        this.read_internal(buf.remaining(), buf);
         Poll::Ready(Ok(()))
+    }
+}
+
+impl BufRead for RopeReader {
+    /// Returns the full buffer without coping any data. The same bytes will
+    /// continue to be returned until [consume] is called to either consume a
+    /// partial amount of bytes (in which case the Bytes will advance beyond
+    /// them) or the full amount of bytes (in which case the next Bytes will be
+    /// returned).
+    fn fill_buf(&mut self) -> IoResult<&[u8]> {
+        let bytes = match self.next() {
+            None => return Ok(EMPTY_BUF),
+            Some(b) => b,
+        };
+
+        self.stack.push(StackElem::Local(bytes));
+        let bytes = match self.stack.last() {
+            Some(StackElem::Local(b)) => b,
+            _ => unreachable!(),
+        };
+        Ok(bytes)
+    }
+
+    /// Consumes some amount of bytes from the current Bytes instance, ensuring
+    /// those bytes are not returned on the next call to [fill_buf].
+    fn consume(&mut self, amt: usize) {
+        if let Some(StackElem::Local(b)) = self.stack.last_mut() {
+            if amt == b.len() {
+                self.stack.pop();
+            } else {
+                b.advance(amt);
+            }
+        }
     }
 }
 
@@ -410,22 +429,12 @@ impl Stream for RopeReader {
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        let mut bytes = match this.next() {
+        let bytes = match this.next() {
             None => return Poll::Ready(None),
             Some(b) => b,
         };
 
-        if bytes.len() > this.max_bytes {
-            bytes.truncate(this.max_bytes);
-            this.max_bytes = 0;
-        } else {
-            this.max_bytes -= bytes.len();
-        }
         Poll::Ready(Some(Ok(bytes)))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.max_bytes, Some(self.max_bytes))
     }
 }
 

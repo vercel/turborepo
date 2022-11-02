@@ -1,6 +1,3 @@
-use std::io::Read;
-
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 use turbo_tasks_hash::DeterministicHash;
@@ -9,9 +6,6 @@ use turbo_tasks_hash::DeterministicHash;
 const U8_LF: u8 = 0x0A;
 /// CARRIAGE RETURN (CR), one of the basic JS line terminators.
 const U8_CR: u8 = 0x0D;
-
-// https://github.com/rust-lang/rust/blob/6250d5a08cf0870d3655fa98b83718bc01ff6f45/library/std/src/sys_common/io.rs#L3
-const DEFAULT_BUF_SIZE: usize = 1024 * 8;
 
 #[derive(
     Default,
@@ -49,7 +43,7 @@ impl SourcePos {
     /// a single terminator), and JSON LINE/PARAGRAPH SEPARATORs.
     ///
     /// See https://tc39.es/ecma262/multipage/ecmascript-language-lexical-grammar.html#sec-line-terminators
-    pub fn update(&mut self, code: &[u8]) -> usize {
+    pub fn update(&mut self, code: &[u8]) {
         // JS source text is interpreted as UCS-2, which is basically UTF-16 with less
         // restrictions. We cannot iterate UTF-8 bytes here, 2-byte UTF-8 octets
         // should count as a 1 char and not 2.
@@ -129,28 +123,6 @@ impl SourcePos {
         }
         self.line = line;
         self.column = column;
-
-        // It's possible we've only the buffer only contained 1 octet of a multi-octet
-        // char. So we return how many we need to eat on the next go around.
-        i - code.len()
-    }
-
-    pub fn update_from_read<R: Read>(&mut self, reader: &mut R) -> Result<()> {
-        let mut eat = 0;
-        let mut buf = [0; DEFAULT_BUF_SIZE];
-        loop {
-            let len = reader.read(&mut buf)?;
-            if len == 0 {
-                break;
-            }
-
-            if len <= eat {
-                eat -= len
-            } else {
-                eat = self.update(&buf[eat..len]);
-            }
-        }
-        Ok(())
     }
 }
 
