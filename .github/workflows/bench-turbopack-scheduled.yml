@@ -1,8 +1,9 @@
 name: Benchmark Turbopack
 
 on:
-  push:
-    branches: [main]
+  schedule:
+    # Run every week on Sunday 12:42
+    - cron: "42 12 * * 0"
   pull_request:
     branches: [main]
 
@@ -21,38 +22,46 @@ jobs:
           # One of Turbopack CSR or SSR with 1000 modules is benchmarked in every run
           # to create a baseline result for normalization (should the runners performance vary between jobs)
 
-          # This runs all the non next-dev benchmarks
-          - name: generic
-            cache_key: all
-            TURBOPACK_BENCH_COUNTS: 1000
-
-          # This measures Turbopack CSR and SSR
-          - name: turbopack
+          # This measures Next.js 12
+          - name: next 12
             cache_key: next-dev
-            args: -p next-dev
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 12)"
             TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
 
-          # This measures Turbopack CSR and SSR with larger apps
-          - name: turbopack-large
+          # This measures Next.js 11
+          - name: next 11
             cache_key: next-dev
-            args: -p next-dev
-            TURBOPACK_BENCH_COUNTS: 1000,2000,3000
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 11)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
 
-          # This measures Turbopack CSR and SSR with even larger apps
-          - name: turbopack-xlarge
+          # This measures Vite
+          - name: vite
             cache_key: next-dev
-            args: -p next-dev
-            TURBOPACK_BENCH_COUNTS: 1000,5000
+            args: -p next-dev -- "(Turbopack CSR/1000|Vite)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Parcel
+          - name: parcel
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Parcel)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Webpack
+          - name: webpack
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Webpack)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
 
     runs-on: ubuntu-latest-8-core-oss
     name: bench - ${{ matrix.bench.name }}
 
     steps:
       - uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - uses: ./.github/actions/setup-node
 
@@ -65,7 +74,7 @@ jobs:
 
       - name: Run cargo bench
         uses: actions-rs/cargo@v1
-        timeout-minutes: 120
+        timeout-minutes: 180
         env:
           TURBOPACK_BENCH_BUNDLERS: ${{ matrix.bench.TURBOPACK_BENCH_BUNDLERS }}
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
