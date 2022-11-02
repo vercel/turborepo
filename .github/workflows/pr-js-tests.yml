@@ -31,7 +31,8 @@ jobs:
         run: |
           pr_commits=${{ github.event.pull_request.commits }}
           if [[ -n "$pr_commits" ]]; then
-            git fetch --no-tags --prune --progress --depth="$(( pr_commits + 1 ))" origin +${{ github.event.pull_request.base.sha }}:${{ github.head_ref }}
+            git fetch --no-tags --prune --progress --depth="$(( pr_commits + 1 ))" origin +${{ github.event.pull_request.base.sha }}:${{ github.ref }}
+            git checkout ${{ github.ref }} --force
           else
             git fetch --no-tags --prune --progress --depth=2
           fi
