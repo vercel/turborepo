@@ -8,6 +8,7 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/fs"
 	"github.com/vercel/turborepo/cli/internal/runcache"
 	"github.com/vercel/turborepo/cli/internal/scope"
@@ -29,6 +30,24 @@ func TestParseConfig(t *testing.T) {
 		ExpectedTasks []string
 	}{
 		{
+			"remote cache timeout",
+			[]string{"foo", "--remote-cache-timeout=600"},
+			&Opts{
+				runOpts: runOpts{
+					concurrency: 10,
+				},
+				cacheOpts: cache.Opts{
+					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 600,
+				},
+				runcacheOpts: runcache.Opts{},
+				scopeOpts:    scope.Opts{},
+			},
+			[]string{"foo"},
+		},
+		{
 			"string flags",
 			[]string{"foo"},
 			&Opts{
@@ -37,6 +56,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				cacheOpts: cache.Opts{
 					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
@@ -52,6 +74,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				cacheOpts: cache.Opts{
 					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts: scope.Opts{
@@ -72,6 +97,9 @@ func TestParseConfig(t *testing.T) {
 				cacheOpts: cache.Opts{
 					Workers: 10,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -86,6 +114,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				cacheOpts: cache.Opts{
 					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
@@ -104,6 +135,9 @@ func TestParseConfig(t *testing.T) {
 				cacheOpts: cache.Opts{
 					Workers: 10,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -120,6 +154,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				cacheOpts: cache.Opts{
 					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
@@ -139,6 +176,9 @@ func TestParseConfig(t *testing.T) {
 				cacheOpts: cache.Opts{
 					Workers: 10,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -157,6 +197,9 @@ func TestParseConfig(t *testing.T) {
 				runcacheOpts: runcache.Opts{
 					SkipReads: true,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
@@ -172,6 +215,9 @@ func TestParseConfig(t *testing.T) {
 					Workers:        10,
 					SkipFilesystem: true,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -186,6 +232,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				cacheOpts: cache.Opts{
 					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{
 					SkipWrites: true,
@@ -207,6 +256,9 @@ func TestParseConfig(t *testing.T) {
 				cacheOpts: cache.Opts{
 					Workers: 10,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -221,6 +273,9 @@ func TestParseConfig(t *testing.T) {
 				},
 				cacheOpts: cache.Opts{
 					Workers: 10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts: scope.Opts{
@@ -240,6 +295,9 @@ func TestParseConfig(t *testing.T) {
 				cacheOpts: cache.Opts{
 					Workers: 10,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -257,6 +315,9 @@ func TestParseConfig(t *testing.T) {
 					OverrideDir: "bar",
 					Workers:     10,
 				},
+				clientOpts: client.Opts{
+					Timeout: 20,
+				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
 			},
@@ -273,6 +334,9 @@ func TestParseConfig(t *testing.T) {
 				cacheOpts: cache.Opts{
 					OverrideDir: defaultCwd.UntypedJoin("bar").ToString(),
 					Workers:     10,
+				},
+				clientOpts: client.Opts{
+					Timeout: 20,
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},

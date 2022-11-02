@@ -35,6 +35,7 @@ type ApiClient struct {
 	teamSlug   string
 	// Whether or not to send preflight requests before uploads
 	usePreflight bool
+	Timeout      uint64
 }
 
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
@@ -55,17 +56,18 @@ type RemoteConfig struct {
 	TeamID   string
 	TeamSlug string
 	APIURL   string
-	Timeout  uint64
 }
 
 // Opts holds values for configuring the behavior of the API client
 type Opts struct {
 	UsePreflight bool
+	Timeout      uint64
 }
 
 // AddFlags adds flags specific to the api client to the given flagset
 func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.UsePreflight, "preflight", false, "When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization")
+	flags.Uint64Var(&opts.Timeout, "remote-cache-timeout", 20, "Set the number of concurrent cache operations")
 }
 
 // New creates a new ApiClient
@@ -75,7 +77,7 @@ func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion stri
 		turboVersion: turboVersion,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(time.Duration(remoteConfig.Timeout) * time.Second),
+				Timeout: time.Duration(opts.Timeout) * time.Second,
 			},
 			RetryWaitMin: 2 * time.Second,
 			RetryWaitMax: 10 * time.Second,

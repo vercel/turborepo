@@ -34,7 +34,6 @@ func Test_sendToServer(t *testing.T) {
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
-		Timeout:  20,
 	}
 	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 
@@ -90,7 +89,6 @@ func Test_PutArtifact(t *testing.T) {
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
-		Timeout:  20,
 	}
 	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	expectedArtifactBody := []byte("My string artifact")
@@ -117,7 +115,6 @@ func Test_PutWhenCachingDisabled(t *testing.T) {
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
-		Timeout:  20,
 	}
 	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	expectedArtifactBody := []byte("My string artifact")
@@ -145,7 +142,6 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
-		Timeout:  20,
 	}
 	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	// Test Put Artifact

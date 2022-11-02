@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turborepo/cli/internal/analytics"
 	"github.com/vercel/turborepo/cli/internal/cache"
+	"github.com/vercel/turborepo/cli/internal/client"
 	"github.com/vercel/turborepo/cli/internal/cmdutil"
 	"github.com/vercel/turborepo/cli/internal/colorcache"
 	"github.com/vercel/turborepo/cli/internal/context"
@@ -143,6 +144,7 @@ func optsFromFlags(flags *pflag.FlagSet) *Opts {
 	addRunOpts(&opts.runOpts, flags, aliases)
 	cache.AddFlags(&opts.cacheOpts, flags)
 	runcache.AddFlags(&opts.runcacheOpts, flags)
+	client.AddFlags(&opts.clientOpts, flags)
 	flags.SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
 		if alias, ok := aliases[name]; ok {
 			return pflag.NormalizedName(alias)
@@ -519,6 +521,7 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 type Opts struct {
 	runOpts      runOpts
 	cacheOpts    cache.Opts
+	clientOpts   client.Opts
 	runcacheOpts runcache.Opts
 	scopeOpts    scope.Opts
 }
@@ -703,6 +706,9 @@ func getDefaultOptions() *Opts {
 	return &Opts{
 		runOpts: runOpts{
 			concurrency: 10,
+		},
+		clientOpts: client.Opts{
+			Timeout: 20,
 		},
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/fatih/color"
@@ -184,6 +185,23 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 			remoteConfig.TeamID = vercelArtifactsOwner
 		}
 	}
+
+	val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
+	if ok {
+		number, err := strconv.ParseUint(string(val), 10, 64)
+		if err == nil {
+			h.clientOpts.Timeout = number
+		} else {
+			fmt.Println("Parsing TURBO_REMOTE_CACHE_TIMEOUT failed...")
+			fmt.Printf("Error:%v\n", err)
+		}
+	}
+
+	timeout, err := flags.GetUint64("remote-cache-timeout")
+	if flags.Lookup("remote-cache-timeout").Changed && err == nil {
+		h.clientOpts.Timeout = timeout
+	}
+
 	apiClient := client.NewClient(
 		remoteConfig,
 		logger,

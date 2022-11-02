@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -24,6 +23,21 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 	}
 }
 
+func TestNotAllowed(t *testing.T) {
+	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
+
+	remoteCacheTimeout := "invalid"
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"remoteCacheTimeout":"%v"}`, remoteCacheTimeout)), 0644), "WriteFile")
+
+	_, err := ReadRepoConfigFile(testConfigFile, flags)
+	if err == nil {
+		t.Error("ReadRepoConfigFile was allowed to read remoteCacheTimeout")
+	}
+}
+
 func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
@@ -36,8 +50,6 @@ func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 	assert.NilError(t, flags.Set("team", slug), "flags.Set")
 	apiURL := "http://my-login-url"
 	assert.NilError(t, flags.Set("api", apiURL), "flags.Set")
-	timeout := "20"
-	assert.NilError(t, flags.Set("timeout", timeout), "flags.Set")
 
 	config, err := ReadRepoConfigFile(testConfigFile, flags)
 	if err != nil {
@@ -53,10 +65,6 @@ func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 	if remoteConfig.APIURL != apiURL {
 		t.Errorf("APIURL got %v, want %v", remoteConfig.APIURL, apiURL)
 	}
-	number, err := strconv.ParseUint(string(timeout), 10, 64)
-	if remoteConfig.Timeout != number {
-		t.Errorf("Timeout got %v, want %v", remoteConfig.Timeout, number)
-	}
 }
 
 func TestRepoConfigIncludesDefaults(t *testing.T) {
@@ -65,7 +73,6 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 	AddRepoConfigFlags(flags)
 
 	expectedTeam := "my-team"
-	expectedTimeout := uint64(20)
 
 	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
 	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
@@ -81,9 +88,6 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 	}
 	if remoteConfig.TeamSlug != expectedTeam {
 		t.Errorf("team slug got %v, want %v", remoteConfig.TeamSlug, expectedTeam)
-	}
-	if remoteConfig.Timeout != expectedTimeout {
-		t.Errorf("timeout got %v, want %v", remoteConfig.Timeout, expectedTimeout)
 	}
 }
 
