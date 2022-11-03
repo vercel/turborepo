@@ -14,7 +14,7 @@ use bytes::{Buf, Bytes};
 use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
-use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
+use turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
 use RopeElem::{Local, Shared};
 
 static EMPTY_BUF: &[u8] = &[];
@@ -24,7 +24,7 @@ static EMPTY_BUF: &[u8] = &[];
 /// the sharing contents of one Rope can be shared by just cloning an Arc.
 ///
 /// Ropes are immutable, in order to construct one see [RopeBuilder].
-#[turbo_tasks::value(shared, serialization = "none")]
+#[turbo_tasks::value(shared, serialization = "custom")]
 #[derive(Clone, Debug, Default)]
 pub struct Rope {
     length: usize,
@@ -36,11 +36,11 @@ pub struct Rope {
 /// sharing of the contents between Ropes (and also RopeReaders).
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 #[derive(Clone, Debug, Default)]
-pub struct InnerRope(#[turbo_tasks(debug_ignore, trace_ignore)] Arc<Vec<RopeElem>>);
+struct InnerRope(#[turbo_tasks(debug_ignore, trace_ignore)] Arc<Vec<RopeElem>>);
 
 /// Differentiates the types of stored bytes in a rope.
 #[derive(Clone, Debug)]
-pub enum RopeElem {
+enum RopeElem {
     /// Local bytes are created directly by this rope.
     Local(Bytes),
 
@@ -78,7 +78,7 @@ impl Rope {
 
     /// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
     pub fn read(&self) -> RopeReader {
-        RopeReader::new(self)
+        RopeReader::new(&self.data)
     }
 
     /// Returns a String instance of all bytes.
@@ -138,7 +138,7 @@ impl RopeBuilder {
     }
 
     /// Concatenate another Rope instance into our builder. This is much more
-    /// effeicient than pushing actual bytes, since we can share the other
+    /// efficient than pushing actual bytes, since we can share the other
     /// Rope's references without copying the underlying data.
     pub fn concat(&mut self, other: &Rope) {
         // We may have pending bytes from a prior push.
@@ -213,6 +213,12 @@ impl ops::AddAssign<&'static str> for RopeBuilder {
     }
 }
 
+impl ops::AddAssign<&Rope> for RopeBuilder {
+    fn add_assign(&mut self, rhs: &Rope) {
+        self.concat(rhs);
+    }
+}
+
 impl DeterministicHash for Rope {
     /// Ropes with similar contents hash the same, regardless of their
     /// structure.
@@ -268,7 +274,34 @@ impl From<Vec<RopeElem>> for InnerRope {
 impl PartialEq for InnerRope {
     /// Ropes with similar contents are equals, regardless of their structure.
     fn eq(&self, other: &Self) -> bool {
-        hash_xxh3_hash64(self) == hash_xxh3_hash64(other)
+        let mut left = RopeReader::new(self);
+        let mut right = RopeReader::new(other);
+
+        loop {
+            match (left.fill_buf(), right.fill_buf()) {
+                // fill_buf should always return Ok, with either some number of bytes or 0 bytes
+                // when consumed.
+                (Ok(a), Ok(b)) => {
+                    let len = min(a.len(), b.len());
+
+                    // When one buffer is consumed, both must be consumed.
+                    if len == 0 {
+                        return a.len() == b.len();
+                    }
+
+                    if a[0..len] != b[0..len] {
+                        return false;
+                    }
+
+                    left.consume(len);
+                    right.consume(len);
+                }
+
+                // If an error is ever returned (which shouldn't happen for us) for either/both,
+                // then we can't prove equality.
+                _ => return false,
+            }
+        }
     }
 }
 impl Eq for InnerRope {}
@@ -310,7 +343,7 @@ enum StackElem {
 }
 
 impl RopeReader {
-    fn new(rope: &Rope) -> Self {
+    fn new(rope: &InnerRope) -> Self {
         RopeReader {
             stack: vec![StackElem::from(rope)],
         }
@@ -438,9 +471,9 @@ impl Stream for RopeReader {
     }
 }
 
-impl From<&Rope> for StackElem {
-    fn from(rope: &Rope) -> Self {
-        Self::Shared(rope.data.clone(), 0)
+impl From<&InnerRope> for StackElem {
+    fn from(rope: &InnerRope) -> Self {
+        Self::Shared(rope.clone(), 0)
     }
 }
 

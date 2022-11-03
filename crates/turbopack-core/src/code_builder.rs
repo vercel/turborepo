@@ -57,7 +57,7 @@ impl CodeBuilder {
     /// code.
     pub fn push_source(&mut self, code: &Rope, map: Option<GenerateSourceMapVc>) {
         self.push_map(map);
-        self.code.concat(code);
+        self.code += code;
     }
 
     /// Copies the Synthetic/Original code of an already constructed Code into
@@ -82,7 +82,7 @@ impl CodeBuilder {
             self.push_map(None);
         }
 
-        self.code.concat(&prebuilt.code);
+        self.code += &prebuilt.code;
     }
 
     /// Setting breakpoints on synthetic code can cause weird behaviors

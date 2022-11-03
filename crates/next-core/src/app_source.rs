@@ -537,7 +537,7 @@ import BOOTSTRAP from {};
 
         let base_code = next_js_file("entry/app-renderer.tsx");
         if let FileContent::Content(base_file) = &*base_code.await? {
-            result.concat(base_file.content())
+            result += base_file.content()
         }
 
         let file = File::from(result.build());

@@ -145,7 +145,7 @@ impl SourceMapVc {
                         offset.line, offset.column,
                     )?;
 
-                    rope.concat(&section_map);
+                    rope += &*section_map;
 
                     write!(rope, r#"}}"#)?;
                 }

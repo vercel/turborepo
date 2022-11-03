@@ -642,7 +642,7 @@ impl EcmascriptChunkContentVc {
     #[turbo_tasks::function]
     async fn content(self) -> Result<AssetContentVc> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code()).into())
+        Ok(File::from_rope(code.source_code()).into())
     }
 }
 

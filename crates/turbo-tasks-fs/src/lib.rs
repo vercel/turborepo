@@ -490,7 +490,6 @@ impl FileSystem for DiskFileSystem {
                     async move {
                         let mut f = fs::File::create(&full_path).await?;
                         tokio::io::copy(&mut file.read(), &mut f).await?;
-                        // f.write_all(file.content.as_slice()).await?;
                         #[cfg(target_family = "unix")]
                         f.set_permissions(file.meta.permissions.into()).await?;
                         Ok::<(), io::Error>(())
@@ -1225,6 +1224,7 @@ impl File {
         self
     }
 
+    /// Returns a Read/AsyncRead/Stream/Iterator to access the File's contents.
     pub fn read(&self) -> RopeReader {
         self.content.read()
     }
@@ -1275,12 +1275,6 @@ impl From<RopeReadRef> for File {
     }
 }
 
-impl From<&Rope> for File {
-    fn from(rope: &Rope) -> Self {
-        File::from_rope(rope.clone())
-    }
-}
-
 impl From<Rope> for File {
     fn from(rope: Rope) -> Self {
         File::from_rope(rope)
@@ -1295,10 +1289,12 @@ impl File {
         }
     }
 
+    /// Returns the associated [FileMeta] of this file.
     pub fn meta(&self) -> &FileMeta {
         &self.meta
     }
 
+    /// Returns the immutable contents of this file.
     pub fn content(&self) -> &Rope {
         &self.content
     }
