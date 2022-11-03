@@ -4,7 +4,7 @@ on:
     types: [opened, edited, synchronize]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - run: 'echo "No lint run required"'
