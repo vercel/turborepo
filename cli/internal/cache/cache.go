@@ -37,7 +37,7 @@ type ItemStatus struct {
 	Remote bool `json:"remote"`
 }
 
-const cacheEventHit = "HIT"
+const cacheEventHit = "HITHIT"
 const cacheEventMiss = "MISS"
 
 type CacheEvent struct {
