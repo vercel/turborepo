@@ -257,7 +257,7 @@ impl DiskFileSystem {
     }
 
     pub async fn to_sys_path(&self, fs_path: FileSystemPathVc) -> Result<PathBuf> {
-        let path = Path::new(&self.root).join(&*unix_to_sys(&fs_path.await?.path));
+        let path = Path::new(&*unix_to_sys(&self.root)).join(&*unix_to_sys(&fs_path.await?.path));
         Ok(path)
     }
 }
@@ -547,13 +547,15 @@ impl FileSystem for DiskFileSystem {
                     })?;
             }
         }
+
         match &*target_link {
             LinkContent::Link { target, link_type } => {
                 let link_type = *link_type;
                 let target_path = if link_type.contains(LinkType::ABSOLUTE) {
-                    Path::new(&self.root).join(unix_to_sys(target).as_ref())
+                    let sys_root = unix_to_sys(&self.root);
+                    Path::new(&*sys_root).join(&*unix_to_sys(target))
                 } else {
-                    PathBuf::from(unix_to_sys(target).as_ref())
+                    PathBuf::from(&*unix_to_sys(target))
                 };
                 retry_blocking(&target_path, move |target_path| {
                     // we use the sync std method here because `symlink` is fast
@@ -569,10 +571,24 @@ impl FileSystem for DiskFileSystem {
                         } else {
                             std::os::windows::fs::symlink_file(target_path, &full_path)
                         }
+                        .or_else(|err| {
+                            // The parameter is incorrect. (os error 87)
+                            if err.raw_os_error() == Some(87) {
+                                Ok(())
+                            } else {
+                                Err(err)
+                            }
+                        })
                     }
                 })
                 .await
-                .with_context(|| format!("create symlink to {}", target))?;
+                .with_context(|| {
+                    format!(
+                        "create symlink to {}, old file type {:?}",
+                        target_path.display(),
+                        file_type,
+                    )
+                })?;
             }
             LinkContent::Invalid => {
                 return Err(anyhow!("invalid symlink target: {}", full_path.display()));
