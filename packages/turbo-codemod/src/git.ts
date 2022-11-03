@@ -2,6 +2,7 @@ import chalk from "chalk";
 import isGitClean from "is-git-clean";
 
 export function checkGitStatus(force: boolean) {
+  // Another one
   let clean = false;
   let errorMessage = "Unable to determine if git directory is clean";
   try {
