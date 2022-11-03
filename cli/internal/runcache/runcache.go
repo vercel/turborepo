@@ -154,7 +154,7 @@ type TaskCache struct {
 // Returns true if successful.
 func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
-		if tc.taskOutputMode != util.NoTaskOutput {
+		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
@@ -175,7 +175,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 		if err != nil {
 			return false, err
 		} else if !hit {
-			if tc.taskOutputMode != util.NoTaskOutput {
+			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			return false, nil
@@ -198,15 +198,30 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
 		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
-		if tc.LogFileName.FileExists() {
-
-			tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
-		}
+		tc.ReplayLogFile(prefixedUI, progressLogger)
+	case util.ErrorTaskOutput:
+		// The task succeeded, so we don't output anything in this case
 	default:
 		// NoLogs, do not output anything
 	}
 
 	return true, nil
+}
+
+// ReplayLogFile writes out the stored logfile to the terminal
+func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) {
+	if tc.LogFileName.FileExists() {
+		tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
+	}
+}
+
+// OnError
+// If output mode is set to log output only after error, we'll have buffered output
+// to disk without logging it.  Now we can log that here.
+func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
+	if tc.taskOutputMode == util.ErrorTaskOutput {
+		tc.ReplayLogFile(terminal, logger)
+	}
 }
 
 // nopWriteCloser is modeled after io.NopCloser, which is for Readers
@@ -253,7 +268,7 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 		file:  output,
 		bufio: bufWriter,
 	}
-	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput || tc.taskOutputMode == util.ErrorTaskOutput {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
