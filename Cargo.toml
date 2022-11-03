@@ -28,10 +28,9 @@ members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack",
   "crates/turbopack-tests",
+  "shim",
   "xtask",
 ]
-
-exclude = ["shim"]
 
 [profile.release]
 
@@ -48,5 +47,5 @@ opt-level = 3
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
 # This version pin is workaround for https://github.com/tkaitchuck/aHash/issues/95
-indexmap = "=1.6.2"
+indexmap = "=1.9.1"
 swc_core = "0.40.16"
