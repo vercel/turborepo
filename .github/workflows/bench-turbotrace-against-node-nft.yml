@@ -31,6 +31,10 @@ jobs:
           echo 'node-linker = "hoisted"' > .npmrc
           pnpm install -r --side-effects-cache false
 
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         shell: bash

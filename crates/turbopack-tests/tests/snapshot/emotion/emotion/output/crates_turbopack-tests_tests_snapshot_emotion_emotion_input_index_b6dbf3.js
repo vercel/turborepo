@@ -1,18 +1,36 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/a587c_tests_snapshot_swc_transforms_mono_transforms_input_packages_app_index_94a35f.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_emotion_emotion_input_index_b6dbf3.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/mono_transforms/input/packages/app/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
 
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$swc_transforms$2f$mono_transforms$2f$input$2f$packages$2f$component$2f$index$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/mono_transforms/input/packages/component/index.js (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$swc_transforms$2f$mono_transforms$2f$input$2f$node_modules$2f$third_party_component$2f$index$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/mono_transforms/input/node_modules/third_party_component/index.js (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f40$emotion$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/node_modules/@emotion/react/jsx-dev-runtime.js (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f40$emotion$2f$react$2f$index$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/node_modules/@emotion/react/index.js (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f40$emotion$2f$styled$2f$index$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/node_modules/@emotion/styled/index.js (ecmascript)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
 ;
-console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$swc_transforms$2f$mono_transforms$2f$input$2f$packages$2f$component$2f$index$2e$js__["default"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$swc_transforms$2f$mono_transforms$2f$input$2f$node_modules$2f$third_party_component$2f$index$2e$js__["default"]);
+;
+const StyledButton = __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f40$emotion$2f$styled$2f$index$2e$js__["default"]("button", {
+    target: "e1r1p2t30",
+    label: "StyledButton"
+})("background:blue;", "/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VzIjpbImluZGV4LmpzIl0sInNvdXJjZXNDb250ZW50IjpbIi8qKiBAanN4SW1wb3J0U291cmNlIEBlbW90aW9uL3JlYWN0ICovXG5cbmltcG9ydCB7IGpzeCB9IGZyb20gXCJAZW1vdGlvbi9yZWFjdFwiO1xuaW1wb3J0IHN0eWxlZCBmcm9tIFwiQGVtb3Rpb24vc3R5bGVkXCI7XG5cbmNvbnN0IFN0eWxlZEJ1dHRvbiA9IHN0eWxlZC5idXR0b25gXG4gIGJhY2tncm91bmQ6IGJsdWU7XG5gO1xuXG5mdW5jdGlvbiBDbGFzc05hbWVCdXR0b24oeyBjaGlsZHJlbiB9KSB7XG4gIHJldHVybiAoXG4gICAgPGJ1dHRvblxuICAgICAgY2xhc3NOYW1lPXtjc3NgXG4gICAgICAgIGJhY2tncm91bmQ6IGJsdWU7XG4gICAgICBgfVxuICAgID5cbiAgICAgIHtjaGlsZHJlbn1cbiAgICA8L2J1dHRvbj5cbiAgKTtcbn1cblxuY29uc29sZS5sb2coU3R5bGVkQnV0dG9uLCBDbGFzc05hbWVCdXR0b24pO1xuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUtxQiJ9 */");
+function ClassNameButton({ children  }) {
+    return __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f40$emotion$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__["jsxDEV"]("button", {
+        className: css`
+        background: blue;
+      `,
+        children: children
+    }, void 0, false, {
+        fileName: "<crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js>",
+        lineNumber: 12,
+        columnNumber: 5
+    }, this);
+}
+console.log(StyledButton, ClassNameButton);
 
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/a587c_tests_snapshot_swc_transforms_mono_transforms_input_packages_app_index_e702fc.js") && loadedChunks.has("output/7b7bf_third_party_component_index.js") && loadedChunks.has("output/a587c_tests_snapshot_swc_transforms_mono_transforms_input_packages_component_index.js") && loadedChunks.has("output/63a02_react_jsx-runtime.js") && loadedChunks.has("output/7b7bf_react_jsx-runtime.js"))) return true;
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/mono_transforms/input/packages/app/index.js (ecmascript)");
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_emotion_emotion_input_index_2896ed.js") && loadedChunks.has("output/63a02_@emotion_styled_index.js") && loadedChunks.has("output/63a02_@emotion_react_index.js") && loadedChunks.has("output/63a02_@emotion_react_jsx-dev-runtime.js"))) return true;
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js (ecmascript)");
 }]);
 (() => {
   // When a chunk is executed, it will either register itself with the current
@@ -907,6 +925,10 @@ console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$
       // implement, but the Next.js React Refresh runtime uses this to decide
       // whether to schedule an update.
       status: () => "idle",
+
+      // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
+      addStatusHandler: (_handler) => {},
+      removeStatusHandler: (_handler) => {},
     };
 
     return { hot, hotState };
@@ -1018,4 +1040,4 @@ console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$
 })();
 
 
-//# sourceMappingURL=a587c_tests_snapshot_swc_transforms_mono_transforms_input_packages_app_index_94a35f.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_emotion_emotion_input_index_b6dbf3.js.map
