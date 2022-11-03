@@ -1,10 +1,16 @@
 name: CLI Run Examples
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     types: [opened, edited, synchronize]
 
 jobs:
   examples:
+    name: CLI run examples
     strategy:
       fail-fast: false
       matrix:
