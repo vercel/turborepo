@@ -435,7 +435,7 @@ async fn find_package(
     package_name: String,
     options: ResolveModulesOptionsVc,
 ) -> Result<FindPackageResultVc> {
-    let mut packages = vec![];
+    let mut packages = HashSet::new();
     let mut references = vec![];
     let options = options.await?;
     for resolve_modules in &options.modules {
@@ -451,7 +451,7 @@ async fn find_package(
                         if let Some(fs_path) = dir_exists(fs_path, &mut references).await? {
                             let fs_path = fs_path.join(&package_name);
                             if let Some(fs_path) = dir_exists(fs_path, &mut references).await? {
-                                packages.push(fs_path);
+                                packages.insert(fs_path);
                             }
                         }
                     }
@@ -466,14 +466,14 @@ async fn find_package(
             ResolveModules::Path(context) => {
                 let package_dir = context.join(&package_name);
                 if dir_exists(package_dir, &mut references).await?.is_some() {
-                    packages.push(package_dir.resolve().await?);
+                    packages.insert(package_dir.resolve().await?);
                 }
             }
             ResolveModules::Registry(_, _) => todo!(),
         }
     }
     Ok(FindPackageResultVc::cell(FindPackageResult {
-        packages,
+        packages: packages.into_iter().collect(),
         references,
     }))
 }
@@ -493,14 +493,10 @@ fn merge_results_with_references(
     if references.is_empty() {
         return merge_results(results);
     }
-    match results.len() {
-        0 => ResolveResult::Unresolveable(references).into(),
-        1 => results
-            .into_iter()
-            .next()
-            .unwrap()
-            .add_references(references),
-        _ => ResolveResultVc::alternatives_with_references(results, references),
+    if results.is_empty() {
+        ResolveResult::Unresolveable(references).into()
+    } else {
+        ResolveResultVc::alternatives_with_references(results, references)
     }
 }
 
