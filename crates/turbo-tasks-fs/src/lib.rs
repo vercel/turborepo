@@ -4,6 +4,7 @@
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
 #![feature(main_separator_str)]
+#![feature(fs_try_exists)]
 
 pub mod attach;
 pub mod embed;
@@ -572,6 +573,12 @@ impl FileSystem for DiskFileSystem {
                             std::os::windows::fs::symlink_file(target_path, &full_path)
                         }
                         .or_else(|err| {
+                            let existed = std::fs::try_exists(&full_path);
+                            let file_type = std::fs::metadata(&full_path).map(|meta| {
+                                let file_type = meta.file_type();
+                                (file_type.is_dir(), file_type.is_file(), existed)
+                            });
+                            println!("{} file type: {:?}", full_path.display(), file_type);
                             // The parameter is incorrect. (os error 87)
                             if err.raw_os_error() == Some(87) {
                                 Ok(())
@@ -582,13 +589,7 @@ impl FileSystem for DiskFileSystem {
                     }
                 })
                 .await
-                .with_context(|| {
-                    format!(
-                        "create symlink to {}, old file type {:?}",
-                        target_path.display(),
-                        file_type,
-                    )
-                })?;
+                .with_context(|| format!("create symlink to {}", target_path.display(),))?;
             }
             LinkContent::Invalid => {
                 return Err(anyhow!("invalid symlink target: {}", full_path.display()));
