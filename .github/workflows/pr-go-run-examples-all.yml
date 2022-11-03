@@ -1,0 +1,24 @@
+name: CLI Run Examples
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  examples:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        manager: [yarn, npm]
+        example: [basic, design-system, kitchen-sink]
+        include:
+          - os: ubuntu-latest
+            manager: pnpm
+            example: with-pnpm
+          - os: macos-latest
+            manager: pnpm
+            example: with-pnpm
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: 'echo "No examples run required"'
