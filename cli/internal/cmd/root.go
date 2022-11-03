@@ -80,6 +80,32 @@ func RunWithArgs(args []string, turboVersion string) int {
 	}
 }
 
+func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
+	if parsedArgs.Trace != "" {
+		cleanup, err := createTraceFile(parsedArgs.Trace)
+		if err != nil {
+			return fmt.Errorf("Failed to create trace file: %v\n", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if parsedArgs.Heap != "" {
+		cleanup, err := createHeapFile(parsedArgs.Heap)
+		if err != nil {
+			return fmt.Errorf("Failed to create heap file: %v\n", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if parsedArgs.CPUProfile != "" {
+		cleanup, err := createCpuprofileFile(parsedArgs.CPUProfile)
+		if err != nil {
+			return fmt.Errorf("Failed to create CPU profile file: %v\n", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+
+	return nil
+}
+
 // RunWithTurboState runs turbo with the CLIExecutionStateFromRust that is passed from the Rust side.
 func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion string) int {
 	util.InitPrintf()
@@ -88,31 +114,11 @@ func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion 
 	helper := cmdutil.NewHelper(turboVersion)
 	ctx := context.Background()
 
-	if state.ParsedArgs.Trace != "" {
-		cleanup, err := createTraceFile(state.ParsedArgs.Trace)
-		if err != nil {
-			fmt.Printf("Failed to create trace file: %v\n", err)
-			return 1
-		}
-		helper.RegisterCleanup(cleanup)
+	err := initializeOutputFiles(helper, state.ParsedArgs)
+	if err != nil {
+		fmt.Printf("%v", err)
+		return 1
 	}
-	if state.ParsedArgs.Heap != "" {
-		cleanup, err := createHeapFile(state.ParsedArgs.Heap)
-		if err != nil {
-			fmt.Printf("Failed to create heap file: %v\n", err)
-			return 1
-		}
-		helper.RegisterCleanup(cleanup)
-	}
-	if state.ParsedArgs.CPUProfile != "" {
-		cleanup, err := createCpuprofileFile(state.ParsedArgs.CPUProfile)
-		if err != nil {
-			fmt.Printf("Failed to create CPU profile file: %v\n", err)
-			return 1
-		}
-		helper.RegisterCleanup(cleanup)
-	}
-
 	defer helper.Cleanup(&state.ParsedArgs)
 
 	doneCh := make(chan struct{})

@@ -12,7 +12,7 @@ type RepoState struct {
 
 // LinkPayload is the extra flags passed for the `link` subcommand
 type LinkPayload struct {
-	DontModifyGitIgnore bool `json:"dont_modify_gitIgnore"`
+	DontModifyGitIgnore bool `json:"no_gitignore"`
 }
 
 // LoginPayload is the extra flags passed for the `login` subcommand
@@ -34,16 +34,17 @@ type Command struct {
 type ParsedArgsFromRust struct {
 	API        string   `json:"api"`
 	Color      bool     `json:"color"`
-	CPUProfile string   `json:"cpuprofile"`
+	CPUProfile string   `json:"cpu_profile"`
 	CWD        string   `json:"cwd"`
 	Heap       string   `json:"heap"`
 	Login      string   `json:"login"`
-	NoColor    bool     `json:"noColor"`
+	NoColor    bool     `json:"no_color"`
 	Preflight  bool     `json:"preflight"`
 	Team       string   `json:"team"`
 	Token      string   `json:"token"`
 	Trace      string   `json:"trace"`
 	Verbosity  uint8    `json:"verbosity"`
+	TestRun    bool     `json:"test_run"`
 	Command    *Command `json:"command"`
 }
 

@@ -150,7 +150,6 @@ func NewHelper(turboVersion string) *Helper {
 func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error) {
 	// terminal is for color/no-color output
 	terminal := h.getUI(cliConfig)
-
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
 	if err != nil {
@@ -173,7 +172,6 @@ func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error
 	if err != nil {
 		return nil, err
 	}
-
 	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
 	if remoteConfig.Token == "" && ui.IsCI {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")

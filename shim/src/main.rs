@@ -39,7 +39,7 @@ struct Args {
     color: bool,
     /// Specify a file to save a cpu profile
     #[clap(long, global = true, value_parser)]
-    cpuprofile: Option<String>,
+    cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     cwd: Option<String>,
@@ -68,6 +68,8 @@ struct Args {
     /// verbosity
     #[clap(short, long, global = true, value_parser)]
     verbosity: Option<u8>,
+    #[clap(long = "__test-run", global = true, hidden = true)]
+    test_run: bool,
     #[clap(subcommand)]
     command: Option<Command>,
     tasks: Vec<String>,
