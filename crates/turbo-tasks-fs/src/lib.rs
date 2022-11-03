@@ -522,18 +522,12 @@ impl FileSystem for DiskFileSystem {
         fs_path: FileSystemPathVc,
         target: LinkContentVc,
     ) -> Result<CompletionVc> {
-        let raw_path_file_type = fs_path.get_type().await?;
-        // return if the link target is not existed
-        if matches!(&*raw_path_file_type, FileSystemEntryType::NotFound) {
-            return Ok(CompletionVc::new());
-        }
         let full_path = self.to_sys_path(fs_path).await?;
         let old_content = fs_path
             .read_link()
             .await
             .with_context(|| format!("reading old symlink target of {}", full_path.display()))?;
         let target_link = target.await?;
-        let original_file_type = fs_path.get_type().await?;
         if target_link == old_content {
             return Ok(CompletionVc::new());
         }
@@ -576,15 +570,22 @@ impl FileSystem for DiskFileSystem {
                         } else {
                             std::os::windows::fs::symlink_file(target_path, &full_path)
                         }
+                        .or_else(|err| {
+                            // The parameter is incorrect. (os error 87)
+                            if err.raw_os_error() == Some(87) {
+                                Ok(())
+                            } else {
+                                Err(err)
+                            }
+                        })
                     }
                 })
                 .await
                 .with_context(|| {
                     format!(
-                        "create symlink to {}, old file type {:?}, original file type {:?}",
+                        "create symlink to {}, old file type {:?}",
                         target_path.display(),
                         file_type,
-                        original_file_type,
                     )
                 })?;
             }

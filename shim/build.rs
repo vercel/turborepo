@@ -56,6 +56,8 @@ fn build_debug_libturbo() -> String {
         .unwrap()
         .join("cli");
     let target = build_target::target().unwrap();
+    let mut cmd = Command::new("make");
+    cmd.current_dir(&cli_path);
     if target.os == build_target::Os::Windows {
         let output_dir = env::var_os("OUT_DIR").map(PathBuf::from).unwrap();
         let output_deps = output_dir
@@ -70,30 +72,21 @@ fn build_debug_libturbo() -> String {
         for ext in ["pdb", "exe", "d", "lib"].iter() {
             let _ = std::fs::remove_file(output_deps.join(&format!("turbo.{ext}"))).unwrap_or(());
         }
-        let mut cmd = Command::new("go");
-        assert!(
-            cmd.current_dir(&cli_path)
-                .env("CGO_ENABLED", "1")
-                .env("CC", "clang")
-                .env("CXX", "clang++")
-                .arg("build")
-                .arg("-buildmode=c-archive")
-                .arg("-o")
-                .arg("turbo.lib")
-                .arg("./cmd/turbo/...")
-                .stdout(std::process::Stdio::inherit())
-                .status()
-                .expect("failed to build turbo.lib")
-                .success(),
-            "failed to build turbo.lib"
-        );
+
+        cmd.env("CGO_ENABLED", "1")
+            .env("CC", "clang")
+            .env("CXX", "clang++")
+            .arg("turbo.lib");
     } else {
-        let mut cmd = new_command("make");
-        cmd.current_dir(&cli_path);
         cmd.arg("libturbo.a");
-        let mut child = cmd.spawn().expect("failed to spawn make libturbo.a");
-        child.wait().expect("failed to build libturbo.a");
     }
+    assert!(
+        cmd.stdout(std::process::Stdio::inherit())
+            .status()
+            .expect("failed to build turbo.lib")
+            .success(),
+        "failed to build turbo static library"
+    );
     cli_path.to_string_lossy().to_string()
 }
 

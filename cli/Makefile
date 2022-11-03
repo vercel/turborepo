@@ -28,6 +28,9 @@ shim: libturbo.a
 libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
 
+turbo.lib: $(GENERATED_FILES) $(SRC_FILES) go.mod
+	go build -buildmode=c-archive -o turbo.lib  ./cmd/turbo/...
+
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
