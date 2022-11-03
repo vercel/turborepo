@@ -5,6 +5,7 @@ function getTurboRoot(cwd?: string): string | null {
   // Turborepo root can be determined by the presence of turbo.json
   let root = searchUp({ target: "turbo.json", cwd: cwd || process.cwd() });
 
+  // Third and final
   if (!root) {
     root = findRootSync(process.cwd());
     if (!root) {
