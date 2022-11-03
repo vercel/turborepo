@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value};
+use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 use turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
