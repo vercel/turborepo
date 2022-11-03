@@ -28,6 +28,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/graphvisualizer"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -48,16 +49,6 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
-
-// completeGraph represents the common state inferred from the filesystem and pipeline.
-// It is not intended to include information specific to a particular run.
-type completeGraph struct {
-	TopologicalGraph dag.AcyclicGraph
-	Pipeline         fs.Pipeline
-	PackageInfos     map[interface{}]*fs.PackageJSON
-	GlobalHash       string
-	RootNode         string
-}
 
 // runSpec contains the run-specific configuration elements that come from a particular
 // invocation of turbo.
@@ -269,7 +260,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
 	// TODO: consolidate some of these arguments
-	g := &completeGraph{
+	g := &graph.CompleteGraph{
 		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
 		PackageInfos:     pkgDepGraph.PackageInfos,
@@ -285,7 +276,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	return r.runOperation(ctx, g, rs, packageManager, startAt)
 }
 
-func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
+func (r *run) runOperation(ctx gocontext.Context, g *graph.CompleteGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
@@ -735,7 +726,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	})
 }
 
-func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Engine, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+func (r *run) executeTasks(ctx gocontext.Context, g *graph.CompleteGraph, rs *runSpec, engine *core.Engine, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 
@@ -780,7 +771,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
-	visitor := g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+	visitor := g.GetPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		return ec.exec(ctx, packageTask, deps)
 	})
@@ -858,7 +849,7 @@ type hashedSinglePackageTask struct {
 	Dependents      []string `json:"dependents"`
 }
 
-func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	turboCache, err := r.initCache(ctx, rs, analyticsClient)
@@ -874,7 +865,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *compl
 
 	taskIDs := []hashedTask{}
 
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+	errs := engine.Execute(g.GetPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, r.base.Logger, passThroughArgs)
@@ -1130,35 +1121,4 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer(TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
-}
-
-func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
-	return func(taskID string) error {
-
-		name, task := util.GetPackageTaskFromId(taskID)
-		pkg, ok := g.PackageInfos[name]
-		if !ok {
-			return fmt.Errorf("cannot find package %v for task %v", name, taskID)
-		}
-
-		// first check for package-tasks
-		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
-		if !ok {
-			// then check for regular tasks
-			fallbackTaskDefinition, notcool := g.Pipeline[task]
-			// if neither, then bail
-			if !notcool && !ok {
-				return nil
-			}
-			// override if we need to...
-			taskDefinition = fallbackTaskDefinition
-		}
-		return visitor(ctx, &nodes.PackageTask{
-			TaskID:         taskID,
-			Task:           task,
-			PackageName:    name,
-			Pkg:            pkg,
-			TaskDefinition: &taskDefinition,
-		})
-	}
 }
