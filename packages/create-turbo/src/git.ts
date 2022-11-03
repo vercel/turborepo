@@ -5,6 +5,7 @@ import rimraf from "rimraf";
 
 function isInGitRepository(): boolean {
   try {
+    // Some comment
     execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
     return true;
   } catch (_) {}
