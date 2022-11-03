@@ -484,7 +484,7 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.buildpass.com.au/",
     pinned: true,
     style: {
-      width: 150,
+      width: 175,
     },
   },
 ];
