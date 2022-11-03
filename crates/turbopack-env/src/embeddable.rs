@@ -1,4 +1,5 @@
 use anyhow::Result;
+use turbo_tasks::primitives::OptionStringVc;
 use turbo_tasks_env::{EnvMapVc, ProcessEnv, ProcessEnvVc};
 use turbopack_ecmascript::utils::stringify_str;
 
@@ -29,5 +30,12 @@ impl ProcessEnv for EmbeddableProcessEnv {
             .collect();
 
         Ok(EnvMapVc::cell(encoded))
+    }
+
+    #[turbo_tasks::function]
+    async fn read(&self, name: &str) -> Result<OptionStringVc> {
+        let prior = self.prior.read(name).await?;
+        let encoded = prior.as_deref().map(stringify_str);
+        Ok(OptionStringVc::cell(encoded))
     }
 }
