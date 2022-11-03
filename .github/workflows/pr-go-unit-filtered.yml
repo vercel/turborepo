@@ -10,11 +10,7 @@ on:
   pull_request:
     types: [opened, edited, synchronize]
     paths:
-      - "**.go"
-      - "go.mod"
-      - "cli/fixtures/**"
-      - "cli/internal/fs/testdata/**"
-      - "cli/internal/lockfile/testdata/**"
+      - "cli/**"
 
 jobs:
   test:
