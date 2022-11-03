@@ -120,7 +120,7 @@ impl EcmascriptChunkItem for ProcessEnvChunkItem {
 
         // TODO: In SSR, we use the native process.env, which can only contain string
         // values. We need to inject literal values (to emulate webpack's
-        // DefinePlugin, so create a new regular object out of the old env.
+        // DefinePlugin), so create a new regular object out of the old env.
         let mut code = "const env = process.env = {...process.env};\n\n".to_string();
 
         for (name, val) in &*env {

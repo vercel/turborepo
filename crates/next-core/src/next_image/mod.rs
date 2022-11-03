@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 use turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
@@ -38,7 +38,7 @@ impl ContentSource for NextImageContentSource {
             None => {
                 let queries = [
                     "url".to_string(),
-                    // "q" and "w" to come.
+                    // TODO: support q and w queries.
                 ]
                 .iter()
                 .cloned()
@@ -68,7 +68,10 @@ impl ContentSource for NextImageContentSource {
         // TODO: consume the assets, resize and reduce quality, re-encode into next-gen
         // formats.
         if let Some(path) = url.strip_prefix('/') {
-            return Ok(this.asset_source.get(path, Value::new(Default::default())));
+            let asset = this.asset_source.get(path, Value::new(Default::default()));
+            if matches!(&*asset.await?, ContentSourceResult::Static(..)) {
+                return Ok(asset);
+            }
         }
 
         // TODO: This should be downloaded by the server, and resized, etc.
