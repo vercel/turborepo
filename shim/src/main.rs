@@ -267,7 +267,16 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
         .root
         .join("node_modules")
         .join(".bin")
-        .join("turbo");
+        .join({
+            #[cfg(windows)]
+            {
+                "turbo.cmd"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        });
 
     let mut args: Vec<_> = env::args().skip(1).collect();
     if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
@@ -285,12 +294,12 @@ fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
 
     // Otherwise, we spawn a process that executes the local turbo
     // that we've found in node_modules/.bin/turbo.
-    let mut command = process::Command::new(local_turbo_path)
+    let mut command = process::Command::new(&local_turbo_path)
         .args(&args)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
-        .expect("Failed to execute turbo.");
+        .unwrap_or_else(|_| panic!("Failed to execute turbo {}.", local_turbo_path.display()));
 
     Ok(command.wait()?.code().unwrap_or(2))
 }
@@ -394,7 +403,7 @@ mod test {
     #[test]
     fn test_parse_run() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "run", "build"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
                 command: Some(Command::Run {
                     tasks: vec!["build".to_string()]
@@ -404,7 +413,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "run", "build", "lint", "test"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "lint", "test"]).unwrap(),
             Args {
                 command: Some(Command::Run {
                     tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()]
@@ -414,7 +423,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "build"]).unwrap(),
+            Args::try_parse_from(["turbo", "build"]).unwrap(),
             Args {
                 tasks: vec!["build".to_string()],
                 ..Args::default()
@@ -422,7 +431,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "build", "lint", "test"]).unwrap(),
+            Args::try_parse_from(["turbo", "build", "lint", "test"]).unwrap(),
             Args {
                 tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
                 ..Args::default()
@@ -433,7 +442,7 @@ mod test {
     #[test]
     fn test_parse_bin() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "bin"]).unwrap(),
+            Args::try_parse_from(["turbo", "bin"]).unwrap(),
             Args {
                 command: Some(Command::Bin),
                 ..Args::default()
@@ -456,7 +465,7 @@ mod test {
     #[test]
     fn test_parse_login() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "login"]).unwrap(),
+            Args::try_parse_from(["turbo", "login"]).unwrap(),
             Args {
                 command: Some(Command::Login { sso_team: None }),
                 ..Args::default()
@@ -493,7 +502,7 @@ mod test {
     #[test]
     fn test_parse_logout() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "logout"]).unwrap(),
+            Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
                 command: Some(Command::Logout),
                 ..Args::default()
@@ -516,7 +525,7 @@ mod test {
     #[test]
     fn test_parse_unlink() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "unlink"]).unwrap(),
+            Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
                 command: Some(Command::Unlink),
                 ..Args::default()
@@ -545,7 +554,7 @@ mod test {
         };
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune"]).unwrap(),
             Args {
                 command: Some(default_prune.clone()),
                 ..Args::default()
@@ -557,7 +566,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(default_prune.clone()),
+                command: Some(default_prune),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -565,7 +574,7 @@ mod test {
         .test();
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune", "--scope", "bar"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--scope", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
                     scope: Some("bar".to_string()),
@@ -577,7 +586,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune", "--docker"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--docker"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
                     scope: None,
@@ -589,7 +598,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune", "--out-dir", "dist"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--out-dir", "dist"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
                     scope: None,

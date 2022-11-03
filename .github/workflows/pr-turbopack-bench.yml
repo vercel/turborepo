@@ -38,6 +38,10 @@ jobs:
       - name: Fetch the base branch
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
 
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - uses: ./.github/actions/setup-node
 
       - uses: Swatinem/rust-cache@v2
