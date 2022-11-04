@@ -27,7 +27,7 @@ static TURBO_JSON: &str = "turbo.json";
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true, disable_version_flag = true)]
 struct Args {
-    #[clap(long, short, global = true)]
+    #[clap(long, short)]
     help: bool,
     #[clap(long, global = true)]
     version: bool,
@@ -81,28 +81,58 @@ struct Args {
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 enum Command {
     /// Get the path to the Turbo binary
-    Bin,
+    Bin {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Generate the autocompletion script for the specified shell
-    Completion,
+    Completion {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Runs the Turborepo background daemon
-    Daemon,
+    Daemon {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Help about any command
-    Help,
+    Help {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
     Link {
+        /// help for link
+        #[clap(long, short)]
+        help: bool,
+        /// Do not create or modify .gitignore (default false)
         #[clap(long)]
         no_gitignore: bool,
     },
     /// Login to your Vercel account
     Login {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
         #[clap(long = "sso-team")]
         sso_team: Option<String>,
     },
     /// Logout to your Vercel account
-    Logout,
+    Logout {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Prepare a subset of your monorepo.
     Prune {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
         #[clap(long)]
         scope: Option<String>,
         #[clap(long)]
@@ -111,10 +141,19 @@ enum Command {
         output_dir: String,
     },
     /// Run tasks across projects in your monorepo
-    Run { tasks: Vec<String> },
+    Run {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+        tasks: Vec<String>,
+    },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink,
+    Unlink {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -151,6 +190,32 @@ impl TryInto<GoString> for TurboState {
         })
     }
 }
+
+fn try_run_help(command: &Command) -> Result<bool> {
+    let (help, command_name) = match command {
+        Command::Bin { help, .. } => (help, "bin"),
+        Command::Completion { help, .. } => (help, "completion"),
+        Command::Daemon { help, .. } => (help, "daemon"),
+        Command::Help { help, .. } => (help, "help"),
+        Command::Link { help, .. } => (help, "link"),
+        Command::Login { help, .. } => (help, "login"),
+        Command::Logout { help, .. } => (help, "logout"),
+        Command::Prune { help, .. } => (help, "prune"),
+        Command::Run { help, .. } => (help, "run"),
+        Command::Unlink { help, .. } => (help, "unlink"),
+    };
+
+    if *help {
+        Args::command()
+            .find_subcommand_mut(command_name)
+            .expect("Could not find subcommand")
+            .print_long_help()?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 impl TurboState {
     /// Runs the Go code linked in current binary.
     ///
@@ -160,15 +225,21 @@ impl TurboState {
     ///
     /// returns: Result<i32, Error>
     fn run_current_turbo(self) -> Result<i32> {
+        if let Some(command) = &self.parsed_args.command {
+            if try_run_help(command)? {
+                return Ok(0);
+            }
+        }
+
         match self.parsed_args.command {
-            Some(Command::Bin) => {
+            Some(Command::Bin { .. }) => {
                 commands::bin::run()?;
                 Ok(0)
             }
             Some(Command::Link { .. })
             | Some(Command::Login { .. })
-            | Some(Command::Logout)
-            | Some(Command::Unlink) => {
+            | Some(Command::Logout { .. })
+            | Some(Command::Unlink { .. }) => {
                 let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
                 Ok(exit_code.try_into()?)
             }
@@ -435,6 +506,7 @@ mod test {
             Args::try_parse_from(&["turbo", "run", "build"]).unwrap(),
             Args {
                 command: Some(Command::Run {
+                    help: false,
                     tasks: vec!["build".to_string()]
                 }),
                 ..Args::default()
@@ -445,6 +517,7 @@ mod test {
             Args::try_parse_from(&["turbo", "run", "build", "lint", "test"]).unwrap(),
             Args {
                 command: Some(Command::Run {
+                    help: false,
                     tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()]
                 }),
                 ..Args::default()
@@ -473,7 +546,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(&["turbo", "bin"]).unwrap(),
             Args {
-                command: Some(Command::Bin),
+                command: Some(Command::Bin { help: false }),
                 ..Args::default()
             }
         );
@@ -483,7 +556,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Bin),
+                command: Some(Command::Bin { help: false }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -496,7 +569,10 @@ mod test {
         assert_eq!(
             Args::try_parse_from(&["turbo", "login"]).unwrap(),
             Args {
-                command: Some(Command::Login { sso_team: None }),
+                command: Some(Command::Login {
+                    help: false,
+                    sso_team: None
+                }),
                 ..Args::default()
             }
         );
@@ -506,7 +582,10 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Login { sso_team: None }),
+                command: Some(Command::Login {
+                    help: false,
+                    sso_team: None,
+                }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -519,6 +598,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
                 command: Some(Command::Login {
+                    help: false,
                     sso_team: Some("my-team".to_string()),
                 }),
                 cwd: Some("../examples/basic".to_string()),
@@ -533,7 +613,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(&["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout),
+                command: Some(Command::Logout { help: false }),
                 ..Args::default()
             }
         );
@@ -543,7 +623,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Logout),
+                command: Some(Command::Logout { help: false }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -556,7 +636,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(&["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink),
+                command: Some(Command::Unlink { help: false }),
                 ..Args::default()
             }
         );
@@ -566,7 +646,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Unlink),
+                command: Some(Command::Unlink { help: false }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -577,6 +657,7 @@ mod test {
     #[test]
     fn test_parse_prune() {
         let default_prune = Command::Prune {
+            help: false,
             scope: None,
             docker: false,
             output_dir: "out".to_string(),
@@ -606,6 +687,7 @@ mod test {
             Args::try_parse_from(&["turbo", "prune", "--scope", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: Some("bar".to_string()),
                     docker: false,
                     output_dir: "out".to_string(),
@@ -618,6 +700,7 @@ mod test {
             Args::try_parse_from(&["turbo", "prune", "--docker"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "out".to_string(),
@@ -630,6 +713,7 @@ mod test {
             Args::try_parse_from(&["turbo", "prune", "--out-dir", "dist"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: false,
                     output_dir: "dist".to_string(),
@@ -644,6 +728,7 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -659,6 +744,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -679,6 +765,7 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: Some("foo".to_string()),
                     docker: true,
                     output_dir: "dist".to_string(),

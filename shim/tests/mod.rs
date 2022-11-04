@@ -10,21 +10,21 @@ ARGS:
     <TASKS>...    
 
 OPTIONS:
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpuprofile <CPUPROFILE>    Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-    -h, --help                       
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS
-                                     request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
-        --version                    
+        --api <API>                    Override the endpoint for API calls
+        --color                        Force color usage in the terminal
+        --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
+        --cwd <CWD>                    The directory in which to run turbo
+    -h, --help                         
+        --heap <HEAP>                  Specify a file to save a pprof heap profile
+        --login <LOGIN>                Override the login endpoint
+        --no-color                     Suppress color usage in the terminal
+        --preflight                    When enabled, turbo will precede HTTP requests with an
+                                       OPTIONS request for authorization
+        --team <TEAM>                  Set the team slug for API calls
+        --token <TOKEN>                Set the auth token for API calls
+        --trace <TRACE>                Specify a file to save a pprof trace
+    -v, --verbosity <VERBOSITY>        verbosity
+        --version                      
 
 SUBCOMMANDS:
     bin           Get the path to the Turbo binary
@@ -37,8 +37,20 @@ SUBCOMMANDS:
     prune         Prepare a subset of your monorepo
     run           Run tasks across projects in your monorepo
     unlink        Unlink the current directory from your Vercel organization and disable Remote
-                      Caching
-";
+                      Caching";
+
+static TURBO_LINK_HELP: &str = "link 
+Link your local directory to a Vercel organization and enable remote caching
+
+USAGE:
+    link [OPTIONS]
+
+OPTIONS:
+    -h, --help
+            help for link
+
+        --no-gitignore
+            Do not create or modify .gitignore (default false)";
 
 fn get_version() -> &'static str {
     include_str!("../../version.txt")
@@ -62,6 +74,17 @@ fn test_help() {
     cmd.assert()
         .success()
         .stdout(format!("{}\n", get_version()));
+}
+
+#[test]
+fn test_subcommand_help() {
+    let mut cmd = Command::cargo_bin("turbo").unwrap();
+    cmd.arg("link").arg("--help");
+    cmd.assert().success().stdout(TURBO_LINK_HELP);
+
+    let mut cmd = Command::cargo_bin("turbo").unwrap();
+    cmd.arg("link").arg("-h");
+    cmd.assert().success().stdout(TURBO_LINK_HELP);
 }
 
 #[test]
