@@ -1,6 +1,8 @@
 use swc_core::css::visit::{AstParentKind, VisitMut};
 use turbopack_core::chunk::ChunkingContextVc;
 
+use crate::chunk::CssImport;
+
 /// impl of code generation inferred from a AssetReference.
 /// This is rust only and can't be implemented by non-rust plugins.
 #[turbo_tasks::value(
@@ -14,6 +16,8 @@ pub struct CodeGeneration {
     /// ast nodes matching the span will be visitor by the visitor
     #[turbo_tasks(debug_ignore, trace_ignore)]
     pub visitors: Vec<(Vec<AstParentKind>, Box<dyn VisitorFactory>)>,
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    pub imports: Vec<CssImport>,
 }
 
 pub trait VisitorFactory: Send + Sync {
