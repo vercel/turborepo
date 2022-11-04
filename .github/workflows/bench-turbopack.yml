@@ -2,8 +2,16 @@ name: Benchmark Turbopack
 
 on:
   push:
+    # Runs on every commit on main
     branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
   pull_request:
+    # Runs on PRs from bench/ prefixed branches
     branches: [main]
 
 env:

@@ -2,8 +2,16 @@ name: Test
 
 on:
   push:
+    # Runs on every commit on main that affects turbopack
     branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
   pull_request:
+    # Runs on every PR affects turbopack
     branches: [main]
     paths:
       - "crates/**"
