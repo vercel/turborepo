@@ -59,7 +59,7 @@ jobs:
         timeout-minutes: 60
         with:
           command: nextest
-          args: run --release
+          args: run --workspace --release
 
   test-bench:
     runs-on: ubuntu-latest
