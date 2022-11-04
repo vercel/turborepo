@@ -27,13 +27,15 @@ static EMPTY_BUF: &[u8] = &[];
 #[turbo_tasks::value(shared, serialization = "custom")]
 #[derive(Clone, Debug, Default)]
 pub struct Rope {
+    /// Total length of all held bytes.
     length: usize,
 
+    /// A shareable container holding the rope's bytes.
     data: InnerRope,
 }
 
-/// An Arc container for ropes. This indirection allows for easy sharing
-/// sharing of the contents between Ropes (and also RopeReaders).
+/// An Arc container for ropes. This indirection allows for easily sharing the
+/// contents between Ropes (and also RopeBuilders/RopeReaders).
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 #[derive(Clone, Debug, Default)]
 struct InnerRope(#[turbo_tasks(debug_ignore, trace_ignore)] Arc<Vec<RopeElem>>);
@@ -41,10 +43,10 @@ struct InnerRope(#[turbo_tasks(debug_ignore, trace_ignore)] Arc<Vec<RopeElem>>);
 /// Differentiates the types of stored bytes in a rope.
 #[derive(Clone, Debug)]
 enum RopeElem {
-    /// Local bytes are created directly by this rope.
+    /// Local bytes are owned directly by this rope.
     Local(Bytes),
 
-    /// Shared holds the Arc contents of another rope.
+    /// Shared holds the Arc container of another rope.
     Shared(InnerRope),
 }
 
@@ -53,7 +55,7 @@ enum RopeElem {
 /// the contents without a full clone of the bytes.
 #[derive(Default)]
 pub struct RopeBuilder {
-    /// Total length of all prevoiusly committed bytes.
+    /// Total length of all previously committed bytes.
     length: usize,
 
     /// Immutable bytes references that have been appended to this builder. The
@@ -87,16 +89,16 @@ impl Rope {
             if let Local(bytes) = &self.data[0] {
                 let utf8 = std::str::from_utf8(bytes);
                 return utf8
-                    .map(Cow::Borrowed)
-                    .context("failed to convert rope into string");
+                    .context("failed to convert rope into string")
+                    .map(Cow::Borrowed);
             }
         }
 
         let mut read = self.read();
         let mut string = String::with_capacity(self.len());
-        let res = <RopeReader as Read>::read_to_string(&mut read, &mut string);
-        res.map(|_| Cow::Owned(string))
-            .context("failed to convert rope into string")
+        let res = read.read_to_string(&mut string);
+        res.context("failed to convert rope into string")?;
+        Ok(Cow::Owned(string))
     }
 }
 
@@ -114,14 +116,16 @@ impl RopeBuilder {
     /// Push owned bytes into the Rope.
     ///
     /// If possible use [push_static_bytes] or `+=` operation instead, as they
-    /// will create a reference to shared memory instead of cloning the
-    /// bytes.
+    /// will create a reference to shared memory instead of cloning the bytes.
     pub fn push_bytes(&mut self, bytes: &[u8]) {
         self.length += bytes.len();
         self.writable.extend(bytes);
     }
 
-    /// Push static bytes into the Rope.
+    /// Push static lifetime bytes into the Rope.
+    ///
+    /// This is more efficient than pushing owned bytes, because the internal
+    /// data does not need to be copied when the rope is read.
     pub fn push_static_bytes(&mut self, bytes: &'static [u8]) {
         // If the string is smaller than the cost of a Bytes reference (4 usizes), then
         // it's more efficient to own the bytes in a new buffer. We may be able to reuse
@@ -137,9 +141,10 @@ impl RopeBuilder {
         self.committed.push(Local(bytes.into()));
     }
 
-    /// Concatenate another Rope instance into our builder. This is much more
-    /// efficient than pushing actual bytes, since we can share the other
-    /// Rope's references without copying the underlying data.
+    /// Concatenate another Rope instance into our builder.
+    ///
+    /// This is much more efficient than pushing actual bytes, since we can
+    /// share the other Rope's references without copying the underlying data.
     pub fn concat(&mut self, other: &Rope) {
         // We may have pending bytes from a prior push.
         self.finish();
@@ -148,23 +153,22 @@ impl RopeBuilder {
         self.committed.push(Shared(other.data.clone()));
     }
 
+    /// Writes any pending bytes into our committed queue.
+    ///
+    /// This may be called multiple times without issue.
+    pub fn finish(&mut self) {
+        if !self.writable.is_empty() {
+            let writable = mem::take(&mut self.writable);
+            self.committed.push(Local(writable.into()));
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.length
     }
 
     pub fn is_empty(&self) -> bool {
         self.length == 0
-    }
-
-    /// Writes any pending bytes into our committed queue.
-    ///
-    /// This may be called multiple times without issue.
-    pub fn finish(&mut self) {
-        if !self.writable.is_empty() {
-            let mut writable = mem::take(&mut self.writable);
-            writable.shrink_to_fit();
-            self.committed.push(Local(writable.into()));
-        }
     }
 
     /// Constructs our final, immutable Rope instance.
@@ -208,6 +212,10 @@ impl Write for RopeBuilder {
 }
 
 impl ops::AddAssign<&'static str> for RopeBuilder {
+    /// Pushes a reference to static memory onto the rope.
+    ///
+    /// This is more efficient than pushing owned bytes, because the internal
+    /// data does not need to be copied when the rope is read.
     fn add_assign(&mut self, rhs: &'static str) {
         self.push_static_bytes(rhs.as_bytes());
     }
@@ -321,16 +329,15 @@ impl DeterministicHash for RopeElem {
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         match self {
             Local(bytes) => state.write_bytes(bytes),
-            Shared(rope) => rope.deterministic_hash(state),
+            Shared(inner) => inner.deterministic_hash(state),
         }
     }
 }
 
 /// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
-///
-/// The Rope's tree is kept as a cloned stack, allowing us to accomplish
-/// incremental yielding.
 pub struct RopeReader {
+    /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
+    /// incremental yielding.
     stack: Vec<StackElem>,
 }
 
@@ -378,20 +385,20 @@ impl RopeReader {
 impl Iterator for RopeReader {
     type Item = Bytes;
 
-    /// Iterates the rope's element recursively until we find the next Local
+    /// Iterates the rope's elements recursively until we find the next Local
     /// section, returning its Bytes.
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let (rope, mut index) = match self.stack.pop() {
+            let (inner, mut index) = match self.stack.pop() {
                 None => return None,
                 Some(StackElem::Local(b)) => return Some(b),
                 Some(StackElem::Shared(r, i)) => (r, i),
             };
 
-            let el = rope[index].clone();
+            let el = inner[index].clone();
             index += 1;
-            if index < rope.len() {
-                self.stack.push(StackElem::Shared(rope, index));
+            if index < inner.len() {
+                self.stack.push(StackElem::Shared(inner, index));
             }
 
             self.stack.push(StackElem::from(el));
@@ -458,7 +465,7 @@ impl Stream for RopeReader {
     type Item = Result<Bytes>;
 
     /// Returns a "result" of reading the next shared bytes reference. This
-    /// differes from [Read::read] by not copying any memory.
+    /// differs from [Read::read] by not copying any memory.
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
@@ -481,7 +488,7 @@ impl From<RopeElem> for StackElem {
     fn from(el: RopeElem) -> Self {
         match el {
             Local(bytes) => Self::Local(bytes),
-            Shared(rope) => Self::Shared(rope, 0),
+            Shared(inner) => Self::Shared(inner, 0),
         }
     }
 }
