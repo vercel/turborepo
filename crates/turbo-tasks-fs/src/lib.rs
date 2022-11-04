@@ -46,6 +46,7 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
+use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
 #[cfg(target_family = "windows")]
