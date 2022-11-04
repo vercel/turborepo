@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
@@ -37,6 +38,23 @@ const theme = {
       defaultTitle,
       titleTemplate: `%s – ${section}`,
     };
+  },
+  gitTimestamp({ timestamp }) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [dateString, setDateString] = useState(timestamp.toISOString());
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      setDateString(
+        timestamp.toLocaleDateString(navigator.language, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      );
+    }, [timestamp]);
+
+    return <>Last updated on {dateString}</>;
   },
   unstable_flexsearch: true,
   unstable_staticImage: true,

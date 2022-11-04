@@ -30,6 +30,10 @@ jobs:
         with:
           key: check
 
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
@@ -68,6 +72,10 @@ jobs:
 
       - name: Install cargo clippy
         run: rustup component add clippy
+
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
