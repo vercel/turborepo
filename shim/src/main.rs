@@ -171,7 +171,6 @@ enum RepoMode {
 /// The entire state of the execution, including args, repo state, etc.
 #[derive(Debug, Serialize)]
 struct TurboState {
-    repo_state: RepoState,
     parsed_args: Args,
     raw_args: Vec<String>,
 }
@@ -225,12 +224,6 @@ impl TurboState {
     ///
     /// returns: Result<i32, Error>
     fn run_current_turbo(self) -> Result<i32> {
-        if let Some(command) = &self.parsed_args.command {
-            if try_run_help(command)? {
-                return Ok(0);
-            }
-        }
-
         match self.parsed_args.command {
             Some(Command::Bin { .. }) => {
                 commands::bin::run()?;
@@ -271,17 +264,35 @@ impl TurboState {
     /// * `turbo_state`: state for current execution
     ///
     /// returns: Result<i32, Error>
-    fn run_correct_turbo(mut self) -> Result<i32> {
-        let local_turbo_path = self
-            .repo_state
+    fn run_correct_turbo(mut self, current_dir: PathBuf) -> Result<i32> {
+        // Run help for subcommand if `--help` or `-h` is passed.
+        if let Some(command) = &self.parsed_args.command {
+            if try_run_help(command)? {
+                return Ok(0);
+            }
+        }
+
+        // We run this *before* the local turbo code because login/logout/link/unlink
+        // should work regardless of whether or not we're in a monorepo.
+        if matches!(
+            self.parsed_args.command,
+            Some(Command::Login { .. })
+                | Some(Command::Link { .. })
+                | Some(Command::Logout { .. })
+                | Some(Command::Unlink { .. })
+        ) {
+            let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
+            return Ok(exit_code.try_into()?);
+        }
+
+        let repo_state = RepoState::infer(&current_dir)?;
+        let local_turbo_path = repo_state
             .root
             .join("node_modules")
             .join(".bin")
             .join("turbo");
 
-        if matches!(self.repo_state.mode, RepoMode::SinglePackage)
-            && self.parsed_args.is_run_command()
-        {
+        if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
             self.raw_args.push("--single-package".to_string());
         }
 
@@ -436,14 +447,12 @@ fn main() -> Result<()> {
         process::exit(1);
     }
 
-    let repo_state = RepoState::infer(&current_dir)?;
     let turbo_state = TurboState {
-        repo_state,
         parsed_args: clap_args,
         raw_args: env::args().skip(1).collect(),
     };
 
-    let exit_code = match turbo_state.run_correct_turbo() {
+    let exit_code = match turbo_state.run_correct_turbo(current_dir) {
         Ok(exit_code) => exit_code,
         Err(e) => {
             eprintln!("failed {:?}", e);

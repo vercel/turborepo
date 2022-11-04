@@ -13,12 +13,8 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     help        Help about any command
-    link        Link your local directory to a Vercel organization and enable remote caching.
-    login       Login to your Vercel account
-    logout      Logout of your Vercel account
     prune       Prepare a subset of your monorepo.
     run         Run tasks across projects in your monorepo
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Flags:
         --api string          Override the endpoint for API calls
@@ -49,12 +45,8 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     help        Help about any command
-    link        Link your local directory to a Vercel organization and enable remote caching.
-    login       Login to your Vercel account
-    logout      Logout of your Vercel account
     prune       Prepare a subset of your monorepo.
     run         Run tasks across projects in your monorepo
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Flags:
         --api string          Override the endpoint for API calls
@@ -86,21 +78,21 @@ Test help flag for shim
       <TASKS>...    
   
   OPTIONS:
-          --api <API>                  Override the endpoint for API calls
-          --color                      Force color usage in the terminal
-          --cpuprofile <CPUPROFILE>    Specify a file to save a cpu profile
-          --cwd <CWD>                  The directory in which to run turbo
-      -h, --help                       
-          --heap <HEAP>                Specify a file to save a pprof heap profile
-          --login <LOGIN>              Override the login endpoint
-          --no-color                   Suppress color usage in the terminal
-          --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS
-                                       request for authorization
-          --team <TEAM>                Set the team slug for API calls
-          --token <TOKEN>              Set the auth token for API calls
-          --trace <TRACE>              Specify a file to save a pprof trace
-      -v, --verbosity <VERBOSITY>      verbosity
-          --version                    
+          --api <API>                    Override the endpoint for API calls
+          --color                        Force color usage in the terminal
+          --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
+          --cwd <CWD>                    The directory in which to run turbo
+      -h, --help                         
+          --heap <HEAP>                  Specify a file to save a pprof heap profile
+          --login <LOGIN>                Override the login endpoint
+          --no-color                     Suppress color usage in the terminal
+          --preflight                    When enabled, turbo will precede HTTP requests with an
+                                         OPTIONS request for authorization
+          --team <TEAM>                  Set the team slug for API calls
+          --token <TOKEN>                Set the auth token for API calls
+          --trace <TRACE>                Specify a file to save a pprof trace
+      -v, --verbosity <VERBOSITY>        verbosity
+          --version                      
   
   SUBCOMMANDS:
       bin           Get the path to the Turbo binary
@@ -126,21 +118,21 @@ Test help flag for shim
       <TASKS>...    
   
   OPTIONS:
-          --api <API>                  Override the endpoint for API calls
-          --color                      Force color usage in the terminal
-          --cpuprofile <CPUPROFILE>    Specify a file to save a cpu profile
-          --cwd <CWD>                  The directory in which to run turbo
-      -h, --help                       
-          --heap <HEAP>                Specify a file to save a pprof heap profile
-          --login <LOGIN>              Override the login endpoint
-          --no-color                   Suppress color usage in the terminal
-          --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS
-                                       request for authorization
-          --team <TEAM>                Set the team slug for API calls
-          --token <TOKEN>              Set the auth token for API calls
-          --trace <TRACE>              Specify a file to save a pprof trace
-      -v, --verbosity <VERBOSITY>      verbosity
-          --version                    
+          --api <API>                    Override the endpoint for API calls
+          --color                        Force color usage in the terminal
+          --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
+          --cwd <CWD>                    The directory in which to run turbo
+      -h, --help                         
+          --heap <HEAP>                  Specify a file to save a pprof heap profile
+          --login <LOGIN>                Override the login endpoint
+          --no-color                     Suppress color usage in the terminal
+          --preflight                    When enabled, turbo will precede HTTP requests with an
+                                         OPTIONS request for authorization
+          --team <TEAM>                  Set the team slug for API calls
+          --token <TOKEN>                Set the auth token for API calls
+          --trace <TRACE>                Specify a file to save a pprof trace
+      -v, --verbosity <VERBOSITY>        verbosity
+          --version                      
   
   SUBCOMMANDS:
       bin           Get the path to the Turbo binary
