@@ -39,11 +39,17 @@ use turbopack_dev_server::{
     DevServer,
 };
 
+#[derive(Clone)]
+pub enum EntryRequest {
+    Relative(String),
+    Module(String, String),
+}
+
 pub struct NextDevServerBuilder {
     turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
     project_dir: String,
     root_dir: String,
-    entry_requests: Vec<String>,
+    entry_requests: Vec<EntryRequest>,
     server_component_externals: Vec<String>,
     eager_compile: bool,
     hostname: Option<IpAddr>,
@@ -80,7 +86,7 @@ impl NextDevServerBuilder {
         }
     }
 
-    pub fn entry_request(mut self, entry_asset_path: String) -> NextDevServerBuilder {
+    pub fn entry_request(mut self, entry_asset_path: EntryRequest) -> NextDevServerBuilder {
         self.entry_requests.push(entry_asset_path);
         self
     }
@@ -135,7 +141,6 @@ impl NextDevServerBuilder {
 
         let project_dir = self.project_dir;
         let root_dir = self.root_dir;
-        let entry_requests = self.entry_requests;
         let server_component_externals = self.server_component_externals;
         let eager_compile = self.eager_compile;
         let show_all = self.show_all;
@@ -147,6 +152,7 @@ impl NextDevServerBuilder {
             log_detail,
             log_level: self.log_level,
         };
+        let entry_requests = Arc::new(self.entry_requests.clone());
         let console_ui = Arc::new(ConsoleUi::new(log_options));
         let console_ui_to_dev_server = console_ui.clone();
 
@@ -257,7 +263,7 @@ async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSys
 async fn source(
     root_dir: String,
     project_dir: String,
-    entry_requests: Vec<String>,
+    entry_requests: TransientInstance<Vec<EntryRequest>>,
     eager_compile: bool,
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
     console_ui: TransientInstance<ConsoleUi>,
@@ -279,13 +285,19 @@ async fn source(
 
     let dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
+    let entry_requests = entry_requests
+        .iter()
+        .map(|r| match r {
+            EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
+            EntryRequest::Module(m, p) => {
+                RequestVc::module(m.clone(), Value::new(p.clone().into()))
+            }
+        })
+        .collect();
 
     let web_source = create_web_entry_source(
         project_path,
-        entry_requests
-            .iter()
-            .map(|a| RequestVc::relative(Value::new(a.to_string().into()), false))
-            .collect(),
+        entry_requests,
         dev_server_root,
         env,
         eager_compile,
@@ -393,7 +405,7 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
 
     #[allow(unused_mut)]
     let mut server = NextDevServerBuilder::new(tt, dir, root_dir)
-        .entry_request("src/index".into())
+        .entry_request(EntryRequest::Relative("src/index".into()))
         .eager_compile(options.eager_compile)
         .hostname(options.hostname)
         .port(options.port)

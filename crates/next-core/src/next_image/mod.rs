@@ -69,6 +69,7 @@ impl ContentSource for NextImageContentSource {
         // formats.
         if let Some(path) = url.strip_prefix('/') {
             let asset = this.asset_source.get(path, Value::new(Default::default()));
+            // THERE'S A HUGE PERFORMANCE ISSUE IF THIS MISSES
             if matches!(&*asset.await?, ContentSourceResult::Static(..)) {
                 return Ok(asset);
             }
