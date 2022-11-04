@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest-16-core-oss
+          - name: macos-latest
+          - name: windows-latest
+    runs-on: ubuntu-latest
+    name: test - ${{ matrix.os.name }}
+
+    steps:
+      - run: 'echo "No check run equired"'
+
+  test-bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest
+          - name: macos-latest
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows-latest
+    runs-on: ubuntu-latest
+    name: test-bench - ${{ matrix.os.name }}
+
+    steps:
+      - run: 'echo "No check run equired"'
