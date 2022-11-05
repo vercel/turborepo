@@ -1,0 +1,61 @@
+{
+  "name": "turbo-convert",
+  "version": "0.0.0",
+  "description": "Easily switch between workspace managers",
+  "homepage": "https://turborepo.org",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/use-workspaces"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "bin": "dist/cli.js",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chalk": "2.4.2",
+    "execa": "5.1.1",
+    "fast-glob": "^3.2.12",
+    "fs-extra": "^10.1.0",
+    "gradient-string": "^2.0.0",
+    "inquirer": "^8.0.0",
+    "js-yaml": "^4.1.0",
+    "meow": "^7.1.1",
+    "ora": "4.1.1",
+    "rimraf": "^3.0.2",
+    "semver": "^7.3.5",
+    "turbo-utils": "workspace:*",
+    "update-check": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/chalk-animation": "^1.6.0",
+    "@types/fs-extra": "^9.0.13",
+    "@types/gradient-string": "^1.1.2",
+    "@types/inquirer": "^7.3.1",
+    "@types/jest": "^27.4.0",
+    "@types/js-yaml": "^4.0.5",
+    "@types/node": "^16.11.12",
+    "@types/rimraf": "^3.0.2",
+    "@types/semver": "^7.3.9",
+    "eslint": "^7.23.0",
+    "jest": "^27.4.3",
+    "semver": "^7.3.5",
+    "strip-ansi": "^6.0.1",
+    "ts-jest": "^27.1.1",
+    "tsconfig": "workspace:*",
+    "tsup": "^5.10.3",
+    "typescript": "^4.5.5"
+  },
+  "files": [
+    "dist"
+  ]
+}
