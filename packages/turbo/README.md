@@ -25,7 +25,7 @@
 
 ## Getting Started
 
-Visit https://turbo.build/repo/docs/getting-started to get started with Turborepo.
+Visit https://turbo.build/repo/docs/getting-started/add-to-project to get started with Turborepo.
 
 ## Documentation
 
