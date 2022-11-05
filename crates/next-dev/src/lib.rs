@@ -33,7 +33,7 @@ use turbopack_dev_server::{
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSource, router::RouterContentSource,
+        combined::CombinedContentSourceVc, router::RouterContentSource,
         static_assets::StaticAssetsContentSourceVc, ContentSourceVc,
     },
     DevServer,
@@ -166,7 +166,7 @@ impl NextDevServerBuilder {
             source(
                 root_dir.clone(),
                 project_dir.clone(),
-                entry_requests.clone(),
+                entry_requests.clone().into(),
                 eager_compile,
                 turbo_tasks.clone().into(),
                 console_ui.clone().into(),
@@ -325,10 +325,8 @@ async fn source(
     .into();
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
-    let main_source = CombinedContentSource {
-        sources: vec![static_source, app_source, rendered_source, web_source],
-    }
-    .cell();
+    let main_source =
+        CombinedContentSourceVc::new(vec![static_source, app_source, rendered_source, web_source]);
     let introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
     }
@@ -336,7 +334,10 @@ async fn source(
     .into();
     let main_source = main_source.into();
     let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
-    let img_source = NextImageContentSourceVc::new(main_source).into();
+    let img_source = NextImageContentSourceVc::new(
+        CombinedContentSourceVc::new(vec![static_source, rendered_source]).into(),
+    )
+    .into();
     let source = RouterContentSource {
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
