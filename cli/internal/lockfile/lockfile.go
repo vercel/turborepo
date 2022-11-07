@@ -7,7 +7,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
-// Lockfile Interface for general operations that work accross all lockfiles
+// Lockfile Interface for general operations that work across all lockfiles
 type Lockfile interface {
 	// ResolvePackage Given a workspace, a package it imports and version returns the key, resolved version, and if it was found
 	ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error)

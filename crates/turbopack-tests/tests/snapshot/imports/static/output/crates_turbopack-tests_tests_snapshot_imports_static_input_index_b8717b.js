@@ -10,7 +10,7 @@ console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$
 })()),
 "[project]/crates/turbopack-tests/tests/snapshot/imports/static/input/vercel.svg (static)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
 
-__turbopack_export_value__("/crates/turbopack-tests/tests/snapshot/imports/static/static/04cd41686148faf80b59f60e37c4f0ab.svg");
+__turbopack_export_value__("/crates/turbopack-tests/tests/snapshot/imports/static/static/957b9b162f8447f9.svg");
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
     if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_imports_static_input_index_979536.js"))) return true;
@@ -909,6 +909,10 @@ __turbopack_export_value__("/crates/turbopack-tests/tests/snapshot/imports/stati
       // implement, but the Next.js React Refresh runtime uses this to decide
       // whether to schedule an update.
       status: () => "idle",
+
+      // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
+      addStatusHandler: (_handler) => {},
+      removeStatusHandler: (_handler) => {},
     };
 
     return { hot, hotState };

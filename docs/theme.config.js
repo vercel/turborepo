@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
@@ -38,6 +39,23 @@ const theme = {
       titleTemplate: `%s – ${section}`,
     };
   },
+  gitTimestamp({ timestamp }) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [dateString, setDateString] = useState(timestamp.toISOString());
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      setDateString(
+        timestamp.toLocaleDateString(navigator.language, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      );
+    }, [timestamp]);
+
+    return <>Last updated on {dateString}</>;
+  },
   unstable_flexsearch: true,
   unstable_staticImage: true,
   toc: {
@@ -60,8 +78,10 @@ const theme = {
 
     let ogUrl;
 
-    if (frontMatter.ogImage || asPath === "/") {
-      ogUrl = `${SITE_ROOT}/og-image.png`;
+    if (asPath === "/") {
+      ogUrl = `${SITE_ROOT}/api/og`;
+    } else if (frontMatter?.ogImage) {
+      ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
     } else {
       const type = asPath.startsWith("/repo")
         ? "repo"
@@ -72,7 +92,7 @@ const theme = {
         ? `&title=${encodeURIComponent(frontMatter.title)}`
         : "";
 
-      ogUrl = `https://turbo-site-og.vercel.app/api/og?type=${type}${title}`;
+      ogUrl = `${SITE_ROOT}/api/og?type=${type}${title}`;
     }
 
     return (
@@ -127,6 +147,9 @@ const theme = {
     text: "Edit this page on GitHub",
   },
   navbar: Navigation,
+  search: {
+    placeholder: "Search documentation…",
+  },
   footer: {
     component: Footer,
   },

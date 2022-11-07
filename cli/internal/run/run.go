@@ -500,7 +500,7 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 		})
 	}
 
-	if err := engine.Prepare(&core.EngineExecutionOptions{
+	if err := engine.Prepare(&core.EngineBuildingOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,
 		TasksOnly: rs.Opts.runOpts.only,
@@ -776,7 +776,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	execOpts := core.ExecOpts{
+	execOpts := core.EngineExecutionOptions{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
@@ -934,7 +934,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *compl
 		})
 
 		return nil
-	}), core.ExecOpts{
+	}), core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
 	})

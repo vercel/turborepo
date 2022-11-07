@@ -293,7 +293,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
-		outputs:              outputs,
+		outputs:              outputs.Sort(),
 		passThruArgs:         args,
 		hashableEnvPairs:     hashableEnvPairs,
 		globalHash:           th.globalHash,

@@ -11,7 +11,7 @@ __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/basic/asy
 
 
 __turbopack_export_value__((__turbopack_import__) => {
-    return __turbopack_load__("output/13a8f_turbopack-tests_tests_snapshot_basic_async_chunk_input_import.js_manifest-chunk.js").then(() => {
+    return __turbopack_load__("output/79fb1_turbopack-tests_tests_snapshot_basic_async_chunk_input_import.js_manifest-chunk.js").then(() => {
         return __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/import.js/manifest-chunk.js");
     }).then(() => __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/import.js (ecmascript)"));
 });
@@ -913,6 +913,10 @@ __turbopack_export_value__((__turbopack_import__) => {
       // implement, but the Next.js React Refresh runtime uses this to decide
       // whether to schedule an update.
       status: () => "idle",
+
+      // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
+      addStatusHandler: (_handler) => {},
+      removeStatusHandler: (_handler) => {},
     };
 
     return { hot, hotState };

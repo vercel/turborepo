@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task            = build                  
-    Hash            = 0d6f9a04cadfa475       
+    Hash            = 08d0a37ad9eee1e5       
     Cached (Local)  = false                  
     Cached (Remote) = false                  
     Command         = echo 'building' > foo  
@@ -18,7 +18,7 @@ Check
     Dependendents   = test                   
   test
     Task            = test                                         
-    Hash            = 638b08eb4b64eb68                             
+    Hash            = cb5a64e4f86a6543                             
     Cached (Local)  = false                                        
     Cached (Remote) = false                                        
     Command         = [[ ( -f foo ) && $(cat foo) == 'building' ]] 
@@ -32,7 +32,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "0d6f9a04cadfa475",
+        "hash": "08d0a37ad9eee1e5",
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"
@@ -46,7 +46,7 @@ Check
       },
       {
         "task": "test",
-        "hash": "638b08eb4b64eb68",
+        "hash": "cb5a64e4f86a6543",
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
         "outputs": null,
         "excludedOutputs": null,
