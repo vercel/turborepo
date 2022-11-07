@@ -19,7 +19,7 @@ jobs:
   examples:
     name: CLI run examples
     needs: turboignore
-    if: needs.turboignore.outputs.result == "false"
+    if: needs.turboignore.outputs.result != "true"
     timeout-minutes: 15
 
     strategy:
