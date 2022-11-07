@@ -13,10 +13,12 @@ jobs:
     outputs:
       output: ${{ steps.turboignore.outputs.result }}
     steps:
-      - name: turboignore
+      - name: setup node
         uses: actions/setup-node@v3
-        continue-on-error: true
+
+      - name: turboignore
         run: npx turbo-ignore ${{ inputs.scope }}
+        continue-on-error: true
 
       - if: ${{ steps.turboignore.outcome == 'failure' }}
         run: echo "result=false" >> $GITHUB_OUTPUT
