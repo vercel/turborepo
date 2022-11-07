@@ -28,7 +28,7 @@ import (
 	"github.com/google/chrometracing/traceinternal"
 )
 
-// TODO: remove this comment - test line for turbo-ignore
+// TODO: remove this comment - test line for turbo-ignore workflow
 var trace = struct {
 	start time.Time
 	pid   uint64
