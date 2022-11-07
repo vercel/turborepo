@@ -190,6 +190,14 @@ impl TryInto<GoString> for TurboState {
     }
 }
 
+/// If a command has a help flag passed, print help and return true.
+/// Otherwise, return false.
+///
+/// # Arguments
+///
+/// * `command`: The parsed command.
+///
+/// returns: Result<bool, Error>
 fn try_run_help(command: &Command) -> Result<bool> {
     let (help, command_name) = match command {
         Command::Bin { help, .. } => (help, "bin"),

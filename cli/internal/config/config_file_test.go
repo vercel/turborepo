@@ -67,9 +67,7 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
 
-	fmt.Printf("---------\n")
 	remoteConfig := config.GetRemoteConfig("")
-	fmt.Printf("---------\n")
 	if remoteConfig.APIURL != _defaultAPIURL {
 		t.Errorf("api url got %v, want %v", remoteConfig.APIURL, _defaultAPIURL)
 	}
