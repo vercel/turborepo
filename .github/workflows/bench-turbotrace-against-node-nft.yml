@@ -2,7 +2,17 @@ name: Bench Turbo trace against @vercel/nft
 
 on:
   push:
-    branches: [main, "bench/*"]
+    # Runs on every commit on main
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
+  pull_request:
+    # Runs on PRs from bench/ prefixed branches
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -10,6 +20,7 @@ env:
 
 jobs:
   bench_vs_node_nft:
+    if: github.event_name == 'push' || startsWith(github.head_ref, 'bench/')
     runs-on: ubuntu-latest
     name: bench
 

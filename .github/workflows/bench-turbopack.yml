@@ -110,7 +110,7 @@ jobs:
   commit_results:
     name: Commit benchmark-data
     needs: bench
-    if: always() && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Get current date

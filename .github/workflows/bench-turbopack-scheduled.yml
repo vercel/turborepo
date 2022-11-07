@@ -112,7 +112,7 @@ jobs:
   commit_results:
     name: Commit benchmark-data
     needs: bench
-    if: always() && github.event_name == 'schedule'
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Get current date

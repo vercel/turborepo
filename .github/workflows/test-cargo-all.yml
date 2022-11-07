@@ -17,7 +17,7 @@ jobs:
     name: test - ${{ matrix.os.name }}
 
     steps:
-      - run: 'echo "No check run equired"'
+      - run: 'echo "No check run required"'
 
   test-bench:
     strategy:
@@ -32,4 +32,4 @@ jobs:
     name: test-bench - ${{ matrix.os.name }}
 
     steps:
-      - run: 'echo "No check run equired"'
+      - run: 'echo "No check run required"'
