@@ -2,11 +2,12 @@
 name = "turbo"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
 build-target = "0.4.0"
-bindgen = "0.60.1"
+bindgen = "0.61.0"
 
 [dev-dependencies]
 assert_cmd = "2.0.4"
@@ -14,7 +15,7 @@ itertools = "0.10.5"
 
 [dependencies]
 anyhow = { version = "1.0.65", features = ["backtrace"] }
-clap = { version = "3.2.22", features = ["derive"] }
+clap = { version = "3.2.23", features = ["derive"] }
 globset = "0.4.9"
 predicates = "2.1.1"
 serde = { version = "1.0.145", features = ["derive"] }

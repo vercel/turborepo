@@ -107,6 +107,11 @@ Test help flag for shim
       unlink        Unlink the current directory from your Vercel organization and disable Remote
                         Caching
 
+
+
+
+
+
   $ ${SHIM} --help
   turbo 
   The build system that makes ship happen

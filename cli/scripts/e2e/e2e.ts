@@ -180,11 +180,7 @@ function runSmokeTests<T>(
       options.cwd ? " from " + options.cwd : ""
     }`,
     async () => {
-      const results = repo.turbo(
-        "run",
-        ["test", "--profile=chrometracing"],
-        options
-      );
+      const results = repo.turbo("run", ["test"], options);
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#test");
@@ -203,14 +199,6 @@ function runSmokeTests<T>(
         text = repo.readFileSync(cachedLogFilePath);
       }, `Could not read cached log file from cache ${cachedLogFilePath}`);
       assert.ok(text.includes("testing c"), "Contains correct output");
-
-      const root = options.cwd ? options.cwd : repo.root;
-      const tracingFile = path.join(root, "chrometracing");
-      const tracingBuf = fs.readFileSync(tracingFile);
-      // ensure it doesn't throw
-      JSON.parse(tracingBuf.toString("utf-8"));
-      // don't throw off hashes for later tests
-      fs.unlinkSync(tracingFile);
     }
   );
 

@@ -2,11 +2,12 @@ name: Check Code Style
 on:
   push:
     branches: [main, staging]
+  pull_request:
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - run: 'echo "No check run equired"'
+      - run: 'echo "No check run required"'
   clippy:
     runs-on: ubuntu-latest
     steps:

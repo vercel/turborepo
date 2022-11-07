@@ -17,7 +17,7 @@ fn test_version() {
 }
 
 #[test]
-fn test_find_correct_turbo() {
+fn test_no_arguments() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
     cmd.assert()
         .append_context("turbo", "no arguments")
@@ -26,9 +26,12 @@ fn test_find_correct_turbo() {
             "`turbo` with no arguments should exit with code 1",
         )
         .code(1);
+}
 
+#[test]
+fn test_find_turbo_in_example() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
-    cmd.args(&["--cwd", "../examples/basic", "bin"])
+    cmd.args(["--cwd", "../examples/basic", "bin"])
         .assert()
         .append_context(
             "turbo",
@@ -40,12 +43,34 @@ fn test_find_correct_turbo() {
              in examples/basic",
         )
         .success()
-        .stdout(predicates::str::ends_with(
-            "examples/basic/node_modules/.bin/turbo\n",
-        ));
+        .stdout(predicates::str::ends_with({
+            #[cfg(target_os = "linux")]
+            {
+                "examples/basic/node_modules/turbo/bin/turbo\n"
+            }
+            #[cfg(target_os = "macos")]
+            {
+                "examples/basic/node_modules/.bin/turbo\n"
+            }
+            #[cfg(target_os = "windows")]
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    "examples\\basic\\node_modules\\turbo-windows-64\\bin\\turbo.exe\n"
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    "examples\\basic\\node_modules\\turbo-windows-arm64\\bin\\turbo.exe\n"
+                }
+            }
+        }));
+}
 
+#[test]
+fn test_find_correct_turbo() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
-    cmd.args(&["--cwd", "..", "bin"])
+    let assertion = cmd
+        .args(["--cwd", "..", "bin"])
         .assert()
         .append_context(
             "turbo",
@@ -55,6 +80,17 @@ fn test_find_correct_turbo() {
             "expect",
             "`turbo --cwd .. bin` should print out current turbo binary",
         )
-        .success()
-        .stdout(predicates::str::ends_with("target/debug/turbo\n"));
+        .success();
+
+    if cfg!(debug_assertions) {
+        if cfg!(windows) {
+            assertion.stdout(predicates::str::ends_with("target\\debug\\turbo.exe\n"));
+        } else {
+            assertion.stdout(predicates::str::ends_with("target/debug/turbo\n"));
+        }
+    } else if cfg!(windows) {
+        assertion.stdout(predicates::str::ends_with("target\\release\\turbo.exe\n"));
+    } else {
+        assertion.stdout(predicates::str::ends_with("target/release/turbo\n"));
+    }
 }

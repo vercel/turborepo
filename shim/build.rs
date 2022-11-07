@@ -1,8 +1,8 @@
-use std::{env, ffi::OsStr, path::PathBuf, process::Command};
+use std::{env, path::PathBuf, process::Command};
 
 fn main() {
     let is_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
-    let lib_search_path = if is_release {
+    let lib_search_path = if is_release && env::var("RELEASE_TURBO_CLI") == Ok("true".to_string()) {
         expect_release_lib()
     } else {
         build_debug_libturbo()
@@ -25,8 +25,8 @@ fn main() {
     bindings
         .write_to_file("src/ffi.rs")
         .expect("Couldn't write bindings!");
-
-    if cfg!(target_os = "macos") {
+    let target = build_target::target().unwrap();
+    if target.os == build_target::Os::MacOs {
         println!("cargo:rustc-link-lib=framework=cocoa");
         println!("cargo:rustc-link-lib=framework=security");
     }
@@ -54,17 +54,41 @@ fn expect_release_lib() -> String {
 }
 
 fn build_debug_libturbo() -> String {
-    let cli_path = "../cli";
-    let mut cmd = new_command("make");
-    cmd.current_dir(cli_path);
-    cmd.arg("libturbo.a");
-    let mut child = cmd.spawn().expect("failed to spawn make libturbo.a");
-    child.wait().expect("failed to build libturbo.a");
-    cli_path.to_string()
-}
+    let cli_path = env::var_os("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .unwrap()
+        .join("cli");
+    let target = build_target::target().unwrap();
+    let mut cmd = Command::new("make");
+    cmd.current_dir(&cli_path);
+    if target.os == build_target::Os::Windows {
+        let output_dir = env::var_os("OUT_DIR").map(PathBuf::from).unwrap();
+        let output_deps = output_dir
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("deps");
+        // workaround to make increment build works
+        for ext in ["pdb", "exe", "d", "lib"].iter() {
+            std::fs::remove_file(output_deps.join(&format!("turbo.{ext}"))).unwrap_or(());
+        }
 
-fn new_command(program: impl AsRef<OsStr>) -> Command {
-    let mut cmd = Command::new("sh");
-    cmd.args(["-c", "exec \"$0\" \"$@\""]).arg(program);
-    cmd
+        cmd.env("CGO_ENABLED", "1")
+            .env("CC", "clang")
+            .env("CXX", "clang++")
+            .arg("turbo.lib");
+    } else {
+        cmd.arg("libturbo.a");
+    }
+    assert!(
+        cmd.stdout(std::process::Stdio::inherit())
+            .status()
+            .expect("failed to build turbo.lib")
+            .success(),
+        "failed to build turbo static library"
+    );
+    cli_path.to_string_lossy().to_string()
 }
