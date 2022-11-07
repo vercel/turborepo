@@ -147,6 +147,9 @@ const theme = {
     text: "Edit this page on GitHub",
   },
   navbar: Navigation,
+  search: {
+    placeholder: "Search documentation…",
+  },
   footer: {
     component: Footer,
   },
