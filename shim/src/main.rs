@@ -110,6 +110,9 @@ enum Command {
         /// help for link
         #[clap(long, short)]
         help: bool,
+        /// Respond `yes` to all prompts
+        #[clap(long, short)]
+        yes: bool,
         /// Do not create or modify .gitignore (default false)
         #[clap(long)]
         no_gitignore: bool,

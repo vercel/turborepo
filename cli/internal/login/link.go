@@ -25,6 +25,7 @@ import (
 type link struct {
 	base                *cmdutil.CmdBase
 	modifyGitIgnore     bool
+	yes                 bool
 	apiClient           linkAPIClient // separate from base to allow testing
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
@@ -50,6 +51,7 @@ func RunLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error 
 	link := &link{
 		base:                base,
 		modifyGitIgnore:     !args.Command.Link.DontModifyGitIgnore,
+		yes:                 args.Command.Link.Yes,
 		apiClient:           base.APIClient,
 		promptSetup:         promptSetup,
 		promptTeam:          promptTeam,
@@ -90,12 +92,15 @@ func (l *link) run() error {
 		return fmt.Errorf("could figure out file path.\n%w", err)
 	}
 	repoLocation := strings.Replace(currentDir, dir, "~", 1)
-	shouldSetup, err := l.promptSetup(repoLocation)
-	if err != nil {
-		return err
-	}
-	if !shouldSetup {
-		return errUserCanceled
+
+	if !l.yes {
+		shouldSetup, err := l.promptSetup(repoLocation)
+		if err != nil {
+			return err
+		}
+		if !shouldSetup {
+			return errUserCanceled
+		}
 	}
 
 	if !l.apiClient.HasUser() {

@@ -146,3 +146,57 @@ Test help flag for shim
       run           Run tasks across projects in your monorepo
       unlink        Unlink the current directory from your Vercel organization and disable Remote
                         Caching
+
+Test help flag for shim's link command
+  $ ${SHIM} link -h
+  link 
+  Link your local directory to a Vercel organization and enable remote caching
+  
+  USAGE:
+      link [OPTIONS]
+  
+  OPTIONS:
+      -h, --help
+              help for link
+  
+          --no-gitignore
+              Do not create or modify .gitignore (default false)
+
+Test help flag for shim's unlink command
+  $ ${SHIM} unlink -h
+  unlink 
+  Unlink the current directory from your Vercel organization and disable Remote Caching
+  
+  USAGE:
+      unlink
+  
+  OPTIONS:
+      -h, --help
+              Help flag
+
+Test help flag for shim's login command
+  $ ${SHIM} login -h
+  login 
+  Login to your Vercel account
+  
+  USAGE:
+      login [OPTIONS]
+  
+  OPTIONS:
+      -h, --help
+              Help flag
+  
+          --sso-team <SSO_TEAM>
+              
+
+Test help flag for shim's logout command
+  $ ${SHIM} logout -h
+  logout 
+  Logout to your Vercel account
+  
+  USAGE:
+      logout
+  
+  OPTIONS:
+      -h, --help
+              Help flag
