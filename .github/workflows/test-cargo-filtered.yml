@@ -100,7 +100,7 @@ jobs:
         timeout-minutes: 120
         with:
           command: nextest
-          args: run --release --no-fail-fast
+          args: run --workspace --release --no-fail-fast
 
   test-bench:
     strategy:

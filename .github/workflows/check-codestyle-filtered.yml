@@ -39,6 +39,7 @@ jobs:
         with:
           command: check
           # args: --features persistent_cache
+          args: --workspace
 
       - name: Run cargo check tests
         uses: actions-rs/cargo@v1
@@ -81,7 +82,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets
+          args: --workspace --all-targets
 
       - name: Count clippy warnings
         run: |
