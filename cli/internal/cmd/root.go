@@ -133,8 +133,14 @@ func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion 
 			execErr = auth.RunLogout(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
 			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
+		} else if command.Daemon != nil {
+			execErr = daemon.RunDaemon(ctx, helper, signalWatcher, &state.ParsedArgs)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
+		}
+
+		if execErr != nil {
+			fmt.Printf("error: %v\n", execErr)
 		}
 		close(doneCh)
 	}()
@@ -220,7 +226,6 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	helper.AddFlags(flags)
 	execOpts.addFlags(flags)
 	cmd.AddCommand(info.BinCmd(helper))
-	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
 	cmd.AddCommand(prune.GetCmd(helper))
 	cmd.AddCommand(run.GetCmd(helper, signalWatcher))
 	return cmd

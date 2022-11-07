@@ -14,153 +14,16 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser};
 use serde::Serialize;
 
 use crate::{
+    commands::{Args, Command},
     ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
     package_manager::PackageManager,
 };
 
 static TURBO_JSON: &str = "turbo.json";
-
-#[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
-#[clap(author, about = "The build system that makes ship happen", long_about = None)]
-#[clap(
-    ignore_errors = true,
-    disable_help_flag = true,
-    disable_help_subcommand = true
-)]
-#[clap(disable_version_flag = true)]
-struct Args {
-    #[clap(long, short)]
-    help: bool,
-    #[clap(long, global = true)]
-    version: bool,
-    /// Override the endpoint for API calls
-    #[clap(long, global = true, value_parser)]
-    api: Option<String>,
-    /// Force color usage in the terminal
-    #[clap(long, global = true)]
-    color: bool,
-    /// Specify a file to save a cpu profile
-    #[clap(long, global = true, value_parser)]
-    cpu_profile: Option<String>,
-    /// The directory in which to run turbo
-    #[clap(long, global = true, value_parser)]
-    cwd: Option<String>,
-    /// Specify a file to save a pprof heap profile
-    #[clap(long, global = true, value_parser)]
-    heap: Option<String>,
-    /// Override the login endpoint
-    #[clap(long, global = true, value_parser)]
-    login: Option<String>,
-    /// Suppress color usage in the terminal
-    #[clap(long, global = true)]
-    no_color: bool,
-    /// When enabled, turbo will precede HTTP requests with an OPTIONS request
-    /// for authorization
-    #[clap(long, global = true)]
-    preflight: bool,
-    /// Set the team slug for API calls
-    #[clap(long, global = true, value_parser)]
-    team: Option<String>,
-    /// Set the auth token for API calls
-    #[clap(long, global = true, value_parser)]
-    token: Option<String>,
-    /// Specify a file to save a pprof trace
-    #[clap(long, global = true, value_parser)]
-    trace: Option<String>,
-    /// verbosity
-    #[clap(short, long, global = true, value_parser)]
-    verbosity: Option<u8>,
-    #[clap(long = "__test-run", global = true, hide = true)]
-    test_run: bool,
-    #[clap(subcommand)]
-    command: Option<Command>,
-    tasks: Vec<String>,
-}
-
-/// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
-/// we must change these as well to avoid accidentally passing the
-/// --single-package flag into non-build commands.
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
-enum Command {
-    /// Get the path to the Turbo binary
-    Bin {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-    },
-    /// Generate the autocompletion script for the specified shell
-    Completion {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-    },
-    /// Runs the Turborepo background daemon
-    Daemon {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-    },
-    /// Help about any command
-    Help {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-    },
-    /// Link your local directory to a Vercel organization and enable remote
-    /// caching.
-    Link {
-        /// help for link
-        #[clap(long, short)]
-        help: bool,
-        /// Do not create or modify .gitignore (default false)
-        #[clap(long)]
-        no_gitignore: bool,
-    },
-    /// Login to your Vercel account
-    Login {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-        #[clap(long = "sso-team")]
-        sso_team: Option<String>,
-    },
-    /// Logout to your Vercel account
-    Logout {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-    },
-    /// Prepare a subset of your monorepo.
-    Prune {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-        #[clap(long)]
-        scope: Option<String>,
-        #[clap(long)]
-        docker: bool,
-        #[clap(long = "out-dir", default_value = "out")]
-        output_dir: String,
-    },
-    /// Run tasks across projects in your monorepo
-    Run {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-        tasks: Vec<String>,
-    },
-    /// Unlink the current directory from your Vercel organization and disable
-    /// Remote Caching
-    Unlink {
-        /// Help flag
-        #[clap(long, short)]
-        help: bool,
-    },
-}
 
 #[derive(Debug, Clone, Serialize)]
 struct RepoState {
@@ -209,7 +72,6 @@ fn try_run_help(command: &Command) -> Result<bool> {
         Command::Bin { help, .. } => (help, "bin"),
         Command::Completion { help, .. } => (help, "completion"),
         Command::Daemon { help, .. } => (help, "daemon"),
-        Command::Help { help, .. } => (help, "help"),
         Command::Link { help, .. } => (help, "link"),
         Command::Login { help, .. } => (help, "login"),
         Command::Logout { help, .. } => (help, "logout"),
@@ -243,7 +105,8 @@ impl TurboState {
                 commands::bin::run()?;
                 Ok(0)
             }
-            Some(Command::Link { .. })
+            Some(Command::Daemon { .. })
+            | Some(Command::Link { .. })
             | Some(Command::Login { .. })
             | Some(Command::Logout { .. })
             | Some(Command::Unlink { .. }) => {

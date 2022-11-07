@@ -10,6 +10,14 @@ type RepoState struct {
 	Mode string `json:"mode"`
 }
 
+// DaemonPayload is the extra flags and command that are
+// passed for the `daemon` subcommand
+type DaemonPayload struct {
+	IdleTimeout string `json:"idle_time"`
+	Command     string `json:"command"`
+	Json        bool   `json:"json"`
+}
+
 // LinkPayload is the extra flags passed for the `link` subcommand
 type LinkPayload struct {
 	DontModifyGitIgnore bool `json:"no_gitignore"`
@@ -23,29 +31,30 @@ type LoginPayload struct {
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
-	Link   *LinkPayload  `json:"link"`
-	Login  *LoginPayload `json:"login"`
-	Logout *struct{}     `json:"logout"`
-	Unlink *struct{}     `json:"unlink"`
+	Daemon *DaemonPayload `json:"daemon"`
+	Link   *LinkPayload   `json:"link"`
+	Login  *LoginPayload  `json:"login"`
+	Logout *struct{}      `json:"logout"`
+	Unlink *struct{}      `json:"unlink"`
 }
 
 // ParsedArgsFromRust are the parsed command line arguments passed
 // from the Rust shim
 type ParsedArgsFromRust struct {
-	API        string   `json:"api"`
-	Color      bool     `json:"color"`
-	CPUProfile string   `json:"cpu_profile"`
-	CWD        string   `json:"cwd"`
-	Heap       string   `json:"heap"`
-	Login      string   `json:"login"`
-	NoColor    bool     `json:"no_color"`
-	Preflight  bool     `json:"preflight"`
-	Team       string   `json:"team"`
-	Token      string   `json:"token"`
-	Trace      string   `json:"trace"`
-	Verbosity  uint8    `json:"verbosity"`
-	TestRun    bool     `json:"test_run"`
-	Command    *Command `json:"command"`
+	API        string  `json:"api"`
+	Color      bool    `json:"color"`
+	CPUProfile string  `json:"cpu_profile"`
+	CWD        string  `json:"cwd"`
+	Heap       string  `json:"heap"`
+	Login      string  `json:"login"`
+	NoColor    bool    `json:"no_color"`
+	Preflight  bool    `json:"preflight"`
+	Team       string  `json:"team"`
+	Token      string  `json:"token"`
+	Trace      string  `json:"trace"`
+	Verbosity  uint8   `json:"verbosity"`
+	TestRun    bool    `json:"test_run"`
+	Command    Command `json:"command"`
 }
 
 // CLIExecutionStateFromRust is the entire state of an execution passed from the Rust side

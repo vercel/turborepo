@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"time"
 
 	"github.com/vercel/turbo/cli/internal/config"
@@ -14,6 +15,21 @@ import (
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
 )
+
+func RunStatus(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
+	}
+	l := &lifecycle{
+		base,
+	}
+	if err := l.status(ctx, args.Command.Daemon.Json); err != nil {
+		l.logError(err)
+		return err
+	}
+	return nil
+}
 
 func addStatusCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	var outputJSON bool
