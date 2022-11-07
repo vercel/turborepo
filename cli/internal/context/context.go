@@ -21,6 +21,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// A new comment to trigger a workflow
+
 // Warnings Error type for errors that don't prevent the creation of a functional Context
 type Warnings struct {
 	warns *multierror.Error
