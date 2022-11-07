@@ -8,6 +8,8 @@ To get started, open a new shell and run:
 npx create-turbo@latest
 ```
 
+Node 16 or higher is required.
+
 Then follow the prompts you see in your terminal.
 
 For more information about Turborepo, [visit turbo.build/repo](https://turbo.build/repo) and follow us on Twitter ([@turborepo](https://twitter.com/turborepo))!
