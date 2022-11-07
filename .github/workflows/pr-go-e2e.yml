@@ -11,7 +11,15 @@ on:
     types: [opened, edited, synchronize]
 
 jobs:
+  turboignore:
+    - uses: ./.github/workflows/turbo-ignore
+      with:
+        scope: "cli"
+
   test:
+    needs: turboignore
+    if: needs.turboignore.outputs.result == "false"
+
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:

@@ -1,0 +1,25 @@
+name: Turbo Ignore
+
+on:
+  workflow_call:
+    inputs:
+      scope:
+        required: true
+        type: string
+
+jobs:
+  ignore:
+    runs-on: ubuntu-latest
+    outputs:
+      output: ${{ steps.turboignore.outputs.result }}
+    steps:
+      - name: turboignore
+        uses: actions/setup-node@v3
+        continue-on-error: true
+        run: npx turbo-ignore ${{ inputs.scope }}
+
+      - if: ${{ steps.turboignore.outcome == 'failure' }}
+        run: echo "result=false" >> $GITHUB_OUTPUT
+
+      - if: ${{ steps.turboignore.outcome == 'success' }}
+        run: echo "result=true" >> $GITHUB_OUTPUT
