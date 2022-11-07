@@ -1,4 +1,4 @@
-name: CLI Unit Tests
+name: CLI E2E tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -9,6 +9,10 @@ on:
     branches: ["main"]
   pull_request:
     types: [opened, edited, synchronize]
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
 
 jobs:
   test:
@@ -26,4 +30,9 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - run: pnpm -- turbo run test --filter=cli --color
+      - name: E2E Tests
+        run: pnpm -- turbo run e2e --filter=cli
+
+      - name: Integration Tests
+        if: matrix.os != 'windows-latest'
+        run: pnpm -- turbo run integration-tests --filter=cli
