@@ -91,7 +91,12 @@ fn generate_scaling(
 
         // TODO: Avoid vector allocation -- not sure why this is necessary for
         // typechecker
-        let time_range = fitting_range(time_range_iter.collect::<Vec<f64>>().iter());
+        let time_range = {
+            let mut range = fitting_range(time_range_iter.collect::<Vec<f64>>().iter());
+            // Ensure the time range starts at 0 instead of the minimum time value.
+            range.start = 0.0;
+            range
+        };
 
         let file_name = output_path.join(format!("{}.svg", bench_name));
         let root = SVGBackend::new(&file_name, (960, 720)).into_drawing_area();
