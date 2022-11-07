@@ -12,6 +12,12 @@ func RunUnlink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) erro
 	if err != nil {
 		return err
 	}
+
+	if args.TestRun {
+		base.UI.Info("Unlink test run successful")
+		return nil
+	}
+
 	if err := base.RepoConfig.Delete(); err != nil {
 		base.LogError("could not unlink. Something went wrong: %w", err)
 		return err

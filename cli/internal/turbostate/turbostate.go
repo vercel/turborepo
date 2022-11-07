@@ -12,7 +12,6 @@ type RepoState struct {
 
 // LinkPayload is the extra flags passed for the `link` subcommand
 type LinkPayload struct {
-	Yes                 bool `json:"yes"`
 	DontModifyGitIgnore bool `json:"no_gitignore"`
 }
 

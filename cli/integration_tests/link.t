@@ -1,8 +1,6 @@
 Setup
   $ . ${TESTDIR}/setup.sh
-  $ . ${TESTDIR}/logged_in.sh
 
-Link while logged in
-  $ ${SHIM} link -y
-  >>> Logged out
-
+Link Test Run
+  $ ${SHIM} link --__test-run
+  Link test run successful

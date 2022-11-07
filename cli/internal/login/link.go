@@ -25,7 +25,7 @@ import (
 type link struct {
 	base                *cmdutil.CmdBase
 	modifyGitIgnore     bool
-	yes                 bool
+	isTestRun           bool
 	apiClient           linkAPIClient // separate from base to allow testing
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
@@ -48,10 +48,15 @@ func RunLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error 
 		return err
 	}
 
+	if args.TestRun {
+		base.UI.Info("Link test run successful")
+		return nil
+	}
+
 	link := &link{
 		base:                base,
 		modifyGitIgnore:     !args.Command.Link.DontModifyGitIgnore,
-		yes:                 args.Command.Link.Yes,
+		isTestRun:           args.TestRun,
 		apiClient:           base.APIClient,
 		promptSetup:         promptSetup,
 		promptTeam:          promptTeam,
@@ -93,14 +98,12 @@ func (l *link) run() error {
 	}
 	repoLocation := strings.Replace(currentDir, dir, "~", 1)
 
-	if !l.yes {
-		shouldSetup, err := l.promptSetup(repoLocation)
-		if err != nil {
-			return err
-		}
-		if !shouldSetup {
-			return errUserCanceled
-		}
+	shouldSetup, err := l.promptSetup(repoLocation)
+	if err != nil {
+		return err
+	}
+	if !shouldSetup {
+		return errUserCanceled
 	}
 
 	if !l.apiClient.HasUser() {

@@ -28,6 +28,12 @@ func RunLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Pars
 	if err != nil {
 		return err
 	}
+
+	if args.TestRun {
+		base.UI.Info("Login test run successful")
+		return nil
+	}
+
 	login := login{
 		base:                base,
 		openURL:             browser.OpenBrowser,
