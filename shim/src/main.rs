@@ -25,7 +25,13 @@ use crate::{
 static TURBO_JSON: &str = "turbo.json";
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
-#[clap(author, about = "The build system that makes ship happen", long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true, disable_version_flag = true)]
+#[clap(author, about = "The build system that makes ship happen", long_about = None)]
+#[clap(
+    ignore_errors = true,
+    disable_help_flag = true,
+    disable_help_subcommand = true
+)]
+#[clap(disable_version_flag = true)]
 struct Args {
     #[clap(long, short)]
     help: bool,
