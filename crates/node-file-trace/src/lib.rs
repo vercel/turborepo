@@ -542,6 +542,7 @@ async fn main_operation(
                 output_nft_assets.push(path);
                 emits.push(emit_asset(nft_asset.into()));
             }
+            // Wait for all files to be emitted
             for emit in emits {
                 emit.await?;
             }
@@ -565,6 +566,7 @@ async fn main_operation(
                 let rebased = RebasedAssetVc::new(*module, input_dir, output_dir).into();
                 emits.push(emit_with_completion(rebased, output_dir));
             }
+            // Wait for all files to be emitted
             for emit in emits {
                 emit.await?;
             }
