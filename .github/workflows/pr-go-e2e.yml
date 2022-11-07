@@ -19,7 +19,6 @@ jobs:
   test:
     needs: turboignore
     if: needs.turboignore.outputs.result == "false"
-
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:

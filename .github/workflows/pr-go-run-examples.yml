@@ -11,8 +11,15 @@ on:
     types: [opened, edited, synchronize]
 
 jobs:
+  turboignore:
+    - uses: ./.github/workflows/turbo-ignore
+      with:
+        scope: "cli"
+
   examples:
     name: CLI run examples
+    needs: turboignore
+    if: needs.turboignore.outputs.result == "false"
     timeout-minutes: 15
 
     strategy:
