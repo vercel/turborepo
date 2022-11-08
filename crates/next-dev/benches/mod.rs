@@ -56,6 +56,13 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
             } else {
                 true
             }
+        } else if !bundler.has_interactivity() {
+            // For bundlers without interactivity there is no hydration event to wait for
+            if hydration {
+                continue;
+            } else {
+                false
+            }
         } else {
             hydration
         };
@@ -71,6 +78,7 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                             || async {
                                 PreparedApp::new(bundler, test_app.path().to_path_buf()).await
                             },
+                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
@@ -118,6 +126,10 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
     let browser = &runtime.block_on(create_browser());
 
     for bundler in get_bundlers() {
+        // TODO HMR for RSC is broken, fix it and enable it here
+        if !bundler.has_interactivity() {
+            continue;
+        }
         for module_count in get_module_counts() {
             let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref()));
             let input = (bundler.as_ref(), &test_app);
@@ -205,29 +217,27 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                         .await?;
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
-                                guard.wait_for_hydration().await?;
+                                if bundler.has_interactivity() {
+                                    guard.wait_for_hydration().await?;
+                                } else {
+                                    guard.page().wait_for_navigation().await?;
+                                }
                                 guard
                                     .page()
                                     .evaluate_expression("globalThis.HMR_IS_HAPPENING = true")
-                                    .await?;
-
-                                // Make warmup change
-                                for i in (0..MAX_UPDATE_TIMEOUT.as_secs() / 5).rev() {
-                                    match make_change(&mut guard, location, Duration::from_secs(5))
-                                        .await
-                                    {
-                                        Ok(_) => break,
-                                        Err(err) => {
-                                            if i != 0
-                                                && err.to_string().contains(CHANGE_TIMEOUT_MESSAGE)
-                                            {
-                                                continue;
-                                            }
-                                            return Err(err);
-                                        }
-                                    }
+                                    .await
+                                    .context(
+                                        "Unable to evaluate JavaScript in the page for HMR check \
+                                         flag",
+                                    )?;
+                                Ok(guard)
+                            },
+                            |mut guard| async move {
+                                // Make 5 changes to warm up.
+                                for _ in 0..5 {
+                                    let _ =
+                                        make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await;
                                 }
-
                                 Ok(guard)
                             },
                             |mut guard| async move {
@@ -292,6 +302,13 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
             } else {
                 true
             }
+        } else if !bundler.has_interactivity() {
+            // For bundlers without interactivity there is no hydration event to wait for
+            if hydration {
+                continue;
+            } else {
+                false
+            }
         } else {
             hydration
         };
@@ -312,7 +329,11 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                         .await?;
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
-                                guard.wait_for_hydration().await?;
+                                if bundler.has_interactivity() {
+                                    guard.wait_for_hydration().await?;
+                                } else {
+                                    guard.page().wait_for_navigation().await?;
+                                }
 
                                 let mut app = guard.close_page().await?;
 
@@ -322,6 +343,7 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                 app.stop_server()?;
                                 Ok(app)
                             },
+                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;

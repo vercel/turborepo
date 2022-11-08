@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a aria-label="Vercel logo" href="https://vercel.com">
+  <a aria-label="Vercel logo" href="https://vercel.com/">
     <img src="https://img.shields.io/badge/MADE%20BY%20Vercel-000000.svg?style=for-the-badge&logo=Vercel&labelColor=000">
   </a>
   <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo">
@@ -25,11 +25,7 @@
 
 ## Getting Started
 
-Visit https://turbo.build/repo/docs/getting-started to get started with Turborepo.
-
-## Documentation
-
-Visit https://turbo.build/repo/docs to view the full documentation.
+Visit https://turbo.build/repo/docs to get started with Turborepo and read the documentation.
 
 ## Community
 

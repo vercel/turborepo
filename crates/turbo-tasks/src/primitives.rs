@@ -33,7 +33,13 @@ impl StringsVc {
 }
 
 #[turbo_tasks::value(transparent)]
+pub struct Bytes(Vec<u8>);
+
+#[turbo_tasks::value(transparent)]
 pub struct Bool(bool);
+
+#[turbo_tasks::value(transparent)]
+pub struct Usize(usize);
 
 #[turbo_tasks::value(transparent)]
 pub struct RawVcSet(HashSet<RawVc>);
@@ -50,7 +56,7 @@ impl ValueToString for JsonValue {
 }
 
 #[turbo_tasks::value(transparent, eq = "manual")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Regex(
     #[turbo_tasks(trace_ignore)]
     #[serde(with = "serde_regex")]

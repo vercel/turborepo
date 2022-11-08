@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // nosysFileInfo hides the system-dependent info of the wrapped FileInfo to

@@ -36,7 +36,7 @@ if (!scope) {
   );
   if (!pathScope.scope) {
     console.error(
-      'Error: the package.json is missing the "name" field.\nSet this field or pass the --scope flag to turbo-ignore.'
+      'Error: the package.json is missing the "name" field.\nSet this field or pass the scope name as the first argument to turbo-ignore.'
     );
   }
   console.error("");

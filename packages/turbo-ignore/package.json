@@ -2,7 +2,7 @@
   "name": "turbo-ignore",
   "version": "0.3.0",
   "description": "",
-  "homepage": "https://turborepo.org",
+  "homepage": "https://turbo.build/repo",
   "keywords": [],
   "author": "Jared Palmer",
   "license": "MPL-2.0",
@@ -17,7 +17,7 @@
   "main": "index.js",
   "bin": "index.js",
   "scripts": {
-    "build": "tsup && cp ./package.json ./dist/package.json",
+    "build": "tsup && cp ./package.json ./dist/package.json && cp README.md ./dist/README.md",
     "release": "pnpm build && cd dist && pnpm publish",
     "test": "jest",
     "lint": "eslint src/**/*.ts",

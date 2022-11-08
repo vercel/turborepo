@@ -3,7 +3,7 @@ package colorcache
 import (
 	"sync"
 
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/fatih/color"
 )

@@ -8,12 +8,12 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/vercel/turborepo/cli/internal/core"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/lockfile"
-	"github.com/vercel/turborepo/cli/internal/packagemanager"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/lockfile"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
@@ -385,7 +385,7 @@ func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON,
 			pkg.Mu.Lock()
 			pkg.TransitiveDeps = append(pkg.TransitiveDeps, lockfilePkg.Key)
 			pkg.Mu.Unlock()
-			resolvedDepsSet.Add(fmt.Sprintf("%v@%v", directDepName, lockfilePkg.Version))
+			resolvedDepsSet.Add(fmt.Sprintf("%s@%s", lockfilePkg.Key, lockfilePkg.Version))
 
 			allDeps, ok := c.Lockfile.AllDependencies(lockfilePkg.Key)
 

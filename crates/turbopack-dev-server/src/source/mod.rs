@@ -15,6 +15,7 @@ use std::{
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
 use turbo_tasks::{trace::TraceRawVcs, Value};
+use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
 use self::query::Query;
@@ -27,7 +28,7 @@ pub struct ProxyResult {
     /// Headers arranged as contiguous (name, value) pairs.
     pub headers: Vec<String>,
     /// The body to return.
-    pub body: Vec<u8>,
+    pub body: Rope,
 }
 
 #[turbo_tasks::value(shared)]
@@ -268,8 +269,8 @@ pub trait ContentSource {
     /// Gets content by `path` and request `data` from the source. `data` is
     /// empty by default and will only be filled when returning `NeedData`.
     /// This is useful as this method call will be cached based on it's
-    /// arguments, so we want to make the arguments contain as few information
-    /// as possible to increase cache hit ratio.
+    /// arguments, so we want to make the arguments contain as little
+    /// information as possible to increase cache hit ratio.
     fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceResultVc;
 }
 

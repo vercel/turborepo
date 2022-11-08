@@ -19,29 +19,29 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/vercel/turborepo/cli/internal/analytics"
-	"github.com/vercel/turborepo/cli/internal/cache"
-	"github.com/vercel/turborepo/cli/internal/cmdutil"
-	"github.com/vercel/turborepo/cli/internal/colorcache"
-	"github.com/vercel/turborepo/cli/internal/context"
-	"github.com/vercel/turborepo/cli/internal/core"
-	"github.com/vercel/turborepo/cli/internal/daemon"
-	"github.com/vercel/turborepo/cli/internal/daemonclient"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/graphvisualizer"
-	"github.com/vercel/turborepo/cli/internal/logstreamer"
-	"github.com/vercel/turborepo/cli/internal/nodes"
-	"github.com/vercel/turborepo/cli/internal/packagemanager"
-	"github.com/vercel/turborepo/cli/internal/process"
-	"github.com/vercel/turborepo/cli/internal/runcache"
-	"github.com/vercel/turborepo/cli/internal/scm"
-	"github.com/vercel/turborepo/cli/internal/scope"
-	"github.com/vercel/turborepo/cli/internal/signals"
-	"github.com/vercel/turborepo/cli/internal/spinner"
-	"github.com/vercel/turborepo/cli/internal/taskhash"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/analytics"
+	"github.com/vercel/turbo/cli/internal/cache"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/colorcache"
+	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/daemon"
+	"github.com/vercel/turbo/cli/internal/daemonclient"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graphvisualizer"
+	"github.com/vercel/turbo/cli/internal/logstreamer"
+	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
+	"github.com/vercel/turbo/cli/internal/process"
+	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/scm"
+	"github.com/vercel/turbo/cli/internal/scope"
+	"github.com/vercel/turbo/cli/internal/signals"
+	"github.com/vercel/turbo/cli/internal/spinner"
+	"github.com/vercel/turbo/cli/internal/taskhash"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -500,7 +500,7 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 		})
 	}
 
-	if err := engine.Prepare(&core.EngineExecutionOptions{
+	if err := engine.Prepare(&core.EngineBuildingOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,
 		TasksOnly: rs.Opts.runOpts.only,
@@ -776,7 +776,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	}
 
 	// run the thing
-	execOpts := core.ExecOpts{
+	execOpts := core.EngineExecutionOptions{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
@@ -934,7 +934,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *compl
 		})
 
 		return nil
-	}), core.ExecOpts{
+	}), core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
 	})
@@ -1005,7 +1005,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
 		// @TODO probably should abort fatally???
 	}
-	// TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
+	// TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
 	// the following block should never get hit. In the meantime, keep it after hashing
 	// so that downstream tasks can count on the hash existing
 	//

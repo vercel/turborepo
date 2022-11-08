@@ -19,7 +19,7 @@ lazy_static = "1.4.0"
 patricia_tree = "0.3.1"
 rand = "0.8.5"
 regex = "1.5.4"
-serde = "1.0.136"
+serde = { version = "1.0.136", features = ["rc"] }
 serde_json = { version = "1.0.85", features = ["preserve_order"] }
 serde_regex = "1.1.0"
 sourcemap = "6.0.2"
