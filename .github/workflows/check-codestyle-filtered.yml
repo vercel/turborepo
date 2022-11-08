@@ -2,7 +2,7 @@ name: Check Code Style
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main]
   pull_request:
     paths:
       - "crates/**"
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-core-oss
 
     steps:
       - name: Checkout
@@ -61,7 +61,7 @@ jobs:
           args: --benches
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-core-oss
 
     steps:
       - name: Checkout
