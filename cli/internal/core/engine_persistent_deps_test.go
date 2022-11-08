@@ -13,14 +13,14 @@ import (
 	"github.com/pyr-sh/dag"
 )
 
-var WorkspaceGraphDefinition = map[string][]string{
+var _workspaceGraphDefinition = map[string][]string{
 	"workspace-a": {"workspace-c"}, // a depends on c
 	"workspace-b": {"workspace-c"}, // b depends on c
 	"workspace-c": {},
 }
 
 func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
-	completeGraph, workspaces := _buildCompleteGraph(WorkspaceGraphDefinition)
+	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
@@ -50,7 +50,7 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 }
 
 func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
-	completeGraph, workspaces := _buildCompleteGraph(WorkspaceGraphDefinition)
+	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
 	// "build": dependsOn: ["dev"] (where build is not, but "dev" is persistent)
@@ -88,7 +88,7 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 }
 
 func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
-	completeGraph, workspaces := _buildCompleteGraph(WorkspaceGraphDefinition)
+	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
 	// "build": dependsOn: ["workspace-b#dev"]
@@ -126,7 +126,7 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 }
 
 func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
-	completeGraph, workspaces := _buildCompleteGraph(WorkspaceGraphDefinition)
+	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
 	// workspace-a#dev specifically dependsOn workspace-b#dev
@@ -167,7 +167,7 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 }
 
 func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
-	completeGraph, workspaces := _buildCompleteGraph(WorkspaceGraphDefinition)
+	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
 	// Remove "dev" script from workspace-c. workspace-a|b will still implement,
