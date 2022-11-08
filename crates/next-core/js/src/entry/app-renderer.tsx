@@ -1,9 +1,21 @@
 import type { Ipc } from "@vercel/turbopack-next/internal/ipc";
 
 // Provided by the rust generate code
+type FileType =
+  | "layout"
+  | "template"
+  | "error"
+  | "loading"
+  | "not-found"
+  | "head";
 declare global {
   // an array of all layouts and the page
-  const LAYOUT_INFO: { segment: string; module: any; chunks: string[] }[];
+  const LAYOUT_INFO: ({
+    segment: string;
+    page?: { module: any; chunks: string[] };
+  } & {
+    [componentKey in FileType]?: { module: any; chunks: string[] };
+  })[];
   // array of chunks for the bootstrap script
   const BOOTSTRAP: string[];
   const IPC: Ipc<unknown, unknown>;
@@ -21,7 +33,6 @@ import "next/dist/server/node-polyfill-web-streams";
 import { RenderOpts, renderToHTMLOrFlight } from "next/dist/server/app-render";
 import { PassThrough } from "stream";
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
-import { structuredError } from "@vercel/turbopack-next/internal/error";
 import { ParsedUrlQuery } from "node:querystring";
 
 globalThis.__next_require__ = (data) => {
@@ -78,15 +89,10 @@ type IpcOutgoingMessage = {
 // TODO expose these types in next.js
 type ComponentModule = () => any;
 export type ComponentsType = {
-  readonly [componentKey in
-    | "layout"
-    | "template"
-    | "error"
-    | "loading"
-    | "not-found"]?: ComponentModule;
+  [componentKey in FileType]?: ComponentModule;
 } & {
-  readonly layoutOrPagePath?: string;
-  readonly page?: ComponentModule;
+  layoutOrPagePath?: string;
+  page?: ComponentModule;
 };
 type LoaderTree = [
   segment: string,
@@ -103,30 +109,27 @@ type ServerComponentsManifestModule = {
 
 async function runOperation(renderData: RenderData) {
   const pageItem = LAYOUT_INFO[LAYOUT_INFO.length - 1];
-  const pageModule = pageItem.module;
+  const pageModule = pageItem.page!.module;
   const Page = pageModule.default;
   let tree: LoaderTree = [
     "",
     {},
     { page: () => Page, layoutOrPagePath: "page.js" },
   ];
+  const layoutInfoChunks: string[][] = [];
   for (let i = LAYOUT_INFO.length - 2; i >= 0; i--) {
     const info = LAYOUT_INFO[i];
-    const mod = info.module;
-    if (mod) {
-      const Layout = mod.default;
-      tree = [
-        info.segment,
-        { children: tree },
-        { layout: () => Layout, layoutOrPagePath: `layout${i}.js` },
-      ];
-    } else {
-      tree = [
-        info.segment,
-        { children: tree },
-        { layoutOrPagePath: `layout${i}.js` },
-      ];
+    const components: ComponentsType = { layoutOrPagePath: `layout${i}.js` };
+    layoutInfoChunks[i] = [];
+    for (const key of Object.keys(info)) {
+      if (key === "segment") {
+        continue;
+      }
+      const k = key as FileType;
+      components[k] = () => info[k]!.module.default;
+      layoutInfoChunks[i].push(...info[k]!.chunks);
     }
+    tree = [info.segment, { children: tree }, components];
   }
 
   const proxyMethodsForModule = (
@@ -157,16 +160,16 @@ async function runOperation(renderData: RenderData) {
   const manifest: FlightManifest = new Proxy({} as any, proxyMethods(false));
   const serverCSSManifest: FlightCSSManifest = {};
   serverCSSManifest.__entry_css__ = {};
-  for (let i = 0; i < LAYOUT_INFO.length - 1; i++) {
-    const { chunks } = LAYOUT_INFO[i];
-    const cssChunks = (chunks || []).filter((path) => path.endsWith(".css"));
+  for (let i = 0; i < layoutInfoChunks.length; i++) {
+    const chunks = layoutInfoChunks[i];
+    const cssChunks = chunks.filter((path) => path.endsWith(".css"));
     serverCSSManifest[`layout${i}.js`] = cssChunks.map((chunk) =>
       JSON.stringify([chunk, [chunk]])
     );
   }
   serverCSSManifest.__entry_css__ = {
-    page: pageItem.chunks
-      .filter((path) => path.endsWith(".css"))
+    page: pageItem
+      .page!.chunks.filter((path) => path.endsWith(".css"))
       .map((chunk) => JSON.stringify([chunk, [chunk]])),
   };
   serverCSSManifest["page.js"] = serverCSSManifest.__entry_css__.page;
@@ -185,7 +188,8 @@ async function runOperation(renderData: RenderData) {
     dev: true,
     buildManifest: {
       polyfillFiles: [],
-      rootMainFiles: LAYOUT_INFO.flatMap(({ chunks }) => chunks || [])
+      rootMainFiles: layoutInfoChunks
+        .flat()
         .concat(BOOTSTRAP)
         .filter((path) => !path.endsWith(".css")),
       devFiles: [],
