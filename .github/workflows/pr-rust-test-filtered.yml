@@ -41,14 +41,7 @@ jobs:
             runner: macos-latest
             nextest: mac
           - name: windows
-            # Using the `windows-2019` runner instead of latest(`windows-2022`)
-            # because the build was last known working on that version of runner and
-            # `prebuild` fails to find the 2022 Visual Studio install because
-            # it's internally using an old version of `node-gyp`, see
-            # https://github.com/prebuild/prebuild/issues/286
-            #
-            # ref: https://github.com/MadLittleMods/node-usb-detection/blob/ae2fc13e9ad6a09927f4516358dea4c4ca2ceb92/.github/workflows/ci.yml#L18
-            runner: windows-2019
+            runner: windows-latest
             nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
     name: test - ${{ matrix.os.name }}
@@ -58,7 +51,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-        if: matrix.os.name == 'windows-latest'
+        if: matrix.os.name == 'windows'
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -75,11 +68,11 @@ jobs:
         uses: supercharge/redis-github-action@1.4.0
         with:
           redis-version: 6
-        if: matrix.os.name == 'ubuntu-latest'
+        if: matrix.os.name == 'ubuntu'
 
       - name: Set Redis URL
         run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
-        if: matrix.os.name == 'ubuntu-latest'
+        if: matrix.os.name == 'ubuntu'
 
       - uses: ./.github/actions/setup-go
         with:
@@ -92,7 +85,7 @@ jobs:
           pnpx node-gyp install
           choco install protoc -y
           echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
-        if: matrix.os.name == 'windows-latest'
+        if: matrix.os.name == 'windows'
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
@@ -136,7 +129,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-        if: matrix.os.name == 'windows-latest'
+        if: matrix.os.name == 'windows'
       - uses: actions/checkout@v3
 
       - name: Setup rust
