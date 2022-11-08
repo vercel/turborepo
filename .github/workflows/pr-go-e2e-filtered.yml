@@ -33,6 +33,14 @@ jobs:
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
 
+      - name: Setup rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test
+
       - name: Integration Tests
         if: matrix.os != 'windows-latest'
         run: pnpm -- turbo run integration-tests --filter=cli
