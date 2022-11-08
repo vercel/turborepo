@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"time"
@@ -11,8 +12,8 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -43,9 +44,9 @@ type Opts struct {
 type Client struct {
 	turbodprotocol.TurbodClient
 	*grpc.ClientConn
-	SockPath fs.AbsolutePath
-	PidPath  fs.AbsolutePath
-	LogPath  fs.AbsolutePath
+	SockPath turbopath.AbsoluteSystemPath
+	PidPath  turbopath.AbsoluteSystemPath
+	LogPath  turbopath.AbsoluteSystemPath
 }
 
 // Connector instances are used to create a connection to turbo's daemon process
@@ -54,18 +55,18 @@ type Connector struct {
 	Logger       hclog.Logger
 	Bin          string
 	Opts         Opts
-	SockPath     fs.AbsolutePath
-	PidPath      fs.AbsolutePath
-	LogPath      fs.AbsolutePath
+	SockPath     turbopath.AbsoluteSystemPath
+	PidPath      turbopath.AbsoluteSystemPath
+	LogPath      turbopath.AbsoluteSystemPath
 	TurboVersion string
 }
 
 // ConnectionError is returned in the error case from connect. It wraps the underlying
 // cause and adds a message with the relevant files for the user to check.
 type ConnectionError struct {
-	SockPath fs.AbsolutePath
-	PidPath  fs.AbsolutePath
-	LogPath  fs.AbsolutePath
+	SockPath turbopath.AbsoluteSystemPath
+	PidPath  turbopath.AbsoluteSystemPath
+	LogPath  turbopath.AbsoluteSystemPath
 	cause    error
 }
 
@@ -94,7 +95,7 @@ func (c *Connector) wrapConnectionError(err error) error {
 // lockFile returns a pointer to where a lockfile should be.
 // lockfile.New does not perform IO and the only error it produces
 // is in the case a non-absolute path was provided. We're guaranteeing an
-// AbsolutePath, so an error here is an indication of a bug and
+// turbopath.AbsoluteSystemPath, so an error here is an indication of a bug and
 // we should crash.
 func (c *Connector) lockFile() lockfile.Lockfile {
 	lockFile, err := lockfile.New(c.PidPath.ToString())
@@ -105,7 +106,11 @@ func (c *Connector) lockFile() lockfile.Lockfile {
 }
 
 func (c *Connector) addr() string {
-	return fmt.Sprintf("unix://%v", c.SockPath.ToString())
+	// grpc special-cases parsing of unix:<path> urls
+	// to avoid url.Parse. This lets us pass through our absolute
+	// paths unmodified, even on windows.
+	// See code here: https://github.com/grpc/grpc-go/blob/d83070ec0d9043f713b6a63e1963c593b447208c/internal/transport/http_util.go#L392
+	return fmt.Sprintf("unix:%v", c.SockPath.ToString())
 }
 
 // We defer to the daemon's pid file as the locking mechanism.
@@ -265,23 +270,29 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 // the daemon if it doesn't find one running.
 func (c *Connector) getOrStartDaemon() (int, error) {
 	lockFile := c.lockFile()
-	if daemonProcess, err := lockFile.GetOwner(); errors.Is(err, lockfile.ErrDeadOwner) {
-		// If we've found a pid file but no corresponding process, there's nothing we can do.
-		// We defer to the user to clean up the pid file.
-		return 0, errors.Wrapf(err, "pid file appears stale. If no daemon is running, please remove it: %v", c.PidPath)
-	} else if os.IsNotExist(err) {
-		if c.Opts.DontStart {
-			return 0, ErrDaemonNotRunning
+	daemonProcess, getDaemonProcessErr := lockFile.GetOwner()
+	if getDaemonProcessErr != nil {
+		// If we're in a clean state this isn't an "error" per se.
+		// We attempt to start a daemon.
+		if errors.Is(getDaemonProcessErr, fs.ErrNotExist) {
+			if c.Opts.DontStart {
+				return 0, ErrDaemonNotRunning
+			}
+			pid, startDaemonErr := c.startDaemon()
+			if startDaemonErr != nil {
+				return 0, startDaemonErr
+			}
+			return pid, nil
 		}
-		// The pid file doesn't exist. Start a daemon
-		pid, err := c.startDaemon()
-		if err != nil {
-			return 0, err
-		}
-		return pid, nil
-	} else {
-		return daemonProcess.Pid, nil
+
+		// We could have hit any number of errors.
+		// - Failed to read the file for permission reasons.
+		// - User emptied the file's contents.
+		// - etc.
+		return 0, errors.Wrapf(getDaemonProcessErr, "An issue was encountered with the pid file. Please remove it and try again: %v", c.PidPath)
 	}
+
+	return daemonProcess.Pid, nil
 }
 
 func (c *Connector) getClientConn() (*Client, error) {

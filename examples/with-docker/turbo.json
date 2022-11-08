@@ -1,8 +1,10 @@
 {
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**", "public/dist/**"],
-      "dependsOn": ["^build", "$NEXT_PUBLIC_API_HOST"]
+      "dependsOn": ["^build"],
+      "env": ["NEXT_PUBLIC_API_HOST"]
     },
     "test": {
       "outputs": ["coverage/**"],

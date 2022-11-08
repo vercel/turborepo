@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/pkg/errors"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // https://github.com/thought-machine/please/blob/master/src/fs/fs.go
@@ -63,22 +66,32 @@ func FileExists(filename string) bool {
 // CopyFile copies a file from 'from' to 'to', with an attempt to perform a copy & rename
 // to avoid chaos if anything goes wrong partway.
 func CopyFile(from *LstatCachedFile, to string) error {
-	fromFile, err := from.Path.Open()
-	if err != nil {
-		fromMode, err := from.GetMode()
-		isSymlink := err == nil && fromMode&os.ModeSymlink == os.ModeSymlink
-
-		if isSymlink {
-			// We have a broken symlink. Don't try to copy it.
-			return nil
-		}
-		return err
-	}
 	fromMode, err := from.GetMode()
 	if err != nil {
+		return errors.Wrapf(err, "getting mode for %v", from.Path)
+	}
+	if fromMode&os.ModeSymlink != 0 {
+		target, err := from.Path.Readlink()
+		if err != nil {
+			return errors.Wrapf(err, "reading link target for %v", from.Path)
+		}
+		if err := EnsureDir(to); err != nil {
+			return err
+		}
+		if _, err := os.Lstat(to); err == nil {
+			// target link file exist, should remove it first
+			err := os.Remove(to)
+			if err != nil {
+				return err
+			}
+		}
+		return os.Symlink(target, to)
+	}
+	fromFile, err := from.Path.Open()
+	if err != nil {
 		return err
 	}
-	defer fromFile.Close()
+	defer util.CloseAndIgnoreError(fromFile)
 	return writeFileFromStream(fromFile, to, fromMode)
 }
 

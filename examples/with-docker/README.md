@@ -8,7 +8,7 @@ This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package ma
 
 ### Apps and Packages
 
-- `web`: a [Next.js](https://nextjs.org) app
+- `web`: a [Next.js](https://nextjs.org/) app
 - `api`: an [Express](https://expressjs.com/) server
 - `ui`: ui: a React component library
 - `eslint-config-custom`: `eslint` configurations for client side applications (includes `eslint-config-next` and `eslint-config-prettier`)
@@ -18,6 +18,17 @@ This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package ma
 - `tsconfig`: tsconfig.json;s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turbo/examples/with-docker with-docker
+cd with-docker
+yarn install
+git init . && git add . && git commit -m "Init"
+```
 
 ### Docker
 

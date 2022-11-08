@@ -5,3 +5,6 @@ packages:
   - "benchmark"
   # Intentionally exclude the `npm` `turbo` package from the workspaces.
   - "!packages/turbo"
+  - "packages/turbo-tracing-next-plugin/test/with-mongodb-mongoose"
+  - "crates/next-dev/tests"
+  - "crates/*/js"

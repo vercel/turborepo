@@ -12,109 +12,83 @@ import (
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/server"
-	"github.com/vercel/turborepo/cli/internal/signals"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/daemon/connector"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/server"
+	"github.com/vercel/turbo/cli/internal/signals"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Command is the wrapper around the daemon command until we port fully to cobra
-type Command struct {
-	Config        *config.Config
-	UI            cli.Ui
-	SignalWatcher *signals.Watcher
-}
-
-// Run runs the daemon command
-func (c *Command) Run(args []string) int {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
-	cmd.SetArgs(args)
-	err := cmd.Execute()
-	if err != nil {
-		return 1
-	}
-	return 0
-}
-
-// Help returns information about the `daemon` command
-func (c *Command) Help() string {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
-	return util.HelpForCobraCmd(cmd)
-}
-
-// Synopsis of daemon command
-func (c *Command) Synopsis() string {
-	cmd := getCmd(c.Config, c.UI, c.SignalWatcher)
-	return cmd.Short
-}
-
 type daemon struct {
 	logger     hclog.Logger
-	repoRoot   fs.AbsolutePath
+	repoRoot   turbopath.AbsoluteSystemPath
 	timeout    time.Duration
 	reqCh      chan struct{}
 	timedOutCh chan struct{}
 }
 
-func getRepoHash(repoRoot fs.AbsolutePath) string {
+func getRepoHash(repoRoot turbopath.AbsoluteSystemPath) string {
 	pathHash := sha256.Sum256([]byte(repoRoot.ToString()))
 	// We grab a substring of the hash because there is a 108-character limit on the length
 	// of a filepath for unix domain socket.
 	return hex.EncodeToString(pathHash[:])[:16]
 }
 
-func getDaemonFileRoot(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func getDaemonFileRoot(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	tempDir := fs.TempDir("turbod")
 	hexHash := getRepoHash(repoRoot)
-	return tempDir.Join(hexHash)
+	return tempDir.UntypedJoin(hexHash)
 }
 
-func getLogFilePath(repoRoot fs.AbsolutePath) (fs.AbsolutePath, error) {
+func getLogFilePath(repoRoot turbopath.AbsoluteSystemPath) (turbopath.AbsoluteSystemPath, error) {
 	hexHash := getRepoHash(repoRoot)
 	base := repoRoot.Base()
 	logFilename := fmt.Sprintf("%v-%v.log", hexHash, base)
 
-	logsDir := fs.GetTurboDataDir().Join("logs")
-	return logsDir.Join(logFilename), nil
+	logsDir := fs.GetTurboDataDir().UntypedJoin("logs")
+	return logsDir.UntypedJoin(logFilename), nil
 }
 
-func getUnixSocket(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func getUnixSocket(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	root := getDaemonFileRoot(repoRoot)
-	return root.Join("turbod.sock")
+	return root.UntypedJoin("turbod.sock")
 }
 
-func getPidFile(repoRoot fs.AbsolutePath) fs.AbsolutePath {
+func getPidFile(repoRoot turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	root := getDaemonFileRoot(repoRoot)
-	return root.Join("turbod.pid")
+	return root.UntypedJoin("turbod.pid")
 }
 
 // logError logs an error and outputs it to the UI.
 func (d *daemon) logError(err error) {
-	d.logger.Error("error", err)
+	d.logger.Error(fmt.Sprintf("error %v", err))
 }
 
 // we're only appending, and we're creating the file if it doesn't exist.
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher) *cobra.Command {
+// GetCmd returns the root daemon command
+func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
 	var idleTimeout time.Duration
 	cmd := &cobra.Command{
-		Use:           "turbo daemon",
-		Short:         "Runs turbod",
+		Use:           "daemon",
+		Short:         "Runs the Turborepo background daemon",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logFilePath, err := getLogFilePath(config.Cwd)
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
+			}
+			logFilePath, err := getLogFilePath(base.RepoRoot)
 			if err != nil {
 				return err
 			}
@@ -128,20 +102,20 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 			defer func() { _ = logFile.Close() }()
 			logger := hclog.New(&hclog.LoggerOptions{
 				Output: io.MultiWriter(logFile, os.Stdout),
-				Level:  hclog.Debug,
+				Level:  hclog.Info,
 				Color:  hclog.ColorOff,
 				Name:   "turbod",
 			})
 			ctx := cmd.Context()
 			d := &daemon{
 				logger:     logger,
-				repoRoot:   config.Cwd,
+				repoRoot:   base.RepoRoot,
 				timeout:    idleTimeout,
 				reqCh:      make(chan struct{}),
 				timedOutCh: make(chan struct{}),
 			}
-			serverName := getRepoHash(config.Cwd)
-			turboServer, err := server.New(serverName, d.logger.Named("rpc server"), config.Cwd, config.TurboVersion, logFilePath)
+			serverName := getRepoHash(base.RepoRoot)
+			turboServer, err := server.New(serverName, d.logger.Named("rpc server"), base.RepoRoot, base.TurboVersion, logFilePath)
 			if err != nil {
 				d.logError(err)
 				return err
@@ -156,22 +130,22 @@ func getCmd(config *config.Config, output cli.Ui, signalWatcher *signals.Watcher
 		},
 	}
 	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 4*time.Hour, "Set the idle timeout for turbod")
-	addDaemonSubcommands(cmd, config, output)
+	addDaemonSubcommands(cmd, helper)
 	return cmd
 }
 
-func addDaemonSubcommands(cmd *cobra.Command, config *config.Config, output cli.Ui) {
-	addStatusCmd(cmd, config, output)
-	addStartCmd(cmd, config, output)
-	addStopCmd(cmd, config, output)
-	addRestartCmd(cmd, config, output)
+func addDaemonSubcommands(cmd *cobra.Command, helper *cmdutil.Helper) {
+	addStatusCmd(cmd, helper)
+	addStartCmd(cmd, helper)
+	addStopCmd(cmd, helper)
+	addRestartCmd(cmd, helper)
 }
 
 var errInactivityTimeout = errors.New("turbod shut down from inactivity")
 
 // tryAcquirePidfileLock attempts to ensure that only one daemon is running from the given pid file path
 // at a time. If this process fails to write its PID to the lockfile, it must exit.
-func tryAcquirePidfileLock(pidPath fs.AbsolutePath) (lockfile.Lockfile, error) {
+func tryAcquirePidfileLock(pidPath turbopath.AbsoluteSystemPath) (lockfile.Lockfile, error) {
 	if err := pidPath.EnsureDir(); err != nil {
 		return "", err
 	}
@@ -307,7 +281,7 @@ type ClientOpts = connector.Opts
 type Client = connector.Client
 
 // GetClient returns a client that can be used to interact with the daemon
-func GetClient(ctx context.Context, repoRoot fs.AbsolutePath, logger hclog.Logger, turboVersion string, opts ClientOpts) (*Client, error) {
+func GetClient(ctx context.Context, repoRoot turbopath.AbsoluteSystemPath, logger hclog.Logger, turboVersion string, opts ClientOpts) (*Client, error) {
 	sockPath := getUnixSocket(repoRoot)
 	pidPath := getPidFile(repoRoot)
 	logPath, err := getLogFilePath(repoRoot)

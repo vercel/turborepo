@@ -1,99 +1,157 @@
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
-import TurboLogo from "./components/logos/Turbo";
+import Navigation from "./components/Navigation";
+import HeaderLogo from "./components/HeaderLogo";
+import { Discord, Github } from "./components/Social";
 
+const SITE_ROOT = "https://turbo.build";
+
+/**
+ * @type {import('nextra-theme-docs').DocsThemeConfig}
+ */
 const theme = {
-  github: "https://github.com/vercel/turborepo",
-  projectLink: "https://github.com/vercel/turborepo",
-  docsRepositoryBase:
-    "https://github.com/vercel/turborepo/blob/main/docs/pages",
-  titleSuffix: " | Turborepo",
-  search: true,
+  project: {
+    icon: Github,
+  },
+  chat: {
+    icon: Discord,
+  },
+  docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
+  getNextSeoProps: function SEO() {
+    const router = useRouter();
+    const { frontMatter } = useConfig();
+
+    let section = "Turbo";
+    if (router?.pathname.startsWith("/pack")) {
+      section = "Turbopack";
+    }
+    if (router?.pathname.startsWith("/repo")) {
+      section = "Turborepo";
+    }
+
+    const defaultTitle = frontMatter.overrideTitle || section;
+
+    return {
+      description: frontMatter.description,
+      defaultTitle,
+      titleTemplate: `%s – ${section}`,
+    };
+  },
+  gitTimestamp({ timestamp }) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [dateString, setDateString] = useState(timestamp.toISOString());
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      setDateString(
+        timestamp.toLocaleDateString(navigator.language, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      );
+    }, [timestamp]);
+
+    return <>Last updated on {dateString}</>;
+  },
   unstable_flexsearch: true,
   unstable_staticImage: true,
-  floatTOC: true,
+  toc: {
+    float: true,
+  },
   font: false,
-  projectChatLink: "https://turborepo.org/discord",
-  feedbackLink: "Question? Give us feedback →",
-  banner: function Banner() {
-    return (
-      <a
-        href="https://vercel.com/blog/vercel-acquires-turborepo?utm_source=turbo-site&amp;utm_medium=banner&amp;utm_campaign=turbo-website"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-medium text-current no-underline"
-        title="Go to the Vercel website"
-      >
-        Turborepo has joined Vercel. Read More →
-      </a>
-    );
+  feedback: {
+    link: "Question? Give us feedback →",
   },
-  logo: function LogoActual() {
-    return (
-      <>
-        <TurboLogo height={32} />
-        <span className="sr-only">Turborepo</span>
-      </>
-    );
-  },
-  head: function Head({ title, meta }) {
+  logo: HeaderLogo,
+  logoLink: false,
+  head: function Head() {
     const router = useRouter();
+    const { systemTheme = "dark" } = useTheme();
+    const { frontMatter } = useConfig();
+    const fullUrl =
+      router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
+
+    const asPath = router.asPath;
+
+    let ogUrl;
+
+    if (asPath === "/") {
+      ogUrl = `${SITE_ROOT}/api/og`;
+    } else if (frontMatter?.ogImage) {
+      ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
+    } else {
+      const type = asPath.startsWith("/repo")
+        ? "repo"
+        : asPath.startsWith("/pack")
+        ? "pack"
+        : "";
+      const title = frontMatter.title
+        ? `&title=${encodeURIComponent(frontMatter.title)}`
+        : "";
+
+      ogUrl = `${SITE_ROOT}/api/og?type=${type}${title}`;
+    }
+
     return (
       <>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link
           rel="apple-touch-icon"
           sizes="180x180"
-          href="/images/favicon/apple-touch-icon.png"
+          href={`/images/favicon-${systemTheme}/apple-touch-icon.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="32x32"
-          href="/images/favicon/favicon-32x32.png"
+          href={`/images/favicon-${systemTheme}/favicon-32x32.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="16x16"
-          href="/images/favicon/favicon-16x16.png"
+          href={`/images/favicon-${systemTheme}/favicon-16x16.png`}
         />
         <link
           rel="mask-icon"
-          href="/images/favicon/safari-pinned-tab.svg"
+          href={`/images/favicon-${systemTheme}/safari-pinned-tab.svg`}
           color="#000000"
         />
-        <link rel="shortcut icon" href="/images/favicon/favicon.ico" />
+        <link
+          rel="shortcut icon"
+          href={`/images/favicon-${systemTheme}/favicon.ico`}
+        />
         <meta name="msapplication-TileColor" content="#000000" />
         <meta name="theme-color" content="#000" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@turborepo" />
         <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
-        <meta name="og:title" content={title} />
-        <meta name="og:description" content={meta.description} />
-        <meta
-          property="og:url"
-          content={`https://turborepo.org${router.asPath}`}
-        />
-        <meta
-          property="twitter:image"
-          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
-        />
-        <meta
-          property="og:image"
-          content={`https://turborepo.org${meta.ogImage ?? "/og-image.png"}`}
-        />
+        <meta property="og:url" content={fullUrl} />
+        <link rel="canonical" href={fullUrl} />
+        <meta property="twitter:image" content={ogUrl} />
+        <meta property="og:image" content={ogUrl} />
         <meta property="og:locale" content="en_IE" />
-        <meta property="og:site_name" content="Turborepo" />
+        <meta property="og:site_name" content="Turbo" />
+        <link rel="prefetch" href="/repo" as="document" />
+        <link rel="prefetch" href="/repo/docs" as="document" />
+        <link rel="prefetch" href="/pack" as="document" />
+        <link rel="prefetch" href="/pack/docs" as="document" />
       </>
     );
   },
-  footerEditLink: () => {
-    return "Edit this page on GitHub";
+  editLink: {
+    text: "Edit this page on GitHub",
   },
-  footerText: () => {
-    return <Footer />;
+  navbar: Navigation,
+  search: {
+    placeholder: "Search documentation…",
+  },
+  footer: {
+    component: Footer,
   },
   nextThemes: {
     defaultTheme: "dark",

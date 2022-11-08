@@ -10,7 +10,7 @@
   "license": "MIT",
   "scripts": {
     "build": "tsup src/index.tsx --format esm,cjs --dts --external react && tailwindcss -i ./src/styles.css -o ./dist/styles.css",
-    "dev": "tsup src/index.tsx --format esm,cjs --dts --external react --watch & tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch",
+    "dev": "concurrently \"tsup src/index.tsx --format esm,cjs --dts --external react --watch\" \"tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch\"",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
@@ -19,7 +19,7 @@
     "concurrently": "^7.2.2",
     "eslint": "^7.32.0",
     "eslint-config-custom": "*",
-    "react": "^17.0.2",
+    "react": "^18.2.0",
     "tailwind-config": "*",
     "tailwindcss": "^3.1.5",
     "tsconfig": "*",

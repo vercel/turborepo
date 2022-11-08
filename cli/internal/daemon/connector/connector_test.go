@@ -11,8 +11,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,12 +33,32 @@ func testBin() string {
 	return "node"
 }
 
-func getUnixSocket(dir fs.AbsolutePath) fs.AbsolutePath {
-	return dir.Join("turbod-test.sock")
+func getUnixSocket(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return dir.UntypedJoin("turbod-test.sock")
 }
 
-func getPidFile(dir fs.AbsolutePath) fs.AbsolutePath {
-	return dir.Join("turbod-test.pid")
+func getPidFile(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return dir.UntypedJoin("turbod-test.pid")
+}
+
+func TestGetOrStartDaemonInvalidPIDFile(t *testing.T) {
+	logger := hclog.Default()
+	dir := t.TempDir()
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
+
+	pidPath := getPidFile(dirPath)
+	writeFileErr := pidPath.WriteFile(nil, 0777)
+	assert.NilError(t, writeFileErr, "WriteFile")
+
+	c := &Connector{
+		Logger:  logger,
+		Opts:    Opts{},
+		PidPath: pidPath,
+	}
+
+	pid, err := c.getOrStartDaemon()
+	assert.Equal(t, pid, 0)
+	assert.ErrorContains(t, err, "issue was encountered with the pid file")
 }
 
 func TestConnectFailsWithoutGrpcServer(t *testing.T) {
@@ -46,7 +67,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 	// failures, followed by ErrTooManyAttempts
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -67,7 +88,7 @@ func TestConnectFailsWithoutGrpcServer(t *testing.T) {
 func TestKillDeadServerNoPid(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -86,7 +107,7 @@ func TestKillDeadServerNoPid(t *testing.T) {
 func TestKillDeadServerNoProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -114,7 +135,7 @@ func TestKillDeadServerNoProcess(t *testing.T) {
 func TestKillDeadServerWithProcess(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)
@@ -157,7 +178,7 @@ type mockServer struct {
 	turbodprotocol.UnimplementedTurbodServer
 	helloErr     error
 	shutdownResp *turbodprotocol.ShutdownResponse
-	pidFile      fs.AbsolutePath
+	pidFile      turbopath.AbsoluteSystemPath
 }
 
 // Simulates server exiting by cleaning up the pid file
@@ -178,7 +199,7 @@ func (s *mockServer) Hello(ctx context.Context, req *turbodprotocol.HelloRequest
 func TestKillLiveServer(t *testing.T) {
 	logger := hclog.Default()
 	dir := t.TempDir()
-	dirPath := fs.AbsolutePathFromUpstream(dir)
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
 
 	sockPath := getUnixSocket(dirPath)
 	pidPath := getPidFile(dirPath)

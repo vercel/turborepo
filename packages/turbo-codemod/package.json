@@ -1,21 +1,23 @@
 {
   "name": "@turbo/codemod",
-  "version": "1.4.3",
+  "version": "1.6.3",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
-  "homepage": "https://turborepo.org",
+  "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turborepo",
-    "directory": "turbo-codemod"
+    "url": "https://github.com/vercel/turbo",
+    "directory": "packages/turbo-codemod"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
+    "url": "https://github.com/vercel/turbo/issues"
   },
   "bin": "dist/index.js",
   "scripts": {
-    "build": "tsup src/*.ts src/transforms/*.ts --format cjs",
-    "lint": "eslint src/**/*.ts"
+    "build": "tsup",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "chalk": "2.4.2",
@@ -27,7 +29,7 @@
     "inquirer": "^8.0.0",
     "is-git-clean": "^1.1.0",
     "meow": "^7.1.1",
-    "ora": "4.0.4",
+    "ora": "4.1.1",
     "rimraf": "^3.0.2",
     "semver": "^7.3.5",
     "update-check": "^1.5.4"
@@ -40,12 +42,15 @@
     "@types/jest": "^27.4.0",
     "@types/node": "^16.11.12",
     "@types/semver": "^7.3.9",
+    "deepmerge": "^4.2.2",
     "eslint": "^7.23.0",
     "jest": "^27.4.3",
     "semver": "^7.3.5",
     "strip-ansi": "^6.0.1",
     "ts-jest": "^27.1.1",
+    "tsconfig": "workspace:*",
     "tsup": "^5.10.3",
+    "turbo-types": "workspace:*",
     "typescript": "^4.5.5"
   },
   "files": [

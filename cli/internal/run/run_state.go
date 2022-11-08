@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vercel/turborepo/cli/internal/chrometracing"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/chrometracing"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/mitchellh/cli"
 )
@@ -172,7 +172,7 @@ func writeChrometracing(filename string, terminal cli.Ui) error {
 		return err
 	}
 	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
-	// so we have to account for that before converting to AbsolutePath
+	// so we have to account for that before converting to turbopath.AbsoluteSystemPath
 	if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
 		return err
 	}

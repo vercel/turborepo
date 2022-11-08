@@ -1,6 +1,7 @@
 package login
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,11 +10,15 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/client"
-	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/spf13/pflag"
+	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/config"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
+	"gotest.tools/v3/assert"
 )
 
 type dummyClient struct {
@@ -49,38 +54,15 @@ func (d *dummyClient) VerifySSOToken(token string, tokenName string) (*client.Ve
 	}, nil
 }
 
-var logger = hclog.Default()
-var cf = &config.Config{
-	Logger:       logger,
-	TurboVersion: "test",
-	ApiUrl:       "api-url",
-	LoginUrl:     "login-url",
-}
-
 type testResult struct {
-	repoRoot            fs.AbsolutePath
+	repoRoot            turbopath.AbsoluteSystemPath
+	userConfig          *config.UserConfig
+	repoConfig          *config.RepoConfig
 	clientErr           error
-	clientTokenWritten  string
 	openedURL           string
 	stepCh              chan struct{}
 	client              dummyClient
 	shouldEnableCaching bool
-}
-
-func (tr *testResult) userConfigWritten(t *testing.T) *config.TurborepoConfig {
-	config, err := config.ReadUserConfigFile()
-	if err != nil {
-		t.Fatalf("failed reading user config: %v", err)
-	}
-	return config
-}
-
-func (tr *testResult) repoConfigWritten(t *testing.T) *config.TurborepoConfig {
-	config, err := config.ReadRepoConfigFile(tr.repoRoot)
-	if err != nil {
-		t.Fatalf("failed reading repo config: %v", err)
-	}
-	return config
 }
 
 func (tr *testResult) getTestLogin() login {
@@ -89,12 +71,17 @@ func (tr *testResult) getTestLogin() login {
 		tr.stepCh <- struct{}{}
 		return nil
 	}
+	base := &cmdutil.CmdBase{
+		UI:         ui.Default(),
+		Logger:     hclog.Default(),
+		RepoRoot:   tr.repoRoot,
+		UserConfig: tr.userConfig,
+		RepoConfig: tr.repoConfig,
+	}
 	return login{
-		ui:       ui.Default(),
-		logger:   hclog.Default(),
-		repoRoot: tr.repoRoot,
-		openURL:  urlOpener,
-		client:   &tr.client,
+		base:    base,
+		openURL: urlOpener,
+		client:  &tr.client,
 		promptEnableCaching: func() (bool, error) {
 			return tr.shouldEnableCaching, nil
 		},
@@ -102,14 +89,28 @@ func (tr *testResult) getTestLogin() login {
 }
 
 func newTest(t *testing.T, redirectedURL string) *testResult {
+	t.Helper()
 	stepCh := make(chan struct{}, 1)
-	cwd, err := fs.GetCwd()
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	config.AddUserConfigFlags(flags)
+	config.AddRepoConfigFlags(flags)
+	assert.NilError(t, flags.Set("login", "login-url"))
+	assert.NilError(t, flags.Set("api", "api-url"))
+	userConfigPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo")
+	userConfig, err := config.ReadUserConfigFile(userConfigPath, flags)
 	if err != nil {
-		t.Fatalf("getting cwd: %v", err)
+		t.Fatalf("setting up user config: %v", err)
+	}
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), flags)
+	if err != nil {
+		t.Fatalf("setting up repo config: %v", err)
 	}
 	tr := &testResult{
-		repoRoot: cwd,
-		stepCh:   stepCh,
+		repoRoot:   repoRoot,
+		userConfig: userConfig,
+		repoConfig: repoConfig,
+		stepCh:     stepCh,
 	}
 	tr.client.team = &client.Team{
 		ID:         "sso-team-id",
@@ -135,9 +136,10 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 }
 
 func Test_run(t *testing.T) {
+	ctx := context.Background()
 	test := newTest(t, "http://127.0.0.1:9789/?token=my-token")
 	login := test.getTestLogin()
-	err := login.run(cf)
+	err := login.run(ctx)
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
@@ -150,9 +152,8 @@ func Test_run(t *testing.T) {
 		t.Errorf("openedURL got %v, want %v", test.openedURL, expectedURL)
 	}
 
-	userConfig := test.userConfigWritten(t)
-	if userConfig.Token != "my-token" {
-		t.Errorf("config token got %v, want my-token", userConfig.Token)
+	if test.userConfig.Token() != "my-token" {
+		t.Errorf("config token got %v, want my-token", test.userConfig.Token())
 	}
 	if test.client.setToken != "my-token" {
 		t.Errorf("user client token got %v, want my-token", test.client.setToken)
@@ -160,12 +161,13 @@ func Test_run(t *testing.T) {
 }
 
 func Test_sso(t *testing.T) {
+	ctx := context.Background()
 	redirectParams := make(url.Values)
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
 	test := newTest(t, "http://127.0.0.1:9789/?"+redirectParams.Encode())
 	login := test.getTestLogin()
-	err := login.loginSSO(cf, "my-team")
+	err := login.loginSSO(ctx, "my-team")
 	if err != nil {
 		t.Errorf("expected to succeed, got error %v", err)
 	}
@@ -184,21 +186,19 @@ func Test_sso(t *testing.T) {
 	if test.client.setToken != expectedToken {
 		t.Errorf("user client token got %v, want %v", test.client.setToken, expectedToken)
 	}
-	userConfigWritten := test.userConfigWritten(t)
-	if userConfigWritten.Token != expectedToken {
-		t.Errorf("user config token got %v want %v", userConfigWritten.Token, expectedToken)
+
+	if test.userConfig.Token() != expectedToken {
+		t.Errorf("user config token got %v want %v", test.userConfig.Token(), expectedToken)
 	}
-	repoConfigWritten := test.repoConfigWritten(t)
+	remoteConfig := test.repoConfig.GetRemoteConfig(expectedToken)
 	expectedTeamID := "sso-team-id"
-	if repoConfigWritten.TeamId != expectedTeamID {
-		t.Errorf("repo config team id got %v want %v", repoConfigWritten.TeamId, expectedTeamID)
-	}
-	if repoConfigWritten.Token != "" {
-		t.Errorf("repo config file token, got %v want empty string", repoConfigWritten.Token)
+	if remoteConfig.TeamID != expectedTeamID {
+		t.Errorf("repo config team id got %v want %v", remoteConfig.TeamID, expectedTeamID)
 	}
 }
 
 func Test_ssoCachingDisabledShouldEnable(t *testing.T) {
+	ctx := context.Background()
 	redirectParams := make(url.Values)
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
@@ -206,7 +206,7 @@ func Test_ssoCachingDisabledShouldEnable(t *testing.T) {
 	test.shouldEnableCaching = true
 	test.client.cachingStatus = util.CachingStatusDisabled
 	login := test.getTestLogin()
-	err := login.loginSSO(cf, "my-team")
+	err := login.loginSSO(ctx, "my-team")
 	// Handle URL Open
 	<-test.stepCh
 	if !errors.Is(err, errTryAfterEnable) {
@@ -215,6 +215,7 @@ func Test_ssoCachingDisabledShouldEnable(t *testing.T) {
 }
 
 func Test_ssoCachingDisabledDontEnable(t *testing.T) {
+	ctx := context.Background()
 	redirectParams := make(url.Values)
 	redirectParams.Add("token", "verification-token")
 	redirectParams.Add("email", "test@example.com")
@@ -222,7 +223,7 @@ func Test_ssoCachingDisabledDontEnable(t *testing.T) {
 	test.shouldEnableCaching = false
 	test.client.cachingStatus = util.CachingStatusDisabled
 	login := test.getTestLogin()
-	err := login.loginSSO(cf, "my-team")
+	err := login.loginSSO(ctx, "my-team")
 	if !errors.Is(err, errNeedCachingEnabled) {
 		t.Errorf("loginSSO got %v, want %v", err, errNeedCachingEnabled)
 	}

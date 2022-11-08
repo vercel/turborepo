@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // CookieWaiter is the interface used by clients that need to wait
@@ -27,26 +28,26 @@ var (
 // CookieJar is used for tracking roundtrips through the filesystem watching API
 type CookieJar struct {
 	timeout time.Duration
-	dir     fs.AbsolutePath
+	dir     turbopath.AbsoluteSystemPath
 	serial  uint64
 	mu      sync.Mutex
-	cookies map[fs.AbsolutePath]chan error
+	cookies map[turbopath.AbsoluteSystemPath]chan error
 	closed  bool
 }
 
 // NewCookieJar returns a new instance of a CookieJar. There should only ever be a single
 // instance live per cookieDir, since they expect to have full control over that directory.
-func NewCookieJar(cookieDir fs.AbsolutePath, timeout time.Duration) (*CookieJar, error) {
+func NewCookieJar(cookieDir turbopath.AbsoluteSystemPath, timeout time.Duration) (*CookieJar, error) {
 	if err := cookieDir.RemoveAll(); err != nil {
 		return nil, err
 	}
-	if err := cookieDir.MkdirAll(); err != nil {
+	if err := cookieDir.MkdirAll(0775); err != nil {
 		return nil, err
 	}
 	return &CookieJar{
 		timeout: timeout,
 		dir:     cookieDir,
-		cookies: make(map[fs.AbsolutePath]chan error),
+		cookies: make(map[turbopath.AbsoluteSystemPath]chan error),
 	}, nil
 }
 
@@ -82,7 +83,7 @@ func (cj *CookieJar) OnFileWatchError(err error) {
 	cj.mu.Lock()
 	defer cj.mu.Unlock()
 	cj.removeAllCookiesWithError(err)
-	cj.cookies = make(map[fs.AbsolutePath]chan error)
+	cj.cookies = make(map[turbopath.AbsoluteSystemPath]chan error)
 }
 
 // OnFileWatchEvent determines if the specified event is relevant
@@ -106,7 +107,7 @@ func (cj *CookieJar) WaitForCookie() error {
 	// block sending it.
 	ch := make(chan error, 1)
 	serial := atomic.AddUint64(&cj.serial, 1)
-	cookiePath := cj.dir.Join(fmt.Sprintf("%v.cookie", serial))
+	cookiePath := cj.dir.UntypedJoin(fmt.Sprintf("%v.cookie", serial))
 	cj.mu.Lock()
 	if cj.closed {
 		cj.mu.Unlock()
@@ -133,7 +134,7 @@ func (cj *CookieJar) WaitForCookie() error {
 	}
 }
 
-func (cj *CookieJar) notifyCookie(cookie fs.AbsolutePath, err error) {
+func (cj *CookieJar) notifyCookie(cookie turbopath.AbsoluteSystemPath, err error) {
 	cj.mu.Lock()
 	ch, ok := cj.cookies[cookie]
 	// delete is a no-op if the key doesn't exist
@@ -147,7 +148,7 @@ func (cj *CookieJar) notifyCookie(cookie fs.AbsolutePath, err error) {
 	}
 }
 
-func touchCookieFile(cookie fs.AbsolutePath) error {
+func touchCookieFile(cookie turbopath.AbsoluteSystemPath) error {
 	f, err := cookie.OpenFile(os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0700)
 	if err != nil {
 		return err

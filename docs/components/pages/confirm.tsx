@@ -18,12 +18,12 @@ export default function Confirm() {
                   <h2 className="text-xl font-bold">Thanks so much!</h2>
                   <p>
                     Keep an eye on your inbox for product updates and
-                    announcements from Turborepo and Vercel.
+                    announcements from Turbo and Vercel.
                   </p>{" "}
                   <p>
                     Thanks,
                     <br />
-                    The Turborepo Team
+                    The Turbo Team
                   </p>
                 </div>
               </div>

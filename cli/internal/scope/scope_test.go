@@ -8,10 +8,12 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/context"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type mockSCM struct {
@@ -56,28 +58,28 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	packagesInfos := map[interface{}]*fs.PackageJSON{
 		"app0": {
-			Dir: filepath.FromSlash("app/app0"),
+			Dir: turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
 		},
 		"app1": {
-			Dir: filepath.FromSlash("app/app1"),
+			Dir: turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
 		},
 		"app2": {
-			Dir: filepath.FromSlash("app/app2"),
+			Dir: turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
 		},
 		"app2-a": {
-			Dir: filepath.FromSlash("app/app2-a"),
+			Dir: turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
 		},
 		"libA": {
-			Dir: filepath.FromSlash("libs/libA"),
+			Dir: turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
 		},
 		"libB": {
-			Dir: filepath.FromSlash("libs/libB"),
+			Dir: turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
 		},
 		"libC": {
-			Dir: filepath.FromSlash("libs/libC"),
+			Dir: turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
 		},
 		"libD": {
-			Dir: filepath.FromSlash("libs/libD"),
+			Dir: turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
 		},
 	}
 	packageNames := []string{}
@@ -96,6 +98,7 @@ func TestResolvePackages(t *testing.T) {
 		globalDeps          []string
 		includeDependencies bool
 		includeDependents   bool
+		lockfile            string
 	}{
 		{
 			name:                "Just scope and dependencies",
@@ -103,6 +106,44 @@ func TestResolvePackages(t *testing.T) {
 			includeDependencies: true,
 			scope:               []string{"app2"},
 			expected:            []string{"app2", "libB", "libC", "libD"},
+		},
+		{
+			name:                "Only turbo.json changed",
+			changed:             []string{"turbo.json"},
+			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			since:               "dummy",
+			includeDependencies: true,
+		},
+		{
+			name:                "Only root package.json changed",
+			changed:             []string{"package.json"},
+			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			since:               "dummy",
+			includeDependencies: true,
+		},
+		{
+			name:                "Only package-lock.json changed",
+			changed:             []string{"package-lock.json"},
+			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			since:               "dummy",
+			includeDependencies: true,
+			lockfile:            "package-lock.json",
+		},
+		{
+			name:                "Only yarn.lock changed",
+			changed:             []string{"yarn.lock"},
+			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			since:               "dummy",
+			includeDependencies: true,
+			lockfile:            "yarn.lock",
+		},
+		{
+			name:                "Only pnpm-lock.yaml changed",
+			changed:             []string{"pnpm-lock.yaml"},
+			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			since:               "dummy",
+			includeDependencies: true,
+			lockfile:            "pnpm-lock.yaml",
 		},
 		{
 			name:     "One package changed",
@@ -207,7 +248,7 @@ func TestResolvePackages(t *testing.T) {
 		},
 		{
 			// make sure multiple apps with the same prefix are handled separately.
-			// prevents this issue: https://github.com/vercel/turborepo/issues/1528
+			// prevents this issue: https://github.com/vercel/turbo/issues/1528
 			name:     "Two apps with an overlapping prefix changed",
 			changed:  []string{"app/app2/src/index.js", "app/app2-a/src/index.js"},
 			expected: []string{"app2", "app2-a"},
@@ -236,6 +277,7 @@ func TestResolvePackages(t *testing.T) {
 			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
 				PackageInfos:     packagesInfos,
 				PackageNames:     packageNames,
+				PackageManager:   &packagemanager.PackageManager{Lockfile: tc.lockfile},
 				TopologicalGraph: graph,
 			}, tui, logger)
 			if err != nil {

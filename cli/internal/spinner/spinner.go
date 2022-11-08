@@ -8,7 +8,7 @@ import (
 
 	"github.com/mitchellh/cli"
 	progressbar "github.com/schollz/progressbar/v3"
-	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/ui"
 )
 
 // getWriterAndColor unwraps cli.Ui instances until it gets to a BasicUi.

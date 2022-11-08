@@ -36,7 +36,7 @@ export default function Callout({
 }: {
   children: ReactNode;
   type: keyof typeof THEMES;
-  icon: ReactElement;
+  icon?: ReactElement;
 }) {
   return (
     <div className={`${THEMES[type].classes} flex rounded-lg callout mt-6`}>
@@ -49,7 +49,7 @@ export default function Callout({
       >
         {icon || THEMES[type].icon}
       </div>
-      <div className="py-2 pr-4">{children}</div>
+      <div className="py-2 pr-4 overflow-auto">{children}</div>
     </div>
   );
 }

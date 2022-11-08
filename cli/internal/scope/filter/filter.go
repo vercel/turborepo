@@ -7,9 +7,9 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type SelectedPackages struct {
@@ -22,11 +22,9 @@ type SelectedPackages struct {
 type PackagesChangedInRange = func(fromRef string, toRef string) (util.Set, error)
 
 type Resolver struct {
-	Graph        *dag.AcyclicGraph
-	PackageInfos map[interface{}]*fs.PackageJSON
-	// SCM                  scm.SCM
-	Cwd string
-	// HasGlobalChange      bool
+	Graph                  *dag.AcyclicGraph
+	PackageInfos           map[interface{}]*fs.PackageJSON
+	Cwd                    string
 	PackagesChangedInRange PackagesChangedInRange
 }
 
@@ -214,7 +212,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 					}
 				} else if pkg, ok := r.PackageInfos[pkgName]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
-				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
+				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
 					entryPackages.Add(pkgName)
@@ -231,7 +229,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 			entryPackages.Add(util.RootPkgName)
 		} else {
 			for name, pkg := range r.PackageInfos {
-				if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir)); err != nil {
+				if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
 					entryPackages.Add(name)
@@ -281,7 +279,7 @@ func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Se
 	for name, pkg := range r.PackageInfos {
 		if parentDir == "" {
 			entryPackages.Add(name)
-		} else if matches, err := doublestar.PathMatch(parentDir, pkg.Dir); err != nil {
+		} else if matches, err := doublestar.PathMatch(parentDir, pkg.Dir.ToStringDuringMigration()); err != nil {
 			return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 		} else if matches {
 			entryPackages.Add(name)
