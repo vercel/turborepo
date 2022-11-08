@@ -9,6 +9,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/util"
+	"gotest.tools/v3/assert"
 
 	"github.com/pyr-sh/dag"
 )
@@ -36,9 +37,9 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 		Packages:  workspaces,
 		TaskNames: []string{"dev"},
 	}
-	if err := engine.Prepare(opts); err != nil {
-		t.Fatalf("Failed to prepare engine: %v", err)
-	}
+
+	err := engine.Prepare(opts)
+	assert.NilError(t, err, "Failed to prepare engine")
 
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
@@ -73,9 +74,8 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 		TaskNames: []string{"build"},
 	}
 
-	if err := engine.Prepare(opts); err != nil {
-		t.Fatalf("Failed to prepare engine: %v", err)
-	}
+	err := engine.Prepare(opts)
+	assert.NilError(t, err, "Failed to prepare engine")
 
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
@@ -112,9 +112,8 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 		TaskNames: []string{"build"},
 	}
 
-	if err := engine.Prepare(opts); err != nil {
-		t.Fatalf("Failed to prepare engine: %v", err)
-	}
+	err := engine.Prepare(opts)
+	assert.NilError(t, err, "Failed to prepare engine")
 
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
@@ -131,9 +130,8 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 
 	// workspace-a#dev specifically dependsOn workspace-b#dev
 	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
-	if err := engine.AddDep("workspace-b#dev", "workspace-a#dev"); err != nil {
-		t.Fatalf("Something went wrong in test construction: %s", err)
-	}
+	err := engine.AddDep("workspace-b#dev", "workspace-a#dev")
+	assert.NilError(t, err, "Failed to prepare engine")
 
 	engine.AddTask(&Task{
 		Name:       "workspace-a#dev",
@@ -154,9 +152,9 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 		Packages:  workspaces,
 		TaskNames: []string{"dev"},
 	}
-	if err := engine.Prepare(opts); err != nil {
-		t.Fatalf("Failed to prepare engine: %v", err)
-	}
+
+	prepErr := engine.Prepare(opts)
+	assert.NilError(t, prepErr, "Failed to prepare engine")
 
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
@@ -186,9 +184,9 @@ func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 		Packages:  workspaces,
 		TaskNames: []string{"dev"},
 	}
-	if err := engine.Prepare(opts); err != nil {
-		t.Fatalf("Failed to prepare engine: %v", err)
-	}
+
+	err := engine.Prepare(opts)
+	assert.NilError(t, err, "Failed to prepare engine")
 
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
