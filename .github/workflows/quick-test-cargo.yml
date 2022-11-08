@@ -38,6 +38,10 @@ jobs:
         run: |
           pnpm install -r --side-effects-cache false
 
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Start Redis
         uses: supercharge/redis-github-action@1.4.0
         with:
@@ -55,7 +59,7 @@ jobs:
         timeout-minutes: 60
         with:
           command: nextest
-          args: run --release
+          args: run --workspace --release
 
   test-bench:
     runs-on: ubuntu-latest

@@ -483,5 +483,8 @@ export const users: Array<TurboUser> = [
     image: "/images/logos/buildpass.svg",
     infoLink: "https://www.buildpass.com.au/",
     pinned: true,
+    style: {
+      width: 175,
+    },
   },
 ];
