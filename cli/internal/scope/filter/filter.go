@@ -13,6 +13,7 @@ import (
 )
 
 // A test commit
+// Another commit
 type SelectedPackages struct {
 	pkgs          util.Set
 	unusedFilters []*TargetSelector
