@@ -34,9 +34,11 @@ jobs:
         run: pnpm -- turbo run e2e --filter=cli
 
       - name: Setup rust
+        if: matrix.os != 'windows-latest'
         uses: actions-rs/toolchain@v1
 
       - name: Setup rust cache
+        if: matrix.os != 'windows-latest'
         uses: Swatinem/rust-cache@v2
         with:
           key: test
