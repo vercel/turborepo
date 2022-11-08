@@ -216,7 +216,7 @@ func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hcl
 }
 
 // OnError
-// If output mode is set to log output only after error, we'll have buffered output
+// If output-mode is set to "errors-only", we'll have buffered output
 // to disk without logging it.  Now we can log that here.
 func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
 	if tc.taskOutputMode == util.ErrorTaskOutput {
