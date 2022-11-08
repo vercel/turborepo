@@ -25,8 +25,8 @@ function SiteSwitcherLink({ href, text, isActive }) {
   };
 
   return (
-    <Link href={href}>
-      <a className={cn(classes, conditionalClasses)}>{text}</a>
+    <Link href={href} className={cn(classes, conditionalClasses)}>
+      {text}
     </Link>
   );
 }
