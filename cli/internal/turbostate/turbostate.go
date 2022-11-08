@@ -15,7 +15,7 @@ type RepoState struct {
 type DaemonPayload struct {
 	IdleTimeout string `json:"idle_time"`
 	Command     string `json:"command"`
-	Json        bool   `json:"json"`
+	JSON        bool   `json:"json"`
 }
 
 // LinkPayload is the extra flags passed for the `link` subcommand

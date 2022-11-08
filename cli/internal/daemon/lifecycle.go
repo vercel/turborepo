@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 )
 
+// RunLifecycle executes the lifecycle commands `start`, `stop`, `restart`.
 func RunLifecycle(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {

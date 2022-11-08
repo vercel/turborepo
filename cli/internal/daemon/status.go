@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/turbostate"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
+// RunStatus executes the `daemon status` command.
 func RunStatus(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
@@ -21,7 +22,7 @@ func RunStatus(ctx context.Context, helper *cmdutil.Helper, args *turbostate.Par
 	l := &lifecycle{
 		base,
 	}
-	if err := l.status(ctx, args.Command.Daemon.Json); err != nil {
+	if err := l.status(ctx, args.Command.Daemon.JSON); err != nil {
 		l.logError(err)
 		return err
 	}
