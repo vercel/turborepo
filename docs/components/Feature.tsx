@@ -51,10 +51,8 @@ export const DetailedFeatureLink = (props: {
   feature: FeatureProps["feature"];
 }) => {
   return (
-    <Link href={props.href}>
-      <a className={featureWrapperClasses}>
-        <DetailedFeatureInner feature={props.feature}></DetailedFeatureInner>
-      </a>
+    <Link href={props.href} className={featureWrapperClasses}>
+      <DetailedFeatureInner feature={props.feature}></DetailedFeatureInner>
     </Link>
   );
 };
