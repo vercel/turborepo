@@ -44,7 +44,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			// then check for regular tasks
 			fallbackTaskDefinition, notcool := g.Pipeline[taskName]
 			// if neither, then bail
-			if !notcool && !ok {
+			if !notcool {
 				return nil
 			}
 			// override if we need to...
