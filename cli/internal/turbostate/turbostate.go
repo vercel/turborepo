@@ -28,6 +28,13 @@ type LoginPayload struct {
 	SsoTeam string `json:"sso_team"`
 }
 
+// PrunePayload is the extra flags passed for the `prune` subcommand
+type PrunePayload struct {
+	Scope     string `json:"scope"`
+	Docker    bool   `json:"docker"`
+	OutputDir string `json:"output_dir"`
+}
+
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
@@ -35,6 +42,7 @@ type Command struct {
 	Link   *LinkPayload   `json:"link"`
 	Login  *LoginPayload  `json:"login"`
 	Logout *struct{}      `json:"logout"`
+	Prune  *PrunePayload  `json:"prune"`
 	Unlink *struct{}      `json:"unlink"`
 }
 

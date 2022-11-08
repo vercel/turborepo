@@ -139,7 +139,7 @@ pub enum Command {
         scope: Option<String>,
         #[clap(long)]
         docker: bool,
-        #[clap(long = "out-dir", default_value = "out")]
+        #[clap(long = "out-dir", default_value_t = String::from("out"), value_parser)]
         output_dir: String,
     },
     /// Run tasks across projects in your monorepo
