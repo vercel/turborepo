@@ -1,4 +1,4 @@
-import Image from "next/image";
+import Image from "next/future/image";
 import type { AuthorDetails } from "../content/team";
 
 export const Avatar = ({ name, picture, twitterUsername }: AuthorDetails) => {
@@ -9,7 +9,6 @@ export const Avatar = ({ name, picture, twitterUsername }: AuthorDetails) => {
           src={picture}
           height={32}
           width={32}
-          layout="fixed"
           loading="lazy"
           title={name}
           className="w-full rounded-full"
