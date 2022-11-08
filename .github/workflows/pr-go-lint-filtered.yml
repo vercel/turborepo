@@ -7,6 +7,8 @@ concurrency:
 on:
   pull_request:
     types: [opened, edited, synchronize]
+    paths:
+      - "**.go"
 
 permissions:
   contents: read

@@ -1,0 +1,46 @@
+name: CLI E2E tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, edited, synchronize]
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
+
+jobs:
+  test:
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: E2E Tests
+        run: pnpm -- turbo run e2e --filter=cli
+
+      - name: Cache Prysk
+        if: matrix.os != 'windows-latest'
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: ${{ runner.os }}-prysk
+
+      - name: Integration Tests
+        if: matrix.os != 'windows-latest'
+        run: pnpm -- turbo run integration-tests --filter=cli

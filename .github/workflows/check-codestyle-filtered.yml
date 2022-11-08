@@ -2,7 +2,7 @@ name: Check Code Style
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main]
   pull_request:
     paths:
       - "crates/**"
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-core-oss
 
     steps:
       - name: Checkout
@@ -39,6 +39,7 @@ jobs:
         with:
           command: check
           # args: --features persistent_cache
+          args: --workspace
 
       - name: Run cargo check tests
         uses: actions-rs/cargo@v1
@@ -60,7 +61,7 @@ jobs:
           args: --benches
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-core-oss
 
     steps:
       - name: Checkout
@@ -81,7 +82,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets
+          args: --workspace --all-targets
 
       - name: Count clippy warnings
         run: |
