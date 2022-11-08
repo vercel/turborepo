@@ -14,7 +14,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use serde::Serialize;
 
 use crate::{
@@ -56,38 +56,6 @@ impl TryInto<GoString> for TurboState {
             p: cstring.into_raw(),
             n,
         })
-    }
-}
-
-/// If a command has a help flag passed, print help and return true.
-/// Otherwise, return false.
-///
-/// # Arguments
-///
-/// * `command`: The parsed command.
-///
-/// returns: Result<bool, Error>
-fn try_run_help(command: &Command) -> Result<bool> {
-    let (help, command_name) = match command {
-        Command::Bin { help, .. } => (help, "bin"),
-        Command::Completion { help, .. } => (help, "completion"),
-        Command::Daemon { help, .. } => (help, "daemon"),
-        Command::Link { help, .. } => (help, "link"),
-        Command::Login { help, .. } => (help, "login"),
-        Command::Logout { help, .. } => (help, "logout"),
-        Command::Prune { help, .. } => (help, "prune"),
-        Command::Run { help, .. } => (help, "run"),
-        Command::Unlink { help, .. } => (help, "unlink"),
-    };
-
-    if *help {
-        Args::command()
-            .find_subcommand_mut(command_name)
-            .expect("Could not find subcommand")
-            .print_long_help()?;
-        Ok(true)
-    } else {
-        Ok(false)
     }
 }
 
@@ -144,13 +112,6 @@ impl TurboState {
     ///
     /// returns: Result<i32, Error>
     fn run_correct_turbo(mut self, current_dir: PathBuf) -> Result<i32> {
-        // Run help for subcommand if `--help` or `-h` is passed.
-        if let Some(command) = &self.parsed_args.command {
-            if try_run_help(command)? {
-                return Ok(0);
-            }
-        }
-
         // We run this *before* the local turbo code because login/logout/link/unlink
         // should work regardless of whether or not we're in a monorepo.
         if matches!(
@@ -307,12 +268,6 @@ fn get_version() -> &'static str {
 
 fn main() -> Result<()> {
     let clap_args = Args::parse();
-    // --help doesn't work with ignore_errors in clap.
-    if clap_args.help {
-        let mut command = Args::command();
-        command.print_help()?;
-        process::exit(0);
-    }
     // --version flag doesn't work with ignore_errors in clap, so we have to handle
     // it manually
     if clap_args.version {
