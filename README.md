@@ -70,4 +70,4 @@ If you believe you have found a security vulnerability in Turbo, we encourage yo
 
 https://vercel.com/security
 
-Thanks!
+Many thanks!
