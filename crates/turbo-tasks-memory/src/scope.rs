@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
     mem::take,
     ops::Deref,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicIsize, AtomicUsize, Ordering},
 };
 
 use event_listener::{Event, EventListener};
@@ -115,8 +115,9 @@ pub struct TaskScope {
     /// Total number of tasks
     tasks: AtomicUsize,
     /// Number of tasks that are not Done, unfinished child scopes also count as
-    /// unfinished tasks
-    unfinished_tasks: AtomicUsize,
+    /// unfinished tasks. This values might go temporary negative in race
+    /// conditions.
+    unfinished_tasks: AtomicIsize,
     /// State that requires locking
     pub state: Mutex<TaskScopeState>,
 }
@@ -154,7 +155,7 @@ impl TaskScope {
             #[cfg(feature = "print_scope_updates")]
             id,
             tasks: AtomicUsize::new(tasks),
-            unfinished_tasks: AtomicUsize::new(0),
+            unfinished_tasks: AtomicIsize::new(0),
             state: Mutex::new(TaskScopeState {
                 #[cfg(feature = "print_scope_updates")]
                 id,
@@ -176,7 +177,7 @@ impl TaskScope {
             #[cfg(feature = "print_scope_updates")]
             id,
             tasks: AtomicUsize::new(tasks),
-            unfinished_tasks: AtomicUsize::new(unfinished),
+            unfinished_tasks: AtomicIsize::new(unfinished as isize),
             state: Mutex::new(TaskScopeState {
                 #[cfg(feature = "print_scope_updates")]
                 id,
@@ -201,36 +202,42 @@ impl TaskScope {
     }
 
     pub fn increment_unfinished_tasks(&self, backend: &MemoryBackend) {
-        let old_count = self.unfinished_tasks.fetch_add(1, Ordering::AcqRel);
-        if old_count == 0 {
+        if self.increment_unfinished_tasks_internal() {
             self.update_unfinished_state(backend);
         }
     }
 
+    /// Returns true if the state requires an update
+    #[must_use]
     fn increment_unfinished_tasks_internal(&self) -> bool {
+        // crossing to 0 to 1 boundary, requires an update
         self.unfinished_tasks.fetch_add(1, Ordering::AcqRel) == 0
     }
 
     pub fn decrement_unfinished_tasks(&self, backend: &MemoryBackend) {
-        let old_count = self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel);
-        debug_assert!(old_count > 0);
-        if old_count == 1 {
+        if self.decrement_unfinished_tasks_internal() {
             self.update_unfinished_state(backend);
         }
     }
 
+    /// Returns true if the state requires an update
+    #[must_use]
     fn decrement_unfinished_tasks_internal(&self) -> bool {
-        self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel) == 1
+        let old_count = self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel);
+        debug_assert!(old_count > 0);
+        old_count == 1
     }
 
     pub fn add_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
-        let mut state = self.state.lock();
-        if state.parents.add(parent) && state.has_unfinished_tasks {
+        let new_unfinished_parent = {
+            let mut state = self.state.lock();
+            state.parents.add(parent) && state.has_unfinished_tasks
+        };
+        if new_unfinished_parent {
+            // As we added a parent while having unfinished tasks we need to increment the
+            // unfinished task count and potentially update the state
             backend.with_scope(parent, |parent| {
                 let update = parent.increment_unfinished_tasks_internal();
-
-                // lock need to include increment_unfinished_tasks
-                drop(state);
 
                 if update {
                     parent.update_unfinished_state(backend);
@@ -240,13 +247,15 @@ impl TaskScope {
     }
 
     pub fn remove_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
-        let mut state = self.state.lock();
-        if state.parents.remove(parent) && state.has_unfinished_tasks {
+        let remove_unfinished_parent = {
+            let mut state = self.state.lock();
+            state.parents.remove(parent) && state.has_unfinished_tasks
+        };
+        if remove_unfinished_parent {
+            // As we removed a parent while having unfinished tasks we need to decrement the
+            // unfinished task count and potentially update the state
             backend.with_scope(parent, |parent| {
                 let update = parent.decrement_unfinished_tasks_internal();
-
-                // lock need to include decrement_unfinished_tasks
-                drop(state);
 
                 if update {
                     parent.update_unfinished_state(backend);
@@ -257,6 +266,7 @@ impl TaskScope {
 
     fn update_unfinished_state(&self, backend: &MemoryBackend) {
         let mut state = self.state.lock();
+        // we need to load the atomic under the lock to ensure consistency
         let count = self.unfinished_tasks.load(Ordering::Acquire);
         let has_unfinished_tasks = count > 0;
         let mut to_update = Vec::new();

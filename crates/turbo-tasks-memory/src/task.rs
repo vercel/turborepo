@@ -688,8 +688,8 @@ impl Task {
                         backend.increase_scope_active(root, turbo_tasks);
                     }
                     if parent {
-                        backend.with_scope(root, |parent| {
-                            parent.add_parent(id, backend);
+                        backend.with_scope(root, |child| {
+                            child.add_parent(id, backend);
                         })
                     }
                 }
@@ -870,8 +870,8 @@ impl Task {
                             backend.decrease_scope_active(root, turbo_tasks);
                         }
                         if parent {
-                            backend.with_scope(root, |parent| {
-                                parent.remove_parent(id, backend);
+                            backend.with_scope(root, |child| {
+                                child.remove_parent(id, backend);
                             })
                         }
                     }
@@ -969,8 +969,8 @@ impl Task {
             );
             let mut active_counter = 0isize;
             let mut tasks = HashSet::new();
-            let mut scopes_to_add_parent = Vec::new();
-            let mut scopes_to_remove_parent = Vec::new();
+            let mut scopes_to_add_as_parent = Vec::new();
+            let mut scopes_to_remove_as_parent = Vec::new();
             for (scope_id, count) in scopes.iter() {
                 backend.with_scope(*scope_id, |scope| {
                     // add the new root scope as child of old scopes
@@ -988,7 +988,7 @@ impl Task {
                                     active_counter += 1;
                                 }
                                 if parent {
-                                    scopes_to_add_parent.push(*scope_id);
+                                    scopes_to_add_as_parent.push(*scope_id);
                                 }
                             }
                         }
@@ -1004,7 +1004,7 @@ impl Task {
                                     active_counter -= 1;
                                 }
                                 if parent {
-                                    scopes_to_remove_parent.push(*scope_id);
+                                    scopes_to_remove_as_parent.push(*scope_id);
                                 }
                             }
                         }
@@ -1015,12 +1015,12 @@ impl Task {
             if !tasks.is_empty() {
                 turbo_tasks.schedule_notify_tasks_set(&tasks);
             }
-            backend.with_scope(root_scope, |scope| {
-                for parent in scopes_to_add_parent {
-                    scope.add_parent(parent, backend);
+            backend.with_scope(root_scope, |root_scope| {
+                for parent in scopes_to_add_as_parent {
+                    root_scope.add_parent(parent, backend);
                 }
-                for parent in scopes_to_remove_parent {
-                    scope.remove_parent(parent, backend);
+                for parent in scopes_to_remove_as_parent {
+                    root_scope.remove_parent(parent, backend);
                 }
             });
 
