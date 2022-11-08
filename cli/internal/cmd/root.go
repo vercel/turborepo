@@ -16,7 +16,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/login"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/prune"
-	"github.com/vercel/turbo/cli/internal/recent"
 	"github.com/vercel/turbo/cli/internal/run"
 	"github.com/vercel/turbo/cli/internal/signals"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -144,7 +143,6 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
 	cmd.AddCommand(prune.GetCmd(helper))
 	cmd.AddCommand(run.GetCmd(helper, signalWatcher))
-	cmd.AddCommand(recent.GetCmd(helper, signalWatcher))
 	return cmd
 }
 
