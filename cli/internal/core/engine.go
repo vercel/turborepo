@@ -286,7 +286,9 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			return nil
 		}
 
-		// Aquire a lock, because otherwise walking this group
+		// Aquire a lock, because otherwise walking this group can cause a race condition
+		// writing to the same validationError var defined outside the Walk(). This shows
+		// up when running tests with the `-race` flag.
 		sema.Acquire()
 		defer sema.Release()
 
