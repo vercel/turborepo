@@ -1,0 +1,47 @@
+name: "Turborepo Node.js Setup"
+description: "Sets Node.js up for CI"
+inputs:
+  enable-corepack:
+    description: "Control turning on corepack."
+    required: false
+    default: true
+  extra-flags:
+    description: "Extra flags to pass to the pnpm install."
+    required: false
+    default: ""
+  package-install:
+    description: "Don't run the install step."
+    required: false
+    default: true
+runs:
+  using: "composite"
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2.2.4
+      with:
+        version: 7.12.1
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16
+        cache: pnpm
+
+    - name: Configure corepack
+      # Forcibly upgrade our available version of corepack.
+      # The bundled version in node 16 has known issues.
+      # Prepends the npm bin dir so that it is always first.
+      shell: bash
+      run: |
+        npm install --force --global corepack@latest
+        npm config get prefix >> $GITHUB_PATH
+        corepack enable
+    - name: Enable corepack
+      if: ${{ inputs.enable-corepack == 'true' }}
+      shell: bash
+      run: |
+        corepack enable
+    - name: pnpm install
+      if: ${{ inputs.package-install == 'true' }}
+      shell: bash
+      run: pnpm install ${{ inputs.extra-flags }}

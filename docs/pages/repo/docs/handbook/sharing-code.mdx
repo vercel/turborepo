@@ -1,0 +1,71 @@
+import Callout from "../../../../components/Callout";
+
+# Sharing Code in a monorepo
+
+Monorepos let you share code across applications without friction. To do that, you'll be building **packages** to share code between your apps.
+
+## What is a package?
+
+The word 'package' has a double meaning when it comes to monorepos. It can refer to either of these:
+
+1. A set of files you download from a registry into your `node_modules`, via a package manager like `npm`.
+2. A workspace containing code that can be shared between applications - by convention usually inside `/packages`.
+
+This dual meaning can be very confusing to folks new to the monorepo scene. You're likely very familiar with [package installation](/repo/docs/handbook/package-installation), but not so familiar with [workspaces](/repo/docs/handbook/workspaces).
+
+The fact is that they're very similar. A package is just a piece of shared code. Except that _installed packages_ live in your `node_modules`, and _local packages_ lives in a workspace - likely in your `/packages` folder.
+
+## Anatomy of a package
+
+Each package contains a `package.json`. You're likely familiar with using these to manage dependencies and scripts in your applications.
+
+However, you may not have noticed the `main` and `name` fields before:
+
+```jsonc filename="packages/my-lib/package.json"
+{
+  // The name of your package
+  "name": "my-lib",
+
+  // When this package is used, this file is actually
+  // the thing that gets imported
+  "main": "./index.js"
+}
+```
+
+Both of these fields are important for deciding **how this package behaves when it's imported**. For instance, if `index.js` has some exports:
+
+```js filename="packages/my-lib/index.js"
+export const myFunc = () => {
+  console.log("Hello!");
+};
+```
+
+And we import this file into one of our apps:
+
+```ts filename="apps/web/pages/index.jsx"
+import { myFunc } from "my-lib";
+
+myFunc(); // Hello!
+```
+
+Then we'll be able to use the code inside the `my-lib` folder inside our applications.
+
+To summarize, **each package must have a `name` and a `main`** declared inside its `package.json`.
+
+<Callout type="info">
+
+Package resolution in `package.json` is a very complicated topic, and we can't do justice to it here. Other fields in your `package.json` may take precedence over `main` depending on how the package is being imported.
+
+Check the [npm docs](https://docs.npmjs.com/cli/v8/configuring-npm/package-json/#main) for a guide.
+
+For our purposes, using `main` will be good enough.
+
+</Callout>
+
+## Next steps
+
+We're going to introduce two styles of packages - **internal** packages and **external** packages:
+
+[**Internal** packages](/repo/docs/handbook/sharing-code/internal-packages) are intended to only be used inside the monorepo where they're housed. They are relatively simple to set up, and if your project is closed source they will be the most useful to you.
+
+[**External** packages](/repo/docs/handbook/publishing-packages) are bundled and sent to a package registry. This is useful for design systems, shared utility libraries or any open source work. However, they introduce more complexity around bundling, versioning and publishing.

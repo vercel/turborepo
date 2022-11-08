@@ -2,34 +2,30 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"github.com/segmentio/ksuid"
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/daemon/connector"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 )
 
-func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
+func addStartCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	cmd := &cobra.Command{
 		Use:           "start",
 		Short:         "Ensures that the turbo daemon is running",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sessionID := ksuid.New()
-			l := &lifecycle{
-				sessionID:    sessionID,
-				repoRoot:     config.Cwd,
-				logger:       config.Logger,
-				output:       output,
-				turboVersion: config.TurboVersion,
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
 			}
-			if err := l.ensureStarted(); err != nil {
+			l := &lifecycle{
+				base,
+			}
+			if err := l.ensureStarted(cmd.Context()); err != nil {
 				l.logError(err)
 				return err
 			}
@@ -39,22 +35,21 @@ func addStartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 	root.AddCommand(cmd)
 }
 
-func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
+func addStopCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	cmd := &cobra.Command{
 		Use:           "stop",
 		Short:         "Stop the turbo daemon",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sessionID := ksuid.New()
-			l := &lifecycle{
-				sessionID:    sessionID,
-				repoRoot:     config.Cwd,
-				logger:       config.Logger,
-				output:       output,
-				turboVersion: config.TurboVersion,
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
 			}
-			if err := l.ensureStopped(); err != nil {
+			l := &lifecycle{
+				base,
+			}
+			if err := l.ensureStopped(cmd.Context()); err != nil {
 				l.logError(err)
 				return err
 			}
@@ -64,26 +59,25 @@ func addStopCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 	root.AddCommand(cmd)
 }
 
-func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
+func addRestartCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	cmd := &cobra.Command{
 		Use:           "restart",
 		Short:         "Restart the turbo daemon",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sessionID := ksuid.New()
-			l := &lifecycle{
-				sessionID:    sessionID,
-				repoRoot:     config.Cwd,
-				logger:       config.Logger,
-				output:       output,
-				turboVersion: config.TurboVersion,
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
 			}
-			if err := l.ensureStopped(); err != nil {
+			l := &lifecycle{
+				base,
+			}
+			if err := l.ensureStopped(cmd.Context()); err != nil {
 				l.logError(err)
 				return err
 			}
-			if err := l.ensureStarted(); err != nil {
+			if err := l.ensureStarted(cmd.Context()); err != nil {
 				l.logError(err)
 				return err
 			}
@@ -94,40 +88,34 @@ func addRestartCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 }
 
 type lifecycle struct {
-	sessionID    ksuid.KSUID
-	repoRoot     fs.AbsolutePath
-	logger       hclog.Logger
-	output       cli.Ui
-	turboVersion string
+	base *cmdutil.CmdBase
 }
 
 // logError logs an error and outputs it to the UI.
 func (l *lifecycle) logError(err error) {
-	l.logger.Error("error", err)
-	l.output.Error(err.Error())
+	l.base.Logger.Error(fmt.Sprintf("error: %v", err))
+	l.base.UI.Error(err.Error())
 }
 
-func (l *lifecycle) ensureStarted() error {
-	ctx := context.Background()
-	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, l.sessionID, ClientOpts{})
+func (l *lifecycle) ensureStarted(ctx context.Context) error {
+	client, err := GetClient(ctx, l.base.RepoRoot, l.base.Logger, l.base.TurboVersion, l.base.SessionID, ClientOpts{})
 	if err != nil {
 		return err
 	}
 	// We don't really care if we fail to close the client, we're about to exit
 	_ = client.Close()
-	l.output.Output("turbo daemon is running")
+	l.base.UI.Output("turbo daemon is running")
 	return nil
 }
 
-func (l *lifecycle) ensureStopped() error {
-	ctx := context.Background()
-	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, l.sessionID, ClientOpts{
+func (l *lifecycle) ensureStopped(ctx context.Context) error {
+	client, err := GetClient(ctx, l.base.RepoRoot, l.base.Logger, l.base.TurboVersion, l.base.SessionID, ClientOpts{
 		// If the daemon is not running, don't start it, since we're trying to stop it
 		DontStart: true,
 	})
 	if err != nil {
 		if errors.Is(err, connector.ErrDaemonNotRunning) {
-			l.output.Output("turbo daemon is not running")
+			l.base.UI.Output("turbo daemon is not running")
 			return nil
 		}
 		return err
@@ -137,6 +125,6 @@ func (l *lifecycle) ensureStopped() error {
 	if err != nil {
 		return err
 	}
-	l.output.Output("Successfully requested that turbo daemon shut down")
+	l.base.UI.Output("Successfully requested that turbo daemon shut down")
 	return nil
 }

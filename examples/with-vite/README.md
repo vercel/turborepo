@@ -24,3 +24,14 @@ This Turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
+
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turbo/examples/with-vite with-vite
+cd with-vite
+yarn install
+git init . && git add . && git commit -m "Init"
+```

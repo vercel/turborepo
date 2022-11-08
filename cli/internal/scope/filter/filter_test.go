@@ -8,8 +8,9 @@ import (
 	"testing"
 
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 func setMatches(t *testing.T, name string, s util.Set, expected []string) {
@@ -37,12 +38,12 @@ func Test_filter(t *testing.T) {
 	graph.Add("project-0")
 	packageJSONs["project-0"] = &fs.PackageJSON{
 		Name: "project-0",
-		Dir:  filepath.Join("packages", "project-0"),
+		Dir:  turbopath.AnchoredUnixPath("packages/project-0").ToSystemPath(),
 	}
 	graph.Add("project-1")
 	packageJSONs["project-1"] = &fs.PackageJSON{
 		Name: "project-1",
-		Dir:  filepath.Join("packages", "project-1"),
+		Dir:  turbopath.AnchoredUnixPath("packages/project-1").ToSystemPath(),
 	}
 	graph.Add("project-2")
 	packageJSONs["project-2"] = &fs.PackageJSON{
@@ -68,7 +69,7 @@ func Test_filter(t *testing.T) {
 	graph.Add("project-6")
 	packageJSONs["project-6"] = &fs.PackageJSON{
 		Name: "project-6",
-		Dir:  filepath.Join("project-5", "packages", "project-6"),
+		Dir:  turbopath.AnchoredUnixPath("project-5/packages/project-6").ToSystemPath(),
 	}
 	// Add dependencies
 	graph.Connect(dag.BasicEdge("project-0", "project-1"))
@@ -282,12 +283,13 @@ func Test_matchScopedPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
+
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  filepath.Join(root, "packages", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/bar").ToSystemPath(),
 	}
 	r := &Resolver{
 		Graph:        graph,
@@ -310,17 +312,18 @@ func Test_matchExactPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
+
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  filepath.Join(root, "packages", "@foo", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/@foo/bar").ToSystemPath(),
 	}
 	graph.Add("bar")
 	packageJSONs["bar"] = &fs.PackageJSON{
 		Name: "bar",
-		Dir:  filepath.Join(root, "packages", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/bar").ToSystemPath(),
 	}
 	r := &Resolver{
 		Graph:        graph,
@@ -343,17 +346,18 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
+
 	packageJSONs := make(map[interface{}]*fs.PackageJSON)
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
 		Name: "@foo/bar",
-		Dir:  filepath.Join(root, "packages", "@foo", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/@foo/bar").ToSystemPath(),
 	}
 	graph.Add("@types/bar")
 	packageJSONs["@types/bar"] = &fs.PackageJSON{
 		Name: "@types/bar",
-		Dir:  filepath.Join(root, "packages", "@types", "bar"),
+		Dir:  turbopath.AnchoredUnixPath("packages/@types/bar").ToSystemPath(),
 	}
 	r := &Resolver{
 		Graph:        graph,

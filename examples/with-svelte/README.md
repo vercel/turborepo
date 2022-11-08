@@ -22,3 +22,14 @@ This Turborepo has some additional tools already setup for you:
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
+
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turbo/examples/with-svelte with-svelte
+cd with-svelte
+yarn install
+git init . && git add . && git commit -m "Init"
+```

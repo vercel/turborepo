@@ -1,0 +1,42 @@
+name: Publish docs
+
+on:
+  push:
+    branches: [main, staging]
+
+jobs:
+  build_docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps
+      - uses: actions/upload-artifact@v3
+        with:
+          name: docs_rs
+          path: ./target/doc/
+
+  commit_docs:
+    name: Commit docs
+    needs: build_docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: gh-pages
+      - uses: actions/download-artifact@v3
+        with:
+          name: docs_rs
+          path: ./target/doc
+      - run: ls -a
+      - run: rm -rf ./docs/docs.rs
+      - run: cp -r ./target/doc ./docs/docs.rs
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Update docs (${{ github.sha }})

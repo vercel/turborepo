@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 func Test_sendToServer(t *testing.T) {
@@ -30,8 +30,12 @@ func Test_sendToServer(t *testing.T) {
 		}))
 	defer ts.Close()
 
-	apiClient := NewClient(ts.URL, hclog.Default(), "v1", "", "my-team-slug", 1, false)
-	apiClient.SetToken("my-token")
+	remoteConfig := RemoteConfig{
+		TeamSlug: "my-team-slug",
+		APIURL:   ts.URL,
+		Token:    "my-token",
+	}
+	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 
 	myUUID, err := uuid.NewUUID()
 	if err != nil {
@@ -81,8 +85,12 @@ func Test_PutArtifact(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1, false)
-	apiClient.SetToken("my-token")
+	remoteConfig := RemoteConfig{
+		TeamSlug: "my-team-slug",
+		APIURL:   ts.URL,
+		Token:    "my-token",
+	}
+	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	expectedArtifactBody := []byte("My string artifact")
 
 	// Test Put Artifact
@@ -103,8 +111,12 @@ func Test_PutWhenCachingDisabled(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1, false)
-	apiClient.SetToken("my-token")
+	remoteConfig := RemoteConfig{
+		TeamSlug: "my-team-slug",
+		APIURL:   ts.URL,
+		Token:    "my-token",
+	}
+	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	expectedArtifactBody := []byte("My string artifact")
 	// Test Put Artifact
 	err := apiClient.PutArtifact("hash", expectedArtifactBody, 500, "")
@@ -126,8 +138,12 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	apiClient := NewClient(ts.URL+"/hash", hclog.Default(), "v1", "", "my-team-slug", 1, false)
-	apiClient.SetToken("my-token")
+	remoteConfig := RemoteConfig{
+		TeamSlug: "my-team-slug",
+		APIURL:   ts.URL,
+		Token:    "my-token",
+	}
+	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
 	// Test Put Artifact
 	resp, err := apiClient.FetchArtifact("hash")
 	cd := &util.CacheDisabledError{}

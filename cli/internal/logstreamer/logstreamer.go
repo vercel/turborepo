@@ -125,9 +125,35 @@ func (l *Logstreamer) out(str string) {
 		str = l.colorOkay + l.prefix + l.colorReset + " " + str
 	} else if l.prefix == "stderr" {
 		str = l.colorFail + l.prefix + l.colorReset + " " + str
-	} else {
-		str = l.prefix + str
 	}
 
 	l.Logger.Print(str)
+}
+
+// PrettyStdoutWriter wraps an ioWriter so it can add string
+// prefixes to every message it writes to stdout.
+type PrettyStdoutWriter struct {
+	w      io.Writer
+	Prefix string
+}
+
+var _ io.Writer = (*PrettyStdoutWriter)(nil)
+
+// NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
+func NewPrettyStdoutWriter(prefix string) *PrettyStdoutWriter {
+	return &PrettyStdoutWriter{
+		w:      os.Stdout,
+		Prefix: prefix,
+	}
+}
+
+func (psw *PrettyStdoutWriter) Write(p []byte) (int, error) {
+	str := psw.Prefix + string(p)
+	n, err := psw.w.Write([]byte(str))
+
+	if err != nil {
+		return n, err
+	}
+
+	return len(p), nil
 }

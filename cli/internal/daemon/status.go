@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"github.com/segmentio/ksuid"
 	"github.com/spf13/cobra"
-	"github.com/vercel/turborepo/cli/internal/config"
-	"github.com/vercel/turborepo/cli/internal/daemon/connector"
-	"github.com/vercel/turborepo/cli/internal/daemonclient"
+	"github.com/vercel/turbo/cli/internal/cmdutil"
+	"github.com/vercel/turbo/cli/internal/daemon/connector"
+	"github.com/vercel/turbo/cli/internal/daemonclient"
 )
 
-func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
+func addStatusCmd(root *cobra.Command, helper *cmdutil.Helper) {
 	var outputJSON bool
 	cmd := &cobra.Command{
 		Use:           "status",
@@ -23,15 +21,14 @@ func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sessionID := ksuid.New()
-			l := &lifecycle{
-				sessionID:    sessionID,
-				repoRoot:     config.Cwd,
-				logger:       config.Logger,
-				output:       output,
-				turboVersion: config.TurboVersion,
+			base, err := helper.GetCmdBase(cmd.Flags())
+			if err != nil {
+				return err
 			}
-			if err := l.status(outputJSON); err != nil {
+			l := &lifecycle{
+				base,
+			}
+			if err := l.status(cmd.Context(), outputJSON); err != nil {
 				l.logError(err)
 				return err
 			}
@@ -42,9 +39,8 @@ func addStatusCmd(root *cobra.Command, config *config.Config, output cli.Ui) {
 	root.AddCommand(cmd)
 }
 
-func (l *lifecycle) status(outputJSON bool) error {
-	ctx := context.Background()
-	client, err := GetClient(ctx, l.repoRoot, l.logger, l.turboVersion, l.sessionID, ClientOpts{
+func (l *lifecycle) status(ctx context.Context, outputJSON bool) error {
+	client, err := GetClient(ctx, l.base.RepoRoot, l.base.Logger, l.base.TurboVersion, l.base.SessionID, ClientOpts{
 		// If the daemon is not running, the status is that it's not running.
 		// We don't want to start it just to check the status.
 		DontStart: true,
@@ -62,13 +58,13 @@ func (l *lifecycle) status(outputJSON bool) error {
 		if err != nil {
 			return err
 		}
-		l.output.Output(string(rendered))
+		l.base.UI.Output(string(rendered))
 	} else {
 		uptime := time.Duration(int64(status.UptimeMs * 1000 * 1000))
-		l.output.Output(fmt.Sprintf("Daemon log file: %v", status.LogFile))
-		l.output.Output(fmt.Sprintf("Daemon uptime: %v", uptime.String()))
-		l.output.Output(fmt.Sprintf("Daemon pid file: %v", client.PidPath))
-		l.output.Output(fmt.Sprintf("Daemon socket file: %v", client.SockPath))
+		l.base.UI.Output(fmt.Sprintf("Daemon log file: %v", status.LogFile))
+		l.base.UI.Output(fmt.Sprintf("Daemon uptime: %v", uptime.String()))
+		l.base.UI.Output(fmt.Sprintf("Daemon pid file: %v", client.PidPath))
+		l.base.UI.Output(fmt.Sprintf("Daemon socket file: %v", client.SockPath))
 	}
 	return nil
 }
@@ -87,9 +83,9 @@ func (l *lifecycle) reportStatusError(err error, outputJSON bool) error {
 		if err != nil {
 			return err
 		}
-		l.output.Output(string(rendered))
+		l.base.UI.Output(string(rendered))
 	} else {
-		l.output.Output(fmt.Sprintf("Failed to contact daemon: %v", msg))
+		l.base.UI.Output(fmt.Sprintf("Failed to contact daemon: %v", msg))
 	}
 	return nil
 }

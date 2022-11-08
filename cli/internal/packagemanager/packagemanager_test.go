@@ -7,7 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 
@@ -105,7 +106,7 @@ func TestGetPackageManager(t *testing.T) {
 	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
-		projectDirectory fs.AbsolutePath
+		projectDirectory turbopath.AbsoluteSystemPath
 		pkg              *fs.PackageJSON
 		want             string
 		wantErr          bool
@@ -216,7 +217,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     []string
 		wantErr  bool
 	}
@@ -225,12 +226,12 @@ func Test_GetWorkspaces(t *testing.T) {
 
 	repoRoot, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
-	rootPath := map[string]fs.AbsolutePath{
-		"nodejs-npm":   repoRoot.Join("../../../examples/basic"),
-		"nodejs-berry": repoRoot.Join("../../../examples/basic"),
-		"nodejs-yarn":  repoRoot.Join("../../../examples/basic"),
-		"nodejs-pnpm":  repoRoot.Join("../../../examples/with-pnpm"),
-		"nodejs-pnpm6": repoRoot.Join("../../../examples/with-pnpm"),
+	rootPath := map[string]turbopath.AbsoluteSystemPath{
+		"nodejs-npm":   repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-berry": repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-yarn":  repoRoot.UntypedJoin("../../../examples/basic"),
+		"nodejs-pnpm":  repoRoot.UntypedJoin("../../../examples/with-pnpm"),
+		"nodejs-pnpm6": repoRoot.UntypedJoin("../../../examples/with-pnpm"),
 	}
 
 	want := map[string][]string{
@@ -307,7 +308,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     []string
 		wantErr  bool
 	}
@@ -318,8 +319,8 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		"nodejs-npm":   {"**/node_modules/**"},
 		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
 		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
-		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**"},
-		"nodejs-pnpm6": {"**/node_modules/**", "**/bower_components/**"},
+		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**", "packages/skip"},
+		"nodejs-pnpm6": {"**/node_modules/**", "**/bower_components/**", "packages/skip"},
 	}
 
 	tests := make([]test, len(packageManagers))
@@ -327,7 +328,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.Join("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("fixtures"),
 			want:     want[packageManager.Name],
 			wantErr:  false,
 		}
@@ -357,7 +358,7 @@ func Test_CanPrune(t *testing.T) {
 	type test struct {
 		name     string
 		pm       PackageManager
-		rootPath fs.AbsolutePath
+		rootPath turbopath.AbsoluteSystemPath
 		want     bool
 		wantErr  bool
 	}
@@ -370,11 +371,11 @@ func Test_CanPrune(t *testing.T) {
 	cwd, err := fs.GetCwd()
 	assert.NilError(t, err, "GetCwd")
 	wants := map[string]want{
-		"nodejs-npm":   {false, false},
+		"nodejs-npm":   {true, false},
 		"nodejs-berry": {false, true},
 		"nodejs-yarn":  {true, false},
-		"nodejs-pnpm":  {false, false},
-		"nodejs-pnpm6": {false, false},
+		"nodejs-pnpm":  {true, false},
+		"nodejs-pnpm6": {true, false},
 	}
 
 	tests := make([]test, len(packageManagers))
@@ -382,7 +383,7 @@ func Test_CanPrune(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.Join("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("../../../examples/basic"),
 			want:     wants[packageManager.Name].want,
 			wantErr:  wants[packageManager.Name].wantErr,
 		}

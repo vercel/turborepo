@@ -3,13 +3,14 @@ title: Turborepo 0.4.0
 date: 2021/04/02
 description: Turborepo 0.4.0 introduces 10x faster hashing, pruned workspaces with sparse installs, a new pipeline configuration API, and improved cache control.
 tag: web development
+ogImage: /images/blog/joining-vercel/twitter-card.png
 ---
 
 # Turborepo 0.4.0
 
-import { Authors } from '../../components/Authors'
+import { Authors } from "../../components/Authors";
 
-<Authors authors={['jaredpalmer']} />
+<Authors authors={["jaredpalmer"]} />
 
 I'm excited to announce the release of Turborepo v0.4.0!
 
@@ -21,7 +22,7 @@ I'm excited to announce the release of Turborepo v0.4.0!
 
 ## Rewritten in Go
 
-Although I initially prototyped turbo in TypeScript, it became clear that certain items on the roadmap would require better performance. After around a month or so of work, I'm excited to finally release Go version of the `turbo` CLI. Not only does it boot in a milliseconds, but the new Go implementation is somewhere between 10x and 100x faster at hashing than the Node.js implementation. With this new foundation (and some features you're about to read about), Turborepo can now scale to intergalactic sized projects while remaining blazing fast all thanks to Go's awesome concurrency controls.
+Although I initially prototyped `turbo` in TypeScript, it became clear that certain items on the roadmap would require better performance. After around a month or so of work, I'm excited to finally release Go version of the `turbo` CLI. Not only does it boot in a milliseconds, but the new Go implementation is somewhere between 10x and 100x faster at hashing than the Node.js implementation. With this new foundation (and some features you're about to read about), Turborepo can now scale to intergalactic sized projects while remaining blazing fast all thanks to Go's awesome concurrency controls.
 
 ## Better Hashing
 
@@ -83,7 +84,7 @@ Let's look at how to use `turbo prune` inside of Docker.
 FROM node:alpine AS base
 RUN apk update && apk add git
 
-## Globally install turbo
+## Globally install `turbo`
 RUN npm i -g turbo
 
 # Prune the workspace for the `frontend` app
@@ -136,7 +137,7 @@ Here's how it works:
   "turbo": {
     "pipeline": {
       "build": {
-        // This `^` tells turbo that this pipeline target relies on a topological target being completed.
+        // This `^` tells `turbo` that this pipeline target relies on a topological target being completed.
         // In english, this reads as: "this package's `build` command depends on its dependencies' or
         // devDependencies' `build` command being completed"
         "dependsOn": ["^build"]
@@ -147,8 +148,7 @@ Here's how it works:
         "dependsOn": ["lint", "build"]
       },
       "lint": {},
-      "dev": {},
-
+      "dev": {}
     }
   }
 }
@@ -158,7 +158,7 @@ The above config would then be interpreted by `turbo` to optimally schedule exec
 
 What's that actually mean? In the past (like Lerna and Nx), `turbo` could only run tasks in topological order. With the addition of pipelines, `turbo` now constructs a topological "action" graph in addition to the actual dependency graph which it uses to determine the order in which tasks should be executed with maximum concurrency. The end result is that you no longer waste idle CPU time waiting around for stuff to finish (i.e. no more waterfalls).
 
-![Turborepo scheduler](https://images.ctfassets.net/cthugtr3knc8/13nXE2X372pP1aougbSsR6/d3601f6f25e3ff87977e996b1ec76bb5/turbo-vs-lerna-execution.png)
+![Turborepo scheduler](/images/blog/turbo-0-4-0/turbo-vs-lerna-execution.png)
 
 ## Improved Cache Control
 
@@ -199,13 +199,13 @@ but in later releases these will be overridable on per-package basis._
 I know this was a lot, but there's even more to come. Here's what's up next on the Turborepo roadmap.
 
 - A landing page!
-- [Remote caching w/ `@turborepo/server`](https://twitter.com/jaredpalmer/status/1359627800840462341?s=20)
+- [Remote caching w/ `@turborepo/server`](https://twitter.com/jaredpalmer/status/1359627800840462341)
 - Build scans, telemetry, and metrics and dependency and task graph visualization
-- [Desktop Console UI](https://twitter.com/jaredpalmer/status/1360315387372572672?s=20)
+- [Desktop Console UI](https://twitter.com/jaredpalmer/status/1360315387372572672)
 - Intelligent `watch` mode
 - Official build rules for TypeScript, React, Jest, Node.js, Docker, Kubernetes, and more
 
 ## Credits
 
-- [Iheanyi Ekechukwu](https://twitter.com/kwuchu "Iheanyi Ekechukwu Twitter") for guiding me through the Go ecosystem
-- [Miguel Oller](https://twitter.com/ollermi) and the team from [Makeswift](http://makeswift.com/) for iterating on the new `prune` command
+- [Iheanyi Ekechukwu](https://twitter.com/kwuchu) for guiding me through the Go ecosystem
+- [Miguel Oller](https://twitter.com/ollermi) and the team from [Makeswift](https://www.makeswift.com/) for iterating on the new `prune` command

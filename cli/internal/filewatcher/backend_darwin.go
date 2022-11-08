@@ -14,8 +14,9 @@ import (
 
 	"github.com/fsnotify/fsevents"
 	"github.com/hashicorp/go-hclog"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/doublestar"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 type fseventsBackend struct {
@@ -61,13 +62,13 @@ var (
 
 // AddRoot starts watching a new directory hierarchy. Events matching the provided excludePatterns
 // will not be forwarded.
-func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...string) error {
+func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsoluteSystemPath, excludePatterns ...string) error {
 	// We need to resolve the real path to the hierarchy that we are going to watch
 	realRoot, err := realpath.Realpath(someRoot.ToString())
 	if err != nil {
 		return err
 	}
-	root := fs.AbsolutePathFromUpstream(realRoot)
+	root := fs.AbsoluteSystemPathFromUpstream(realRoot)
 	dev, err := fsevents.DeviceForPath(root.ToString())
 	if err != nil {
 		return err
@@ -116,7 +117,7 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 				// back to the path we were provided since that's what the caller will
 				// expect in terms of event paths.
 				watchRootRelativePath := eventPath[len(realRoot):]
-				processedEventPath := someRoot.Join(watchRootRelativePath)
+				processedEventPath := someRoot.UntypedJoin(watchRootRelativePath)
 
 				// 3. Compare the event to all exclude patterns, short-circuit if we know
 				// we are not watching this file.
@@ -145,13 +146,19 @@ func (f *fseventsBackend) AddRoot(someRoot fs.AbsolutePath, excludePatterns ...s
 	return nil
 }
 
-func waitForCookie(root fs.AbsolutePath, events <-chan []fsevents.Event, timeout time.Duration) error {
-	cookiePath := root.Join(".turbo-cookie")
+func waitForCookie(root turbopath.AbsoluteSystemPath, events <-chan []fsevents.Event, timeout time.Duration) error {
+	// This cookie needs to be in a location that we're watching, and at this point we can't guarantee
+	// what the root is, or if something like "node_modules/.cache/turbo" would make sense. As a compromise, ensure
+	// that we clean it up even in the event of a failure.
+	cookiePath := root.UntypedJoin(".turbo-cookie")
 	if err := cookiePath.WriteFile([]byte("cookie"), 0755); err != nil {
 		return err
 	}
 	expected := cookiePath.ToString()[1:] // trim leading slash
 	if err := waitForEvent(events, expected, fsevents.ItemCreated, timeout); err != nil {
+		// Attempt to not leave the cookie file lying around.
+		// Ignore the error, since there's not much we can do with it.
+		_ = cookiePath.Remove()
 		return err
 	}
 	if err := cookiePath.Remove(); err != nil {

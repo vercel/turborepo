@@ -2,189 +2,148 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/spf13/pflag"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"gotest.tools/v3/assert"
 )
 
-func backupExistingConfig(t *testing.T) fs.AbsolutePath {
-	t.Helper()
-	path, err := createUserConfigPath()
-	if err != nil {
-		t.Fatalf("failed to get user config path: %v", err)
-	}
-	configDir := path.Dir()
-	if configDir.DirExists() {
-		backup := fs.AbsolutePathFromUpstream(t.TempDir()).Join("config_test")
-		if err := configDir.Rename(backup); err != nil {
-			t.Fatalf("failed to backup %v to %v: %v", configDir, backup, err)
-		}
-		t.Cleanup(func() {
-			// don't have a live testing instance here, use panic instead
-			if err := configDir.Remove(); err != nil {
-				panic(fmt.Sprintf("failed to remove test config dir %v: %v", configDir, err))
-			}
-			if err := backup.Rename(configDir); err != nil {
-				panic(fmt.Sprintf("failed to restore %v from %v", configDir, backup))
-			}
-		})
-	}
-	return path
-}
-
-func Test_UserConfigPath(t *testing.T) {
-	// XDG is not filesystem aware. Clean up first.
-	path := backupExistingConfig(t)
-
-	getConfigPath, getConfigPathErr := getUserConfigPath()
-	if getConfigPathErr != nil {
-		t.Errorf("failed to run getUserConfigPath: %v", getConfigPathErr)
-	}
-	// We just cleaned up the existing config, if it existed.
-	// We should not currenctly have one
-	if getConfigPath != "" {
-		t.Fatalf("expected to not find a config file, got %v", getConfigPath)
-	}
-
-	// The main thing we want to do is make sure that we don't have side effects.
-	// We know where it would attempt to create a directory already.
-	getConfigPath = path
-
-	getConfigDir := getConfigPath.Dir()
-	getCheck, _ := os.Stat(getConfigDir.ToString())
-	if getCheck != nil {
-		t.Error("getUserConfigPath() had side effects.")
-	}
-
-	createConfigPath, createErr := createUserConfigPath()
-	if createErr != nil {
-		t.Errorf("createUserConfigPath() errored: %v.", createErr)
-	}
-	createConfigDir := createConfigPath.Dir()
-	createCheck, _ := os.Stat(createConfigDir.ToString())
-	if createCheck == nil {
-		t.Error("createUserConfigPath() did not create the path.")
-	}
-}
-
 func TestReadRepoConfigWhenMissing(t *testing.T) {
-	testDir := fs.AbsolutePath(t.TempDir())
+	testDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
 
-	config, err := ReadRepoConfigFile(testDir)
+	config, err := ReadRepoConfigFile(testDir, flags)
 	if err != nil {
 		t.Errorf("got error reading non-existent config file: %v, want <nil>", err)
 	}
-	if config != nil {
-		t.Errorf("got config value %v, wanted <nil>", config)
+	if config == nil {
+		t.Error("got <nil>, wanted config value")
+	}
+}
+
+func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
+	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
+
+	teamID := "some-id"
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamId":"%v"}`, teamID)), 0644), "WriteFile")
+	slug := "my-team-slug"
+	assert.NilError(t, flags.Set("team", slug), "flags.Set")
+	apiURL := "http://my-login-url"
+	assert.NilError(t, flags.Set("api", apiURL), "flags.Set")
+
+	config, err := ReadRepoConfigFile(testConfigFile, flags)
+	if err != nil {
+		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
+	}
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.TeamID != "" {
+		t.Errorf("TeamID got %v, want <empty string>", remoteConfig.TeamID)
+	}
+	if remoteConfig.TeamSlug != slug {
+		t.Errorf("TeamSlug got %v, want %v", remoteConfig.TeamSlug, slug)
+	}
+	if remoteConfig.APIURL != apiURL {
+		t.Errorf("APIURL got %v, want %v", remoteConfig.APIURL, apiURL)
 	}
 }
 
 func TestRepoConfigIncludesDefaults(t *testing.T) {
-	testDir := fs.AbsolutePath(t.TempDir())
+	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
 
-	customConfig := &TurborepoConfig{
-		TeamSlug: "my-team",
-	}
+	expectedTeam := "my-team"
 
-	initialWriteErr := WriteRepoConfigFile(testDir, customConfig)
-	if initialWriteErr != nil {
-		t.Errorf("Failed to set up test: %v", initialWriteErr)
-	}
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
 
-	config, err := ReadRepoConfigFile(testDir)
+	config, err := ReadRepoConfigFile(testConfigFile, flags)
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
 
-	defaultConfig := defaultRepoConfig()
-	if config.ApiUrl != defaultConfig.ApiUrl {
-		t.Errorf("api url got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.APIURL != _defaultAPIURL {
+		t.Errorf("api url got %v, want %v", remoteConfig.APIURL, _defaultAPIURL)
 	}
-	if config.TeamSlug != customConfig.TeamSlug {
-		t.Errorf("team slug got %v, want %v", config.TeamSlug, customConfig.TeamSlug)
+	if remoteConfig.TeamSlug != expectedTeam {
+		t.Errorf("team slug got %v, want %v", remoteConfig.TeamSlug, expectedTeam)
 	}
 }
 
 func TestWriteRepoConfig(t *testing.T) {
-	testDir := fs.AbsolutePath(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	testConfigFile := repoRoot.UntypedJoin(".turbo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddRepoConfigFlags(flags)
 
-	initial := &TurborepoConfig{}
-	initial.TeamSlug = "my-team"
-	err := WriteRepoConfigFile(testDir, initial)
-	if err != nil {
-		t.Errorf("WriteRepoConfigFile got %v, want <nil>", err)
-	}
+	expectedTeam := "my-team"
 
-	config, err := ReadRepoConfigFile(testDir)
+	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
+	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
+
+	initial, err := ReadRepoConfigFile(testConfigFile, flags)
+	assert.NilError(t, err, "GetRepoConfig")
+	// setting the teamID should clear the slug, since it may have been from an old team
+	expectedTeamID := "my-team-id"
+	err = initial.SetTeamID(expectedTeamID)
+	assert.NilError(t, err, "SetTeamID")
+
+	config, err := ReadRepoConfigFile(testConfigFile, flags)
 	if err != nil {
 		t.Errorf("ReadRepoConfig err got %v, want <nil>", err)
 	}
 
-	if config.TeamSlug != initial.TeamSlug {
-		t.Errorf("TeamSlug got %v want %v", config.TeamSlug, initial.TeamSlug)
+	remoteConfig := config.GetRemoteConfig("")
+	if remoteConfig.TeamSlug != "" {
+		t.Errorf("Expected TeamSlug to be cleared, got %v", remoteConfig.TeamSlug)
 	}
-	defaultConfig := defaultRepoConfig()
-	if config.ApiUrl != defaultConfig.ApiUrl {
-		t.Errorf("ApiUrl got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
-	}
-}
-
-func TestReadUserConfigWhenMissing(t *testing.T) {
-	// Make sure it actually doesn't exist first.
-	path, _ := getUserConfigPath()
-	if path.FileExists() {
-		// remove the file.
-		err := path.Remove()
-		if err != nil {
-			t.Error("User config path unable to be removed.")
-		}
-	}
-
-	// Proceed with the test.
-	config, err := ReadUserConfigFile()
-	if err != nil {
-		t.Errorf("ReadUserConfig err got %v, want <nil>", err)
-	}
-	if config != nil {
-		t.Errorf("ReadUserConfig on non-existent file got %v, want <nil>", config)
+	if remoteConfig.TeamID != expectedTeamID {
+		t.Errorf("TeamID got %v, want %v", remoteConfig.TeamID, expectedTeamID)
 	}
 }
 
 func TestWriteUserConfig(t *testing.T) {
-	initial := defaultUserConfig()
-	initial.Token = "my-token"
-	initial.ApiUrl = "https://api.vercel.com" // should be overridden
+	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddUserConfigFlags(flags)
+	// Non-existent config file should get empty values
+	userConfig, err := ReadUserConfigFile(configPath, flags)
+	assert.NilError(t, err, "readUserConfigFile")
+	assert.Equal(t, userConfig.Token(), "")
+	assert.Equal(t, userConfig.path, configPath)
 
-	err := WriteUserConfigFile(initial)
-	if err != nil {
-		t.Errorf("WriteUserConfigFile err got %v, want <nil>", err)
-	}
+	expectedToken := "my-token"
+	err = userConfig.SetToken(expectedToken)
+	assert.NilError(t, err, "SetToken")
 
-	config, err := ReadUserConfigFile()
-	if err != nil {
-		t.Errorf("ReadUserConfig err got %v, want <nil>", err)
-	}
-	if config.Token != initial.Token {
-		t.Errorf("Token got %v want %v", config.Token, initial.Token)
-	}
+	config, err := ReadUserConfigFile(configPath, flags)
+	assert.NilError(t, err, "readUserConfigFile")
+	assert.Equal(t, config.Token(), expectedToken)
 
-	// Verify that our legacy ApiUrl was upgraded
-	defaultConfig := defaultUserConfig()
-	if config.ApiUrl != defaultConfig.ApiUrl {
-		t.Errorf("ApiUrl got %v, want %v", config.ApiUrl, defaultConfig.ApiUrl)
-	}
+	err = config.Delete()
+	assert.NilError(t, err, "deleteConfigFile")
+	assert.Equal(t, configPath.FileExists(), false, "config file should be deleted")
 
-	err = DeleteUserConfigFile()
-	if err != nil {
-		t.Errorf("DeleteUserConfigFile err got %v, want <nil>", err)
-	}
+	final, err := ReadUserConfigFile(configPath, flags)
+	assert.NilError(t, err, "readUserConfigFile")
+	assert.Equal(t, final.Token(), "")
+	assert.Equal(t, configPath.FileExists(), false, "config file should be deleted")
+}
 
-	missing, err := ReadUserConfigFile()
-	if err != nil {
-		t.Errorf("ReadUserConfig err got %v, want <nil>", err)
-	}
-	if missing != nil {
-		t.Errorf("reading deleted config got %v, want <nil>", missing)
-	}
+func TestUserConfigFlags(t *testing.T) {
+	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
+	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
+	AddUserConfigFlags(flags)
+
+	assert.NilError(t, flags.Set("token", "my-token"), "set flag")
+	userConfig, err := ReadUserConfigFile(configPath, flags)
+	assert.NilError(t, err, "readUserConfigFile")
+	assert.Equal(t, userConfig.Token(), "my-token")
+	assert.Equal(t, userConfig.path, configPath)
 }

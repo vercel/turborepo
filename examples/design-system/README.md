@@ -2,7 +2,7 @@
 
 This guide explains how to use a React design system starter powered by:
 
-- 🏎 [Turborepo](https://turborepo.org) — High-performance build system for Monorepos
+- 🏎 [Turborepo](https://turbo.build/repo) — High-performance build system for Monorepos
 - 🚀 [React](https://reactjs.org/) — JavaScript library for user interfaces
 - 🛠 [Tsup](https://github.com/egoist/tsup) — TypeScript bundler powered by esbuild
 - 📖 [Storybook](https://storybook.js.org/) — UI component environment powered by Vite
@@ -15,12 +15,12 @@ As well as a few others tools preconfigured:
 - [Changesets](https://github.com/changesets/changesets) for managing versioning and changelogs
 - [GitHub Actions](https://github.com/changesets/action) for fully automated package publishing
 
-## Getting Started
+## Using this example
 
-Clone the design system example locally or [from GitHub](https://github.com/vercel/turborepo/tree/main/examples/design-system):
+Clone the design system example locally or [from GitHub](https://github.com/vercel/turbo/tree/main/examples/design-system):
 
 ```bash
-npx degit vercel/turborepo/examples/design-system design-system
+npx degit vercel/turbo/examples/design-system design-system
 cd design-system
 yarn install
 git init . && git add . && git commit -m "Init"
@@ -36,7 +36,7 @@ git init . && git add . && git commit -m "Init"
 
 ## Turborepo
 
-[Turborepo](https://turborepo.org) is a high-performance build system for JavaScript and TypeScript codebases. It was designed after the workflows used by massive software engineering organizations to ship code at scale. Turborepo abstracts the complex configuration needed for monorepos and provides fast, incremental builds with zero-configuration remote caching.
+[Turborepo](https://turbo.build/repo) is a high-performance build system for JavaScript and TypeScript codebases. It was designed after the workflows used by massive software engineering organizations to ship code at scale. Turborepo abstracts the complex configuration needed for monorepos and provides fast, incremental builds with zero-configuration remote caching.
 
 Using Turborepo simplifes managing your design system monorepo, as you can have a single lint, build, test, and release process for all packages. [Learn more](https://vercel.com/blog/monorepos-are-changing-how-teams-build-software) about how monorepos improve your development workflow.
 
@@ -48,7 +48,7 @@ This Turborepo includes the following packages and applications:
 - `packages/@acme/core`: Core React components
 - `packages/@acme/utils`: Shared React utilities
 - `packages/@acme/tsconfig`: Shared `tsconfig.json`s used throughout the Turborepo
-- `packages/eslint-preset-acme`: ESLint preset
+- `packages/eslint-config-acme`: ESLint preset
 
 Each package and app is 100% [TypeScript](https://www.typescriptlang.org/). Yarn Workspaces enables us to "hoist" dependencies that are shared between packages to the root `package.json`. This means smaller `node_modules` folders and a better local dev experience. To install a dependency for the entire monorepo, use the `-W` workspaces flag with `yarn add`.
 

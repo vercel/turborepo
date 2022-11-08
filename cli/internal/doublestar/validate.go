@@ -12,7 +12,6 @@ import "path/filepath"
 // you might want to validate it.
 //
 // ValidatePattern assumes your pattern uses '/' as the path separator.
-//
 func ValidatePattern(s string) bool {
 	return doValidatePattern(s, '/')
 }
@@ -21,7 +20,6 @@ func ValidatePattern(s string) bool {
 // ValidatePattern if you would normally use Match() or Glob(). Use
 // ValidatePathPattern if you would normally use PathMatch(). Keep in mind,
 // Glob() requires '/' separators, even if your OS uses something else.
-//
 func ValidatePathPattern(s string) bool {
 	return doValidatePattern(s, filepath.Separator)
 }

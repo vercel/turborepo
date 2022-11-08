@@ -8,18 +8,21 @@ ogImage: /images/blog/turbo-1-2-0/twitter-card.png
 
 # Turborepo 1.2
 
-import { Authors } from '../../components/Authors'
+import { Authors } from "../../components/Authors";
+import Date from "../../components/blog/Date";
 
-<div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400">Friday, April 8th, 2022</div>
+<Date>
+  Friday, April 8th, 2022
+</Date>
 
-<Authors authors={['jaredpalmer', 'becca__z', 'gaspargarcia_', 'gsoltis']} />
+<Authors authors={["jaredpalmer", "becca__z", "gaspargarcia_", "gsoltis"]} />
 
 Since releasing Turborepo v1.1 in late January, we've seen incredible adoption and community growth:
 
-- **6.5k+** [GitHub Stars](https://github.com/vercel/turborepo)
+- **6.5k+** [GitHub Stars](https://github.com/vercel/turbo)
 - **140k+** weekly npm downloads (doubling since our [last blog post for v1.1](/blog/turbo-1-1-0))
 - **95+** OSS contributors
-- **900+** members of the [Turborepo Community Discord](https://turborepo.org/discord)
+- **900+** members of the [Turborepo Community Discord](https://turbo.build/discord)
 - **1.6 years** of Time Saved through Remote Caching on Vercel, saving more than 2.5 months every week
 
 We've further improved ergonomics, observability, and security with Turborepo v1.2 featuring:
@@ -49,7 +52,7 @@ Take a look at some examples of what you can accomplish with the new `--filter` 
 
 You can use multiple filters together to get even more granular filtering as well as combine each part of the above patterns `{}`, `[]` , `^` , and `...` to express more complex behavior.
 
-For example, if you had an app located in `./apps/web` directory with local packages used as dependencies, and a Turborepo pipeline where `test` depends on `^build` [topologically](https://turborepo.org/docs/glossary#topological-order), running:
+For example, if you had an app located in `./apps/web` directory with local packages used as dependencies, and a Turborepo pipeline where `test` depends on `^build` topologically, running:
 
 ```sh
 turbo run test --filter={./apps/web}[HEAD^1]^...
@@ -57,7 +60,7 @@ turbo run test --filter={./apps/web}[HEAD^1]^...
 
 would tell `turbo` to ensure dependencies are built and to run the `test` script in all of the local dependencies of the app located in `./apps/web`, not including that app itself, if the app has changed since HEAD^1.
 
-For more details and examples, refer to the new [filtering documentation](/docs/core-concepts/filtering).
+For more details and examples, refer to the new [filtering documentation](/repo/docs/core-concepts/monorepos/filtering).
 
 ## Debug and Automate with `--dry-run`
 
@@ -68,11 +71,13 @@ Dry runs are incredibly useful for two situations:
 - Debugging and testing run options
 - Using `turbo` filtering and task graphs for building automations
 
-<Nextra.Bleed>
+import { Bleed } from "nextra-theme-docs";
+
+<Bleed>
   <div className="lg:rounded-xl overflow-hidden">
     ![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
   </div>
-</Nextra.Bleed>
+</Bleed>
 
 We hope that this will improve visibility into what `turbo` is doing, speeding up debugging, and make it easier to leverage `turbo` in dynamic CI/CD systems.
 
@@ -90,7 +95,7 @@ To enable this feature, set the `remoteCache` options in your `turbo.json` confi
 
 ```jsonc
 {
-  "$schema": "[https://turborepo.org/schema.json](https://turborepo.org/schema.json)",
+  "$schema": "[https://turbo.build/schema.json](https://turbo.build/schema.json)",
   "remoteCache": {
     // Indicates if signature verification is enabled.
     "signature": true
@@ -112,7 +117,7 @@ To enable this feature, set the `remoteCache` options in your `turbo.json` confi
 
 ## We're hiring!
 
-The Turborepo team at [Vercel](https://vercel.com) is hiring! We're up to five core team members already this year and are looking to hire even more. We're specifically looking for full-time [Senior Build Systems Engineers](https://vercel.com/careers/senior-build-systems-engineer-turborepo-us-4383106004).
+The Turborepo team at [Vercel](https://vercel.com/) is hiring! We're up to five core team members already this year and are looking to hire even more. We're specifically looking for full-time [Senior Build Systems Engineers](https://vercel.com/careers).
 
 ## What's next?
 

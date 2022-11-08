@@ -8,7 +8,7 @@ This turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
-- `web`: a [Next.js](https://nextjs.org) app
+- `web`: a [Next.js](https://nextjs.org/) app
 - `config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
 - `database`: [Prisma](https://prisma.io/) ORM wrapper to manage & access your database
 - `tsconfig`: `tsconfig.json`s used throughout the monorepo
@@ -74,12 +74,22 @@ yarn run db:seed
 
 For further more information on migrations, seeding & more, we recommend reading through the [Prisma Documentation](https://www.prisma.io/docs/).
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turbo/examples/with-prisma with-prisma
+cd with-prisma
+yarn install
+git init . && git add . && git commit -m "Init"
+```
+
 ### Build
 
 To build all apps and packages, run the following command:
 
 ```bash
-cd my-turborepo
 yarn run build
 ```
 
@@ -88,7 +98,6 @@ yarn run build
 To develop all apps and packages, run the following command:
 
 ```bash
-cd my-turborepo
 yarn run dev
 ```
 
@@ -96,9 +105,9 @@ yarn run dev
 
 Learn more about the power of Turborepo:
 
-- [Pipelines](https://turborepo.org/docs/features/pipelines)
-- [Caching](https://turborepo.org/docs/features/caching)
-- [Remote Caching (Beta)](https://turborepo.org/docs/features/remote-caching)
-- [Scoped Tasks](https://turborepo.org/docs/features/scopes)
-- [Configuration Options](https://turborepo.org/docs/reference/configuration)
-- [CLI Usage](https://turborepo.org/docs/reference/command-line-reference)
+- [Pipelines](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
+- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
+- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
+- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
+- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
+- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)

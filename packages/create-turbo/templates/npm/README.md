@@ -1,6 +1,6 @@
-# Turborepo starter with npm
+# Turborepo starter
 
-This is an official starter turborepo.
+This is an official npm starter turborepo.
 
 ## What's inside?
 
@@ -8,8 +8,8 @@ This turborepo uses [npm](https://www.npmjs.com/) as a package manager. It inclu
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org) app
-- `web`: another [Next.js](https://nextjs.org) app
+- `docs`: a [Next.js](https://nextjs.org/) app
+- `web`: another [Next.js](https://nextjs.org/) app
 - `ui`: a stub React component library shared by both `web` and `docs` applications
 - `eslint-config-custom`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
 - `tsconfig`: `tsconfig.json`s used throughout the monorepo
@@ -23,10 +23,6 @@ This turborepo has some additional tools already setup for you:
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
-
-## Setup
-
-This repository is used in the `npx create-turbo@latest` command, and selected when choosing which package manager you wish to use with your monorepo (npm).
 
 ### Build
 
@@ -48,7 +44,7 @@ npm run dev
 
 ### Remote Caching
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.org/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
 By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
 
@@ -69,9 +65,9 @@ npx turbo link
 
 Learn more about the power of Turborepo:
 
-- [Pipelines](https://turborepo.org/docs/core-concepts/pipelines)
-- [Caching](https://turborepo.org/docs/core-concepts/caching)
-- [Remote Caching](https://turborepo.org/docs/core-concepts/remote-caching)
-- [Scoped Tasks](https://turborepo.org/docs/core-concepts/scopes)
-- [Configuration Options](https://turborepo.org/docs/reference/configuration)
-- [CLI Usage](https://turborepo.org/docs/reference/command-line-reference)
+- [Pipelines](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
+- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
+- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
+- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
+- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
+- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)

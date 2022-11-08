@@ -41,7 +41,7 @@ func (c *Command) Run(args []string) int {
 	return 0
 }
 
-func getCmd(config *config.Config, terminal cli.Ui) *cobra.Command {
+func GetCmd(config *config.Config, terminal cli.Ui) *cobra.Command {
 	var outputJSON bool
 	cmd := &cobra.Command{
 		Use:           "turbo recent",

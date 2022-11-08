@@ -9,11 +9,12 @@
     "e2e": "make e2e",
     "publish": "make publish-all",
     "format": "make fmt-go",
-    "lint": "make lint-go"
+    "lint": "make lint-go",
+    "integration-tests": "make integration-tests"
   },
   "devDependencies": {
     "copy-template-dir": "^1.4.0",
-    "esbuild": "^0.14.38",
+    "esbuild": "^0.15.0",
     "esbuild-register": "^3.3.2",
     "execa": "^5.0.0",
     "faker": "^5.1.0",
@@ -21,6 +22,8 @@
     "globby": "11.1.0",
     "ngraph.generators": "^19.3.0",
     "shelljs": "^0.8.4",
-    "uvu": "^0.5.3"
+    "tar": "6.1.11",
+    "uvu": "^0.5.3",
+    "zstd-codec": "0.1.4"
   }
 }

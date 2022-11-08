@@ -17,16 +17,16 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/spf13/pflag"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type ApiClient struct {
 	// The api's base URL
 	baseUrl      string
-	Token        string
+	token        string
 	turboVersion string
-	// Number of failed requests before we stop trying to upload/download artifacts to the remote cache
-	maxRemoteFailCount uint64
+
 	// Must be used via atomic package
 	currentFailCount uint64
 	// An http client
@@ -40,17 +40,38 @@ type ApiClient struct {
 // ErrTooManyFailures is returned from remote cache API methods after `maxRemoteFailCount` errors have occurred
 var ErrTooManyFailures = errors.New("skipping HTTP Request, too many failures have occurred")
 
+// _maxRemoteFailCount is the number of failed requests before we stop trying to upload/download
+// artifacts to the remote cache
+const _maxRemoteFailCount = uint64(3)
+
 // SetToken updates the ApiClient's Token
 func (c *ApiClient) SetToken(token string) {
-	c.Token = token
+	c.token = token
+}
+
+// RemoteConfig holds the authentication and endpoint details for the API client
+type RemoteConfig struct {
+	Token    string
+	TeamID   string
+	TeamSlug string
+	APIURL   string
+}
+
+// Opts holds values for configuring the behavior of the API client
+type Opts struct {
+	UsePreflight bool
+}
+
+// AddFlags adds flags specific to the api client to the given flagset
+func AddFlags(opts *Opts, flags *pflag.FlagSet) {
+	flags.BoolVar(&opts.UsePreflight, "preflight", false, "When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization")
 }
 
 // New creates a new ApiClient
-func NewClient(baseURL string, logger hclog.Logger, turboVersion string, teamID string, teamSlug string, maxRemoteFailCount uint64, usePreflight bool) *ApiClient {
+func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *ApiClient {
 	client := &ApiClient{
-		baseUrl:            baseURL,
-		turboVersion:       turboVersion,
-		maxRemoteFailCount: maxRemoteFailCount,
+		baseUrl:      remoteConfig.APIURL,
+		turboVersion: turboVersion,
 		HttpClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
 				Timeout: time.Duration(20 * time.Second),
@@ -61,22 +82,33 @@ func NewClient(baseURL string, logger hclog.Logger, turboVersion string, teamID 
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
-		teamID:       teamID,
-		teamSlug:     teamSlug,
-		usePreflight: usePreflight,
+		token:        remoteConfig.Token,
+		teamID:       remoteConfig.TeamID,
+		teamSlug:     remoteConfig.TeamSlug,
+		usePreflight: opts.UsePreflight,
 	}
 	client.HttpClient.CheckRetry = client.checkRetry
 	return client
 }
 
-// IsLoggedIn returns true if this ApiClient has a credential (token)
-func (c *ApiClient) IsLoggedIn() bool {
-	return c.Token != ""
+// HasUser returns true if we have credentials for a user
+func (c *ApiClient) HasUser() bool {
+	return c.token != ""
+}
+
+// IsLinked returns true if we have a user and linked team
+func (c *ApiClient) IsLinked() bool {
+	return c.HasUser() && (c.teamID != "" || c.teamSlug != "")
 }
 
 // SetTeamID sets the team parameter used on all requests by this client
 func (c *ApiClient) SetTeamID(teamID string) {
 	c.teamID = teamID
+}
+
+// GetTeamID returns the currently configured team id
+func (c *ApiClient) GetTeamID() string {
+	return c.teamID
 }
 
 func (c *ApiClient) retryCachePolicy(resp *http.Response, err error) (bool, error) {
@@ -133,7 +165,7 @@ func (c *ApiClient) checkRetry(ctx context.Context, resp *http.Response, err err
 // okToRequest returns nil if it's ok to make a request, and returns the error to
 // return to the caller if a request is not allowed
 func (c *ApiClient) okToRequest() error {
-	if atomic.LoadUint64(&c.currentFailCount) < c.maxRemoteFailCount {
+	if atomic.LoadUint64(&c.currentFailCount) < _maxRemoteFailCount {
 		return nil
 	}
 	return ErrTooManyFailures
@@ -153,7 +185,7 @@ func (c *ApiClient) doPreflight(requestURL string, requestMethod string, request
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Access-Control-Request-Method", requestMethod)
 	req.Header.Set("Access-Control-Request-Headers", requestHeaders)
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	if err != nil {
 		return nil, requestURL, fmt.Errorf("[WARNING] Invalid cache URL: %w", err)
 	}
@@ -246,7 +278,7 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("x-artifact-duration", fmt.Sprintf("%v", duration))
 	if allowAuth {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if tag != "" {
@@ -270,6 +302,23 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 // FetchArtifact attempts to retrieve the build artifact with the given hash from the
 // Remote Caching server
 func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
+	return c.getArtifact(hash, http.MethodGet)
+}
+
+// ArtifactExists attempts to determine if the build artifact with the given hash
+// exists in the Remote Caching server
+func (c *ApiClient) ArtifactExists(hash string) (*http.Response, error) {
+	return c.getArtifact(hash, http.MethodHead)
+}
+
+// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// Remote Caching server
+func (c *ApiClient) getArtifact(hash string, httpMethod string) (*http.Response, error) {
+
+	if httpMethod != http.MethodHead && httpMethod != http.MethodGet {
+		return nil, fmt.Errorf("invalid httpMethod %v, expected GET or HEAD", httpMethod)
+	}
+
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -293,9 +342,9 @@ func (c *ApiClient) FetchArtifact(hash string) (*http.Response, error) {
 		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
 	}
 
-	req, err := retryablehttp.NewRequest(http.MethodGet, requestURL, nil)
+	req, err := retryablehttp.NewRequest(httpMethod, requestURL, nil)
 	if allowAuth {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if err != nil {
@@ -346,7 +395,7 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if allowAuth {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	resp, err := c.HttpClient.Do(req)
@@ -409,7 +458,7 @@ func (c *ApiClient) GetTeams() (*TeamsResponse, error) {
 
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -442,7 +491,7 @@ func (c *ApiClient) GetTeam(teamID string) (*Team, error) {
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -494,7 +543,7 @@ func (c *ApiClient) GetUser() (*UserResponse, error) {
 
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -523,7 +572,7 @@ type statusResponse struct {
 	Status string `json:"status"`
 }
 
-// GetCachingStatus returns the server's perspective on whether or not remove caching
+// GetCachingStatus returns the server's perspective on whether or not remote caching
 // requests will be allowed.
 func (c *ApiClient) GetCachingStatus() (util.CachingStatus, error) {
 	values := make(url.Values)
@@ -534,7 +583,7 @@ func (c *ApiClient) GetCachingStatus() (util.CachingStatus, error) {
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return util.CachingStatusDisabled, err

@@ -8,11 +8,11 @@ This Turborepo includes the following:
 
 ### Apps and Packages
 
-- `docs`: A placeholder documentation site powered by [Next.js](https://nextjs.org)
+- `docs`: A placeholder documentation site powered by [Next.js](https://nextjs.org/)
 - `@acme/core`: core React components
 - `@acme/utils`: shared React utilities
 - `@acme/tsconfig`: shared `tsconfig.json`s used throughout the monorepo
-- `eslint-preset-acme`: ESLint preset
+- `eslint-config-acme`: ESLint preset
 
 Each package and app is 100% [TypeScript](https://www.typescriptlang.org/).
 
@@ -29,8 +29,8 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turborepo/examples/with-changesets design-system
-cd design-system
+npx degit vercel/turbo/examples/with-changesets with-changesets
+cd with-changesets
 yarn install
 git init . && git add . && git commit -m "Init"
 ```
