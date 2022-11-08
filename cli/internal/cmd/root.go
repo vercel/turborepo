@@ -84,21 +84,21 @@ func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedA
 	if parsedArgs.Trace != "" {
 		cleanup, err := createTraceFile(parsedArgs.Trace)
 		if err != nil {
-			return fmt.Errorf("Failed to create trace file: %v\n", err)
+			return fmt.Errorf("failed to create trace file: %v", err)
 		}
 		helper.RegisterCleanup(cleanup)
 	}
 	if parsedArgs.Heap != "" {
 		cleanup, err := createHeapFile(parsedArgs.Heap)
 		if err != nil {
-			return fmt.Errorf("Failed to create heap file: %v\n", err)
+			return fmt.Errorf("failed to create heap file: %v", err)
 		}
 		helper.RegisterCleanup(cleanup)
 	}
 	if parsedArgs.CPUProfile != "" {
 		cleanup, err := createCpuprofileFile(parsedArgs.CPUProfile)
 		if err != nil {
-			return fmt.Errorf("Failed to create CPU profile file: %v\n", err)
+			return fmt.Errorf("failed to create CPU profile file: %v", err)
 		}
 		helper.RegisterCleanup(cleanup)
 	}
