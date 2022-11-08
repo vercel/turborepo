@@ -1,6 +1,8 @@
 name: Test
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -10,9 +12,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu-latest-16-core-oss
-          - name: macos-latest
-          - name: windows-latest
+          - name: ubuntu
+          - name: macos
+          - name: windows
     runs-on: ubuntu-latest
     name: test - ${{ matrix.os.name }}
 
@@ -24,10 +26,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu-latest
-          - name: macos-latest
-          # Temporarily disable windows bench due to consistent timeouts
-          # - name: windows-latest
+          - name: ubuntu
+          - name: macos
+          - name: windows
     runs-on: ubuntu-latest
     name: test-bench - ${{ matrix.os.name }}
 

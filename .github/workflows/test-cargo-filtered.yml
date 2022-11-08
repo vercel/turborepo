@@ -34,13 +34,23 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu-latest-16-core-oss
+          - name: ubuntu
+            runner: ubuntu-latest-16-core-oss
             nextest: linux
-          - name: macos-latest
+          - name: macos
+            runner: macos-latest
             nextest: mac
-          - name: windows-latest
+          - name: windows
+            # Using the `windows-2019` runner instead of latest(`windows-2022`)
+            # because the build was last known working on that version of runner and
+            # `prebuild` fails to find the 2022 Visual Studio install because
+            # it's internally using an old version of `node-gyp`, see
+            # https://github.com/prebuild/prebuild/issues/286
+            #
+            # ref: https://github.com/MadLittleMods/node-usb-detection/blob/ae2fc13e9ad6a09927f4516358dea4c4ca2ceb92/.github/workflows/ci.yml#L18
+            runner: windows-2019
             nextest: windows-tar
-    runs-on: ${{ matrix.os.name }}
+    runs-on: ${{ matrix.os.runner }}
     name: test - ${{ matrix.os.name }}
 
     steps:
@@ -81,6 +91,7 @@ jobs:
         run: |
           pnpx node-gyp install
           choco install protoc -y
+          echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
         if: matrix.os.name == 'windows-latest'
 
       - name: Install tests dependencies
@@ -107,14 +118,17 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu-latest
+          - name: ubuntu
+            runner: ubuntu-latest-16-core-oss
             nextest: linux
-          - name: macos-latest
+          - name: macos
+            runner: macos-latest
             nextest: mac
           # Temporarily disable windows bench due to consistent timeouts
-          # - name: windows-latest
+          # - name: windows
+          #   runner: windows-2019
           #   nextest: windows-tar
-    runs-on: ${{ matrix.os.name }}
+    runs-on: ${{ matrix.os.runner }}
     name: test-bench - ${{ matrix.os.name }}
 
     steps:
