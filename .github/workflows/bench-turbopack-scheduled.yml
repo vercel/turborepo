@@ -1,12 +1,12 @@
-name: Custom matrix next-dev Benchmark
+name: Benchmark other Bundlers
 
 on:
-  workflow_dispatch:
-    inputs:
-      count:
-        description: "Modules count"
-        default: "10000"
-        required: true
+  schedule:
+    # Run every week on Sunday 12:42
+    - cron: "42 12 * * 0"
+  pull_request:
+    # Runs on PRs from bench/ prefixed branches
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,27 +15,51 @@ env:
 
 jobs:
   bench:
+    if: github.event_name == 'schedule' || startsWith(github.head_ref, 'bench/')
     strategy:
       fail-fast: false
       matrix:
         bench:
-          - name: Turbopack
-            type: SSR
-          - name: Turbopack
-            type: CSR
-          - name: Next.js 12
-            type: SSR
-          - name: Next.js 11
-            type: SSR
-          - name: Vite
-            type: CSR
-          - name: Parcel
-            type: CSR
-          - name: Webpack
-            type: CSR
+          # One of Turbopack CSR or SSR with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This measures Next.js 12
+          - name: next 12
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 12)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Next.js 11
+          - name: next 11
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 11)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Vite
+          - name: vite
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Vite)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Parcel
+          - name: parcel
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Parcel)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
+          # This measures Webpack
+          - name: webpack
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack CSR/1000|Webpack)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
 
     runs-on: ubuntu-latest-8-core-oss
-    name: bench - ${{ matrix.bench.name }} ${{ matrix.bench.type }}
+    name: bench - ${{ matrix.bench.name }}
 
     steps:
       - uses: actions/checkout@v3
@@ -44,22 +68,20 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: benchmark-next-dev
+          key: benchmark-${{ matrix.bench.cache_key }}
 
       - name: Clear benchmarks
         run: rm -rf target/criterion
 
       - name: Run cargo bench
         uses: actions-rs/cargo@v1
-        timeout-minutes: 120
+        timeout-minutes: 180
         env:
-          TURBOPACK_BENCH_BUNDLERS: all
-          TURBOPACK_BENCH_COUNTS: 1000,${{ github.event.inputs.count }}
+          TURBOPACK_BENCH_BUNDLERS: ${{ matrix.bench.TURBOPACK_BENCH_BUNDLERS }}
+          TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
         with:
           command: bench
-          # Turbopack with 1000 modules is benchmarked in every run
-          # to create a baseline result for normalization (should the runners performance vary between jobs)
-          args: -p next-dev -- "(Turbopack ${{ matrix.bench.type }}/1000|${{ matrix.bench.name }} ${{ matrix.bench.type }}/${{ github.event.inputs.count }})"
+          args: ${{ matrix.bench.args }}
 
       - name: Install critcmp
         if: always()
@@ -80,7 +102,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: custom ${{ matrix.bench.name }} ${{ matrix.bench.type }}
+          name: ${{ matrix.bench.name }}
           path: raw.json
 
       # This avoids putting this data into the rust-cache
@@ -90,7 +112,7 @@ jobs:
   commit_results:
     name: Commit benchmark-data
     needs: bench
-    if: always()
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Get current date
