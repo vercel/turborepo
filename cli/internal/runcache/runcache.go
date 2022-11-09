@@ -17,6 +17,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
+	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
@@ -153,8 +154,8 @@ type TaskCache struct {
 	cacheResults      map[string]interface{}
 }
 
-// RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
-// if successful.
+// RestoreOutputs attempts to restore output for the corresponding task from the cache.
+// Returns true if successful.
 func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		tc.cacheResults["cacheRead"] = "disabled"
@@ -239,7 +240,10 @@ func (fwc *fileWriterCloser) Close() error {
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
-func (tc *TaskCache) OutputWriter() (io.WriteCloser, error) {
+func (tc *TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
+	// an os.Stdout wrapper that will add prefixes before printing to stdout
+	stdoutWriter := logstreamer.NewPrettyStdoutWriter(prefix)
+
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{stdoutWriter}, nil
 	}
