@@ -215,7 +215,9 @@ impl TaskScope {
     #[must_use]
     fn increment_unfinished_tasks_internal(&self) -> bool {
         // crossing the 0 to 1 boundary requires an update
-        self.unfinished_tasks.fetch_add(1, Ordering::AcqRel) == 0
+        // SAFETY: This need to sync with the unfinished_tasks load in
+        // update_unfinished_state
+        self.unfinished_tasks.fetch_add(1, Ordering::Release) == 0
     }
 
     pub fn decrement_unfinished_tasks(&self, backend: &MemoryBackend) {
@@ -227,7 +229,10 @@ impl TaskScope {
     /// Returns true if the state requires an update
     #[must_use]
     fn decrement_unfinished_tasks_internal(&self) -> bool {
-        self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel) == 1
+        // crossing the 0 to 1 boundary requires an update
+        // SAFETY: This need to sync with the unfinished_tasks load in
+        // update_unfinished_state
+        self.unfinished_tasks.fetch_sub(1, Ordering::Release) == 1
     }
 
     pub fn add_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
@@ -269,7 +274,7 @@ impl TaskScope {
     fn update_unfinished_state(&self, backend: &MemoryBackend) {
         let mut state = self.state.lock();
         // we need to load the atomic under the lock to ensure consistency
-        let count = self.unfinished_tasks.load(Ordering::Acquire);
+        let count = self.unfinished_tasks.load(Ordering::SeqCst);
         let has_unfinished_tasks = count > 0;
         let mut to_update = Vec::new();
         if state.has_unfinished_tasks != has_unfinished_tasks {

@@ -40,7 +40,6 @@ pub mod debug;
 mod display;
 mod id;
 mod id_factory;
-mod infinite_vec;
 mod join_iter_ext;
 mod magic_any;
 mod manager;

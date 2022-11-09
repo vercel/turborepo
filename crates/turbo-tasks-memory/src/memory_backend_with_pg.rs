@@ -6,7 +6,7 @@ use std::{
     mem::{replace, take},
     pin::Pin,
     sync::{
-        atomic::{fence, AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicUsize, Ordering},
         Mutex, MutexGuard,
     },
     time::Duration,
@@ -24,7 +24,7 @@ use turbo_tasks::{
         ActivateResult, DeactivateResult, PersistResult, PersistTaskState, PersistedGraph,
         PersistedGraphApi, ReadTaskState, TaskCell, TaskData,
     },
-    util::{IdFactory, InfiniteVec, SharedError},
+    util::{IdFactory, NoMoveVec, SharedError},
     RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
 
@@ -116,10 +116,10 @@ enum BackgroundJob {
 
 pub struct MemoryBackendWithPersistedGraph<P: PersistedGraph> {
     pub pg: P,
-    tasks: InfiniteVec<Option<Task>>,
+    tasks: NoMoveVec<Task>,
     cache: flurry::HashMap<PersistentTaskType, TaskId>,
     background_job_id_factory: IdFactory<BackendJobId>,
-    background_jobs: InfiniteVec<Option<BackgroundJob>>,
+    background_jobs: NoMoveVec<BackgroundJob>,
     only_known_to_memory_tasks: flurry::HashSet<TaskId>,
     /// Tasks that were selected to persist
     persist_queue1: ConcurrentQueue<TaskId>,
@@ -145,10 +145,10 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
         let persist_job = background_job_id_factory.get();
         Self {
             pg,
-            tasks: InfiniteVec::new_allocate_initial(),
+            tasks: NoMoveVec::new(),
             cache: flurry::HashMap::new(),
             background_job_id_factory,
-            background_jobs: InfiniteVec::new_allocate_initial(),
+            background_jobs: NoMoveVec::new(),
             only_known_to_memory_tasks: flurry::HashSet::new(),
             persist_queue1: ConcurrentQueue::unbounded(),
             persist_queue1_queued: flurry::HashSet::new(),
@@ -171,7 +171,7 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
         task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> (MutexGuard<'_, TaskState>, &Task) {
-        let task_info = self.tasks.get(*task).as_ref().unwrap();
+        let task_info = self.tasks.get(*task).unwrap();
         let mut state = task_info.task_state.lock().unwrap();
         self.ensure_task_initialized(task, task_info, &mut state, turbo_tasks);
         (state, task_info)
@@ -182,7 +182,7 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
         task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> (MutexGuard<'_, TaskState>, &Task) {
-        let task_info = self.tasks.get(*task).as_ref().unwrap();
+        let task_info = self.tasks.get(*task).unwrap();
         loop {
             let mut delayed_activate = Vec::new();
             let mut state = task_info.task_state.lock().unwrap();
@@ -365,7 +365,7 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
         let id = self.background_job_id_factory.get();
         // SAFETY: It's a fresh id
         unsafe {
-            self.background_jobs.set(*id, Some(job));
+            self.background_jobs.insert(*id, job);
         }
         turbo_tasks.schedule_backend_background_job(id);
     }
@@ -447,7 +447,7 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
         delayed_activate: &mut Vec<TaskId>,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let task_info = self.tasks.get(*task).as_ref().unwrap();
+        let task_info = self.tasks.get(*task).unwrap();
         let prev = task_info.active_parents.fetch_add(by, Ordering::Relaxed);
         if prev == 0 {
             // only the connect() call that increases from 0 is responsible for activating
@@ -599,7 +599,7 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
         delayed_deactivate: &mut Vec<TaskId>,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let task_info = self.tasks.get(*task).as_ref().unwrap();
+        let task_info = self.tasks.get(*task).unwrap();
         let prev = task_info.active_parents.fetch_sub(by, Ordering::Relaxed);
         if prev == by {
             // count reached zero
@@ -988,7 +988,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
     }
 
     fn get_task_description(&self, task: TaskId) -> String {
-        let task_info = self.tasks.get(*task).as_ref().unwrap();
+        let task_info = self.tasks.get(*task).unwrap();
         format!("{:?}", task_info.task_type)
     }
 
@@ -1178,8 +1178,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             });
         }
         // SAFETY: We are the only owner of this id
-        let job = unsafe { self.background_jobs.get_mut(*id) }.take();
-        fence(Ordering::Release);
+        let job = unsafe { self.background_jobs.take(*id) };
         unsafe {
             self.background_job_id_factory.reuse(id);
         }
@@ -1545,7 +1544,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         let task = turbo_tasks.get_fresh_task_id();
         // SAFETY: It's a fresh task id
         unsafe {
-            self.tasks.set(*task, Some(new_task));
+            self.tasks.insert(*task, new_task);
         }
         match cache.try_insert(task_type, task) {
             Ok(_) => {
@@ -1559,7 +1558,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             Err(e) => {
                 // SAFETY: We are still the only owner of this task and id
                 unsafe {
-                    self.tasks.set(*task, None);
+                    self.tasks.remove(*task);
                     turbo_tasks.reuse_task_id(task);
                 }
                 let task = *e.current;
@@ -1594,7 +1593,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         let task = turbo_tasks.get_fresh_task_id();
         // SAFETY: It's a fresh task id
         unsafe {
-            self.tasks.set(*task, Some(new_task));
+            self.tasks.insert(*task, new_task);
         }
         self.only_known_to_memory_tasks.pin().insert(task);
         task
@@ -1619,7 +1618,7 @@ impl<'a, P: PersistedGraph> PersistedGraphApi for MemoryBackendPersistedGraphApi
         let task = self.turbo_tasks.get_fresh_task_id();
         // SAFETY: It's a fresh task id
         unsafe {
-            self.backend.tasks.set(*task, Some(new_task));
+            self.backend.tasks.insert(*task, new_task);
         }
         match cache.try_insert(task_type, task) {
             Ok(_) => task,
@@ -1633,7 +1632,7 @@ impl<'a, P: PersistedGraph> PersistedGraphApi for MemoryBackendPersistedGraphApi
     }
 
     fn lookup_task_type(&self, id: TaskId) -> &PersistentTaskType {
-        let task = self.backend.tasks.get(*id).as_ref().unwrap();
+        let task = self.backend.tasks.get(*id).unwrap();
         match &task.task_type {
             TaskType::Persistent(ty) => ty,
             _ => panic!("lookup_task_type should only be used for PersistentTaskType"),
