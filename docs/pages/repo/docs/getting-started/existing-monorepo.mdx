@@ -25,7 +25,6 @@ You can configure workspaces any way you want, but a common folder structure exa
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
-<div/>
 Specify your `workspaces` in your monorepo's root `package.json` file:
 
 ```json filename="package.json"
@@ -36,7 +35,6 @@ Specify your `workspaces` in your monorepo's root `package.json` file:
 
   </Tab>
   <Tab>
-<div/>
 Specify your `workspaces` in your monorepo's root `package.json` file:
 
 ```json filename="package.json"
@@ -47,7 +45,6 @@ Specify your `workspaces` in your monorepo's root `package.json` file:
 
   </Tab>
   <Tab>
-<div/>
 Specify your `packages` in `pnpm-workspace.yaml`.
 ```yaml filename="pnpm-workspace.yaml"
 packages:
@@ -71,18 +68,18 @@ Add [`turbo`](https://www.npmjs.com/package/turbo) as a development dependency a
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
   <Tab>
-```bash 
-npm install turbo -D 
+```bash
+npm install turbo -D
 ```
   </Tab>
   <Tab>
-```bash 
-yarn add turbo -DW 
+```bash
+yarn add turbo -DW
 ```
   </Tab>
   <Tab>
-```bash 
-pnpm add turbo -Dw 
+```bash
+pnpm add turbo -Dw
 ```
   </Tab>
 </Tabs>
@@ -202,18 +199,18 @@ Add or update `scripts` in your monorepo's root `package.json` file and have the
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
   <Tab>
-```sh 
-npm run build 
+```sh
+npm run build
 ```
   </Tab>
   <Tab>
-```sh 
-yarn build 
+```sh
+yarn build
 ```
   </Tab>
   <Tab>
-```sh 
-pnpm build 
+```sh
+pnpm build
 ```
   </Tab>
 </Tabs>

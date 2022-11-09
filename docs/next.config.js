@@ -19,7 +19,6 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/core-concepts/caching",
   "/docs/core-concepts/remote-caching",
   "/docs/core-concepts/scopes",
-  "/docs/core-concepts/why-turborepo",
   "/docs/core-concepts/monorepos/filtering",
   "/docs/core-concepts/monorepos/running-tasks",
   "/docs/getting-started/create-new",
@@ -59,6 +58,7 @@ const nextConfig = withNextra({
   },
   reactStrictMode: true,
   experimental: {
+    newNextLinkBehavior: true,
     legacyBrowsers: false,
   },
   webpack: (config, { webpack }) => {
@@ -92,7 +92,7 @@ const nextConfig = withNextra({
       })),
       {
         source: "/usage",
-        destination: "/reference/command-line-reference",
+        destination: "/repo/docs/reference/command-line-reference",
         permanent: true,
       },
       {
