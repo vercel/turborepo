@@ -43,7 +43,7 @@ func RunWithArgs(args []string, turboVersion string) int {
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
 	helper := cmdutil.NewHelper(turboVersion)
-	root := getCmd(helper, signalWatcher)
+	root := getCmd(helper, signalWatcher, args)
 	resolvedArgs := resolveArgs(root, args)
 	defer helper.Cleanup(root.Flags())
 	root.SetArgs(resolvedArgs)
@@ -98,7 +98,7 @@ func resolveArgs(root *cobra.Command, args []string) []string {
 }
 
 // getCmd returns the root cobra command
-func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
+func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher, rawArgs []string) *cobra.Command {
 	execOpts := &execOpts{}
 
 	cmd := &cobra.Command{
@@ -131,6 +131,7 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			return nil
 		},
 	}
+
 	cmd.SetVersionTemplate("{{.Version}}\n")
 	flags := cmd.PersistentFlags()
 	helper.AddFlags(flags)
@@ -142,7 +143,7 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	cmd.AddCommand(info.BinCmd(helper))
 	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
 	cmd.AddCommand(prune.GetCmd(helper))
-	cmd.AddCommand(run.GetCmd(helper, signalWatcher))
+	cmd.AddCommand(run.GetCmd(helper, signalWatcher, rawArgs))
 	return cmd
 }
 
