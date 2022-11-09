@@ -57,7 +57,7 @@ run()
   });
 
 async function run() {
-  let { input, flags, showHelp, showVersion } = meow(help, {
+  let { input, flags } = meow(help, {
     booleanDefault: undefined,
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
@@ -69,10 +69,6 @@ async function run() {
     },
   });
 
-  if (flags.help) showHelp();
-  if (flags.version) showVersion();
-
-  // let anim = chalkAnimation.pulse(`\n>>> TURBOREPO\n`);
   console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   await new Promise((resolve) => setTimeout(resolve, 500));
   console.log(
