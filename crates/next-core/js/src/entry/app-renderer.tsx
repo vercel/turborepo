@@ -88,11 +88,11 @@ type IpcOutgoingMessage = {
 
 // TODO expose these types in next.js
 type ComponentModule = () => any;
+type ModuleReference = [componentModule: ComponentModule, filePath: string];
 export type ComponentsType = {
-  [componentKey in FileType]?: ComponentModule;
+  [componentKey in FileType]?: ModuleReference;
 } & {
-  layoutOrPagePath?: string;
-  page?: ComponentModule;
+  page?: ModuleReference;
 };
 type LoaderTree = [
   segment: string,
@@ -108,26 +108,22 @@ type ServerComponentsManifestModule = {
 };
 
 async function runOperation(renderData: RenderData) {
+  const layoutInfoChunks: Record<string, string[]> = {};
   const pageItem = LAYOUT_INFO[LAYOUT_INFO.length - 1];
   const pageModule = pageItem.page!.module;
   const Page = pageModule.default;
-  let tree: LoaderTree = [
-    "",
-    {},
-    { page: () => Page, layoutOrPagePath: "page.js" },
-  ];
-  const layoutInfoChunks: string[][] = [];
+  let tree: LoaderTree = ["", {}, { page: [() => Page, "page.js"] }];
+  layoutInfoChunks["page.js"] = pageItem.page!.chunks;
   for (let i = LAYOUT_INFO.length - 2; i >= 0; i--) {
     const info = LAYOUT_INFO[i];
-    const components: ComponentsType = { layoutOrPagePath: `layout${i}.js` };
-    layoutInfoChunks[i] = [];
+    const components: ComponentsType = {};
     for (const key of Object.keys(info)) {
       if (key === "segment") {
         continue;
       }
       const k = key as FileType;
-      components[k] = () => info[k]!.module.default;
-      layoutInfoChunks[i].push(...info[k]!.chunks);
+      components[k] = [() => info[k]!.module.default, `${k}${i}.js`];
+      layoutInfoChunks[`${k}${i}.js`] = info[k]!.chunks;
     }
     tree = [info.segment, { children: tree }, components];
   }
@@ -160,19 +156,15 @@ async function runOperation(renderData: RenderData) {
   const manifest: FlightManifest = new Proxy({} as any, proxyMethods(false));
   const serverCSSManifest: FlightCSSManifest = {};
   serverCSSManifest.__entry_css__ = {};
-  for (let i = 0; i < layoutInfoChunks.length; i++) {
-    const chunks = layoutInfoChunks[i];
+  for (const [key, chunks] of Object.entries(layoutInfoChunks)) {
     const cssChunks = chunks.filter((path) => path.endsWith(".css"));
-    serverCSSManifest[`layout${i}.js`] = cssChunks.map((chunk) =>
+    serverCSSManifest[key] = cssChunks.map((chunk) =>
       JSON.stringify([chunk, [chunk]])
     );
   }
   serverCSSManifest.__entry_css__ = {
-    page: pageItem
-      .page!.chunks.filter((path) => path.endsWith(".css"))
-      .map((chunk) => JSON.stringify([chunk, [chunk]])),
+    page: serverCSSManifest["page.js"],
   };
-  serverCSSManifest["page.js"] = serverCSSManifest.__entry_css__.page;
   const req: IncomingMessage = {
     url: renderData.url,
     method: renderData.method,
@@ -188,7 +180,7 @@ async function runOperation(renderData: RenderData) {
     dev: true,
     buildManifest: {
       polyfillFiles: [],
-      rootMainFiles: layoutInfoChunks
+      rootMainFiles: Object.values(layoutInfoChunks)
         .flat()
         .concat(BOOTSTRAP)
         .filter((path) => !path.endsWith(".css")),
