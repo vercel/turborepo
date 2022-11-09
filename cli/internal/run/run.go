@@ -808,7 +808,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 
 	// TODO @mehulkar: where did r.config and r.ui go?
 	summaryPath := r.config.Cwd.Join(".turbo", "runs", r.base.SessionID.String()+".json")
-	if err := summary.Close(r.ui, rs.Opts.runOpts.profile, summaryPath); err != nil {
+	if err := summary.Close(r.base.UI, rs.Opts.runOpts.profile, summaryPath); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
 	if exitCode != 0 {
