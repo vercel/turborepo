@@ -546,7 +546,7 @@ impl<B: Backend> TurboTasks<B> {
         self.currently_scheduled_background_jobs
             .fetch_add(1, Ordering::AcqRel);
         tokio::spawn(TURBO_TASKS.scope(this.clone(), async move {
-            if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
+            while this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
                 let listener = this.event.listen();
                 if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
                     listener.await;
