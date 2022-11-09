@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
 

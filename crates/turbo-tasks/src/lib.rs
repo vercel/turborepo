@@ -31,6 +31,7 @@
 #![feature(box_syntax)]
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
+#![feature(new_uninit)]
 
 pub mod backend;
 mod collectibles;

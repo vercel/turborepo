@@ -13,8 +13,8 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/andybalholm/crlf"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/yaml"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/yaml"
 )
 
 var _multipleKeyRegex = regexp.MustCompile(" *, *")
@@ -58,9 +58,6 @@ func (b *BerryLockfileEntry) possibleDescriptors() []_Descriptor {
 	}
 
 	for dep, version := range b.Dependencies {
-		addDescriptor(dep, version)
-	}
-	for dep, version := range b.PeerDependencies {
 		addDescriptor(dep, version)
 	}
 

@@ -3,7 +3,7 @@ package login
 import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 var (

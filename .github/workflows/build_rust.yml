@@ -6,6 +6,9 @@ on:
       release_branch:
         description: "Staging branch to run release from"
 
+env:
+  RELEASE_TURBO_CLI: true
+
 jobs:
   build-native:
     name: "Build Native"
@@ -43,8 +46,6 @@ jobs:
         with:
           profile: minimal
           override: true
-          # TODO: copied from turbo tooling, may need to make this file-driven
-          toolchain: nightly-2022-09-23
           target: ${{ matrix.settings.target }}
 
       # - name: Cache cargo registry
@@ -100,11 +101,11 @@ jobs:
 
       - name: Build
         if: ${{ !matrix.settings.docker }}
-        run: cd shim && ${{ matrix.settings.rustflags }} cargo build --release --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
 
       - name: Build in Docker
         if: ${{ matrix.settings.docker }}
-        run: cd shim && ${{ matrix.settings.rustflags }} cargo build --release --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

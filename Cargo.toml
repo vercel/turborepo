@@ -27,18 +27,44 @@ members = [
   "crates/turbopack-static",
   "crates/turbopack-swc-utils",
   "crates/turbopack",
+  "crates/turbopack-tests",
+  "shim",
   "xtask",
 ]
 
-exclude = ["shim"]
+default-members = [
+  "crates/next-core",
+  "crates/next-dev",
+  "crates/node-file-trace",
+  "crates/swc-ast-explorer",
+  "crates/turbo-malloc",
+  "crates/turbo-tasks-build",
+  "crates/turbo-tasks-env",
+  "crates/turbo-tasks-fs",
+  "crates/turbo-tasks-hash",
+  "crates/turbo-tasks-macros",
+  "crates/turbo-tasks-macros-shared",
+  "crates/turbo-tasks-memory",
+  "crates/turbo-tasks-testing",
+  "crates/turbo-tasks",
+  "crates/turbopack-cli-utils",
+  "crates/turbopack-core",
+  "crates/turbopack-create-test-app",
+  "crates/turbopack-css",
+  "crates/turbopack-dev-server",
+  "crates/turbopack-ecmascript",
+  "crates/turbopack-env",
+  "crates/turbopack-json",
+  "crates/turbopack-static",
+  "crates/turbopack-swc-utils",
+  "crates/turbopack",
+  "crates/turbopack-tests",
+  "xtask",
+]
 
 [profile.release]
-# We use CARGO_PROFILE_RELEASE_LTO instead
-# lto = true
 
 [profile.bench]
-# We want correct benchmark results
-lto = true
 
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
@@ -51,5 +77,5 @@ opt-level = 3
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
 # This version pin is workaround for https://github.com/tkaitchuck/aHash/issues/95
-indexmap = "=1.6.2"
+indexmap = "=1.9.1"
 swc_core = "0.40.16"

@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"time"
@@ -11,8 +12,8 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -269,23 +270,29 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 // the daemon if it doesn't find one running.
 func (c *Connector) getOrStartDaemon() (int, error) {
 	lockFile := c.lockFile()
-	if daemonProcess, err := lockFile.GetOwner(); errors.Is(err, lockfile.ErrDeadOwner) {
-		// If we've found a pid file but no corresponding process, there's nothing we can do.
-		// We defer to the user to clean up the pid file.
-		return 0, errors.Wrapf(err, "pid file appears stale. If no daemon is running, please remove it: %v", c.PidPath)
-	} else if os.IsNotExist(err) {
-		if c.Opts.DontStart {
-			return 0, ErrDaemonNotRunning
+	daemonProcess, getDaemonProcessErr := lockFile.GetOwner()
+	if getDaemonProcessErr != nil {
+		// If we're in a clean state this isn't an "error" per se.
+		// We attempt to start a daemon.
+		if errors.Is(getDaemonProcessErr, fs.ErrNotExist) {
+			if c.Opts.DontStart {
+				return 0, ErrDaemonNotRunning
+			}
+			pid, startDaemonErr := c.startDaemon()
+			if startDaemonErr != nil {
+				return 0, startDaemonErr
+			}
+			return pid, nil
 		}
-		// The pid file doesn't exist. Start a daemon
-		pid, err := c.startDaemon()
-		if err != nil {
-			return 0, err
-		}
-		return pid, nil
-	} else {
-		return daemonProcess.Pid, nil
+
+		// We could have hit any number of errors.
+		// - Failed to read the file for permission reasons.
+		// - User emptied the file's contents.
+		// - etc.
+		return 0, errors.Wrapf(getDaemonProcessErr, "An issue was encountered with the pid file. Please remove it and try again: %v", c.PidPath)
 	}
+
+	return daemonProcess.Pid, nil
 }
 
 func (c *Connector) getClientConn() (*Client, error) {

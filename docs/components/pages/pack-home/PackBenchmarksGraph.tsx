@@ -34,7 +34,7 @@ export function BenchmarksGraph({
   const data: BenchmarkData = benchmarkData[category][numberOfModules];
   const keys = bars.map((bar) => bar.key);
   const longestTime = Math.max(...keys.map((key) => data[key])) * 1000;
-  const roundedLongestTime = Math.ceil(longestTime / 5000) * 5000 + 5000;
+  const longestTimeWithPadding = longestTime * 1.15;
   const graphRef = useRef(null);
   const graphInView = useInView(graphRef, { once: true, margin: "-128px" });
 
@@ -59,7 +59,7 @@ export function BenchmarksGraph({
               turbo={bar.turbo}
               Label={<GraphLabel label={bar.label} turbo={bar.turbo} />}
               duration={data[bar.key] * 1000}
-              longestTime={roundedLongestTime}
+              longestTime={longestTimeWithPadding}
               inView={graphInView}
               pinTime={pinTime}
             ></GraphBar>
@@ -139,7 +139,7 @@ function GraphBar({
       .then(() => {
         setFinished(true);
       });
-    const timerAnimationRef = animate(0, duration / 1000, {
+    const timerAnimationRef = animate(0, duration, {
       ...transition,
       ease: "linear",
       onUpdate(value) {
@@ -183,7 +183,7 @@ function GraphBar({
           transition={{ duration: 0.1 }}
           initial="hidden"
           className={cn(
-            "flex items-center h-full rounded relative dark:bg-[#ffffff06] bg-[#00000006]"
+            "flex items-center h-full rounded relative dark:bg-[#383838] bg-[#E6E6E6]"
           )}
         >
           <motion.div
@@ -203,14 +203,26 @@ function GraphBar({
           className="pr-2"
           transition={{ duration: 0.1 }}
         >
-          <GraphTimer turbo={turbo} timer={pinTime ? duration / 1000 : timer} />
+          <GraphTimer
+            turbo={turbo}
+            timer={pinTime ? duration : timer}
+            duration={duration}
+          />
         </motion.div>
       </div>
     </div>
   );
 }
 
-const GraphTimer = ({ turbo, timer }: { turbo: boolean; timer: number }) => {
+const GraphTimer = ({
+  turbo,
+  timer,
+  duration,
+}: {
+  turbo: boolean;
+  timer: number;
+  duration: number;
+}) => {
   return (
     <div className={`flex flex-row gap-2 w-24 justify-end items-center z-10`}>
       {turbo && (
@@ -238,8 +250,41 @@ const GraphTimer = ({ turbo, timer }: { turbo: boolean; timer: number }) => {
           />
         </div>
       )}
-      <p className="font-mono">{timer.toFixed(2)}s</p>
+      <p className="font-mono">
+        <Time value={timer} maxValue={duration} />
+      </p>
     </div>
+  );
+};
+
+function roundTo(num: number, decimals: number) {
+  const factor = Math.pow(10, decimals);
+  return Math.round(num * factor) / factor;
+}
+
+const Time = ({
+  value,
+  maxValue,
+}: {
+  value: number;
+  maxValue: number;
+}): JSX.Element => {
+  let unitValue: string;
+  let unit: string;
+  if (maxValue < 1000) {
+    unitValue = Math.round(value).toFixed(0);
+    unit = "ms";
+  } else {
+    const roundedValue = roundTo(value / 1000, 1);
+    unitValue = roundedValue.toFixed(1);
+    unit = "s";
+  }
+
+  return (
+    <>
+      {unitValue}
+      {unit}
+    </>
   );
 };
 

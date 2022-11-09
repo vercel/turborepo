@@ -11,9 +11,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/turbodprotocol"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbodprotocol"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,6 +39,26 @@ func getUnixSocket(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPat
 
 func getPidFile(dir turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
 	return dir.UntypedJoin("turbod-test.pid")
+}
+
+func TestGetOrStartDaemonInvalidPIDFile(t *testing.T) {
+	logger := hclog.Default()
+	dir := t.TempDir()
+	dirPath := fs.AbsoluteSystemPathFromUpstream(dir)
+
+	pidPath := getPidFile(dirPath)
+	writeFileErr := pidPath.WriteFile(nil, 0777)
+	assert.NilError(t, writeFileErr, "WriteFile")
+
+	c := &Connector{
+		Logger:  logger,
+		Opts:    Opts{},
+		PidPath: pidPath,
+	}
+
+	pid, err := c.getOrStartDaemon()
+	assert.Equal(t, pid, 0)
+	assert.ErrorContains(t, err, "issue was encountered with the pid file")
 }
 
 func TestConnectFailsWithoutGrpcServer(t *testing.T) {

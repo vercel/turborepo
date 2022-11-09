@@ -16,8 +16,8 @@ function FooterLink({ href, children }: { href: string; children: ReactNode }) {
     );
   }
   return (
-    <Link href={href}>
-      <a className={classes}>{children}</a>
+    <Link href={href} className={classes}>
+      {children}
     </Link>
   );
 }

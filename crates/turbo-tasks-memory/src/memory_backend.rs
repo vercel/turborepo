@@ -1,16 +1,18 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     future::Future,
+    hash::BuildHasherDefault,
     pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 
 use anyhow::{bail, Result};
+use dashmap::{mapref::entry::Entry, DashMap};
 use event_listener::EventListener;
-use flurry::HashMap as FHashMap;
+use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
 use turbo_tasks::{
     backend::{
@@ -37,7 +39,7 @@ pub struct MemoryBackend {
     pub(crate) initial_scope: TaskScopeId,
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
-    task_cache: FHashMap<PersistentTaskType, TaskId>,
+    task_cache: DashMap<PersistentTaskType, TaskId, BuildHasherDefault<FxHasher>>,
     scope_generation: AtomicUsize,
 }
 
@@ -62,7 +64,7 @@ impl MemoryBackend {
             initial_scope,
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
-            task_cache: FHashMap::new(),
+            task_cache: DashMap::default(),
             scope_generation: AtomicUsize::new(0),
         }
     }
@@ -100,7 +102,7 @@ impl MemoryBackend {
     }
 
     pub fn with_all_cached_tasks(&self, mut func: impl FnMut(TaskId)) {
-        for id in self.task_cache.pin().values() {
+        for id in self.task_cache.clone().into_read_only().values() {
             func(*id);
         }
     }
@@ -441,8 +443,7 @@ impl Backend for MemoryBackend {
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
-        let map = self.task_cache.pin();
-        let result = if let Some(task) = map.get(&task_type).copied() {
+        let result = if let Some(task) = self.task_cache.get(&task_type).map(|task| *task) {
             // fast pass without creating a new task
             self.connect_task_child(parent_task, task, turbo_tasks);
 
@@ -465,30 +466,28 @@ impl Backend for MemoryBackend {
                     Task::new_resolve_trait(id, *trait_type, trait_fn_name.clone(), inputs.clone())
                 }
             };
-            // SAFETY: We have a fresh task id where nobody knows about yet
+            // Safety: We have a fresh task id that nobody knows about yet
             unsafe {
                 self.memory_tasks.insert(*id, task);
             }
-            let result_task = match map.try_insert(task_type, id) {
-                Ok(_) => {
+            let result_task = match self.task_cache.entry(task_type) {
+                Entry::Vacant(entry) => {
                     // This is the most likely case
+                    entry.insert(id);
                     id
                 }
-                Err(r) => {
-                    // SAFETY: We have a fresh task id where nobody knows about yet
+                Entry::Occupied(entry) => {
+                    // Safety: We have a fresh task id that nobody knows about yet
                     unsafe {
                         self.memory_tasks.remove(*id);
                         turbo_tasks.reuse_task_id(id);
                     }
-                    *r.current
+                    *entry.get()
                 }
             };
             self.connect_task_child(parent_task, result_task, turbo_tasks);
             result_task
         };
-        // keep the guard alive over the whole function
-        // to avoid load on GC
-        drop(map);
         result
     }
 
@@ -521,8 +520,12 @@ pub(crate) enum Job {
     RemoveFromScopes(HashSet<TaskId>, Vec<TaskScopeId>),
     RemoveFromScope(HashSet<TaskId>, TaskScopeId),
     ScheduleWhenDirty(Vec<TaskId>),
-    AddToScopeQueue(Vec<(Vec<TaskId>, usize)>, usize, TaskScopeId, bool),
-    RemoveFromScopeQueue(Vec<Vec<TaskId>>, usize, TaskScopeId),
+    /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
+    /// split off work.
+    AddToScopeQueue(VecDeque<(TaskId, usize)>, TaskScopeId, bool),
+    /// Remove tasks from a scope. Scheduled by `run_remove_from_scope_queue` to
+    /// split off work.
+    RemoveFromScopeQueue(VecDeque<TaskId>, TaskScopeId),
 }
 
 impl Job {
@@ -549,18 +552,11 @@ impl Job {
                     })
                 }
             }
-            Job::AddToScopeQueue(queue, queue_size, id, is_optimization_scope) => {
-                run_add_to_scope_queue(
-                    queue,
-                    queue_size,
-                    id,
-                    is_optimization_scope,
-                    backend,
-                    turbo_tasks,
-                );
+            Job::AddToScopeQueue(queue, id, is_optimization_scope) => {
+                run_add_to_scope_queue(queue, id, is_optimization_scope, backend, turbo_tasks);
             }
-            Job::RemoveFromScopeQueue(queue, queue_size, id) => {
-                run_remove_from_scope_queue(queue, queue_size, id, backend, turbo_tasks);
+            Job::RemoveFromScopeQueue(queue, id) => {
+                run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
             }
         }
     }

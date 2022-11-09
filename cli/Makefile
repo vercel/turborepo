@@ -28,6 +28,9 @@ shim: libturbo.a
 libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
 
+turbo.lib: $(GENERATED_FILES) $(SRC_FILES) go.mod
+	go build -buildmode=c-archive -o turbo.lib  ./cmd/turbo/...
+
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
@@ -274,7 +277,7 @@ $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
 
 # use target testbed-<some directory under integration_tests> to set up the testbed directory

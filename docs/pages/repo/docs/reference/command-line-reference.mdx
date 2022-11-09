@@ -8,7 +8,7 @@ import OuputModeTable from "../../../../components/output-mode-table.mdx";
 
 # Command-Line Reference
 
-After [installing the `turbo`](../getting-started) package (or cloning a starter), you can start using Turborepo's command line interface (CLI) `turbo` to do all kinds of awesomeness in your monorepo.
+After [installing the `turbo`](/repo/docs/getting-started/add-to-project) package (or cloning a starter), you can start using Turborepo's command line interface (CLI) `turbo` to do all kinds of awesomeness in your monorepo.
 
 ## Option Syntax
 
@@ -84,7 +84,7 @@ Run npm scripts across all workspaces in specified scope. Tasks must be specifie
 
 `turbo` can run multiple tasks, and any arguments following `--` will be passed through
 to the tasks to be executed. Note that these additional arguments will _not_ be passed to
-any additional tasks that are run due to dependencies from the [pipeline](/docs/reference/configuration#pipeline) configuration.
+any additional tasks that are run due to dependencies from the [pipeline](/repo/docs/reference/configuration#pipeline) configuration.
 
 ### Options
 
@@ -131,7 +131,7 @@ turbo run build --cwd=./somewhere/else
 
 <Callout type="error">
   `--deps` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#include-dependents-of-matched-packages)
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependents-of-matched-workspaces)
   instead.
 </Callout>
 
@@ -174,7 +174,7 @@ Multiple filters can be combined to select distinct sets of targets. Additionall
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
 be in the final entrypoint selection.
 
-For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/docs/core-concepts/filtering)
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering)
 
 ```sh
 turbo run build --filter=my-pkg
@@ -260,7 +260,7 @@ Just a quick overview.
 
 <Callout type="error">
   `--include-dependencies` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#include-dependencies-of-matched-packages)
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependencies-of-matched-workspaces)
   instead.
 </Callout>
 
@@ -306,7 +306,7 @@ Given this pipeline in `turbo.json`:
 
 ```json
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"]
@@ -347,7 +347,7 @@ The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment v
 
 <Callout type="error">
   `--scope` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#filter-by-package) instead.
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-package) instead.
 </Callout>
 
 `type: string[]`
@@ -376,7 +376,7 @@ turbo run build --serial
 
 <Callout type="error">
   `--since` is deprecated in `1.2.x`. Please use
-  [`--filter`](/docs/core-concepts/filtering#filter-by-changed-packages)
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-changed-workspaces)
   instead.
 </Callout>
 
@@ -444,7 +444,7 @@ turbo run build --trace="<trace-file-name>"
 
 `type: string`
 
-To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://speedscope.app) and use the `left heavy` or `sandwich` view modes.
+To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://www.speedscope.app/) and use the `left heavy` or `sandwich` view modes.
 
 ```sh
 turbo run build --heap="<heap-file-name>"
@@ -454,7 +454,7 @@ turbo run build --heap="<heap-file-name>"
 
 `type: string`
 
-To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://speedscope.app).
+To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://www.speedscope.app/).
 
 <Callout>
   **Important**: The CPU profiler doesn't work under Windows Subsystem for
@@ -572,7 +572,7 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 
 ## `turbo login`
 
-Connect machine to your Remote Cache provider. The default provider is [Vercel](https://vercel.com).
+Connect machine to your Remote Cache provider. The default provider is [Vercel](https://vercel.com/).
 
 ### Options
 
@@ -580,7 +580,7 @@ Connect machine to your Remote Cache provider. The default provider is [Vercel](
 
 `type: string`
 
-Defaults to `https://vercel.com`.
+Defaults to `https://vercel.com/`.
 
 #### `--api`
 
@@ -604,7 +604,7 @@ Logs you out of your Vercel account.
 
 ## `turbo link`
 
-Link the current directory to Remote Cache scope. The selected owner (either a user or and organization) will be able to share [cache artifacts](../core-concepts/caching) through [Remote Caching](../core-concepts/remote-caching).
+Link the current directory to Remote Cache scope. The selected owner (either a user or and organization) will be able to share [cache artifacts](/repo/docs/core-concepts/caching) through [Remote Caching](/repo/docs/core-concepts/remote-caching).
 You should run this command from the root of your monorepo.
 
 ### Options

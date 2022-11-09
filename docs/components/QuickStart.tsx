@@ -51,7 +51,7 @@ export const MonoreposArea = () => {
           description: `Understand why monorepos don't scale - and why Turborepo is the solution.`,
           name: "Why Turborepo?",
         }}
-        href="/repo/docs/core-concepts/why-turborepo"
+        href="/repo/docs/core-concepts/monorepos"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
@@ -82,7 +82,7 @@ export const LearnMoreArea = () => {
           description: `The way you run your tasks is probably not optimized. Turborepo speeds them up with smart scheduling, minimising idle CPU's.`,
           name: "Maximum Multitasking",
         }}
-        href="/repo/docs/core-concepts/running-tasks"
+        href="/repo/docs/core-concepts/monorepos/running-tasks"
       ></DetailedFeatureLink>
     </div>
   );

@@ -18,14 +18,21 @@ pub struct Turbopack {
     name: String,
     path: String,
     has_server_rendered_html: bool,
+    has_interactivity: bool,
 }
 
 impl Turbopack {
-    pub fn new(name: &str, path: &str, has_server_rendered_html: bool) -> Self {
+    pub fn new(
+        name: &str,
+        path: &str,
+        has_server_rendered_html: bool,
+        has_interactivity: bool,
+    ) -> Self {
         Turbopack {
             name: name.to_owned(),
             path: path.to_owned(),
             has_server_rendered_html,
+            has_interactivity,
         }
     }
 }
@@ -43,11 +50,15 @@ impl Bundler for Turbopack {
         self.has_server_rendered_html
     }
 
+    fn has_interactivity(&self) -> bool {
+        self.has_interactivity
+    }
+
     fn prepare(&self, install_dir: &Path) -> Result<()> {
         npm::install(
             install_dir,
             &[
-                NpmPackage::new("next", "12.3.2-canary.33"),
+                NpmPackage::new("next", "13.0.0"),
                 // Dependency on this is inserted by swc's preset_env
                 NpmPackage::new("@swc/helpers", "^0.4.11"),
             ],

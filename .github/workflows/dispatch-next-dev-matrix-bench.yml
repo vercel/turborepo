@@ -10,7 +10,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_PROFILE_RELEASE_LTO: true
   RUST_BACKTRACE: 1
   NODE_OPTIONS: "--max-old-space-size=32768"
 
@@ -35,17 +34,15 @@ jobs:
           - name: Webpack
             type: CSR
 
-    runs-on: ubuntu-latest-16-core
+    runs-on: ubuntu-latest-8-core-oss
     name: bench - ${{ matrix.bench.name }} ${{ matrix.bench.type }}
 
     steps:
       - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-node
-        with:
-          extra-flags: "--filter=!@vercel/nft-tests"
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: benchmark-next-dev
 
@@ -110,7 +107,7 @@ jobs:
       - name: Download benchmark data
         uses: actions/download-artifact@v3
         with:
-          path: data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-16-core/${{ steps.date.outputs.date }}-${{ github.sha }}
+          path: data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}
       - name: Git pull
         run: git pull --depth=1 --no-tags origin benchmark-data
       - name: Push data to branch

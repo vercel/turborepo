@@ -2,9 +2,12 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
-use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+use turbopack_core::{
+    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    source_map::GenerateSourceMapVc,
+};
 use turbopack_dev_server::source::{
-    ContentSource, ContentSourceData, ContentSourceDataVary, ContentSourceResult,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
     ContentSourceResultVc, ContentSourceVc,
 };
 use url::Url;
@@ -36,15 +39,17 @@ impl ContentSource for NextSourceMapTraceContentSource {
     ) -> Result<ContentSourceResultVc> {
         let url = match &data.url {
             None => {
-                return Ok(ContentSourceResult::NeedData {
-                    source: self_vc.into(),
-                    path: path.to_string(),
-                    vary: ContentSourceDataVary {
-                        url: true,
-                        ..Default::default()
-                    },
-                }
-                .cell());
+                return Ok(ContentSourceResultVc::exact(
+                    ContentSourceContent::NeedData {
+                        source: self_vc.into(),
+                        path: path.to_string(),
+                        vary: ContentSourceDataVary {
+                            url: true,
+                            ..Default::default()
+                        },
+                    }
+                    .cell(),
+                ));
             }
             Some(query) => query,
         };
@@ -53,54 +58,47 @@ impl ContentSource for NextSourceMapTraceContentSource {
         // could convert it into my struct.
         let query_idx = match url.find('?') {
             Some(i) => i,
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
+            _ => return Ok(ContentSourceResultVc::not_found()),
         };
         let frame: StackFrame = match serde_qs::from_str(&url[query_idx + 1..]) {
             Ok(f) => f,
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
+            _ => return Ok(ContentSourceResultVc::not_found()),
         };
         let (line, column) = match frame.get_pos() {
             Some((l, c)) => (l, c),
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
+            _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
         // The file is some percent encoded `http://localhost:3000/_next/foo/bar.js`
         let file = match Url::parse(&frame.file) {
             Ok(u) => u,
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
+            _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
         let path = match file.path().strip_prefix('/') {
             Some(p) => p,
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
+            _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
-        // Source maps aren't stored as `foo.js.map`, but instead use a hash of the JS's
-        // contents: `foo.js.abc123.map`. In order to find the map, we need to
-        // get the JS's version id and then fetch the map.
         let this = self_vc.await?;
-        let js_file = this
+        let result = this
             .asset_source
             .get(path, Value::new(Default::default()))
             .await?;
-        let js_file = match &*js_file {
-            ContentSourceResult::Static(f) => f,
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
-        };
-        let id = js_file.version().id().await?;
-
-        let map = this
-            .asset_source
-            .get(&format!("{path}.{id}.map"), Value::new(Default::default()))
-            .await?;
-        let map = match &*map {
-            ContentSourceResult::Static(f) => f,
-            _ => return Ok(ContentSourceResult::NotFound.cell()),
+        let file = match &*result.content.await? {
+            ContentSourceContent::Static(f) => *f,
+            _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
-        let traced = SourceMapTraceVc::new(map.content(), line, column, frame.name);
+        let gen = match GenerateSourceMapVc::resolve_from(file).await? {
+            Some(f) => f,
+            _ => return Ok(ContentSourceResultVc::not_found()),
+        };
 
-        Ok(ContentSourceResult::Static(traced.content().into()).cell())
+        let traced = SourceMapTraceVc::new(gen.generate_source_map(), line, column, frame.name);
+        Ok(ContentSourceResultVc::exact(
+            ContentSourceContent::Static(traced.content().into()).cell(),
+        ))
     }
 }
 
