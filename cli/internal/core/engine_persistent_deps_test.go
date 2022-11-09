@@ -45,7 +45,7 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
 
 	// Use a regex here, because depending on the order the graph is walked,
-	// either workpsce-a or workspace-b could throw the error first.
+	// either workspace-a or workspace-b could throw the error first.
 	expected := regexp.MustCompile("\"workspace-c#dev\" is a persistent task, \"workspace-[a|b]#dev\" cannot depend on it")
 	testifyAssert.Regexp(t, expected, actualErr)
 }

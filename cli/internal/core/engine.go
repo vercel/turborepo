@@ -87,7 +87,7 @@ type EngineExecutionOptions struct {
 func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
 	return e.TaskGraph.Walk(func(v dag.Vertex) error {
-		// Each vertex in the graoh is a taskID (package#task format)
+		// Each vertex in the graph is a taskID (package#task format)
 		taskID := dag.VertexName(v)
 
 		// Always return if it is the root node
