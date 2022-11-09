@@ -1,7 +1,22 @@
 pub(crate) mod bin;
 
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
+
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum OutputLogsMode {
+    Full,
+    None,
+    HashOnly,
+    NewOnly,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum DryRunMode {
+    Stdout,
+    Text,
+    Json,
+}
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
@@ -113,89 +128,92 @@ pub enum Command {
         output_dir: String,
     },
     /// Run tasks across projects in your monorepo
-    Run {
-        /// Override the filesystem cache directory.
-        #[clap(long = "cache-dir")]
-        cache_dir: Option<String>,
-        /// Set the number of concurrent cache operations (default 10)
-        #[clap(long = "cache-workers", default_value_t = 10)]
-        cache_workers: u32,
-        /// Limit the concurrency of task execution. Use 1 for serial (i.e.
-        /// one-at-a-time) execution.
-        #[clap(long = "concurrency")]
-        concurrency: Option<String>,
-        /// Continue execution even if a task exits with an error or non-zero
-        /// exit code. The default behavior is to bail
-        #[clap(long = "continue")]
-        continue_execution: bool,
-        #[clap(long = "dry-run")]
-        dry_run: Option<String>,
-        /// Use the given selector to specify package(s) to act as
-        /// entry points. The syntax mirrors pnpm's syntax, and
-        /// additional documentation and examples can be found in
-        /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
-        #[clap(long)]
-        filter: Option<String>,
-        /// Ignore the existing cache (to force execution)
-        #[clap(long)]
-        force: bool,
-        /// Specify glob of global filesystem dependencies to be hashed. Useful
-        /// for .env and files
-        #[clap(long = "global-deps")]
-        global_deps: Vec<String>,
-        /// Generate a graph of the task execution and output to a file when a
-        /// filename is specified (.svg, .png, .jpg, .pdf, .json,
-        /// .html). Outputs dot graph to stdout when if no filename is provided
-        #[clap(long, num_args = 0..=1, require_equals = true, default_missing_value = "stdout")]
-        graph: Option<String>,
-        /// Files to ignore when calculating changed files (i.e. --since).
-        /// Supports globs.
-        #[clap(long)]
-        ignore: Vec<String>,
-        /// Include the dependencies of tasks in execution.
-        #[clap(long = "ignore-dependencies")]
-        include_dependencies: bool,
-        /// Avoid saving task results to the cache. Useful for development/watch
-        /// tasks.
-        #[clap(long = "no-cache")]
-        no_cache: bool,
-        /// Run without using turbo's daemon process
-        #[clap(long = "no-daemon")]
-        no_daemon: bool,
-        /// Exclude dependent task consumers from execution.
-        #[clap(long = "no-deps")]
-        no_deps: bool,
-        /// Set type of process output logging. Use "full" to show
-        /// all output. Use "hash-only" to show only turbo-computed
-        /// task hashes. Use "new-only" to show only new output with
-        /// only hashes for cached tasks. Use "none" to hide process
-        /// output. (default full)
-        #[clap(long = "output-logs")]
-        output_logs: Option<String>,
-        /// Execute all tasks in parallel.
-        #[clap(long)]
-        parallel: bool,
-        /// File to write turbo's performance profile output into.
-        /// You can load the file up in chrome://tracing to see
-        /// which parts of your build were slow.
-        #[clap(long)]
-        profile: Option<String>,
-        /// Ignore the local filesystem cache for all tasks. Only
-        /// allow reading and caching artifacts using the remote cache.
-        #[clap(long = "remote-only")]
-        remote_only: bool,
-        /// Specify package(s) to act as entry points for task execution.
-        /// Supports globs.
-        #[clap(long)]
-        scope: Vec<String>,
-        /// Limit/Set scope to changed packages since a mergebase.
-        /// This uses the git diff ${target_branch}... mechanism
-        /// to identify which packages have changed.
-        #[clap(long)]
-        since: Option<String>,
-        tasks: Vec<String>,
-    },
+    Run(RunArgs),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink,
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct RunArgs {
+    /// Override the filesystem cache directory.
+    #[clap(long = "cache-dir")]
+    pub cache_dir: Option<String>,
+    /// Set the number of concurrent cache operations (default 10)
+    #[clap(long = "cache-workers", default_value_t = 10)]
+    pub cache_workers: u32,
+    /// Limit the concurrency of task execution. Use 1 for serial (i.e.
+    /// one-at-a-time) execution.
+    #[clap(long = "concurrency")]
+    pub concurrency: Option<String>,
+    /// Continue execution even if a task exits with an error or non-zero
+    /// exit code. The default behavior is to bail
+    #[clap(long = "continue")]
+    pub continue_execution: bool,
+    #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "stdout")]
+    pub dry_run: Option<DryRunMode>,
+    /// Use the given selector to specify package(s) to act as
+    /// entry points. The syntax mirrors pnpm's syntax, and
+    /// additional documentation and examples can be found in
+    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    #[clap(long, action = ArgAction::Append)]
+    pub filter: Vec<String>,
+    /// Ignore the existing cache (to force execution)
+    #[clap(long)]
+    pub force: bool,
+    /// Specify glob of global filesystem dependencies to be hashed. Useful
+    /// for .env and files
+    #[clap(long = "global-deps", action = ArgAction::Append)]
+    pub global_deps: Vec<String>,
+    /// Generate a graph of the task execution and output to a file when a
+    /// filename is specified (.svg, .png, .jpg, .pdf, .json,
+    /// .html). Outputs dot graph to stdout when if no filename is provided
+    #[clap(long, num_args = 0..=1, default_missing_value = "stdout")]
+    pub graph: Option<String>,
+    /// Files to ignore when calculating changed files (i.e. --since).
+    /// Supports globs.
+    #[clap(long)]
+    pub ignore: Vec<String>,
+    /// Include the dependencies of tasks in execution.
+    #[clap(long = "ignore-dependencies")]
+    pub include_dependencies: bool,
+    /// Avoid saving task results to the cache. Useful for development/watch
+    /// tasks.
+    #[clap(long = "no-cache")]
+    pub no_cache: bool,
+    /// Run without using turbo's daemon process
+    #[clap(long = "no-daemon")]
+    pub no_daemon: bool,
+    /// Exclude dependent task consumers from execution.
+    #[clap(long = "no-deps")]
+    pub no_deps: bool,
+    /// Set type of process output logging. Use "full" to show
+    /// all output. Use "hash-only" to show only turbo-computed
+    /// task hashes. Use "new-only" to show only new output with
+    /// only hashes for cached tasks. Use "none" to hide process
+    /// output. (default full)
+    #[clap(long = "output-logs", value_enum)]
+    pub output_logs: Option<OutputLogsMode>,
+    /// Execute all tasks in parallel.
+    #[clap(long)]
+    pub parallel: bool,
+    /// File to write turbo's performance profile output into.
+    /// You can load the file up in chrome://tracing to see
+    /// which parts of your build were slow.
+    #[clap(long)]
+    pub profile: Option<String>,
+    /// Ignore the local filesystem cache for all tasks. Only
+    /// allow reading and caching artifacts using the remote cache.
+    #[clap(long = "remote-only")]
+    pub remote_only: bool,
+    /// Specify package(s) to act as entry points for task execution.
+    /// Supports globs.
+    #[clap(long)]
+    pub scope: Vec<String>,
+    /// Limit/Set scope to changed packages since a mergebase.
+    /// This uses the git diff ${target_branch}... mechanism
+    /// to identify which packages have changed.
+    #[clap(long)]
+    pub since: Option<String>,
+    pub tasks: Vec<String>,
 }
