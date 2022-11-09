@@ -523,6 +523,30 @@ mod test {
         );
 
         assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--graph"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    graph: Some("stdout".to_string()),
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--graph", "out.html"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    graph: Some("out.html".to_string()),
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
             Args::try_parse_from(["turbo", "build"]).unwrap(),
             Args {
                 tasks: vec!["build".to_string()],
