@@ -155,7 +155,7 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache. Returns true
 // if successful.
-func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, logger hclog.Logger) (bool, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		tc.cacheResults["cacheRead"] = "disabled"
 		if tc.taskOutputMode != util.NoTaskOutput {

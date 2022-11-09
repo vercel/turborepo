@@ -12,6 +12,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
+	"github.com/segmentio/ksuid"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/config"
@@ -193,7 +194,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 
 	sessionID := ksuid.New()
 	return &CmdBase{
-		SessionID: sessionID
+		SessionID:    sessionID,
 		UI:           terminal,
 		Logger:       logger,
 		RepoRoot:     repoRoot,
@@ -207,7 +208,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 
 // CmdBase encompasses configured components common to all turbo commands.
 type CmdBase struct {
-	SessionID ksuid.KSUID
+	SessionID    ksuid.KSUID
 	UI           cli.Ui
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath

@@ -806,8 +806,7 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		r.base.UI.Error(err.Error())
 	}
 
-	// TODO @mehulkar: where did r.config and r.ui go?
-	summaryPath := r.config.Cwd.Join(".turbo", "runs", r.base.SessionID.String()+".json")
+	summaryPath := r.base.RepoRoot.UntypedJoin(".turbo", "runs", r.base.SessionID.String()+".json")
 	if err := summary.Close(r.base.UI, rs.Opts.runOpts.profile, summaryPath); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
