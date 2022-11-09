@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/segmentio/ksuid"
-	"github.com/vercel/turborepo/cli/internal/chrometracing"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/chrometracing"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/mitchellh/cli"
 )
