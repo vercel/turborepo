@@ -115,8 +115,12 @@ pub struct TaskScope {
     /// Total number of tasks
     tasks: AtomicUsize,
     /// Number of tasks that are not Done, unfinished child scopes also count as
-    /// unfinished tasks. This values might go temporary negative in race
+    /// unfinished tasks. This value might temporarly become negative in race
     /// conditions.
+    /// When this value crosses the 0 to 1 boundary, we need to look into
+    /// potentially updating [TaskScopeState]::has_unfinished_tasks with a mutex
+    /// lock. [TaskScopeState]::has_unfinished_tasks is the real truth, if a
+    /// task scope has unfinished tasks.
     unfinished_tasks: AtomicIsize,
     /// State that requires locking
     pub state: Mutex<TaskScopeState>,
@@ -210,7 +214,7 @@ impl TaskScope {
     /// Returns true if the state requires an update
     #[must_use]
     fn increment_unfinished_tasks_internal(&self) -> bool {
-        // crossing to 0 to 1 boundary, requires an update
+        // crossing the 0 to 1 boundary requires an update
         self.unfinished_tasks.fetch_add(1, Ordering::AcqRel) == 0
     }
 
@@ -223,45 +227,43 @@ impl TaskScope {
     /// Returns true if the state requires an update
     #[must_use]
     fn decrement_unfinished_tasks_internal(&self) -> bool {
-        let old_count = self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel);
-        debug_assert!(old_count > 0);
-        old_count == 1
+        self.unfinished_tasks.fetch_sub(1, Ordering::AcqRel) == 1
     }
 
     pub fn add_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
-        let new_unfinished_parent = {
+        {
             let mut state = self.state.lock();
-            state.parents.add(parent) && state.has_unfinished_tasks
+            if !state.parents.add(parent) || !state.has_unfinished_tasks {
+                return;
+            }
         };
-        if new_unfinished_parent {
-            // As we added a parent while having unfinished tasks we need to increment the
-            // unfinished task count and potentially update the state
-            backend.with_scope(parent, |parent| {
-                let update = parent.increment_unfinished_tasks_internal();
+        // As we added a parent while having unfinished tasks we need to increment the
+        // unfinished task count and potentially update the state
+        backend.with_scope(parent, |parent| {
+            let update = parent.increment_unfinished_tasks_internal();
 
-                if update {
-                    parent.update_unfinished_state(backend);
-                }
-            });
-        }
+            if update {
+                parent.update_unfinished_state(backend);
+            }
+        });
     }
 
     pub fn remove_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
-        let remove_unfinished_parent = {
+        {
             let mut state = self.state.lock();
-            state.parents.remove(parent) && state.has_unfinished_tasks
+            if !state.parents.remove(parent) || !state.has_unfinished_tasks {
+                return;
+            }
         };
-        if remove_unfinished_parent {
-            // As we removed a parent while having unfinished tasks we need to decrement the
-            // unfinished task count and potentially update the state
-            backend.with_scope(parent, |parent| {
-                let update = parent.decrement_unfinished_tasks_internal();
+        // As we removed a parent while having unfinished tasks we need to decrement the
+        // unfinished task count and potentially update the state
+        backend.with_scope(parent, |parent| {
+            let update = parent.decrement_unfinished_tasks_internal();
 
-                if update {
-                    parent.update_unfinished_state(backend);
-                }
-            });
-        }
+            if update {
+                parent.update_unfinished_state(backend);
+            }
+        });
     }
 
     fn update_unfinished_state(&self, backend: &MemoryBackend) {
