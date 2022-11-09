@@ -10,6 +10,7 @@ import (
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/chrometracing"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 
@@ -178,7 +179,7 @@ func (r *Summary) add(taskSummary *taskSummary) {
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
 // TODO: versioning the serialized summary
-func (r *Summary) Close(terminal cli.Ui, filename string, summaryPath fs.AbsolutePath) error {
+func (r *Summary) Close(terminal cli.Ui, filename string, summaryPath turbopath.AbsoluteSystemPath) error {
 	endedAt := time.Now()
 	if err := writeChrometracing(filename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
@@ -200,7 +201,7 @@ func (r *Summary) Close(terminal cli.Ui, filename string, summaryPath fs.Absolut
 	return nil
 }
 
-func (r *Summary) writeSummary(summaryPath fs.AbsolutePath, endedAt time.Time) error {
+func (r *Summary) writeSummary(summaryPath turbopath.AbsoluteSystemPath, endedAt time.Time) error {
 	if err := summaryPath.EnsureDir(); err != nil {
 		return err
 	}

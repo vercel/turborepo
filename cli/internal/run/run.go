@@ -115,7 +115,7 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher, rawArgs []st
 			opts.runOpts.singlePackage = packageMode == packagemanager.Single
 
 			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(config, ui, opts, signalWatcher, rawArgs)
+			run := configureRun(base, opts, signalWatcher, rawArgs)
 			ctx := cmd.Context()
 			if err := run.run(ctx, tasks); err != nil {
 				base.LogError("run failed: %v", err)
@@ -153,7 +153,7 @@ func optsFromFlags(flags *pflag.FlagSet) *Opts {
 	return opts
 }
 
-func configureRun(base *cmdutil.CmdBase, output cli.Ui, opts *Opts, signalWatcher *signals.Watcher, rawArgs []string) *run {
+func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher, rawArgs []string) *run {
 	if os.Getenv("TURBO_FORCE") == "true" {
 		opts.runcacheOpts.SkipReads = true
 	}

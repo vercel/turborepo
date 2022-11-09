@@ -13,7 +13,6 @@ import (
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"google.golang.org/grpc"
