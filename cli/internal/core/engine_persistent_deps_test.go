@@ -164,6 +164,45 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	testifyAssert.Regexp(t, expected, actualErr, "")
 }
 
+func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
+	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
+	// Add in a "dev" task into the root workspace, so it exists
+	completeGraph.PackageInfos["//"].Scripts["dev"] = "echo \"root dev task\""
+
+	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// build task depends on the root dev task
+	engine.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: make(util.Set), // empty
+		Deps:     util.SetFromStrings([]string{"//#dev"}),
+	})
+
+	// Add the persistent task in the root workspace
+	engine.AddTask(&Task{
+		Name:       "//#dev",
+		TopoDeps:   make(util.Set), // empty
+		Deps:       make(util.Set), // empty
+		Persistent: true,
+	})
+
+	// prepare the engine
+	opts := &EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"build"},
+	}
+
+	err := engine.Prepare(opts)
+	assert.NilError(t, err, "Failed to prepare engine")
+
+	actualErr := engine.ValidatePersistentDependencies(completeGraph)
+	// Use a regex here, because depending on the order the graph is walked,
+	// workspace-a, b or c could throw the error first.
+	expected := regexp.MustCompile("\"//#dev\" is a persistent task, \"workspace-[a|b|c]#build\" cannot depend on it")
+
+	testifyAssert.Regexp(t, expected, actualErr)
+}
+
 func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
@@ -211,6 +250,16 @@ func _buildCompleteGraph(workspaceEasyDefinition map[string][]string) (*graph.Co
 
 	// build Workspace Infos
 	workspaceInfos := make(graph.WorkspaceInfos)
+
+	// Add in the root workspace. Not adding any scripts in here
+	// but specific tests may add it in
+	workspaceInfos["//"] = &fs.PackageJSON{
+		Name:    "my-test-package",
+		Scripts: map[string]string{}, // empty
+	}
+
+	// Seed some scripts for each of the workspaces since all our tests
+	// mostly center around these scripts.
 	for _, workspace := range workspaces {
 		workspaceInfos[workspace] = &fs.PackageJSON{
 			Name: workspace,
