@@ -63,7 +63,7 @@ importers:
       globby: 11.1.0
       ngraph.generators: ^19.3.0
       shelljs: ^0.8.4
-      tar: 6.1.11
+      tar: 6.1.12
       uvu: ^0.5.3
       zstd-codec: 0.1.4
     devDependencies:
@@ -76,7 +76,7 @@ importers:
       globby: 11.1.0
       ngraph.generators: 19.3.1
       shelljs: 0.8.5
-      tar: 6.1.11
+      tar: 6.1.12
       uvu: 0.5.6
       zstd-codec: 0.1.4
 
@@ -1654,7 +1654,6 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
     requiresBuild: true
     dev: false
     optional: true
@@ -1683,7 +1682,6 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
     requiresBuild: true
     dev: false
     optional: true
@@ -1712,7 +1710,6 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
     requiresBuild: true
     dev: false
     optional: true
@@ -1741,7 +1738,6 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
     requiresBuild: true
     dev: false
     optional: true
@@ -3244,7 +3240,7 @@ packages:
       promise-inflight: 1.0.1
       rimraf: 3.0.2
       ssri: 9.0.1
-      tar: 6.1.11
+      tar: 6.1.12
       unique-filename: 2.0.1
     transitivePeerDependencies:
       - bluebird
@@ -8736,7 +8732,7 @@ packages:
       npmlog: 6.0.2
       rimraf: 3.0.2
       semver: 7.3.7
-      tar: 6.1.11
+      tar: 6.1.12
       which: 2.0.2
     transitivePeerDependencies:
       - bluebird
@@ -10705,9 +10701,9 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
-  /tar/6.1.11:
-    resolution: {integrity: sha512-an/KZQzQUkZCkuoAA64hM92X0Urb6VpRhAFllDzz44U2mcD5scmT3zBc4VgVpkugF580+DQn8eAFSyoQt0tznA==}
-    engines: {node: '>= 10'}
+  /tar/6.1.12:
+    resolution: {integrity: sha512-jU4TdemS31uABHd+Lt5WEYJuzn+TJTCBLljvIAHZOz6M9Os5pJ4dD+vRFLxPa/n3T0iEFzpi+0x1UfuDZYbRMw==}
+    engines: {node: '>=10'}
     dependencies:
       chownr: 2.0.0
       fs-minipass: 2.1.0
