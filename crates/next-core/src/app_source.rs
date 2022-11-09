@@ -434,7 +434,7 @@ impl NodeEntry for AppRenderer {
     #[turbo_tasks::function]
     async fn entry(&self, data: Value<ContentSourceData>) -> Result<NodeRenderingEntryVc> {
         let is_rsc = if let Some(headers) = data.into_value().headers {
-            headers.contains_key("__rsc__")
+            headers.contains_key("rsc")
         } else {
             false
         };
@@ -549,7 +549,7 @@ import BOOTSTRAP from {};
         let file = File::from(result.build());
         let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
-            (self.context, self.intermediate_output_path.join("__rsc__"))
+            (self.context, self.intermediate_output_path.join("rsc"))
         } else {
             (self.context_ssr, self.intermediate_output_path)
         };
