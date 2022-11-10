@@ -158,10 +158,7 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
-	// Depending on the order the graph is walked in, workspace a, b, or c, could throw the error first
-	// but the persistent task is consistently workspace-b.
-	expected := regexp.MustCompile("\"workspace-b#dev\" is a persistent task, \"workspace-a#dev\" cannot depend on it")
-	testifyAssert.Regexp(t, expected, actualErr, "")
+	testifyAssert.EqualError(t, actualErr, "\"workspace-b#dev\" is a persistent task, \"workspace-a#dev\" cannot depend on it")
 }
 
 func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
