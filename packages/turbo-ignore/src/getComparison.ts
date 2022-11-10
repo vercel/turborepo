@@ -1,4 +1,12 @@
-export function getComparison(): {
+import { info } from "./logger";
+
+export function getComparison({
+  workspace,
+  fallback = true,
+}: {
+  workspace: string;
+  fallback?: boolean;
+}): {
   ref: string;
   type: "previousDeploy" | "headRelative";
 } | null {
@@ -10,6 +18,14 @@ export function getComparison(): {
         type: "previousDeploy",
       };
     } else {
+      info(
+        `no previous deployments found for "${workspace}" on "${process.env.VERCEL_GIT_COMMIT_REF}".`
+      );
+      if (fallback) {
+        info(`falling back to HEAD^`);
+        return { ref: "HEAD^", type: "headRelative" };
+      }
+
       return null;
     }
   }
