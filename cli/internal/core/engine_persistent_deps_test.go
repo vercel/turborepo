@@ -321,7 +321,7 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 		"workspace-a": {}, // no dependencies
 		"workspace-b": {}, // no dependencies
 		"workspace-c": {}, // no dependencies
-		"workspace-z": {}, // no dependencies, nothing depends on it, just floatin'
+		"workspace-z": {}, // no dependencies
 	}
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
