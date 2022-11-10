@@ -267,6 +267,55 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 	testifyAssert.EqualError(t, actualErr, "\"workspace-c#dev\" is a persistent task, \"workspace-b#dev\" cannot depend on it")
 }
 
+func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.T) {
+	var workspaceGraphDefinition = map[string][]string{
+		"workspace-a": {"workspace-b"}, // a depends on b
+		"workspace-b": {"workspace-c"}, // b depends on c
+		"workspace-c": {},              // no dependencies
+		"workspace-z": {},              // no dependencies, nothing depends on it, just floatin'
+	}
+
+	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
+	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// "build": dependsOn: ["^build"] (where dev is persistent)
+	engine.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: util.SetFromStrings([]string{"build"}),
+		Deps:     make(util.Set),
+	})
+
+	// c#build also depends on z#dev
+	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
+	err := engine.AddDep("workspace-z#dev", "workspace-c#build")
+	assert.NilError(t, err, "Failed to prepare engine")
+	engine.AddTask(&Task{
+		Name:     "c#build",
+		TopoDeps: make(util.Set),
+		Deps:     util.SetFromStrings([]string{"z#dev"}),
+	})
+
+	// workspace-z#dev is persistent (blanket "dev" is not added, we don't need it for this test case)
+	engine.AddTask(&Task{
+		Name:       "workspace-z#dev",
+		TopoDeps:   make(util.Set),
+		Deps:       make(util.Set),
+		Persistent: true,
+	})
+
+	opts := &EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"build"},
+	}
+
+	prepErr := engine.Prepare(opts)
+	assert.NilError(t, prepErr, "Failed to prepare engine")
+
+	// do the validation
+	actualErr := engine.ValidatePersistentDependencies(completeGraph)
+	testifyAssert.EqualError(t, actualErr, "\"workspace-z#dev\" is a persistent task, \"workspace-c#build\" cannot depend on it")
+}
+
 // helper function for some of the tests to set up workspace
 func _buildCompleteGraph(workspaceEasyDefinition map[string][]string) (*graph.CompleteGraph, []string) {
 	var workspaceGraph dag.AcyclicGraph
