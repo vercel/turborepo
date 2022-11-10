@@ -25,6 +25,17 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
+	// Make this Task Graph:
+	// dev
+	// └── ^dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#dev
+	// └── workspace-c#dev
+	// workspace-b#dev
+	// └── workspace-c#dev
+
 	// "dev": dependsOn: ["^dev"] (where dev is persistent)
 	engine.AddTask(&Task{
 		Name:       "dev",
@@ -53,6 +64,19 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// Make this Task Graph:
+	// build
+	// └── dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#build
+	// └── workspace-a#dev
+	// workspace-b#build
+	// └── workspace-b#dev
+	// workspace-c#build
+	// └── workspace-c#dev
 
 	// "build": dependsOn: ["dev"] (where build is not, but "dev" is persistent)
 	engine.AddTask(&Task{
@@ -91,6 +115,19 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
+	// Make this Task Graph:
+	// build
+	// └── workspace-b#dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#build
+	// └── workspace-b#dev
+	// workspace-b#build
+	// └── workspace-b#dev
+	// workspace-c#build
+	// └── workspace-b#dev
+
 	// "build": dependsOn: ["workspace-b#dev"]
 	engine.AddTask(&Task{
 		Name:       "build",
@@ -127,6 +164,10 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// Make this Task Graph:
+	// workspace-a#dev
+	// └── workspace-b#dev
 
 	// workspace-a#dev specifically dependsOn workspace-b#dev
 	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
@@ -165,8 +206,20 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	// Add in a "dev" task into the root workspace, so it exists
 	completeGraph.PackageInfos["//"].Scripts["dev"] = "echo \"root dev task\""
-
 	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// Make this Task Graph:
+	// build
+	// └── //#dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#build
+	// └── //#dev
+	// workspace-b#build
+	// └── //#dev
+	// workspace-c#build
+	// └── //#dev
 
 	// build task depends on the root dev task
 	engine.AddTask(&Task{
@@ -204,6 +257,17 @@ func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
+	// Make this Task Graph:
+	// dev
+	// └── ^dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#dev
+	// └── workspace-c#dev (but this isn't implemented)
+	// workspace-b#dev
+	// └── workspace-c#dev (but this isn't implemented)
+
 	// Remove "dev" script from workspace-c. workspace-a|b will still implement,
 	// but since no topological dependencies implement, this test can ensure there is no error
 	delete(completeGraph.PackageInfos["workspace-c"].Scripts, "dev")
@@ -237,6 +301,17 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 		"workspace-c": {},
 	}
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
+
+	// Make this Task Graph:
+	// dev
+	// └── ^dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#dev
+	// └── workspace-b#dev (but this isn't implemented)
+	// 		 └── workspace-c#dev
+
 	// remove b's dev script, so there's a skip in the middle
 	delete(completeGraph.PackageInfos["workspace-b"].Scripts, "dev")
 
@@ -277,6 +352,19 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// Make this Task Graph:
+	// build
+	// └── ^build
+	// workspace-c#build
+	// └── workspace-z#dev
+	//
+	// With this workspace graph, that means:
+	//
+	// workspace-a#build
+	// └── workspace-b#build
+	// 		 └── workspace-c#build
+	// 		 		 └── workspace-z#dev	// this one is persistent
 
 	// "build": dependsOn: ["^build"]
 	engine.AddTask(&Task{
@@ -325,6 +413,14 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 	}
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// Make this Task Graph:
+	//
+	// workspace-a#build
+	// └── workspace-b#build
+	// 		 └── workspace-c#build
+	// 		 		 └── workspace-z#dev // this one is persistent
+	//
 
 	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
 	err1 := engine.AddDep("workspace-b#build", "workspace-a#build") // a#build dependsOn b#build
