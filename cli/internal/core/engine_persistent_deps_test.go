@@ -278,21 +278,21 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
 	engine := NewEngine(&completeGraph.TopologicalGraph)
 
-	// "build": dependsOn: ["^build"] (where dev is persistent)
+	// "build": dependsOn: ["^build"]
 	engine.AddTask(&Task{
 		Name:     "build",
 		TopoDeps: util.SetFromStrings([]string{"build"}),
 		Deps:     make(util.Set),
 	})
 
-	// c#build also depends on z#dev
+	// workspace-c#build also depends on workspace-z#dev
 	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
 	err := engine.AddDep("workspace-z#dev", "workspace-c#build")
 	assert.NilError(t, err, "Failed to prepare engine")
 	engine.AddTask(&Task{
-		Name:     "c#build",
+		Name:     "workspace-c#build",
 		TopoDeps: make(util.Set),
-		Deps:     util.SetFromStrings([]string{"z#dev"}),
+		Deps:     util.SetFromStrings([]string{"workspace-z#dev"}),
 	})
 
 	// workspace-z#dev is persistent (blanket "dev" is not added, we don't need it for this test case)
