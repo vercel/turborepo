@@ -230,6 +230,43 @@ func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 	testifyAssert.Nil(t, actualErr)
 }
 
+func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *testing.T) {
+	var workspaceGraphDefinition = map[string][]string{
+		"workspace-a": {"workspace-b"}, // a depends on b
+		"workspace-b": {"workspace-c"}, // b depends on c
+		"workspace-c": {},
+	}
+	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
+	// remove b's dev script, so there's a skip in the middle
+	delete(completeGraph.PackageInfos["workspace-b"].Scripts, "dev")
+
+	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// "dev": dependsOn: ["^dev"] (where dev is persistent)
+	engine.AddTask(&Task{
+		Name:       "dev",
+		TopoDeps:   util.SetFromStrings([]string{"dev"}),
+		Deps:       make(util.Set), // empty, no non-caret task deps.
+		Persistent: true,
+	})
+
+	opts := &EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"dev"},
+	}
+
+	err := engine.Prepare(opts)
+	assert.NilError(t, err, "Failed to prepare engine")
+
+	// do the validation
+	actualErr := engine.ValidatePersistentDependencies(completeGraph)
+
+	// Note: This error is interesting because workspace-b doesn't implement dev, so saying that workspace-c
+	// shouldn't depend on it. This is partly unavoidable, but partly debatable about what the error message
+	// should say. Leaving as-is so we don't have to implement special casing logic to handle this case.
+	testifyAssert.EqualError(t, actualErr, "\"workspace-c#dev\" is a persistent task, \"workspace-b#dev\" cannot depend on it")
+}
+
 // helper function for some of the tests to set up workspace
 func _buildCompleteGraph(workspaceEasyDefinition map[string][]string) (*graph.CompleteGraph, []string) {
 	var workspaceGraph dag.AcyclicGraph
