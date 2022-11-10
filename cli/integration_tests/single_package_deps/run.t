@@ -44,8 +44,8 @@ Run with --output-logs=hash-only
   $ ${TURBO} run test --single-package --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing output 08d0a37ad9eee1e5
-  test: cache hit, suppressing output cb5a64e4f86a6543
+  build: cache hit, suppressing output e04d8bf0e58a455b
+  test: cache hit, suppressing output 804a9b713dc63f25
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
