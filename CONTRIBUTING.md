@@ -14,12 +14,16 @@ Thanks for your interest in contributing to Turbo!
 Dependencies
 
 1.  On OSX: `brew install sponge jq protobuf protoc-gen-go protoc-gen-go-grpc golang`
-1.  Run `pnpm install` at root
+2.  Setup Rust via [rustup](https://rustup.rs/): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+3.  Run `rustup update`
+4.  Check that `rustup show` shows that the active toolchain is the same as the one in `rust-toolchain`
+5.  Run `pnpm install` at root
 
 Building
 
-- Building `turbo` CLI: In `cli` run `make turbo`
+- Building `turbo` Go CLI: In `cli` run `make turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
+- Building `turbo` Rust CLI: In `shim` run `cargo build`
 
 ### Testing Turborepo
 
