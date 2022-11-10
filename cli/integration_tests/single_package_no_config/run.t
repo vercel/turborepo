@@ -6,7 +6,7 @@ Check
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 8b5e4367c7a67585
+  build: cache bypass, force executing fcdc2cfedba63a1f
   build: 
   build: > build
   build: > echo 'building'
@@ -21,7 +21,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 8b5e4367c7a67585
+  build: cache bypass, force executing fcdc2cfedba63a1f
   build: 
   build: > build
   build: > echo 'building'
