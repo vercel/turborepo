@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"log"
 	"os"
 	"os/exec"
@@ -91,6 +92,29 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
+// Run executes the run command
+func Run(ctx *context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
+	args := executionState.ParsedArgs
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
+	}
+	tasks, passThroughArgs := parseTasksAndPassthroughArgsFromRust(&args)
+	if len(tasks) == 0 {
+		return errors.New("at least one task must be specified")
+	}
+	opts := optsFromRunPayload(args.Command.Run)
+	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
+
+	opts.runOpts.passThroughArgs = passThroughArgs
+	run := configureRun(base, opts, signalWatcher)
+	if err := run.run(ctx, tasks); err != nil {
+		base.LogError("run failed: %v", err)
+		return err
+	}
+	return nil
+}
+
 // GetCmd returns the run command
 func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
 	var opts *Opts
@@ -139,6 +163,57 @@ func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) 
 	return remainingArgs, nil
 }
 
+func parseTasksAndPassthroughArgsFromRust(args *turbostate.ParsedArgsFromRust) ([]string, []string) {
+	for i, task := range args.Command.Run.Tasks {
+		if task == "--" {
+			var tasks []string
+			var passthroughArgs []string
+			// If the `--` has arguments after it, we set passthroughArgs to them
+			if i < len(args.Command.Run.Tasks)-1 {
+				passthroughArgs = args.Command.Run.Tasks[(i + 1):]
+			}
+			if i > 0 {
+				tasks = args.Command.Run.Tasks[0:(i - 1)]
+			}
+
+			return tasks, passthroughArgs
+		}
+	}
+	return remainingArgs, nil
+}
+
+//func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
+//	if argSplit := flags.ArgsLenAtDash(); argSplit != -1 {
+//		return remainingArgs[:argSplit], remainingArgs[argSplit:]
+//	}
+//	return remainingArgs, nil
+//}
+
+func optsFromRunPayload(runPayload *turbostate.RunPayload) *Opts {
+	opts := getDefaultOptions()
+	// aliases := make(map[string]string)
+	opts.scopeOpts.FilterPatterns = runPayload.Filter
+	opts.scopeOpts.IgnorePatterns = runPayload.Ignore
+	opts.scopeOpts.GlobalDepPatterns = runPayload.GlobalDeps
+
+	// opts.runOpts.concurrency = runPayload.Concurrency
+	opts.runOpts.parallel = runPayload.Parallel
+	opts.runOpts.profile = runPayload.Profile
+	opts.runOpts.continueOnError = runPayload.ContinueExecution
+	opts.runOpts.only = runPayload.RemoteOnly
+	//scope.AddFlags(&opts.scopeOpts, flags)
+	//addRunOpts(&opts.runOpts, flags, aliases)
+	//cache.AddFlags(&opts.cacheOpts, flags)
+	//runcache.AddFlags(&opts.runcacheOpts, flags)
+	//flags.SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
+	//	if alias, ok := aliases[name]; ok {
+	//		return pflag.NormalizedName(alias)
+	//	}
+	//	return pflag.NormalizedName(name)
+	//})
+	return opts
+}
+
 func optsFromFlags(flags *pflag.FlagSet) *Opts {
 	opts := getDefaultOptions()
 	aliases := make(map[string]string)
@@ -179,7 +254,7 @@ type run struct {
 	processes *process.Manager
 }
 
-func (r *run) run(ctx gocontext.Context, targets []string) error {
+func (r *run) run(ctx *context.Context, targets []string) error {
 	startAt := time.Now()
 	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)

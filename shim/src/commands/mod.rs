@@ -221,5 +221,6 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    #[clap(trailing_var_arg = true)]
     pub tasks: Vec<String>,
 }

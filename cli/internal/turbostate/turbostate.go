@@ -35,6 +35,31 @@ type PrunePayload struct {
 	OutputDir string `json:"output_dir"`
 }
 
+// RunPayload is the extra flags passed for the `run` subcommand
+type RunPayload struct {
+	CacheDir            string   `json:"cache_dir"`
+	CacheWorkers        int      `json:"cache_workers"`
+	Concurrency         string   `json:"concurrency"`
+	ContinueExecution   bool     `json:"continue_execution"`
+	DryRun              string   `json:"dry_run"`
+	Filter              []string `json:"filter"`
+	Force               bool     `json:"force"`
+	GlobalDeps          []string `json:"global_deps"`
+	Graph               string   `json:"graph"`
+	Ignore              []string `json:"ignore"`
+	IncludeDependencies bool     `json:"include_dependencies"`
+	NoCache             bool     `json:"no_cache"`
+	NoDaemon            bool     `json:"no_daemon"`
+	NoDeps              bool     `json:"no_deps"`
+	OutputLogs          bool     `json:"output_logs"`
+	Parallel            bool     `json:"parallel"`
+	Profile             string   `json:"profile"`
+	RemoteOnly          bool     `json:"remote_only"`
+	Scope               []string `json:"scope"`
+	Since               string   `json:"since"`
+	Tasks               []string `json:"tasks"`
+}
+
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
@@ -43,6 +68,7 @@ type Command struct {
 	Login  *LoginPayload  `json:"login"`
 	Logout *struct{}      `json:"logout"`
 	Prune  *PrunePayload  `json:"prune"`
+	Run    *RunPayload    `json:"run"`
 	Unlink *struct{}      `json:"unlink"`
 }
 
