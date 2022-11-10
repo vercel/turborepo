@@ -113,8 +113,6 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}
-			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
-			opts.runOpts.singlePackage = packageMode == packagemanager.Single
 
 			opts.runOpts.passThroughArgs = passThroughArgs
 			run := configureRun(base, opts, signalWatcher)
