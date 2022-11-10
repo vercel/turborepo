@@ -351,7 +351,7 @@ mod test {
     }
 
     use crate::{
-        commands::{DryRunMode, RunArgs},
+        commands::{DryRunMode, OutputLogsMode, RunArgs},
         Args, Command,
     };
 
@@ -540,6 +540,178 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     graph: Some("out.html".to_string()),
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--ignore", "foo.js"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    ignore: vec!["foo.js".to_string()],
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo", "run", "build", "--ignore", "foo.js", "--ignore", "bar.js"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--include-dependencies"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    include_dependencies: true,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--no-cache"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    no_cache: true,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--no-daemon"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    no_daemon: true,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--no-deps"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    no_deps: true,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--output-logs", "full"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    output_logs: OutputLogsMode::Full,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--output-logs", "none"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    output_logs: OutputLogsMode::None,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--output-logs", "hash-only"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    output_logs: OutputLogsMode::HashOnly,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--parallel"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    parallel: true,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--profile", "profile_out"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    profile: Some("profile_out".to_string()),
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--remote-only"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: true,
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--scope", "foo", "--scope", "bar"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    scope: vec!["foo".to_string(), "bar".to_string()],
+                    ..default_run_args.clone()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--since", "foo"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    since: Some("foo".to_string()),
                     ..default_run_args.clone()
                 })),
                 ..Args::default()

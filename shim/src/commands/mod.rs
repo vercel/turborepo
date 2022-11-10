@@ -11,6 +11,12 @@ pub enum OutputLogsMode {
     NewOnly,
 }
 
+impl Default for OutputLogsMode {
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum DryRunMode {
     Stdout,
@@ -175,7 +181,7 @@ pub struct RunArgs {
     #[clap(long)]
     pub ignore: Vec<String>,
     /// Include the dependencies of tasks in execution.
-    #[clap(long = "ignore-dependencies")]
+    #[clap(long = "include-dependencies")]
     pub include_dependencies: bool,
     /// Avoid saving task results to the cache. Useful for development/watch
     /// tasks.
@@ -192,8 +198,8 @@ pub struct RunArgs {
     /// task hashes. Use "new-only" to show only new output with
     /// only hashes for cached tasks. Use "none" to hide process
     /// output. (default full)
-    #[clap(long = "output-logs", value_enum)]
-    pub output_logs: Option<OutputLogsMode>,
+    #[clap(long = "output-logs", value_enum, default_value_t = OutputLogsMode::Full)]
+    pub output_logs: OutputLogsMode,
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
