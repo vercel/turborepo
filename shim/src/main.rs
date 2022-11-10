@@ -29,7 +29,8 @@ static TURBO_JSON: &str = "turbo.json";
 #[clap(
     ignore_errors = true,
     disable_help_flag = true,
-    disable_help_subcommand = true
+    disable_help_subcommand = true,
+    disable_colored_help = true
 )]
 #[clap(disable_version_flag = true)]
 struct Args {
