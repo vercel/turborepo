@@ -4,7 +4,6 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/turbostate"
 	"log"
 	"os"
 	"os/exec"
@@ -17,10 +16,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/vercel/turbo/cli/internal/config"
-
 	"github.com/pyr-sh/dag"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cache"
@@ -43,6 +39,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 
@@ -93,7 +90,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 `
 
 // Run executes the run command
-func Run(ctx *context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
+func Run(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
 	args := executionState.ParsedArgs
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
@@ -115,46 +112,46 @@ func Run(ctx *context.Context, helper *cmdutil.Helper, signalWatcher *signals.Wa
 	return nil
 }
 
-// GetCmd returns the run command
-func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
-	var opts *Opts
-	var flags *pflag.FlagSet
-
-	cmd := &cobra.Command{
-		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
-		Short:                 "Run tasks across projects in your monorepo",
-		Long:                  _cmdLong,
-		SilenceUsage:          true,
-		SilenceErrors:         true,
-		DisableFlagsInUseLine: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
-			if len(tasks) == 0 {
-				return errors.New("at least one task must be specified")
-			}
-			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
-			opts.runOpts.singlePackage = packageMode == packagemanager.Single
-
-			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(base, opts, signalWatcher)
-			ctx := cmd.Context()
-			if err := run.run(ctx, tasks); err != nil {
-				base.LogError("run failed: %v", err)
-				return err
-			}
-			return nil
-		},
-	}
-
-	flags = cmd.Flags()
-	opts = optsFromFlags(flags)
-	return cmd
-}
+//// GetCmd returns the run command
+//func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
+//	var opts *Opts
+//	var flags *pflag.FlagSet
+//
+//	cmd := &cobra.Command{
+//		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
+//		Short:                 "Run tasks across projects in your monorepo",
+//		Long:                  _cmdLong,
+//		SilenceUsage:          true,
+//		SilenceErrors:         true,
+//		DisableFlagsInUseLine: true,
+//		RunE: func(cmd *cobra.Command, args []string) error {
+//			flags := config.FlagSet{FlagSet: cmd.Flags()}
+//			base, err := helper.GetCmdBase(flags)
+//			if err != nil {
+//				return err
+//			}
+//			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
+//			if len(tasks) == 0 {
+//				return errors.New("at least one task must be specified")
+//			}
+//			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
+//			opts.runOpts.singlePackage = packageMode == packagemanager.Single
+//
+//			opts.runOpts.passThroughArgs = passThroughArgs
+//			run := configureRun(base, opts, signalWatcher)
+//			ctx := cmd.Context()
+//			if err := run.run(ctx, tasks); err != nil {
+//				base.LogError("run failed: %v", err)
+//				return err
+//			}
+//			return nil
+//		},
+//	}
+//
+//	flags = cmd.Flags()
+//	opts = optsFromFlags(flags)
+//	return cmd
+//}
 
 func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
 	if argSplit := flags.ArgsLenAtDash(); argSplit != -1 {
@@ -179,7 +176,7 @@ func parseTasksAndPassthroughArgsFromRust(args *turbostate.ParsedArgsFromRust) (
 			return tasks, passthroughArgs
 		}
 	}
-	return remainingArgs, nil
+	return args.Command.Run.Tasks, nil
 }
 
 //func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
@@ -254,7 +251,7 @@ type run struct {
 	processes *process.Manager
 }
 
-func (r *run) run(ctx *context.Context, targets []string) error {
+func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
 	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
