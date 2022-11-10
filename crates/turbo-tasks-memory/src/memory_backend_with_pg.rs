@@ -14,12 +14,12 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use concurrent_queue::ConcurrentQueue;
-use event_listener::{Event, EventListener};
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, CellMappings, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
+    event::{Event, EventListener},
     persisted_graph::{
         ActivateResult, DeactivateResult, PersistResult, PersistTaskState, PersistedGraph,
         PersistedGraphApi, ReadTaskState, TaskCell, TaskData,
@@ -62,7 +62,7 @@ impl Default for TaskFreshness {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct MemoryTaskState {
     need_persist: bool,
     has_changes: bool,
@@ -75,6 +75,24 @@ struct MemoryTaskState {
     children: HashSet<TaskId>,
     event: Event,
     event_cells: Event,
+}
+
+impl MemoryTaskState {
+    fn new(task: TaskId, freshness: TaskFreshness) -> Self {
+        Self {
+            freshness,
+            need_persist: Default::default(),
+            has_changes: Default::default(),
+            cells: Default::default(),
+            cell_mappings: Default::default(),
+            output: Default::default(),
+            output_dependent: Default::default(),
+            dependencies: Default::default(),
+            children: Default::default(),
+            event: Event::new(move || format!("MemoryTaskState({task})::event")),
+            event_cells: Event::new(move || format!("MemoryTaskState({task})::event_cells")),
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -221,7 +239,8 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
                 if self.pg_is_persisted(task, turbo_tasks) {
                     task_state.persisted = Some(PersistedTaskState { clean: None });
                 } else {
-                    task_state.memory = Some(MemoryTaskState::default());
+                    task_state.memory =
+                        Some(MemoryTaskState::new(task, TaskFreshness::NeverExecuted));
                 }
             } else {
                 // We must never have not initizalized transient task in the cache
@@ -259,7 +278,12 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
                     output_dependent: HashSet::new(),
                     dependencies: data.dependencies.into_iter().collect(),
                     children: data.children.into_iter().collect(),
-                    ..Default::default()
+                    need_persist: Default::default(),
+                    has_changes: Default::default(),
+                    event: Event::new(move || format!("MemoryTaskState({task})::event")),
+                    event_cells: Event::new(move || {
+                        format!("MemoryTaskState({task})::event_cells")
+                    }),
                 };
                 if task_state.active {
                     for &child in mem_state.children.iter() {
@@ -284,7 +308,7 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
                     turbo_tasks.schedule(task);
                 }
             } else {
-                task_state.memory = Some(MemoryTaskState::default());
+                task_state.memory = Some(MemoryTaskState::new(task, TaskFreshness::NeverExecuted));
             }
         }
     }
@@ -894,7 +918,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             #[allow(unused_variables)]
             let (mut state, task_info) = self.state_mut(*task, turbo_tasks);
             state.persisted_to_mem_active = true;
-            state.memory = Some(MemoryTaskState::default());
+            state.memory = Some(MemoryTaskState::new(*task, TaskFreshness::NeverExecuted));
             #[cfg(feature = "log_running_tasks")]
             {
                 println!(
@@ -1527,21 +1551,18 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             return task;
         }
 
+        let task = turbo_tasks.get_fresh_task_id();
         let new_task = Task {
             active_parents: AtomicU32::new(1),
             task_state: Mutex::new(TaskState {
                 scheduled: true,
-                memory: Some(MemoryTaskState {
-                    freshness: TaskFreshness::NeverExecuted,
-                    ..Default::default()
-                }),
+                memory: Some(MemoryTaskState::new(task, TaskFreshness::NeverExecuted)),
                 persisted: None,
                 active: true,
                 ..Default::default()
             }),
             task_type: TaskType::Persistent(task_type.clone()),
         };
-        let task = turbo_tasks.get_fresh_task_id();
         // SAFETY: It's a fresh task id
         unsafe {
             self.tasks.insert(*task, new_task);
@@ -1573,14 +1594,12 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         task_type: TransientTaskType,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
+        let task = turbo_tasks.get_fresh_task_id();
         let new_task = Task {
             active_parents: AtomicU32::new(1),
             task_state: Mutex::new(TaskState {
                 scheduled: true,
-                memory: Some(MemoryTaskState {
-                    freshness: TaskFreshness::NeverExecuted,
-                    ..Default::default()
-                }),
+                memory: Some(MemoryTaskState::new(task, TaskFreshness::NeverExecuted)),
                 persisted: None,
                 active: true,
                 ..Default::default()
@@ -1590,7 +1609,6 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
                 TransientTaskType::Once(o) => TaskType::Once(Mutex::new(o)),
             },
         };
-        let task = turbo_tasks.get_fresh_task_id();
         // SAFETY: It's a fresh task id
         unsafe {
             self.tasks.insert(*task, new_task);

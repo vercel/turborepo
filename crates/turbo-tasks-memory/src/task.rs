@@ -13,11 +13,11 @@ use std::{
 };
 
 use anyhow::Result;
-use event_listener::{Event, EventListener};
 use parking_lot::{RwLock, RwLockWriteGuard};
 use tokio::task_local;
 use turbo_tasks::{
     backend::{CellMappings, PersistentTaskType},
+    event::{Event, EventListener},
     get_invalidator, registry, FunctionId, Invalidator, RawVc, TaskId, TaskInput, TraitTypeId,
     TurboTasksBackendApi,
 };
@@ -148,7 +148,6 @@ impl Debug for Task {
 }
 
 /// The state of a [Task]
-#[derive(Default)]
 struct TaskState {
     scopes: TaskScopes,
 
@@ -171,6 +170,42 @@ struct TaskState {
     executions: u32,
     total_duration: Duration,
     last_duration: Duration,
+}
+
+impl TaskState {
+    fn new(id: TaskId) -> Self {
+        Self {
+            scopes: Default::default(),
+            state_type: Default::default(),
+            children: Default::default(),
+            collectibles: Default::default(),
+            output: Default::default(),
+            created_cells: Default::default(),
+            event: Event::new(move || format!("TaskState({id})::event")),
+            executions: Default::default(),
+            total_duration: Default::default(),
+            last_duration: Default::default(),
+            #[cfg(feature = "track_wait_dependencies")]
+            last_waiting_task: Default::default(),
+        }
+    }
+
+    fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -> Self {
+        Self {
+            scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
+            state_type: Scheduled,
+            children: Default::default(),
+            collectibles: Default::default(),
+            output: Default::default(),
+            created_cells: Default::default(),
+            event: Event::new(move || format!("TaskState({id})::event")),
+            executions: Default::default(),
+            total_duration: Default::default(),
+            last_duration: Default::default(),
+            #[cfg(feature = "track_wait_dependencies")]
+            last_waiting_task: Default::default(),
+        }
+    }
 }
 
 /// Keeps track of emitted and unemitted collectibles. Defaults to None to avoid
@@ -274,7 +309,7 @@ impl Task {
             id,
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
-            state: Default::default(),
+            state: RwLock::new(TaskState::new(id)),
             execution_data: Default::default(),
         }
     }
@@ -288,7 +323,7 @@ impl Task {
             id,
             inputs,
             ty: TaskType::ResolveNative(native_fn),
-            state: Default::default(),
+            state: RwLock::new(TaskState::new(id)),
             execution_data: Default::default(),
         }
     }
@@ -303,7 +338,7 @@ impl Task {
             id,
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
-            state: Default::default(),
+            state: RwLock::new(TaskState::new(id)),
             execution_data: Default::default(),
         }
     }
@@ -317,11 +352,7 @@ impl Task {
             id,
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
-            state: RwLock::new(TaskState {
-                state_type: Scheduled,
-                scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
-                ..Default::default()
-            }),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
             execution_data: Default::default(),
         }
     }
@@ -335,11 +366,7 @@ impl Task {
             id,
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(Some(Box::pin(functor)))),
-            state: RwLock::new(TaskState {
-                state_type: Scheduled,
-                scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
-                ..Default::default()
-            }),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
             execution_data: Default::default(),
         }
     }

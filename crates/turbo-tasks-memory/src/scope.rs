@@ -7,10 +7,12 @@ use std::{
     sync::atomic::{AtomicIsize, AtomicUsize, Ordering},
 };
 
-use event_listener::{Event, EventListener};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::Mutex;
-use turbo_tasks::{RawVc, TaskId, TraitTypeId};
+use turbo_tasks::{
+    event::{Event, EventListener},
+    RawVc, TaskId, TraitTypeId,
+};
 
 use crate::{
     count_hash_set::{CountHashSet, CountHashSetIter},
@@ -168,7 +170,12 @@ impl TaskScope {
                 children: CountHashSet::new(),
                 collectibles: HashMap::new(),
                 dependent_tasks: HashSet::new(),
-                event: Event::new(),
+                event: Event::new(|| {
+                    #[cfg(feature = "print_scope_updates")]
+                    return format!("TaskScope({id})::event");
+                    #[cfg(not(feature = "print_scope_updates"))]
+                    return format!("TaskScope::event");
+                }),
                 has_unfinished_tasks: false,
                 parents: CountHashSet::new(),
             }),
@@ -190,7 +197,12 @@ impl TaskScope {
                 children: CountHashSet::new(),
                 collectibles: HashMap::new(),
                 dependent_tasks: HashSet::new(),
-                event: Event::new(),
+                event: Event::new(|| {
+                    #[cfg(feature = "print_scope_updates")]
+                    return format!("TaskScope({id})::event");
+                    #[cfg(not(feature = "print_scope_updates"))]
+                    return format!("TaskScope::event");
+                }),
                 has_unfinished_tasks: false,
                 parents: CountHashSet::new(),
             }),

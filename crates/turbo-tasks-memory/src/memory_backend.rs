@@ -10,7 +10,6 @@ use std::{
 
 use anyhow::{bail, Result};
 use dashmap::{mapref::entry::Entry, DashMap};
-use event_listener::EventListener;
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
 use turbo_tasks::{
@@ -18,6 +17,7 @@ use turbo_tasks::{
         Backend, BackendJobId, CellContent, CellMappings, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
+    event::EventListener,
     util::{IdFactory, NoMoveVec},
     RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
