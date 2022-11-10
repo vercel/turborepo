@@ -16,9 +16,13 @@ itertools = "0.10.5"
 [dependencies]
 anyhow = { version = "1.0.65", features = ["backtrace"] }
 clap = { version = "4.0.18", features = ["derive"] }
+config = "0.13"
 globset = "0.4.9"
 predicates = "2.1.1"
+semver = "1.0"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.86"
 serde_yaml = "0.8.26"
+termcolor = "1.1"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 walkdir = "2"
