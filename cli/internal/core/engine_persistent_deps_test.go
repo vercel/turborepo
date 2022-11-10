@@ -316,6 +316,66 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 	testifyAssert.EqualError(t, actualErr, "\"workspace-z#dev\" is a persistent task, \"workspace-c#build\" cannot depend on it")
 }
 
+func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *testing.T) {
+	var workspaceGraphDefinition = map[string][]string{
+		"workspace-a": {}, // no dependencies
+		"workspace-b": {}, // no dependencies
+		"workspace-c": {}, // no dependencies
+		"workspace-z": {}, // no dependencies, nothing depends on it, just floatin'
+	}
+	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
+	engine := NewEngine(&completeGraph.TopologicalGraph)
+
+	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
+	err1 := engine.AddDep("workspace-b#build", "workspace-a#build") // a#build dependsOn b#build
+	assert.NilError(t, err1, "Failed to prepare engine")
+	err2 := engine.AddDep("workspace-c#build", "workspace-b#build") // b#build dependsOn c#build
+	assert.NilError(t, err2, "Failed to prepare engine")
+	err3 := engine.AddDep("workspace-z#dev", "workspace-c#build") // c#build dependsOn z#dev
+	assert.NilError(t, err3, "Failed to prepare engine")
+
+	// The default build command has no deps, it just exists to have a baseline
+	engine.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: make(util.Set),
+		Deps:     make(util.Set),
+	})
+
+	engine.AddTask(&Task{
+		Name:     "workspace-a#build",
+		TopoDeps: make(util.Set),
+		Deps:     util.SetFromStrings([]string{"workspace-b#build"}),
+	})
+	engine.AddTask(&Task{
+		Name:     "workspace-b#build",
+		TopoDeps: make(util.Set),
+		Deps:     util.SetFromStrings([]string{"workspace-c#build"}),
+	})
+	engine.AddTask(&Task{
+		Name:     "workspace-c#build",
+		TopoDeps: make(util.Set),
+		Deps:     util.SetFromStrings([]string{"workspace-z#dev"}),
+	})
+	engine.AddTask(&Task{
+		Name:       "workspace-z#dev",
+		TopoDeps:   make(util.Set),
+		Deps:       make(util.Set),
+		Persistent: true,
+	})
+
+	opts := &EngineBuildingOptions{
+		Packages:  workspaces,
+		TaskNames: []string{"build"},
+	}
+
+	prepErr := engine.Prepare(opts)
+	assert.NilError(t, prepErr, "Failed to prepare engine")
+
+	// do the validation
+	actualErr := engine.ValidatePersistentDependencies(completeGraph)
+	testifyAssert.EqualError(t, actualErr, "\"workspace-z#dev\" is a persistent task, \"workspace-c#build\" cannot depend on it")
+}
+
 // helper function for some of the tests to set up workspace
 func _buildCompleteGraph(workspaceEasyDefinition map[string][]string) (*graph.CompleteGraph, []string) {
 	var workspaceGraph dag.AcyclicGraph
