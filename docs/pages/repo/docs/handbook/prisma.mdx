@@ -1,0 +1,52 @@
+# Using Prisma with Turborepo
+
+[Prisma](https://www.prisma.io/) is an extremely popular ORM with automated migrations, type safety and integrated tooling.
+
+## Guide
+
+### 1. Create your Monorepo
+
+If you don't have an existing project, use our [quickstart](/repo/docs/getting-started/create-new) to create a new monorepo.
+
+### 2. Add a new `database` package
+
+Create a new folder called `database` inside packages with a `package.json` inside:
+
+```json filename="packages/database/package.json"
+{
+  "name": "database",
+  "dependencies": {
+    "@prisma/client": "latest"
+  },
+  "devDependencies": {
+    // Replace "latest" with the latest version
+    "prisma": "latest"
+  }
+}
+```
+
+If you're using `pnpm`, you should add a file at the root called `.npmrc`:
+
+```txt filename=".npmrc"
+public-hoist-pattern[]=*prisma*
+```
+
+Run your package manager's install step to install the new dependencies.
+
+### 3. Run `prisma init`
+
+`cd` into `packages/database`:
+
+```bash
+cd packages/database
+```
+
+Run `npx prisma init`.
+
+This should create several files inside `packages/db`:
+
+```
+prisma/schema.prisma
+.gitignore
+.env
+```
