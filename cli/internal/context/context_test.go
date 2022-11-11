@@ -141,7 +141,7 @@ func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
 	// getting the regex incantation to check that is not worth it.
 	// We have to use regex because the actual error may be different depending on which workspace was
 	// added first and which one was second, causing the error.
-	testifyAssert.Regexp(t, actualErr, regexp.MustCompile("^Failed to add workspace \"same-name\".+$"))
+	testifyAssert.Regexp(t, regexp.MustCompile("^Failed to add workspace \"same-name\".+$"), actualErr)
 }
 
 // This is duplicated from fs.turbo_json_test.go.
