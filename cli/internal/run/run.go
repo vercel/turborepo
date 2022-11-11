@@ -1125,6 +1125,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			prefixedUI.Warn("command finished with error, but continuing...")
 		}
 
+		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 
 		return err
