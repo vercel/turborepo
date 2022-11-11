@@ -1,0 +1,50 @@
+name: Turborepo Integration tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, edited, synchronize]
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
+      - "examples/**"
+
+jobs:
+  test:
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test
+
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: ${{ runner.os }}-prysk
+
+      - name: Integration Tests
+        run: pnpm -- turbo run integration-tests --filter=cli

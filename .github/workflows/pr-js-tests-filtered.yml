@@ -1,4 +1,4 @@
-name: CLI E2E tests
+name: JS Package Tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -9,26 +9,33 @@ on:
     branches: ["main"]
   pull_request:
     types: [opened, edited, synchronize]
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
+      - "examples/**"
 
 jobs:
   test:
-    timeout-minutes: 15
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
       - uses: ./.github/actions/setup-node
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: E2E Tests
-        run: pnpm -- turbo run e2e --filter=cli
-
-      - name: Integration Tests
-        if: matrix.os != 'windows-latest'
-        run: pnpm -- turbo run integration-tests --filter=cli
+      - run: |
+          pnpm -- turbo run test  --filter=...[${{ github.event.pull_request.base.sha }}] --filter=!cli --color

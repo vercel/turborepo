@@ -2,13 +2,12 @@ name: Build release
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main]
     tags:
       - node-file-trace*
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_PROFILE_RELEASE_LTO: true
 
 jobs:
   build:
@@ -16,13 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu-latest-16-core
+          - name: ubuntu-latest-16-core-oss
             target: x86_64-unknown-linux-musl
           - name: macos-latest
             target: x86_64-apple-darwin
           - name: macos-latest
             target: aarch64-apple-darwin
-          - name: ubuntu-latest-16-core
+          - name: ubuntu-latest-16-core-oss
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os.name }}
 

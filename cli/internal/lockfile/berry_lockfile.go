@@ -80,7 +80,8 @@ type BerryLockfile struct {
 
 // BerryDependencyMetaEntry Structure for holding if a package is optional or not
 type BerryDependencyMetaEntry struct {
-	Optional bool `yaml:"optional,omitempty"`
+	Optional  bool `yaml:"optional,omitempty"`
+	Unplugged bool `yaml:"unplugged,omitempty"`
 }
 
 var _ Lockfile = (*BerryLockfile)(nil)
@@ -681,14 +682,17 @@ func _stringifyDepsMeta(meta map[string]BerryDependencyMetaEntry) string {
 	sort.Strings(keys)
 
 	lines := make([]string, 0, len(meta))
-	addLine := func(name string) {
-		lines = append(lines, fmt.Sprintf("    %s:\n      optional: true", _wrapString(name)))
+	addLine := func(name string, key string) {
+		lines = append(lines, fmt.Sprintf("    %s:\n      %s: true", _wrapString(name), key))
 	}
 
 	for _, name := range keys {
 		optional := meta[name]
 		if optional.Optional {
-			addLine(name)
+			addLine(name, "optional")
+		}
+		if optional.Unplugged {
+			addLine(name, "unplugged")
 		}
 	}
 

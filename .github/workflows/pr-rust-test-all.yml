@@ -1,0 +1,36 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+          - name: macos
+          - name: windows
+    runs-on: ubuntu-latest
+    name: test - ${{ matrix.os.name }}
+
+    steps:
+      - run: 'echo "No check run required"'
+
+  test-bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+          - name: macos
+          - name: windows
+    runs-on: ubuntu-latest
+    name: test-bench - ${{ matrix.os.name }}
+
+    steps:
+      - run: 'echo "No check run required"'

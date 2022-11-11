@@ -9,6 +9,10 @@ on:
     branches: ["main"]
   pull_request:
     types: [opened, edited, synchronize]
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+      - "docs/**"
 
 jobs:
   examples:
@@ -20,7 +24,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
-        example: [basic, design-system, kitchen-sink]
+        example: [basic, design-system, kitchen-sink, non-monorepo]
         include:
           - os: ubuntu-latest
             manager: pnpm
