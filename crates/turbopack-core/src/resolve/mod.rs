@@ -435,7 +435,7 @@ async fn find_package(
     package_name: String,
     options: ResolveModulesOptionsVc,
 ) -> Result<FindPackageResultVc> {
-    let mut packages = HashSet::new();
+    let mut packages = IndexSet::new();
     let mut references = vec![];
     let options = options.await?;
     for resolve_modules in &options.modules {
