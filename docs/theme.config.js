@@ -45,13 +45,18 @@ const theme = {
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
-      setDateString(
-        timestamp.toLocaleDateString(navigator.language, {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
-      );
+      try {
+        setDateString(
+          timestamp.toLocaleDateString(navigator.language, {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        );
+      } catch (e) {
+        // Ignore errors here; they get the ISO string.
+        // At least one person out there has manually misconfigured navigator.language.
+      }
     }, [timestamp]);
 
     return <>Last updated on {dateString}</>;
