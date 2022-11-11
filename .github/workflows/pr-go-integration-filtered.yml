@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v3
@@ -32,17 +32,14 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup rust
-        if: matrix.os != 'windows-latest'
         uses: actions-rs/toolchain@v1
 
       - name: Setup rust cache
-        if: matrix.os != 'windows-latest'
         uses: Swatinem/rust-cache@v2
         with:
           key: test
 
       - name: Cache Prysk
-        if: matrix.os != 'windows-latest'
         id: cache-prysk
         uses: actions/cache@v3
         with:
@@ -50,5 +47,4 @@ jobs:
           key: ${{ runner.os }}-prysk
 
       - name: Integration Tests
-        if: matrix.os != 'windows-latest'
         run: pnpm -- turbo run integration-tests --filter=cli
