@@ -317,7 +317,7 @@ checkAndPreparePackage().then(() => {
       console.error(
         `Error: Failed to run turbo binary, you may need to install glibc compat\nSee https://turbo.build/repo/docs/getting-started/existing-monorepo#install-turbo`
       );
-      throw err;
     }
+    throw err;
   }
 });
