@@ -200,51 +200,8 @@ Check out the section on [running tasks](/repo/docs/core-concepts/monorepos/runn
 
 ### 7. Caching the results of `prisma generate`
 
-`prisma generate` (our `db:generate` task) produces outputs to `node_modules`. It's possible to cache those outputs with Turborepo, meaning you can skip executing `db:generate`.
+`prisma generate` outputs files to the filesystem, usually inside `node_modules`. In theory, it should be possible to cache the output of `prisma generate` with Turborepo to save a few seconds.
 
-This experience is slightly different depending on which package manager you use, and depending on its hoisting configuration. For consistency, we recommend setting up prisma so it generates its code _not_ in `node_modules`.
+However, Prisma behaves differently with different package managers. This can lead to unpredictable results, which might lead to broken deployments in some situations. Instead of documenting the intricacies of each approach, we recommend _not_ caching the results of `prisma generate`. Since `prisma generate` usually only takes 5-6 seconds, and tends not to take longer with larger `schema` files, this seems like a fine trade-off.
 
-Inside your `schema.prisma`, add this line to your `generator client` block:
-
-```diff filename="packages/database/schema.prisma"
-generator client {
-  provider = "prisma-client-js"
-+ output   = "./generated/client"
-}
-```
-
-Run `turbo db:generate` from root again. You'll notice that now, the client gets generated at `packages/database/prisma/generated/client` instead.
-
-We recommend gitignoring these files. Add them to `.gitignore`:
-
-```diff filename="packages/database/.gitignore"
-+ prisma/generated
-```
-
-We'll now need to change `index.ts` to export from the generated files, not `@prisma/client`:
-
-```diff filename="packages/database/index.ts"
-- export * from "@prisma/client";
-+ export * from "./prisma/generated/client";
-```
-
-Now, we can set up caching with `db:generate` inside `turbo.json`:
-
-```json filename="turbo.json"
-{
-  "pipeline": {
-    "db:generate": {
-      "inputs": [
-        "prisma/schema.prisma"
-      ],
-      "outputs": [
-        "prisma/generated/**"
-      ]
-    }
-  }
-}
-```
-
-Running `turbo db:generate` will now take advantage of [Turborepo's caching](/repo/docs/core-concepts/caching). The first time you run it, it'll run normally. The second time you run it, it'll run `FULL TURBO` and restore files from the cache.
-
-We've also specified the `inputs` down to `prisma/schema.prisma`. This is because we know `schema.prisma` is the _only_ input file to `db:generate`.
+You may wish to experiment with this yourself. If you find a solution that you feel works, feel free to [add an issue](https://github.com/vercel/turbo/issues/new/choose) and we can update this section.
