@@ -129,7 +129,7 @@ func Test_isWorkspaceReference(t *testing.T) {
 }
 
 func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
-	path := getTestDir(t, "duplicate-pkgs")
+	path := getTestDir(t, "repo-with-dupe-workspaces")
 	pkgJSON := &fs.PackageJSON{
 		Name:           "repo-with-dupe-workspaces",
 		PackageManager: "npm@8.1.2",
