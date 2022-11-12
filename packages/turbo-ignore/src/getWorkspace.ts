@@ -4,10 +4,8 @@ import { error, info } from "./logger";
 import { TurboIgnoreArgs } from "./types";
 
 export function getWorkspace({
-  cwd,
   args,
 }: {
-  cwd: string;
   args: TurboIgnoreArgs;
 }): string | null {
   // if the workspace is provided via args, use that
@@ -17,7 +15,10 @@ export function getWorkspace({
   }
 
   // otherwise, try and infer it from a package.json in the current directory
-  const packageJsonPath = path.join(cwd, "package.json");
+  const packageJsonPath = path.join(
+    args.directory || process.cwd(),
+    "package.json"
+  );
   try {
     const raw = fs.readFileSync(packageJsonPath, "utf8");
     const packageJsonContent: Record<string, string> & { name: string } =
@@ -25,6 +26,7 @@ export function getWorkspace({
 
     if (!packageJsonContent.name) {
       error(`"${packageJsonPath}" is missing the "name" field (required).`);
+      return null;
     }
 
     info(

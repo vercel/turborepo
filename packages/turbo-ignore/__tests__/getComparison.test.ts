@@ -1,8 +1,8 @@
 import { getComparison } from "../src/getComparison";
-import { spyConsole } from "../src/test-utils";
+import { spyConsole } from "./test-utils";
 
 describe("getComparison()", () => {
-  const console = spyConsole();
+  const mockConsole = spyConsole();
   it("uses headRelative comparison when not running Vercel CI", async () => {
     expect(getComparison({ workspace: "test-workspace" }))
       .toMatchInlineSnapshot(`
@@ -19,7 +19,7 @@ describe("getComparison()", () => {
     expect(
       getComparison({ workspace: "test-workspace", fallback: false })
     ).toBeNull();
-    expect(console.log).toHaveBeenCalledWith(
+    expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
       'no previous deployments found for "test-workspace" on "my-branch".'
     );
@@ -35,12 +35,12 @@ describe("getComparison()", () => {
           "type": "headRelative",
         }
       `);
-    expect(console.log).toHaveBeenNthCalledWith(
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
       1,
       "≫  ",
       'no previous deployments found for "test-workspace" on "my-branch".'
     );
-    expect(console.log).toHaveBeenNthCalledWith(
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
       2,
       "≫  ",
       "falling back to HEAD^"

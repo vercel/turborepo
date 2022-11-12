@@ -1,0 +1,267 @@
+import child_process, { ChildProcess, ExecException } from "child_process";
+import turboIgnore from "../src/ignore";
+import { spyExit, spyConsole, mockEnv, validateLogs } from "./test-utils";
+import type { SpyExit } from "./test-utils";
+
+function expectBuild(mockExit: SpyExit) {
+  expect(mockExit.exit).toHaveBeenCalledWith(1);
+}
+
+function expectIgnore(mockExit: SpyExit) {
+  expect(mockExit.exit).toHaveBeenCalledWith(0);
+}
+
+describe("turboIgnore()", () => {
+  mockEnv();
+  const mockExit = spyExit();
+  const mockConsole = spyConsole();
+
+  it("throws error and allows build when exec fails", async () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            "error" as unknown as ExecException,
+            "stdout",
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore({
+      args: { workspace: "test-workspace", filterFallback: true },
+    });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
+      expect.anything(),
+      expect.anything()
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("skips checks and allows build when no workspace can be found", async () => {
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: true,
+        directory: "__fixtures__/no-app",
+      },
+    });
+    expect(mockConsole.error).toHaveBeenLastCalledWith(
+      "≫  ",
+      "workspace not found. turbo-ignore inferencing failed"
+    );
+    expectBuild(mockExit);
+  });
+
+  it("skips checks and allows build when a workspace with no name is found", async () => {
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: true,
+        directory: "__fixtures__/invalid-app",
+      },
+    });
+    expect(mockConsole.error).toHaveBeenLastCalledWith(
+      "≫  ",
+      "workspace not found. turbo-ignore inferencing failed"
+    );
+    expectBuild(mockExit);
+  });
+
+  it("skips checks and allows build when no monorepo root can be found", async () => {
+    turboIgnore({
+      args: { workspace: null, filterFallback: true, directory: "/" },
+    });
+    expectBuild(mockExit);
+    expect(mockConsole.error).toHaveBeenLastCalledWith(
+      "≫  ",
+      "monorepo root not found. turbo-ignore inferencing failed"
+    );
+  });
+
+  it("skips checks and allows build when TURBO_FORCE is set", async () => {
+    process.env.TURBO_FORCE = "true";
+    turboIgnore({
+      args: { workspace: "test-workspace", filterFallback: true },
+    });
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      2,
+      "≫  ",
+      "`TURBO_FORCE` detected"
+    );
+    expectBuild(mockExit);
+  });
+
+  it("allows build when no comparison is returned", async () => {
+    process.env.VERCEL = "1";
+    process.env.VERCEL_GIT_PREVIOUS_SHA = "";
+    process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: false,
+        directory: "__fixtures__/app",
+      },
+    });
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      3,
+      "≫  ",
+      'no previous deployments found for "test-app" on "my-branch".'
+    );
+    expectBuild(mockExit);
+  });
+
+  it("skips build for `previousDeploy` comparison with no changes", async () => {
+    process.env.VERCEL = "1";
+    process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
+    process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages":[],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: false,
+        directory: "__fixtures__/app",
+      },
+    });
+    validateLogs(
+      [
+        "Using Turborepo to determine if this project is affected by the commit...\n",
+        'inferred "test-app" as workspace from "package.json"',
+        "found previous deployment for project",
+        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        "this project and its dependencies are not affected",
+        "ignoring the change",
+      ],
+      mockConsole
+    );
+
+    expectIgnore(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("allows build for `previousDeploy` comparison with changes", async () => {
+    process.env.VERCEL = "1";
+    process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
+    process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages":["ui"],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: false,
+        directory: "__fixtures__/app",
+      },
+    });
+    validateLogs(
+      [
+        "Using Turborepo to determine if this project is affected by the commit...\n",
+        'inferred "test-app" as workspace from "package.json"',
+        "found previous deployment for project",
+        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        "the commit affects this project and/or its 0 dependencies",
+        "proceeding with deployment",
+      ],
+      mockConsole
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("throws error and allows build when json cannot be parsed", async () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(null, "stdout", "stderr") as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: true,
+        directory: "__fixtures__/app",
+      },
+    });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
+      expect.anything(),
+      expect.anything()
+    );
+    expect(mockConsole.error).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`."
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("throws error and allows build when stdout is null", async () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            null as unknown as string,
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore({
+      args: {
+        workspace: null,
+        filterFallback: true,
+        directory: "__fixtures__/app",
+      },
+    });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
+      expect.anything(),
+      expect.anything()
+    );
+    expect(mockConsole.error).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`."
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+});

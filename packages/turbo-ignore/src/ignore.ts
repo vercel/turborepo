@@ -1,4 +1,5 @@
 import { exec } from "child_process";
+import path from "path";
 import { getTurboRoot } from "turbo-utils";
 import { getComparison } from "./getComparison";
 import { getWorkspace } from "./getWorkspace";
@@ -27,30 +28,28 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   }
 
   // find the monorepo root
-  const root = getTurboRoot();
+  const root = getTurboRoot(
+    args.directory ? path.resolve(args.directory) : process.cwd()
+  );
   if (!root) {
     error("monorepo root not found. turbo-ignore inferencing failed");
     return continueBuild();
   }
 
   // Find the workspace from the command-line args, or the package.json at the current directory
-  const workspace = getWorkspace({ cwd: process.cwd(), args });
+  const workspace = getWorkspace({ args });
   if (!workspace) {
     error("workspace not found. turbo-ignore inferencing failed");
     return continueBuild();
   }
 
   // Get the start of the comparison (previous deployment when available, or previous commit by default)
-  const comparison = getComparison({ workspace });
+  const comparison = getComparison({
+    workspace,
+    fallback: args.filterFallback,
+  });
   if (!comparison) {
     // This is either the first deploy of the project, or the first deploy for the branch, either way - build it.
-    info(
-      `no previous deployments found for "${workspace}"${
-        process.env.VERCEL === "1"
-          ? ` on "${process.env.VERCEL_GIT_COMMIT_REF}".`
-          : "."
-      }`
-    );
     return continueBuild();
   }
   if (comparison.type === "previousDeploy") {
