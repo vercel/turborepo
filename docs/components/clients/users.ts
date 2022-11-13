@@ -487,4 +487,10 @@ export const users: Array<TurboUser> = [
       width: 175,
     },
   },
+  {
+    caption: "SolanaFM",
+    image: "/images/logos/solanafm.svg",
+    infoLink: "https://solana.fm/",
+    pinned: true,
+  },
 ];
