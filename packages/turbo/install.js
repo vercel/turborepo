@@ -300,11 +300,24 @@ this. If that fails, you need to remove the "--no-optional" flag to use turbo.
 }
 
 checkAndPreparePackage().then(() => {
-  if (isToPathJS) {
-    // We need "node" before this command since it's a JavaScript file
-    validateBinaryVersion("node", toPath);
-  } else {
-    // This is no longer a JavaScript file so don't run it using "node"
-    validateBinaryVersion(toPath);
+  try {
+    if (isToPathJS) {
+      // We need "node" before this command since it's a JavaScript file
+      validateBinaryVersion("node", toPath);
+    } else {
+      // This is no longer a JavaScript file so don't run it using "node"
+      validateBinaryVersion(toPath);
+    }
+  } catch (err) {
+    if (
+      process.platform === "linux" &&
+      err.message &&
+      err.message.includes("ENOENT")
+    ) {
+      console.error(
+        `Error: Failed to run turbo binary, you may need to install glibc compat\nSee https://turbo.build/repo/docs/getting-started/existing-monorepo#install-turbo`
+      );
+    }
+    throw err;
   }
 });
