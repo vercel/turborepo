@@ -222,6 +222,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 }
 
 type taskHashInputs struct {
+	packageDir           turbopath.AnchoredUnixPath
 	hashOfFiles          string
 	externalDepsHash     string
 	task                 string
@@ -290,6 +291,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
 	hash, err := fs.HashObject(&taskHashInputs{
+		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,

@@ -50,12 +50,16 @@ type RemoteCacheOptions struct {
 }
 
 type rawTask struct {
-	Outputs    *[]string           `json:"outputs"`
+	// We can't use omitempty for Outputs, because it will
+	// always unmarshal into an empty array, which means something different from nil.
+	Outputs *[]string `json:"outputs"`
+
 	Cache      *bool               `json:"cache,omitempty"`
 	DependsOn  []string            `json:"dependsOn,omitempty"`
 	Inputs     []string            `json:"inputs,omitempty"`
 	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env        []string            `json:"env,omitempty"`
+	Persistent bool                `json:"persistent,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -63,13 +67,34 @@ type Pipeline map[string]TaskDefinition
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	Outputs                 TaskOutputs
-	ShouldCache             bool
-	EnvVarDependencies      []string
+	Outputs     TaskOutputs
+	ShouldCache bool
+
+	// This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
+	EnvVarDependencies []string
+
+	// TopologicalDependencies are tasks from package dependencies.
+	// E.g. "build" is a topological dependency in:
+	// dependsOn: ['^build'].
+	// This field is custom-marshalled from rawTask.DependsOn
 	TopologicalDependencies []string
-	TaskDependencies        []string
-	Inputs                  []string
-	OutputMode              util.TaskOutputMode
+
+	// TaskDependencies are anything that is not a topological dependency
+	// E.g. both something and //whatever are TaskDependencies in:
+	// dependsOn: ['something', '//whatever']
+	// This field is custom-marshalled from rawTask.DependsOn
+	TaskDependencies []string
+
+	// Inputs indicate the list of files this Task depends on. If any of those files change
+	// we can conclude that any cached outputs or logs for this Task should be invalidated.
+	Inputs []string
+
+	// OutputMode determins how we should log the output.
+	OutputMode util.TaskOutputMode
+
+	// Persistent indicates whether the Task is expected to exit or not
+	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
+	Persistent bool
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
@@ -225,8 +250,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	// We actually need a nil value to be able to unmarshal the json
 	// because we interpret the omission of outputs to be different
-	// from an empty array. We can't use omitempty because it will
-	// always unmarshal into an empty array which is not what we want.
+	// from an empty array.
 	if task.Outputs != nil {
 		var inclusions []string
 		var exclusions []string
@@ -254,8 +278,9 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	envVarDependencies := make(util.Set)
-	c.TopologicalDependencies = []string{}
-	c.TaskDependencies = []string{}
+
+	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
+	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
 
 	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
@@ -287,6 +312,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// hash the resulting files and sort that instead
 	c.Inputs = task.Inputs
 	c.OutputMode = task.OutputMode
+	c.Persistent = task.Persistent
 	return nil
 }
 

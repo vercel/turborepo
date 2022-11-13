@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -324,7 +325,20 @@ func Test_dontSquashTasks(t *testing.T) {
 		Targets:      []string{"build"},
 		Opts:         &Opts{},
 	}
-	engine, err := buildTaskGraphEngine(topoGraph, pipeline, rs)
+
+	workspaceInfos := make(graph.WorkspaceInfos)
+	workspaceInfos["a"] = &fs.PackageJSON{
+		Name:    "a",
+		Scripts: map[string]string{},
+	}
+
+	completeGraph := &graph.CompleteGraph{
+		TopologicalGraph: *topoGraph,
+		Pipeline:         pipeline,
+		PackageInfos:     workspaceInfos,
+	}
+
+	engine, err := buildTaskGraphEngine(completeGraph, rs)
 	if err != nil {
 		t.Fatalf("failed to build task graph: %v", err)
 	}
@@ -357,7 +371,13 @@ func Test_taskSelfRef(t *testing.T) {
 		Targets:      []string{"build"},
 		Opts:         &Opts{},
 	}
-	_, err := buildTaskGraphEngine(topoGraph, pipeline, rs)
+
+	completeGraph := &graph.CompleteGraph{
+		TopologicalGraph: *topoGraph,
+		Pipeline:         pipeline,
+	}
+
+	_, err := buildTaskGraphEngine(completeGraph, rs)
 	if err == nil {
 		t.Fatalf("expected to failed to build task graph: %v", err)
 	}
