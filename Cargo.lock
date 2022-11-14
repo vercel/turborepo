@@ -1154,9 +1154,9 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "2.5.2"
+version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
+checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "fastrand"
@@ -2391,6 +2391,7 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
+ "turbo-tasks-testing",
  "turbopack",
  "turbopack-cli-utils",
  "turbopack-core",
@@ -5314,7 +5315,6 @@ dependencies = [
  "concurrent-queue",
  "criterion",
  "dashmap",
- "event-listener",
  "flurry",
  "lazy_static",
  "nohash-hasher",
@@ -5334,7 +5334,6 @@ name = "turbo-tasks-testing"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "event-listener",
  "lazy_static",
  "tokio",
  "turbo-tasks",
@@ -5456,7 +5455,6 @@ name = "turbopack-dev-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "event-listener",
  "futures",
  "httparse",
  "hyper",
