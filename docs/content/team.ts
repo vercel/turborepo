@@ -1,33 +1,33 @@
-const TURBO_TEAM = {
+const TURBO_TEAM: Record<string, AuthorDetails> = {
   jaredpalmer: {
     name: "Jared Palmer",
     twitterUsername: "jaredpalmer",
-    picture: "/images/people/jaredpalmer_headshot.jpeg",
+    picture: "/images/people/jaredpalmer.jpeg",
   },
-  gaspargarcia_: {
+  gaspargarcia: {
     name: "Gaspar Garcia",
     twitterUsername: "gaspargarcia_",
-    picture: "/images/people/gaspargarcia_.jpeg",
+    picture: "/images/people/gaspargarcia.jpeg",
   },
   becca__z: {
     name: "Becca Z.",
     twitterUsername: "becca__z",
     picture: "/images/people/becca__z.jpeg",
   },
-  gsoltis: {
+  gregsoltis: {
     name: "Greg Soltis",
     twitterUsername: "gsoltis",
-    picture: "/images/people/gsoltis.jpeg",
+    picture: "/images/people/gregsoltis.jpeg",
   },
   nathanhammond: {
     name: "Nathan Hammond",
     twitterUsername: "nathanhammond",
     picture: "/images/people/nathanhammond.png",
   },
-  tknickman: {
+  tomknickman: {
     name: "Tom Knickman",
     twitterUsername: "tknickman",
-    picture: "/images/people/tknickman.jpeg",
+    picture: "/images/people/tomknickman.jpeg",
   },
   mehulkar: {
     name: "Mehul Kar",
@@ -39,19 +39,37 @@ const TURBO_TEAM = {
     twitterUsername: "mattpocockuk",
     picture: "/images/people/mattpocock.jpeg",
   },
-  sokra: {
+  tobiaskoppers: {
     name: "Tobias Koppers",
     twitterUsername: "wSokra",
-    picture: "/images/people/wsokra.jpg",
+    picture: "/images/people/tobiaskoppers-avatar.jpg",
   },
   alexkirsz: {
     name: "Alex Kirszenberg",
     twitterUsername: "alexkirsz",
     picture: "/images/people/alexkirsz.jpg",
   },
+  anthonyshew: {
+    name: "Anthony Schew",
+    twitterUsername: "anthonyShewDev",
+    picture: "/images/people/anthonyshew.png",
+  },
+  nicholasyang: {
+    name: "Nicholas Yang",
+    twitterUsername: "nicholaslyang",
+    picture: "/images/people/nicholasyang.png",
+  },
+  chrisolszewski: {
+    name: "Chris Olszewski",
+    picture: "/images/people/chrisolszewski.jpg",
+  },
 };
 
 export type Author = keyof typeof TURBO_TEAM;
-export type AuthorDetails = typeof TURBO_TEAM[Author];
+export type AuthorDetails = {
+  name: string;
+  twitterUsername?: string;
+  picture: string;
+};
 
 export default TURBO_TEAM;
