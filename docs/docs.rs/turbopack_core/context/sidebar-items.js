@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["AssetContextVc",""]],"trait":[["AssetContext","A context for building an asset graph. It’s passed through the assets while creating them. It’s needed to resolve assets and upgrade assets to a higher type (e. g. from SourceAsset to ModuleAsset)."]]};

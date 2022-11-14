@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["generate_register",""],["rerun_if_glob",""]]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["VirtualAsset","An [Asset] that is created from some passed source code."],["VirtualAssetVc","Vc for [`VirtualAsset`]"]],"type":[["VirtualAssetReadRef","see [turbo_tasks::ReadRef]"]]};

@@ -1,0 +1,752 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/turbopack-ecmascript/src/chunk/optimize.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>optimize.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../turbopack_ecmascript/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
+
+<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indexmap::IndexSet;
+<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
+<span class="kw">use </span>turbopack_core::chunk::{
+    optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
+    ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
+};
+
+<span class="kw">use super</span>::{EcmascriptChunkPlaceablesVc, EcmascriptChunkVc};
+<span class="kw">use </span><span class="kw">crate</span>::chunk::EcmascriptChunkEvaluate;
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">pub struct </span>EcmascriptChunkOptimizer(ChunkingContextVc);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>EcmascriptChunkOptimizerVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(context: ChunkingContextVc) -&gt; <span class="self">Self </span>{
+        EcmascriptChunkOptimizer(context).cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkOptimizer <span class="kw">for </span>EcmascriptChunkOptimizer {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+        optimize_by_common_parent(chunks, get_common_parent, |local, children| {
+            optimize_ecmascript(local, children, chunk_group)
+        })
+        .<span class="kw">await
+    </span>}
+}
+
+<span class="kw">async fn </span>ecma(chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkVc&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk) = EcmascriptChunkVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="prelude-val">Ok</span>(chunk)
+    } <span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;EcmascriptChunkOptimizer can only be used on EcmascriptChunks&quot;</span>)
+    }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>get_common_parent(chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathOptionVc&gt; {
+    <span class="prelude-val">Ok</span>(ecma(chunk).<span class="kw">await</span><span class="question-mark">?</span>.common_parent())
+}
+
+<span class="kw">async fn </span>merge_chunks(
+    first: EcmascriptChunkVc,
+    chunks: <span class="kw-2">&amp;</span>[EcmascriptChunkVc],
+) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkVc&gt; {
+    <span class="kw">let </span>chunks = chunks.iter().copied().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>main_entries = chunks
+        .iter()
+        .map(|c| c.main_entries)
+        .try_join()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.iter()
+        .flat_map(|e| e.iter().copied())
+        .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let </span>evaluate = chunks.iter().find_map(|e| e.evaluate);
+    <span class="prelude-val">Ok</span>(EcmascriptChunkVc::new_normalized(
+        first.<span class="kw">await</span><span class="question-mark">?</span>.context,
+        EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
+        <span class="prelude-val">None</span>,
+        evaluate,
+    ))
+}
+
+<span class="doccomment">/// Number of chunks to compare with to chunk for duplication.
+/// This limit restricts the complexity from O(n²) to O(M * n) = O(n)
+</span><span class="kw">const </span>COMPARE_WITH_COUNT: usize = <span class="number">100</span>;
+<span class="doccomment">/// Max percentage of shared chunk items between two chunk before they are
+/// merged.
+</span><span class="kw">const </span>DUPLICATION_THRESHOLD: f32 = <span class="number">0.1</span>;
+<span class="doccomment">/// Max percentage of unshared chunk items on either side before chunks are
+/// merged.
+</span><span class="kw">const </span>CONTAINED_THRESHOLD: f32 = <span class="number">0.05</span>;
+<span class="doccomment">/// Max number of local chunks. Will start to merge into chunks of
+/// MAX_CHUNK_ITEMS_PER_CHUNK.
+</span><span class="kw">const </span>LOCAL_CHUNK_MERGE_THRESHOLD: usize = <span class="number">20</span>;
+<span class="doccomment">/// Max number of total chunks. Will start to merge into chunks of
+/// MAX_CHUNK_ITEMS_PER_CHUNK.
+</span><span class="kw">const </span>TOTAL_CHUNK_MERGE_THRESHOLD: usize = <span class="number">20</span>;
+<span class="doccomment">/// Max number of chunk items per chunk to merge.
+</span><span class="kw">const </span>MAX_CHUNK_ITEMS_PER_CHUNK: usize = <span class="number">3000</span>;
+
+<span class="kw">async fn </span>merge_duplicated_and_contained(
+    chunks: <span class="kw-2">&amp;mut </span>Vec&lt;EcmascriptChunkVc&gt;,
+    <span class="kw-2">mut </span>unoptimized_count: usize,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">struct </span>Comparison {
+        <span class="doccomment">/// Index of chunk in the `chunks` vec
+        </span>index: usize,
+        other: EcmascriptChunkVc,
+        shared: usize,
+        left: usize,
+        right: usize,
+    }
+
+    <span class="kw">impl </span>Comparison {
+        <span class="kw">fn </span>left_contained_factor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f32 {
+            <span class="self">self</span>.left <span class="kw">as </span>f32 / (<span class="self">self</span>.left + <span class="self">self</span>.shared) <span class="kw">as </span>f32
+        }
+        <span class="kw">fn </span>right_contained_factor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f32 {
+            <span class="self">self</span>.right <span class="kw">as </span>f32 / (<span class="self">self</span>.right + <span class="self">self</span>.shared) <span class="kw">as </span>f32
+        }
+        <span class="kw">fn </span>duplication_factor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f32 {
+            <span class="self">self</span>.shared <span class="kw">as </span>f32 / (<span class="self">self</span>.left + <span class="self">self</span>.right + <span class="self">self</span>.shared) <span class="kw">as </span>f32
+        }
+    }
+
+    <span class="comment">// This type assumes that f32 is never in an NaN or invalid state
+    </span><span class="kw">struct </span>FloatOrd(f32);
+
+    <span class="kw">impl </span>PartialEq <span class="kw">for </span>FloatOrd {
+        <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+            <span class="self">self</span>.<span class="number">0 </span>== other.<span class="number">0
+        </span>}
+    }
+    <span class="kw">impl </span>Eq <span class="kw">for </span>FloatOrd {}
+
+    <span class="kw">impl </span>PartialOrd <span class="kw">for </span>FloatOrd {
+        <span class="kw">fn </span>partial_cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
+            <span class="self">self</span>.<span class="number">0</span>.partial_cmp(<span class="kw-2">&amp;</span>other.<span class="number">0</span>)
+        }
+    }
+    <span class="kw">impl </span>Ord <span class="kw">for </span>FloatOrd {
+        <span class="kw">fn </span>cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; Ordering {
+            <span class="self">self</span>.partial_cmp(other).unwrap_or(Ordering::Equal)
+        }
+    }
+
+    <span class="comment">// We compare each unoptimized chunk with COMPARE_WITH_COUNT following chunks to
+    // find duplication greater than DUPLICATION_THRESHOLD.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
+    <span class="kw">while </span>i &lt; unoptimized_count {
+        <span class="kw">let </span>chunk = chunks[i];
+        <span class="comment">// Compare chunk with following chunks
+        </span><span class="kw">let </span><span class="kw-2">mut </span>comparisons = chunks[i + <span class="number">1</span>..]
+            .iter()
+            .enumerate()
+            .take(COMPARE_WITH_COUNT)
+            .map(|(j, <span class="kw-2">&amp;</span>other)| <span class="kw">async move </span>{
+                <span class="kw">let </span>compare = EcmascriptChunkVc::compare(chunk, other).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(Comparison {
+                    <span class="comment">// since enumerate is offset by `i + 1` we need to account for that
+                    </span>index: i + j + <span class="number">1</span>,
+                    other,
+                    shared: compare.shared_chunk_items,
+                    left: compare.left_chunk_items,
+                    right: compare.right_chunk_items,
+                })
+            })
+            .try_join()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// List of planned merges
+        </span><span class="kw">let </span><span class="kw-2">mut </span>merged = <span class="macro">vec!</span>[chunk];
+        <span class="kw">let </span><span class="kw-2">mut </span>merged_indices = Vec::new();
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>merge = |j, other, correction: <span class="prelude-ty">Option</span>&lt;(usize, <span class="kw-2">&amp;mut </span>Vec&lt;Comparison&gt;)&gt;| {
+                merged.push(other);
+                merged_indices.push(j);
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((correction, comparisons)) = correction {
+                    comparisons.retain_mut(
+                        |Comparison {
+                             other: third_chunk,
+                             left: other_left,
+                             ..
+                         }| {
+                            <span class="kw">if </span><span class="kw-2">*</span>third_chunk == other {
+                                <span class="bool-val">false
+                            </span>} <span class="kw">else </span>{
+                                <span class="comment">// This is not perfect, since we don&#39;t know if these chunk items are
+                                // actually shared between &quot;other&quot; and &quot;third_chunk&quot;. But for
+                                // efficiency we assume they are
+                                // not. We are doing a second pass on the chunk
+                                // anyway.
+                                </span><span class="kw-2">*</span>other_left += correction;
+                                <span class="bool-val">true
+                            </span>}
+                        },
+                    );
+                }
+            };
+            <span class="comment">// Select the best contained chunk, that is a chunk that has the the most chunk
+            // items included in the other chunk relative to the smaller chunk&#39;s total
+            // number of chunk items
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((
+                <span class="kw-2">&amp;</span>Comparison {
+                    index: j,
+                    other,
+                    right,
+                    ..
+                },
+                left_contained_factor,
+                right_contained_factor,
+            )) = comparisons
+                .iter()
+                .map(|cmp| {
+                    (
+                        cmp,
+                        cmp.left_contained_factor(),
+                        cmp.right_contained_factor(),
+                    )
+                })
+                .min_by_key(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, left, right)| std::cmp::min(FloatOrd(left), FloatOrd(right)))
+            {
+                <span class="comment">// Merge when right is mostly contained in left or vice versa
+                </span><span class="kw">if </span>right_contained_factor &lt; CONTAINED_THRESHOLD {
+                    merge(j, other, <span class="prelude-val">Some</span>((right, <span class="kw-2">&amp;mut </span>comparisons)));
+                    <span class="comment">// Continue looking for more candidates
+                    </span><span class="kw">continue</span>;
+                } <span class="kw">else if </span>left_contained_factor &lt; CONTAINED_THRESHOLD {
+                    merge(j, other, <span class="prelude-val">None</span>);
+                    <span class="comment">// comparison will be skewed too much, re-compare chunks
+                    </span><span class="kw">break</span>;
+                }
+            }
+            <span class="comment">// Select the best candidate for merging
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((
+                <span class="kw-2">&amp;</span>Comparison {
+                    index: j,
+                    other,
+                    right,
+                    ..
+                },
+                duplication_factor,
+            )) = comparisons
+                .iter()
+                .map(|cmp| (cmp, cmp.duplication_factor()))
+                .max_by_key(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, f)| FloatOrd(f))
+            {
+                <span class="comment">// Merge when there is a lot of duplication
+                </span><span class="kw">if </span>duplication_factor &gt; DUPLICATION_THRESHOLD {
+                    merge(j, other, <span class="prelude-val">Some</span>((right, <span class="kw-2">&amp;mut </span>comparisons)));
+                    <span class="comment">// Continue looking for more candidates
+                    </span><span class="kw">continue</span>;
+                }
+            }
+
+            <span class="comment">// No candidates found, stop it
+            </span><span class="kw">break</span>;
+        }
+        <span class="kw">if </span>merged.len() &gt; <span class="number">1 </span>{
+            <span class="comment">// Merge selected chunks
+            </span>chunks[i] = merge_chunks(chunk, <span class="kw-2">&amp;</span>merged).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="comment">// We need to fix the unoptimized_count when we merge unoptimized chunks
+            </span>unoptimized_count -= merged_indices
+                .iter()
+                .filter(|&amp;&amp;j| j &lt; unoptimized_count)
+                .count();
+
+            <span class="comment">// Remove merged chunks from chunks list
+            </span><span class="kw">let </span><span class="kw-2">mut </span>remove = merged[<span class="number">1</span>..].iter().collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+            chunks.retain(|c| !remove.remove(c));
+            <span class="comment">// All merged chunks must be removed
+            </span><span class="macro">debug_assert!</span>(remove.is_empty());
+            <span class="comment">// Don&#39;t increase i, since we want to re-visit the chunk for more
+            // merging
+        </span>} <span class="kw">else </span>{
+            i += <span class="number">1</span>;
+        }
+    }
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>merge_by_size(chunks: <span class="kw-2">&amp;</span>[EcmascriptChunkVc]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;EcmascriptChunkVc&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>merged = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>current = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>current_items = <span class="number">0</span>;
+    <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>chunks {
+        <span class="kw">let </span>chunk_items = <span class="kw-2">*</span>chunk.chunk_items_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>chunk_items &gt;= MAX_CHUNK_ITEMS_PER_CHUNK {
+            <span class="comment">// chunk is too big, keep it separate
+            </span>merged.push(chunk);
+        } <span class="kw">else if </span>current_items + chunk_items &lt; MAX_CHUNK_ITEMS_PER_CHUNK {
+            <span class="comment">// fits in this chunk
+            </span>current.push(chunk);
+            current_items += chunk_items;
+        } <span class="kw">else </span>{
+            <span class="comment">// doesn&#39;t fit in this chunk, merge current and start a new one
+            </span><span class="kw">if </span>!current.is_empty() {
+                <span class="kw">if </span>current.len() == <span class="number">1 </span>{
+                    merged.push(current.pop().unwrap());
+                } <span class="kw">else </span>{
+                    merged.push(merge_chunks(<span class="kw-2">*</span>current.first().unwrap(), <span class="kw-2">&amp;</span>current).<span class="kw">await</span><span class="question-mark">?</span>);
+                    current.clear();
+                }
+            }
+            current.push(chunk);
+            current_items = chunk_items;
+        }
+    }
+    <span class="kw">if </span>!current.is_empty() {
+        <span class="kw">if </span>current.len() == <span class="number">1 </span>{
+            merged.push(current.pop().unwrap());
+        } <span class="kw">else </span>{
+            merged.push(merge_chunks(<span class="kw-2">*</span>current.first().unwrap(), <span class="kw-2">&amp;</span>current).<span class="kw">await</span><span class="question-mark">?</span>);
+        }
+    }
+    <span class="prelude-val">Ok</span>(merged)
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>optimize_ecmascript(
+    local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;,
+    children: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;,
+    chunk_group: ChunkGroupVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
+    <span class="comment">// TODO optimize
+    </span><span class="kw">let </span><span class="kw-2">mut </span>unoptimized_count = <span class="number">0</span>;
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(local) = local {
+        <span class="comment">// Local chunks have the same common_parent and could be merged into fewer
+        // chunks. (We use a pretty large threshold for that.)
+        </span><span class="kw">let </span><span class="kw-2">mut </span>local = local.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(ecma).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// Merge all local chunks when they are too many
+        </span><span class="kw">if </span>local.len() &gt; LOCAL_CHUNK_MERGE_THRESHOLD {
+            local = merge_by_size(<span class="kw-2">&amp;</span>local).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="kw">for </span>chunk <span class="kw">in </span>local.iter_mut() {
+            <span class="kw">let </span>content = (<span class="kw-2">*</span>chunk).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = content.evaluate {
+                <span class="kw">let </span>evaluate = evaluate.<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw-2">*</span>chunk = EcmascriptChunkVc::new_normalized(
+                    content.context,
+                    content.main_entries,
+                    content.omit_entries,
+                    <span class="prelude-val">Some</span>(
+                        EcmascriptChunkEvaluate {
+                            evaluate_entries: evaluate.evaluate_entries,
+                            chunk_group: <span class="prelude-val">Some</span>(chunk_group),
+                        }
+                        .cell(),
+                    ),
+                )
+            }
+        }
+        unoptimized_count = local.len();
+        chunks.append(<span class="kw-2">&amp;mut </span>local);
+    }
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(children) = children {
+        <span class="kw">let </span><span class="kw-2">mut </span>children = children.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(ecma).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+        chunks.append(<span class="kw-2">&amp;mut </span>children);
+    }
+
+    <span class="comment">// Merge chunks that have a lot duplication between them. children will never
+    // have duplication, but there might be duplication within local chunks or
+    // between local chunks and children.
+    </span><span class="kw">if </span>unoptimized_count &gt; <span class="number">0 </span>&amp;&amp; chunks.len() &gt; <span class="number">1 </span>{
+        merge_duplicated_and_contained(<span class="kw-2">&amp;mut </span>chunks, unoptimized_count).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+
+    <span class="comment">// If chunks share chunk items they might be removed from one of them. The
+    // bigger chunk should be preferred, to make it smaller.
+    // TODO implement that
+
+    // Multiple very small chunks could be merged to avoid requests. (We use a small
+    // threshold for that.)
+    // TODO implement that
+
+    // When there are too many chunks, try hard to reduce the number of chunks to
+    // limit the request count.
+    </span><span class="kw">if </span>chunks.len() &gt; TOTAL_CHUNK_MERGE_THRESHOLD {
+        chunks = merge_by_size(<span class="kw-2">&amp;</span>chunks).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="prelude-val">Ok</span>(ChunksVc::cell(
+        chunks.into_iter().map(|c| c.as_chunk()).collect(),
+    ))
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

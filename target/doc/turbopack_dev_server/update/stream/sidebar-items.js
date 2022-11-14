@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["UpdateStreamItem",""],["UpdateStreamItemVc","Vc for [`UpdateStreamItem`]"]],"type":[["UpdateStreamItemReadRef","see [turbo_tasks::ReadRef]"]]};

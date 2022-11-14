@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["IntrospectionSource",""],["IntrospectionSourceVc","Vc for [`IntrospectionSource`]"]],"type":[["IntrospectionSourceReadRef","see [turbo_tasks::ReadRef]"]]};

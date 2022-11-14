@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["ConstantValue",""],["FreeVarKind",""],["JsValue","TODO: Use `Arc`"],["ObjectPart",""],["WellKnownFunctionKind",""],["WellKnownObjectKind",""]],"mod":[["builtin",""],["graph",""],["imports",""],["linker",""],["well_known",""]],"struct":[["ConstantNumber",""],["ModuleValue",""]]};

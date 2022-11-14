@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["ModuleOptionsContext",""],["ModuleOptionsContextVc","Vc for [`ModuleOptionsContext`]"]],"type":[["ModuleOptionsContextReadRef","see [turbo_tasks::ReadRef]"]]};

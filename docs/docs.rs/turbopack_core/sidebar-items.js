@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["register",""]],"mod":[["asset",""],["chunk",""],["code_builder",""],["context",""],["environment",""],["introspect",""],["issue",""],["reference",""],["resolve",""],["source_asset",""],["source_map",""],["source_pos",""],["target",""],["version",""],["virtual_asset",""]]};

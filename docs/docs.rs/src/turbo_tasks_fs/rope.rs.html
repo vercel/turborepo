@@ -1,0 +1,990 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/turbo-tasks-fs/src/rope.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>rope.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../turbo_tasks_fs/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    borrow::Cow,
+    cmp::min,
+    fmt::Debug,
+    io::{<span class="self">self</span>, BufRead, Read, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
+    mem, ops,
+    pin::Pin,
+    sync::Arc,
+    task::{Context <span class="kw">as </span>TaskContext, Poll},
+};
+
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>bytes::{Buf, Bytes};
+<span class="kw">use </span>futures::Stream;
+<span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+<span class="kw">use </span>tokio::io::{AsyncRead, ReadBuf};
+<span class="kw">use </span>turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
+<span class="kw">use </span>RopeElem::{Local, Shared};
+
+<span class="kw">static </span>EMPTY_BUF: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>[];
+
+<span class="doccomment">/// A Rope provides an efficient structure for sharing bytes/strings between
+/// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
+/// the sharing contents of one Rope can be shared by just cloning an Arc.
+///
+/// Ropes are immutable, in order to construct one see [RopeBuilder].
+</span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;custom&quot;</span>)]
+#[derive(Clone, Debug, Default)]
+</span><span class="kw">pub struct </span>Rope {
+    <span class="doccomment">/// Total length of all held bytes.
+    </span>length: usize,
+
+    <span class="doccomment">/// A shareable container holding the rope&#39;s bytes.
+    </span>data: InnerRope,
+}
+
+<span class="doccomment">/// An Arc container for ropes. This indirection allows for easily sharing the
+/// contents between Ropes (and also RopeBuilders/RopeReaders).
+</span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
+#[derive(Clone, Debug, Default)]
+</span><span class="kw">struct </span>InnerRope(<span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)] </span>Arc&lt;Vec&lt;RopeElem&gt;&gt;);
+
+<span class="doccomment">/// Differentiates the types of stored bytes in a rope.
+</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">enum </span>RopeElem {
+    <span class="doccomment">/// Local bytes are owned directly by this rope.
+    </span>Local(Bytes),
+
+    <span class="doccomment">/// Shared holds the Arc container of another rope.
+    </span>Shared(InnerRope),
+}
+
+<span class="doccomment">/// RopeBuilder provides a mutable container to append bytes/strings. This can
+/// also append _other_ Rope instances cheaply, allowing efficient sharing of
+/// the contents without a full clone of the bytes.
+</span><span class="attr">#[derive(Default)]
+</span><span class="kw">pub struct </span>RopeBuilder {
+    <span class="doccomment">/// Total length of all previously committed bytes.
+    </span>length: usize,
+
+    <span class="doccomment">/// Immutable bytes references that have been appended to this builder. The
+    /// rope&#39;s is the combination of all these committed bytes.
+    </span>committed: Vec&lt;RopeElem&gt;,
+
+    <span class="doccomment">/// Mutable bytes collection where non-static/non-shared bytes are written.
+    /// This builds until the next time a static or shared bytes is
+    /// appended, in which case we split the buffer and commit. Finishing
+    /// the builder also commits these bytes.
+    </span>writable: Vec&lt;u8&gt;,
+}
+
+<span class="kw">impl </span>Rope {
+    <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.length
+    }
+
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.length == <span class="number">0
+    </span>}
+
+    <span class="doccomment">/// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
+    </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RopeReader {
+        RopeReader::new(<span class="kw-2">&amp;</span><span class="self">self</span>.data)
+    }
+
+    <span class="doccomment">/// Returns a String instance of all bytes.
+    </span><span class="kw">pub fn </span>to_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cow&lt;<span class="lifetime">&#39;_</span>, str&gt;&gt; {
+        <span class="kw">if </span><span class="self">self</span>.data.len() == <span class="number">1 </span>{
+            <span class="kw">if let </span>Local(bytes) = <span class="kw-2">&amp;</span><span class="self">self</span>.data[<span class="number">0</span>] {
+                <span class="kw">let </span>utf8 = std::str::from_utf8(bytes);
+                <span class="kw">return </span>utf8
+                    .context(<span class="string">&quot;failed to convert rope into string&quot;</span>)
+                    .map(Cow::Borrowed);
+            }
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>read = <span class="self">self</span>.read();
+        <span class="kw">let </span><span class="kw-2">mut </span>string = String::with_capacity(<span class="self">self</span>.len());
+        <span class="kw">let </span>res = read.read_to_string(<span class="kw-2">&amp;mut </span>string);
+        res.context(<span class="string">&quot;failed to convert rope into string&quot;</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(Cow::Owned(string))
+    }
+}
+
+<span class="kw">impl</span>&lt;T: Into&lt;Bytes&gt;&gt; From&lt;T&gt; <span class="kw">for </span>Rope {
+    <span class="kw">fn </span>from(bytes: T) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>bytes = bytes.into();
+        Rope {
+            length: bytes.len(),
+            data: InnerRope::from(bytes),
+        }
+    }
+}
+
+<span class="kw">impl </span>RopeBuilder {
+    <span class="doccomment">/// Push owned bytes into the Rope.
+    ///
+    /// If possible use [push_static_bytes] or `+=` operation instead, as they
+    /// will create a reference to shared memory instead of cloning the bytes.
+    </span><span class="kw">pub fn </span>push_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) {
+        <span class="self">self</span>.length += bytes.len();
+        <span class="self">self</span>.writable.extend(bytes);
+    }
+
+    <span class="doccomment">/// Push static lifetime bytes into the Rope.
+    ///
+    /// This is more efficient than pushing owned bytes, because the internal
+    /// data does not need to be copied when the rope is read.
+    </span><span class="kw">pub fn </span>push_static_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[u8]) {
+        <span class="comment">// If the string is smaller than the cost of a Bytes reference (4 usizes), then
+        // it&#39;s more efficient to own the bytes in a new buffer. We may be able to reuse
+        // that buffer when more bytes are pushed.
+        </span><span class="kw">if </span>bytes.len() &lt; mem::size_of::&lt;Bytes&gt;() {
+            <span class="kw">return </span><span class="self">self</span>.push_bytes(bytes);
+        }
+
+        <span class="comment">// We may have pending bytes from a prior push.
+        </span><span class="self">self</span>.finish();
+
+        <span class="self">self</span>.length += bytes.len();
+        <span class="self">self</span>.committed.push(Local(bytes.into()));
+    }
+
+    <span class="doccomment">/// Concatenate another Rope instance into our builder.
+    ///
+    /// This is much more efficient than pushing actual bytes, since we can
+    /// share the other Rope&#39;s references without copying the underlying data.
+    </span><span class="kw">pub fn </span>concat(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Rope) {
+        <span class="comment">// We may have pending bytes from a prior push.
+        </span><span class="self">self</span>.finish();
+
+        <span class="self">self</span>.length += other.len();
+        <span class="self">self</span>.committed.push(Shared(other.data.clone()));
+    }
+
+    <span class="doccomment">/// Writes any pending bytes into our committed queue.
+    ///
+    /// This may be called multiple times without issue.
+    </span><span class="kw">pub fn </span>finish(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">if </span>!<span class="self">self</span>.writable.is_empty() {
+            <span class="kw">let </span>writable = mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.writable);
+            <span class="self">self</span>.committed.push(Local(writable.into()));
+        }
+    }
+
+    <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.length
+    }
+
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.length == <span class="number">0
+    </span>}
+
+    <span class="doccomment">/// Constructs our final, immutable Rope instance.
+    </span><span class="kw">pub fn </span>build(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; Rope {
+        <span class="self">self</span>.finish();
+        Rope {
+            length: <span class="self">self</span>.length,
+            data: <span class="self">self</span>.committed.into(),
+        }
+    }
+}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>RopeBuilder {
+    default <span class="kw">fn </span>from(bytes: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>r = RopeBuilder::default();
+        r.push_static_bytes(bytes.as_bytes());
+        r
+    }
+}
+
+<span class="kw">impl </span>From&lt;Vec&lt;u8&gt;&gt; <span class="kw">for </span>RopeBuilder {
+    <span class="kw">fn </span>from(bytes: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
+        RopeBuilder {
+            length: bytes.len(),
+            committed: <span class="macro">vec!</span>[],
+            writable: bytes,
+        }
+    }
+}
+
+<span class="kw">impl </span>Write <span class="kw">for </span>RopeBuilder {
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; IoResult&lt;usize&gt; {
+        <span class="self">self</span>.push_bytes(bytes);
+        <span class="prelude-val">Ok</span>(bytes.len())
+    }
+
+    <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IoResult&lt;()&gt; {
+        <span class="self">self</span>.finish();
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl </span>ops::AddAssign&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>RopeBuilder {
+    <span class="doccomment">/// Pushes a reference to static memory onto the rope.
+    ///
+    /// This is more efficient than pushing owned bytes, because the internal
+    /// data does not need to be copied when the rope is read.
+    </span><span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) {
+        <span class="self">self</span>.push_static_bytes(rhs.as_bytes());
+    }
+}
+
+<span class="kw">impl </span>ops::AddAssign&lt;<span class="kw-2">&amp;</span>Rope&gt; <span class="kw">for </span>RopeBuilder {
+    <span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: <span class="kw-2">&amp;</span>Rope) {
+        <span class="self">self</span>.concat(rhs);
+    }
+}
+
+<span class="kw">impl </span>DeterministicHash <span class="kw">for </span>Rope {
+    <span class="doccomment">/// Ropes with similar contents hash the same, regardless of their
+    /// structure.
+    </span><span class="kw">fn </span>deterministic_hash&lt;H: DeterministicHasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        state.write_usize(<span class="self">self</span>.len());
+        <span class="self">self</span>.data.deterministic_hash(state);
+    }
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>Rope {
+    <span class="doccomment">/// Ropes are always serialized into contiguous strings, because
+    /// deserialization won&#39;t deduplicate and share the Arcs (being the only
+    /// possible owner of a individual &quot;shared&quot; data doesn&#39;t make sense).
+    </span><span class="kw">fn </span>serialize&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
+        <span class="kw">use </span>serde::ser::Error;
+        <span class="kw">let </span>s = <span class="self">self</span>.to_str().map_err(Error::custom)<span class="question-mark">?</span>;
+        serializer.serialize_str(<span class="kw-2">&amp;</span>s)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>Rope {
+    <span class="doccomment">/// Deserializes strings into a contiguous, immutable Rope.
+    </span><span class="kw">fn </span>deserialize&lt;D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
+        <span class="kw">let </span>bytes = &lt;Vec&lt;u8&gt;&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(Rope::from(bytes))
+    }
+}
+
+<span class="kw">impl </span>DeterministicHash <span class="kw">for </span>InnerRope {
+    <span class="doccomment">/// Ropes with similar contents hash the same, regardless of their
+    /// structure. Notice the InnerRope does not contain a length (and any
+    /// shared InnerRopes won&#39;t either), so the exact structure isn&#39;t
+    /// relevant at this point.
+    </span><span class="kw">fn </span>deterministic_hash&lt;H: DeterministicHasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        <span class="kw">for </span>v <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter() {
+            v.deterministic_hash(state);
+        }
+    }
+}
+
+<span class="kw">impl </span>From&lt;Bytes&gt; <span class="kw">for </span>InnerRope {
+    <span class="kw">fn </span>from(bytes: Bytes) -&gt; <span class="self">Self </span>{
+        InnerRope::from(<span class="macro">vec!</span>[Local(bytes)])
+    }
+}
+
+<span class="kw">impl </span>From&lt;Vec&lt;RopeElem&gt;&gt; <span class="kw">for </span>InnerRope {
+    <span class="kw">fn </span>from(els: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
+        InnerRope(Arc::new(els))
+    }
+}
+
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>InnerRope {
+    <span class="doccomment">/// Ropes with similar contents are equals, regardless of their structure.
+    </span><span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+        <span class="kw">let </span><span class="kw-2">mut </span>left = RopeReader::new(<span class="self">self</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>right = RopeReader::new(other);
+
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>(left.fill_buf(), right.fill_buf()) {
+                <span class="comment">// fill_buf should always return Ok, with either some number of bytes or 0 bytes
+                // when consumed.
+                </span>(<span class="prelude-val">Ok</span>(a), <span class="prelude-val">Ok</span>(b)) =&gt; {
+                    <span class="kw">let </span>len = min(a.len(), b.len());
+
+                    <span class="comment">// When one buffer is consumed, both must be consumed.
+                    </span><span class="kw">if </span>len == <span class="number">0 </span>{
+                        <span class="kw">return </span>a.len() == b.len();
+                    }
+
+                    <span class="kw">if </span>a[<span class="number">0</span>..len] != b[<span class="number">0</span>..len] {
+                        <span class="kw">return </span><span class="bool-val">false</span>;
+                    }
+
+                    left.consume(len);
+                    right.consume(len);
+                }
+
+                <span class="comment">// If an error is ever returned (which shouldn&#39;t happen for us) for either/both,
+                // then we can&#39;t prove equality.
+                </span><span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="bool-val">false</span>,
+            }
+        }
+    }
+}
+<span class="kw">impl </span>Eq <span class="kw">for </span>InnerRope {}
+
+<span class="kw">impl </span>ops::Deref <span class="kw">for </span>InnerRope {
+    <span class="kw">type </span>Target = Arc&lt;Vec&lt;RopeElem&gt;&gt;;
+
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>DeterministicHash <span class="kw">for </span>RopeElem {
+    <span class="doccomment">/// Ropes with similar contents hash the same, regardless of their
+    /// structure. Notice the Bytes length is not hashed, and shared InnerRopes
+    /// do not contain a length.
+    </span><span class="kw">fn </span>deterministic_hash&lt;H: DeterministicHasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        <span class="kw">match </span><span class="self">self </span>{
+            Local(bytes) =&gt; state.write_bytes(bytes),
+            Shared(inner) =&gt; inner.deterministic_hash(state),
+        }
+    }
+}
+
+<span class="doccomment">/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
+</span><span class="kw">pub struct </span>RopeReader {
+    <span class="doccomment">/// The Rope&#39;s tree is kept as a cloned stack, allowing us to accomplish
+    /// incremental yielding.
+    </span>stack: Vec&lt;StackElem&gt;,
+}
+
+<span class="doccomment">/// A StackElem holds the current index into either a Bytes or a shared Rope.
+/// When the index reaches the end of the associated data, it is removed and we
+/// continue onto the next item in the stack.
+</span><span class="kw">enum </span>StackElem {
+    Local(Bytes),
+    Shared(InnerRope, usize),
+}
+
+<span class="kw">impl </span>RopeReader {
+    <span class="kw">fn </span>new(rope: <span class="kw-2">&amp;</span>InnerRope) -&gt; <span class="self">Self </span>{
+        RopeReader {
+            stack: <span class="macro">vec!</span>[StackElem::from(rope)],
+        }
+    }
+
+    <span class="doccomment">/// A shared implementation for reading bytes. This takes the basic
+    /// operations needed for both Read and AsyncRead.
+    </span><span class="kw">fn </span>read_internal(<span class="kw-2">&amp;mut </span><span class="self">self</span>, want: usize, buf: <span class="kw-2">&amp;mut </span>ReadBuf&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; usize {
+        <span class="kw">let </span><span class="kw-2">mut </span>remaining = want;
+
+        <span class="kw">while </span>remaining &gt; <span class="number">0 </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="kw">match </span><span class="self">self</span>.next() {
+                <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+                <span class="prelude-val">Some</span>(b) =&gt; b,
+            };
+
+            <span class="kw">let </span>amount = min(bytes.len(), remaining);
+
+            buf.put_slice(<span class="kw-2">&amp;</span>bytes[<span class="number">0</span>..amount]);
+
+            <span class="kw">if </span>amount &lt; bytes.len() {
+                bytes.advance(amount);
+                <span class="self">self</span>.stack.push(StackElem::Local(bytes))
+            }
+            remaining -= amount;
+        }
+
+        want - remaining
+    }
+}
+
+<span class="kw">impl </span>Iterator <span class="kw">for </span>RopeReader {
+    <span class="kw">type </span>Item = Bytes;
+
+    <span class="doccomment">/// Iterates the rope&#39;s elements recursively until we find the next Local
+    /// section, returning its Bytes.
+    </span><span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>(inner, <span class="kw-2">mut </span>index) = <span class="kw">match </span><span class="self">self</span>.stack.pop() {
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+                <span class="prelude-val">Some</span>(StackElem::Local(b)) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(b),
+                <span class="prelude-val">Some</span>(StackElem::Shared(r, i)) =&gt; (r, i),
+            };
+
+            <span class="kw">let </span>el = inner[index].clone();
+            index += <span class="number">1</span>;
+            <span class="kw">if </span>index &lt; inner.len() {
+                <span class="self">self</span>.stack.push(StackElem::Shared(inner, index));
+            }
+
+            <span class="self">self</span>.stack.push(StackElem::from(el));
+        }
+    }
+}
+
+<span class="kw">impl </span>Read <span class="kw">for </span>RopeReader {
+    <span class="doccomment">/// Reads the Rope into the provided buffer.
+    </span><span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.read_internal(buf.len(), <span class="kw-2">&amp;mut </span>ReadBuf::new(buf)))
+    }
+}
+
+<span class="kw">impl </span>AsyncRead <span class="kw">for </span>RopeReader {
+    <span class="doccomment">/// Reads the Rope into the provided buffer, asynchronously.
+    </span><span class="kw">fn </span>poll_read(
+        <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        _cx: <span class="kw-2">&amp;mut </span>TaskContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        buf: <span class="kw-2">&amp;mut </span>ReadBuf&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Poll&lt;io::Result&lt;()&gt;&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.get_mut();
+        this.read_internal(buf.remaining(), buf);
+        Poll::Ready(<span class="prelude-val">Ok</span>(()))
+    }
+}
+
+<span class="kw">impl </span>BufRead <span class="kw">for </span>RopeReader {
+    <span class="doccomment">/// Returns the full buffer without coping any data. The same bytes will
+    /// continue to be returned until [consume] is called to either consume a
+    /// partial amount of bytes (in which case the Bytes will advance beyond
+    /// them) or the full amount of bytes (in which case the next Bytes will be
+    /// returned).
+    </span><span class="kw">fn </span>fill_buf(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IoResult&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+        <span class="kw">let </span>bytes = <span class="kw">match </span><span class="self">self</span>.next() {
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(EMPTY_BUF),
+            <span class="prelude-val">Some</span>(b) =&gt; b,
+        };
+
+        <span class="self">self</span>.stack.push(StackElem::Local(bytes));
+        <span class="kw">let </span>bytes = <span class="kw">match </span><span class="self">self</span>.stack.last() {
+            <span class="prelude-val">Some</span>(StackElem::Local(b)) =&gt; b,
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        };
+        <span class="prelude-val">Ok</span>(bytes)
+    }
+
+    <span class="doccomment">/// Consumes some amount of bytes from the current Bytes instance, ensuring
+    /// those bytes are not returned on the next call to [fill_buf].
+    </span><span class="kw">fn </span>consume(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: usize) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(StackElem::Local(b)) = <span class="self">self</span>.stack.last_mut() {
+            <span class="kw">if </span>amt == b.len() {
+                <span class="self">self</span>.stack.pop();
+            } <span class="kw">else </span>{
+                b.advance(amt);
+            }
+        }
+    }
+}
+
+<span class="kw">impl </span>Stream <span class="kw">for </span>RopeReader {
+    <span class="doccomment">/// The Result&lt;Bytes&gt; item type is required for this to be streamable into a
+    /// [Hyper::Body].
+    </span><span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;Bytes&gt;;
+
+    <span class="doccomment">/// Returns a &quot;result&quot; of reading the next shared bytes reference. This
+    /// differs from [Read::read] by not copying any memory.
+    </span><span class="kw">fn </span>poll_next(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, _cx: <span class="kw-2">&amp;mut </span>TaskContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.get_mut();
+
+        <span class="kw">let </span>bytes = <span class="kw">match </span>this.next() {
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span>Poll::Ready(<span class="prelude-val">None</span>),
+            <span class="prelude-val">Some</span>(b) =&gt; b,
+        };
+
+        Poll::Ready(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(bytes)))
+    }
+}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>InnerRope&gt; <span class="kw">for </span>StackElem {
+    <span class="kw">fn </span>from(rope: <span class="kw-2">&amp;</span>InnerRope) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::Shared(rope.clone(), <span class="number">0</span>)
+    }
+}
+
+<span class="kw">impl </span>From&lt;RopeElem&gt; <span class="kw">for </span>StackElem {
+    <span class="kw">fn </span>from(el: RopeElem) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>el {
+            Local(bytes) =&gt; <span class="self">Self</span>::Local(bytes),
+            Shared(inner) =&gt; <span class="self">Self</span>::Shared(inner, <span class="number">0</span>),
+        }
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks_fs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

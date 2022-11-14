@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/turbopack-ecmascript/src/magic_identifier.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>magic_identifier.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../turbopack_ecmascript/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
+
+<span class="kw">pub fn </span>encode(content: <span class="kw-2">&amp;</span>str) -&gt; String {
+    <span class="kw">let </span><span class="kw-2">mut </span>r = <span class="string">&quot;__TURBOPACK__&quot;</span>.to_string();
+    <span class="kw">let </span><span class="kw-2">mut </span>hex_mode = <span class="bool-val">false</span>;
+    <span class="kw">for </span>c <span class="kw">in </span>content.chars() {
+        <span class="kw">if </span><span class="macro">matches!</span>(c, <span class="string">&#39;0&#39;</span>..=<span class="string">&#39;9&#39; </span>| <span class="string">&#39;A&#39;</span>..=<span class="string">&#39;Z&#39; </span>| <span class="string">&#39;a&#39;</span>..=<span class="string">&#39;z&#39; </span>| <span class="string">&#39; &#39;</span>) {
+            <span class="kw">if </span>hex_mode {
+                r.push(<span class="string">&#39;$&#39;</span>);
+                hex_mode = <span class="bool-val">false</span>;
+            }
+            <span class="kw">if </span>c == <span class="string">&#39; &#39; </span>{
+                r += <span class="string">&quot;__&quot;</span>;
+            } <span class="kw">else </span>{
+                r.push(c);
+            }
+        } <span class="kw">else if </span>c == <span class="string">&#39;_&#39; </span>&amp;&amp; (!r.ends_with(<span class="string">&#39;_&#39;</span>) || hex_mode) {
+            <span class="kw">if </span>hex_mode {
+                r.push(<span class="string">&#39;$&#39;</span>);
+                hex_mode = <span class="bool-val">false</span>;
+            }
+            r += <span class="string">&quot;_&quot;</span>;
+        } <span class="kw">else if </span>c == <span class="string">&#39;$&#39; </span>&amp;&amp; !hex_mode {
+            r += <span class="string">&quot;$$&quot;</span>;
+        } <span class="kw">else if </span><span class="macro">matches!</span>(c, <span class="string">&#39;\0&#39;</span>..=<span class="string">&#39;\u{ff}&#39;</span>) {
+            <span class="kw">if </span>!hex_mode {
+                r.push(<span class="string">&#39;$&#39;</span>);
+                hex_mode = <span class="bool-val">true</span>;
+            }
+            <span class="macro">write!</span>(r, <span class="string">&quot;{0:2x}&quot;</span>, c <span class="kw">as </span>u8).unwrap();
+        } <span class="kw">else </span>{
+            <span class="kw">if </span>!hex_mode {
+                r.push(<span class="string">&#39;$&#39;</span>);
+            }
+            <span class="macro">write!</span>(r, <span class="string">&quot;_{:x}$&quot;</span>, c <span class="kw">as </span>u32).unwrap();
+            hex_mode = <span class="bool-val">false</span>;
+        }
+    }
+    r += <span class="string">&quot;__&quot;</span>;
+    r
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">super</span>::encode;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_encode() {
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello__World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello__World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello/World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello///World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f2f2f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello_/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$2f$_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello😀World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$_1f600$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(
+            encode(<span class="string">&quot;Hello/😀/World&quot;</span>),
+            <span class="string">&quot;__TURBOPACK__Hello$2f_1f600$$2f$World__&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            encode(<span class="string">&quot;Hello😀😀World&quot;</span>),
+            <span class="string">&quot;__TURBOPACK__Hello$_1f600$$_1f600$World__&quot;
+        </span>);
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

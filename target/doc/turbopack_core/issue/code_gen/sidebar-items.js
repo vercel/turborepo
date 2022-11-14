@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["CodeGenerationIssue",""],["CodeGenerationIssueVc","Vc for [`CodeGenerationIssue`]"]],"type":[["CodeGenerationIssueReadRef","see [turbo_tasks::ReadRef]"]]};

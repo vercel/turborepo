@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["CombinedContentSource","Combines multiple [ContentSource]s by trying all content sources in order. First [ContentSource] that responds with something other than NotFound will serve the request."],["CombinedContentSourceVc","Vc for [`CombinedContentSource`]"]],"type":[["CombinedContentSourceReadRef","see [turbo_tasks::ReadRef]"]]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["Effect",""]],"fn":[["as_parent_path",""],["create_graph","You should use same [Mark] for this function and [swc_ecma_transforms_base::resolver::resolver_with_mark]"]],"struct":[["EvalContext",""],["VarGraph",""]]};

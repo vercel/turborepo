@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["DevServerFileSystem",""],["DevServerFileSystemVc","Vc for [`DevServerFileSystem`]"]],"type":[["DevServerFileSystemReadRef","see [turbo_tasks::ReadRef]"]]};

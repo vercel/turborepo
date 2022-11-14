@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["UnsupportedModuleIssue",""],["UnsupportedModuleIssueVc","Vc for [`UnsupportedModuleIssue`]"]],"type":[["UnsupportedModuleIssueReadRef","see [turbo_tasks::ReadRef]"]]};

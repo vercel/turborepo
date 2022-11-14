@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":[["COLORS",""]],"fn":[["generate",""],["generate_scaling",""],["ns_to_ms",""]],"struct":[["BundlerColor",""]],"type":[["ByBench",""],["ByBundler",""],["ByModuleCount",""]]};

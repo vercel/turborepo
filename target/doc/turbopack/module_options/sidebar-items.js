@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["module_options_context",""],["module_rule",""]],"struct":[["ModuleOptions",""],["ModuleOptionsVc","Vc for [`ModuleOptions`]"]],"type":[["ModuleOptionsReadRef","see [turbo_tasks::ReadRef]"]]};

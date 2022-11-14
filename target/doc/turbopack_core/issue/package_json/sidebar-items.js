@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["PackageJsonIssue",""],["PackageJsonIssueVc","Vc for [`PackageJsonIssue`]"]],"type":[["PackageJsonIssueReadRef","see [turbo_tasks::ReadRef]"]]};

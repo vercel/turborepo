@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["PackageJsonConfig","Configuration struct to generate the `package.json` file of the test app."],["TestApp",""],["TestAppBuilder",""]]};

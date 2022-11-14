@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["asset",""]],"struct":[["IntrospectableChildren",""],["IntrospectableChildrenVc","Vc for [`IntrospectableChildren`]"],["IntrospectableVc",""]],"trait":[["Introspectable",""]],"type":[["IntrospectableChildrenReadRef","see [turbo_tasks::ReadRef]"]]};
