@@ -5,10 +5,12 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bundlers::get_bundlers;
 use criterion::{
-    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, BenchmarkId, Criterion,
+    criterion_group, criterion_main,
+    measurement::{Measurement, WallTime},
+    BenchmarkGroup, BenchmarkId, Criterion,
 };
 use once_cell::sync::Lazy;
 use tokio::{
@@ -16,7 +18,10 @@ use tokio::{
     time::{sleep, timeout},
 };
 use util::{
-    build_test, create_browser, AsyncBencherExtension, PageGuard, PreparedApp, BINDING_NAME,
+    build_test, create_browser,
+    env::{read_env, read_env_bool, read_env_list},
+    rand::deterministic_random_pick,
+    AsyncBencherExtension, PageGuard, PreparedApp, BINDING_NAME,
 };
 
 use self::util::resume_on_error;
@@ -24,7 +29,12 @@ use self::util::resume_on_error;
 mod bundlers;
 mod util;
 
-const MAX_UPDATE_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_UPDATE_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_WARMUP_ATTEMPTS: usize = 30;
+
+fn get_module_counts() -> Vec<usize> {
+    read_env_list("TURBOPACK_BENCH_COUNTS", vec![1_000usize]).unwrap()
+}
 
 fn bench_startup(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_startup");
@@ -124,6 +134,8 @@ fn bench_hmr_to_commit(c: &mut Criterion) {
 fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
     let runtime = Runtime::new().unwrap();
     let browser = &runtime.block_on(create_browser());
+    let hmr_samples = read_env("TURBOPACK_BENCH_HMR_SAMPLES", 100).unwrap();
+    let warmup_samples = read_env("TURBOPACK_BENCH_HMR_WARMUP", 10).unwrap();
 
     for bundler in get_bundlers() {
         // TODO HMR for RSC is broken, fix it and enable it here
@@ -138,83 +150,25 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                     BenchmarkId::new(bundler.get_name(), format!("{} modules", module_count)),
                     &input,
                     |b, &(bundler, test_app)| {
-                        fn add_code(
-                            app_path: &Path,
-                            code: &str,
-                            location: CodeLocation,
-                        ) -> Result<()> {
-                            let triangle_path = app_path.join("src/triangle.jsx");
-                            let mut contents = fs::read_to_string(&triangle_path)?;
-                            const INSERTED_CODE_COMMENT: &str = "// Inserted Code:\n";
-                            const COMPONENT_START: &str = "function Container({ style }) {\n";
-                            match location {
-                                CodeLocation::Effect => {
-                                    let a = contents
-                                        .find(COMPONENT_START)
-                                        .ok_or_else(|| anyhow!("unable to find component start"))?;
-                                    let b = contents
-                                        .find("\n    return <>")
-                                        .ok_or_else(|| anyhow!("unable to find component start"))?;
-                                    contents.replace_range(
-                                        a..b,
-                                        &format!(
-                                            "{COMPONENT_START}    React.useEffect(() => {{ {code} \
-                                             }});\n"
-                                        ),
-                                    );
-                                }
-                                CodeLocation::Evaluation => {
-                                    let b = contents
-                                        .find(COMPONENT_START)
-                                        .ok_or_else(|| anyhow!("unable to find component start"))?;
-                                    if let Some(a) = contents.find(INSERTED_CODE_COMMENT) {
-                                        contents.replace_range(
-                                            a..b,
-                                            &format!("{INSERTED_CODE_COMMENT}{code}\n"),
-                                        );
-                                    } else {
-                                        contents.insert_str(
-                                            b,
-                                            &format!("{INSERTED_CODE_COMMENT}{code}\n"),
-                                        );
-                                    }
-                                }
-                            }
-
-                            fs::write(&triangle_path, contents)?;
-                            Ok(())
-                        }
-                        static CHANGE_TIMEOUT_MESSAGE: &str =
-                            "update was not registered by bundler";
-                        async fn make_change<'a>(
-                            guard: &mut PageGuard<'a>,
-                            location: CodeLocation,
-                            timeout_duration: Duration,
-                        ) -> Result<()> {
-                            let msg =
-                                format!("TURBOPACK_BENCH_CHANGE_{}", guard.app_mut().counter());
-                            add_code(
-                                guard.app().path(),
-                                &format!(
-                                    "globalThis.{BINDING_NAME} && \
-                                     globalThis.{BINDING_NAME}('{msg}');"
-                                ),
-                                location,
-                            )?;
-
-                            // Wait for the change introduced above to be reflected at runtime.
-                            // This expects HMR or automatic reloading to occur.
-                            timeout(timeout_duration, guard.wait_for_binding(&msg))
-                                .await
-                                .context(CHANGE_TIMEOUT_MESSAGE)??;
-
-                            Ok(())
-                        }
-                        b.to_async(Runtime::new().unwrap()).try_iter_async(
+                        b.to_async(Runtime::new().unwrap()).try_iter_async_custom(
                             || async {
                                 let mut app =
                                     PreparedApp::new(bundler, test_app.path().to_path_buf())
                                         .await?;
+
+                                let test_app_path = test_app.path();
+                                let modules: Vec<_> = deterministic_random_pick(
+                                    test_app
+                                        .modules()
+                                        .iter()
+                                        .map(|module| {
+                                            app.path()
+                                                .join(module.strip_prefix(test_app_path).unwrap())
+                                        })
+                                        .collect(),
+                                    hmr_samples + warmup_samples,
+                                );
+
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
                                 if bundler.has_interactivity() {
@@ -230,21 +184,52 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                         "Unable to evaluate JavaScript in the page for HMR check \
                                          flag",
                                     )?;
-                                Ok(guard)
-                            },
-                            |mut guard| async move {
-                                // Make 5 changes to warm up.
-                                for _ in 0..5 {
-                                    let _ =
-                                        make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await;
-                                }
-                                Ok(guard)
-                            },
-                            |mut guard| async move {
-                                make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
 
+                                Ok((modules, guard))
+                            },
+                            |(modules, guard)| async move { Ok((modules, guard)) },
+                            |measurement, (modules, mut guard)| async move {
+                                let mut warmup_modules = modules;
+                                let mut modules = warmup_modules.split_off(warmup_samples);
+                                let mut failed_warmup_attempts = 0usize;
+                                while let Some(module) = warmup_modules.pop() {
+                                    if failed_warmup_attempts == MAX_WARMUP_ATTEMPTS {
+                                        bail!(
+                                            "Unable to warmup HMR after {} attempts",
+                                            failed_warmup_attempts
+                                        );
+                                    }
+                                    if let Err(err) = make_change(
+                                        &module,
+                                        &mut guard,
+                                        location,
+                                        MAX_UPDATE_TIMEOUT,
+                                        &measurement,
+                                    )
+                                    .await
+                                    {
+                                        eprintln!("warmup failed {:?}, retrying", err);
+                                        warmup_modules.push(module);
+                                        failed_warmup_attempts += 1;
+                                    }
+                                }
+
+                                let mut value = measurement.zero();
+                                let measurement_count = modules.len() as u32;
+                                while let Some(module) = modules.pop() {
+                                    let change_duration = make_change(
+                                        &module,
+                                        &mut guard,
+                                        location,
+                                        MAX_UPDATE_TIMEOUT,
+                                        &measurement,
+                                    )
+                                    .await?;
+                                    eprintln!("change duration: {:?}", change_duration);
+                                    value = measurement.add(&value, &change_duration);
+                                }
                                 // Defer the dropping of the guard to `teardown`.
-                                Ok(guard)
+                                Ok((value / measurement_count, guard))
                             },
                             |guard| async move {
                                 let hmr_is_happening = guard
@@ -264,6 +249,65 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
     }
 }
 
+fn insert_code(contents: &mut String, code: &str, location: CodeLocation) -> Result<()> {
+    const PRAGMA_EFFECT: &str = "/* @turbopack-bench:effect */";
+    const PRAGMA_EVAL: &str = "/* @turbopack-bench:eval */";
+    match location {
+        CodeLocation::Effect => {
+            let a = contents
+                .find(PRAGMA_EFFECT)
+                .ok_or_else(|| anyhow!("unable to find effect pragma in {}", contents))?;
+            contents.insert_str(
+                a + PRAGMA_EFFECT.len(),
+                &format!("\nEFFECT = () => {{ {code} }};"),
+            );
+        }
+        CodeLocation::Evaluation => {
+            let a = contents
+                .find(PRAGMA_EVAL)
+                .ok_or_else(|| anyhow!("unable to find eval pragma in {}", contents))?;
+            contents.insert_str(a + PRAGMA_EVAL.len(), &format!("\n{code}"));
+        }
+    }
+
+    Ok(())
+}
+
+static CHANGE_TIMEOUT_MESSAGE: &str = "update was not registered by bundler";
+
+async fn make_change<'a, M>(
+    module: &Path,
+    guard: &mut PageGuard<'a>,
+    location: CodeLocation,
+    timeout_duration: Duration,
+    measurement: &M,
+) -> Result<M::Value>
+where
+    M: Measurement,
+{
+    let msg = format!("TURBOPACK_BENCH_CHANGE_{}", guard.app_mut().counter());
+    let code = format!(
+        "globalThis.{BINDING_NAME} && globalThis.{BINDING_NAME}('{msg}'); console.log('{msg}');"
+    );
+
+    // Keep the IO out of the measurement.
+    let mut contents = fs::read_to_string(module)?;
+    insert_code(&mut contents, &code, location)?;
+    fs::write(module, contents)?;
+
+    let start = measurement.start();
+
+    // Wait for the change introduced above to be reflected at runtime.
+    // This expects HMR or automatic reloading to occur.
+    timeout(timeout_duration, guard.wait_for_binding(&msg))
+        .await
+        .context(CHANGE_TIMEOUT_MESSAGE)??;
+
+    let value = measurement.end(start);
+
+    Ok(value)
+}
+
 fn bench_startup_cached(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_startup_cached");
     g.sample_size(10);
@@ -281,11 +325,7 @@ fn bench_hydration_cached(c: &mut Criterion) {
 }
 
 fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
-    let config = std::env::var("TURBOPACK_BENCH_CACHED").ok();
-    if matches!(
-        config.as_deref(),
-        None | Some("") | Some("no") | Some("false")
-    ) {
+    if !read_env_bool("TURBOPACK_BENCH_CACHED") {
         return;
     }
 
@@ -360,19 +400,6 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                 );
             }));
         }
-    }
-}
-
-fn get_module_counts() -> Vec<usize> {
-    let config = std::env::var("TURBOPACK_BENCH_COUNTS").ok();
-    match config.as_deref() {
-        None | Some("") => {
-            vec![1_000]
-        }
-        Some(config) => config
-            .split(',')
-            .map(|s| s.parse().expect("Invalid value for TURBOPACK_BENCH_COUNTS"))
-            .collect(),
     }
 }
 
