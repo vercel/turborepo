@@ -273,7 +273,7 @@ $(CRAM_ENV)/bin/pip:
 	python3 -m venv $(CRAM_ENV)
 
 $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
-	$(CRAM_ENV)/bin/pip install prysk
+	$(CRAM_ENV)\bin\pip install prysk
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
