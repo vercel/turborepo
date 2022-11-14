@@ -30,6 +30,7 @@ jobs:
       - name: Create or update PR comment
         if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
         uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
         with:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
@@ -717,6 +718,7 @@ jobs:
       - name: Create or update PR comment
         if: always() && github.event_name == 'pull_request' && steps.cancelled.outputs.cancelled != 'true'
         uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
         with:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
