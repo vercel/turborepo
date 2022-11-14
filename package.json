@@ -53,17 +53,8 @@
     "pre-commit": "pnpm exec lint-staged && cargo fmt --all"
   },
   "pnpm": {
-    "packageExtensions": {
-      "@tensorflow/tfjs": {
-        "peerDependencies": {
-          "long": "^5.2.0"
-        }
-      },
-      "@tensorflow/tfjs-node": {
-        "peerDependencies": {
-          "@tensorflow/tfjs-core": "^3.20.0"
-        }
-      }
+    "overrides": {
+      "next@latest": "13.0.2"
     }
   },
   "packageManager": "pnpm@7.13.5"

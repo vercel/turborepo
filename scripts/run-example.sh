@@ -63,12 +63,20 @@ function run_npm {
   echo "======================================================="
   echo "=> $folder: npm build lint"
   echo "======================================================="
-  npm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    npx turbo build lint
+  else
+    npm run build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: npm build lint again"
   echo "======================================================="
-  npm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    npx turbo build lint
+  else
+    npm run build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: npm SUCCESSFUL"
@@ -89,12 +97,20 @@ function run_pnpm {
   echo "======================================================="
   echo "=> $folder: pnpm build lint"
   echo "======================================================="
-  pnpm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    pnpm turbo build lint
+  else
+    pnpm run build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: pnpm build lint again"
   echo "======================================================="
-  pnpm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    pnpm turbo build lint
+  else
+    pnpm run build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: pnpm SUCCESSFUL"
@@ -115,12 +131,21 @@ function run_yarn {
   echo "======================================================="
   echo "=> $folder: yarn build lint"
   echo "======================================================="
-  yarn build lint
+  if [ $folder == "non-monorepo" ]; then
+    yarn turbo build lint
+  else
+    yarn build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: yarn build again"
   echo "======================================================="
-  yarn build lint
+  if [ $folder == "non-monorepo" ]; then
+
+    yarn turbo build lint
+  else
+    yarn build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: yarn SUCCESSFUL"
