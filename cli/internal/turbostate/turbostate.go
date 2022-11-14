@@ -48,6 +48,8 @@ type ParsedArgsFromRust struct {
 	Command    *Command `json:"command"`
 }
 
+var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
+
 // CLIExecutionStateFromRust is the entire state of an execution passed from the Rust side
 type CLIExecutionStateFromRust struct {
 	RepoState  RepoState          `json:"repo_state"`
