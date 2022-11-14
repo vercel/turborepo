@@ -30,6 +30,7 @@ jobs:
       - name: Create or update PR comment
         if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
         uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
         with:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
@@ -49,7 +50,8 @@ jobs:
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            .github/**
+            .github/actions/**
+            .github/workflows/test.yml
       - name: Rust related changes
         id: rust
         uses: technote-space/get-diff-action@v6
@@ -58,6 +60,8 @@ jobs:
             pnpm-lock.yaml
             package.json
             crates/**
+            shim/**
+            xtask/**
             Cargo.*
             .cargo/**
             rust-toolchain
@@ -81,7 +85,8 @@ jobs:
             .eslint*
             .prettier*
             tsconfig*
-            creates/**/js/**
+            crates/**/js/**
+            .github/**
             docs/**
             packages/**
             docs/**
@@ -163,7 +168,7 @@ jobs:
       - name: Count clippy warnings
         run: |
           count="0"
-          clippy_output="$(cargo clippy --all-targets 2>&1)"
+          clippy_output="$(cargo clippy --workspace --all-targets 2>&1)"
 
           # Clippy will be invoked and report on each crate individually. We need to sum manually.
           for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings\?$/\1/p'); do
@@ -287,6 +292,13 @@ jobs:
         run: npm install
 
       - name: Install nextest
+        id: nextest-install
+        continue-on-error: true
+        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Install nextest (second try)
+        if: steps.nextest-install.outcome == 'failure'
         run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         shell: bash
 
@@ -367,7 +379,7 @@ jobs:
           - name: ubuntu-latest-16-core-oss
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os.name }}
-    name: Rust building release on ${{ matrix.os.name }}
+    name: Rust building release for ${{ matrix.os.target }}
 
     steps:
       - name: Checkout
@@ -683,7 +695,7 @@ jobs:
         run: |
           echo "## :warning: CI failed :warning:" > comment.md
           echo >> comment.md
-          echo "The following steps have failed in CI:" > comment.md
+          echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
           cat failures.md >> comment.md
           echo >> comment.md
@@ -712,6 +724,7 @@ jobs:
       - name: Create or update PR comment
         if: always() && github.event_name == 'pull_request' && steps.cancelled.outputs.cancelled != 'true'
         uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
         with:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
