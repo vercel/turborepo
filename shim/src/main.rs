@@ -254,7 +254,7 @@ impl Args {
     /// returns: bool
     fn is_run_command(&self) -> bool {
         let is_explicit_run = matches!(self.command, Some(Command::Run { .. }));
-        let is_implicit_run = self.command.is_none() && !self.tasks.is_empty();
+        let is_implicit_run = self.command.is_none() && !self.run_args.tasks.is_empty();
 
         is_explicit_run || is_implicit_run
     }

@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"testing"
 
@@ -19,7 +20,11 @@ import (
 
 func TestParseConfig(t *testing.T) {
 	cpus := runtime.NumCPU()
-	defaultCwd, err := fs.GetCwd()
+	defaultCwdRaw, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get raw cwd: %v", err)
+	}
+	defaultCwd, err := fs.GetCwd(defaultCwdRaw)
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}

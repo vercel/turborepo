@@ -3,6 +3,8 @@
 // to Go via a JSON payload.
 package turbostate
 
+import "github.com/vercel/turbo/cli/internal/config"
+
 // RepoState is the state for repository. Consists of the root for the repo
 // along with the mode (single package or multi package)
 type RepoState struct {

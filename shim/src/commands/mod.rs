@@ -72,7 +72,8 @@ pub struct Args {
     pub test_run: bool,
     #[clap(subcommand)]
     pub command: Option<Command>,
-    pub tasks: Vec<String>,
+    #[clap(flatten, next_help_heading = "Run Arguments")]
+    pub run_args: RunArgs,
 }
 
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
