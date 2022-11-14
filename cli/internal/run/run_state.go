@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -167,7 +168,11 @@ func writeChrometracing(filename string, terminal cli.Ui) error {
 	if err := chrometracing.Close(); err != nil {
 		terminal.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
 	}
-	root, err := fs.GetCwd()
+	cwdRaw, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	root, err := fs.GetCwd(cwdRaw)
 	if err != nil {
 		return err
 	}

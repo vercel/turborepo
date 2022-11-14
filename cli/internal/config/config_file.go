@@ -19,6 +19,7 @@ type CLIConfigProvider interface {
 	GetAPI() (string, error)
 	GetTeam() (string, error)
 	GetToken() (string, error)
+	GetCwd() (string, error)
 }
 
 // FlagSet is a wrapper so that the CLIConfigProvider interface can be implemented
@@ -55,6 +56,11 @@ func (p FlagSet) GetTeam() (string, error) {
 // GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
 func (p FlagSet) GetToken() (string, error) {
 	return p.GetString("token")
+}
+
+// GetCwd returns the value of the `cwd` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetCwd() (string, error) {
+	return p.GetString("cwd")
 }
 
 // RepoConfig is a configuration object for the logged-in turborepo.com user

@@ -79,11 +79,12 @@ impl TurboState {
             | Some(Command::Unlink { .. }) => {
                 unreachable!()
             }
-            Some(Command::Daemon { .. }) => {
+            Some(Command::Daemon { .. }) | Some(Command::Run(_)) | Some(Command::Prune { .. }) => {
+                println!("TURBO STATE TIME");
                 let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
                 Ok(exit_code.try_into()?)
             }
-            _ => {
+            Some(Command::Completion) => {
                 let mut args = self
                     .raw_args
                     .iter()
@@ -98,6 +99,7 @@ impl TurboState {
                 let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
                 Ok(exit_code.try_into()?)
             }
+            None => todo!(),
         }
     }
 
@@ -140,7 +142,6 @@ impl TurboState {
         if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
             self.raw_args.push("--single-package".to_string());
         }
-
         let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
         // If the local turbo path doesn't exist or if we are local turbo, then we go
         // ahead and run the Go code linked in the current binary.
@@ -267,7 +268,7 @@ fn get_version() -> &'static str {
 }
 
 fn main() -> Result<()> {
-    let clap_args = Args::parse();
+    let mut clap_args = Args::parse();
     // --version flag doesn't work with ignore_errors in clap, so we have to handle
     // it manually
     if clap_args.version {
@@ -280,6 +281,8 @@ fn main() -> Result<()> {
     } else {
         env::current_dir()?
     };
+
+    clap_args.cwd = Some(current_dir.to_string_lossy().to_string());
 
     let args: Vec<_> = env::args().skip(1).collect();
     if args.is_empty() {

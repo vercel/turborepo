@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/run"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
@@ -136,6 +137,8 @@ func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion 
 			execErr = daemon.RunDaemon(ctx, helper, signalWatcher, &state.ParsedArgs)
 		} else if command.Prune != nil {
 			execErr = prune.RunPrune(helper, &state.ParsedArgs)
+		} else if command.Run != nil {
+			execErr = run.RunRun(ctx, helper, signalWatcher, &state)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}

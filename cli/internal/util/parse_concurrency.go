@@ -17,7 +17,7 @@ var (
 	_positiveInfinity = 1
 )
 
-func parseConcurrency(concurrencyRaw string) (int, error) {
+func ParseConcurrency(concurrencyRaw string) (int, error) {
 	if strings.HasSuffix(concurrencyRaw, "%") {
 		if percent, err := strconv.ParseFloat(concurrencyRaw[:len(concurrencyRaw)-1], 64); err != nil {
 			return 0, fmt.Errorf("invalid value for --concurrency CLI flag. This should be a number --concurrency=4 or percentage of CPU cores --concurrency=50%% : %w", err)
@@ -55,7 +55,7 @@ func (cv *ConcurrencyValue) String() string {
 
 // Set implements pflag.Value.Set for ConcurrencyValue
 func (cv *ConcurrencyValue) Set(value string) error {
-	parsed, err := parseConcurrency(value)
+	parsed, err := ParseConcurrency(value)
 	if err != nil {
 		return err
 	}

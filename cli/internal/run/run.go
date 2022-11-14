@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+
 	"log"
 	"os"
 	"os/exec"
@@ -89,8 +90,8 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-// Run executes the run command
-func Run(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
+// RunRun executes the run command
+func RunRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
 	args := executionState.ParsedArgs
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
@@ -100,7 +101,11 @@ func Run(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.W
 	if len(tasks) == 0 {
 		return errors.New("at least one task must be specified")
 	}
-	opts := optsFromRunPayload(args.Command.Run)
+	opts, err := optsFromExecutionState(executionState)
+	if err != nil {
+		return err
+	}
+
 	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
 
 	opts.runOpts.passThroughArgs = passThroughArgs
@@ -179,36 +184,59 @@ func parseTasksAndPassthroughArgsFromRust(args *turbostate.ParsedArgsFromRust) (
 	return args.Command.Run.Tasks, nil
 }
 
-//func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
-//	if argSplit := flags.ArgsLenAtDash(); argSplit != -1 {
-//		return remainingArgs[:argSplit], remainingArgs[argSplit:]
-//	}
-//	return remainingArgs, nil
-//}
-
-func optsFromRunPayload(runPayload *turbostate.RunPayload) *Opts {
+func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust) (*Opts, error) {
+	runPayload := executionState.ParsedArgs.Command.Run
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
+	// Scope flags
 	opts.scopeOpts.FilterPatterns = runPayload.Filter
 	opts.scopeOpts.IgnorePatterns = runPayload.Ignore
 	opts.scopeOpts.GlobalDepPatterns = runPayload.GlobalDeps
 
-	// opts.runOpts.concurrency = runPayload.Concurrency
+	// Cache flags
+	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
+	opts.cacheOpts.OverrideDir = runPayload.CacheDir
+	opts.cacheOpts.Workers = runPayload.CacheWorkers
+
+	// Runcache flags
+	opts.runcacheOpts.SkipReads = runPayload.Force
+	opts.runcacheOpts.SkipWrites = runPayload.NoCache
+
+	// Run flags
+	if runPayload.Concurrency != "" {
+		concurrency, err := util.ParseConcurrency(runPayload.Concurrency)
+		if err != nil {
+			return nil, err
+		}
+		opts.runOpts.concurrency = concurrency
+	}
 	opts.runOpts.parallel = runPayload.Parallel
 	opts.runOpts.profile = runPayload.Profile
 	opts.runOpts.continueOnError = runPayload.ContinueExecution
-	opts.runOpts.only = runPayload.RemoteOnly
-	//scope.AddFlags(&opts.scopeOpts, flags)
-	//addRunOpts(&opts.runOpts, flags, aliases)
-	//cache.AddFlags(&opts.cacheOpts, flags)
-	//runcache.AddFlags(&opts.runcacheOpts, flags)
-	//flags.SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
-	//	if alias, ok := aliases[name]; ok {
-	//		return pflag.NormalizedName(alias)
-	//	}
-	//	return pflag.NormalizedName(name)
-	//})
-	return opts
+	opts.runOpts.only = runPayload.Only
+	opts.runOpts.noDaemon = runPayload.NoDaemon
+	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
+
+	if runPayload.Graph == _graphNoValue || runPayload.Graph == _graphTextValue {
+		opts.runOpts.graphDot = true
+	} else {
+		opts.runOpts.graphDot = false
+		opts.runOpts.graphFile = runPayload.Graph
+	}
+
+	if runPayload.DryRun != "" {
+		if runPayload.DryRun == _dryRunJSONValue {
+			opts.runOpts.dryRunJSON = true
+		}
+
+		if runPayload.DryRun == _dryRunTextValue || runPayload.DryRun == _dryRunJSONValue || runPayload.DryRun == _dryRunNoValue {
+			opts.runOpts.dryRun = true
+		} else {
+			return nil, fmt.Errorf("invalid dry-run mode: %v", runPayload.DryRun)
+		}
+	}
+
+	return opts, nil
 }
 
 func optsFromFlags(flags *pflag.FlagSet) *Opts {
@@ -685,7 +713,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 
 const (
 	_graphText      = "graph"
-	_graphNoValue   = "<output filename>"
+	_graphNoValue   = "stdout"
 	_graphTextValue = "true"
 )
 
@@ -729,9 +757,9 @@ func (d *graphValue) Type() string {
 const (
 	_dryRunText      = "dry run"
 	_dryRunJSONText  = "json"
-	_dryRunJSONValue = "json"
-	_dryRunNoValue   = "text|json"
-	_dryRunTextValue = "text"
+	_dryRunJSONValue = "Json"
+	_dryRunNoValue   = "Stdout"
+	_dryRunTextValue = "Text"
 )
 
 // dryRunValue implements a flag that can be treated as a boolean (--dry-run)

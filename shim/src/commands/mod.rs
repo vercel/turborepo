@@ -133,7 +133,16 @@ pub enum Command {
         #[clap(long = "out-dir", default_value_t = String::from("out"), value_parser)]
         output_dir: String,
     },
+
     /// Run tasks across projects in your monorepo
+    ///
+    /// By default, turbo executes tasks in topological order (i.e.
+    /// dependencies first) and then caches the results. Re-running commands for
+    /// tasks already in the cache will skip re-execution and immediately move
+    /// artifacts from the cache into the correct output folders (as if the task
+    /// occurred again).
+    ///
+    /// Arguments passed after '--' will be passed through to the named tasks.
     Run(RunArgs),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
@@ -200,6 +209,8 @@ pub struct RunArgs {
     /// output. (default full)
     #[clap(long = "output-logs", value_enum, default_value_t = OutputLogsMode::Full)]
     pub output_logs: OutputLogsMode,
+    #[clap(long, hide = true)]
+    pub only: bool,
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,

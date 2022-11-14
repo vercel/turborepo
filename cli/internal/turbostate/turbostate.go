@@ -51,7 +51,8 @@ type RunPayload struct {
 	NoCache             bool     `json:"no_cache"`
 	NoDaemon            bool     `json:"no_daemon"`
 	NoDeps              bool     `json:"no_deps"`
-	OutputLogs          bool     `json:"output_logs"`
+	Only                bool     `json:"only"`
+	OutputLogs          string   `json:"output_logs"`
 	Parallel            bool     `json:"parallel"`
 	Profile             string   `json:"profile"`
 	RemoteOnly          bool     `json:"remote_only"`
@@ -126,4 +127,9 @@ func (a ParsedArgsFromRust) GetTeam() (string, error) {
 // GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
 func (a ParsedArgsFromRust) GetToken() (string, error) {
 	return a.Token, nil
+}
+
+// GetCwd returns the value of the `cwd` flag. Used to implement CLIConfigProvider interface.
+func (a ParsedArgsFromRust) GetCwd() (string, error) {
+	return a.CWD, nil
 }
