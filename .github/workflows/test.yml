@@ -36,7 +36,7 @@ jobs:
           body: |
             ## :hourglass_flowing_sand: CI is running again... :hourglass_flowing_sand:
 
-            Wait for it...
+            [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
             <!-- CI COMMENT -->
 
@@ -686,6 +686,8 @@ jobs:
           echo "The following steps have failed in CI:" > comment.md
           echo >> comment.md
           cat failures.md >> comment.md
+          echo >> comment.md
+          echo "See [workflow summary](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}) for details">> comment.md
           echo >> comment.md
           echo "<!-- CI COMMENT -->" >> comment.md
 
