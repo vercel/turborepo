@@ -241,7 +241,9 @@ async fn handle_issues<T: Into<RawVc>>(source: T, console_ui: ConsoleUiVc) -> Re
 async fn project_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSystemVc> {
     let disk_fs = DiskFileSystemVc::new("project".to_string(), project_dir.to_string());
     handle_issues(disk_fs, console_ui).await?;
-    disk_fs.await?.start_watching()?;
+    if let Err(watch_err) = disk_fs.await?.start_watching() {
+        eprintln!("error watching project directory: {:?}", watch_err);
+    }
     Ok(disk_fs.into())
 }
 
@@ -249,7 +251,9 @@ async fn project_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSy
 async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSystemVc> {
     let disk_fs = DiskFileSystemVc::new("output".to_string(), project_dir.to_string());
     handle_issues(disk_fs, console_ui).await?;
-    disk_fs.await?.start_watching()?;
+    if let Err(watch_err) = disk_fs.await?.start_watching() {
+        eprintln!("error watching output directory: {:?}", watch_err);
+    }
     Ok(disk_fs.into())
 }
 

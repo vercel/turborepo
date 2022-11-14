@@ -22,7 +22,7 @@ use std::{
     mem::take,
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::{
-        mpsc::{channel, RecvError, TryRecvError},
+        mpsc::{channel, RecvError},
         Arc, Mutex,
     },
     time::Duration,
@@ -34,7 +34,8 @@ use glob::GlobVc;
 use invalidator_map::InvalidatorMap;
 use jsonc_parser::{parse_to_serde_value, ParseOptions};
 use mime::Mime;
-use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecommendedWatcher, RecursiveMode};
+use notify_debouncer_mini::{new_debouncer, DebouncedEvent, Debouncer};
 use read_glob::read_glob;
 pub use read_glob::{ReadGlobResult, ReadGlobResultVc};
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,7 @@ pub struct DiskFileSystem {
     dir_invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
-    watcher: Mutex<Option<RecommendedWatcher>>,
+    watcher: Mutex<Option<Debouncer<RecommendedWatcher>>>,
 }
 
 impl DiskFileSystem {
@@ -112,15 +113,21 @@ impl DiskFileSystem {
         }
         let invalidator_map = self.invalidator_map.clone();
         let dir_invalidator_map = self.dir_invalidator_map.clone();
-        let root = self.root.clone();
         // Create a channel to receive the events.
-        let (tx, rx) = channel();
+        let (tx, rx) = channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
         // Create a watcher object, delivering debounced events.
         // The notification back-end is selected based on the platform.
-        let mut watcher = watcher(tx, Duration::from_millis(1))?;
+        let mut debouncer = new_debouncer(Duration::from_millis(4), None, move |res| {
+            if let Err(err) = tx.send(res) {
+                eprintln!("error sending event: {:?}", err);
+            }
+        })?;
         // Add a path to be watched. All files and directories at that path and
         // below will be monitored for changes.
-        watcher.watch(&root, RecursiveMode::Recursive)?;
+        debouncer.watcher().watch(
+            &PathBuf::from(unix_to_sys(&self.root).as_ref()),
+            RecursiveMode::Recursive,
+        )?;
 
         // We need to invalidate all reads that happened before watching
         // Best is to start_watching before starting to read
@@ -131,7 +138,7 @@ impl DiskFileSystem {
             invalidators.into_iter().for_each(|i| i.invalidate());
         }
 
-        watcher_guard.replace(watcher);
+        watcher_guard.replace(debouncer);
 
         spawn_thread(move || {
             let mut batched_invalidate_path = HashSet::new();
@@ -139,68 +146,27 @@ impl DiskFileSystem {
             let mut batched_invalidate_path_and_children = HashSet::new();
             let mut batched_invalidate_path_and_children_dir = HashSet::new();
 
-            'outer: loop {
-                let mut event = rx.recv().map_err(|e| match e {
-                    RecvError => TryRecvError::Disconnected,
-                });
-                loop {
-                    match event {
-                        Ok(DebouncedEvent::Write(path)) => {
-                            batched_invalidate_path.insert(path);
-                        }
-                        Ok(DebouncedEvent::Create(path)) | Ok(DebouncedEvent::Remove(path)) => {
-                            batched_invalidate_path_and_children.insert(path.clone());
-                            batched_invalidate_path_and_children_dir.insert(path.clone());
-                            if let Some(parent) = path.parent() {
+            loop {
+                match rx.recv() {
+                    Ok(Ok(events)) => {
+                        for event in events {
+                            if let Some(parent) = event.path.parent() {
                                 batched_invalidate_path_dir.insert(PathBuf::from(parent));
                             }
-                        }
-                        Ok(DebouncedEvent::Rename(source, destination)) => {
-                            batched_invalidate_path_and_children.insert(source.clone());
-                            if let Some(parent) = source.parent() {
-                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
-                            }
-                            batched_invalidate_path_and_children.insert(destination.clone());
-                            if let Some(parent) = destination.parent() {
-                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
-                            }
-                        }
-                        Ok(DebouncedEvent::Rescan) => {
-                            batched_invalidate_path_and_children.insert(PathBuf::from(&root));
-                            batched_invalidate_path_and_children_dir.insert(PathBuf::from(&root));
-                        }
-                        Ok(DebouncedEvent::Error(err, path)) => {
-                            println!("watch error ({:?}): {:?} ", path, err);
-                            match path {
-                                Some(path) => {
-                                    batched_invalidate_path_and_children.insert(path.clone());
-                                    batched_invalidate_path_and_children_dir.insert(path);
-                                }
-                                None => {
-                                    batched_invalidate_path_and_children
-                                        .insert(PathBuf::from(&root));
-                                    batched_invalidate_path_and_children_dir
-                                        .insert(PathBuf::from(&root));
-                                }
-                            }
-                        }
-                        Ok(DebouncedEvent::Chmod(_))
-                        | Ok(DebouncedEvent::NoticeRemove(_))
-                        | Ok(DebouncedEvent::NoticeWrite(_)) => {
-                            // ignored
-                        }
-                        Err(TryRecvError::Disconnected) => {
-                            // Sender has been disconnected
-                            // which means DiskFileSystem has been dropped
-                            // exit thread
-                            break 'outer;
-                        }
-                        Err(TryRecvError::Empty) => {
-                            break;
+                            batched_invalidate_path_and_children.insert(event.path.clone());
+                            batched_invalidate_path_and_children_dir.insert(event.path);
                         }
                     }
-                    event = rx.try_recv();
+                    Ok(Err(errors)) => {
+                        for error in errors {
+                            eprintln!("watch error: {:?} ", error);
+                        }
+                    }
+                    Err(RecvError) => {
+                        break;
+                    }
                 }
+
                 fn invalidate_path(
                     invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
                     paths: impl Iterator<Item = PathBuf>,
