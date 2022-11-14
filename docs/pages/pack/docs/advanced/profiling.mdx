@@ -1,0 +1,58 @@
+---
+title: Profiling 
+description: Learn how to profile Turbopack
+---
+
+import { ThemedImageFigure } from '../../../../components/image/ThemedImageFigure';
+
+# Profiling Turbopack
+
+## On macOS
+
+### Install [`cargo-instruments`]
+
+[`cargo-instruments`] version 0.4.7 is incompatible with our workspace setup, so to install it you'll need to clone it and install it from an updated branch:
+
+```sh
+git clone https://github.com/cmyr/cargo-instruments.git
+git checkout update-deps
+cargo install --path .
+```
+
+Make sure you have all the [prerequisites](https://github.com/cmyr/cargo-instruments#pre-requisites) for running cargo-instruments.
+
+### Run the profiler
+
+By default, the next-dev CLI will keep watching for changes to your application and never exit until you manually interrupt it. However, [`cargo-instruments`] waits for your program to exit before building and opening the trace file. For this purpose, we've added a `profile` feature to `next-dev` which exits the program if no updates are detected within a given timeframe and there are no pending tasks.
+
+To profile `next-dev`, run the following command:
+
+```sh
+cargo instruments -t time --bin next-dev --release --features profile [-- [...args]]
+```
+
+You can also run [other templates](https://github.com/cmyr/cargo-instruments#templates) than the time profiler.
+
+Once the program exits, the profiler will open the trace file in Instruments. Refer to the [learning resources](https://github.com/cmyr/cargo-instruments#resources) to learn how to use Instruments.
+
+<ThemedImageFigure
+  borderRadius={true}
+  dark={{
+    source: '/images/docs/pack/instruments-dark.png',
+    height: 662,
+    width: 968
+  }}
+  light={{
+    source: '/images/docs/pack/instruments-light.png',
+    height: 706,
+    width: 1012
+  }}
+  captionSpacing={24}
+  caption="An example trace from the time profiler."
+/>
+
+## On other platforms
+
+We currently don't have a guide for profiling Turbopack on other platforms.
+
+[`cargo-instruments`]: https://github.com/cmyr/cargo-instruments

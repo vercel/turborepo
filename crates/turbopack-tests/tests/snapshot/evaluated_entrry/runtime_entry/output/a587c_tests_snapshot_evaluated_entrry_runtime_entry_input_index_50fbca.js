@@ -1,6 +1,6 @@
 (self.TURBOPACK = self.TURBOPACK || []).push(["output/a587c_tests_snapshot_evaluated_entrry_runtime_entry_input_index_50fbca.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/evaluated_entrry/runtime_entry/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/evaluated_entrry/runtime_entry/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
 console.log("hello world");
 
@@ -159,10 +159,8 @@ console.log("hello world");
   function interopEsm(raw, ns, allowExportDefault) {
     /** @type {Object.<string, () => any>} */
     const getters = { __proto__: null };
-    if (typeof raw === "object" || typeof raw === "function") {
-      for (const key in raw) {
-        getters[key] = createGetter(raw, key);
-      }
+    for (const key in raw) {
+      getters[key] = createGetter(raw, key);
     }
     if (!(allowExportDefault && "default" in getters)) {
       getters["default"] = () => raw;
@@ -379,6 +377,7 @@ console.log("hello world");
         c: moduleCache,
         l: loadChunk,
         p: _process,
+        g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
       });
     });

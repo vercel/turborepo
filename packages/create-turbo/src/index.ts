@@ -2,7 +2,7 @@
 
 import * as path from "path";
 import execa from "execa";
-import fs from "fs";
+import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
@@ -57,7 +57,7 @@ run()
   });
 
 async function run() {
-  let { input, flags, showHelp, showVersion } = meow(help, {
+  let { input, flags } = meow(help, {
     booleanDefault: undefined,
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
@@ -69,10 +69,6 @@ async function run() {
     },
   });
 
-  if (flags.help) showHelp();
-  if (flags.version) showVersion();
-
-  // let anim = chalkAnimation.pulse(`\n>>> TURBOREPO\n`);
   console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   await new Promise((resolve) => setTimeout(resolve, 500));
   console.log(
@@ -136,19 +132,22 @@ async function run() {
   let relativeProjectDir = path.relative(process.cwd(), projectDir);
   let projectDirIsCurrentDir = relativeProjectDir === "";
   if (!projectDirIsCurrentDir) {
-    if (fs.existsSync(projectDir) && fs.readdirSync(projectDir).length !== 0) {
+    if (
+      fse.existsSync(projectDir) &&
+      fse.readdirSync(projectDir).length !== 0
+    ) {
       console.log(
         `️🚨 Oops, "${relativeProjectDir}" already exists. Please try again with a different directory.`
       );
       process.exit(1);
     } else {
-      fs.mkdirSync(projectDir, { recursive: true });
+      fse.mkdirSync(projectDir, { recursive: true });
     }
   }
 
   // copy the shared template
   let sharedTemplate = path.resolve(__dirname, "../templates", `_shared_ts`);
-  fs.cpSync(sharedTemplate, projectDir, { recursive: true });
+  fse.copySync(sharedTemplate, projectDir, { recursive: true });
 
   let packageManagerVersion = getPackageManagerVersion(answers.packageManager);
   let packageManagerConfigs = PACKAGE_MANAGERS[answers.packageManager];
@@ -166,15 +165,15 @@ async function run() {
     "../templates",
     packageManager.template
   );
-  if (fs.existsSync(packageManagerTemplate)) {
-    fs.cpSync(packageManagerTemplate, projectDir, {
+  if (fse.existsSync(packageManagerTemplate)) {
+    fse.copySync(packageManagerTemplate, projectDir, {
       recursive: true,
-      force: true,
+      overwrite: true,
     });
   }
 
   // rename dotfiles
-  fs.renameSync(
+  fse.renameSync(
     path.join(projectDir, "gitignore"),
     path.join(projectDir, ".gitignore")
   );
@@ -196,7 +195,7 @@ async function run() {
   sharedPkg.name = projectName;
 
   // write package.json
-  fs.writeFileSync(
+  fse.writeFileSync(
     path.join(projectDir, "package.json"),
     JSON.stringify(sharedPkg, null, 2)
   );

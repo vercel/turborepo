@@ -1,6 +1,6 @@
 (self.TURBOPACK = self.TURBOPACK || []).push(["output/79fb1_turbopack-tests_tests_snapshot_imports_resolve_error_esm_input_index_1a5dd4.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/imports/resolve_error_esm/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/imports/resolve_error_esm/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname }) => (() => {
 
 (()=>{
     const e = new Error("Cannot find module 'does-not-exist/path'");
@@ -167,10 +167,8 @@ console.log({}[dne]);
   function interopEsm(raw, ns, allowExportDefault) {
     /** @type {Object.<string, () => any>} */
     const getters = { __proto__: null };
-    if (typeof raw === "object" || typeof raw === "function") {
-      for (const key in raw) {
-        getters[key] = createGetter(raw, key);
-      }
+    for (const key in raw) {
+      getters[key] = createGetter(raw, key);
     }
     if (!(allowExportDefault && "default" in getters)) {
       getters["default"] = () => raw;
@@ -387,6 +385,7 @@ console.log({}[dne]);
         c: moduleCache,
         l: loadChunk,
         p: _process,
+        g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
       });
     });

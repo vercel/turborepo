@@ -25,7 +25,6 @@ import (
 type link struct {
 	base                *cmdutil.CmdBase
 	modifyGitIgnore     bool
-	isTestRun           bool
 	apiClient           linkAPIClient // separate from base to allow testing
 	promptSetup         func(location string) (bool, error)
 	promptTeam          func(teams []string) (string, error)
@@ -56,7 +55,6 @@ func RunLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error 
 	link := &link{
 		base:                base,
 		modifyGitIgnore:     !args.Command.Link.DontModifyGitIgnore,
-		isTestRun:           args.TestRun,
 		apiClient:           base.APIClient,
 		promptSetup:         promptSetup,
 		promptTeam:          promptTeam,
