@@ -4,8 +4,18 @@ Thanks for your interest in contributing to Turbo!
 
 **Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
 
-- [Contributing to Turborepo](#contributing-to-turborepo)
-- [Contributing to Turbopack](#contributing-to-turbopack)
+- [Contributing to Turbo](#contributing-to-turbo)
+  - [Contributing to Turborepo](#contributing-to-turborepo)
+    - [Building Turborepo](#building-turborepo)
+    - [Testing Turborepo](#testing-turborepo)
+  - [Debugging Turborepo](#debugging-turborepo)
+  - [Benchmarking Turborepo](#benchmarking-turborepo)
+  - [Updating `turbo`](#updating-turbo)
+  - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Contributing to Turbopack](#contributing-to-turbopack)
+    - [Testing Turbopack](#testing-turbopack)
+    - [Benchmarking Turbopack](#benchmarking-turbopack)
+  - [Troubleshooting](#troubleshooting)
 
 ## Contributing to Turborepo
 
@@ -13,8 +23,13 @@ Thanks for your interest in contributing to Turbo!
 
 Dependencies
 
-1.  On OSX: `brew install sponge jq protobuf protoc-gen-go protoc-gen-go-grpc golang`
-1.  Run `pnpm install` at root
+1. Install `jq` and `sponge`
+
+   On macOS: `brew install sponge jq`
+
+1. Install [turbo/shim](https://github.com/vercel/turbo/blob/main/shim/README.md) build requirements
+
+1. Run `pnpm install` at root
 
 Building
 
