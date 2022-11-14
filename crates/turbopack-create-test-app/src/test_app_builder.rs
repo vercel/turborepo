@@ -61,8 +61,8 @@ impl TestAppBuilder {
         } else {
             TestAppTarget::Temp(tempfile::tempdir().context("creating tempdir")?)
         };
-        let app = TestApp { target };
-        let path = app.path();
+        let path = target.path();
+        let mut modules = vec![];
         let src = path.join("src");
         create_dir_all(&src).context("creating src dir")?;
 
@@ -75,6 +75,8 @@ impl TestAppBuilder {
         remaining_modules -= 1;
 
         while let Some(file) = queue.pop_front() {
+            modules.push(file.clone());
+
             let leaf = remaining_modules == 0
                 || (!queue.is_empty()
                     && (queue.len() + remaining_modules) % (self.flatness + 1) == 0);
@@ -84,11 +86,18 @@ impl TestAppBuilder {
                     .write_all(
                         r#"import React from "react";
 
-function Triangle({ style }) {
+let EFFECT = () => {};
+
+/* @turbopack-bench:eval */
+/* @turbopack-bench:effect */ 
+
+function Component({ style }) {
+    React.useEffect(EFFECT, [EFFECT]);
+
     return <polygon points="-5,4.33 0,-4.33 5,4.33" style={style} />;
 }
 
-export default React.memo(Triangle);
+export default React.memo(Component);
 "#
                         .as_bytes(),
                     )
@@ -157,7 +166,14 @@ export default React.memo(Triangle);
 {b}
 {c}
 
-function Container({{ style }}) {{
+let EFFECT = () => {{}};
+
+/* @turbopack-bench:eval */
+/* @turbopack-bench:effect */
+
+function Component({{ style }}) {{
+    React.useEffect(EFFECT, [EFFECT]);
+
     return <>
         <g transform="translate(0 -2.16)   scale(0.5 0.5)">
             {a_}
@@ -171,7 +187,7 @@ function Container({{ style }}) {{
     </>;
 }}
 
-export default React.memo(Container);
+export default React.memo(Component);
 "#
                             )
                             .as_bytes(),
@@ -369,7 +385,7 @@ export default function Page() {
                 .context("writing package.json")?;
         }
 
-        Ok(app)
+        Ok(TestApp { target, modules })
     }
 }
 
@@ -394,17 +410,30 @@ enum TestAppTarget {
     Temp(TempDir),
 }
 
+impl TestAppTarget {
+    /// Returns the path to the directory containing the app.
+    fn path(&self) -> &Path {
+        match &self {
+            TestAppTarget::Set(target) => target.as_path(),
+            TestAppTarget::Temp(target) => target.path(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TestApp {
     target: TestAppTarget,
+    modules: Vec<PathBuf>,
 }
 
 impl TestApp {
     /// Returns the path to the directory containing the app.
     pub fn path(&self) -> &Path {
-        match &self.target {
-            TestAppTarget::Set(target) => target.as_path(),
-            TestAppTarget::Temp(target) => target.path(),
-        }
+        self.target.path()
+    }
+
+    /// Returns the list of modules in this app.
+    pub fn modules(&self) -> &[PathBuf] {
+        &self.modules
     }
 }
