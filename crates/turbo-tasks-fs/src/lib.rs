@@ -117,7 +117,7 @@ impl DiskFileSystem {
         let (tx, rx) = channel::<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>();
         // Create a watcher object, delivering debounced events.
         // The notification back-end is selected based on the platform.
-        let mut debouncer = new_debouncer(Duration::from_millis(4), None, move |res| {
+        let mut debouncer = new_debouncer(Duration::from_millis(1), None, move |res| {
             if let Err(err) = tx.send(res) {
                 eprintln!("error sending event: {:?}", err);
             }
