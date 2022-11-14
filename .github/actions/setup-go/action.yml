@@ -15,6 +15,15 @@ runs:
         cache-dependency-path: cli/go.sum
 
     - name: Set Up Protoc
+      id: set-up-protoc
+      continue-on-error: true
+      uses: arduino/setup-protoc@v1
+      with:
+        version: "3.x"
+        repo-token: ${{ inputs.github-token }}
+
+    - name: Set Up Protoc (second try)
+      if: steps.set-up-protoc.outcome == 'failure'
       uses: arduino/setup-protoc@v1
       with:
         version: "3.x"
