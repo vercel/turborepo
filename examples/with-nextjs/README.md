@@ -2,6 +2,7 @@ The following turborepo examples contain [Next.js](https://nextjs.org/) applicat
 
 1. [basic](../basic/)
 1. [kitchen-sink](../kitchen-sink/)
+1. [non-monorepo](../non-monorepo/)
 1. [with-changesets](../with-changesets/)
 1. [with-docker](../with-docker/)
 1. [with-prisma](../with-prisma)

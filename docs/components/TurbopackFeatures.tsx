@@ -3,8 +3,6 @@ import {
   ArchiveIcon,
   DesktopComputerIcon,
   DownloadIcon,
-  LightBulbIcon,
-  QuestionMarkCircleIcon,
   ServerIcon,
 } from "@heroicons/react/outline";
 import { DetailedFeatureLink } from "./Feature";
@@ -25,10 +23,10 @@ export const TurbopackFeatures = () => {
         feature={{
           Icon: TSIcon,
           description: (
-            <p>
+            <>
               Supports TypeScript out of the box, including resolving{" "}
               <code>paths</code> and <code>baseUrl</code>.
-            </p>
+            </>
           ),
           name: "TypeScript",
         }}
@@ -38,10 +36,10 @@ export const TurbopackFeatures = () => {
         feature={{
           Icon: DownloadIcon,
           description: (
-            <p>
+            <>
               Supports <code>require</code>, <code>import</code>, dynamic
               imports and more.
-            </p>
+            </>
           ),
           name: "Imports",
         }}
@@ -59,10 +57,10 @@ export const TurbopackFeatures = () => {
         feature={{
           Icon: CSSIcon,
           description: (
-            <p>
+            <>
               Supports Global CSS, CSS Modules, postcss-nested and{" "}
               <code>@import</code>.
-            </p>
+            </>
           ),
           name: "CSS",
         }}
@@ -71,12 +69,8 @@ export const TurbopackFeatures = () => {
       <DetailedFeatureLink
         feature={{
           Icon: ArchiveIcon,
-          description: (
-            <p>
-              Learn about Next.js, Svelte, Vue and React Server Components
-              support.
-            </p>
-          ),
+          description:
+            "Learn about Next.js, Svelte, Vue and React Server Components support.",
           name: "Frameworks",
         }}
         href="/pack/docs/features/frameworks"
@@ -85,10 +79,10 @@ export const TurbopackFeatures = () => {
         feature={{
           Icon: ServerIcon,
           description: (
-            <p>
+            <>
               Supports the <code>/public</code> directory, JSON imports, and
               importing assets via ESM.
-            </p>
+            </>
           ),
           name: "Static Assets",
         }}
@@ -98,10 +92,10 @@ export const TurbopackFeatures = () => {
         feature={{
           Icon: AdjustmentsIcon,
           description: (
-            <p>
+            <>
               Supports environment variables via <code>.env</code>,{" "}
               <code>.env.local</code>, and more.
-            </p>
+            </>
           ),
           name: "Environment Variables",
         }}

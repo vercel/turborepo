@@ -105,7 +105,7 @@ yarn run dev
 
 Learn more about the power of Turborepo:
 
-- [Pipelines](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
+- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
 - [Caching](https://turbo.build/repo/docs/core-concepts/caching)
 - [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
 - [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)

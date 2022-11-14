@@ -1,4 +1,4 @@
-name: CLI E2E tests
+name: Turborepo E2E tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,6 +13,7 @@ on:
       - "**.md"
       - "**.mdx"
       - "docs/**"
+      - "examples/**"
 
 jobs:
   test:
@@ -32,7 +33,3 @@ jobs:
 
       - name: E2E Tests
         run: pnpm -- turbo run e2e --filter=cli
-
-      - name: Integration Tests
-        if: matrix.os != 'windows-latest'
-        run: pnpm -- turbo run integration-tests --filter=cli
