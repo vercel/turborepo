@@ -15,32 +15,41 @@ use crate::{
     },
 };
 
-pub struct Vite;
+pub struct Vite {
+    swc: bool,
+}
 
 impl Vite {
-    pub fn new() -> Self {
-        Vite {}
+    pub fn new(swc: bool) -> Self {
+        Vite { swc }
     }
 }
 
 impl Bundler for Vite {
     fn get_name(&self) -> &str {
-        "Vite CSR"
+        if self.swc {
+            "Vite SWC CSR"
+        } else {
+            "Vite CSR"
+        }
     }
 
     fn prepare(&self, install_dir: &Path) -> Result<()> {
-        npm::install(
-            install_dir,
-            &[
-                NpmPackage::new("vite", "3.0.9"),
-                NpmPackage::new("@vitejs/plugin-react", "2.1.0"),
-            ],
-        )
-        .context("failed to install from npm")?;
+        let mut packages = vec![NpmPackage::new("vite", "3.0.9")];
+        if self.swc {
+            packages.push(NpmPackage::new("vite-plugin-swc-react-refresh", "2.2.0"));
+        } else {
+            packages.push(NpmPackage::new("@vitejs/plugin-react", "2.1.0"));
+        };
+        npm::install(install_dir, &packages).context("failed to install from npm")?;
 
         fs::write(
             install_dir.join("vite.config.js"),
-            include_bytes!("vite.config.js"),
+            if self.swc {
+                include_bytes!("vite.swc.config.js") as &[u8]
+            } else {
+                include_bytes!("vite.config.js") as &[u8]
+            },
         )?;
 
         Ok(())

@@ -225,7 +225,6 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                         &measurement,
                                     )
                                     .await?;
-                                    eprintln!("change duration: {:?}", change_duration);
                                     value = measurement.add(&value, &change_duration);
                                 }
                                 // Defer the dropping of the guard to `teardown`.
@@ -250,16 +249,20 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
 }
 
 fn insert_code(contents: &mut String, code: &str, location: CodeLocation) -> Result<()> {
-    const PRAGMA_EFFECT: &str = "/* @turbopack-bench:effect */";
+    const PRAGMA_EFFECT_START: &str = "/* @turbopack-bench:effect-start */";
+    const PRAGMA_EFFECT_END: &str = "/* @turbopack-bench:effect-end */";
     const PRAGMA_EVAL: &str = "/* @turbopack-bench:eval */";
     match location {
         CodeLocation::Effect => {
-            let a = contents
-                .find(PRAGMA_EFFECT)
-                .ok_or_else(|| anyhow!("unable to find effect pragma in {}", contents))?;
-            contents.insert_str(
-                a + PRAGMA_EFFECT.len(),
-                &format!("\nEFFECT = () => {{ {code} }};"),
+            let start = contents
+                .find(PRAGMA_EFFECT_START)
+                .ok_or_else(|| anyhow!("unable to find effect start pragma in {}", contents))?;
+            let end = contents
+                .find(PRAGMA_EFFECT_END)
+                .ok_or_else(|| anyhow!("unable to find effect end pragma in {}", contents))?;
+            contents.replace_range(
+                start + PRAGMA_EFFECT_START.len()..end,
+                &format!("\nEFFECT = () => {{ {code} }};\n"),
             );
         }
         CodeLocation::Evaluation => {

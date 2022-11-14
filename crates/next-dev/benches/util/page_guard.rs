@@ -21,6 +21,7 @@ pub struct PageGuard<'a> {
     events: Box<dyn Stream<Item = Event> + Unpin>,
 }
 
+#[derive(Debug)]
 enum Event {
     EventBindingCalled(Arc<EventBindingCalled>),
     EventExceptionThrown(Arc<EventExceptionThrown>),

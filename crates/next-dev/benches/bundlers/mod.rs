@@ -84,7 +84,8 @@ pub fn get_bundlers() -> Vec<Box<dyn Bundler>> {
         bundlers.push(Box::new(NextJs::new(NextJsVersion::V12)));
         bundlers.push(Box::new(NextJs::new(NextJsVersion::V11)));
         bundlers.push(Box::new(Parcel {}));
-        bundlers.push(Box::new(Vite::new()));
+        bundlers.push(Box::new(Vite::new(false)));
+        bundlers.push(Box::new(Vite::new(true)));
         bundlers.push(Box::new(Webpack {}));
     }
 

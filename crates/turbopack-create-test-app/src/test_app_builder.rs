@@ -89,7 +89,8 @@ impl TestAppBuilder {
 let EFFECT = () => {};
 
 /* @turbopack-bench:eval */
-/* @turbopack-bench:effect */ 
+/* @turbopack-bench:effect-start */ 
+/* @turbopack-bench:effect-end */ 
 
 function Component({ style }) {
     React.useEffect(EFFECT, [EFFECT]);
@@ -169,7 +170,8 @@ export default React.memo(Component);
 let EFFECT = () => {{}};
 
 /* @turbopack-bench:eval */
-/* @turbopack-bench:effect */
+/* @turbopack-bench:effect-start */
+/* @turbopack-bench:effect-end */
 
 function Component({{ style }}) {{
     React.useEffect(EFFECT, [EFFECT]);
