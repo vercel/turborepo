@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+
 	"log"
 	"os"
 	"os/exec"
@@ -16,10 +17,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/vercel/turbo/cli/internal/config"
-
 	"github.com/pyr-sh/dag"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cache"
@@ -42,6 +40,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 
@@ -91,50 +90,153 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-// GetCmd returns the run command
-func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
-	var opts *Opts
-	var flags *pflag.FlagSet
-
-	cmd := &cobra.Command{
-		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
-		Short:                 "Run tasks across projects in your monorepo",
-		Long:                  _cmdLong,
-		SilenceUsage:          true,
-		SilenceErrors:         true,
-		DisableFlagsInUseLine: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
-			if len(tasks) == 0 {
-				return errors.New("at least one task must be specified")
-			}
-
-			opts.runOpts.passThroughArgs = passThroughArgs
-			run := configureRun(base, opts, signalWatcher)
-			ctx := cmd.Context()
-			if err := run.run(ctx, tasks); err != nil {
-				base.LogError("run failed: %v", err)
-				return err
-			}
-			return nil
-		},
+// RunRun executes the run command
+func RunRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
+	args := executionState.ParsedArgs
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
+	}
+	tasks, passThroughArgs := parseTasksAndPassthroughArgsFromRust(&args)
+	if len(tasks) == 0 {
+		return errors.New("at least one task must be specified")
+	}
+	opts, err := optsFromExecutionState(executionState)
+	if err != nil {
+		return err
 	}
 
-	flags = cmd.Flags()
-	opts = optsFromFlags(flags)
-	return cmd
+	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
+
+	opts.runOpts.passThroughArgs = passThroughArgs
+	run := configureRun(base, opts, signalWatcher)
+	if err := run.run(ctx, tasks); err != nil {
+		base.LogError("run failed: %v", err)
+		return err
+	}
+	return nil
 }
+
+//// GetCmd returns the run command
+//func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
+//	var opts *Opts
+//	var flags *pflag.FlagSet
+//
+//	cmd := &cobra.Command{
+//		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
+//		Short:                 "Run tasks across projects in your monorepo",
+//		Long:                  _cmdLong,
+//		SilenceUsage:          true,
+//		SilenceErrors:         true,
+//		DisableFlagsInUseLine: true,
+//		RunE: func(cmd *cobra.Command, args []string) error {
+//			flags := config.FlagSet{FlagSet: cmd.Flags()}
+//			base, err := helper.GetCmdBase(flags)
+//			if err != nil {
+//				return err
+//			}
+//			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
+//			if len(tasks) == 0 {
+//				return errors.New("at least one task must be specified")
+//			}
+//			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
+//			opts.runOpts.singlePackage = packageMode == packagemanager.Single
+//
+//			opts.runOpts.passThroughArgs = passThroughArgs
+//			run := configureRun(base, opts, signalWatcher)
+//			ctx := cmd.Context()
+//			if err := run.run(ctx, tasks); err != nil {
+//				base.LogError("run failed: %v", err)
+//				return err
+//			}
+//			return nil
+//		},
+//	}
+//
+//	flags = cmd.Flags()
+//	opts = optsFromFlags(flags)
+//	return cmd
+//}
 
 func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
 	if argSplit := flags.ArgsLenAtDash(); argSplit != -1 {
 		return remainingArgs[:argSplit], remainingArgs[argSplit:]
 	}
 	return remainingArgs, nil
+}
+
+func parseTasksAndPassthroughArgsFromRust(args *turbostate.ParsedArgsFromRust) ([]string, []string) {
+	for i, task := range args.Command.Run.Tasks {
+		if task == "--" {
+			var tasks []string
+			var passthroughArgs []string
+			// If the `--` has arguments after it, we set passthroughArgs to them
+			if i < len(args.Command.Run.Tasks)-1 {
+				passthroughArgs = args.Command.Run.Tasks[(i + 1):]
+			}
+			if i > 0 {
+				tasks = args.Command.Run.Tasks[0:(i - 1)]
+			}
+
+			return tasks, passthroughArgs
+		}
+	}
+	return args.Command.Run.Tasks, nil
+}
+
+func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust) (*Opts, error) {
+	runPayload := executionState.ParsedArgs.Command.Run
+	opts := getDefaultOptions()
+	// aliases := make(map[string]string)
+	// Scope flags
+	opts.scopeOpts.FilterPatterns = runPayload.Filter
+	opts.scopeOpts.IgnorePatterns = runPayload.Ignore
+	opts.scopeOpts.GlobalDepPatterns = runPayload.GlobalDeps
+
+	// Cache flags
+	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
+	opts.cacheOpts.OverrideDir = runPayload.CacheDir
+	opts.cacheOpts.Workers = runPayload.CacheWorkers
+
+	// Runcache flags
+	opts.runcacheOpts.SkipReads = runPayload.Force
+	opts.runcacheOpts.SkipWrites = runPayload.NoCache
+
+	// Run flags
+	if runPayload.Concurrency != "" {
+		concurrency, err := util.ParseConcurrency(runPayload.Concurrency)
+		if err != nil {
+			return nil, err
+		}
+		opts.runOpts.concurrency = concurrency
+	}
+	opts.runOpts.parallel = runPayload.Parallel
+	opts.runOpts.profile = runPayload.Profile
+	opts.runOpts.continueOnError = runPayload.ContinueExecution
+	opts.runOpts.only = runPayload.Only
+	opts.runOpts.noDaemon = runPayload.NoDaemon
+	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
+
+	if runPayload.Graph == _graphNoValue || runPayload.Graph == _graphTextValue {
+		opts.runOpts.graphDot = true
+	} else {
+		opts.runOpts.graphDot = false
+		opts.runOpts.graphFile = runPayload.Graph
+	}
+
+	if runPayload.DryRun != "" {
+		if runPayload.DryRun == _dryRunJSONValue {
+			opts.runOpts.dryRunJSON = true
+		}
+
+		if runPayload.DryRun == _dryRunTextValue || runPayload.DryRun == _dryRunJSONValue || runPayload.DryRun == _dryRunNoValue {
+			opts.runOpts.dryRun = true
+		} else {
+			return nil, fmt.Errorf("invalid dry-run mode: %v", runPayload.DryRun)
+		}
+	}
+
+	return opts, nil
 }
 
 func optsFromFlags(flags *pflag.FlagSet) *Opts {
@@ -611,7 +713,7 @@ func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) 
 
 const (
 	_graphText      = "graph"
-	_graphNoValue   = "<output filename>"
+	_graphNoValue   = "stdout"
 	_graphTextValue = "true"
 )
 
@@ -655,9 +757,9 @@ func (d *graphValue) Type() string {
 const (
 	_dryRunText      = "dry run"
 	_dryRunJSONText  = "json"
-	_dryRunJSONValue = "json"
-	_dryRunNoValue   = "text|json"
-	_dryRunTextValue = "text"
+	_dryRunJSONValue = "Json"
+	_dryRunNoValue   = "Stdout"
+	_dryRunTextValue = "Text"
 )
 
 // dryRunValue implements a flag that can be treated as a boolean (--dry-run)
