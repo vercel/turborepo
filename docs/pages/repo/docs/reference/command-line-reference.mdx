@@ -274,7 +274,7 @@ Default `false`. Do not cache results of the task. This is useful for watch comm
 
 ```shell
 turbo run build --no-cache
-turbo run dev --parallel --no-cache
+turbo run dev --no-cache
 ```
 
 #### `--no-daemon`
@@ -356,7 +356,7 @@ Specify/filter workspaces to act as entry points for execution. Globs against `p
 
 ```sh
 turbo run lint --scope="@example/**"
-turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --no-deps
+turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
 ```
 
 #### `--serial`
