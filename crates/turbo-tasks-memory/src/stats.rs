@@ -9,9 +9,15 @@ use std::{
 use turbo_tasks::{registry, FunctionId, TaskId, TraitTypeId};
 
 use crate::{
+    scope::TaskScopeId,
     task::{Task, TaskStatsInfo},
     MemoryBackend,
 };
+
+pub type StatsReferenceType = (
+    Vec<(ReferenceType, TaskId)>,
+    Vec<(ReferenceType, TaskScopeId)>,
+);
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum TaskType {

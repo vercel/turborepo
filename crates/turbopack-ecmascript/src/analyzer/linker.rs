@@ -16,6 +16,8 @@ type LinkCacheValue = (
     Vec<Vec<(HashSet<Id>, Vec<(HashSet<Id>, JsValue)>)>>,
 );
 
+type LinkCacheItem = Option<(bool, JsValue, (HashSet<Id>, HashSet<Id>))>;
+
 #[derive(Default)]
 pub struct LinkCache {
     data: HashMap<Id, LinkCacheValue>,
@@ -64,11 +66,7 @@ impl LinkCache {
         }
     }
 
-    fn get(
-        &self,
-        id: &Id,
-        cycle_stack: &HashSet<Id>,
-    ) -> Option<(bool, JsValue, (HashSet<Id>, HashSet<Id>))> {
+    fn get(&self, id: &Id, cycle_stack: &HashSet<Id>) -> LinkCacheItem {
         if let Some((bailing, data)) = self.data.get(id) {
             if let Some(bailing) = bailing {
                 return Some((true, bailing.clone(), (HashSet::new(), HashSet::new())));
