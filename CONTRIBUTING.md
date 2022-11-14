@@ -101,6 +101,10 @@ cargo run -p node-file-trace -- print demo/index.js
 
 See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
 
+### Profiling Turbopack
+
+See [the profiling docs for Turbopack](https://turbo.build/pack/docs/advanced/profiling) for details.
+
 ## Troubleshooting
 
 See [Troubleshooting][].
