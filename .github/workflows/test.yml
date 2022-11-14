@@ -287,6 +287,13 @@ jobs:
         run: npm install
 
       - name: Install nextest
+        id: nextest-install
+        continue-on-error: true
+        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Install nextest (second try)
+        if: steps.nextest-install.outcome == 'failure'
         run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         shell: bash
 
