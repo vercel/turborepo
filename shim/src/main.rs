@@ -248,7 +248,8 @@ impl TurboState {
             | Some(Command::Login { .. })
             | Some(Command::Logout { .. })
             | Some(Command::Unlink { .. }) => {
-                let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
+                let serialized_state = self.try_into()?;
+                let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
                 Ok(exit_code.try_into()?)
             }
             _ => {
