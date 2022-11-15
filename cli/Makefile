@@ -292,7 +292,7 @@ endif
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
 integration-tests: $(CRAM_ENV)/bin/prysk $(INTEGRATION_TEST_FILES) corepack shim
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
+	$(CRAM_ENV)/bin/prysk --shell="bash" $(INTEGRATION_TEST_FILES)
 
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk $(INTEGRATION_TEST_FILES) corepack shim
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
