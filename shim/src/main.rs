@@ -69,9 +69,14 @@ impl TurboState {
     ///
     /// returns: Result<i32, Error>
     fn run_current_turbo(mut self) -> Result<i32> {
+        // If there is no command, we set the command to `Command::Run` with
+        // `self.parsed_args.run_args` as arguments.
         if self.parsed_args.command.is_none() {
-            let run_args = take(&mut self.parsed_args.run_args);
-            self.parsed_args.command = run_args.map(|run_args| Command::Run(run_args));
+            if let Some(run_args) = take(&mut self.parsed_args.run_args) {
+                self.parsed_args.command = Some(Command::Run(run_args));
+            } else {
+                return Err(anyhow!("No command specified"));
+            }
         }
         match self.parsed_args.command {
             Some(Command::Bin { .. }) => {
