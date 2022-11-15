@@ -73,7 +73,7 @@ pub struct Args {
     #[clap(subcommand)]
     pub command: Option<Command>,
     #[clap(flatten, next_help_heading = "Run Arguments")]
-    pub run_args: RunArgs,
+    pub run_args: Option<RunArgs>,
 }
 
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]

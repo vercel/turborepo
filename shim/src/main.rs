@@ -7,6 +7,7 @@ use std::{
     env::current_exe,
     ffi::CString,
     fs,
+    mem::take,
     os::raw::{c_char, c_int},
     path::{Path, PathBuf},
     process,
@@ -67,7 +68,11 @@ impl TurboState {
     /// * `args`: Arguments for turbo
     ///
     /// returns: Result<i32, Error>
-    fn run_current_turbo(self) -> Result<i32> {
+    fn run_current_turbo(mut self) -> Result<i32> {
+        if self.parsed_args.command.is_none() {
+            let run_args = take(&mut self.parsed_args.run_args);
+            self.parsed_args.command = run_args.map(|run_args| Command::Run(run_args));
+        }
         match self.parsed_args.command {
             Some(Command::Bin { .. }) => {
                 commands::bin::run()?;
@@ -79,8 +84,10 @@ impl TurboState {
             | Some(Command::Unlink { .. }) => {
                 unreachable!()
             }
-            Some(Command::Daemon { .. }) | Some(Command::Run(_)) | Some(Command::Prune { .. }) => {
-                println!("TURBO STATE TIME");
+            Some(Command::Daemon { .. })
+            | Some(Command::Run(_))
+            | Some(Command::Prune { .. })
+            | None => {
                 let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
                 Ok(exit_code.try_into()?)
             }
@@ -99,7 +106,6 @@ impl TurboState {
                 let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
                 Ok(exit_code.try_into()?)
             }
-            None => todo!(),
         }
     }
 
@@ -254,7 +260,11 @@ impl Args {
     /// returns: bool
     fn is_run_command(&self) -> bool {
         let is_explicit_run = matches!(self.command, Some(Command::Run { .. }));
-        let is_implicit_run = self.command.is_none() && !self.run_args.tasks.is_empty();
+        let is_implicit_run = self.command.is_none()
+            && self
+                .run_args
+                .as_ref()
+                .map_or(false, |args| !args.tasks.is_empty());
 
         is_explicit_run || is_implicit_run
     }
