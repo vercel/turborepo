@@ -188,7 +188,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 
 	val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
 	if ok {
-		number, err := strconv.ParseUint(string(val), 10, 64)
+		number, err := strconv.ParseUint(val, 10, 64)
 		if err == nil {
 			h.clientOpts.Timeout = number
 		} else {
