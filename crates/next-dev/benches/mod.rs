@@ -17,9 +17,8 @@ use tokio::{
     runtime::Runtime,
     time::{sleep, timeout},
 };
-use util::{
-    build_test, create_browser, AsyncBencherExtension, PageGuard, PreparedApp, BINDING_NAME,
-};
+use turbo_tasks::util::FormatDuration;
+use util::{build_test, create_browser, AsyncBencherExtension, PreparedApp, BINDING_NAME};
 
 use self::util::resume_on_error;
 
@@ -153,7 +152,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                             app_path: &Path,
                             code: &str,
                             location: CodeLocation,
-                        ) -> Result<()> {
+                        ) -> Result<impl FnOnce() -> Result<()>> {
                             let triangle_path = app_path.join("src/triangle.jsx");
                             let mut contents = fs::read_to_string(&triangle_path)?;
                             const INSERTED_CODE_COMMENT: &str = "// Inserted Code:\n";
@@ -192,35 +191,10 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 }
                             }
 
-                            fs::write(&triangle_path, contents)?;
-                            Ok(())
+                            Ok(move || Ok(fs::write(&triangle_path, contents)?))
                         }
                         static CHANGE_TIMEOUT_MESSAGE: &str =
                             "update was not registered by bundler";
-                        async fn make_change<'a>(
-                            guard: &mut PageGuard<'a>,
-                            location: CodeLocation,
-                            timeout_duration: Duration,
-                        ) -> Result<()> {
-                            let msg =
-                                format!("TURBOPACK_BENCH_CHANGE_{}", guard.app_mut().counter());
-                            add_code(
-                                guard.app().path(),
-                                &format!(
-                                    "globalThis.{BINDING_NAME} && \
-                                     globalThis.{BINDING_NAME}('{msg}');"
-                                ),
-                                location,
-                            )?;
-
-                            // Wait for the change introduced above to be reflected at runtime.
-                            // This expects HMR or automatic reloading to occur.
-                            timeout(timeout_duration, guard.wait_for_binding(&msg))
-                                .await
-                                .context(CHANGE_TIMEOUT_MESSAGE)??;
-
-                            Ok(())
-                        }
                         b.to_async(&runtime).try_iter_async(
                             &runtime,
                             || async {
@@ -251,14 +225,47 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
 
                                 Ok(guard)
                             },
-                            |mut guard, iters, m| async move {
-                                let start = m.start();
-                                for _ in 0..iters {
-                                    make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
-                                }
-                                let duration = m.end(start);
+                            |mut guard, iters, m, verbose| async move {
+                                let mut value = m.zero();
+                                for iter in 0..iters {
+                                    let msg = format!(
+                                        "TURBOPACK_BENCH_CHANGE_{}",
+                                        guard.app_mut().counter()
+                                    );
+                                    let commit = add_code(
+                                        guard.app().path(),
+                                        &format!(
+                                            "globalThis.{BINDING_NAME} && \
+                                             globalThis.{BINDING_NAME}('{msg}');"
+                                        ),
+                                        location,
+                                    )?;
 
-                                Ok((guard, duration))
+                                    let start = m.start();
+                                    commit()?;
+
+                                    // Wait for the change introduced above to be reflected at
+                                    // runtime. This expects HMR
+                                    // or automatic reloading to occur.
+                                    timeout(MAX_UPDATE_TIMEOUT, guard.wait_for_binding(&msg))
+                                        .await
+                                        .context(CHANGE_TIMEOUT_MESSAGE)??;
+
+                                    let duration = m.end(start);
+                                    value = m.add(&value, &duration);
+
+                                    let i: u64 = iter + 1;
+                                    if verbose && i != iters && i.count_ones() == 1 {
+                                        eprint!(
+                                            " [{:?} {:?}/{}]",
+                                            duration,
+                                            FormatDuration(value / (i as u32)),
+                                            i
+                                        );
+                                    }
+                                }
+
+                                Ok((guard, value))
                             },
                             |guard| async move {
                                 let hmr_is_happening = guard

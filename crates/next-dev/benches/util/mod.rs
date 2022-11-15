@@ -142,7 +142,7 @@ pub trait AsyncBencherExtension<A: AsyncExecutor> {
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        R: Fn(I, u64, WallTime) -> F,
+        R: Fn(I, u64, WallTime, bool) -> F,
         F: Future<Output = Result<(I, Duration)>>,
         T: Fn(I) -> TF,
         TF: Future<Output = ()>;
@@ -179,7 +179,7 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        R: Fn(I, u64, WallTime) -> F,
+        R: Fn(I, u64, WallTime, bool) -> F,
         F: Future<Output = Result<(I, Duration)>>,
         T: Fn(I) -> TF,
         TF: Future<Output = ()>,
@@ -215,7 +215,7 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b,
                 .take()
                 .expect("iter_custom only executes its closure once");
 
-            let (output, value) = routine(input, iters, measurement)
+            let (output, value) = routine(input, iters, measurement, log_progress)
                 .await
                 .expect("Routine failed");
             let output = black_box(output);

@@ -71,7 +71,7 @@ impl Debug for FormatDuration {
         }
         let ms = self.0.as_millis();
         if ms > 10000 {
-            return write!(f, "{}s", (ms as f32) / 1000.0);
+            return write!(f, "{:.2}s", (ms as f32) / 1000.0);
         }
         if ms > 100 {
             return write!(f, "{}ms", ms);
