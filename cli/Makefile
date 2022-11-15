@@ -270,10 +270,24 @@ clean-demo:
 CRAM_ENV := .cram_env
 
 $(CRAM_ENV)/bin/pip:
+# Windows installs python binaries to Scripts
+ifeq ($(UNAME), Windows)
 	python3 -m venv $(CRAM_ENV)
+	mkdir -p $(CRAM_ENV)/bin
+	mv $(CRAM_ENV)/Scripts/pip.exe $(CRAM_ENV)/bin/pip
+else
+	python3 -m venv $(CRAM_ENV)
+endif
 
 $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
-	$(CRAM_ENV)\bin\pip install prysk
+# Windows installs python binaries to Scripts
+ifeq ($(UNAME), Windows)
+	$(CRAM_ENV)/bin/pip install prysk
+	mkdir -p $(CRAM_ENV)/bin
+	mv $(CRAM_ENV)/Scripts/prysk.exe $(CRAM_ENV)/bin/prysk
+else
+	$(CRAM_ENV)/bin/pip install prysk
+endif
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
