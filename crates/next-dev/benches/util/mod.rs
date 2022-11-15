@@ -2,8 +2,7 @@ use std::{
     io::{self, BufRead, BufReader, Read, Write},
     panic::UnwindSafe,
     process::Command,
-    sync::Mutex,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
@@ -11,14 +10,10 @@ use chromiumoxide::{
     browser::{Browser, BrowserConfig},
     error::CdpError::Ws,
 };
-use criterion::{
-    async_executor::AsyncExecutor,
-    black_box,
-    measurement::{Measurement, WallTime},
-    AsyncBencher,
-};
+use criterion::{async_executor::AsyncExecutor, black_box, measurement::WallTime, AsyncBencher};
 use futures::{Future, StreamExt};
 pub use page_guard::PageGuard;
+use parking_lot::Mutex;
 pub use prepared_app::PreparedApp;
 use regex::Regex;
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
@@ -133,129 +128,116 @@ pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
 }
 
 pub trait AsyncBencherExtension<A: AsyncExecutor> {
-    fn try_iter_async<I, O, S, SF, R, F, U, UF, T, TF>(
+    fn try_iter_custom<R, F>(&mut self, routine: R)
+    where
+        R: Fn(u64, WallTime) -> F,
+        F: Future<Output = Result<Duration>>;
+
+    fn try_iter_async<I, S, SF, R, F, T, TF>(
         &mut self,
         runner: A,
         setup: S,
         routine: R,
-        restore: U,
         teardown: T,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        R: Fn(I) -> F,
-        F: Future<Output = Result<O>>,
-        U: Fn(O) -> UF,
-        UF: Future<Output = Result<I>>,
-        T: Fn(O) -> TF,
+        R: Fn(I, u64, WallTime) -> F,
+        F: Future<Output = Result<(I, Duration)>>,
+        T: Fn(I) -> TF,
         TF: Future<Output = ()>;
 }
 
 impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b, A, WallTime> {
-    #[inline(never)]
-    fn try_iter_async<I, O, S, SF, R, F, U, UF, T, TF>(
+    fn try_iter_custom<R, F>(&mut self, routine: R)
+    where
+        R: Fn(u64, WallTime) -> F,
+        F: Future<Output = Result<Duration>>,
+    {
+        let log_progress = !matches!(
+            std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
+            None | Some("") | Some("no") | Some("false")
+        );
+
+        let routine = &routine;
+        self.iter_custom(|iters| async move {
+            let measurement = WallTime;
+            let value = routine(iters, measurement).await.expect("routine failed");
+            if log_progress {
+                eprint!(" {:?}/{}", FormatDuration(value / (iters as u32)), iters);
+            }
+            value
+        });
+    }
+
+    fn try_iter_async<I, S, SF, R, F, T, TF>(
         &mut self,
         runner: A,
         setup: S,
         routine: R,
-        restore: U,
         teardown: T,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        R: Fn(I) -> F,
-        F: Future<Output = Result<O>>,
-        U: Fn(O) -> UF,
-        UF: Future<Output = Result<I>>,
-        T: Fn(O) -> TF,
+        R: Fn(I, u64, WallTime) -> F,
+        F: Future<Output = Result<(I, Duration)>>,
+        T: Fn(I) -> TF,
         TF: Future<Output = ()>,
     {
         let log_progress = !matches!(
             std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
             None | Some("") | Some("no") | Some("false")
         );
-        let log_progress_verbose = matches!(
-            std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
-            Some("verbose")
-        );
 
         let setup = &setup;
         let routine = &routine;
-        let restore = &restore;
         let teardown = &teardown;
-        let input = &Mutex::new(Some(black_box(runner.block_on(async {
-            let measurement = WallTime;
-            if log_progress_verbose {
+        let input_mutex = &Mutex::new(Some(black_box(runner.block_on(async {
+            if log_progress {
                 eprint!(" setup...");
             }
-            let start = measurement.start();
+            let start = Instant::now();
             let input = retry_async_default((), |_| setup())
                 .await
                 .expect("failed to setup");
-            if log_progress_verbose {
-                let duration = measurement.end(start);
-                eprint!(" [{}]", FormatDuration(duration));
+            if log_progress {
+                let duration = start.elapsed();
+                eprint!(" [{:?}]", FormatDuration(duration));
             }
             input
         }))));
-        let output_mutex: &Mutex<Option<O>> = &Mutex::new(None);
 
         self.iter_custom(|iters| async move {
             let measurement = WallTime;
-            let mut value = measurement.zero();
 
-            if log_progress_verbose {
-                eprint!(" [{} iterations]", iters);
-            }
-
-            let mut input = input
+            let input = input_mutex
                 .lock()
-                .unwrap()
                 .take()
-                .expect("iter_custom only executes it's closure once");
+                .expect("iter_custom only executes its closure once");
 
-            let mut iter = 0u64;
+            let (output, value) = routine(input, iters, measurement)
+                .await
+                .expect("Routine failed");
+            let output = black_box(output);
 
-            loop {
-                let start = measurement.start();
-                let output = routine(input).await.expect("Routine failed");
-                let duration = measurement.end(start);
-
-                value = measurement.add(&value, &duration);
-                iter += 1;
-
-                if iter < iters {
-                    if log_progress_verbose && iter.count_ones() == 1 {
-                        eprint!(" [{}/{}]", FormatDuration(value / iter as u32), iter);
-                    }
-
-                    input = restore(black_box(output)).await.expect("failed to restore");
-                } else {
-                    if log_progress {
-                        eprint!(" {}", FormatDuration(value / iter as u32),);
-                    }
-                    output_mutex.lock().unwrap().replace(output);
-                    break;
-                }
+            if log_progress {
+                eprint!(" {:?}/{}", FormatDuration(value / (iters as u32)), iters);
             }
+
+            input_mutex.lock().replace(output);
 
             value
         });
 
-        let measurement = WallTime;
-        let output = output_mutex
-            .lock()
-            .unwrap()
-            .take()
-            .expect("iter_custom must execute it's closure");
-        if log_progress_verbose {
+        let input = input_mutex.lock().take().unwrap();
+        if log_progress {
             eprint!(" teardown...");
         }
-        let start = measurement.start();
-        runner.block_on(teardown(black_box(output)));
-        let duration = measurement.end(start);
-        if log_progress_verbose {
-            eprintln!(" [{}]", FormatDuration(duration));
+        let start = Instant::now();
+        runner.block_on(teardown(input));
+        let duration = start.elapsed();
+        if log_progress {
+            eprintln!(" [{:?}]", FormatDuration(duration));
         }
     }
 }

@@ -8,7 +8,9 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use bundlers::get_bundlers;
 use criterion::{
-    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, BenchmarkId, Criterion,
+    criterion_group, criterion_main,
+    measurement::{Measurement, WallTime},
+    BenchmarkGroup, BenchmarkId, Criterion,
 };
 use once_cell::sync::Lazy;
 use tokio::{
@@ -74,28 +76,28 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                     BenchmarkId::new(bundler.get_name(), format!("{} modules", module_count)),
                     &input,
                     |b, &(bundler, test_app)| {
-                        b.to_async(&runtime).try_iter_async(
-                            &runtime,
-                            || async {
-                                PreparedApp::new(bundler, test_app.path().to_path_buf()).await
-                            },
-                            |mut app| async {
+                        let test_app = &**test_app;
+                        b.to_async(&runtime).try_iter_custom(|iters, m| async move {
+                            let mut value = m.zero();
+
+                            for _ in 0..iters {
+                                let mut app =
+                                    PreparedApp::new(bundler, test_app.path().to_path_buf())
+                                        .await?;
+                                let start = m.start();
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
                                 if wait_for_hydration {
                                     guard.wait_for_hydration().await?;
                                 }
+                                let duration = m.end(start);
+                                value = m.add(&value, &duration);
 
-                                // Defer the dropping of the guard to `teardown`.
-                                Ok(guard)
-                            },
-                            |guard| async move {
-                                let mut app = guard.close_page().await?;
-                                app.stop_server()?;
-                                Ok(app)
-                            },
-                            |_guard| async move {},
-                        );
+                                // Defer the dropping of the guard.
+                                drop(guard);
+                            }
+                            Ok(value)
+                        });
                     },
                 );
             }));
@@ -113,7 +115,7 @@ enum CodeLocation {
 fn bench_hmr_to_eval(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_hmr_to_eval");
     g.sample_size(10);
-    g.measurement_time(Duration::from_secs(120));
+    g.measurement_time(Duration::from_secs(60));
 
     bench_hmr_internal(g, CodeLocation::Evaluation);
 }
@@ -121,14 +123,14 @@ fn bench_hmr_to_eval(c: &mut Criterion) {
 fn bench_hmr_to_commit(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_hmr_to_commit");
     g.sample_size(10);
-    g.measurement_time(Duration::from_secs(120));
+    g.measurement_time(Duration::from_secs(60));
 
     bench_hmr_internal(g, CodeLocation::Effect);
 }
 
 fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
-    // This effectively only captures one sample on warmup
-    g.warm_up_time(Duration::from_millis(300));
+    // Only capture one sample for warmup
+    g.warm_up_time(Duration::from_millis(1));
 
     let runtime = Runtime::new().unwrap();
     let browser = &runtime.block_on(create_browser());
@@ -146,6 +148,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                     BenchmarkId::new(bundler.get_name(), format!("{} modules", module_count)),
                     &input,
                     |b, &(bundler, test_app)| {
+                        let test_app = &**test_app;
                         fn add_code(
                             app_path: &Path,
                             code: &str,
@@ -248,13 +251,15 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
 
                                 Ok(guard)
                             },
-                            |mut guard| async move {
-                                make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
+                            |mut guard, iters, m| async move {
+                                let start = m.start();
+                                for _ in 0..iters {
+                                    make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
+                                }
+                                let duration = m.end(start);
 
-                                // Defer the dropping of the guard to `teardown`.
-                                Ok(guard)
+                                Ok((guard, duration))
                             },
-                            |guard| async move { Ok(guard) },
                             |guard| async move {
                                 let hmr_is_happening = guard
                                     .page()
@@ -330,46 +335,44 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                     BenchmarkId::new(bundler.get_name(), format!("{} modules", module_count)),
                     &input,
                     |b, &(bundler, test_app)| {
-                        b.to_async(&runtime).try_iter_async(
-                            &runtime,
-                            || async {
-                                // Run a complete build, shut down, and test running it again
-                                let mut app =
-                                    PreparedApp::new(bundler, test_app.path().to_path_buf())
-                                        .await?;
-                                app.start_server()?;
-                                let mut guard = app.with_page(browser).await?;
-                                if bundler.has_interactivity() {
-                                    guard.wait_for_hydration().await?;
-                                } else {
-                                    guard.page().wait_for_navigation().await?;
-                                }
+                        let test_app = &**test_app;
+                        b.to_async(&runtime).try_iter_custom(|iters, m| async move {
+                            // Run a complete build, shut down, and test running it again
+                            let mut app =
+                                PreparedApp::new(bundler, test_app.path().to_path_buf()).await?;
+                            app.start_server()?;
+                            let mut guard = app.with_page(browser).await?;
+                            if bundler.has_interactivity() {
+                                guard.wait_for_hydration().await?;
+                            } else {
+                                guard.page().wait_for_navigation().await?;
+                            }
 
-                                let mut app = guard.close_page().await?;
+                            let mut app = guard.close_page().await?;
 
-                                // Give it 4 seconds time to store the cache
-                                sleep(Duration::from_secs(4)).await;
+                            // Give it 4 seconds time to store the cache
+                            sleep(Duration::from_secs(4)).await;
 
-                                app.stop_server()?;
-                                Ok(app)
-                            },
-                            |mut app| async {
+                            app.stop_server()?;
+
+                            let mut value = m.zero();
+                            for _ in 0..iters {
+                                let start = m.start();
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
                                 if wait_for_hydration {
                                     guard.wait_for_hydration().await?;
                                 }
+                                let duration = m.end(start);
+                                value = m.add(&value, &duration);
 
-                                // Defer the dropping of the guard to `teardown`.
-                                Ok(guard)
-                            },
-                            |guard| async move {
-                                let mut app = guard.close_page().await?;
+                                app = guard.close_page().await?;
                                 app.stop_server()?;
-                                Ok(app)
-                            },
-                            |_guard| async move {},
-                        );
+                            }
+
+                            drop(app);
+                            Ok(value)
+                        });
                     },
                 );
             }));
