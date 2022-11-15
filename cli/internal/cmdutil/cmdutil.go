@@ -192,8 +192,7 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 		if err == nil {
 			h.clientOpts.Timeout = number
 		} else {
-			fmt.Println("Parsing TURBO_REMOTE_CACHE_TIMEOUT failed...")
-			fmt.Printf("Error:%v\n", err)
+      terminal.Warn(fmt.Sprintf("%s Unable to parse TURBO_REMOTE_CACHE_TIMEOUT: %s", ui.WARNING_PREFIX, prefix, color.YellowString(" %v", err)))
 		}
 	}
 
