@@ -9,8 +9,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
+
+	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/client"
@@ -61,26 +62,26 @@ func (h *Helper) RegisterCleanup(cleanup io.Closer) {
 
 // Cleanup runs the register cleanup handlers. It requires the flags
 // to the root command so that it can construct a UI if necessary
-func (h *Helper) Cleanup(flags *pflag.FlagSet) {
+func (h *Helper) Cleanup(cliConfig config.CLIConfigProvider) {
 	h.cleanupsMu.Lock()
 	defer h.cleanupsMu.Unlock()
 	var ui cli.Ui
 	for _, cleanup := range h.cleanups {
 		if err := cleanup.Close(); err != nil {
 			if ui == nil {
-				ui = h.getUI(flags)
+				ui = h.getUI(cliConfig)
 			}
 			ui.Warn(fmt.Sprintf("failed cleanup: %v", err))
 		}
 	}
 }
 
-func (h *Helper) getUI(flags *pflag.FlagSet) cli.Ui {
+func (h *Helper) getUI(flags config.CLIConfigProvider) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
-	if flags.Changed("no-color") && h.noColor {
+	if flags.GetNoColor() && h.noColor {
 		colorMode = ui.ColorModeSuppressed
 	}
-	if flags.Changed("color") && h.forceColor {
+	if flags.GetColor() && h.forceColor {
 		colorMode = ui.ColorModeForced
 	}
 	return ui.BuildColoredUi(colorMode)
@@ -146,13 +147,11 @@ func NewHelper(turboVersion string) *Helper {
 
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
-func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
+func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error) {
 	// terminal is for color/no-color output
-	terminal := h.getUI(flags)
-
+	terminal := h.getUI(cliConfig)
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
-
 	if err != nil {
 		return nil, err
 	}
@@ -165,11 +164,11 @@ func (h *Helper) GetCmdBase(flags *pflag.FlagSet) (*CmdBase, error) {
 	if err != nil {
 		return nil, err
 	}
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), flags)
+	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), cliConfig)
 	if err != nil {
 		return nil, err
 	}
-	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, flags)
+	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, cliConfig)
 	if err != nil {
 		return nil, err
 	}

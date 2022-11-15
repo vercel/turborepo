@@ -23,6 +23,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/colorcache"
+	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/daemon"
@@ -93,7 +94,8 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flagSet := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flagSet)
 			if err != nil {
 				return err
 			}
