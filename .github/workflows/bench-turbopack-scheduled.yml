@@ -4,9 +4,6 @@ on:
   schedule:
     # Run every week on Sunday 12:42
     - cron: "42 12 * * 0"
-  pull_request:
-    # Runs on PRs from bench/ prefixed branches
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,7 +12,6 @@ env:
 
 jobs:
   bench:
-    if: github.event_name == 'schedule' || startsWith(github.head_ref, 'bench/')
     strategy:
       fail-fast: false
       matrix:
@@ -112,7 +108,6 @@ jobs:
   commit_results:
     name: Commit benchmark-data
     needs: bench
-    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Get current date
