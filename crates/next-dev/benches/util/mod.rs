@@ -133,19 +133,16 @@ pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
 }
 
 pub trait AsyncBencherExtension<A: AsyncExecutor> {
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, U, UF, T, TF>(
+    fn try_iter_async<I, O, S, SF, R, F, U, UF, T, TF>(
         &mut self,
         runner: A,
         setup: S,
-        warmup: W,
         routine: R,
         restore: U,
         teardown: T,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        W: Fn(I) -> WF,
-        WF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
         U: Fn(O) -> UF,
@@ -156,19 +153,16 @@ pub trait AsyncBencherExtension<A: AsyncExecutor> {
 
 impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b, A, WallTime> {
     #[inline(never)]
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, U, UF, T, TF>(
+    fn try_iter_async<I, O, S, SF, R, F, U, UF, T, TF>(
         &mut self,
         runner: A,
         setup: S,
-        warmup: W,
         routine: R,
         restore: U,
         teardown: T,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        W: Fn(I) -> WF,
-        WF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
         U: Fn(O) -> UF,
@@ -186,7 +180,6 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b,
         );
 
         let setup = &setup;
-        let warmup = &warmup;
         let routine = &routine;
         let restore = &restore;
         let teardown = &teardown;
@@ -199,12 +192,6 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b,
             let input = retry_async_default((), |_| setup())
                 .await
                 .expect("failed to setup");
-            if log_progress_verbose {
-                let duration = measurement.end(start);
-                eprint!(" [{}] warmup...", FormatDuration(duration));
-            }
-            let start = measurement.start();
-            let input = warmup(input).await.expect("failed to warmup");
             if log_progress_verbose {
                 let duration = measurement.end(start);
                 eprint!(" [{}]", FormatDuration(duration));
@@ -237,11 +224,11 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b,
                 value = measurement.add(&value, &duration);
                 iter += 1;
 
-                if log_progress_verbose && iter.count_ones() == 1 {
-                    eprint!(" [{}/{}]", FormatDuration(value / iter as u32), iter);
-                }
-
                 if iter < iters {
+                    if log_progress_verbose && iter.count_ones() == 1 {
+                        eprint!(" [{}/{}]", FormatDuration(value / iter as u32), iter);
+                    }
+
                     input = restore(black_box(output)).await.expect("failed to restore");
                 } else {
                     if log_progress {

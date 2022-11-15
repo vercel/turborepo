@@ -79,7 +79,6 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                             || async {
                                 PreparedApp::new(bundler, test_app.path().to_path_buf()).await
                             },
-                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
@@ -245,7 +244,6 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
 
                                 Ok(guard)
                             },
-                            |guard| async move { Ok(guard) },
                             |mut guard| async move {
                                 make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
 
@@ -351,7 +349,6 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                 app.stop_server()?;
                                 Ok(app)
                             },
-                            |app| async { Ok(app) },
                             |mut app| async {
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
