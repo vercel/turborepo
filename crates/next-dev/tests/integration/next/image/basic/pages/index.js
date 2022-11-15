@@ -30,20 +30,20 @@ export default function Home() {
   ];
 }
 
-globalThis.waitForTests = function() {
+globalThis.waitForTests = function () {
   return testResult.promise;
-}
+};
 
 function runTests() {
-  console.log(document.querySelectorAll('img'));
+  console.log(document.querySelectorAll("img"));
   it("it should link to imported image", function () {
-    const img = document.querySelector('#imported');
-    expect(img.src).toContain(encodeURIComponent('_next/static/assets'));
+    const img = document.querySelector("#imported");
+    expect(img.src).toContain(encodeURIComponent("_next/static/assets"));
   });
 
   it("it should link to local src image", function () {
-    const img = document.querySelector('#local');
-    expect(img.src).toContain('triangle-black');
+    const img = document.querySelector("#local");
+    expect(img.src).toContain("triangle-black");
   });
 
   testResult.resolve(__jest__.run());
