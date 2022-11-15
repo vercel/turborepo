@@ -299,7 +299,7 @@ use crate::{
     memory_backend::Job,
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
-    stats::{self, StatsReference},
+    stats::{self, StatsReferences},
     MemoryBackend,
 };
 
@@ -1246,7 +1246,7 @@ impl Task {
         }
     }
 
-    pub fn get_stats_references(&self) -> StatsReference {
+    pub fn get_stats_references(&self) -> StatsReferences {
         let mut refs = Vec::new();
         let mut scope_refs = Vec::new();
         {
@@ -1276,7 +1276,10 @@ impl Task {
                 }
             }
         }
-        StatsReference(refs, scope_refs)
+        StatsReferences {
+            tasks: refs,
+            scopes: scope_refs,
+        }
     }
 
     fn state_string(state: &TaskState) -> String {

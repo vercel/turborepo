@@ -14,10 +14,10 @@ use crate::{
     MemoryBackend,
 };
 
-pub struct StatsReferences(
-    pub Vec<(ReferenceType, TaskId)>,
-    pub Vec<(ReferenceType, TaskScopeId)>,
-);
+pub struct StatsReferences {
+    pub tasks: Vec<(ReferenceType, TaskId)>,
+    pub scopes: Vec<(ReferenceType, TaskScopeId)>,
+}
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum TaskType {
@@ -144,8 +144,8 @@ impl Stats {
         }
         stats.scopes += child_scopes;
 
-        let StatsReferences(references, _) = task.get_stats_references();
-        let set: HashSet<_> = references.into_iter().collect();
+        let StatsReferences { tasks, .. } = task.get_stats_references();
+        let set: HashSet<_> = tasks.into_iter().collect();
         for (ref_type, task) in set {
             backend.with_task(task, |task| {
                 let ty = task.get_stats_type();
