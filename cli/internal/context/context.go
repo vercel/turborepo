@@ -15,7 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 
-	"github.com/Masterminds/semver"
+	"github.com/Masterminds/semver/v3"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/pyr-sh/dag"
 	"golang.org/x/sync/errgroup"

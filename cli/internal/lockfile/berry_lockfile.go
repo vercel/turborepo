@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Masterminds/semver"
+	"github.com/Masterminds/semver/v3"
 	"github.com/andybalholm/crlf"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"

@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.5
 	github.com/DataDog/zstd v1.5.2
-	github.com/Masterminds/semver v1.5.0
+	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/adrg/xdg v0.3.3
 	github.com/andybalholm/crlf v0.0.0-20171020200849-670099aa064f
 	github.com/briandowns/spinner v1.18.1
@@ -49,6 +49,7 @@ require (
 
 require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
+	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
