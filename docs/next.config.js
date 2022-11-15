@@ -141,6 +141,14 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
+        // Somehow this URL got created, probably in error during transition.
+        // It has _never_ resolved, so we should be able to remove this rule.
+        // Eventually.
+        source: "/repo/docs/guides/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
         source: "/docs/core-concepts/workspaces",
         destination: "/repo/docs/handbook/workspaces",
         permanent: true,
@@ -196,6 +204,38 @@ const nextConfig = withNextra({
         destination: "/repo/docs/ci",
       },
       {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/why-turborepo",
+        destination: "/repo/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/filtering",
+        destination: "/repo/docs/core-concepts/monorepos/filtering",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/guides/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
+        // This rule accidentally created these four URLs:
+        // - /repo/docs/core-concepts/why-turborepo
+        // - /repo/docs/core-concepts/running-tasks
+        // - /repo/docs/core-concepts/filtering
+        // - /repo/docs/core-concepts/pipelines
+        //
+        // They've _never_ resolved, so _eventually_ we should be able to remove the
+        // redirects we added above to fix them.
         source: "/docs/features/:path*",
         permanent: true,
         destination: "/repo/docs/core-concepts/:path*",
