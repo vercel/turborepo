@@ -80,16 +80,19 @@ pub fn get_server_environment(
 pub fn get_server_module_options_context(ty: Value<ServerContextType>) -> ModuleOptionsContextVc {
     match ty.into_value() {
         ServerContextType::Pages { .. } => ModuleOptionsContext {
+            enable_nextjs_font: true,
             enable_typescript_transform: true,
             enable_styled_jsx: true,
             ..Default::default()
         },
         ServerContextType::AppSSR { .. } => ModuleOptionsContext {
+            enable_nextjs_font: true,
             enable_styled_jsx: true,
             enable_typescript_transform: true,
             ..Default::default()
         },
         ServerContextType::AppRSC { .. } => ModuleOptionsContext {
+            enable_nextjs_font: true,
             enable_typescript_transform: true,
             custom_ecmascript_transforms: vec![EcmascriptInputTransform::ClientDirective(
                 StringVc::cell("server-to-client".to_string()),

@@ -99,6 +99,7 @@ pub async fn get_client_module_options_context(
         // we try resolve it once at the root and pass down a context to all
         // the modules.
         enable_emotion: true,
+        enable_nextjs_font: true,
         enable_react_refresh,
         enable_styled_components: true,
         enable_styled_jsx: true,
@@ -128,7 +129,7 @@ pub async fn add_next_transforms_to_pages(
             ]),
         ]),
         vec![ModuleRuleEffect::AddEcmascriptTransforms(
-            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::NextJs]),
+            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::NextJsPageSsr]),
         )],
     ));
     Ok(module_options_context.cell())

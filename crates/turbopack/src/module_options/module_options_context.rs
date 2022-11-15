@@ -7,6 +7,7 @@ use super::ModuleRule;
 #[derive(Default, Clone)]
 pub struct ModuleOptionsContext {
     pub enable_emotion: bool,
+    pub enable_nextjs_font: bool,
     pub enable_react_refresh: bool,
     pub enable_styled_components: bool,
     pub enable_styled_jsx: bool,

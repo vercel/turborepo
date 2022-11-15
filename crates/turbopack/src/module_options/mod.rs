@@ -23,6 +23,7 @@ impl ModuleOptionsVc {
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
             enable_emotion,
+            enable_nextjs_font,
             enable_react_refresh,
             enable_styled_jsx,
             enable_styled_components,
@@ -43,6 +44,9 @@ impl ModuleOptionsVc {
         }
         if enable_emotion {
             transforms.push(EcmascriptInputTransform::Emotion)
+        }
+        if enable_nextjs_font {
+            transforms.push(EcmascriptInputTransform::NextJsFont)
         }
         if enable_styled_components {
             transforms.push(EcmascriptInputTransform::StyledComponents)
