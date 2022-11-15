@@ -2,6 +2,7 @@ use std::{
     io::{self, BufRead, BufReader, Read, Write},
     panic::UnwindSafe,
     process::Command,
+    sync::Mutex,
     time::Duration,
 };
 
@@ -131,12 +132,14 @@ pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
     }
 }
 
-pub trait AsyncBencherExtension {
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+pub trait AsyncBencherExtension<A: AsyncExecutor> {
+    fn try_iter_async<I, O, S, SF, W, WF, R, F, U, UF, T, TF>(
         &mut self,
+        runner: A,
         setup: S,
         warmup: W,
         routine: R,
+        restore: U,
         teardown: T,
     ) where
         S: Fn() -> SF,
@@ -145,17 +148,21 @@ pub trait AsyncBencherExtension {
         WF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
+        U: Fn(O) -> UF,
+        UF: Future<Output = Result<I>>,
         T: Fn(O) -> TF,
         TF: Future<Output = ()>;
 }
 
-impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A, WallTime> {
+impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b, A, WallTime> {
     #[inline(never)]
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+    fn try_iter_async<I, O, S, SF, W, WF, R, F, U, UF, T, TF>(
         &mut self,
+        runner: A,
         setup: S,
         warmup: W,
         routine: R,
+        restore: U,
         teardown: T,
     ) where
         S: Fn() -> SF,
@@ -164,72 +171,105 @@ impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A,
         WF: Future<Output = Result<I>>,
         R: Fn(I) -> F,
         F: Future<Output = Result<O>>,
+        U: Fn(O) -> UF,
+        UF: Future<Output = Result<I>>,
         T: Fn(O) -> TF,
         TF: Future<Output = ()>,
     {
-        let config = std::env::var("TURBOPACK_BENCH_BENCH").ok();
-        let bench_benchmark_itself = !matches!(
-            config.as_deref(),
-            None | Some("") | Some("no") | Some("false")
-        );
         let log_progress = !matches!(
             std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
             None | Some("") | Some("no") | Some("false")
+        );
+        let log_progress_verbose = matches!(
+            std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
+            Some("verbose")
         );
 
         let setup = &setup;
         let warmup = &warmup;
         let routine = &routine;
+        let restore = &restore;
         let teardown = &teardown;
+        let input = &Mutex::new(Some(black_box(runner.block_on(async {
+            let measurement = WallTime;
+            if log_progress_verbose {
+                eprint!(" setup...");
+            }
+            let start = measurement.start();
+            let input = retry_async_default((), |_| setup())
+                .await
+                .expect("failed to setup");
+            if log_progress_verbose {
+                let duration = measurement.end(start);
+                eprint!(" [{}] warmup...", FormatDuration(duration));
+            }
+            let start = measurement.start();
+            let input = warmup(input).await.expect("failed to warmup");
+            if log_progress_verbose {
+                let duration = measurement.end(start);
+                eprint!(" [{}]", FormatDuration(duration));
+            }
+            input
+        }))));
+        let output_mutex: &Mutex<Option<O>> = &Mutex::new(None);
+
         self.iter_custom(|iters| async move {
             let measurement = WallTime;
             let mut value = measurement.zero();
 
-            let mut iter = 0u64;
-            let mut failures = 0u64;
-            while iter < iters {
-                loop {
-                    let early_start = bench_benchmark_itself.then(|| measurement.start());
-                    let input = black_box(
-                        retry_async_default((), |_| setup())
-                            .await
-                            .expect("failed to setup"),
-                    );
-                    let input = black_box(warmup(input).await).expect("failed to warmup");
+            if log_progress_verbose {
+                eprint!(" [{} iterations]", iters);
+            }
 
-                    let start = early_start.unwrap_or_else(|| measurement.start());
-                    match routine(input).await {
-                        Ok(output) => {
-                            let duration;
-                            if bench_benchmark_itself {
-                                teardown(black_box(output)).await;
-                                duration = measurement.end(start);
-                            } else {
-                                duration = measurement.end(start);
-                                teardown(black_box(output)).await;
-                            }
-                            if log_progress {
-                                eprint!(" {} ", FormatDuration(duration));
-                            }
-                            value = measurement.add(&value, &duration);
-                            iter += 1;
-                            break;
-                        }
-                        Err(err) => {
-                            failures += 1;
-                            if failures > iters {
-                                panic!("Routine failed {failures} times, aborting\n{:?}", err)
-                            } else {
-                                eprintln!("Routine failed, will be retried: {:?}", err);
-                                continue;
-                            }
-                        }
+            let mut input = input
+                .lock()
+                .unwrap()
+                .take()
+                .expect("iter_custom only executes it's closure once");
+
+            let mut iter = 0u64;
+
+            loop {
+                let start = measurement.start();
+                let output = routine(input).await.expect("Routine failed");
+                let duration = measurement.end(start);
+
+                value = measurement.add(&value, &duration);
+                iter += 1;
+
+                if log_progress_verbose && iter.count_ones() == 1 {
+                    eprint!(" [{}/{}]", FormatDuration(value / iter as u32), iter);
+                }
+
+                if iter < iters {
+                    input = restore(black_box(output)).await.expect("failed to restore");
+                } else {
+                    if log_progress {
+                        eprint!(" {}", FormatDuration(value / iter as u32),);
                     }
+                    output_mutex.lock().unwrap().replace(output);
+                    break;
                 }
             }
 
             value
-        })
+        });
+
+        let measurement = WallTime;
+        let output = output_mutex
+            .lock()
+            .unwrap()
+            .take()
+            .expect("iter_custom must execute it's closure");
+        if log_progress_verbose {
+            eprint!(" teardown...");
+        }
+        let start = measurement.start();
+        runner.block_on(teardown(black_box(output)));
+        let duration = measurement.end(start);
+        if log_progress_verbose {
+            eprintln!(" [{}]", FormatDuration(duration));
+        }
     }
 }
 

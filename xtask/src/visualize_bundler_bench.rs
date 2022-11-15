@@ -58,7 +58,10 @@ pub fn generate(summary_path: PathBuf) -> Result<()> {
                 .split_ascii_whitespace()
                 .collect::<Vec<&str>>()[0]
                 .parse()?,
-            bench.estimates.mean,
+            bench
+                .estimates
+                .slope
+                .unwrap_or_else(|| bench.estimates.mean),
         );
     }
 

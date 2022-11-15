@@ -540,6 +540,7 @@ jobs:
         timeout-minutes: 180
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
+          TURBOPACK_BENCH_PROGRESS: verbose
         with:
           command: bench
           args: ${{ matrix.bench.args }}

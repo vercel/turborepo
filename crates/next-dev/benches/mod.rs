@@ -75,6 +75,7 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                     &input,
                     |b, &(bundler, test_app)| {
                         b.to_async(&runtime).try_iter_async(
+                            &runtime,
                             || async {
                                 PreparedApp::new(bundler, test_app.path().to_path_buf()).await
                             },
@@ -89,6 +90,7 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                                 // Defer the dropping of the guard to `teardown`.
                                 Ok(guard)
                             },
+                            |guard| async move { guard.close_page().await },
                             |_guard| async move {},
                         );
                     },
@@ -108,7 +110,7 @@ enum CodeLocation {
 fn bench_hmr_to_eval(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_hmr_to_eval");
     g.sample_size(10);
-    g.measurement_time(Duration::from_secs(60));
+    g.measurement_time(Duration::from_secs(120));
 
     bench_hmr_internal(g, CodeLocation::Evaluation);
 }
@@ -116,12 +118,15 @@ fn bench_hmr_to_eval(c: &mut Criterion) {
 fn bench_hmr_to_commit(c: &mut Criterion) {
     let mut g = c.benchmark_group("bench_hmr_to_commit");
     g.sample_size(10);
-    g.measurement_time(Duration::from_secs(60));
+    g.measurement_time(Duration::from_secs(120));
 
     bench_hmr_internal(g, CodeLocation::Effect);
 }
 
 fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
+    // This effectively only captures one sample on warmup
+    g.warm_up_time(Duration::from_millis(300));
+
     let runtime = Runtime::new().unwrap();
     let browser = &runtime.block_on(create_browser());
 
@@ -210,7 +215,8 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
 
                             Ok(())
                         }
-                        b.to_async(Runtime::new().unwrap()).try_iter_async(
+                        b.to_async(&runtime).try_iter_async(
+                            &runtime,
                             || async {
                                 let mut app =
                                     PreparedApp::new(bundler, test_app.path().to_path_buf())
@@ -230,22 +236,23 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                         "Unable to evaluate JavaScript in the page for HMR check \
                                          flag",
                                     )?;
+
+                                // TODO(alexkirsz) Turbopack takes a few ms to start listening on
+                                // HMR, and we don't send updates retroactively, so we need to wait
+                                // before starting to make changes.
+                                // This should not be required.
+                                tokio::time::sleep(Duration::from_millis(5000)).await;
+
                                 Ok(guard)
                             },
-                            |mut guard| async move {
-                                // Make 5 changes to warm up.
-                                for _ in 0..5 {
-                                    let _ =
-                                        make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await;
-                                }
-                                Ok(guard)
-                            },
+                            |guard| async move { Ok(guard) },
                             |mut guard| async move {
                                 make_change(&mut guard, location, MAX_UPDATE_TIMEOUT).await?;
 
                                 // Defer the dropping of the guard to `teardown`.
                                 Ok(guard)
                             },
+                            |guard| async move { Ok(guard) },
                             |guard| async move {
                                 let hmr_is_happening = guard
                                     .page()
@@ -321,7 +328,8 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                     BenchmarkId::new(bundler.get_name(), format!("{} modules", module_count)),
                     &input,
                     |b, &(bundler, test_app)| {
-                        b.to_async(Runtime::new().unwrap()).try_iter_async(
+                        b.to_async(&runtime).try_iter_async(
+                            &runtime,
                             || async {
                                 // Run a complete build, shut down, and test running it again
                                 let mut app =
@@ -354,6 +362,7 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                 // Defer the dropping of the guard to `teardown`.
                                 Ok(guard)
                             },
+                            |guard| async move { guard.close_page().await },
                             |_guard| async move {},
                         );
                     },
