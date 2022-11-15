@@ -261,6 +261,9 @@ impl TurboState {
                         Ok(c_string.into_raw())
                     })
                     .collect::<Result<Vec<*mut c_char>>>()?;
+                // With vectors there is a possibility of over-allocating, whether
+                // from the allocator itself or the Vec implementation.
+                // Therefore we shrink the vector to just the length we need.
                 args.shrink_to_fit();
                 let argc: c_int = args.len() as c_int;
                 let argv = args.as_mut_ptr();
