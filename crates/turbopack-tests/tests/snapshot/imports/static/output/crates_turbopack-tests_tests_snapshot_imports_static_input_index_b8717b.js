@@ -386,7 +386,6 @@ __turbopack_export_value__("/crates/turbopack-tests/tests/snapshot/imports/stati
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-        g: globalThis,
       });
     });
 

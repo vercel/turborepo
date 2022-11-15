@@ -393,7 +393,6 @@ throw new Error("An error occurred while importing a JSON module: \"File is not 
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-        g: globalThis,
       });
     });
 

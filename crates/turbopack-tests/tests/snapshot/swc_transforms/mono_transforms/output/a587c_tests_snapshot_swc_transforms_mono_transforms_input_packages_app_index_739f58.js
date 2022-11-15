@@ -384,7 +384,6 @@ console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-        g: globalThis,
       });
     });
 

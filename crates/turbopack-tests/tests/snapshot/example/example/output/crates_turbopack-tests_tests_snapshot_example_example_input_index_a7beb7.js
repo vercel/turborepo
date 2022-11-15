@@ -379,7 +379,6 @@ console.log("hello world");
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-        g: globalThis,
       });
     });
 

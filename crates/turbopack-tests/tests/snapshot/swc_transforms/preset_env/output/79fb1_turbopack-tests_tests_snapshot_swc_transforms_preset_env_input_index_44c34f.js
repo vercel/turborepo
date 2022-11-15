@@ -386,7 +386,6 @@ console.log(Foo, [].includes("foo"));
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-        g: globalThis,
       });
     });
 

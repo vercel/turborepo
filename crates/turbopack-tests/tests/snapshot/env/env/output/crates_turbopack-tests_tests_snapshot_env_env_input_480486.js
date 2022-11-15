@@ -388,7 +388,6 @@ instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/env/en
         p: _process,
         g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-        g: globalThis,
       });
     });
 
