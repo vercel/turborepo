@@ -160,7 +160,11 @@ const nextConfig = withNextra({
         destination: "/repo/docs/handbook/migrating-to-a-monorepo",
         permanent: true,
       },
-
+      {
+        source: "/docs/getting-started",
+        destination: "/repo/docs",
+        permanent: true,
+      },
       {
         source: "/discord{/}?",
         permanent: true,
