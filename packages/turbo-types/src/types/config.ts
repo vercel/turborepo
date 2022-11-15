@@ -75,16 +75,13 @@ export interface Pipeline {
   env?: string[];
 
   /**
-   * The set of glob patterns of a task's cacheable filesystem outputs.
+   * The set of glob patterns indicating a task's cacheable filesystem outputs.
    *
-   * Note: turbo automatically logs stderr/stdout to .turbo/run-<task>.log. This file is
-   * always treated as a cacheable artifact and never needs to be specified.
+   * Turborepo captures task logs for all tasks. This enables us to cache tasks whose runs
+   * produce no artifacts other than logs (such as linters). Logs are always treated as a
+   * cacheable artifact, and never need to be specified.
    *
-   * Passing an empty array can be used to tell turbo that a task is a side-effect and
-   * thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want
-   * to cache its logs (and treat them like an artifact).
-   *
-   * @default ["dist/**", "build/**"]
+   * @default []
    */
   outputs?: string[];
 

@@ -65,7 +65,6 @@ To override the default cache output behavior, pass an array of globs to a [`pip
       "dependsOn": ["^build"]
     },
     "test": {
-      "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"]
     }
   }
@@ -102,7 +101,6 @@ in the `src/` and `test/` subdirectories has changed since the last execution.
       // A workspace's `test` task depends on that workspace's
       // own `build` task being completed first.
       "dependsOn": ["build"],
-      "outputs": [],
       // A workspace's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
@@ -149,7 +147,6 @@ determining a cache hit on the `test` task:
   "pipeline": {
     // ...other tasks
     "test": {
-      "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
@@ -174,7 +171,6 @@ If you want _all_ tasks to depend on certain files, you can declare this depende
   "pipeline": {
     // ...other tasks
     "test": {
-      "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
