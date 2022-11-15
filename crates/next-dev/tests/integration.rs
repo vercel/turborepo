@@ -118,7 +118,6 @@ async fn run_test(resource: &str) -> JestRunResult {
         path.to_str().unwrap()
     );
 
-    dbg!(resource);
     // Count the number of dirs _under_ crates/next-dev/tests
     let test_entry = Path::new(resource).join("index.js");
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
