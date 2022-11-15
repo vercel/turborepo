@@ -231,7 +231,8 @@ async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std
     let page = browser.new_page(format!("http://{}", addr)).await?;
     page.wait_for_navigation().await?;
 
-    Ok(page.evaluate("__jest__.run()").await?.into_value()?)
+    let value = page.evaluate("globalThis.waitForTests?.() ?? __jest__.run()");
+    Ok(value.await?.into_value()?)
 }
 
 fn get_free_local_addr() -> Result<SocketAddr, std::io::Error> {
