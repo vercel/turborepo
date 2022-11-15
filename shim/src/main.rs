@@ -222,7 +222,7 @@ fn try_run_help(command: &Command) -> Result<bool> {
     if *help {
         Args::command()
             .find_subcommand_mut(command_name)
-            .expect("Could not find subcommand")
+            .unwrap_or_else(|| { panic!("Could not find subcommand: {command_name}"))
             .print_long_help()?;
         Ok(true)
     } else {
