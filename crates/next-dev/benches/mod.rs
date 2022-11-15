@@ -89,7 +89,11 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
                                 // Defer the dropping of the guard to `teardown`.
                                 Ok(guard)
                             },
-                            |guard| async move { guard.close_page().await },
+                            |guard| async move {
+                                let mut app = guard.close_page().await?;
+                                app.stop_server()?;
+                                Ok(app)
+                            },
                             |_guard| async move {},
                         );
                     },
@@ -359,7 +363,11 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
                                 // Defer the dropping of the guard to `teardown`.
                                 Ok(guard)
                             },
-                            |guard| async move { guard.close_page().await },
+                            |guard| async move {
+                                let mut app = guard.close_page().await?;
+                                app.stop_server()?;
+                                Ok(app)
+                            },
                             |_guard| async move {},
                         );
                     },
