@@ -29,6 +29,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/graphvisualizer"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -49,16 +50,6 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
-
-// completeGraph represents the common state inferred from the filesystem and pipeline.
-// It is not intended to include information specific to a particular run.
-type completeGraph struct {
-	TopologicalGraph dag.AcyclicGraph
-	Pipeline         fs.Pipeline
-	PackageInfos     map[interface{}]*fs.PackageJSON
-	GlobalHash       string
-	RootNode         string
-}
 
 // runSpec contains the run-specific configuration elements that come from a particular
 // invocation of turbo.
@@ -207,6 +198,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			return err
 		}
 	}
+
 	if ui.IsCI && !r.opts.runOpts.noDaemon {
 		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
 	} else if !r.opts.runOpts.noDaemon {
@@ -271,7 +263,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
 	// TODO: consolidate some of these arguments
-	g := &completeGraph{
+	g := &graph.CompleteGraph{
 		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
 		PackageInfos:     pkgDepGraph.PackageInfos,
@@ -287,13 +279,14 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	return r.runOperation(ctx, g, rs, packageManager, startAt)
 }
 
-func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
+func (r *run) runOperation(ctx gocontext.Context, g *graph.CompleteGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
 	for _, v := range g.TopologicalGraph.Vertices() {
 		vertexSet.Add(v)
 	}
 
-	engine, err := buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
+	engine, err := buildTaskGraphEngine(g, rs)
+
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
@@ -312,7 +305,7 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 				g.TopologicalGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
+		engine, err = buildTaskGraphEngine(g, rs)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
@@ -475,30 +468,37 @@ func filterSinglePackageGraphForDisplay(originalGraph *dag.AcyclicGraph) *dag.Ac
 	return graph
 }
 
-func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(topoGraph)
+func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
+	engine := core.NewEngine(&g.TopologicalGraph)
 
-	for taskName, taskDefinition := range pipeline {
-		topoDeps := make(util.Set)
+	for taskName, taskDefinition := range g.Pipeline {
 		deps := make(util.Set)
+
 		isPackageTask := util.IsPackageTask(taskName)
+
 		for _, dependency := range taskDefinition.TaskDependencies {
+			// If the current task is a workspace-specific task (including root Task)
+			// and its dependency is _also_ a workspace-specific task, we need to add
+			// a reference to this dependency directly into the engine.
+			// TODO @mehulkar: Why do we need this?
 			if isPackageTask && util.IsPackageTask(dependency) {
 				err := engine.AddDep(dependency, taskName)
 				if err != nil {
 					return nil, err
 				}
 			} else {
+				// For non-workspace-specific dependencies, we attach a reference to
+				// the task that is added into the engine.
 				deps.Add(dependency)
 			}
 		}
-		for _, dependency := range taskDefinition.TopologicalDependencies {
-			topoDeps.Add(dependency)
-		}
+
+		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 		engine.AddTask(&core.Task{
-			Name:     taskName,
-			TopoDeps: topoDeps,
-			Deps:     deps,
+			Name:       taskName,
+			TopoDeps:   topoDeps,
+			Deps:       deps,
+			Persistent: taskDefinition.Persistent,
 		})
 	}
 
@@ -510,8 +510,14 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 		return nil, err
 	}
 
+	// Check for cycles in the DAG.
 	if err := util.ValidateGraph(engine.TaskGraph); err != nil {
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
+	}
+
+	// Check that no tasks would be blocked by a persistent task
+	if err := engine.ValidatePersistentDependencies(g); err != nil {
+		return nil, fmt.Errorf("Invalid persistent task dependency:\n%v", err)
 	}
 
 	return engine, nil
@@ -741,7 +747,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	})
 }
 
-func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Engine, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
+func (r *run) executeTasks(ctx gocontext.Context, g *graph.CompleteGraph, rs *runSpec, engine *core.Engine, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 
@@ -786,15 +792,20 @@ func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
-	visitor := g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
-	})
-	errs := engine.Execute(visitor, execOpts)
+	}
+
+	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
+	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
+
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
 			if exitCodeErr.ExitCode > exitCode {
@@ -864,7 +875,7 @@ type hashedSinglePackageTask struct {
 	Dependents      []string `json:"dependents"`
 }
 
-func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
+func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
 	analyticsClient := r.initAnalyticsClient(ctx)
 	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
 	turboCache, err := r.initCache(ctx, rs, analyticsClient)
@@ -880,7 +891,7 @@ func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *compl
 
 	taskIDs := []hashedTask{}
 
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+	errs := engine.Execute(g.GetPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, r.base.Logger, passThroughArgs)
@@ -1119,6 +1130,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
 		}
+
+		// If there was an error, flush the buffered output
+		taskCache.OnError(prefixedUI, progressLogger)
+
 		return err
 	}
 
@@ -1136,35 +1151,4 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer(TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
-}
-
-func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
-	return func(taskID string) error {
-
-		name, task := util.GetPackageTaskFromId(taskID)
-		pkg, ok := g.PackageInfos[name]
-		if !ok {
-			return fmt.Errorf("cannot find package %v for task %v", name, taskID)
-		}
-
-		// first check for package-tasks
-		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
-		if !ok {
-			// then check for regular tasks
-			fallbackTaskDefinition, notcool := g.Pipeline[task]
-			// if neither, then bail
-			if !notcool && !ok {
-				return nil
-			}
-			// override if we need to...
-			taskDefinition = fallbackTaskDefinition
-		}
-		return visitor(ctx, &nodes.PackageTask{
-			TaskID:         taskID,
-			Task:           task,
-			PackageName:    name,
-			Pkg:            pkg,
-			TaskDefinition: &taskDefinition,
-		})
-	}
 }
