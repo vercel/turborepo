@@ -130,18 +130,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		}
 
 		taskIDs = append(taskIDs, hashedTask{
-			TaskID:          packageTask.TaskID,
-			Task:            packageTask.Task,
-			Package:         packageTask.PackageName,
-			Hash:            hash,
-			CacheState:      itemStatus,
-			Command:         command,
-			Dir:             packageTask.Pkg.Dir.ToString(),
-			Outputs:         packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs: packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:         packageTask.RepoRelativeLogFile(),
-			Dependencies:    stringAncestors,
-			Dependents:      stringDescendents,
+			TaskID:                 packageTask.TaskID,
+			Task:                   packageTask.Task,
+			Package:                packageTask.PackageName,
+			Hash:                   hash,
+			CacheState:             itemStatus,
+			Command:                command,
+			Dir:                    packageTask.Pkg.Dir.ToString(),
+			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
+			LogFile:                packageTask.RepoRelativeLogFile(),
+			Dependencies:           stringAncestors,
+			Dependents:             stringDescendents,
+			ResolvedTaskDefinition: packageTask.TaskDefinition.Raw,
 		})
 		return nil
 	}
@@ -249,6 +250,13 @@ func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []strin
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+
+		if resolvedTask, err := json.MarshalIndent(task.ResolvedTaskDefinition, "", "\t"); err != nil {
+			// If unmarshalling fails, don't fail the whole thing
+		} else {
+			fmt.Fprintln(w, util.Sprintf("  ${GREY}Resolved Task Definition\t=\t%s\t${RESET}", resolvedTask))
+		}
+
 		if err := w.Flush(); err != nil {
 			return err
 		}
@@ -264,29 +272,31 @@ func commandLooksLikeTurbo(command string) bool {
 
 // TODO: put this somewhere else
 type hashedTask struct {
-	TaskID          string           `json:"taskId"`
-	Task            string           `json:"task"`
-	Package         string           `json:"package"`
-	Hash            string           `json:"hash"`
-	CacheState      cache.ItemStatus `json:"cacheState"`
-	Command         string           `json:"command"`
-	Outputs         []string         `json:"outputs"`
-	ExcludedOutputs []string         `json:"excludedOutputs"`
-	LogFile         string           `json:"logFile"`
-	Dir             string           `json:"directory"`
-	Dependencies    []string         `json:"dependencies"`
-	Dependents      []string         `json:"dependents"`
+	TaskID                 string                 `json:"taskId"`
+	Task                   string                 `json:"task"`
+	Package                string                 `json:"package"`
+	Hash                   string                 `json:"hash"`
+	CacheState             cache.ItemStatus       `json:"cacheState"`
+	Command                string                 `json:"command"`
+	Outputs                []string               `json:"outputs"`
+	ExcludedOutputs        []string               `json:"excludedOutputs"`
+	LogFile                string                 `json:"logFile"`
+	Dir                    string                 `json:"directory"`
+	Dependencies           []string               `json:"dependencies"`
+	Dependents             []string               `json:"dependents"`
+	ResolvedTaskDefinition map[string]interface{} `json:"resolvedTaskDefinition"`
 }
 
 type hashedSinglePackageTask struct {
-	Task            string   `json:"task"`
-	Hash            string   `json:"hash"`
-	Command         string   `json:"command"`
-	Outputs         []string `json:"outputs"`
-	ExcludedOutputs []string `json:"excludedOutputs"`
-	LogFile         string   `json:"logFile"`
-	Dependencies    []string `json:"dependencies"`
-	Dependents      []string `json:"dependents"`
+	Task                   string                 `json:"task"`
+	Hash                   string                 `json:"hash"`
+	Command                string                 `json:"command"`
+	Outputs                []string               `json:"outputs"`
+	ExcludedOutputs        []string               `json:"excludedOutputs"`
+	LogFile                string                 `json:"logFile"`
+	Dependencies           []string               `json:"dependencies"`
+	Dependents             []string               `json:"dependents"`
+	ResolvedTaskDefinition map[string]interface{} `json:"resolvedTaskDefinition"`
 }
 
 func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {

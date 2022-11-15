@@ -48,8 +48,7 @@ type RemoteCacheOptions struct {
 }
 
 type rawTask struct {
-	Outputs *[]string `json:"outputs,omitempty"`
-
+	Outputs    *[]string           `json:"outputs,omitempty"`
 	Cache      *bool               `json:"cache,omitempty"`
 	DependsOn  []string            `json:"dependsOn,omitempty"`
 	Inputs     []string            `json:"inputs,omitempty"`
@@ -91,6 +90,9 @@ type TaskDefinition struct {
 	// Persistent indicates whether the Task is expected to exit or not
 	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
 	Persistent bool
+
+	// Raw stores the raw value, so we can use it for introspection later.
+	Raw map[string]interface{}
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
@@ -155,7 +157,6 @@ func (to TaskOutputs) Sort() TaskOutputs {
 
 // ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
 func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
-
 	turboJSONPath := rootPath.UntypedJoin(configFile)
 
 	// Check if turbo key in package.json exists
@@ -239,6 +240,13 @@ func (pc Pipeline) HasTask(task string) bool {
 
 // UnmarshalJSON deserializes JSON into a TaskDefinition
 func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
+	// Store the raw struct data json, so we can log it later.
+	c.Raw = make(map[string]interface{})
+	_ = json.Unmarshal([]byte(data), &c.Raw)
+
+	// unmarshal the rawJSON into a struct, so we can do some
+	// custom stuff to the json fields to the TaskDefinition we
+	// will actually use downstream.
 	task := rawTask{}
 	if err := json.Unmarshal(data, &task); err != nil {
 		return err
