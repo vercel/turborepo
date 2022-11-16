@@ -90,4 +90,20 @@ describe("add-default-outputs", () => {
     // @ts-ignore-next-line
     cleanupFn();
   });
+
+  test("With package.json", () => {
+    const fixture = path.join(FIXTURES_DIR, "with-old-config");
+    const [testDir, cleanupFn] = useFixture(fixture);
+
+    expect(() => {
+      // @ts-ignore
+      addDefaultOutputs([testDir], {
+        dry: false,
+        force: false,
+        print: false,
+      });
+    }).toThrowError(
+      `"turbo" key detected in package.json. Run npx @turbo/codemod create-turbo-config first`
+    );
+  });
 });

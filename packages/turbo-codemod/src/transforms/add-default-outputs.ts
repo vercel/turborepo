@@ -19,10 +19,20 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
     return;
   }
 
-  // TODO: handle config in package.json turbo keys?
-
   const dir = files[0];
   const root = path.resolve(process.cwd(), dir);
+
+  // If `turbo` key is detected in package.json, require user to run the other codemod first.
+  const packageJsonPath = path.join(root, "package.json");
+  // package.json should always exist, but if it doesn't, it would be a silly place to blow up this codemode
+  if (fs.existsSync(packageJsonPath)) {
+    const packageJSON = fs.readJSONSync(packageJsonPath);
+    if (packageJSON.turbo) {
+      throw new Error(
+        `"turbo" key detected in package.json. Run npx @turbo/codemod create-turbo-config first`
+      );
+    }
+  }
 
   console.log(`Adding default \`outputs\` key into tasks if it doesn't exist`);
 
