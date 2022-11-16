@@ -4,6 +4,15 @@ export interface Schema {
   $schema?: string;
 
   /**
+   * A version of turbo that should be used with this project
+   *
+   * If turbo is invoked in a project with turboVersion specified, turbo will make
+   * sure to use the correct version. Only semver versions that include patch
+   * numbers are allowed.
+   */
+  turboVersion?: string;
+
+  /**
    * A list of globs for implicit global hash dependencies.
    *
    * The contents of these files will be included in the global hashing
