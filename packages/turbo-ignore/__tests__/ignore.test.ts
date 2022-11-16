@@ -171,7 +171,7 @@ describe("turboIgnore()", () => {
         if (callback) {
           return callback(
             null,
-            '{"packages":["ui"],"tasks":[]}',
+            '{"packages":["test-app"],"tasks":[]}',
             "stderr"
           ) as unknown as ChildProcess;
         }
@@ -189,7 +189,83 @@ describe("turboIgnore()", () => {
         'inferred "test-app" as workspace from "package.json"',
         'found previous deployment ("last-deployed-sha") for "test-app" on "my-branch"',
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
-        "the commit affects this project and/or its 0 dependencies",
+        'this commit affects "test-app"',
+        "proceeding with deployment",
+      ],
+      mockConsole.log
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("allows build for `previousDeploy` comparison with single dependency change", async () => {
+    process.env.VERCEL = "1";
+    process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
+    process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages":["test-app", "ui"],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+    turboIgnore({
+      args: {
+        fallback: "false",
+        directory: "__fixtures__/app",
+      },
+    });
+    validateLogs(
+      [
+        "Using Turborepo to determine if this project is affected by the commit...\n",
+        'inferred "test-app" as workspace from "package.json"',
+        'found previous deployment ("last-deployed-sha") for "test-app" on "my-branch"',
+        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        'this commit affects "test-app" and 1 dependency (ui)',
+        "proceeding with deployment",
+      ],
+      mockConsole.log
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("allows build for `previousDeploy` comparison with multiple dependency changes", async () => {
+    process.env.VERCEL = "1";
+    process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
+    process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages":["test-app", "ui", "tsconfig"],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+    turboIgnore({
+      args: {
+        fallback: "false",
+        directory: "__fixtures__/app",
+      },
+    });
+    validateLogs(
+      [
+        "Using Turborepo to determine if this project is affected by the commit...\n",
+        'inferred "test-app" as workspace from "package.json"',
+        'found previous deployment ("last-deployed-sha") for "test-app" on "my-branch"',
+        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        'this commit affects "test-app" and 2 dependencies (ui, tsconfig)',
         "proceeding with deployment",
       ],
       mockConsole.log

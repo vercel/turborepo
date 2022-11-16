@@ -74,11 +74,17 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
         }
         const { packages } = parsed;
         if (packages && packages.length > 0) {
-          info(
-            `the commit affects this project and/or its ${
-              packages.length - 1
-            } dependencies`
-          );
+          if (packages.length === 1) {
+            info(`this commit affects "${workspace}"`);
+          } else {
+            // subtract 1 because the first package is the workspace itself
+            info(
+              `this commit affects "${workspace}" and ${packages.length - 1} ${
+                packages.length - 1 === 1 ? "dependency" : "dependencies"
+              } (${packages.slice(1).join(", ")})`
+            );
+          }
+
           return continueBuild();
         } else {
           info(`this project and its dependencies are not affected`);
