@@ -716,7 +716,7 @@ func getDefaultOptions() *Opts {
 			concurrency: 10,
 		},
 		clientOpts: client.Opts{
-			Timeout: 20,
+			Timeout: client.ClientTimeout,
 		},
 	}
 }

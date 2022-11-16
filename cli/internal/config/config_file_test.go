@@ -23,21 +23,6 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 	}
 }
 
-func TestNotAllowed(t *testing.T) {
-	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddRepoConfigFlags(flags)
-
-	remoteCacheTimeout := "invalid"
-	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
-	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"remoteCacheTimeout":"%v"}`, remoteCacheTimeout)), 0644), "WriteFile")
-
-	_, err := ReadRepoConfigFile(testConfigFile, flags)
-	if err == nil {
-		t.Error("ReadRepoConfigFile was allowed to read remoteCacheTimeout")
-	}
-}
-
 func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)

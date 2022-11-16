@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -227,10 +226,6 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
-	}
-
-	if repoViper.IsSet("remoteCacheTimeout") {
-		return nil, fmt.Errorf("remoteCacheTimeout is not a valid config option")
 	}
 
 	// If team was set via commandline, don't read the teamId from the config file, as it

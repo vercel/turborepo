@@ -63,10 +63,13 @@ type Opts struct {
 	Timeout      uint64
 }
 
+// ClientTimeout Exported ClientTimeout used in run.go
+const ClientTimeout uint64 = 20
+
 // AddFlags adds flags specific to the api client to the given flagset
 func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.UsePreflight, "preflight", false, "When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization")
-	flags.Uint64Var(&opts.Timeout, "remote-cache-timeout", 20, "Set the remote cache client timeout (default: 20)")
+	flags.Uint64Var(&opts.Timeout, "remote-cache-timeout", ClientTimeout, "Set the remote cache client timeout")
 }
 
 // New creates a new ApiClient
