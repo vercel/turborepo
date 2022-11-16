@@ -64,7 +64,7 @@ export function PackLetter() {
           <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border dark:border-white/10 border-black/10 flex items-center justify-center ">
             <Image
               alt="Image of Tobias Koopers"
-              src="/images/people/tobias.jpg"
+              src="/images/people/tobiaskoppers.jpg"
               width={64}
               height={64}
               className="rounded-full"
@@ -97,8 +97,8 @@ export function PackLetter() {
       <FadeIn noVertical className="relative flex justify-center w-full mt-16">
         <div className="max-w-[180px] w-full">
           <CTAButton>
-            <Link href="/pack/docs">
-              <a className="block py-3 font-sans">Start Building</a>
+            <Link href="/pack/docs" className="block py-3 font-sans">
+              Start Building
             </Link>
           </CTAButton>
         </div>
