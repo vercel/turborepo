@@ -103,7 +103,7 @@ describe("add-default-outputs", () => {
         print: false,
       });
     }).toThrowError(
-      `"turbo" key detected in package.json. Run npx @turbo/codemod create-turbo-config first`
+      '"turbo" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first'
     );
 
     // @ts-ignore-next-line
