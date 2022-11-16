@@ -8,8 +8,8 @@ describe("parseArgs()", () => {
 
   it("does not throw with no args", async () => {
     const result = parseArgs({ argv: [] });
-    expect(result.workspace).toBe(null);
-    expect(result.filterFallback).toBe(true);
+    expect(result.workspace).toBe(undefined);
+    expect(result.fallback).toBe(undefined);
   });
 
   it("outputs help text (--help)", async () => {
@@ -39,23 +39,30 @@ describe("parseArgs()", () => {
   it("correctly finds workspace", async () => {
     const result = parseArgs({ argv: ["this-workspace"] });
     expect(result.workspace).toBe("this-workspace");
-    expect(result.filterFallback).toBe(true);
+    expect(result.fallback).toBe(undefined);
     expect(mockExit.exit).toHaveBeenCalledTimes(0);
   });
 
   it("correctly finds fallback", async () => {
-    const result = parseArgs({ argv: ["--filter-fallback=false"] });
-    expect(result.workspace).toBe(null);
-    expect(result.filterFallback).toBe(false);
+    const result = parseArgs({ argv: ["--fallback=false"] });
+    expect(result.workspace).toBe(undefined);
+    expect(result.fallback).toBe("false");
+    expect(mockExit.exit).toHaveBeenCalledTimes(0);
+  });
+
+  it("uses default fallback if incorrectly specified", async () => {
+    const result = parseArgs({ argv: ["--fallback"] });
+    expect(result.workspace).toBe(undefined);
+    expect(result.fallback).toBe(undefined);
     expect(mockExit.exit).toHaveBeenCalledTimes(0);
   });
 
   it("correctly finds fallback and workspace", async () => {
     const result = parseArgs({
-      argv: ["this-workspace", "--filter-fallback=false"],
+      argv: ["this-workspace", "--fallback=false"],
     });
     expect(result.workspace).toBe("this-workspace");
-    expect(result.filterFallback).toBe(false);
+    expect(result.fallback).toBe("false");
     expect(mockExit.exit).toHaveBeenCalledTimes(0);
   });
 });

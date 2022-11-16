@@ -21,6 +21,11 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
     "Using Turborepo to determine if this project is affected by the commit...\n"
   );
 
+  // set default directory
+  args.directory = args.directory
+    ? path.resolve(args.directory)
+    : process.cwd();
+
   // check for TURBO_FORCE and bail early if it's set
   if (process.env.TURBO_FORCE === "true") {
     info("`TURBO_FORCE` detected");
@@ -28,32 +33,23 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   }
 
   // find the monorepo root
-  const root = getTurboRoot(
-    args.directory ? path.resolve(args.directory) : process.cwd()
-  );
+  const root = getTurboRoot(args.directory);
   if (!root) {
     error("monorepo root not found. turbo-ignore inferencing failed");
     return continueBuild();
   }
 
   // Find the workspace from the command-line args, or the package.json at the current directory
-  const workspace = getWorkspace({ args });
+  const workspace = getWorkspace(args);
   if (!workspace) {
-    error("workspace not found. turbo-ignore inferencing failed");
     return continueBuild();
   }
 
   // Get the start of the comparison (previous deployment when available, or previous commit by default)
-  const comparison = getComparison({
-    workspace,
-    fallback: args.filterFallback,
-  });
+  const comparison = getComparison({ workspace, fallback: args.fallback });
   if (!comparison) {
     // This is either the first deploy of the project, or the first deploy for the branch, either way - build it.
     return continueBuild();
-  }
-  if (comparison.type === "previousDeploy") {
-    info("found previous deployment for project");
   }
 
   // Build, and execute the command

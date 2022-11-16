@@ -3,22 +3,17 @@ import path from "path";
 import { error, info } from "./logger";
 import { TurboIgnoreArgs } from "./types";
 
-export function getWorkspace({
-  args,
-}: {
-  args: TurboIgnoreArgs;
-}): string | null {
+export function getWorkspace(args: TurboIgnoreArgs): string | null {
+  const { directory = process.cwd(), workspace } = args;
+
   // if the workspace is provided via args, use that
-  if (args.workspace) {
-    info(`using provided ${args.workspace} as workspace`);
-    return args.workspace;
+  if (workspace) {
+    info(`using "${workspace}" as workspace from arguments`);
+    return workspace;
   }
 
   // otherwise, try and infer it from a package.json in the current directory
-  const packageJsonPath = path.join(
-    args.directory || process.cwd(),
-    "package.json"
-  );
+  const packageJsonPath = path.join(directory, "package.json");
   try {
     const raw = fs.readFileSync(packageJsonPath, "utf8");
     const packageJsonContent: Record<string, string> & { name: string } =
@@ -34,7 +29,9 @@ export function getWorkspace({
     );
     return packageJsonContent.name;
   } catch (e) {
-    error(`"${packageJsonPath}" could not be found.`);
+    error(
+      `"${packageJsonPath}" could not be found. turbo-ignore inferencing failed`
+    );
     return null;
   }
 }

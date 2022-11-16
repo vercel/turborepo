@@ -1,31 +1,24 @@
 import { getWorkspace } from "../src/getWorkspace";
-import { spyConsole } from "./test-utils";
+import { spyConsole, validateLogs } from "./test-utils";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
   it("getWorkspace returns workspace from arg", async () => {
     expect(
       getWorkspace({
-        args: {
-          workspace: "test-workspace",
-          filterFallback: true,
-        },
+        workspace: "test-workspace",
       })
     ).toEqual("test-workspace");
-    expect(mockConsole.log).toHaveBeenCalledWith(
-      "≫  ",
-      "using provided test-workspace as workspace"
+    validateLogs(
+      ['using "test-workspace" as workspace from arguments'],
+      mockConsole.log
     );
   });
 
   it("getWorkspace returns workspace from package.json", async () => {
     expect(
       getWorkspace({
-        args: {
-          workspace: null,
-          filterFallback: true,
-          directory: "./__fixtures__/app",
-        },
+        directory: "./__fixtures__/app",
       })
     ).toEqual("test-app");
     expect(mockConsole.log).toHaveBeenCalledWith(
@@ -35,14 +28,7 @@ describe("getWorkspace()", () => {
   });
 
   it("getWorkspace used current directory if not specified", async () => {
-    expect(
-      getWorkspace({
-        args: {
-          workspace: null,
-          filterFallback: true,
-        },
-      })
-    ).toEqual("turbo-ignore");
+    expect(getWorkspace({})).toEqual("turbo-ignore");
     expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
       'inferred "turbo-ignore" as workspace from "package.json"'
@@ -52,11 +38,7 @@ describe("getWorkspace()", () => {
   it("getWorkspace returns null when no arg is provided and package.json is missing name field", async () => {
     expect(
       getWorkspace({
-        args: {
-          workspace: null,
-          filterFallback: true,
-          directory: "./__fixtures__/invalid-app",
-        },
+        directory: "./__fixtures__/invalid-app",
       })
     ).toEqual(null);
     expect(mockConsole.error).toHaveBeenCalledWith(
@@ -68,16 +50,12 @@ describe("getWorkspace()", () => {
   it("getWorkspace returns null when no arg is provided and package.json can be found", async () => {
     expect(
       getWorkspace({
-        args: {
-          workspace: null,
-          filterFallback: true,
-          directory: "./__fixtures__/no-app",
-        },
+        directory: "./__fixtures__/no-app",
       })
     ).toEqual(null);
     expect(mockConsole.error).toHaveBeenCalledWith(
       "≫  ",
-      '"__fixtures__/no-app/package.json" could not be found.'
+      '"__fixtures__/no-app/package.json" could not be found. turbo-ignore inferencing failed'
     );
   });
 });

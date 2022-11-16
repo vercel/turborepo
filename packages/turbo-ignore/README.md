@@ -24,11 +24,52 @@ If <workspace> is not provided, it will be inferred from the "name"
 field of the "package.json" located at the current working directory.
 
 Flags:
-  --filter-fallback   When deploying on Vercel, If no previously deployed SHA is available to compare against,
-                      fallback to comparing against the previous commit [default: true]
+  --fallback=<ref>    On Vercel, if no previously deployed SHA is available to compare against,
+                      fallback to comparing against the provided ref, or use "false" to
+                      disable [default: HEAD^]
   --help, -h          Show this help message
   --version, -v       Show the version of this script
 ```
+
+### Examples
+
+```sh
+npx turbo-ignore
+```
+
+> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous commit. When not on Vercel, always compare against the previous commit.
+
+---
+
+```sh
+npx turbo-ignore docs
+```
+
+> Only build if there are changes to the `docs` workspace, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous commit. When not on Vercel, always compare against the previous commit.
+
+---
+
+```sh
+npx turbo-ignore --fallback=false
+```
+
+> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist, (first deploy of the branch), the build will proceed. When not on Vercel, always compare against the previous commit.
+
+---
+
+```sh
+npx turbo-ignore --fallback=HEAD~10
+```
+
+> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous 10 commits. When not on Vercel, always compare against the previous commit.
+
+---
+
+```sh
+npx turbo-ignore app --fallback=develop
+```
+
+> Only build if there are changes to the `app` workspace, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the `develop` branch. When not on Vercel, always compare against the previous commit.
 
 ## How it Works
 

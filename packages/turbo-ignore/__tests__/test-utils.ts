@@ -12,11 +12,15 @@ export function mockEnv() {
 }
 
 export function validateLogs(
-  logs: Array<string>,
-  mockConsole: SpyConsole["log"]
+  logs: Array<string | (() => boolean)>,
+  mockConsole: SpyConsole["log"] | SpyConsole["error"]
 ) {
   logs.forEach((log, idx) => {
-    expect(mockConsole.log).toHaveBeenNthCalledWith(idx + 1, "≫  ", log);
+    expect(mockConsole).toHaveBeenNthCalledWith(
+      idx + 1,
+      "≫  ",
+      typeof log === "function" ? log() : log
+    );
   });
 }
 

@@ -31,7 +31,7 @@ describe("turboIgnore()", () => {
       });
 
     turboIgnore({
-      args: { workspace: "test-workspace", filterFallback: true },
+      args: { workspace: "test-workspace" },
     });
 
     expect(mockExec).toHaveBeenCalledWith(
@@ -40,6 +40,8 @@ describe("turboIgnore()", () => {
       expect.anything()
     );
 
+    validateLogs(["exec error: error"], mockConsole.error);
+
     expectBuild(mockExit);
     mockExec.mockRestore();
   });
@@ -47,14 +49,17 @@ describe("turboIgnore()", () => {
   it("skips checks and allows build when no workspace can be found", async () => {
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: true,
         directory: "__fixtures__/no-app",
       },
     });
-    expect(mockConsole.error).toHaveBeenLastCalledWith(
-      "≫  ",
-      "workspace not found. turbo-ignore inferencing failed"
+    validateLogs(
+      [
+        () =>
+          expect.stringContaining(
+            " could not be found. turbo-ignore inferencing failed"
+          ),
+      ],
+      mockConsole.error
     );
     expectBuild(mockExit);
   });
@@ -62,21 +67,22 @@ describe("turboIgnore()", () => {
   it("skips checks and allows build when a workspace with no name is found", async () => {
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: true,
         directory: "__fixtures__/invalid-app",
       },
     });
-    expect(mockConsole.error).toHaveBeenLastCalledWith(
-      "≫  ",
-      "workspace not found. turbo-ignore inferencing failed"
+    validateLogs(
+      [
+        () =>
+          expect.stringContaining(' is missing the "name" field (required).'),
+      ],
+      mockConsole.error
     );
     expectBuild(mockExit);
   });
 
   it("skips checks and allows build when no monorepo root can be found", async () => {
     turboIgnore({
-      args: { workspace: null, filterFallback: true, directory: "/" },
+      args: { directory: "/" },
     });
     expectBuild(mockExit);
     expect(mockConsole.error).toHaveBeenLastCalledWith(
@@ -88,7 +94,7 @@ describe("turboIgnore()", () => {
   it("skips checks and allows build when TURBO_FORCE is set", async () => {
     process.env.TURBO_FORCE = "true";
     turboIgnore({
-      args: { workspace: "test-workspace", filterFallback: true },
+      args: { workspace: "test-workspace" },
     });
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       2,
@@ -104,8 +110,8 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: false,
+        workspace: "test-app",
+        fallback: "false",
         directory: "__fixtures__/app",
       },
     });
@@ -135,8 +141,7 @@ describe("turboIgnore()", () => {
       });
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: false,
+        fallback: "false",
         directory: "__fixtures__/app",
       },
     });
@@ -144,12 +149,12 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
-        "found previous deployment for project",
+        `found previous deployment ("last-deployed-sha") for \"test-app\" on \"my-branch\"`,
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         "this project and its dependencies are not affected",
         "ignoring the change",
       ],
-      mockConsole
+      mockConsole.log
     );
 
     expectIgnore(mockExit);
@@ -174,8 +179,7 @@ describe("turboIgnore()", () => {
       });
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: false,
+        fallback: "false",
         directory: "__fixtures__/app",
       },
     });
@@ -183,12 +187,12 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
-        "found previous deployment for project",
+        'found previous deployment ("last-deployed-sha") for "test-app" on "my-branch"',
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         "the commit affects this project and/or its 0 dependencies",
         "proceeding with deployment",
       ],
-      mockConsole
+      mockConsole.log
     );
 
     expectBuild(mockExit);
@@ -207,8 +211,6 @@ describe("turboIgnore()", () => {
 
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: true,
         directory: "__fixtures__/app",
       },
     });
@@ -218,10 +220,11 @@ describe("turboIgnore()", () => {
       expect.anything(),
       expect.anything()
     );
-    expect(mockConsole.error).toHaveBeenNthCalledWith(
-      1,
-      "≫  ",
-      "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`."
+    validateLogs(
+      [
+        "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
+      ],
+      mockConsole.error
     );
 
     expectBuild(mockExit);
@@ -244,8 +247,6 @@ describe("turboIgnore()", () => {
 
     turboIgnore({
       args: {
-        workspace: null,
-        filterFallback: true,
         directory: "__fixtures__/app",
       },
     });
@@ -255,10 +256,11 @@ describe("turboIgnore()", () => {
       expect.anything(),
       expect.anything()
     );
-    expect(mockConsole.error).toHaveBeenNthCalledWith(
-      1,
-      "≫  ",
-      "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`."
+    validateLogs(
+      [
+        "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
+      ],
+      mockConsole.error
     );
 
     expectBuild(mockExit);
