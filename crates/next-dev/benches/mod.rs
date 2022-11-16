@@ -21,6 +21,7 @@ use turbo_tasks::util::FormatDuration;
 use util::{build_test, create_browser, AsyncBencherExtension, PreparedApp, BINDING_NAME};
 
 use self::util::resume_on_error;
+use crate::util::PageGuard;
 
 mod bundlers;
 mod util;
@@ -195,6 +196,34 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                         }
                         static CHANGE_TIMEOUT_MESSAGE: &str =
                             "update was not registered by bundler";
+                        async fn make_change(
+                            guard: &mut PageGuard<'_>,
+                            location: CodeLocation,
+                            m: &WallTime,
+                        ) -> Result<Duration> {
+                            let msg =
+                                format!("TURBOPACK_BENCH_CHANGE_{}", guard.app_mut().counter());
+                            let commit = add_code(
+                                guard.app().path(),
+                                &format!(
+                                    "globalThis.{BINDING_NAME} && \
+                                     globalThis.{BINDING_NAME}('{msg}');"
+                                ),
+                                location,
+                            )?;
+
+                            let start = m.start();
+                            commit()?;
+
+                            // Wait for the change introduced above to be reflected at
+                            // runtime. This expects HMR
+                            // or automatic reloading to occur.
+                            timeout(MAX_UPDATE_TIMEOUT, guard.wait_for_binding(&msg))
+                                .await
+                                .context(CHANGE_TIMEOUT_MESSAGE)??;
+
+                            Ok(m.end(start))
+                        }
                         b.to_async(&runtime).try_iter_async(
                             &runtime,
                             || async {
@@ -223,56 +252,32 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 // This should not be required.
                                 tokio::time::sleep(Duration::from_millis(5000)).await;
 
+                                make_change(&mut guard, location, &WallTime).await?;
+
                                 Ok(guard)
                             },
                             |mut guard, iters, m, verbose| async move {
                                 let mut value = m.zero();
                                 for iter in 0..iters {
-                                    let msg = format!(
-                                        "TURBOPACK_BENCH_CHANGE_{}",
-                                        guard.app_mut().counter()
-                                    );
-                                    let commit = add_code(
-                                        guard.app().path(),
-                                        &format!(
-                                            "globalThis.{BINDING_NAME} && \
-                                             globalThis.{BINDING_NAME}('{msg}');"
-                                        ),
-                                        location,
-                                    )?;
-
-                                    let start = m.start();
-                                    commit()?;
-
-                                    // Wait for the change introduced above to be reflected at
-                                    // runtime. This expects HMR
-                                    // or automatic reloading to occur.
-                                    timeout(MAX_UPDATE_TIMEOUT, guard.wait_for_binding(&msg))
-                                        .await
-                                        .context(CHANGE_TIMEOUT_MESSAGE)??;
-
-                                    let duration = m.end(start);
+                                    let duration = make_change(&mut guard, location, &m).await?;
                                     value = m.add(&value, &duration);
 
+                                    // TODO(sokra) triggering HMR updates too fast can have
+                                    // weird effects
+                                    tokio::time::sleep(std::cmp::max(
+                                        duration,
+                                        Duration::from_millis(100),
+                                    ))
+                                    .await;
+
                                     let i: u64 = iter + 1;
-
-                                    if i != iters {
-                                        // TODO(sokra) triggering HMR updates too fast can have
-                                        // weird effects
-                                        tokio::time::sleep(std::cmp::max(
+                                    if verbose && i != iters && i.count_ones() == 1 {
+                                        eprint!(
+                                            " [{:?} {:?}/{}]",
                                             duration,
-                                            Duration::from_millis(100),
-                                        ))
-                                        .await;
-
-                                        if verbose && i.count_ones() == 1 {
-                                            eprint!(
-                                                " [{:?} {:?}/{}]",
-                                                duration,
-                                                FormatDuration(value / (i as u32)),
-                                                i
-                                            );
-                                        }
+                                            FormatDuration(value / (i as u32)),
+                                            i
+                                        );
                                     }
                                 }
 
