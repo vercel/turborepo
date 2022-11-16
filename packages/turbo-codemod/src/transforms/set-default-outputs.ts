@@ -29,7 +29,7 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
     const packageJSON = fs.readJSONSync(packageJsonPath);
     if (packageJSON.turbo) {
       throw new Error(
-        "\"turbo\" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first"
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first'
       );
     }
   }

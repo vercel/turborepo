@@ -1,4 +1,4 @@
-import addDefaultOutputs from "../src/transforms/add-default-outputs";
+import setDefaultOutputs from "../src/transforms/set-default-outputs";
 import path from "path";
 import fs from "fs-extra";
 
@@ -53,7 +53,7 @@ describe("add-default-outputs", () => {
     };
 
     /* @ts-ignore-next-line */
-    addDefaultOutputs([testDir], flags);
+    setDefaultOutputs([testDir], flags);
 
     /* @ts-ignore-next-line */
     const output = fs.readJSONSync(path.join(testDir, "turbo.json"));
@@ -74,7 +74,7 @@ describe("add-default-outputs", () => {
     const [testDir, cleanupFn] = useFixture(fixture);
 
     // @ts-ignore
-    addDefaultOutputs([testDir], {
+    setDefaultOutputs([testDir], {
       dry: true,
       force: false,
       print: false,
@@ -97,7 +97,7 @@ describe("add-default-outputs", () => {
 
     expect(() => {
       // @ts-ignore
-      addDefaultOutputs([testDir], {
+      setDefaultOutputs([testDir], {
         dry: false,
         force: false,
         print: false,

@@ -42,8 +42,8 @@ const TRANSFORMER_INQUIRER_CHOICES = [
     introducedIn: "1.5.0",
   },
   {
-    name: 'add-default-outputs: Add the "outputs" key with defaults where it is missing in `turbo.json`',
-    value: "add-default-outputs",
+    name: 'set-default-outputs: Add the "outputs" key with defaults where it is missing in `turbo.json`',
+    value: "set-default-outputs",
     introducedIn: "1.7.0",
   },
 ];
