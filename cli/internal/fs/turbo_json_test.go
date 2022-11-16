@@ -61,7 +61,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"dev": {
-			Outputs:                 defaultOutputs,
+			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
@@ -103,7 +103,7 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			Outputs:                 TaskOutputs{Inclusions: []string{"build/**/*", "dist/**/*"}},
+			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{},
 			TaskDependencies:        []string{},
