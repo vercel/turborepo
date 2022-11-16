@@ -39,8 +39,10 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
       ok(`Updating outputs for ${taskName}`);
       taskDef.outputs = DEFAULT_OUTPUTS;
     } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
-      ok(`Removing outputs: [] from ${taskName} as that is now the default behavior`);
-      delete taskDep.outputs;
+      ok(
+        `Removing outputs: [] from ${taskName} as that is now the default behavior`
+      );
+      delete taskDef.outputs;
     } else {
       skip(`Skipping "${taskName}", it already has an outputs key defined`);
     }
@@ -50,6 +52,8 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
     fs.writeJsonSync(turboConfigPath, rootTurboJson, {
       spaces: 2,
     });
+  } else {
+    console.log(JSON.stringify(rootTurboJson, null, 2));
   }
 
   ok("Done");
