@@ -16,7 +16,9 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use auto_hash_map::AutoSet;
+use concurrent_queue::ConcurrentQueue;
 use futures::FutureExt;
+use indexmap::IndexMap;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
@@ -46,16 +48,18 @@ pub trait TurboTasksCallApi: Sync + Send {
 
     fn run_once(
         &self,
+        reason: &'static str,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId;
     fn run_once_process(
         &self,
+        reason: &'static str,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId;
 }
 
 pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
-    fn invalidate(&self, task: TaskId);
+    fn invalidate(&self, task: TaskId, reason: &'static str);
 
     /// Eagerly notifies all tasks that were scheduled for notifications via
     /// `schedule_notify_tasks_set()`
@@ -144,7 +148,7 @@ impl TaskIdProvider for IdFactory<TaskId> {
 pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send {
     fn pin(&self) -> Arc<dyn TurboTasksBackendApi>;
 
-    fn schedule(&self, task: TaskId);
+    fn schedule(&self, task: TaskId, reason: &'static str);
     fn schedule_backend_background_job(&self, id: BackendJobId);
     fn schedule_backend_foreground_job(&self, id: BackendJobId);
 
@@ -208,7 +212,8 @@ pub struct TurboTasks<B: Backend + 'static> {
     currently_scheduled_background_jobs: AtomicUsize,
     scheduled_tasks: AtomicUsize,
     start: Mutex<Option<Instant>>,
-    aggregated_update: Mutex<Option<(Duration, usize)>>,
+    aggregated_update: Mutex<Option<(Duration, usize, IndexMap<&'static str, (Duration, usize)>)>>,
+    aggregated_task_timings: ConcurrentQueue<(&'static str, Duration)>,
     event: Event,
     event_foreground: Event,
     event_background: Event,
@@ -218,6 +223,17 @@ pub struct TurboTasks<B: Backend + 'static> {
     program_start: Instant,
 }
 
+struct CurrentTaskInfo {
+    id: TaskId,
+    reason: &'static str,
+
+    /// Affected [Task]s, that are tracked during task execution
+    /// These tasks will be invalidated when the execution finishes
+    /// or before reading a cell value.
+    /// If None, tasks will be directly invalidated
+    tasks_to_notify: Option<RefCell<Vec<TaskId>>>,
+}
+
 // TODO implement our own thread pool and make these thread locals instead
 task_local! {
     /// The current TurboTasks instance
@@ -225,12 +241,7 @@ task_local! {
 
     static CELL_COUNTERS: RefCell<HashMap<ValueTypeId, u32, BuildNoHashHasher<ValueTypeId>>>;
 
-    static CURRENT_TASK_ID: TaskId;
-
-    /// Affected [Task]s, that are tracked during task execution
-    /// These tasks will be invalidated when the execution finishes
-    /// or before reading a cell value
-    static TASKS_TO_NOTIFY: RefCell<Vec<TaskId>>;
+    static CURRENT_TASK_INFO: CurrentTaskInfo;
 }
 
 impl<B: Backend> TurboTasks<B> {
@@ -253,6 +264,7 @@ impl<B: Backend> TurboTasks<B> {
             scheduled_tasks: AtomicUsize::new(0),
             start: Default::default(),
             aggregated_update: Default::default(),
+            aggregated_task_timings: ConcurrentQueue::unbounded(),
             event: Event::new(|| "TurboTasks::event".to_string()),
             event_foreground: Event::new(|| "TurboTasks::event_foreground".to_string()),
             event_background: Event::new(|| "TurboTasks::event_background".to_string()),
@@ -270,6 +282,7 @@ impl<B: Backend> TurboTasks<B> {
     /// Creates a new root task
     pub fn spawn_root_task(
         &self,
+        reason: &'static str,
         functor: impl Fn() -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>
             + Sync
             + Send
@@ -278,7 +291,7 @@ impl<B: Backend> TurboTasks<B> {
         let id = self
             .backend
             .create_transient_task(TransientTaskType::Root(Box::new(functor)), self);
-        self.schedule(id);
+        self.schedule(id, reason);
         id
     }
 
@@ -288,21 +301,23 @@ impl<B: Backend> TurboTasks<B> {
     #[track_caller]
     pub fn spawn_once_task(
         &self,
+        reason: &'static str,
         future: impl Future<Output = Result<RawVc>> + Send + 'static,
     ) -> TaskId {
         let id = self
             .backend
             .create_transient_task(TransientTaskType::Once(Box::pin(future)), self);
-        self.schedule(id);
+        self.schedule(id, reason);
         id
     }
 
     pub async fn run_once<T: TraceRawVcs + Send + 'static>(
         &self,
+        reason: &'static str,
         future: impl Future<Output = Result<T>> + Send + 'static,
     ) -> Result<T> {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let task_id = self.spawn_once_task(async move {
+        let task_id = self.spawn_once_task(reason, async move {
             let result = future.await?;
             tx.send(result)
                 .map_err(|_| anyhow!("unable to send result"))?;
@@ -318,9 +333,11 @@ impl<B: Backend> TurboTasks<B> {
     /// Call a native function with arguments.
     /// All inputs must be resolved.
     pub(crate) fn native_call(&self, func: FunctionId, inputs: Vec<TaskInput>) -> RawVc {
+        let (id, reason) = current_task_and_reason("turbo_function calls");
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::Native(func, inputs),
-            current_task("turbo_function calls"),
+            id,
+            reason,
             self,
         ))
     }
@@ -331,9 +348,11 @@ impl<B: Backend> TurboTasks<B> {
         if inputs.iter().all(|i| i.is_resolved() && !i.is_nothing()) {
             self.native_call(func, inputs)
         } else {
+            let (id, reason) = current_task_and_reason("turbo_function calls");
             RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
                 PersistentTaskType::ResolveNative(func, inputs),
-                current_task("turbo_function calls"),
+                id,
+                reason,
                 self,
             ))
         }
@@ -347,15 +366,17 @@ impl<B: Backend> TurboTasks<B> {
         trait_fn_name: Cow<'static, str>,
         inputs: Vec<TaskInput>,
     ) -> RawVc {
+        let (id, reason) = current_task_and_reason("turbo_function calls");
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
-            current_task("turbo_function calls"),
+            id,
+            reason,
             self,
         ))
     }
 
     #[track_caller]
-    pub(crate) fn schedule(&self, task_id: TaskId) {
+    pub(crate) fn schedule(&self, task_id: TaskId, reason: &'static str) {
         self.begin_primary_job();
         self.scheduled_tasks.fetch_add(1, Ordering::AcqRel);
 
@@ -364,6 +385,7 @@ impl<B: Backend> TurboTasks<B> {
 
         let this = self.pin();
         let future = async move {
+            let mut total_duration = Duration::ZERO;
             loop {
                 if this.stopped.load(Ordering::Acquire) {
                     break;
@@ -397,6 +419,7 @@ impl<B: Backend> TurboTasks<B> {
                     let reexecute = this
                         .backend
                         .task_execution_completed(task_id, duration, instant, &*this);
+                    total_duration += duration;
                     if !reexecute {
                         break;
                     }
@@ -404,18 +427,19 @@ impl<B: Backend> TurboTasks<B> {
                     break;
                 }
             }
-            this.finish_primary_job();
+            this.finish_primary_job(Some((reason, total_duration.into())));
             anyhow::Ok(())
         };
 
         let future = TURBO_TASKS.scope(
             self.pin(),
-            CURRENT_TASK_ID.scope(
-                task_id,
-                TASKS_TO_NOTIFY.scope(
-                    Default::default(),
-                    self.backend.execution_scope(task_id, future),
-                ),
+            CURRENT_TASK_INFO.scope(
+                CurrentTaskInfo {
+                    id: task_id,
+                    reason,
+                    tasks_to_notify: Some(RefCell::new(Vec::new())),
+                },
+                self.backend.execution_scope(task_id, future),
             ),
         );
 
@@ -444,7 +468,10 @@ impl<B: Backend> TurboTasks<B> {
             .fetch_add(1, Ordering::AcqRel);
     }
 
-    fn finish_primary_job(&self) {
+    fn finish_primary_job(&self, timing: Option<(&'static str, Duration)>) {
+        if let Some(timing) = timing {
+            let _ = self.aggregated_task_timings.push(timing);
+        }
         if self
             .currently_scheduled_tasks
             .fetch_sub(1, Ordering::AcqRel)
@@ -456,11 +483,18 @@ impl<B: Backend> TurboTasks<B> {
             self.scheduled_tasks.store(0, Ordering::Release);
             if let Some(start) = *self.start.lock().unwrap() {
                 let mut update = self.aggregated_update.lock().unwrap();
-                if let Some(update) = update.as_mut() {
-                    update.0 += start.elapsed();
-                    update.1 += total;
+                let update = if let Some(update) = update.as_mut() {
+                    update
                 } else {
-                    *update = Some((start.elapsed(), total));
+                    *update = Some((Duration::ZERO, 0, IndexMap::new()));
+                    update.as_mut().unwrap()
+                };
+                update.0 += start.elapsed();
+                update.1 += total;
+                while let Ok((reason, duration)) = self.aggregated_task_timings.pop() {
+                    let entry = update.2.entry(reason).or_default();
+                    entry.0 += duration.into();
+                    entry.1 += 1;
                 }
             }
             self.event.notify(usize::MAX);
@@ -475,7 +509,7 @@ impl<B: Backend> TurboTasks<B> {
         {
             self.event_foreground.notify(usize::MAX);
         }
-        self.finish_primary_job();
+        self.finish_primary_job(None);
     }
 
     pub async fn wait_foreground_done(&self) {
@@ -507,12 +541,15 @@ impl<B: Backend> TurboTasks<B> {
         result.map(|_| ())
     }
 
-    pub async fn get_or_wait_update_info(&self, aggregation: Duration) -> (Duration, usize) {
+    pub async fn get_or_wait_update_info(
+        &self,
+        aggregation: Duration,
+    ) -> (Duration, usize, IndexMap<&'static str, (Duration, usize)>) {
         let listener = self
             .event
             .listen_with_note(|| "wait for update info".to_string());
         if aggregation.is_zero() {
-            if let Some(info) = *self.aggregated_update.lock().unwrap() {
+            if let Some(info) = self.aggregated_update.lock().unwrap().take() {
                 return info;
             }
             listener.await;
@@ -618,12 +655,14 @@ impl<B: Backend> TurboTasks<B> {
     }
 
     fn notify_scheduled_tasks_internal(&self) {
-        TASKS_TO_NOTIFY.with(|tasks| {
-            let tasks = tasks.take();
-            if tasks.is_empty() {
-                return;
+        CURRENT_TASK_INFO.with(|info| {
+            if let Some(ref cell) = info.tasks_to_notify {
+                let tasks = cell.take();
+                if tasks.is_empty() {
+                    return;
+                }
+                self.backend.invalidate_tasks(tasks, info.reason, self);
             }
-            self.backend.invalidate_tasks(tasks, self);
         });
     }
 
@@ -651,9 +690,10 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
     #[track_caller]
     fn run_once(
         &self,
+        reason: &'static str,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId {
-        self.spawn_once_task(async move {
+        self.spawn_once_task(reason, async move {
             future.await?;
             Ok(NothingVc::new().into())
         })
@@ -662,11 +702,12 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
     #[track_caller]
     fn run_once_process(
         &self,
+        reason: &'static str,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId {
         let this = self.pin();
-        self.spawn_once_task(async move {
-            this.finish_primary_job();
+        self.spawn_once_task(reason, async move {
+            this.finish_primary_job(None);
             future.await?;
             this.begin_primary_job();
             Ok(NothingVc::new().into())
@@ -675,17 +716,19 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
 }
 
 impl<B: Backend> TurboTasksApi for TurboTasks<B> {
-    fn invalidate(&self, task: TaskId) {
-        self.backend.invalidate_task(task, self);
+    fn invalidate(&self, task: TaskId, reason: &'static str) {
+        self.backend.invalidate_task(task, reason, self);
     }
 
     fn notify_scheduled_tasks(&self) {
-        let _ = TASKS_TO_NOTIFY.try_with(|tasks| {
-            let tasks = tasks.take();
-            if tasks.is_empty() {
-                return;
+        let _ = CURRENT_TASK_INFO.try_with(|info| {
+            if let Some(ref cell) = info.tasks_to_notify {
+                let tasks = cell.take();
+                if tasks.is_empty() {
+                    return;
+                }
+                self.backend.invalidate_tasks(tasks, info.reason, self);
             }
-            self.backend.invalidate_tasks(tasks, self);
         });
     }
 
@@ -833,31 +876,42 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
     fn schedule_notify_tasks(&self, tasks: &[TaskId]) {
-        let result = TASKS_TO_NOTIFY.try_with(|tasks_list| {
-            let mut list = tasks_list.borrow_mut();
-            list.extend(tasks.iter());
+        let result = CURRENT_TASK_INFO.try_with(|info| {
+            if let Some(ref cell) = info.tasks_to_notify {
+                let mut list = cell.borrow_mut();
+                list.extend(tasks.iter());
+            } else {
+                self.backend
+                    .invalidate_tasks(tasks.to_vec(), info.reason, self);
+            }
         });
         if result.is_err() {
-            self.backend.invalidate_tasks(tasks.to_vec(), self);
+            self.backend
+                .invalidate_tasks(tasks.to_vec(), "unknown", self);
         }
     }
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
     fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>) {
-        let result = TASKS_TO_NOTIFY.try_with(|tasks_list| {
-            let mut list = tasks_list.borrow_mut();
-            list.extend(tasks.iter());
+        let result = CURRENT_TASK_INFO.try_with(|info| {
+            if let Some(ref cell) = info.tasks_to_notify {
+                let mut list = cell.borrow_mut();
+                list.extend(tasks.iter());
+            } else {
+                self.backend
+                    .invalidate_tasks(tasks.iter().copied().collect(), info.reason, self);
+            }
         });
         if result.is_err() {
             self.backend
-                .invalidate_tasks(tasks.iter().copied().collect(), self);
-        };
+                .invalidate_tasks(tasks.iter().copied().collect(), "unknown", self);
+        }
     }
 
     #[track_caller]
-    fn schedule(&self, task: TaskId) {
-        self.schedule(task)
+    fn schedule(&self, task: TaskId, reason: &'static str) {
+        self.schedule(task, reason)
     }
 
     fn stats_type(&self) -> StatsType {
@@ -890,8 +944,18 @@ impl<B: Backend> TaskIdProvider for TurboTasks<B> {
 }
 
 fn current_task(from: &str) -> TaskId {
-    match CURRENT_TASK_ID.try_with(|id| *id) {
+    match CURRENT_TASK_INFO.try_with(|info| info.id) {
         Ok(id) => id,
+        Err(_) => panic!(
+            "{} can only be used in the context of turbo_tasks task execution",
+            from
+        ),
+    }
+}
+
+fn current_task_and_reason(from: &str) -> (TaskId, &'static str) {
+    match CURRENT_TASK_INFO.try_with(|info| (info.id, info.reason)) {
+        Ok(info) => info,
         Err(_) => panic!(
             "{} can only be used in the context of turbo_tasks task execution",
             from
@@ -920,7 +984,7 @@ impl PartialEq for Invalidator {
 impl Eq for Invalidator {}
 
 impl Invalidator {
-    pub fn invalidate(self) {
+    pub fn invalidate(self, reason: &'static str) {
         let Invalidator {
             task,
             turbo_tasks,
@@ -928,7 +992,7 @@ impl Invalidator {
         } = self;
         let _ = handle.enter();
         if let Some(turbo_tasks) = turbo_tasks.upgrade() {
-            turbo_tasks.invalidate(task);
+            turbo_tasks.invalidate(task, reason);
         }
     }
 }
@@ -979,16 +1043,20 @@ impl<'de> Deserialize<'de> for Invalidator {
 
 pub async fn run_once<T: Send + 'static>(
     tt: Arc<dyn TurboTasksApi>,
+    reason: &'static str,
     future: impl Future<Output = Result<T>> + Send + 'static,
 ) -> Result<T> {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let task_id = tt.run_once(Box::pin(async move {
-        let result = future.await?;
-        tx.send(result)
-            .map_err(|_| anyhow!("unable to send result"))?;
-        Ok(())
-    }));
+    let task_id = tt.run_once(
+        reason,
+        Box::pin(async move {
+            let result = future.await?;
+            tx.send(result)
+                .map_err(|_| anyhow!("unable to send result"))?;
+            Ok(())
+        }),
+    );
 
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
@@ -1031,12 +1099,19 @@ pub fn with_turbo_tasks_for_testing<T>(
 ) -> impl Future<Output = T> {
     TURBO_TASKS.scope(
         tt,
-        CURRENT_TASK_ID.scope(current_task, CELL_COUNTERS.scope(Default::default(), f)),
+        CURRENT_TASK_INFO.scope(
+            CurrentTaskInfo {
+                id: current_task,
+                reason: "testing",
+                tasks_to_notify: None,
+            },
+            CELL_COUNTERS.scope(Default::default(), f),
+        ),
     )
 }
 
 pub fn current_task_for_testing() -> TaskId {
-    CURRENT_TASK_ID.with(|id| *id)
+    CURRENT_TASK_INFO.with(|info| info.id)
 }
 
 /// Get an [Invalidator] that can be used to invalidate the current [Task]

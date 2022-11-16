@@ -79,6 +79,7 @@ pub use native_function::{NativeFunction, NativeFunctionVc};
 pub use nothing::{Nothing, NothingVc};
 pub use raw_vc::{CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
 pub use read_ref::ReadRef;
+pub use small_duration::SmallDuration;
 pub use task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait};
 pub use value::{TransientInstance, TransientValue, Value};

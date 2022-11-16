@@ -97,7 +97,7 @@ async fn run(resource: &'static str) -> Result<()> {
     register();
 
     let tt = TurboTasks::new(MemoryBackend::new());
-    let task = tt.spawn_once_task(async move {
+    let task = tt.spawn_once_task("initial compilation", async move {
         let out = run_test(resource.to_string());
         handle_issues(out).await?;
         Ok(NothingVc::new().into())

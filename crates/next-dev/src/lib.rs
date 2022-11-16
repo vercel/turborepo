@@ -443,12 +443,22 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
                 tt_clone.get_or_wait_update_info(Duration::from_millis(100)),
             );
 
-            let (elapsed, _count) = update_future.await;
+            let (elapsed, _count, details) = update_future.await;
             println!(
                 "{event_type} - updated in {elapsed}",
                 event_type = "event".purple(),
                 elapsed = FormatDuration(elapsed),
             );
+            if options.log_detail {
+                for (reason, (duration, count)) in details {
+                    println!(
+                        "          {reason}: {count} tasks computed in {duration}",
+                        reason = reason,
+                        count = count,
+                        duration = FormatDuration(duration)
+                    );
+                }
+            }
         }
     };
 

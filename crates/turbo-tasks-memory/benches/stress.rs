@@ -35,7 +35,7 @@ pub fn fibonacci(c: &mut Criterion) {
             b.to_async(rt).iter_with_large_drop(move || {
                 let tt = TurboTasks::new(MemoryBackend::new());
                 async move {
-                    let task = tt.spawn_once_task(async move {
+                    let task = tt.spawn_once_task("initial compilation", async move {
                         // Number of tasks:
                         // 1 root task
                         // size >= 1 => + fib(0) = 1

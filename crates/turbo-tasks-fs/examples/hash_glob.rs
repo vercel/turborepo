@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     let tt = TurboTasks::new(MemoryBackend::new());
     let start = Instant::now();
 
-    let task = tt.spawn_root_task(|| {
+    let task = tt.spawn_root_task("initial compilation", || {
         Box::pin(async {
             let root = current_dir().unwrap().to_str().unwrap().to_string();
             let disk_fs = DiskFileSystemVc::new("project".to_string(), root);
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
     println!("done in {}", FormatDuration(start.elapsed()));
 
     loop {
-        let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+        let (elapsed, count, _) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
         println!("updated {} tasks in {}", count, FormatDuration(elapsed));
     }
 }

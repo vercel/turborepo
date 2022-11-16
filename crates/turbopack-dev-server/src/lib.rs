@@ -248,7 +248,7 @@ impl DevServer {
                                 .body(hyper::Body::empty())?);
                         }
 
-                        run_once(tt, async move {
+                        run_once(tt, "http request", async move {
                             let console_ui = (*console_ui).clone().cell();
                             let uri = request.uri();
                             let path = uri.path();

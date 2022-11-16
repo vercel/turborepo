@@ -47,35 +47,37 @@ impl From<Error> for SharedError {
     }
 }
 
-pub struct FormatDuration(pub Duration);
+pub struct FormatDuration<T: Copy + Into<Duration>>(pub T);
 
-impl Display for FormatDuration {
+impl<T: Copy + Into<Duration>> Display for FormatDuration<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = self.0.as_secs();
+        let d = self.0.into();
+        let s = d.as_secs();
         if s > 10 {
             return write!(f, "{}s", s);
         }
-        let ms = self.0.as_millis();
+        let ms = d.as_millis();
         if ms > 10 {
             return write!(f, "{}ms", ms);
         }
-        write!(f, "{}ms", (self.0.as_micros() as f32) / 1000.0)
+        write!(f, "{}ms", (d.as_micros() as f32) / 1000.0)
     }
 }
 
-impl Debug for FormatDuration {
+impl<T: Copy + Into<Duration>> Debug for FormatDuration<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = self.0.as_secs();
+        let d = self.0.into();
+        let s = d.as_secs();
         if s > 100 {
             return write!(f, "{}s", s);
         }
-        let ms = self.0.as_millis();
+        let ms = d.as_millis();
         if ms > 10000 {
             return write!(f, "{:.2}s", (ms as f32) / 1000.0);
         }
         if ms > 100 {
             return write!(f, "{}ms", ms);
         }
-        write!(f, "{}ms", (self.0.as_micros() as f32) / 1000.0)
+        write!(f, "{}ms", (d.as_micros() as f32) / 1000.0)
     }
 }

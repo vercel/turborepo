@@ -483,7 +483,11 @@ fn node_file_trace<B: Backend + 'static>(
             };
 
             let tt = create_turbo_tasks(directory_path.as_path());
-            let output = timeout(Duration::from_secs(timeout_len), tt.run_once(task)).await;
+            let output = timeout(
+                Duration::from_secs(timeout_len),
+                tt.run_once("initial compilation", task),
+            )
+            .await;
             let _ = timeout(Duration::from_secs(2), tt.wait_background_done()).await;
             let stop = timeout(Duration::from_secs(60), tt.stop_and_wait()).await;
             match (output, stop) {

@@ -71,10 +71,11 @@ impl MemoryBackend {
         &self,
         parent: TaskId,
         child: TaskId,
+        reason: &'static str,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
         self.with_task(parent, |parent| {
-            parent.connect_child(child, self, turbo_tasks)
+            parent.connect_child(child, reason, self, turbo_tasks)
         });
     }
 
@@ -126,6 +127,7 @@ impl MemoryBackend {
     fn increase_scope_active_queue(
         &self,
         mut queue: Vec<TaskScopeId>,
+        reason: &'static str,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
         while let Some(scope) = queue.pop() {
@@ -133,7 +135,7 @@ impl MemoryBackend {
                 scope.state.lock().increment_active(&mut queue)
             }) {
                 turbo_tasks.schedule_backend_foreground_job(
-                    self.create_backend_job(Job::ScheduleWhenDirty(tasks)),
+                    self.create_backend_job(Job::ScheduleWhenDirty(tasks, reason)),
                 );
             }
         }
@@ -142,26 +144,28 @@ impl MemoryBackend {
     pub(crate) fn increase_scope_active(
         &self,
         scope: TaskScopeId,
+        reason: &'static str,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        self.increase_scope_active_queue(vec![scope], turbo_tasks);
+        self.increase_scope_active_queue(vec![scope], reason, turbo_tasks);
     }
 
     pub(crate) fn increase_scope_active_by(
         &self,
         scope: TaskScopeId,
         count: usize,
+        reason: &'static str,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
         let mut queue = Vec::new();
         if let Some(tasks) = self.with_scope(scope, |scope| {
             scope.state.lock().increment_active_by(count, &mut queue)
         }) {
-            for task in tasks.into_iter() {
-                turbo_tasks.schedule(task);
-            }
+            turbo_tasks.schedule_backend_foreground_job(
+                self.create_backend_job(Job::ScheduleWhenDirty(tasks, reason)),
+            );
         }
-        self.increase_scope_active_queue(queue, turbo_tasks);
+        self.increase_scope_active_queue(queue, reason, turbo_tasks);
     }
 
     pub(crate) fn decrease_scope_active(
@@ -188,14 +192,24 @@ impl MemoryBackend {
 }
 
 impl Backend for MemoryBackend {
-    fn invalidate_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi) {
-        self.with_task(task, |task| task.invalidate(self, turbo_tasks));
+    fn invalidate_task(
+        &self,
+        task: TaskId,
+        reason: &'static str,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
+        self.with_task(task, |task| task.invalidate(reason, self, turbo_tasks));
     }
 
-    fn invalidate_tasks(&self, tasks: Vec<TaskId>, turbo_tasks: &dyn TurboTasksBackendApi) {
+    fn invalidate_tasks(
+        &self,
+        tasks: Vec<TaskId>,
+        reason: &'static str,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
         for task in tasks.into_iter() {
             self.with_task(task, |task| {
-                task.invalidate(self, turbo_tasks);
+                task.invalidate(reason, self, turbo_tasks);
             });
         }
     }
@@ -423,11 +437,12 @@ impl Backend for MemoryBackend {
         &self,
         task_type: PersistentTaskType,
         parent_task: TaskId,
+        reason: &'static str,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
         let result = if let Some(task) = self.task_cache.get(&task_type).map(|task| *task) {
             // fast pass without creating a new task
-            self.connect_task_child(parent_task, task, turbo_tasks);
+            self.connect_task_child(parent_task, task, reason, turbo_tasks);
 
             // TODO maybe force (background) scheduling to avoid inactive tasks hanging in
             // "in progress" until they become active
@@ -473,7 +488,7 @@ impl Backend for MemoryBackend {
                     *entry.get()
                 }
             };
-            self.connect_task_child(parent_task, result_task, turbo_tasks);
+            self.connect_task_child(parent_task, result_task, reason, turbo_tasks);
             result_task
         };
         result
@@ -508,10 +523,10 @@ impl Backend for MemoryBackend {
 pub(crate) enum Job {
     RemoveFromScopes(AutoSet<TaskId>, Vec<TaskScopeId>),
     RemoveFromScope(AutoSet<TaskId>, TaskScopeId),
-    ScheduleWhenDirty(Vec<TaskId>),
+    ScheduleWhenDirty(Vec<TaskId>, &'static str),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
-    AddToScopeQueue(VecDeque<(TaskId, usize)>, TaskScopeId, bool),
+    AddToScopeQueue(VecDeque<(TaskId, usize)>, TaskScopeId, bool, &'static str),
     /// Remove tasks from a scope. Scheduled by `run_remove_from_scope_queue` to
     /// split off work.
     RemoveFromScopeQueue(VecDeque<TaskId>, TaskScopeId),
@@ -534,15 +549,22 @@ impl Job {
                     });
                 }
             }
-            Job::ScheduleWhenDirty(tasks) => {
+            Job::ScheduleWhenDirty(tasks, reason) => {
                 for task in tasks.into_iter() {
                     backend.with_task(task, |task| {
-                        task.schedule_when_dirty(turbo_tasks);
+                        task.schedule_when_dirty(reason, turbo_tasks);
                     })
                 }
             }
-            Job::AddToScopeQueue(queue, id, is_optimization_scope) => {
-                run_add_to_scope_queue(queue, id, is_optimization_scope, backend, turbo_tasks);
+            Job::AddToScopeQueue(queue, id, is_optimization_scope, reason) => {
+                run_add_to_scope_queue(
+                    queue,
+                    id,
+                    is_optimization_scope,
+                    reason,
+                    backend,
+                    turbo_tasks,
+                );
             }
             Job::RemoveFromScopeQueue(queue, id) => {
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);

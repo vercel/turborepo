@@ -45,10 +45,11 @@ pub fn scope_stress(c: &mut Criterion) {
                             .map(|(a, b)| {
                                 let tt = &tt;
                                 async move {
-                                    let task = tt.spawn_once_task(async move {
-                                        rectangle(a, b).strongly_consistent().await?;
-                                        Ok(NothingVc::new().into())
-                                    });
+                                    let task =
+                                        tt.spawn_once_task("initial compilation", async move {
+                                            rectangle(a, b).strongly_consistent().await?;
+                                            Ok(NothingVc::new().into())
+                                        });
                                     tt.wait_task_completion(task, false).await
                                 }
                             })

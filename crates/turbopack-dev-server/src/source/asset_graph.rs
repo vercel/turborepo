@@ -165,7 +165,7 @@ impl ContentSource for AssetGraphContentSource {
                     let mut state = state.lock().unwrap();
                     if state.expanded.insert(*asset) {
                         if let Some(invalidator) = state.invalidator.take() {
-                            invalidator.invalidate();
+                            invalidator.invalidate("lazy compilation");
                         }
                     }
                 }

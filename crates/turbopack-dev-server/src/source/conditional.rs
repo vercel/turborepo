@@ -68,7 +68,7 @@ impl ConditionalContentSource {
             State::Idle | State::Activated => {}
             State::Waiting(set) => {
                 for invalidator in set {
-                    invalidator.invalidate()
+                    invalidator.invalidate("lazy compilation")
                 }
             }
         }

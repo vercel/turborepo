@@ -164,7 +164,7 @@ impl VersionStateVc {
         let new_inner = new_inner.cell_local().await?;
         let mut lock = this.inner.lock().unwrap();
         if let (_, Some(invalidator)) = std::mem::replace(&mut *lock, (new_inner, None)) {
-            invalidator.invalidate();
+            invalidator.invalidate("subscribed version changed");
         }
         Ok(())
     }

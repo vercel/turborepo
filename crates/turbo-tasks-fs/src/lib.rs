@@ -99,10 +99,14 @@ impl DiskFileSystem {
 
     pub fn invalidate(&self) {
         for (_, invalidators) in take(&mut *self.invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
+            invalidators
+                .into_iter()
+                .for_each(|i| i.invalidate("manual disk fs invalidation"));
         }
         for (_, invalidators) in take(&mut *self.dir_invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
+            invalidators
+                .into_iter()
+                .for_each(|i| i.invalidate("manual disk fs invalidation"));
         }
     }
 
@@ -126,10 +130,14 @@ impl DiskFileSystem {
         // We need to invalidate all reads that happened before watching
         // Best is to start_watching before starting to read
         for (_, invalidators) in take(&mut *invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
+            invalidators
+                .into_iter()
+                .for_each(|i| i.invalidate("start watching"));
         }
         for (_, invalidators) in take(&mut *dir_invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
+            invalidators
+                .into_iter()
+                .for_each(|i| i.invalidate("start watching"));
         }
 
         watcher_guard.replace(watcher);
@@ -209,7 +217,9 @@ impl DiskFileSystem {
                     for path in paths {
                         let key = path_to_key(path);
                         if let Some(invalidators) = invalidator_map.remove(&key) {
-                            invalidators.into_iter().for_each(|i| i.invalidate());
+                            invalidators
+                                .into_iter()
+                                .for_each(|i| i.invalidate("watcher detected change"));
                         }
                     }
                 }
@@ -222,7 +232,9 @@ impl DiskFileSystem {
                             .iter()
                             .any(|path_key| key.starts_with(&path_to_key(path_key)))
                     }) {
-                        invalidators.into_iter().for_each(|i| i.invalidate());
+                        invalidators
+                            .into_iter()
+                            .for_each(|i| i.invalidate("watcher detected change"));
                     }
                     paths.clear()
                 }

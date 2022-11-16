@@ -422,7 +422,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             if let Err(e) = tt.wait_task_completion(root_task, true).await {
                 println!("{}", e);
             }
-            let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+            let (elapsed, count, _) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
             println!(
                 "done in {} ({} task execution, {} tasks)",
                 FormatDuration(start.elapsed()),
@@ -431,13 +431,14 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             );
 
             loop {
-                let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+                let (elapsed, count, _) =
+                    tt.get_or_wait_update_info(Duration::from_millis(100)).await;
                 println!("updated {} tasks in {}", count, FormatDuration(elapsed));
             }
         } else {
             let result = tt.wait_task_completion(root_task, true).await;
             let dur = start.elapsed();
-            let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+            let (elapsed, count, _) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
             final_finish(tt, root_task, dur).await;
             let dur2 = start.elapsed();
             println!(
@@ -461,7 +462,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
         log_detail,
         log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
     }));
-    let task = tt.spawn_root_task(move || {
+    let task = tt.spawn_root_task("compilation", move || {
         let dir = dir.clone();
         let args = args.clone();
         let console_ui = console_ui.clone();

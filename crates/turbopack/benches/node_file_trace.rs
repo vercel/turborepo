@@ -68,7 +68,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
         let tests_root = bench_input.tests_root.clone();
         let input = bench_input.input.clone();
         async move {
-            let task = tt.spawn_once_task(async move {
+            let task = tt.spawn_once_task("initial compilation", async move {
                 let input_fs = DiskFileSystemVc::new("tests".to_string(), tests_root.clone());
                 let input = input_fs.root().join(&input);
 

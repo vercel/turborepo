@@ -42,7 +42,7 @@ impl ContentSource for TurboTasksSource {
         tokio::spawn({
             async move {
                 tokio::time::sleep(INVALIDATION_INTERVAL).await;
-                invalidator.invalidate();
+                invalidator.invalidate("turbo tasks visualization outdated (timeout)");
             }
         });
         let html = match path {

@@ -43,7 +43,7 @@ impl Counter {
         let mut lock = self.value.lock().unwrap();
         lock.0 += 1;
         if let Some(i) = lock.1.take() {
-            i.invalidate();
+            i.invalidate("counter increment");
         }
     }
 }

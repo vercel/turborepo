@@ -32,12 +32,15 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
 
     /// Run the update server loop.
     pub fn run(self, tt: &dyn TurboTasksApi, ws: HyperWebsocket) {
-        tt.run_once_process(Box::pin(async move {
-            if let Err(err) = self.run_internal(ws).await {
-                println!("[UpdateServer]: error {:#}", err);
-            }
-            Ok(())
-        }));
+        tt.run_once_process(
+            "WebSocket subscription",
+            Box::pin(async move {
+                if let Err(err) = self.run_internal(ws).await {
+                    println!("[UpdateServer]: error {:#}", err);
+                }
+                Ok(())
+            }),
+        );
     }
 
     async fn run_internal(self, ws: HyperWebsocket) -> Result<()> {
