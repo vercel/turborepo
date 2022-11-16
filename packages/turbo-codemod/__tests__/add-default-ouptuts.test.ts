@@ -59,7 +59,7 @@ describe("add-default-outputs", () => {
     const output = fs.readJSONSync(path.join(testDir, "turbo.json"));
 
     expect(output.pipeline["build-one"].outputs).toStrictEqual(["foo"]);
-    expect(output.pipeline["build-two"].outputs).toStrictEqual([]);
+    expect(output.pipeline["build-two"].outputs).toStrictEqual(undefined);
     expect(output.pipeline["build-three"].outputs).toStrictEqual([
       "dist/**",
       "build/**",

@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs-extra";
 import { error, ok, skip } from "../logger";
 
-const DEFAULT_OUTPUTS = ["dist/**", "build/**"];
+const DEFAULT_OUTPUTS = ["dist/**/*", "build/**/*"];
 
 interface TaskDefinition {
   outputs: [];
@@ -38,6 +38,9 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
     if (!taskDef.outputs) {
       ok(`Updating outputs for ${taskName}`);
       taskDef.outputs = DEFAULT_OUTPUTS;
+    } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
+      ok(`Removing outputs: [] from ${taskName} as that is now the default behavior`);
+      delete taskDep.outputs;
     } else {
       skip(`Skipping "${taskName}", it already has an outputs key defined`);
     }
