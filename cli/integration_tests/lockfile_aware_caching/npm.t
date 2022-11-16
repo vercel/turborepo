@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd) npm
 
 Populate cache
-  $ ${TURBO} build --filter=a
+  $ ${SHIM} build --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -18,7 +18,7 @@ Populate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-  $ ${TURBO} build --filter=b
+  $ ${SHIM} build --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -38,7 +38,7 @@ Bump dependency for b and rebuild
 Only b should have a cache miss
   $ patch package-lock.json package-lock.patch
   patching file package-lock.json
-  $ ${TURBO} build  --filter=a
+  $ ${SHIM} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -54,7 +54,7 @@ Only b should have a cache miss
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 
-  $ ${TURBO} build  --filter=b
+  $ ${SHIM} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -73,7 +73,7 @@ Only b should have a cache miss
 Bump of root workspace invalidates all packages
   $ patch package-lock.json turbo-bump.patch
   patching file package-lock.json
-  $ ${TURBO} build  --filter=a
+  $ ${SHIM} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -88,7 +88,7 @@ Bump of root workspace invalidates all packages
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-  $ ${TURBO} build  --filter=b
+  $ ${SHIM} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

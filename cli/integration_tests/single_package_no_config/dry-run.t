@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Check
-  $ ${TURBO} run build --dry --single-package
+  $ ${SHIM} run build --dry --single-package
   
   Tasks to Run
   build
@@ -17,7 +17,7 @@ Check
     Dependencies    =                        
     Dependendents   =                        
 
-  $ ${TURBO} run build --dry=json --single-package
+  $ ${SHIM} run build --dry=json --single-package
   {
     "tasks": [
       {
