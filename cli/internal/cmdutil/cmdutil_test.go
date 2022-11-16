@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vercel/turbo/cli/internal/config"
+
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"gotest.tools/v3/assert"
@@ -32,7 +34,7 @@ func TestTokenEnvVar(t *testing.T) {
 				t.Fatalf("setenv %v", err)
 			}
 
-			base, err := h.GetCmdBase(flags)
+			base, err := h.GetCmdBase(config.FlagSet{FlagSet: flags})
 			if err != nil {
 				t.Fatalf("failed to get command base %v", err)
 			}

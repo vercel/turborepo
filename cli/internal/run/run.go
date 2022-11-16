@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/colorcache"
+	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/daemon"
@@ -94,7 +95,8 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flagSet := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flagSet)
 			if err != nil {
 				return err
 			}
@@ -1059,10 +1061,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	cmd := exec.Command(ec.packageManager.Command, argsactual...)
-	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
-	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsoluteSystemPath to
-	// AbsoluteSystemPath
-	cmd.Dir = ec.repoRoot.UntypedJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
+	cmd.Dir = packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).ToString()
 	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
 	cmd.Env = append(os.Environ(), envs)
 

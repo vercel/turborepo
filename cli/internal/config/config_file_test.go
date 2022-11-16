@@ -14,7 +14,7 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddRepoConfigFlags(flags)
 
-	config, err := ReadRepoConfigFile(testDir, flags)
+	config, err := ReadRepoConfigFile(testDir, FlagSet{FlagSet: flags})
 	if err != nil {
 		t.Errorf("got error reading non-existent config file: %v, want <nil>", err)
 	}
@@ -51,7 +51,7 @@ func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 	apiURL := "http://my-login-url"
 	assert.NilError(t, flags.Set("api", apiURL), "flags.Set")
 
-	config, err := ReadRepoConfigFile(testConfigFile, flags)
+	config, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
@@ -77,7 +77,7 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
 	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
 
-	config, err := ReadRepoConfigFile(testConfigFile, flags)
+	config, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
@@ -102,14 +102,14 @@ func TestWriteRepoConfig(t *testing.T) {
 	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
 	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
 
-	initial, err := ReadRepoConfigFile(testConfigFile, flags)
+	initial, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
 	assert.NilError(t, err, "GetRepoConfig")
 	// setting the teamID should clear the slug, since it may have been from an old team
 	expectedTeamID := "my-team-id"
 	err = initial.SetTeamID(expectedTeamID)
 	assert.NilError(t, err, "SetTeamID")
 
-	config, err := ReadRepoConfigFile(testConfigFile, flags)
+	config, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
 	if err != nil {
 		t.Errorf("ReadRepoConfig err got %v, want <nil>", err)
 	}
@@ -128,7 +128,7 @@ func TestWriteUserConfig(t *testing.T) {
 	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	AddUserConfigFlags(flags)
 	// Non-existent config file should get empty values
-	userConfig, err := ReadUserConfigFile(configPath, flags)
+	userConfig, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, userConfig.Token(), "")
 	assert.Equal(t, userConfig.path, configPath)
@@ -137,7 +137,7 @@ func TestWriteUserConfig(t *testing.T) {
 	err = userConfig.SetToken(expectedToken)
 	assert.NilError(t, err, "SetToken")
 
-	config, err := ReadUserConfigFile(configPath, flags)
+	config, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, config.Token(), expectedToken)
 
@@ -145,7 +145,7 @@ func TestWriteUserConfig(t *testing.T) {
 	assert.NilError(t, err, "deleteConfigFile")
 	assert.Equal(t, configPath.FileExists(), false, "config file should be deleted")
 
-	final, err := ReadUserConfigFile(configPath, flags)
+	final, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, final.Token(), "")
 	assert.Equal(t, configPath.FileExists(), false, "config file should be deleted")
@@ -157,7 +157,7 @@ func TestUserConfigFlags(t *testing.T) {
 	AddUserConfigFlags(flags)
 
 	assert.NilError(t, flags.Set("token", "my-token"), "set flag")
-	userConfig, err := ReadUserConfigFile(configPath, flags)
+	userConfig, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, userConfig.Token(), "my-token")
 	assert.Equal(t, userConfig.path, configPath)
