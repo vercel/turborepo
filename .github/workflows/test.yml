@@ -13,10 +13,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   determine_jobs:
     name: Determine jobs to run
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Find PR Comment
         id: comment
@@ -65,6 +72,15 @@ jobs:
             Cargo.*
             .cargo/**
             rust-toolchain
+            !**.md
+            !**.mdx
+      - name: Rust Benchmark related changes
+        id: rust_bench
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            crates/next-dev/benches/**
+            !*.md
       - name: Go related changes
         id: go
         uses: technote-space/get-diff-action@v6
@@ -75,6 +91,20 @@ jobs:
             cli/**
             packages/**
             shim/**
+            !**.md
+            !**.mdx
+      - name: Examples related changes
+        id: examples
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            examples/**
+            cli/**/*.go
+            cli/go.mod
+            cli/go.sum
+            scripts/run-example.sh
+            !**.md
+            !**.mdx
       - name: Node.js related changes
         id: node
         uses: technote-space/get-diff-action@v6
@@ -91,15 +121,129 @@ jobs:
             packages/**
             docs/**
             *.md
+            *.mdx
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
+      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       node: ${{ steps.ci.outputs.diff != '' || steps.node.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/head/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
+
+  go_lint:
+    name: Go linting
+    runs-on: ubuntu-latest
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Protos
+        run: cd cli && make compile-protos
+
+      - name: golangci Linting
+        uses: golangci/golangci-lint-action@v3
+        with:
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: latest
+
+          # Optional: working directory, useful for monorepos
+          working-directory: cli
+
+          # Optional: golangci-lint command line arguments.
+          # args: --issues-exit-code=0
+          args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+
+          # Optional: show only new issues if it's a pull request. The default value is `false`.
+          # only-new-issues: true
+
+          # Optional: if set to true then the all caching functionality will be complete disabled,
+          #           takes precedence over all other caching options.
+          # skip-cache: true
+
+          # Optional: if set to true then the action don't cache or restore ~/go/pkg.
+          # skip-pkg-cache: true
+
+          # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
+          # skip-build-cache: true
+
+  go_examples:
+    name: Go Cli Examples
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.examples == 'true'
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        manager: [yarn, npm]
+        example: [basic, design-system, kitchen-sink, non-monorepo]
+        include:
+          - os: ubuntu-latest
+            manager: pnpm
+            example: with-pnpm
+          - os: macos-latest
+            manager: pnpm
+            example: with-pnpm
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Used by scripts/check-examples.sh
+      - name: Install Sponge
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install -y moreutils
+          else
+            brew install moreutils
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7.2.1
+
+      - name: Make sure pnpm always has a cache
+        shell: bash
+        run: |
+          mkdir -p `pnpm store path`
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: ${{ matrix.manager }}
+          cache-dependency-path: package.json
+
+      - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
+        shell: bash
+        env:
+          FORCE_COLOR: true
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_REMOTE_ONLY: true
+        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   rust_prepare:
     name: Check rust crates
@@ -359,6 +503,19 @@ jobs:
         timeout-minutes: 120
         env:
           TURBOPACK_BENCH_COUNTS: "100"
+          TURBOPACK_BENCH_PROGRESS: "1"
+        with:
+          command: test
+          args: --benches --release
+
+      - name: Run cargo test on benchmarks for other bundlers
+        uses: actions-rs/cargo@v1
+        if: needs.determine_jobs.outputs.rust_bench == 'true'
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_COUNTS: "100"
+          TURBOPACK_BENCH_PROGRESS: "1"
+          TURBOPACK_BENCH_BUNDLERS: "others"
         with:
           command: test
           args: --benches --release
@@ -473,7 +630,7 @@ jobs:
 
   rust_bench:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
+    if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.rust_bench == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -540,6 +697,7 @@ jobs:
         timeout-minutes: 180
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
+          TURBOPACK_BENCH_PROGRESS: 1
         with:
           command: bench
           args: ${{ matrix.bench.args }}
@@ -630,6 +788,9 @@ jobs:
   final:
     name: Ok
     needs:
+      - determine_jobs
+      - go_lint
+      - go_examples
       - rust_prepare
       - rust_lint
       - rust_test
@@ -654,6 +815,21 @@ jobs:
         run: |
           echo "The following steps have failed in CI" > comment.md
           echo >> comment.md
+      - name: Determine Jobs failed
+        if: always() && needs.determine_jobs.result != 'success' && needs.determine_jobs.result != 'skipped'
+        run: |
+          echo "- Determining jobs" >> failures.md
+          exit 1
+      - name: Go Linting failed
+        if: always() && needs.go_lint.result != 'success' && needs.go_lint.result != 'skipped'
+        run: |
+          echo "- Go lints" >> failures.md
+          exit 1
+      - name: Go Examples failed
+        if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
+        run: |
+          echo "- Go Examples" >> failures.md
+          exit 1
       - name: Rust Check failed
         if: always() && needs.rust_prepare.result != 'success' && needs.rust_prepare.result != 'skipped'
         run: |
