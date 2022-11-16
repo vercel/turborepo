@@ -105,5 +105,8 @@ describe("add-default-outputs", () => {
     }).toThrowError(
       `"turbo" key detected in package.json. Run npx @turbo/codemod create-turbo-config first`
     );
+
+    // @ts-ignore-next-line
+    cleanupFn();
   });
 });
