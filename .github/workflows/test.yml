@@ -74,6 +74,13 @@ jobs:
             rust-toolchain
             !**.md
             !**.mdx
+      - name: Rust Benchmark related changes
+        id: rust_bench
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            crates/next-dev/benches/**
+            !*.md
       - name: Go related changes
         id: go
         uses: technote-space/get-diff-action@v6
@@ -118,6 +125,7 @@ jobs:
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       node: ${{ steps.ci.outputs.diff != '' || steps.node.outputs.diff != '' }}
@@ -495,6 +503,19 @@ jobs:
         timeout-minutes: 120
         env:
           TURBOPACK_BENCH_COUNTS: "100"
+          TURBOPACK_BENCH_PROGRESS: "1"
+        with:
+          command: test
+          args: --benches --release
+
+      - name: Run cargo test on benchmarks for other bundlers
+        uses: actions-rs/cargo@v1
+        if: needs.determine_jobs.outputs.rust_bench == 'true'
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_COUNTS: "100"
+          TURBOPACK_BENCH_PROGRESS: "1"
+          TURBOPACK_BENCH_BUNDLERS: "others"
         with:
           command: test
           args: --benches --release
@@ -609,7 +630,7 @@ jobs:
 
   rust_bench:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
+    if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.rust_bench == 'true'
     strategy:
       fail-fast: false
       matrix:
