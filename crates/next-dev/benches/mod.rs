@@ -255,13 +255,24 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                     value = m.add(&value, &duration);
 
                                     let i: u64 = iter + 1;
-                                    if verbose && i != iters && i.count_ones() == 1 {
-                                        eprint!(
-                                            " [{:?} {:?}/{}]",
+
+                                    if i != iters {
+                                        // TODO(sokra) triggering HMR updates too fast can have
+                                        // weird effects
+                                        tokio::time::sleep(std::cmp::max(
                                             duration,
-                                            FormatDuration(value / (i as u32)),
-                                            i
-                                        );
+                                            Duration::from_millis(100),
+                                        ))
+                                        .await;
+
+                                        if verbose && i.count_ones() == 1 {
+                                            eprint!(
+                                                " [{:?} {:?}/{}]",
+                                                duration,
+                                                FormatDuration(value / (i as u32)),
+                                                i
+                                            );
+                                        }
                                     }
                                 }
 
