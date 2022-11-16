@@ -3,6 +3,7 @@ package prune
 import (
 	"bufio"
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -46,7 +47,8 @@ func GetCmd(helper *cmdutil.Helper) *cobra.Command {
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flags := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flags)
 			if err != nil {
 				return err
 			}

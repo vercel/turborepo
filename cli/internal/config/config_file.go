@@ -10,6 +10,53 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+// CLIConfigProvider is an interface for providing configuration values from the CLI
+// It can be implemented by either a pflag.FlagSet struct or a turbostate.Args struct.
+type CLIConfigProvider interface {
+	GetColor() bool
+	GetNoColor() bool
+	GetLogin() (string, error)
+	GetAPI() (string, error)
+	GetTeam() (string, error)
+	GetToken() (string, error)
+}
+
+// FlagSet is a wrapper so that the CLIConfigProvider interface can be implemented
+// on pflag.FlagSet.
+type FlagSet struct {
+	*pflag.FlagSet
+}
+
+// GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetColor() bool {
+	return p.Changed("color")
+}
+
+// GetNoColor returns the value of the `no-color` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetNoColor() bool {
+	return p.Changed("no-color")
+}
+
+// GetLogin returns the value of the `login` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetLogin() (string, error) {
+	return p.GetString("login")
+}
+
+// GetAPI returns the value of the `api` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetAPI() (string, error) {
+	return p.GetString("api")
+}
+
+// GetTeam returns the value of the `team` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetTeam() (string, error) {
+	return p.GetString("team")
+}
+
+// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
+func (p FlagSet) GetToken() (string, error) {
+	return p.GetString("token")
+}
+
 // RepoConfig is a configuration object for the logged-in turborepo.com user
 type RepoConfig struct {
 	repoViper *viper.Viper
@@ -97,15 +144,21 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
 	userViper.SetEnvPrefix("turbo")
 	userViper.MustBindEnv("token")
-	if err := userViper.BindPFlag("token", flags.Lookup("token")); err != nil {
+
+	token, err := cliConfig.GetToken()
+	if err != nil {
 		return nil, err
 	}
+	if token != "" {
+		userViper.Set("token", token)
+	}
+
 	if err := userViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -135,7 +188,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
@@ -146,21 +199,37 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, flags *pflag.FlagSet)
 	repoViper.MustBindEnv("teamid")
 	repoViper.SetDefault("apiurl", _defaultAPIURL)
 	repoViper.SetDefault("loginurl", _defaultLoginURL)
-	if err := repoViper.BindPFlag("loginurl", flags.Lookup("login")); err != nil {
+
+	login, err := cliConfig.GetLogin()
+	if err != nil {
 		return nil, err
 	}
-	if err := repoViper.BindPFlag("apiurl", flags.Lookup("api")); err != nil {
+	if login != "" {
+		repoViper.Set("loginurl", login)
+	}
+
+	api, err := cliConfig.GetAPI()
+	if err != nil {
 		return nil, err
 	}
-	if err := repoViper.BindPFlag("teamslug", flags.Lookup("team")); err != nil {
+	if api != "" {
+		repoViper.Set("apiurl", api)
+	}
+
+	team, err := cliConfig.GetTeam()
+	if err != nil {
 		return nil, err
 	}
+	if team != "" {
+		repoViper.Set("teamslug", team)
+	}
+
 	if err := repoViper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	// If team was set via commandline, don't read the teamId from the config file, as it
 	// won't necessarily match.
-	if flags.Changed("team") {
+	if team != "" {
 		repoViper.Set("teamid", "")
 	}
 	return &RepoConfig{
