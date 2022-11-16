@@ -54,8 +54,6 @@ func getDefaultOptions() *Opts {
 
 // RunOpts holds the options that control the execution of a turbo run
 type runOpts struct {
-	// Show a dot graph
-	dotGraph string
 	// Force execution to be serially one-at-a-time
 	concurrency int
 	// Whether to execute in parallel (defaults to false)
