@@ -83,7 +83,7 @@ Next, it uses `turbo run build --dry` to determine if the given workspace, _or a
 
 When deploying on [Vercel](https://vercel.com), `turbo-ignore` can make a more accurate decision by comparing between the current commit, and the last successfully deployed commit for the current branch.
 
-**NOTE:** By default on Vercel, if the branch has not been deployed, `turbo-ignore` will fall back to comparing against the previous commit. To always deploy the first commit to a new branch, this fallback behavior can be disabled with `--filter-fallback=false`.
+**NOTE:** By default on Vercel, if the branch has not been deployed, `turbo-ignore` will fall back to comparing against the previous commit. To always deploy the first commit of a new branch, this fallback behavior can be disabled with `--fallback=false`, or customized by providing the `ref` to compare against (defaults to `HEAD^1`).
 
 ## Releasing
 
