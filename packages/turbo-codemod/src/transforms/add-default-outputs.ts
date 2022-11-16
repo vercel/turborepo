@@ -24,12 +24,12 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
 
   // If `turbo` key is detected in package.json, require user to run the other codemod first.
   const packageJsonPath = path.join(root, "package.json");
-  // package.json should always exist, but if it doesn't, it would be a silly place to blow up this codemode
+  // package.json should always exist, but if it doesn't, it would be a silly place to blow up this codemod
   if (fs.existsSync(packageJsonPath)) {
     const packageJSON = fs.readJSONSync(packageJsonPath);
     if (packageJSON.turbo) {
       throw new Error(
-        `"turbo" key detected in package.json. Run npx @turbo/codemod create-turbo-config first`
+        "\"turbo\" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first"
       );
     }
   }
