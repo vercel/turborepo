@@ -44,6 +44,17 @@ type WorkspacesAlt struct {
 	Packages []string `json:"packages,omitempty"`
 }
 
+// TurboVersion returns the listed version of turbo listed as a regular or dev dependency
+func (p *PackageJSON) TurboVersion() (string, bool) {
+	if version, ok := p.Dependencies["turbo"]; ok {
+		return version, true
+	}
+	if version, ok := p.DevDependencies["turbo"]; ok {
+		return version, true
+	}
+	return "", false
+}
+
 func (r *Workspaces) UnmarshalJSON(data []byte) error {
 	var tmp = &WorkspacesAlt{}
 	if err := json.Unmarshal(data, tmp); err == nil {

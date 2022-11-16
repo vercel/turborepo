@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -33,6 +34,7 @@ type rawTurboJSON struct {
 	Pipeline Pipeline
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+	TurboVersion       string             `json:"turboVersion,omitempty"`
 }
 
 // TurboJSON is the root turborepo configuration
@@ -41,6 +43,7 @@ type TurboJSON struct {
 	GlobalEnv          []string
 	Pipeline           Pipeline
 	RemoteCacheOptions RemoteCacheOptions
+	TurboVersion       string
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
@@ -164,6 +167,7 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 
 	// Check if turbo key in package.json exists
 	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
+	_, hasPackageJSONTurboVersion := rootPackageJSON.TurboVersion()
 
 	// If the configFile exists, use that
 	if turboJSONPath.FileExists() {
@@ -177,6 +181,10 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 		if hasLegacyConfig {
 			log.Printf("[WARNING] Ignoring \"turbo\" key in package.json, using %s instead.", configFile)
 			rootPackageJSON.LegacyTurboConfig = nil
+		}
+
+		if hasPackageJSONTurboVersion && turboJSON.TurboVersion != "" {
+			return nil, fmt.Errorf("Found versions for turbo in both turbo.json and root package.json. Please delete the package.json dependency")
 		}
 
 		return turboJSON, nil
@@ -354,6 +362,15 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	// copy these over, we don't need any changes here.
 	c.Pipeline = raw.Pipeline
 	c.RemoteCacheOptions = raw.RemoteCacheOptions
+
+	if raw.TurboVersion != "" {
+		// possibly strict here
+		version, err := semver.StrictNewVersion(raw.TurboVersion)
+		if err != nil {
+			return errors.Wrap(err, "invalid version listed in turboVersion, only exact versions are allowed")
+		}
+		c.TurboVersion = version.String()
+	}
 
 	return nil
 }

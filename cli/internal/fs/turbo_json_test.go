@@ -83,6 +83,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
+	assert.Equal(t, "1.7.0", turboJSON.TurboVersion)
 }
 
 func Test_ReadTurboConfig_Legacy(t *testing.T) {
@@ -243,6 +244,40 @@ func Test_TaskOutputsSort(t *testing.T) {
 	assertIsSorted(t, sortedOutputs.Inclusions, "Inclusions")
 	assertIsSorted(t, sortedOutputs.Exclusions, "Exclusions")
 	assert.False(t, cmp.DeepEqual(taskOutputs, sortedOutputs)().Success())
+}
+
+func Test_ReadTurboConfig_VagueTurboVersion(t *testing.T) {
+	testDir := getTestDir(t, "vague_version")
+
+	packageJSONPath := testDir.UntypedJoin("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "turbo.json: invalid version listed in turboVersion, only exact versions are allowed: Invalid Semantic Version"
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_ReadTurboConfig_DoubleTurboVersion(t *testing.T) {
+	testDir := getTestDir(t, "double_version")
+
+	packageJSONPath := testDir.UntypedJoin("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+
+	expectedErrorMsg := "Found versions for turbo in both turbo.json and root package.json. Please delete the package.json dependency"
+
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 // Helpers
