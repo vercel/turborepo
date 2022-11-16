@@ -222,7 +222,14 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 .await
                                 .context(CHANGE_TIMEOUT_MESSAGE)??;
 
-                            Ok(m.end(start))
+                            let duration = m.end(start);
+
+                            // TODO(sokra) triggering HMR updates too fast can have
+                            // weird effects
+                            tokio::time::sleep(std::cmp::max(duration, Duration::from_millis(100)))
+                                .await;
+
+                            Ok(duration)
                         }
                         b.to_async(&runtime).try_iter_async(
                             &runtime,
@@ -264,14 +271,6 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 for iter in 0..iters {
                                     let duration = make_change(&mut guard, location, &m).await?;
                                     value = m.add(&value, &duration);
-
-                                    // TODO(sokra) triggering HMR updates too fast can have
-                                    // weird effects
-                                    tokio::time::sleep(std::cmp::max(
-                                        duration,
-                                        Duration::from_millis(100),
-                                    ))
-                                    .await;
 
                                     let i: u64 = iter + 1;
                                     if verbose && i != iters && i.count_ones() == 1 {
