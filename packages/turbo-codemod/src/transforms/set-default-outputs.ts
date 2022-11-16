@@ -2,6 +2,7 @@ import { Flags } from "../types";
 import path from "path";
 import fs from "fs-extra";
 import { error, ok, skip } from "../logger";
+import chalk from "chalk";
 
 const DEFAULT_OUTPUTS = ["dist/**/*", "build/**/*"];
 
@@ -49,16 +50,23 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
 
   const rootTurboJson: PipelineConfig = fs.readJsonSync(turboConfigPath);
 
+  let skippedCount = 0;
+  let modifiedCount = 0;
+  let deletedEmptyOutputs = 0;
+
   for (const [taskName, taskDef] of Object.entries(rootTurboJson.pipeline)) {
     if (!taskDef.outputs) {
       ok(`Updating outputs for ${taskName}`);
       taskDef.outputs = DEFAULT_OUTPUTS;
+      modifiedCount++;
     } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
       ok(
         `Removing outputs: [] from ${taskName} as that is now the default behavior`
       );
+      deletedEmptyOutputs++;
       delete taskDef.outputs;
     } else {
+      skippedCount++;
       skip(`Skipping "${taskName}", it already has an outputs key defined`);
     }
   }
@@ -71,5 +79,9 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
     console.log(JSON.stringify(rootTurboJson, null, 2));
   }
 
-  ok("Done");
+  console.log("All done.");
+  console.log("Results:");
+  console.log(chalk.green(`${modifiedCount} modified`));
+  console.log(chalk.red(`${deletedEmptyOutputs} unmodified`));
+  console.log(chalk.yellow(`${skippedCount} skipped`));
 }
