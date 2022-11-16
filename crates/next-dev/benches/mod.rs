@@ -227,9 +227,11 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                         b.to_async(&runtime).try_iter_async(
                             &runtime,
                             || async {
-                                let mut app =
-                                    PreparedApp::new(bundler, test_app.path().to_path_buf())
-                                        .await?;
+                                let mut app = PreparedApp::new_without_copy(
+                                    bundler,
+                                    test_app.path().to_path_buf(),
+                                )
+                                .await?;
                                 app.start_server()?;
                                 let mut guard = app.with_page(browser).await?;
                                 if bundler.has_interactivity() {
@@ -252,6 +254,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 // This should not be required.
                                 tokio::time::sleep(Duration::from_millis(5000)).await;
 
+                                // Make a warmup change
                                 make_change(&mut guard, location, &WallTime).await?;
 
                                 Ok(guard)
