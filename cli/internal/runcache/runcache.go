@@ -41,21 +41,21 @@ func AddFlags(opts *Opts, flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
 	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
 
-	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
-	if err != nil {
-		panic(err)
-	}
+	//	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
+	// if err != nil {
+	//		panic(err)
+	// }
 
-	flags.AddFlag(&pflag.Flag{
-		Name: "output-logs",
-		Usage: `Set type of process output logging. Use "full" to show
-all output. Use "hash-only" to show only turbo-computed
-task hashes. Use "new-only" to show only new output with
-only hashes for cached tasks. Use "none" to hide process
-output.`,
-		DefValue: defaultTaskOutputMode,
-		Value:    &taskOutputModeValue{opts: opts},
-	})
+	//	flags.AddFlag(&pflag.Flag{
+	//		Name: "output-logs",
+	//		Usage: `Set type of process output logging. Use "full" to show
+	//all output. Use "hash-only" to show only turbo-computed
+	//task hashes. Use "new-only" to show only new output with
+	//only hashes for cached tasks. Use "none" to hide process
+	//output.`,
+	//		DefValue: defaultTaskOutputMode,
+	//		Value:    &taskOutputModeValue{opts: opts},
+	//	})
 	_ = flags.Bool("stream", true, "Unused")
 	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
 		// fail fast if we've misconfigured our flags
@@ -79,16 +79,25 @@ func (l *taskOutputModeValue) String() string {
 	return taskOutputMode
 }
 
+func (opts *Opts) SetTaskOutputMode(value string) error {
+	outputMode, err := util.FromTaskOutputModeString(value)
+	if err != nil {
+		return fmt.Errorf("must be one of \"%v\"", TaskOutputModes())
+	}
+	opts.TaskOutputModeOverride = &outputMode
+	return nil
+}
+
 func (l *taskOutputModeValue) Set(value string) error {
 	outputMode, err := util.FromTaskOutputModeString(value)
 	if err != nil {
-		return fmt.Errorf("must be one of \"%v\"", l.Type())
+		return fmt.Errorf("must be one of \"%v\"", TaskOutputModes())
 	}
 	l.opts.TaskOutputModeOverride = &outputMode
 	return nil
 }
 
-func (l *taskOutputModeValue) Type() string {
+func TaskOutputModes() string {
 	var builder strings.Builder
 
 	first := true
@@ -101,8 +110,6 @@ func (l *taskOutputModeValue) Type() string {
 	}
 	return builder.String()
 }
-
-var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {

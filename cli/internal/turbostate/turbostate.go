@@ -60,6 +60,7 @@ type RunPayload struct {
 	RemoteOnly          bool     `json:"remote_only"`
 	Scope               []string `json:"scope"`
 	Since               string   `json:"since"`
+	SinglePackage       bool     `json:"single_package"`
 	Tasks               []string `json:"tasks"`
 }
 

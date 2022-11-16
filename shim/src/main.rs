@@ -97,7 +97,7 @@ impl TurboState {
                 let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
                 Ok(exit_code.try_into()?)
             }
-            Some(Command::Completion) => {
+            Some(Command::Completion {}) => {
                 let mut args = self
                     .raw_args
                     .iter()
@@ -295,6 +295,10 @@ fn main() -> Result<()> {
     if clap_args.version {
         println!("{}", get_version());
         process::exit(0);
+    }
+
+    if env::var("TEST_RUN").is_ok() {
+        clap_args.test_run = true;
     }
 
     let current_dir = if let Some(cwd) = &clap_args.cwd {

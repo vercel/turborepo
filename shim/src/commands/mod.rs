@@ -9,6 +9,7 @@ pub enum OutputLogsMode {
     None,
     HashOnly,
     NewOnly,
+    ErrorsOnly,
 }
 
 impl Default for OutputLogsMode {
@@ -99,9 +100,9 @@ pub enum DaemonCommand {
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 pub enum Command {
     /// Get the path to the Turbo binary
-    Bin,
+    Bin {},
     /// Generate the autocompletion script for the specified shell
-    Completion,
+    Completion {},
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod (default 4h0m0s)
@@ -124,7 +125,7 @@ pub enum Command {
         sso_team: Option<String>,
     },
     /// Logout to your Vercel account
-    Logout,
+    Logout {},
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(long)]
@@ -147,20 +148,20 @@ pub enum Command {
     Run(RunArgs),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink,
+    Unlink {},
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long = "cache-dir")]
+    #[clap(long)]
     pub cache_dir: Option<String>,
     /// Set the number of concurrent cache operations (default 10)
-    #[clap(long = "cache-workers", default_value_t = 10)]
+    #[clap(long, default_value_t = 10)]
     pub cache_workers: u32,
     /// Limit the concurrency of task execution. Use 1 for serial (i.e.
     /// one-at-a-time) execution.
-    #[clap(long = "concurrency")]
+    #[clap(long)]
     pub concurrency: Option<String>,
     /// Continue execution even if a task exits with an error or non-zero
     /// exit code. The default behavior is to bail
@@ -191,24 +192,24 @@ pub struct RunArgs {
     #[clap(long)]
     pub ignore: Vec<String>,
     /// Include the dependencies of tasks in execution.
-    #[clap(long = "include-dependencies")]
+    #[clap(long)]
     pub include_dependencies: bool,
     /// Avoid saving task results to the cache. Useful for development/watch
     /// tasks.
-    #[clap(long = "no-cache")]
+    #[clap(long)]
     pub no_cache: bool,
     /// Run without using turbo's daemon process
-    #[clap(long = "no-daemon")]
+    #[clap(long)]
     pub no_daemon: bool,
     /// Exclude dependent task consumers from execution.
-    #[clap(long = "no-deps")]
+    #[clap(long)]
     pub no_deps: bool,
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
     /// task hashes. Use "new-only" to show only new output with
     /// only hashes for cached tasks. Use "none" to hide process
     /// output. (default full)
-    #[clap(long = "output-logs", value_enum, default_value_t = OutputLogsMode::Full)]
+    #[clap(long, value_enum, default_value_t = OutputLogsMode::Full)]
     pub output_logs: OutputLogsMode,
     #[clap(long, hide = true)]
     pub only: bool,
@@ -222,7 +223,7 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long = "remote-only")]
+    #[clap(long)]
     pub remote_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
@@ -233,6 +234,10 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
-    #[clap(trailing_var_arg = true)]
+    /// Run turbo in single-package mode
+    #[clap(long)]
+    pub single_package: bool,
     pub tasks: Vec<String>,
+    #[clap(last = true)]
+    pub forwarded_args: Vec<String>,
 }

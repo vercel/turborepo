@@ -152,6 +152,11 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 	opts.runcacheOpts.SkipReads = runPayload.Force
 	opts.runcacheOpts.SkipWrites = runPayload.NoCache
 
+	err := opts.runcacheOpts.SetTaskOutputMode(runPayload.OutputLogs)
+	if err != nil {
+		return nil, err
+	}
+
 	// Run flags
 	if runPayload.Concurrency != "" {
 		concurrency, err := util.ParseConcurrency(runPayload.Concurrency)
@@ -165,7 +170,7 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 	opts.runOpts.continueOnError = runPayload.ContinueExecution
 	opts.runOpts.only = runPayload.Only
 	opts.runOpts.noDaemon = runPayload.NoDaemon
-	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
+	opts.runOpts.singlePackage = runPayload.SinglePackage || (executionState.RepoState.Mode == "SinglePackage")
 
 	if runPayload.Graph == _graphNoValue || runPayload.Graph == _graphTextValue {
 		opts.runOpts.graphDot = true
