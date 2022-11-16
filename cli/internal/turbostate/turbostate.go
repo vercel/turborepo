@@ -101,7 +101,6 @@ var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
 type CLIExecutionStateFromRust struct {
 	RepoState  RepoState          `json:"repo_state"`
 	ParsedArgs ParsedArgsFromRust `json:"parsed_args"`
-	RawArgs    []string           `json:"raw_args"`
 }
 
 // GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.

@@ -15,7 +15,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use clap::Parser;
 use serde::Serialize;
 
 use crate::{
@@ -41,8 +40,10 @@ enum RepoMode {
 /// The entire state of the execution, including args, repo state, etc.
 #[derive(Debug, Serialize)]
 struct TurboState {
+    /// The repo_state is not required for the `link`, `unlink`, `login`,
+    /// `logout` commands
+    repo_state: Option<RepoState>,
     parsed_args: Args,
-    raw_args: Vec<String>,
 }
 
 impl TryInto<GoString> for TurboState {
@@ -98,9 +99,8 @@ impl TurboState {
                 Ok(exit_code.try_into()?)
             }
             Some(Command::Completion {}) => {
-                let mut args = self
-                    .raw_args
-                    .iter()
+                let mut args = env::args()
+                    .skip(1)
                     .map(|s| {
                         let c_string = CString::new(s.as_str())?;
                         Ok(c_string.into_raw())
@@ -129,21 +129,8 @@ impl TurboState {
     /// * `turbo_state`: state for current execution
     ///
     /// returns: Result<i32, Error>
-    fn run_correct_turbo(mut self, current_dir: PathBuf) -> Result<i32> {
-        // We run this *before* the local turbo code because login/logout/link/unlink
-        // should work regardless of whether or not we're in a monorepo.
-        if matches!(
-            self.parsed_args.command,
-            Some(Command::Login { .. })
-                | Some(Command::Link { .. })
-                | Some(Command::Logout { .. })
-                | Some(Command::Unlink { .. })
-        ) {
-            let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
-            return Ok(exit_code.try_into()?);
-        }
-
-        let repo_state = RepoState::infer(&current_dir)?;
+    fn run_correct_turbo(mut self, current_dir: &Path) -> Result<i32> {
+        let repo_state = RepoState::infer(current_dir)?;
         let local_turbo_path = repo_state.root.join("node_modules").join(".bin").join({
             #[cfg(windows)]
             {
@@ -155,21 +142,35 @@ impl TurboState {
             }
         });
 
-        if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
-            self.raw_args.push("--single-package".to_string());
-        }
-
+        self.repo_state = Some(repo_state);
         let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
         // If the local turbo path doesn't exist or if we are local turbo, then we go
         // ahead and run the Go code linked in the current binary.
         if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
-            return self.run_current_turbo();
+            self.run_current_turbo()
+        } else {
+            // Otherwise we spawn the local turbo process.
+            self.spawn_local_turbo(&local_turbo_path)
+        }
+    }
+
+    fn spawn_local_turbo(&self, local_turbo_path: &Path) -> Result<i32> {
+        let mut raw_args: Vec<_> = env::args().skip(1).collect();
+        if matches!(
+            self.repo_state,
+            Some(RepoState {
+                mode: RepoMode::SinglePackage,
+                ..
+            })
+        ) && self.parsed_args.is_run_command()
+        {
+            raw_args.push("--single-package".to_string());
         }
 
         // Otherwise, we spawn a process that executes the local turbo
         // that we've found in node_modules/.bin/turbo.
         let mut command = process::Command::new(local_turbo_path)
-            .args(&self.raw_args)
+            .args(&raw_args)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
@@ -289,17 +290,7 @@ fn get_version() -> &'static str {
 }
 
 fn main() -> Result<()> {
-    let mut clap_args = Args::parse();
-    // --version flag doesn't work with ignore_errors in clap, so we have to handle
-    // it manually
-    if clap_args.version {
-        println!("{}", get_version());
-        process::exit(0);
-    }
-
-    if env::var("TEST_RUN").is_ok() {
-        clap_args.test_run = true;
-    }
+    let mut clap_args = Args::new()?;
 
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
@@ -309,24 +300,29 @@ fn main() -> Result<()> {
 
     clap_args.cwd = Some(current_dir.to_string_lossy().to_string());
 
-    let args: Vec<_> = env::args().skip(1).collect();
-    if args.is_empty() {
-        process::exit(1);
-    }
-
     let turbo_state = TurboState {
+        repo_state: None,
         parsed_args: clap_args,
-        raw_args: env::args().skip(1).collect(),
     };
 
-    if turbo_state.parsed_args.test_run {
-        println!("Turbo State: {:#?}", turbo_state);
+    // We run this *before* doing any inference because login/logout/link/unlink
+    // should work regardless of whether or not we're in a monorepo.
+    if matches!(
+        turbo_state.parsed_args.command,
+        Some(Command::Login { .. })
+            | Some(Command::Link { .. })
+            | Some(Command::Logout { .. })
+            | Some(Command::Unlink { .. })
+    ) {
+        let serialized_state = turbo_state.try_into()?;
+        let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
+        process::exit(exit_code.try_into()?);
     }
 
-    let exit_code = match turbo_state.run_correct_turbo(current_dir) {
+    let exit_code = match turbo_state.run_correct_turbo(&current_dir) {
         Ok(exit_code) => exit_code,
         Err(e) => {
-            eprintln!("failed {:?}", e);
+            eprintln!("failed: {:?}", e);
             2
         }
     };

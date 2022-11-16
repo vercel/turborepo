@@ -1,7 +1,12 @@
 pub(crate) mod bin;
 
+use std::{env, process};
+
+use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
+
+use crate::get_version;
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -92,6 +97,24 @@ pub enum DaemonCommand {
     },
     /// Stops the turbo daemon
     Stop,
+}
+
+impl Args {
+    pub fn new() -> Result<Self> {
+        let mut clap_args = Args::parse();
+        // --version flag doesn't work with ignore_errors in clap, so we have to handle
+        // it manually
+        if clap_args.version {
+            println!("{}", get_version());
+            process::exit(0);
+        }
+
+        if env::var("TEST_RUN").is_ok() {
+            clap_args.test_run = true;
+        }
+
+        Ok(clap_args)
+    }
 }
 
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
