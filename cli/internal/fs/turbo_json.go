@@ -277,7 +277,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
-			// log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
