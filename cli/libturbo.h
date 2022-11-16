@@ -75,6 +75,7 @@ extern "C" {
 #endif
 
 extern unsigned int nativeRunWithArgs(int argc, char** argv);
+extern unsigned int nativeRunWithTurboState(GoString turboStateString);
 
 #ifdef __cplusplus
 }

@@ -6,18 +6,20 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/mitchellh/go-homedir"
+
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
+
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/util/browser"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
-	"github.com/mitchellh/go-homedir"
 )
 
 type link struct {
@@ -38,48 +40,39 @@ type linkAPIClient interface {
 	GetCachingStatus() (util.CachingStatus, error)
 }
 
-// NewLinkCommand returns the cobra subcommand for turbo link
-func NewLinkCommand(helper *cmdutil.Helper) *cobra.Command {
-	return getCmd(helper)
-}
-
-func getCmd(helper *cmdutil.Helper) *cobra.Command {
-	var dontModifyGitIgnore bool
-	cmd := &cobra.Command{
-		Use:           "link",
-		Short:         "Link your local directory to a Vercel organization and enable remote caching.",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
-			if err != nil {
-				return err
-			}
-			link := &link{
-				base:                base,
-				modifyGitIgnore:     !dontModifyGitIgnore,
-				apiClient:           base.APIClient,
-				promptSetup:         promptSetup,
-				promptTeam:          promptTeam,
-				promptEnableCaching: promptEnableCaching,
-				openBrowser:         browser.OpenBrowser,
-			}
-			err = link.run()
-			if err != nil {
-				if errors.Is(err, errUserCanceled) {
-					base.UI.Info("Canceled. Turborepo not set up.")
-				} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
-					base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
-				} else {
-					link.logError(err)
-				}
-				return err
-			}
-			return nil
-		},
+// RunLink executes the `link` command.
+func RunLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
 	}
-	cmd.Flags().BoolVar(&dontModifyGitIgnore, "no-gitignore", false, "Do not create or modify .gitignore (default false)")
-	return cmd
+
+	if args.TestRun {
+		base.UI.Info("Link test run successful")
+		return nil
+	}
+
+	link := &link{
+		base:                base,
+		modifyGitIgnore:     !args.Command.Link.DontModifyGitIgnore,
+		apiClient:           base.APIClient,
+		promptSetup:         promptSetup,
+		promptTeam:          promptTeam,
+		promptEnableCaching: promptEnableCaching,
+		openBrowser:         browser.OpenBrowser,
+	}
+	err = link.run()
+	if err != nil {
+		if errors.Is(err, errUserCanceled) {
+			base.UI.Info("Canceled. Turborepo not set up.")
+		} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
+			base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+		} else {
+			link.logError(err)
+		}
+		return err
+	}
+	return nil
 }
 
 var errUserCanceled = errors.New("canceled")
@@ -102,6 +95,7 @@ func (l *link) run() error {
 		return fmt.Errorf("could figure out file path.\n%w", err)
 	}
 	repoLocation := strings.Replace(currentDir, dir, "~", 1)
+
 	shouldSetup, err := l.promptSetup(repoLocation)
 	if err != nil {
 		return err
