@@ -29,7 +29,10 @@ use turbo_tasks::{
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
-use turbopack_core::{issue::IssueSeverity, resolve::parse::RequestVc};
+use turbopack_core::{
+    issue::IssueSeverity,
+    resolve::{parse::RequestVc, pattern::QueryMapVc},
+};
 use turbopack_dev_server::{
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
@@ -290,9 +293,11 @@ async fn source(
         .iter()
         .map(|r| match r {
             EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
-            EntryRequest::Module(m, p) => {
-                RequestVc::module(m.clone(), Value::new(p.clone().into()))
-            }
+            EntryRequest::Module(m, p) => RequestVc::module(
+                m.clone(),
+                Value::new(p.clone().into()),
+                QueryMapVc::cell(None),
+            ),
         })
         .collect();
 
