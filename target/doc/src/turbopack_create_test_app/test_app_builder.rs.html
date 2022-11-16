@@ -408,6 +408,24 @@
 <span id="408">408</span>
 <span id="409">409</span>
 <span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::VecDeque,
     fs::{create_dir_all, File},
@@ -483,6 +501,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
         queue.push_back(src.join(<span class="string">&quot;triangle.jsx&quot;</span>));
         remaining_modules -= <span class="number">1</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>is_root = <span class="bool-val">true</span>;
 
         <span class="kw">while let </span><span class="prelude-val">Some</span>(file) = queue.pop_front() {
             <span class="kw">let </span>leaf = remaining_modules == <span class="number">0
@@ -558,6 +577,15 @@ export default React.memo(Triangle);
                     })
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                 {
+                    <span class="kw">let </span>(extra_imports, extra) = <span class="kw">if </span>is_root {
+                        is_root = <span class="bool-val">false</span>;
+                        (
+                            <span class="string">&quot;import Detector from \&quot;./detector.jsx\&quot;;\n&quot;</span>,
+                            <span class="string">&quot;\n        &lt;Detector /&gt;&quot;</span>,
+                        )
+                    } <span class="kw">else </span>{
+                        (<span class="string">&quot;&quot;</span>, <span class="string">&quot;&quot;</span>)
+                    };
                     File::create(<span class="kw-2">&amp;</span>file)
                         .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;creating file with children {}&quot;</span>, file.display()))<span class="question-mark">?
                         </span>.write_all(
@@ -566,7 +594,7 @@ export default React.memo(Triangle);
 {a}
 {b}
 {c}
-
+{extra_imports}
 function Container({{ style }}) {{
     return &lt;&gt;
         &lt;g transform=&quot;translate(0 -2.16)   scale(0.5 0.5)&quot;&gt;
@@ -577,7 +605,7 @@ function Container({{ style }}) {{
         &lt;/g&gt;
         &lt;g transform=&quot;translate(2.5 2.16)  scale(0.5 0.5)&quot;&gt;
             {c_}
-        &lt;/g&gt;
+        &lt;/g&gt;{extra}
     &lt;/&gt;;
 }}
 
@@ -600,9 +628,6 @@ import { createRoot } from &quot;react-dom/client&quot;;
 import Triangle from &quot;./triangle.jsx&quot;;
 
 function App() {
-    React.useEffect(() =&gt; {
-        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
-    })
     return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ }}&gt;
         &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
     &lt;/svg&gt;
@@ -626,9 +651,6 @@ createRoot(root).render(&lt;App /&gt;);
 import Triangle from &quot;../triangle.jsx&quot;;
 
 export default function Page() {
-    React.useEffect(() =&gt; {
-        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
-    })
     return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
         &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
     &lt;/svg&gt;
@@ -644,9 +666,6 @@ export default function Page() {
 import Triangle from &quot;../triangle.jsx&quot;;
 
 export default function Page() {
-    React.useEffect(() =&gt; {
-        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
-    })
     return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
         &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
     &lt;/svg&gt;
@@ -682,15 +701,32 @@ export default function Page() {
             </span>.write_all(bootstrap_app_page.as_bytes())
             .context(<span class="string">&quot;writing bootstrap app page&quot;</span>)<span class="question-mark">?</span>;
 
+        <span class="comment">// The component is used to measure hydration and commit time for app/page.jsx
+        </span><span class="kw">let </span>detector_component = <span class="string">r#&quot;&quot;use client&quot;;
+
+import React from &quot;react&quot;;
+
+export default function Detector({ message }) {
+    React.useEffect(() =&gt; {
+        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
+    });
+    React.useEffect(() =&gt; {
+        message &amp;&amp; globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(message);
+    }, [message]);
+    return null;
+}
+&quot;#</span>;
+        File::create(src.join(<span class="string">&quot;detector.jsx&quot;</span>))
+            .context(<span class="string">&quot;creating detector component&quot;</span>)<span class="question-mark">?
+            </span>.write_all(detector_component.as_bytes())
+            .context(<span class="string">&quot;writing detector component&quot;</span>)<span class="question-mark">?</span>;
+
         <span class="comment">// The page is e. g. used by Next.js
         </span><span class="kw">let </span>bootstrap_app_client_page = <span class="string">r#&quot;&quot;use client&quot;;
 import React from &quot;react&quot;;
 import Triangle from &quot;../../triangle.jsx&quot;;
 
 export default function Page() {
-    React.useEffect(() =&gt; {
-        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
-    })
     return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
         &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
     &lt;/svg&gt;
