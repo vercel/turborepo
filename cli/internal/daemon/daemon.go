@@ -75,8 +75,8 @@ func (d *daemon) logError(err error) {
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-// RunDaemon executes the root daemon command
-func RunDaemon(ctx context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
+// ExecuteDaemon executes the root daemon command
+func ExecuteDaemon(ctx context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	if args.Command.Daemon.Command != "" {
 		var subcommandError error
 		if args.Command.Daemon.Command == "Status" {

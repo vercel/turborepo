@@ -17,6 +17,7 @@ var (
 	_positiveInfinity = 1
 )
 
+// ParseConcurrency parses a concurrency value, which can be a number (e.g. 2) or a percentage (e.g. 50%).
 func ParseConcurrency(concurrencyRaw string) (int, error) {
 	if strings.HasSuffix(concurrencyRaw, "%") {
 		if percent, err := strconv.ParseFloat(concurrencyRaw[:len(concurrencyRaw)-1], 64); err != nil {

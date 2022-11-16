@@ -23,8 +23,8 @@ type opts struct {
 	outputDir string
 }
 
-// RunPrune executes the `prune` command.
-func RunPrune(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+// ExecutePrune executes the `prune` command.
+func ExecutePrune(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err

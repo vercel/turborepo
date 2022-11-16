@@ -125,19 +125,19 @@ func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion 
 	go func() {
 		command := state.ParsedArgs.Command
 		if command.Link != nil {
-			execErr = login.RunLink(helper, &state.ParsedArgs)
+			execErr = login.ExecuteLink(helper, &state.ParsedArgs)
 		} else if command.Login != nil {
-			execErr = login.RunLogin(ctx, helper, &state.ParsedArgs)
+			execErr = login.ExecuteLogin(ctx, helper, &state.ParsedArgs)
 		} else if command.Logout != nil {
-			execErr = auth.RunLogout(helper, &state.ParsedArgs)
+			execErr = auth.ExecuteLogout(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
-			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
+			execErr = auth.ExecuteUnlink(helper, &state.ParsedArgs)
 		} else if command.Daemon != nil {
-			execErr = daemon.RunDaemon(ctx, helper, signalWatcher, &state.ParsedArgs)
+			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, &state.ParsedArgs)
 		} else if command.Prune != nil {
-			execErr = prune.RunPrune(helper, &state.ParsedArgs)
+			execErr = prune.ExecutePrune(helper, &state.ParsedArgs)
 		} else if command.Run != nil {
-			execErr = run.RunRun(ctx, helper, signalWatcher, &state)
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &state)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}

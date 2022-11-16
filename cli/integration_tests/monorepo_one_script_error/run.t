@@ -8,7 +8,13 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:error: cache miss, executing ab251d5df2b0cdc6
+  my-app:okay: cache miss, executing 5eaa36f5c1d36f8d
+  my-app:okay: 
+  my-app:okay: > okay
+  my-app:okay: > echo 'working'
+  my-app:okay: 
+  my-app:okay: working
+  my-app:error: cache miss, executing 19a93de426a177b1
   my-app:error: 
   my-app:error: > error
   my-app:error: > echo 'intentionally failing' && exit 2
@@ -21,19 +27,25 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   my-app:error: ERROR: command finished with error: command \(.*/run\.t/apps/my-app\) npm run error exited \(1\) (re)
   command \(.*/run.t/apps/my-app\) npm run error exited \(1\) (re)
   
-   Tasks:    0 successful, 1 total
-  Cached:    0 cached, 1 total
+   Tasks:    1 successful, 2 total
+  Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
    ERROR  run failed: command  exited (1)
   [1]
 
-Make sure it isn't cached
+Make sure error isn't cached
   $ ${TURBO} error
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:error: cache miss, executing ab251d5df2b0cdc6
+  my-app:okay: cache hit, replaying output 5eaa36f5c1d36f8d
+  my-app:okay: 
+  my-app:okay: > okay
+  my-app:okay: > echo 'working'
+  my-app:okay: 
+  my-app:okay: working
+  my-app:error: cache miss, executing 19a93de426a177b1
   my-app:error: 
   my-app:error: > error
   my-app:error: > echo 'intentionally failing' && exit 2
@@ -46,17 +58,17 @@ Make sure it isn't cached
   my-app:error: ERROR: command finished with error: command \(.*/run\.t/apps/my-app\) npm run error exited \(1\) (re)
   command \(.*/run.t/apps/my-app\) npm run error exited \(1\) (re)
   
-   Tasks:    0 successful, 1 total
-  Cached:    0 cached, 1 total
+   Tasks:    1 successful, 2 total
+  Cached:    1 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
    ERROR  run failed: command  exited (1)
   [1]
 
 Running with --output-mode=errors-only gives error output only
-  $ ${TURBO} --output-logs=errors-only error okay
+  $ ${TURBO} --output-logs=errors-only error
   \xe2\x80\xa2 Packages in scope: my-app (esc)
-  \xe2\x80\xa2 Running error, okay in 1 packages (esc)
+  \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:error: ERROR: command finished with error: command \(.*/run\.t/apps/my-app\) npm run error exited \(1\) (re)
   my-app:error: 
@@ -71,7 +83,7 @@ Running with --output-mode=errors-only gives error output only
   command \(.*/run.t/apps/my-app\) npm run error exited \(1\) (re)
   
    Tasks:    1 successful, 2 total
-  Cached:    0 cached, 2 total
+  Cached:    1 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
    ERROR  run failed: command  exited (1)

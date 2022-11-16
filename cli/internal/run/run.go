@@ -81,8 +81,8 @@ occurred again).
 Arguments passed after '--' will be passed through to the named tasks.
 `
 
-// RunRun executes the run command
-func RunRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
+// ExecuteRun executes the run command
+func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
 	args := executionState.ParsedArgs
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
@@ -107,47 +107,6 @@ func RunRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signal
 	}
 	return nil
 }
-
-//// GetCmd returns the run command
-//func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
-//	var opts *Opts
-//	var flags *pflag.FlagSet
-//
-//	cmd := &cobra.Command{
-//		Use:                   "run <task> [...<task>] [<flags>] -- <args passed to tasks>",
-//		Short:                 "Run tasks across projects in your monorepo",
-//		Long:                  _cmdLong,
-//		SilenceUsage:          true,
-//		SilenceErrors:         true,
-//		DisableFlagsInUseLine: true,
-//		RunE: func(cmd *cobra.Command, args []string) error {
-//			flags := config.FlagSet{FlagSet: cmd.Flags()}
-//			base, err := helper.GetCmdBase(flags)
-//			if err != nil {
-//				return err
-//			}
-//			tasks, passThroughArgs := parseTasksAndPassthroughArgs(args, cmd.Flags())
-//			if len(tasks) == 0 {
-//				return errors.New("at least one task must be specified")
-//			}
-//			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
-//			opts.runOpts.singlePackage = packageMode == packagemanager.Single
-//
-//			opts.runOpts.passThroughArgs = passThroughArgs
-//			run := configureRun(base, opts, signalWatcher)
-//			ctx := cmd.Context()
-//			if err := run.run(ctx, tasks); err != nil {
-//				base.LogError("run failed: %v", err)
-//				return err
-//			}
-//			return nil
-//		},
-//	}
-//
-//	flags = cmd.Flags()
-//	opts = optsFromFlags(flags)
-//	return cmd
-//}
 
 func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
 	if argSplit := flags.ArgsLenAtDash(); argSplit != -1 {

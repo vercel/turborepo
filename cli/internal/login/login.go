@@ -22,8 +22,8 @@ const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
-// RunLogin executes the `login` command.
-func RunLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+// ExecuteLogin executes the `login` command.
+func ExecuteLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err

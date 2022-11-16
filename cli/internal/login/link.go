@@ -40,8 +40,8 @@ type linkAPIClient interface {
 	GetCachingStatus() (util.CachingStatus, error)
 }
 
-// RunLink executes the `link` command.
-func RunLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+// ExecuteLink executes the `link` command.
+func ExecuteLink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err

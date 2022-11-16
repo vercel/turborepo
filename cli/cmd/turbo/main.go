@@ -32,7 +32,7 @@ func nativeRunWithTurboState(turboStateString string) C.uint {
 	var turboState turbostate.CLIExecutionStateFromRust
 	err := json.Unmarshal([]byte(turboStateString), &turboState)
 	if err != nil {
-		fmt.Printf("Error unmarshalling turboState: %v\n", err)
+		fmt.Printf("Error unmarshalling turboState: %v\n Turbo state string: %v\n", err, turboStateString)
 		return 1
 	}
 	exitCode := cmd.RunWithTurboState(turboState, turboVersion)
