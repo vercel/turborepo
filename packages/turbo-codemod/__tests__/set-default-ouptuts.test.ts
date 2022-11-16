@@ -43,7 +43,7 @@ describe("add-default-outputs", () => {
   });
 
   test("basic run", () => {
-    const fixture = path.join(FIXTURES_DIR, "thingie");
+    const fixture = path.join(FIXTURES_DIR, "basic");
     const [testDir, cleanupFn] = useFixture(fixture);
 
     const flags = {
@@ -70,7 +70,7 @@ describe("add-default-outputs", () => {
   });
 
   test("dry run", () => {
-    const fixture = path.join(FIXTURES_DIR, "thingie");
+    const fixture = path.join(FIXTURES_DIR, "basic");
     const [testDir, cleanupFn] = useFixture(fixture);
 
     // @ts-ignore
