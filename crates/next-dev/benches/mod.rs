@@ -216,16 +216,14 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                             commit()?;
 
                             // Wait for the change introduced above to be reflected at
-                            // runtime. This expects HMR
-                            // or automatic reloading to occur.
+                            // runtime. This expects HMR or automatic reloading to occur.
                             timeout(MAX_UPDATE_TIMEOUT, guard.wait_for_binding(&msg))
                                 .await
                                 .context(CHANGE_TIMEOUT_MESSAGE)??;
 
                             let duration = m.end(start);
 
-                            // TODO(sokra) triggering HMR updates too fast can have
-                            // weird effects
+                            // TODO(sokra) triggering HMR updates too fast can have weird effects
                             tokio::time::sleep(std::cmp::max(duration, Duration::from_millis(100)))
                                 .await;
 

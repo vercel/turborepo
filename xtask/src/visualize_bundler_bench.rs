@@ -58,6 +58,8 @@ pub fn generate(summary_path: PathBuf) -> Result<()> {
                 .split_ascii_whitespace()
                 .collect::<Vec<&str>>()[0]
                 .parse()?,
+            // we want to use slope instead of mean when available since this is a better
+            // estimation of the real performance values when iterations go to infinity
             bench
                 .estimates
                 .slope
