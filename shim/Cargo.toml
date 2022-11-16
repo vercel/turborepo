@@ -10,12 +10,14 @@ build-target = "0.4.0"
 bindgen = "0.61.0"
 
 [dev-dependencies]
-assert_cmd = "2.0.4"
+assert_cmd = "2.0.6"
 itertools = "0.10.5"
 
 [dependencies]
 anyhow = { version = "1.0.65", features = ["backtrace"] }
-clap = { version = "4.0.18", features = ["derive"] }
+# Because we use ignore_errors in clap, we have to stick to v3 instead of v4
+# due to issues such as: https://github.com/clap-rs/clap/issues/4391
+clap = { version = "3.2.23", features = ["derive"] }
 globset = "0.4.9"
 predicates = "2.1.1"
 serde = { version = "1.0.145", features = ["derive"] }

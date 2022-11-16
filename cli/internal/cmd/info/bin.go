@@ -3,6 +3,8 @@ package info
 import (
 	"os"
 
+	"github.com/vercel/turbo/cli/internal/config"
+
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 
 	"github.com/spf13/cobra"
@@ -14,7 +16,7 @@ func BinCmd(helper *cmdutil.Helper) *cobra.Command {
 		Use:   "bin",
 		Short: "Get the path to the Turbo binary",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			base, err := helper.GetCmdBase(config.FlagSet{FlagSet: cmd.Flags()})
 			if err != nil {
 				return err
 			}

@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/vercel/turbo/cli/internal/config"
+
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
@@ -84,7 +86,8 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flags := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flags)
 			if err != nil {
 				return err
 			}
