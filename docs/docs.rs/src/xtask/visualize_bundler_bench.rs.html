@@ -173,6 +173,11 @@
 <span id="173">173</span>
 <span id="174">174</span>
 <span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{hash_map::Entry, BTreeMap, HashMap},
     fs::{<span class="self">self</span>, File},
@@ -233,7 +238,12 @@
                 </span>.split_ascii_whitespace()
                 .collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;()[<span class="number">0</span>]
                 .parse()<span class="question-mark">?</span>,
-            bench.estimates.mean,
+            <span class="comment">// we want to use slope instead of mean when available since this is a better
+            // estimation of the real performance values when iterations go to infinity
+            </span>bench
+                .estimates
+                .slope
+                .unwrap_or_else(|| bench.estimates.mean),
         );
     }
 

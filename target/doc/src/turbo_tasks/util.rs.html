@@ -58,7 +58,32 @@
 <span id="58">58</span>
 <span id="59">59</span>
 <span id="60">60</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Display, sync::Arc, time::Duration};
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+    time::Duration,
+};
 
 <span class="kw">use </span>anyhow::Error;
 
@@ -113,6 +138,23 @@
         }
         <span class="kw">let </span>ms = <span class="self">self</span>.<span class="number">0</span>.as_millis();
         <span class="kw">if </span>ms &gt; <span class="number">10 </span>{
+            <span class="kw">return </span><span class="macro">write!</span>(f, <span class="string">&quot;{}ms&quot;</span>, ms);
+        }
+        <span class="macro">write!</span>(f, <span class="string">&quot;{}ms&quot;</span>, (<span class="self">self</span>.<span class="number">0</span>.as_micros() <span class="kw">as </span>f32) / <span class="number">1000.0</span>)
+    }
+}
+
+<span class="kw">impl </span>Debug <span class="kw">for </span>FormatDuration {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="kw">let </span>s = <span class="self">self</span>.<span class="number">0</span>.as_secs();
+        <span class="kw">if </span>s &gt; <span class="number">100 </span>{
+            <span class="kw">return </span><span class="macro">write!</span>(f, <span class="string">&quot;{}s&quot;</span>, s);
+        }
+        <span class="kw">let </span>ms = <span class="self">self</span>.<span class="number">0</span>.as_millis();
+        <span class="kw">if </span>ms &gt; <span class="number">10000 </span>{
+            <span class="kw">return </span><span class="macro">write!</span>(f, <span class="string">&quot;{:.2}s&quot;</span>, (ms <span class="kw">as </span>f32) / <span class="number">1000.0</span>);
+        }
+        <span class="kw">if </span>ms &gt; <span class="number">100 </span>{
             <span class="kw">return </span><span class="macro">write!</span>(f, <span class="string">&quot;{}ms&quot;</span>, ms);
         }
         <span class="macro">write!</span>(f, <span class="string">&quot;{}ms&quot;</span>, (<span class="self">self</span>.<span class="number">0</span>.as_micros() <span class="kw">as </span>f32) / <span class="number">1000.0</span>)
