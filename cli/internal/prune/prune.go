@@ -144,7 +144,7 @@ func (p *prune) prune(opts *opts) error {
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
 	targets := []string{opts.scope}
-	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
+	internalDeps, err := ctx.WorkspaceGraph.Ancestors(opts.scope)
 	if err != nil {
 		return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
 	}

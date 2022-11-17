@@ -50,12 +50,12 @@ func (w *Warnings) append(err error) {
 // Context of the CLI
 type Context struct {
 	// TODO(gsoltis): should the RootPackageJSON be included in WorkspaceInfos?
-	WorkspaceInfos   graph.WorkspaceInfos
-	PackageNames     []string
-	TopologicalGraph dag.AcyclicGraph
-	RootNode         string
-	Lockfile         lockfile.Lockfile
-	PackageManager   *packagemanager.PackageManager
+	WorkspaceInfos graph.WorkspaceInfos
+	PackageNames   []string
+	WorkspaceGraph dag.AcyclicGraph
+	RootNode       string
+	Lockfile       lockfile.Lockfile
+	PackageManager *packagemanager.PackageManager
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -136,7 +136,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 		WorkspaceInfos: workspaceInfos,
 		RootNode:       core.ROOT_NODE_NAME,
 	}
-	c.TopologicalGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
+	c.WorkspaceGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
 	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
 	if err != nil {
 		return nil, err
@@ -286,7 +286,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 	for depName, depVersion := range depMap {
 		if item, ok := c.WorkspaceInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
-			c.TopologicalGraph.Connect(dag.BasicEdge(vertexName, depName))
+			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
 			externalUnresolvedDepsSet.Add(depName)
 		}
@@ -319,7 +319,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
-		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
+		c.WorkspaceGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
 	}
 	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
 	for _, v := range externalDepSet.ToSlice() {
@@ -353,7 +353,7 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 		if err != nil {
 			return err
 		}
-		c.TopologicalGraph.Add(pkg.Name)
+		c.WorkspaceGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
 		if c.WorkspaceInfos[pkg.Name] != nil {

@@ -17,8 +17,8 @@ type WorkspaceInfos map[string]*fs.PackageJSON
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
 type CompleteGraph struct {
-	// TopologicalGraph expresses the dependencies between packages
-	TopologicalGraph dag.AcyclicGraph
+	// WorkspaceGraph expresses the dependencies between packages
+	WorkspaceGraph dag.AcyclicGraph
 
 	// Pipeline is config from turbo.json
 	Pipeline fs.Pipeline

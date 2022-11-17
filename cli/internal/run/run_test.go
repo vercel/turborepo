@@ -333,9 +333,9 @@ func Test_dontSquashTasks(t *testing.T) {
 	}
 
 	completeGraph := &graph.CompleteGraph{
-		TopologicalGraph: *topoGraph,
-		Pipeline:         pipeline,
-		WorkspaceInfos:   workspaceInfos,
+		WorkspaceGraph: *topoGraph,
+		Pipeline:       pipeline,
+		WorkspaceInfos: workspaceInfos,
 	}
 
 	engine, err := buildTaskGraphEngine(completeGraph, rs)
@@ -373,8 +373,8 @@ func Test_taskSelfRef(t *testing.T) {
 	}
 
 	completeGraph := &graph.CompleteGraph{
-		TopologicalGraph: *topoGraph,
-		Pipeline:         pipeline,
+		WorkspaceGraph: *topoGraph,
+		Pipeline:       pipeline,
 	}
 
 	_, err := buildTaskGraphEngine(completeGraph, rs)

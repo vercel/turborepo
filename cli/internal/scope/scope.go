@@ -115,7 +115,7 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
-		Graph:                  &ctx.TopologicalGraph,
+		Graph:                  &ctx.WorkspaceGraph,
 		WorkspaceInfos:         ctx.WorkspaceInfos,
 		Cwd:                    cwd,
 		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManager),
