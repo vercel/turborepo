@@ -22,7 +22,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 ![](../../../../public/images/docs/cache-miss.png)
 
-1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
+1. Turborepo will **evaluate the inputs to your task** (by default all non-git-ignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
 
 2. **Check the local filesystem cache** for a folder named with the hash (e.g.`./node_modules/.cache/turbo/78awdk123`).
 
@@ -197,7 +197,7 @@ You can control `turbo`'s caching behavior based on
 the values of environment variables:
 
 - Including environment variables in the `env` key in your `pipeline` definition will impact the cache fingerprint on a per-task or per-workspace-task basis.
-- Including any gitignored environment files that are read by tasks in `globalDependencies`.
+- Including any git-ignored environment files that are read by tasks in `globalDependencies`.
 - The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```jsonc
@@ -370,9 +370,9 @@ Since Turborepo runs _before_ your tasks, it is possible for your tasks to creat
 
 `turbo`, having calculated a task hash prior to invoking the `build` script, will be unable to discover the `NEXT_PUBLIC_GA_ID=UA-00000000-0` environment variable and thus unable to partition the cache based upon that.
 
-When possible, be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
+Be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
 
-That may not be possible if tasks read environment variables from gitignored files like `.env.local` using a tool like `dotenv`. This is common when building apps like [Next.js][1] or [Create React App][2] that rely on secrets in environment variables. `turbo` will not partition the cache based on the values in these gitignored files. In this case, use a glob pattern to match these files with `globalDependencies`.
+That may not be possible if tasks read environment variables from git-ignored files like `.env.local` using a tool like `dotenv`. This is common when building apps like [Next.js][1] or [Create React App][2] that rely on secrets in environment variables. `turbo` will not partition the cache based on the values in these git-ignored files. In this case, use a glob pattern to match these files with `globalDependencies`.
 
 ```jsonc
 {
