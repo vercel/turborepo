@@ -328,7 +328,9 @@ jobs:
         id: expected-clippy-warnings
         uses: actions/cache@v3
         with:
-          path: expected-clippy-warnings
+          path: |
+            expected-clippy-warnings
+            expected-clippy-warnings-raw
           key: expected-clippy-warnings-${{ github.sha }}
           restore-keys: |
             expected-clippy-warnings
@@ -602,6 +604,9 @@ jobs:
     if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance
     runs-on: ubuntu-latest-16-core-oss
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
