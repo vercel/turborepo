@@ -10,10 +10,15 @@ use crate::get_version;
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
+    #[serde(rename = "full")]
     Full,
+    #[serde(rename = "none")]
     None,
+    #[serde(rename = "hash-only")]
     HashOnly,
+    #[serde(rename = "new-only")]
     NewOnly,
+    #[serde(rename = "errors-only")]
     ErrorsOnly,
 }
 

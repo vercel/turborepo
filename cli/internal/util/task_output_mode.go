@@ -22,11 +22,11 @@ const (
 )
 
 const (
-	fullTaskOutputString  = "Full"
-	noTaskOutputString    = "None"
-	hashTaskOutputString  = "HashOnly"
-	newTaskOutputString   = "NewOnly"
-	errorTaskOutputString = "ErrorsOnly"
+	fullTaskOutputString  = "full"
+	noTaskOutputString    = "none"
+	hashTaskOutputString  = "hash-only"
+	newTaskOutputString   = "new-only"
+	errorTaskOutputString = "errors-only"
 )
 
 // TaskOutputModeStrings is an array containing the string representations for task output modes

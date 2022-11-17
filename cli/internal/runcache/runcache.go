@@ -79,6 +79,7 @@ func (l *taskOutputModeValue) String() string {
 	return taskOutputMode
 }
 
+// SetTaskOutputMode parses the task output mode from string and then sets it in opts
 func (opts *Opts) SetTaskOutputMode(value string) error {
 	outputMode, err := util.FromTaskOutputModeString(value)
 	if err != nil {
@@ -97,6 +98,7 @@ func (l *taskOutputModeValue) Set(value string) error {
 	return nil
 }
 
+// TaskOutputModes creates the description string for task outputs
 func TaskOutputModes() string {
 	var builder strings.Builder
 

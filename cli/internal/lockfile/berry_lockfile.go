@@ -119,9 +119,6 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 	for name, version := range entry.Dependencies {
 		deps[name] = version
 	}
-	for name, version := range entry.PeerDependencies {
-		deps[name] = version
-	}
 
 	return deps, true
 }

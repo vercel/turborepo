@@ -21,8 +21,6 @@ const (
 	topologicalPipelineDelimiter = "^"
 )
 
-var defaultOutputs = TaskOutputs{Inclusions: []string{"dist/**/*", "build/**/*"}}
-
 type rawTurboJSON struct {
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
@@ -50,9 +48,7 @@ type RemoteCacheOptions struct {
 }
 
 type rawTask struct {
-	// We can't use omitempty for Outputs, because it will
-	// always unmarshal into an empty array, which means something different from nil.
-	Outputs *[]string `json:"outputs"`
+	Outputs *[]string `json:"outputs,omitempty"`
 
 	Cache      *bool               `json:"cache,omitempty"`
 	DependsOn  []string            `json:"dependsOn,omitempty"`
@@ -248,12 +244,10 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// We actually need a nil value to be able to unmarshal the json
-	// because we interpret the omission of outputs to be different
-	// from an empty array.
+	var inclusions []string
+	var exclusions []string
+
 	if task.Outputs != nil {
-		var inclusions []string
-		var exclusions []string
 		for _, glob := range *task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
@@ -261,14 +255,13 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 				inclusions = append(inclusions, glob)
 			}
 		}
-
-		c.Outputs = TaskOutputs{
-			Inclusions: inclusions,
-			Exclusions: exclusions,
-		}
-	} else {
-		c.Outputs = defaultOutputs
 	}
+
+	c.Outputs = TaskOutputs{
+		Inclusions: inclusions,
+		Exclusions: exclusions,
+	}
+
 	sort.Strings(c.Outputs.Inclusions)
 	sort.Strings(c.Outputs.Exclusions)
 	if task.Cache == nil {
