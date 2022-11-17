@@ -426,6 +426,30 @@
 <span id="426">426</span>
 <span id="427">427</span>
 <span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::VecDeque,
     fs::{create_dir_all, File},
@@ -480,6 +504,13 @@
             package_json: <span class="prelude-val">Some</span>(Default::default()),
         }
     }
+}
+
+<span class="kw">fn </span>write_file&lt;P: AsRef&lt;Path&gt;&gt;(name: <span class="kw-2">&amp;</span>str, path: P, content: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    File::create(path)
+        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;creating {name}&quot;</span>))<span class="question-mark">?
+        </span>.write_all(content)
+        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;writing {name}&quot;</span>))
 }
 
 <span class="kw">impl </span>TestAppBuilder {
@@ -638,10 +669,7 @@ let root = document.createElement(&quot;main&quot;);
 document.body.appendChild(root);
 createRoot(root).render(&lt;App /&gt;);
 &quot;#</span>;
-        File::create(src.join(<span class="string">&quot;index.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap file&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap file&quot;</span>)<span class="question-mark">?</span>;
+        write_file(<span class="string">&quot;bootrap file&quot;</span>, src.join(<span class="string">&quot;index.jsx&quot;</span>), bootstrap.as_bytes())<span class="question-mark">?</span>;
 
         <span class="kw">let </span>pages = src.join(<span class="string">&quot;pages&quot;</span>);
         create_dir_all(<span class="kw-2">&amp;</span>pages)<span class="question-mark">?</span>;
@@ -656,10 +684,11 @@ export default function Page() {
     &lt;/svg&gt;
 }
 &quot;#</span>;
-        File::create(pages.join(<span class="string">&quot;page.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap page&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_page.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap page&quot;</span>)<span class="question-mark">?</span>;
+        write_file(
+            <span class="string">&quot;bootrap page&quot;</span>,
+            pages.join(<span class="string">&quot;page.jsx&quot;</span>),
+            bootstrap_page.as_bytes(),
+        )<span class="question-mark">?</span>;
 
         <span class="comment">// The page is e. g. used by Next.js
         </span><span class="kw">let </span>bootstrap_static_page = <span class="string">r#&quot;import React from &quot;react&quot;;
@@ -677,10 +706,11 @@ export function getStaticProps() {
     };
 }
 &quot;#</span>;
-        File::create(pages.join(<span class="string">&quot;static.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap static page&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_static_page.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap static page&quot;</span>)<span class="question-mark">?</span>;
+        write_file(
+            <span class="string">&quot;bootrap static page&quot;</span>,
+            pages.join(<span class="string">&quot;static.jsx&quot;</span>),
+            bootstrap_static_page.as_bytes(),
+        )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>app_dir = src.join(<span class="string">&quot;app&quot;</span>);
         create_dir_all(app_dir.join(<span class="string">&quot;app&quot;</span>))<span class="question-mark">?</span>;
@@ -771,10 +801,11 @@ export default function Page() {
     &lt;/body&gt;
 &lt;/html&gt;
 &quot;#</span>;
-        File::create(path.join(<span class="string">&quot;index.html&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap html in root&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_html.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap html in root&quot;</span>)<span class="question-mark">?</span>;
+        write_file(
+            <span class="string">&quot;bootstrap html&quot;</span>,
+            path.join(<span class="string">&quot;index.html&quot;</span>),
+            bootstrap_html.as_bytes(),
+        )<span class="question-mark">?</span>;
 
         <span class="comment">// This HTML is used e. g. by webpack
         </span><span class="kw">let </span>bootstrap_html2 = <span class="string">r#&quot;&lt;!DOCTYPE html&gt;
@@ -793,10 +824,27 @@ export default function Page() {
         <span class="kw">let </span>public = path.join(<span class="string">&quot;public&quot;</span>);
         create_dir_all(<span class="kw-2">&amp;</span>public).context(<span class="string">&quot;creating public dir&quot;</span>)<span class="question-mark">?</span>;
 
-        File::create(public.join(<span class="string">&quot;index.html&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap html in public&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_html2.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap html in public&quot;</span>)<span class="question-mark">?</span>;
+        write_file(
+            <span class="string">&quot;bootstrap html&quot;</span>,
+            public.join(<span class="string">&quot;index.html&quot;</span>),
+            bootstrap_html2.as_bytes(),
+        )<span class="question-mark">?</span>;
+
+        write_file(
+            <span class="string">&quot;vite node.js server&quot;</span>,
+            path.join(<span class="string">&quot;vite-server.mjs&quot;</span>),
+            <span class="macro">include_bytes!</span>(<span class="string">&quot;templates/vite-server.mjs&quot;</span>),
+        )<span class="question-mark">?</span>;
+        write_file(
+            <span class="string">&quot;vite server entry&quot;</span>,
+            path.join(<span class="string">&quot;src/vite-entry-server.jsx&quot;</span>),
+            <span class="macro">include_bytes!</span>(<span class="string">&quot;templates/vite-entry-server.jsx&quot;</span>),
+        )<span class="question-mark">?</span>;
+        write_file(
+            <span class="string">&quot;vite client entry&quot;</span>,
+            path.join(<span class="string">&quot;src/vite-entry-client.jsx&quot;</span>),
+            <span class="macro">include_bytes!</span>(<span class="string">&quot;templates/vite-entry-client.jsx&quot;</span>),
+        )<span class="question-mark">?</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(package_json) = <span class="kw-2">&amp;</span><span class="self">self</span>.package_json {
             <span class="comment">// These dependencies are needed
