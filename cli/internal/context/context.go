@@ -49,13 +49,27 @@ func (w *Warnings) append(err error) {
 
 // Context of the CLI
 type Context struct {
+	// WorkspaceInfos contains the contents of package.json for every workspace
 	// TODO(gsoltis): should the RootPackageJSON be included in WorkspaceInfos?
 	WorkspaceInfos graph.WorkspaceInfos
-	PackageNames   []string
+
+	// PackageNames is all the names of the workspaces
+	PackageNames []string
+
+	// WorkspaceGraph is a graph of workspace dependencies
+	// (based on package.json dependencies and devDependencies)
 	WorkspaceGraph dag.AcyclicGraph
-	RootNode       string
-	Lockfile       lockfile.Lockfile
+
+	// RootNode is a sigil identifying the root workspace
+	RootNode string
+
+	// Lockfile is a struct to read the lockfile based on the package manager
+	Lockfile lockfile.Lockfile
+
+	// PackageManager is an abstraction for all the info a package manager
+	// can give us about the repo.
 	PackageManager *packagemanager.PackageManager
+
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
