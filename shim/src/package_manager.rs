@@ -1,9 +1,11 @@
 use std::{
+    fmt::{Display, Formatter},
     fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Result};
+use semver::Version;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +27,22 @@ pub enum PackageManager {
     Pnpm6,
     #[allow(dead_code)]
     Yarn,
+}
+
+impl Display for PackageManager {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                PackageManager::Berry => "yarn berry",
+                PackageManager::Npm => "npm",
+                PackageManager::Pnpm => "pnpm",
+                PackageManager::Pnpm6 => "pnpm v6",
+                PackageManager::Yarn => "yarn",
+            }
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -96,6 +114,51 @@ impl PackageManager {
             inclusions,
             exclusions,
         })
+    }
+
+    pub fn get_local_turbo_version(&self, repo_root: &Path) -> Option<Version> {
+        match self {
+            PackageManager::Npm => {
+                let package_lock_path = repo_root.join("package-lock.json");
+                let package_lock_text = fs::read_to_string(package_lock_path).ok()?;
+                let package_lock: serde_json::Value =
+                    serde_json::from_str(&package_lock_text).ok()?;
+
+                package_lock
+                    .get("packages")?
+                    .get("node_modules/turbo")?
+                    .get("version")?
+                    .as_str()?
+                    .parse()
+                    .ok()
+            }
+            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                let pnpm_lock_path = repo_root.join("pnpm-lock.yaml");
+                let pnpm_lock_text = fs::read_to_string(pnpm_lock_path).ok()?;
+                let pnpm_lock: serde_yaml::Value = serde_yaml::from_str(&pnpm_lock_text).ok()?;
+
+                let mut package_entries = pnpm_lock.get("packages")?.as_mapping()?.into_iter();
+
+                // Find first key that starts with `/turbo/ and return the version
+                let version_str = package_entries.find_map(|(key, _)| {
+                    key.as_str().and_then(|key| key.strip_prefix("/turbo/"))
+                })?;
+
+                version_str.parse().ok()
+            }
+            PackageManager::Berry | PackageManager::Yarn => {
+                let yarn_lock_path = repo_root.join("yarn.lock");
+                let yarn_lock_text = fs::read_to_string(yarn_lock_path).ok()?;
+                let yarn_lock_entries = yarn_lock_parser::parse_str(&yarn_lock_text).ok()?;
+
+                yarn_lock_entries
+                    .into_iter()
+                    .find(|entry| entry.name == "turbo")?
+                    .version
+                    .parse()
+                    .ok()
+            }
+        }
     }
 }
 

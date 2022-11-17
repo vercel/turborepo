@@ -1,6 +1,7 @@
 mod commands;
 mod ffi;
 mod package_manager;
+mod repo_state;
 
 use std::{
     env,
@@ -8,18 +9,19 @@ use std::{
     ffi::CString,
     fs,
     os::raw::{c_char, c_int},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process,
     process::Stdio,
 };
 
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, Subcommand};
+use semver::Version;
 use serde::Serialize;
 
 use crate::{
     ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
-    package_manager::PackageManager,
+    repo_state::{RepoMode, RepoState, MINIMUM_SUPPORTED_LOCAL_TURBO},
 };
 
 static TURBO_JSON: &str = "turbo.json";
@@ -163,18 +165,6 @@ enum Command {
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct RepoState {
-    root: PathBuf,
-    mode: RepoMode,
-}
-
-#[derive(Debug, Clone, Serialize)]
-enum RepoMode {
-    SinglePackage,
-    MultiPackage,
-}
-
 /// The entire state of the execution, including args, repo state, etc.
 #[derive(Debug, Serialize)]
 struct TurboState {
@@ -305,6 +295,17 @@ impl TurboState {
         }
 
         let repo_state = RepoState::infer(&current_dir)?;
+
+        if let Some(local_turbo_version) = repo_state.infer_local_turbo_version()? {
+            let minimum_supported_turbo_version = Version::parse(MINIMUM_SUPPORTED_LOCAL_TURBO)?;
+            if local_turbo_version < minimum_supported_turbo_version {
+                return Err(anyhow!(
+                    "Your local turbo installation is too old. Please update it to at least {}.",
+                    minimum_supported_turbo_version
+                ));
+            }
+        }
+
         let local_turbo_path = repo_state.root.join("node_modules").join(".bin").join({
             #[cfg(windows)]
             {
@@ -337,85 +338,6 @@ impl TurboState {
             .expect("Failed to execute turbo.");
 
         Ok(command.wait()?.code().unwrap_or(2))
-    }
-}
-
-impl RepoState {
-    /// Infers `RepoState` from current directory.
-    ///
-    /// # Arguments
-    ///
-    /// * `current_dir`: Current working directory
-    ///
-    /// returns: Result<RepoState, Error>
-    pub fn infer(current_dir: &Path) -> Result<Self> {
-        // First we look for a `turbo.json`. This iterator returns the first ancestor
-        // that contains a `turbo.json` file.
-        let root_path = current_dir
-            .ancestors()
-            .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
-
-        // If that directory exists, then we figure out if there are workspaces defined
-        // in it NOTE: This may change with multiple `turbo.json` files
-        if let Some(root_path) = root_path {
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace = pnpm.get_workspace_globs(root_path).is_ok()
-                || npm.get_workspace_globs(root_path).is_ok();
-
-            let mode = if is_workspace {
-                RepoMode::MultiPackage
-            } else {
-                RepoMode::SinglePackage
-            };
-
-            return Ok(Self {
-                root: root_path.to_path_buf(),
-                mode,
-            });
-        }
-
-        // What we look for next is a directory that contains a `package.json`.
-        let potential_roots = current_dir
-            .ancestors()
-            .filter(|path| fs::metadata(path.join("package.json")).is_ok());
-
-        let mut first_package_json_dir = None;
-        // We loop through these directories and see if there are workspaces defined in
-        // them, either in the `package.json` or `pnm-workspaces.yml`
-        for dir in potential_roots {
-            if first_package_json_dir.is_none() {
-                first_package_json_dir = Some(dir)
-            }
-
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace =
-                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
-
-            if is_workspace {
-                return Ok(Self {
-                    root: dir.to_path_buf(),
-                    mode: RepoMode::MultiPackage,
-                });
-            }
-        }
-
-        // Finally, if we don't detect any workspaces, go to the first `package.json`
-        // and use that in single package mode.
-        let root = first_package_json_dir
-            .ok_or_else(|| {
-                anyhow!(
-                    "Unable to find `{}` or `package.json` in current path",
-                    TURBO_JSON
-                )
-            })?
-            .to_path_buf();
-
-        Ok(Self {
-            root,
-            mode: RepoMode::SinglePackage,
-        })
     }
 }
 
@@ -491,6 +413,7 @@ fn main() -> Result<()> {
 mod test {
     use clap::Parser;
     use itertools::Itertools;
+    use semver::Version;
 
     struct CommandTestCase {
         command: &'static str,
@@ -531,7 +454,7 @@ mod test {
         }
     }
 
-    use crate::{Args, Command};
+    use crate::{get_version, Args, Command};
 
     #[test]
     fn test_parse_run() {
@@ -807,5 +730,11 @@ mod test {
             },
         }
         .test();
+    }
+
+    /// Ensures that current version is parsable by semver crate.
+    #[test]
+    fn test_parse_current_version() {
+        Version::parse(get_version()).unwrap();
     }
 }

@@ -437,7 +437,7 @@ version = "8.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c4c54d47a4532db3494ef7332c257ab57b02750daae3250d49e01ee55201ce8"
 dependencies = [
- "semver 1.0.13",
+ "semver 1.0.14",
  "serde",
  "toml",
  "url",
@@ -2971,7 +2971,7 @@ dependencies = [
  "dashmap",
  "from_variant",
  "once_cell",
- "semver 1.0.13",
+ "semver 1.0.14",
  "serde",
  "st-map",
  "tracing",
@@ -3285,7 +3285,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver 1.0.13",
+ "semver 1.0.14",
 ]
 
 [[package]]
@@ -3351,9 +3351,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.13"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93f6841e709003d68bb2deee8c343572bf446003ec20a583e76f7b15cebf3711"
+checksum = "e25dfac463d778e353db5be2449d1cce89bd6fd23c9f1ea21310ce6e5a1b29c4"
 dependencies = [
  "serde",
 ]
@@ -4288,7 +4288,7 @@ dependencies = [
  "indexmap",
  "once_cell",
  "preset_env_base",
- "semver 1.0.13",
+ "semver 1.0.14",
  "serde",
  "serde_json",
  "st-map",
@@ -5221,10 +5221,12 @@ dependencies = [
  "globset",
  "itertools",
  "predicates",
+ "semver 1.0.14",
  "serde",
  "serde_json",
  "serde_yaml",
  "walkdir",
+ "yarn-lock-parser",
 ]
 
 [[package]]
@@ -6099,7 +6101,7 @@ dependencies = [
  "inquire",
  "owo-colors",
  "plotters",
- "semver 1.0.13",
+ "semver 1.0.14",
  "serde",
  "serde_json",
  "tabled",
@@ -6120,6 +6122,16 @@ name = "yansi"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
+
+[[package]]
+name = "yarn-lock-parser"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d723839879490a15b499ff05c7edd53698205f9295565a568946388c04b2ed23"
+dependencies = [
+ "nom",
+ "thiserror",
+]
 
 [[package]]
 name = "yeslogic-fontconfig-sys"
