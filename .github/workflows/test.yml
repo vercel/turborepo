@@ -602,6 +602,9 @@ jobs:
     if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance
     runs-on: ubuntu-latest-16-core-oss
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
