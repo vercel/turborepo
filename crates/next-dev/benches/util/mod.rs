@@ -2,7 +2,7 @@ use std::{
     io::{self, BufRead, BufReader, Read, Write},
     panic::UnwindSafe,
     process::Command,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
@@ -10,18 +10,15 @@ use chromiumoxide::{
     browser::{Browser, BrowserConfig},
     error::CdpError::Ws,
 };
-use criterion::{
-    async_executor::AsyncExecutor,
-    black_box,
-    measurement::{Measurement, WallTime},
-    AsyncBencher,
-};
+use criterion::{async_executor::AsyncExecutor, black_box, measurement::WallTime, AsyncBencher};
 use futures::{Future, StreamExt};
 pub use page_guard::PageGuard;
+use parking_lot::Mutex;
 pub use prepared_app::PreparedApp;
 use regex::Regex;
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::util::FormatDuration;
+use turbo_tasks_testing::retry::{retry, retry_async};
 use turbopack_create_test_app::test_app_builder::{PackageJsonConfig, TestApp, TestAppBuilder};
 
 use crate::bundlers::Bundler;
@@ -32,64 +29,18 @@ mod prepared_app;
 
 pub const BINDING_NAME: &str = "__turbopackBenchBinding";
 
-fn retry<A, F, R>(mut args: A, f: F, max_retries: usize, mut timeout: Duration) -> Result<R>
+fn retry_default<A, F, R, E>(args: A, f: F) -> Result<R, E>
 where
-    F: Fn(&mut A) -> Result<R>,
-{
-    let mut retries = 0usize;
-    loop {
-        match f(&mut args) {
-            Ok(value) => return Ok(value),
-            Err(e) => {
-                if retries >= max_retries {
-                    return Err(e);
-                }
-                retries += 1;
-                std::thread::sleep(timeout);
-                timeout += timeout;
-            }
-        }
-    }
-}
-
-fn retry_default<A, F, R>(args: A, f: F) -> Result<R>
-where
-    F: Fn(&mut A) -> Result<R>,
+    F: Fn(&mut A) -> Result<R, E>,
 {
     // waits 5, 10, 20, 40 seconds = 75 seconds total
     retry(args, f, 3, Duration::from_secs(5))
 }
 
-async fn retry_async<A, F, Fut, R>(
-    mut args: A,
-    f: F,
-    max_retries: usize,
-    mut timeout: Duration,
-) -> Result<R>
+async fn retry_async_default<A, F, Fut, R, E>(args: A, f: F) -> Result<R, E>
 where
     F: Fn(&mut A) -> Fut,
-    Fut: Future<Output = Result<R>>,
-{
-    let mut retries = 0usize;
-    loop {
-        match f(&mut args).await {
-            Ok(value) => return Ok(value),
-            Err(e) => {
-                if retries >= max_retries {
-                    return Err(e);
-                }
-                retries += 1;
-                tokio::time::sleep(timeout).await;
-                timeout += timeout;
-            }
-        }
-    }
-}
-
-async fn retry_async_default<A, F, Fut, R>(args: A, f: F) -> Result<R>
-where
-    F: Fn(&mut A) -> Fut,
-    Fut: Future<Output = Result<R>>,
+    Fut: Future<Output = Result<R, E>>,
 {
     // waits 5, 10, 20, 40 seconds = 75 seconds total
     retry_async(args, f, 3, Duration::from_secs(5)).await
@@ -144,7 +95,7 @@ pub async fn create_browser() -> Browser {
         builder.build().unwrap(),
         |c| {
             let c = c.clone();
-            async { Ok(Browser::launch(c).await?) }
+            Browser::launch(c)
         },
         3,
         Duration::from_millis(100),
@@ -166,8 +117,14 @@ pub async fn create_browser() -> Browser {
 
 pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
     let runs_as_bench = std::env::args().find(|a| a == "--bench");
+    let ignore_errors = !matches!(
+        std::env::var("TURBOPACK_BENCH_IGNORE_ERRORS")
+            .ok()
+            .as_deref(),
+        None | Some("") | Some("no") | Some("false")
+    );
 
-    if runs_as_bench.is_some() {
+    if runs_as_bench.is_some() || ignore_errors {
         use std::panic::catch_unwind;
         // panics are already printed to the console, so no need to handle the result.
         let _ = catch_unwind(f);
@@ -176,105 +133,118 @@ pub fn resume_on_error<F: FnOnce() + UnwindSafe>(f: F) {
     }
 }
 
-pub trait AsyncBencherExtension {
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+pub trait AsyncBencherExtension<A: AsyncExecutor> {
+    fn try_iter_custom<R, F>(&mut self, routine: R)
+    where
+        R: Fn(u64, WallTime) -> F,
+        F: Future<Output = Result<Duration>>;
+
+    fn try_iter_async<I, S, SF, R, F, T, TF>(
         &mut self,
+        runner: A,
         setup: S,
-        warmup: W,
         routine: R,
         teardown: T,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        W: Fn(I) -> WF,
-        WF: Future<Output = Result<I>>,
-        R: Fn(I) -> F,
-        F: Future<Output = Result<O>>,
-        T: Fn(O) -> TF,
+        R: Fn(I, u64, WallTime, bool) -> F,
+        F: Future<Output = Result<(I, Duration)>>,
+        T: Fn(I) -> TF,
         TF: Future<Output = ()>;
 }
 
-impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension for AsyncBencher<'a, 'b, A, WallTime> {
-    #[inline(never)]
-    fn try_iter_async<I, O, S, SF, W, WF, R, F, T, TF>(
+impl<'a, 'b, A: AsyncExecutor> AsyncBencherExtension<A> for AsyncBencher<'a, 'b, A, WallTime> {
+    fn try_iter_custom<R, F>(&mut self, routine: R)
+    where
+        R: Fn(u64, WallTime) -> F,
+        F: Future<Output = Result<Duration>>,
+    {
+        let log_progress = !matches!(
+            std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
+            None | Some("") | Some("no") | Some("false")
+        );
+
+        let routine = &routine;
+        self.iter_custom(|iters| async move {
+            let measurement = WallTime;
+            let value = routine(iters, measurement).await.expect("routine failed");
+            if log_progress {
+                eprint!(" {:?}/{}", FormatDuration(value / (iters as u32)), iters);
+            }
+            value
+        });
+    }
+
+    fn try_iter_async<I, S, SF, R, F, T, TF>(
         &mut self,
+        runner: A,
         setup: S,
-        warmup: W,
         routine: R,
         teardown: T,
     ) where
         S: Fn() -> SF,
         SF: Future<Output = Result<I>>,
-        W: Fn(I) -> WF,
-        WF: Future<Output = Result<I>>,
-        R: Fn(I) -> F,
-        F: Future<Output = Result<O>>,
-        T: Fn(O) -> TF,
+        R: Fn(I, u64, WallTime, bool) -> F,
+        F: Future<Output = Result<(I, Duration)>>,
+        T: Fn(I) -> TF,
         TF: Future<Output = ()>,
     {
-        let config = std::env::var("TURBOPACK_BENCH_BENCH").ok();
-        let bench_benchmark_itself = !matches!(
-            config.as_deref(),
-            None | Some("") | Some("no") | Some("false")
-        );
         let log_progress = !matches!(
             std::env::var("TURBOPACK_BENCH_PROGRESS").ok().as_deref(),
             None | Some("") | Some("no") | Some("false")
         );
 
         let setup = &setup;
-        let warmup = &warmup;
         let routine = &routine;
         let teardown = &teardown;
+        let input_mutex = &Mutex::new(Some(black_box(runner.block_on(async {
+            if log_progress {
+                eprint!(" setup...");
+            }
+            let start = Instant::now();
+            let input = retry_async_default((), |_| setup())
+                .await
+                .expect("failed to setup");
+            if log_progress {
+                let duration = start.elapsed();
+                eprint!(" [{:?}]", FormatDuration(duration));
+            }
+            input
+        }))));
+
         self.iter_custom(|iters| async move {
             let measurement = WallTime;
-            let mut value = measurement.zero();
 
-            let mut iter = 0u64;
-            let mut failures = 0u64;
-            while iter < iters {
-                loop {
-                    let early_start = bench_benchmark_itself.then(|| measurement.start());
-                    let input = black_box(
-                        retry_async_default((), |_| setup())
-                            .await
-                            .expect("failed to setup"),
-                    );
-                    let input = black_box(warmup(input).await).expect("failed to warmup");
+            let input = input_mutex
+                .lock()
+                .take()
+                .expect("iter_custom only executes its closure once");
 
-                    let start = early_start.unwrap_or_else(|| measurement.start());
-                    match routine(input).await {
-                        Ok(output) => {
-                            let duration;
-                            if bench_benchmark_itself {
-                                teardown(black_box(output)).await;
-                                duration = measurement.end(start);
-                            } else {
-                                duration = measurement.end(start);
-                                teardown(black_box(output)).await;
-                            }
-                            if log_progress {
-                                eprint!(" {} ", FormatDuration(duration));
-                            }
-                            value = measurement.add(&value, &duration);
-                            iter += 1;
-                            break;
-                        }
-                        Err(err) => {
-                            failures += 1;
-                            if failures > iters {
-                                panic!("Routine failed {failures} times, aborting\n{:?}", err)
-                            } else {
-                                eprintln!("Routine failed, will be retried: {:?}", err);
-                                continue;
-                            }
-                        }
-                    }
-                }
+            let (output, value) = routine(input, iters, measurement, log_progress)
+                .await
+                .expect("Routine failed");
+            let output = black_box(output);
+
+            if log_progress {
+                eprint!(" {:?}/{}", FormatDuration(value / (iters as u32)), iters);
             }
 
+            input_mutex.lock().replace(output);
+
             value
-        })
+        });
+
+        let input = input_mutex.lock().take().unwrap();
+        if log_progress {
+            eprint!(" teardown...");
+        }
+        let start = Instant::now();
+        runner.block_on(teardown(input));
+        let duration = start.elapsed();
+        if log_progress {
+            eprintln!(" [{:?}]", FormatDuration(duration));
+        }
     }
 }
 

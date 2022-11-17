@@ -13,12 +13,8 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     help        Help about any command
-    link        Link your local directory to a Vercel organization and enable remote caching.
-    login       Login to your Vercel account
-    logout      Logout of your Vercel account
     prune       Prepare a subset of your monorepo.
     run         Run tasks across projects in your monorepo
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Flags:
         --api string          Override the endpoint for API calls
@@ -49,12 +45,8 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     help        Help about any command
-    link        Link your local directory to a Vercel organization and enable remote caching.
-    login       Login to your Vercel account
-    logout      Logout of your Vercel account
     prune       Prepare a subset of your monorepo.
     run         Run tasks across projects in your monorepo
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Flags:
         --api string          Override the endpoint for API calls
@@ -76,82 +68,140 @@ Test help flag
 
 Test help flag for shim
   $ ${SHIM} -h
+  turbo 
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [TASKS]... [COMMAND]
+  USAGE:
+      turbo [OPTIONS] [TASKS]... [SUBCOMMAND]
   
-  Commands:
-    bin         Get the path to the Turbo binary
-    completion  Generate the autocompletion script for the specified shell
-    daemon      Runs the Turborepo background daemon
-    help        Help about any command
-    link        Link your local directory to a Vercel organization and enable remote caching
-    login       Login to your Vercel account
-    logout      Logout to your Vercel account
-    prune       Prepare a subset of your monorepo
-    run         Run tasks across projects in your monorepo
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
+  ARGS:
+      <TASKS>...    
   
-  Arguments:
-    [TASKS]...  
+  OPTIONS:
+          --api <API>                    Override the endpoint for API calls
+          --color                        Force color usage in the terminal
+          --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
+          --cwd <CWD>                    The directory in which to run turbo
+      -h, --help                         
+          --heap <HEAP>                  Specify a file to save a pprof heap profile
+          --login <LOGIN>                Override the login endpoint
+          --no-color                     Suppress color usage in the terminal
+          --preflight                    When enabled, turbo will precede HTTP requests with an
+                                         OPTIONS request for authorization
+          --team <TEAM>                  Set the team slug for API calls
+          --token <TOKEN>                Set the auth token for API calls
+          --trace <TRACE>                Specify a file to save a pprof trace
+      -v, --verbosity <VERBOSITY>        verbosity
+          --version                      
   
-  Options:
-    -h, --help                     
-        --version                  
-        --api <API>                Override the endpoint for API calls
-        --color                    Force color usage in the terminal
-        --cpuprofile <CPUPROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                The directory in which to run turbo
-        --heap <HEAP>              Specify a file to save a pprof heap profile
-        --login <LOGIN>            Override the login endpoint
-        --no-color                 Suppress color usage in the terminal
-        --preflight                When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>              Set the team slug for API calls
-        --token <TOKEN>            Set the auth token for API calls
-        --trace <TRACE>            Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>    verbosity
+  SUBCOMMANDS:
+      bin           Get the path to the Turbo binary
+      completion    Generate the autocompletion script for the specified shell
+      daemon        Runs the Turborepo background daemon
+      help          Help about any command
+      link          Link your local directory to a Vercel organization and enable remote caching
+      login         Login to your Vercel account
+      logout        Logout to your Vercel account
+      prune         Prepare a subset of your monorepo
+      run           Run tasks across projects in your monorepo
+      unlink        Unlink the current directory from your Vercel organization and disable Remote
+                        Caching
+
 
 
 
 
 
   $ ${SHIM} --help
+  turbo 
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [TASKS]... [COMMAND]
+  USAGE:
+      turbo [OPTIONS] [TASKS]... [SUBCOMMAND]
   
-  Commands:
-    bin         Get the path to the Turbo binary
-    completion  Generate the autocompletion script for the specified shell
-    daemon      Runs the Turborepo background daemon
-    help        Help about any command
-    link        Link your local directory to a Vercel organization and enable remote caching
-    login       Login to your Vercel account
-    logout      Logout to your Vercel account
-    prune       Prepare a subset of your monorepo
-    run         Run tasks across projects in your monorepo
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
+  ARGS:
+      <TASKS>...    
   
-  Arguments:
-    [TASKS]...  
+  OPTIONS:
+          --api <API>                    Override the endpoint for API calls
+          --color                        Force color usage in the terminal
+          --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
+          --cwd <CWD>                    The directory in which to run turbo
+      -h, --help                         
+          --heap <HEAP>                  Specify a file to save a pprof heap profile
+          --login <LOGIN>                Override the login endpoint
+          --no-color                     Suppress color usage in the terminal
+          --preflight                    When enabled, turbo will precede HTTP requests with an
+                                         OPTIONS request for authorization
+          --team <TEAM>                  Set the team slug for API calls
+          --token <TOKEN>                Set the auth token for API calls
+          --trace <TRACE>                Specify a file to save a pprof trace
+      -v, --verbosity <VERBOSITY>        verbosity
+          --version                      
   
-  Options:
-    -h, --help                     
-        --version                  
-        --api <API>                Override the endpoint for API calls
-        --color                    Force color usage in the terminal
-        --cpuprofile <CPUPROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                The directory in which to run turbo
-        --heap <HEAP>              Specify a file to save a pprof heap profile
-        --login <LOGIN>            Override the login endpoint
-        --no-color                 Suppress color usage in the terminal
-        --preflight                When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>              Set the team slug for API calls
-        --token <TOKEN>            Set the auth token for API calls
-        --trace <TRACE>            Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>    verbosity
+  SUBCOMMANDS:
+      bin           Get the path to the Turbo binary
+      completion    Generate the autocompletion script for the specified shell
+      daemon        Runs the Turborepo background daemon
+      help          Help about any command
+      link          Link your local directory to a Vercel organization and enable remote caching
+      login         Login to your Vercel account
+      logout        Logout to your Vercel account
+      prune         Prepare a subset of your monorepo
+      run           Run tasks across projects in your monorepo
+      unlink        Unlink the current directory from your Vercel organization and disable Remote
+                        Caching
 
+Test help flag for shim's link command
+  $ ${SHIM} link -h
+  link 
+  Link your local directory to a Vercel organization and enable remote caching
+  
+  USAGE:
+      link [OPTIONS]
+  
+  OPTIONS:
+      -h, --help
+              help for link
+  
+          --no-gitignore
+              Do not create or modify .gitignore (default false)
 
+Test help flag for shim's unlink command
+  $ ${SHIM} unlink -h
+  unlink 
+  Unlink the current directory from your Vercel organization and disable Remote Caching
+  
+  USAGE:
+      unlink
+  
+  OPTIONS:
+      -h, --help
+              Help flag
 
+Test help flag for shim's login command
+  $ ${SHIM} login -h
+  login 
+  Login to your Vercel account
+  
+  USAGE:
+      login [OPTIONS]
+  
+  OPTIONS:
+      -h, --help
+              Help flag
+  
+          --sso-team <SSO_TEAM>
+              
 
-
+Test help flag for shim's logout command
+  $ ${SHIM} logout -h
+  logout 
+  Logout to your Vercel account
+  
+  USAGE:
+      logout
+  
+  OPTIONS:
+      -h, --help
+              Help flag

@@ -2,9 +2,13 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
+
+	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -18,6 +22,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/prune"
 	"github.com/vercel/turbo/cli/internal/run"
 	"github.com/vercel/turbo/cli/internal/signals"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -45,13 +50,92 @@ func RunWithArgs(args []string, turboVersion string) int {
 	helper := cmdutil.NewHelper(turboVersion)
 	root := getCmd(helper, signalWatcher)
 	resolvedArgs := resolveArgs(root, args)
-	defer helper.Cleanup(root.Flags())
+	flags := config.FlagSet{FlagSet: root.Flags()}
+	defer helper.Cleanup(flags)
 	root.SetArgs(resolvedArgs)
 
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
 		execErr = root.Execute()
+		close(doneCh)
+	}()
+
+	// Wait for either our command to finish, in which case we need to clean up,
+	// or to receive a signal, in which case the signal handler above does the cleanup
+	select {
+	case <-doneCh:
+		// We finished whatever task we were running
+		signalWatcher.Close()
+		exitErr := &process.ChildExit{}
+		if errors.As(execErr, &exitErr) {
+			return exitErr.ExitCode
+		} else if execErr != nil {
+			return 1
+		}
+		return 0
+	case <-signalWatcher.Done():
+		// We caught a signal, which already called the close handlers
+		return 1
+	}
+}
+
+func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
+	if parsedArgs.Trace != "" {
+		cleanup, err := createTraceFile(parsedArgs.Trace)
+		if err != nil {
+			return fmt.Errorf("failed to create trace file: %v", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if parsedArgs.Heap != "" {
+		cleanup, err := createHeapFile(parsedArgs.Heap)
+		if err != nil {
+			return fmt.Errorf("failed to create heap file: %v", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if parsedArgs.CPUProfile != "" {
+		cleanup, err := createCpuprofileFile(parsedArgs.CPUProfile)
+		if err != nil {
+			return fmt.Errorf("failed to create CPU profile file: %v", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+
+	return nil
+}
+
+// RunWithTurboState runs turbo with the CLIExecutionStateFromRust that is passed from the Rust side.
+func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion string) int {
+	util.InitPrintf()
+	// TODO: replace this with a context
+	signalWatcher := signals.NewWatcher()
+	helper := cmdutil.NewHelper(turboVersion)
+	ctx := context.Background()
+
+	err := initializeOutputFiles(helper, state.ParsedArgs)
+	if err != nil {
+		fmt.Printf("%v", err)
+		return 1
+	}
+	defer helper.Cleanup(&state.ParsedArgs)
+
+	doneCh := make(chan struct{})
+	var execErr error
+	go func() {
+		command := state.ParsedArgs.Command
+		if command.Link != nil {
+			execErr = login.RunLink(helper, &state.ParsedArgs)
+		} else if command.Login != nil {
+			execErr = login.RunLogin(ctx, helper, &state.ParsedArgs)
+		} else if command.Logout != nil {
+			execErr = auth.RunLogout(helper, &state.ParsedArgs)
+		} else if command.Unlink != nil {
+			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
+		} else {
+			execErr = fmt.Errorf("unknown command: %v", command)
+		}
 		close(doneCh)
 	}()
 
@@ -135,10 +219,6 @@ func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 	flags := cmd.PersistentFlags()
 	helper.AddFlags(flags)
 	execOpts.addFlags(flags)
-	cmd.AddCommand(login.NewLinkCommand(helper))
-	cmd.AddCommand(login.NewLoginCommand(helper))
-	cmd.AddCommand(auth.LogoutCmd(helper))
-	cmd.AddCommand(auth.UnlinkCmd(helper))
 	cmd.AddCommand(info.BinCmd(helper))
 	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
 	cmd.AddCommand(prune.GetCmd(helper))

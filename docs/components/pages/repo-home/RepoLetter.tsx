@@ -70,7 +70,7 @@ export function RepoLetter() {
           <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border dark:border-white/10 border-black/10 flex items-center justify-center ">
             <Image
               alt="Image of Jared Palmer"
-              src="/images/people/jaredpalmer_headshot.jpeg"
+              src="/images/people/jaredpalmer.jpeg"
               width={64}
               height={64}
               className="rounded-full grayscale"

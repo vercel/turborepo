@@ -7,6 +7,7 @@ fn main() {
     } else {
         build_debug_libturbo()
     };
+    println!("cargo:rerun-if-changed={}", lib_search_path);
     println!("cargo:rustc-link-search={}", lib_search_path);
     println!("cargo:rustc-link-lib=turbo");
 
@@ -16,6 +17,8 @@ fn main() {
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .allowlist_function("nativeRunWithArgs")
+        .allowlist_function("nativeRunWithTurboState")
+        .allowlist_type("GoString")
         .generate()
         .expect("Unable to generate bindings");
 
