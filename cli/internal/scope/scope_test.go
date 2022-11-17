@@ -84,7 +84,7 @@ func TestResolvePackages(t *testing.T) {
 	}
 	packageNames := []string{}
 	for name := range workspaceInfos {
-		packageNames = append(packageNames, name.(string))
+		packageNames = append(packageNames, name)
 	}
 
 	testCases := []struct {
