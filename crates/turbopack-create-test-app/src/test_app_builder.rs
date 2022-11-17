@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use indoc::{formatdoc, indoc};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -31,6 +32,13 @@ fn decide_early(remaining: usize, min_remaining_decisions: usize) -> bool {
     }
 }
 
+fn write_file<P: AsRef<Path>>(name: &str, path: P, content: &[u8]) -> Result<()> {
+    File::create(path)
+        .with_context(|| format!("creating {name}"))?
+        .write_all(content)
+        .with_context(|| format!("writing {name}"))
+}
+
 #[derive(Debug)]
 pub struct TestAppBuilder {
     pub target: Option<PathBuf>,
@@ -54,12 +62,19 @@ impl Default for TestAppBuilder {
     }
 }
 
-fn write_file<P: AsRef<Path>>(name: &str, path: P, content: &[u8]) -> Result<()> {
-    File::create(path)
-        .with_context(|| format!("creating {name}"))?
-        .write_all(content)
-        .with_context(|| format!("writing {name}"))
-}
+const SETUP_IMPORTS: &str = indoc! {r#"
+import React from "react";
+"#};
+const SETUP_DETECTOR: &str = indoc! {r#"
+let DETECTOR_PROPS = {};
+"#};
+const SETUP_EVAL: &str = indoc! {r#"
+/* @turbopack-bench:eval-start */ 
+/* @turbopack-bench:eval-end */
+"#};
+const DETECTOR_ELEMENT: &str = indoc! {r#"
+<Detector {...DETECTOR_PROPS} />
+"#};
 
 impl TestAppBuilder {
     pub fn build(&self) -> Result<TestApp> {
@@ -68,8 +83,8 @@ impl TestAppBuilder {
         } else {
             TestAppTarget::Temp(tempfile::tempdir().context("creating tempdir")?)
         };
-        let app = TestApp { target };
-        let path = app.path();
+        let path = target.path();
+        let mut modules = vec![];
         let src = path.join("src");
         create_dir_all(&src).context("creating src dir")?;
 
@@ -82,25 +97,48 @@ impl TestAppBuilder {
         remaining_modules -= 1;
         let mut is_root = true;
 
+        let detector_path = src.join("detector.jsx");
+
         while let Some(file) = queue.pop_front() {
+            modules.push(file.clone());
+
+            let relative_detector = if detector_path.parent() == file.parent() {
+                "./detector.jsx".to_string()
+            } else {
+                pathdiff::diff_paths(&detector_path, file.parent().unwrap())
+                    .unwrap()
+                    .display()
+                    .to_string()
+            };
+            let import_detector = formatdoc! {r#"
+                import Detector from "{relative_detector}";
+            "#};
+
             let leaf = remaining_modules == 0
                 || (!queue.is_empty()
                     && (queue.len() + remaining_modules) % (self.flatness + 1) == 0);
             if leaf {
-                File::create(file)
-                    .context("creating file")?
-                    .write_all(
-                        r#"import React from "react";
+                write_file(
+                    &format!("leaf file {}", file.display()),
+                    &file,
+                    formatdoc! {r#"
+                        {SETUP_IMPORTS}
+                        {import_detector}
 
-function Triangle({ style }) {
-    return <polygon points="-5,4.33 0,-4.33 5,4.33" style={style} />;
-}
+                        {SETUP_DETECTOR}
+                        {SETUP_EVAL}
 
-export default React.memo(Triangle);
-"#
-                        .as_bytes(),
-                    )
-                    .context("writing file")?;
+                        function Triangle({{ style }}) {{
+                            return <>
+                                <polygon points="-5,4.33 0,-4.33 5,4.33" style={{style}} />
+                                {DETECTOR_ELEMENT}
+                            </>;
+                        }}
+
+                        export default React.memo(Triangle);
+                    "#}
+                    .as_bytes(),
+                )?;
             } else {
                 let in_subdirectory = decide(remaining_directories, remaining_modules / 3);
 
@@ -156,106 +194,111 @@ export default React.memo(Triangle);
                     })
                     .collect::<Vec<_>>()
                 {
-                    let (extra_imports, extra) = if is_root {
+                    let setup_hydration = if is_root {
                         is_root = false;
-                        (
-                            "import Detector from \"./detector.jsx\";\n",
-                            "\n        <Detector />",
-                        )
+                        "\nDETECTOR_PROPS.hydration = true;"
                     } else {
-                        ("", "")
+                        ""
                     };
-                    File::create(&file)
-                        .with_context(|| format!("creating file with children {}", file.display()))?
-                        .write_all(
-                            format!(
-                                r#"import React from "react";
-{a}
-{b}
-{c}
-{extra_imports}
-function Container({{ style }}) {{
-    return <>
-        <g transform="translate(0 -2.16)   scale(0.5 0.5)">
-            {a_}
-        </g>
-        <g transform="translate(-2.5 2.16) scale(0.5 0.5)">
-            {b_}
-        </g>
-        <g transform="translate(2.5 2.16)  scale(0.5 0.5)">
-            {c_}
-        </g>{extra}
-    </>;
-}}
+                    write_file(
+                        &format!("file with children {}", file.display()),
+                        &file,
+                        formatdoc! {r#"
+                            {SETUP_IMPORTS}
+                            {import_detector}
+                            {a}
+                            {b}
+                            {c}
 
-export default React.memo(Container);
-"#
-                            )
-                            .as_bytes(),
-                        )
-                        .with_context(|| {
-                            format!("writing file with children {}", file.display())
-                        })?;
+                            {SETUP_DETECTOR}{setup_hydration}
+                            {SETUP_EVAL}
+
+                            function Container({{ style }}) {{
+                                return <>
+                                    <g transform="translate(0 -2.16)   scale(0.5 0.5)">
+                                        {a_}
+                                    </g>
+                                    <g transform="translate(-2.5 2.16) scale(0.5 0.5)">
+                                        {b_}
+                                    </g>
+                                    <g transform="translate(2.5 2.16)  scale(0.5 0.5)">
+                                        {c_}
+                                    </g>
+                                    {DETECTOR_ELEMENT}
+                                </>;
+                            }}
+
+                            export default React.memo(Container);
+                        "#}
+                        .as_bytes(),
+                    )?;
                 } else {
                     unreachable!()
                 }
             }
         }
 
-        let bootstrap = r#"import React from "react";
-import { createRoot } from "react-dom/client";
-import Triangle from "./triangle.jsx";
+        let bootstrap = indoc! {r#"
+            import React from "react";
+            import { createRoot } from "react-dom/client";
+            import Triangle from "./triangle.jsx";
 
-function App() {
-    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ }}>
-        <Triangle style={{ fill: "white" }}/>
-    </svg>
-}
+            function App() {
+                return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ }}>
+                    <Triangle style={{ fill: "white" }}/>
+                </svg>
+            }
 
-document.body.style.backgroundColor = "black";
-let root = document.createElement("main");
-document.body.appendChild(root);
-createRoot(root).render(<App />);
-"#;
-        write_file("bootrap file", src.join("index.jsx"), bootstrap.as_bytes())?;
+            document.body.style.backgroundColor = "black";
+            let root = document.createElement("main");
+            document.body.appendChild(root);
+            createRoot(root).render(<App />);
+        "#};
+        write_file(
+            "bootstrap file",
+            src.join("index.jsx"),
+            bootstrap.as_bytes(),
+        )?;
 
         let pages = src.join("pages");
         create_dir_all(&pages)?;
 
         // The page is e. g. used by Next.js
-        let bootstrap_page = r#"import React from "react";
-import Triangle from "../triangle.jsx";
+        let bootstrap_page = indoc! {r#"
+            import React from "react";
+            import Triangle from "../triangle.jsx";
 
-export default function Page() {
-    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
-        <Triangle style={{ fill: "white" }}/>
-    </svg>
-}
-"#;
+            export default function Page() {
+                return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
+                    <Triangle style={{ fill: "white" }}/>
+                </svg>
+            }
+        "#};
         write_file(
-            "bootrap page",
+            "bootstrap page",
             pages.join("page.jsx"),
             bootstrap_page.as_bytes(),
         )?;
 
         // The page is e. g. used by Next.js
-        let bootstrap_static_page = r#"import React from "react";
-import Triangle from "../triangle.jsx";
+        let bootstrap_static_page = indoc! {r#"
+            import React from "react";
+            import Triangle from "../triangle.jsx";
 
-export default function Page() {
-    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
-        <Triangle style={{ fill: "white" }}/>
-    </svg>
-}
+            export default function Page() {
+                return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
+                    <Triangle style={{ fill: "white" }}/>
+                </svg>
+            }
 
-export function getStaticProps() {
-    return {
-        props: {}
-    };
-}
-"#;
+            export function getStaticProps() {
+                return {
+                    props: {}
+                };
+            }
+        "#};
         write_file(
-            "bootrap static page",
+            "bootstrap static page",
             pages.join("static.jsx"),
             bootstrap_static_page.as_bytes(),
         )?;
@@ -265,109 +308,121 @@ export function getStaticProps() {
         create_dir_all(app_dir.join("client"))?;
 
         // The page is e. g. used by Next.js
-        let bootstrap_app_page = r#"import React from "react";
-import Triangle from "../../triangle.jsx";
+        let bootstrap_app_page = indoc! {r#"
+            import React from "react";
+            import Triangle from "../../triangle.jsx";
 
-export default function Page() {
-    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
-        <Triangle style={{ fill: "white" }}/>
-    </svg>
-}
-"#;
-        File::create(app_dir.join("app/page.jsx"))
-            .context("creating bootstrap app page")?
-            .write_all(bootstrap_app_page.as_bytes())
-            .context("writing bootstrap app page")?;
+            export default function Page() {
+                return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
+                    <Triangle style={{ fill: "white" }}/>
+                </svg>
+            }
+        "#};
+        write_file(
+            "bootstrap app page",
+            app_dir.join("app/page.jsx"),
+            bootstrap_app_page.as_bytes(),
+        )?;
 
         // The component is used to measure hydration and commit time for app/page.jsx
-        let detector_component = r#""use client";
+        let detector_component = indoc! {r#"
+            "use client";
 
-import React from "react";
+            import React from "react";
 
-export default function Detector({ message }) {
-    React.useEffect(() => {
-        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
-    });
-    React.useEffect(() => {
-        message && globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(message);
-    }, [message]);
-    return null;
-}
-"#;
-        File::create(src.join("detector.jsx"))
-            .context("creating detector component")?
-            .write_all(detector_component.as_bytes())
-            .context("writing detector component")?;
+            export default function Detector({ message, hydration }) {
+                React.useEffect(() => {
+                    if (hydration) {
+                        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
+                    }
+                    if (message) {
+                        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(message);
+                    }
+                }, [message, hydration]);
+                return null;
+            }
+        "#};
+        write_file(
+            "detector component",
+            src.join("detector.jsx"),
+            detector_component.as_bytes(),
+        )?;
 
         // The page is e. g. used by Next.js
-        let bootstrap_app_client_page = r#""use client";
-import React from "react";
-import Triangle from "../../triangle.jsx";
+        let bootstrap_app_client_page = indoc! {r#"
+            "use client";
+            import React from "react";
+            import Triangle from "../../triangle.jsx";
 
-export default function Page() {
-    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
-        <Triangle style={{ fill: "white" }}/>
-    </svg>
-}
-"#;
-        File::create(app_dir.join("client/page.jsx"))
-            .context("creating bootstrap app client page")?
-            .write_all(bootstrap_app_client_page.as_bytes())
-            .context("writing bootstrap app client page")?;
+            export default function Page() {
+                return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
+                    <Triangle style={{ fill: "white" }}/>
+                </svg>
+            }
+        "#};
+        write_file(
+            "bootstrap app client page",
+            app_dir.join("client/page.jsx"),
+            bootstrap_app_client_page.as_bytes(),
+        )?;
 
         // This root layout is e. g. used by Next.js
-        let bootstrap_layout = r#"export default function RootLayout({ children }) {
-    return (
-        <html lang="en">
-            <head>
-                <meta charSet="UTF-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                <title>Turbopack Test App</title>
-            </head>
-            <body>
-                {children}
-            </body>
-        </html>
-    );
-}
-        "#;
-        File::create(app_dir.join("layout.jsx"))
-            .context("creating bootstrap html in root")?
-            .write_all(bootstrap_layout.as_bytes())
-            .context("writing bootstrap html in root")?;
+        let bootstrap_layout = indoc! {r#"
+            export default function RootLayout({ children }) {
+                return (
+                    <html lang="en">
+                        <head>
+                            <meta charSet="UTF-8" />
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                            <title>Turbopack Test App</title>
+                        </head>
+                        <body>
+                            {children}
+                        </body>
+                    </html>
+                );
+            }
+        "#};
+        write_file(
+            "bootstrap layout",
+            app_dir.join("layout.jsx"),
+            bootstrap_layout.as_bytes(),
+        )?;
 
         // This HTML is used e. g. by Vite
-        let bootstrap_html = r#"<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Turbopack Test App</title>
-    </head>
-    <body>
-        <script type="module" src="/src/index.jsx"></script>
-    </body>
-</html>
-"#;
+        let bootstrap_html = indoc! {r#"
+            <!DOCTYPE html>
+            <html lang="en">
+                <head>
+                    <meta charset="UTF-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <title>Turbopack Test App</title>
+                </head>
+                <body>
+                    <script type="module" src="/src/index.jsx"></script>
+                </body>
+            </html>
+        "#};
         write_file(
-            "bootstrap html",
+            "bootstrap html in root",
             path.join("index.html"),
             bootstrap_html.as_bytes(),
         )?;
 
         // This HTML is used e. g. by webpack
-        let bootstrap_html2 = r#"<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Turbopack Test App</title>
-    </head>
-    <body>
-        <script src="main.js"></script>
-    </body>
-</html>
-"#;
+        let bootstrap_html2 = indoc! {r#"
+            <!DOCTYPE html>
+            <html lang="en">
+                <head>
+                    <meta charset="UTF-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <title>Turbopack Test App</title>
+                </head>
+                <body>
+                    <script src="main.js"></script>
+                </body>
+            </html>
+        "#};
 
         let public = path.join("public");
         create_dir_all(&public).context("creating public dir")?;
@@ -405,13 +460,14 @@ export default function Page() {
                     "react-dom": package_json.react_version.clone(),
                 }
             });
-            File::create(path.join("package.json"))
-                .context("creating package.json")?
-                .write_all(format!("{:#}", package_json).as_bytes())
-                .context("writing package.json")?;
+            write_file(
+                "package.json",
+                path.join("package.json"),
+                format!("{:#}", package_json).as_bytes(),
+            )?;
         }
 
-        Ok(app)
+        Ok(TestApp { target, modules })
     }
 }
 
@@ -436,17 +492,30 @@ enum TestAppTarget {
     Temp(TempDir),
 }
 
+impl TestAppTarget {
+    /// Returns the path to the directory containing the app.
+    fn path(&self) -> &Path {
+        match &self {
+            TestAppTarget::Set(target) => target.as_path(),
+            TestAppTarget::Temp(target) => target.path(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TestApp {
     target: TestAppTarget,
+    modules: Vec<PathBuf>,
 }
 
 impl TestApp {
     /// Returns the path to the directory containing the app.
     pub fn path(&self) -> &Path {
-        match &self.target {
-            TestAppTarget::Set(target) => target.as_path(),
-            TestAppTarget::Temp(target) => target.path(),
-        }
+        self.target.path()
+    }
+
+    /// Returns the list of modules in this app.
+    pub fn modules(&self) -> &[PathBuf] {
+        &self.modules
     }
 }
