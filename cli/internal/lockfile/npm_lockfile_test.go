@@ -210,7 +210,9 @@ func Test_NpmPeerDependenciesMeta(t *testing.T) {
 	var buf bytes.Buffer
 
 	lockfile := getNpmLockfile(t)
-	lockfile.Encode(&buf)
+	if err := lockfile.Encode(&buf); err != nil {
+		t.Error(err)
+	}
 	s := buf.String()
 
 	expected := `"node_modules/eslint-config-next": {
