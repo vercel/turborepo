@@ -267,7 +267,7 @@ A sample pipeline that defines the root task `format` and opts the root into `te
 For example, the `build` script might be `turbo run build`. In this situation, including `//#build` in
 `turbo run build` will cause infinite recursion. It is for this reason that tasks run from the monorepo's root must
 be explicitly opted into via including `//#<task>` in the pipeline configuration. `turbo` includes
-some best-effort checking to produce an error in the recursion situations, but it is up to you to to only
+some best-effort checking to produce an error in the recursion situations, but it is up to you to only
 opt in those tasks which don't themselves trigger a `turbo` run that would recurse.
 
 <Callout
