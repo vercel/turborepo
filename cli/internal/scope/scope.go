@@ -131,7 +131,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 
 	if isAllPackages {
 		// no filters specified, run every package
-		for _, f := range ctx.PackageNames {
+		for _, f := range ctx.WorkspaceNames {
 			filteredPkgs.Add(f)
 		}
 	}

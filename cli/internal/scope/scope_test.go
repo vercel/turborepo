@@ -276,7 +276,7 @@ func TestResolvePackages(t *testing.T) {
 				GlobalDepPatterns: tc.globalDeps,
 			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
-				PackageNames:   packageNames,
+				WorkspaceNames: packageNames,
 				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile},
 				WorkspaceGraph: graph,
 			}, tui, logger)

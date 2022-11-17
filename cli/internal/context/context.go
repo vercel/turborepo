@@ -53,8 +53,8 @@ type Context struct {
 	// TODO(gsoltis): should the RootPackageJSON be included in WorkspaceInfos?
 	WorkspaceInfos graph.WorkspaceInfos
 
-	// PackageNames is all the names of the workspaces
-	PackageNames []string
+	// WorkspaceNames is all the names of the workspaces
+	WorkspaceNames []string
 
 	// WorkspaceGraph is a graph of workspace dependencies
 	// (based on package.json dependencies and devDependencies)
@@ -375,7 +375,7 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
 		c.WorkspaceInfos[pkg.Name] = pkg
-		c.PackageNames = append(c.PackageNames, pkg.Name)
+		c.WorkspaceNames = append(c.WorkspaceNames, pkg.Name)
 	}
 	return nil
 }
