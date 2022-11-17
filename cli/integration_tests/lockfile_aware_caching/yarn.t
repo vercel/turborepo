@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd) yarn
 
 Populate cache
-  $ ${SHIM} build --filter=a
+  $ ${TURBO} build --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -18,7 +18,7 @@ Populate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-  $ ${SHIM} build --filter=b
+  $ ${TURBO} build --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -38,7 +38,7 @@ Bump dependency for b and rebuild
 Only b should have a cache miss
   $ patch yarn.lock yarn-lock.patch
   patching file yarn.lock
-  $ ${SHIM} build  --filter=a
+  $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -54,7 +54,7 @@ Only b should have a cache miss
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 
-  $ ${SHIM} build  --filter=b
+  $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -73,7 +73,7 @@ Only b should have a cache miss
 Bump of root workspace invalidates all packages
   $ patch yarn.lock turbo-bump.patch
   patching file yarn.lock
-  $ ${SHIM} build  --filter=a
+  $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -88,7 +88,7 @@ Bump of root workspace invalidates all packages
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-  $ ${SHIM} build  --filter=b
+  $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

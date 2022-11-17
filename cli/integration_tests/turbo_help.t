@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/setup.sh
 
 Test help flag for shim
-  $ ${SHIM} -h
+  $ ${TURBO} -h
   turbo 
   The build system that makes ship happen
   
@@ -47,7 +47,7 @@ Test help flag for shim
 
 
 
-  $ ${SHIM} --help
+  $ ${TURBO} --help
   turbo 
   The build system that makes ship happen
   
@@ -88,7 +88,7 @@ Test help flag for shim
                         Caching
 
 Test help flag for shim's link command
-  $ ${SHIM} link -h
+  $ ${TURBO} link -h
   link 
   Link your local directory to a Vercel organization and enable remote caching
   
@@ -103,7 +103,7 @@ Test help flag for shim's link command
               Do not create or modify .gitignore (default false)
 
 Test help flag for shim's unlink command
-  $ ${SHIM} unlink -h
+  $ ${TURBO} unlink -h
   unlink 
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
@@ -115,7 +115,7 @@ Test help flag for shim's unlink command
               Help flag
 
 Test help flag for shim's login command
-  $ ${SHIM} login -h
+  $ ${TURBO} login -h
   login 
   Login to your Vercel account
   
@@ -130,7 +130,7 @@ Test help flag for shim's login command
               
 
 Test help flag for shim's logout command
-  $ ${SHIM} logout -h
+  $ ${TURBO} logout -h
   logout 
   Logout to your Vercel account
   

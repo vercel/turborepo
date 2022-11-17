@@ -4,7 +4,7 @@ Setup
 
 Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
-  $ ${SHIM} error
+  $ ${TURBO} error
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -35,7 +35,7 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   [1]
 
 Make sure error isn't cached
-  $ ${SHIM} error
+  $ ${TURBO} error
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -66,7 +66,7 @@ Make sure error isn't cached
   [1]
 
 Running with --output-mode=errors-only gives error output only
-  $ ${SHIM} --output-logs=errors-only error
+  $ ${TURBO} --output-logs=errors-only error
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

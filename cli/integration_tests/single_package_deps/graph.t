@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Graph
-  $ ${SHIM} run test --single-package --graph
+  $ ${TURBO} run test --single-package --graph
   
   digraph {
   \tcompound = "true" (esc)

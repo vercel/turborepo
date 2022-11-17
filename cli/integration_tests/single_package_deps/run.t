@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Check
-  $ ${SHIM} run test --single-package
+  $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing 8fc80cfff3b64237
@@ -22,7 +22,7 @@ Check
     Time:\s*[\.0-9]+m?s  (re)
   
 Run a second time, verify caching works because there is a config
-  $ ${SHIM} run test --single-package
+  $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output 8fc80cfff3b64237
@@ -41,7 +41,7 @@ Run a second time, verify caching works because there is a config
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 Run with --output-logs=hash-only
-  $ ${SHIM} run test --single-package --output-logs=hash-only
+  $ ${TURBO} run test --single-package --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, suppressing output 8fc80cfff3b64237
@@ -52,7 +52,7 @@ Run with --output-logs=hash-only
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 Run with --output-logs=errors-only
-  $ ${SHIM} run test --single-package --output-logs=errors-only
+  $ ${TURBO} run test --single-package --output-logs=errors-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
@@ -61,7 +61,7 @@ Run with --output-logs=errors-only
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 Run with --output-logs=none
-  $ ${SHIM} run test --single-package --output-logs=none
+  $ ${TURBO} run test --single-package --output-logs=none
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   

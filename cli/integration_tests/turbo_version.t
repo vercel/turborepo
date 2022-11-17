@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/setup.sh
 
 Test version matches that of version.txt
-  $ diff <(head -n 1 ${VERSION}) <(${SHIM} --version)
+  $ diff <(head -n 1 ${VERSION}) <(${TURBO} --version)
 
 TODO: resolve ambiguity
-$ ${SHIM} -v
+$ ${TURBO} -v
