@@ -93,14 +93,14 @@ impl TestAppBuilder {
         let mut remaining_dynamic_imports = self.dynamic_import_count;
 
         let mut queue = VecDeque::new();
-        queue.push_back(src.join("triangle.jsx"));
+        queue.push_back((src.join("triangle.jsx"), 0));
         remaining_modules -= 1;
         let mut is_root = true;
 
         let detector_path = src.join("detector.jsx");
 
-        while let Some(file) = queue.pop_front() {
-            modules.push(file.clone());
+        while let Some((file, depth)) = queue.pop_front() {
+            modules.push((file.clone(), depth));
 
             let relative_detector = if detector_path.parent() == file.parent() {
                 "./detector.jsx".to_string()
@@ -165,7 +165,7 @@ impl TestAppBuilder {
                         f.file_name().unwrap().to_str().unwrap(),
                         i
                     ));
-                    queue.push_back(f);
+                    queue.push_back((f, depth + 1));
                 }
                 remaining_modules = remaining_modules.saturating_sub(3);
 
@@ -505,7 +505,7 @@ impl TestAppTarget {
 #[derive(Debug)]
 pub struct TestApp {
     target: TestAppTarget,
-    modules: Vec<PathBuf>,
+    modules: Vec<(PathBuf, usize)>,
 }
 
 impl TestApp {
@@ -514,8 +514,8 @@ impl TestApp {
         self.target.path()
     }
 
-    /// Returns the list of modules in this app.
-    pub fn modules(&self) -> &[PathBuf] {
+    /// Returns the list of modules and their depth in this app.
+    pub fn modules(&self) -> &[(PathBuf, usize)] {
         &self.modules
     }
 }
