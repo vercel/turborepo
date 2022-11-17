@@ -164,7 +164,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
             let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref()));
             let input = (bundler.as_ref(), &test_app);
             let module_picker =
-                Lazy::new(|| Arc::new(ModulePicker::new(test_app.modules(), test_app.path())));
+                Lazy::new(|| Arc::new(ModulePicker::new(test_app.modules().to_vec())));
 
             resume_on_error(AssertUnwindSafe(|| {
                 g.bench_with_input(
@@ -206,7 +206,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 let mut exponential_duration = Duration::from_millis(100);
                                 loop {
                                     match make_change(
-                                        &modules[0],
+                                        &modules[0].0,
                                         bundler,
                                         &mut guard,
                                         location,
@@ -233,7 +233,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 // changes.
                                 for _ in 0..hmr_warmup {
                                     make_change(
-                                        &modules[0],
+                                        &modules[0].0,
                                         bundler,
                                         &mut guard,
                                         location,

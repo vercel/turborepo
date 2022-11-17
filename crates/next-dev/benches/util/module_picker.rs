@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
@@ -18,19 +15,19 @@ pub struct ModulePicker {
 
 impl ModulePicker {
     /// Creates a new module picker.
-    pub fn new(modules: &[PathBuf], prefix: &Path) -> Self {
+    pub fn new(mut modules: Vec<(PathBuf, usize)>) -> Self {
         let rng = StdRng::seed_from_u64(42);
 
-        let mut modules_by_depth: HashMap<_, Vec<_>> = HashMap::new();
-        for module in modules {
-            let depth = module.strip_prefix(prefix).unwrap().components().count();
+        // Ensure the module order is deterministic.
+        modules.sort();
 
-            modules_by_depth
-                .entry(depth)
-                .or_default()
-                .push(module.clone());
+        let mut modules_by_depth: HashMap<_, Vec<_>> = HashMap::new();
+        for (module, depth) in modules {
+            modules_by_depth.entry(depth).or_default().push(module);
         }
-        let depths = modules_by_depth.keys().copied().collect();
+        let mut depths: Vec<_> = modules_by_depth.keys().copied().collect();
+        // Ensure the depth order is deterministic.
+        depths.sort();
 
         Self {
             depths,
