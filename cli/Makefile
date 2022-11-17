@@ -78,7 +78,7 @@ corepack:
 	which corepack || npm install -g corepack@latest
 	corepack enable
 
-e2e: corepack install turbo
+e2e: corepack install shim
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt

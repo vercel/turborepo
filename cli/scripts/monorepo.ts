@@ -5,7 +5,10 @@ import fs from "fs-extra";
 import os from "os";
 import path from "path";
 const isWin = process.platform === "win32";
-const turboPath = path.join(__dirname, "../turbo" + (isWin ? ".exe" : ""));
+const turboPath = path.join(
+  __dirname,
+  "../../target/debug/turbo" + (isWin ? ".exe" : "")
+);
 
 type NPMClient = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
 
