@@ -8,11 +8,7 @@ export type OverlayProps = React.PropsWithChildren & {
   fixed?: boolean;
 };
 
-const Overlay: React.FC<OverlayProps> = function Overlay({
-  className,
-  children,
-  fixed,
-}) {
+export function Overlay({ className, children, fixed }: OverlayProps) {
   React.useEffect(() => {
     lock();
     return () => {
@@ -45,6 +41,4 @@ const Overlay: React.FC<OverlayProps> = function Overlay({
       {children}
     </div>
   );
-};
-
-export { Overlay };
+}

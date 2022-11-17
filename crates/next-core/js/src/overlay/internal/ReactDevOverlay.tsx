@@ -120,14 +120,14 @@ const shouldPreventDisplay = (
   return preventType.includes(errorType);
 };
 
+
 type ReactDevOverlayProps = {
   globalOverlay?: boolean;
   preventDisplay?: ErrorType[];
   children?: React.ReactNode;
 };
 
-const ReactDevOverlay: React.FunctionComponent<ReactDevOverlayProps> =
-  function ReactDevOverlay({ children, preventDisplay, globalOverlay }) {
+export default function ReactDevOverlay({ children, preventDisplay, globalOverlay }: ReactDevOverlayProps) {
     const [state, dispatch] = React.useReducer<
       React.Reducer<OverlayState, Bus.BusEvent>
     >(reducer, {
@@ -191,6 +191,4 @@ const ReactDevOverlay: React.FunctionComponent<ReactDevOverlayProps> =
         ) : undefined}
       </React.Fragment>
     );
-  };
-
-export default ReactDevOverlay;
+  }

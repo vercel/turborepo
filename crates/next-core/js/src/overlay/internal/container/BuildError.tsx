@@ -13,9 +13,7 @@ import { noop as css } from "../helpers/noop-template";
 
 export type BuildErrorProps = { issue: Issue };
 
-export const BuildError: React.FC<BuildErrorProps> = function BuildError({
-  issue,
-}) {
+export function BuildError({ issue }: BuildErrorProps) {
   const noop = React.useCallback(() => {}, []);
   return (
     <Overlay fixed>
@@ -46,7 +44,7 @@ export const BuildError: React.FC<BuildErrorProps> = function BuildError({
       </Dialog>
     </Overlay>
   );
-};
+}
 
 export const styles = css`
   .nextjs-container-build-error-header > h4 {

@@ -5,14 +5,10 @@ export type ToastProps = React.PropsWithChildren & {
   className?: string;
 };
 
-export const Toast: React.FC<ToastProps> = function Toast({
-  onClick,
-  children,
-  className,
-}) {
+export function Toast({ onClick, children, className }: ToastProps) {
   return (
     <div data-nextjs-toast onClick={onClick} className={className}>
       <div data-nextjs-toast-wrapper>{children}</div>
     </div>
   );
-};
+}

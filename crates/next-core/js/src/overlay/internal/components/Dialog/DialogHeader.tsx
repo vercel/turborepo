@@ -4,15 +4,10 @@ export type DialogHeaderProps = React.PropsWithChildren & {
   className?: string;
 };
 
-const DialogHeader: React.FC<DialogHeaderProps> = function DialogHeader({
-  children,
-  className,
-}) {
+export function DialogHeader({ children, className }: DialogHeaderProps) {
   return (
     <div data-nextjs-dialog-header className={className}>
       {children}
     </div>
   );
-};
-
-export { DialogHeader };
+}

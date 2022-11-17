@@ -8,9 +8,7 @@ import { getFrameSource, OriginalStackFrame } from "../helpers/stack-frame";
 
 export type RuntimeErrorProps = { error: ReadyRuntimeError };
 
-const CallStackFrame: React.FC<{
-  frame: OriginalStackFrame;
-}> = function CallStackFrame({ frame }) {
+function CallStackFrame({ frame }: { frame: OriginalStackFrame }) {
   // TODO: ability to expand resolved frames
   // TODO: render error or external indicator
 
@@ -68,11 +66,9 @@ const CallStackFrame: React.FC<{
       </div>
     </div>
   );
-};
+}
 
-const RuntimeError: React.FC<RuntimeErrorProps> = function RuntimeError({
-  error,
-}) {
+export function RuntimeError({ error }: RuntimeErrorProps) {
   const firstFirstPartyFrameIndex = React.useMemo<number>(() => {
     return error.frames.findIndex(
       (entry) =>
@@ -162,7 +158,7 @@ const RuntimeError: React.FC<RuntimeErrorProps> = function RuntimeError({
       ) : undefined}
     </React.Fragment>
   );
-};
+}
 
 export const styles = css`
   button[data-nextjs-data-runtime-error-collapsed-action] {
@@ -212,5 +208,3 @@ export const styles = css`
     display: unset;
   }
 `;
-
-export { RuntimeError };

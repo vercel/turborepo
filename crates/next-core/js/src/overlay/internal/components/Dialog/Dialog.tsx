@@ -9,12 +9,7 @@ export type DialogProps = React.PropsWithChildren & {
   onClose?: (e: MouseEvent | TouchEvent) => void;
 };
 
-const Dialog: React.FC<DialogProps> = function Dialog({
-  children,
-  type,
-  onClose,
-  ...props
-}) {
+export function Dialog({ children, type, onClose, ...props }: DialogProps) {
   const [dialog, setDialog] = React.useState<HTMLDivElement | null>(null);
   const onDialog = React.useCallback(
     (node: React.SetStateAction<HTMLDivElement | null>) => {
@@ -70,6 +65,4 @@ const Dialog: React.FC<DialogProps> = function Dialog({
       {children}
     </div>
   );
-};
-
-export { Dialog };
+}

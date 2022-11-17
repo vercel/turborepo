@@ -4,15 +4,10 @@ export type DialogContentProps = React.PropsWithChildren & {
   className?: string;
 };
 
-const DialogContent: React.FC<DialogContentProps> = function DialogContent({
-  children,
-  className,
-}) {
+export function DialogContent({ children, className }: DialogContentProps) {
   return (
     <div data-nextjs-dialog-content className={className}>
       {children}
     </div>
   );
-};
-
-export { DialogContent };
+}

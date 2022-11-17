@@ -3,9 +3,7 @@ import * as React from "react";
 
 export type TerminalProps = { content: string };
 
-export const Terminal: React.FC<TerminalProps> = function Terminal({
-  content,
-}) {
+export function Terminal({ content }: TerminalProps) {
   const decoded = React.useMemo(() => {
     return Anser.ansiToJson(content, {
       json: true,
@@ -35,4 +33,4 @@ export const Terminal: React.FC<TerminalProps> = function Terminal({
       </pre>
     </div>
   );
-};
+}

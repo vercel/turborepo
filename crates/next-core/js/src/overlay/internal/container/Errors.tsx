@@ -42,9 +42,7 @@ function getErrorSignature(ev: SupportedErrorEvent): string {
   }
 }
 
-const HotlinkedText: React.FC<{
-  text: string;
-}> = function HotlinkedText(props) {
+function HotlinkedText(props: { text: string }) {
   const { text } = props;
 
   const linkRegex = /https?:\/\/[^\s/$.?#].[^\s"]*/i;
@@ -69,9 +67,9 @@ const HotlinkedText: React.FC<{
         : text}
     </>
   );
-};
+}
 
-export const Errors: React.FC<ErrorsProps> = function Errors({ errors }) {
+export function Errors({ errors }: ErrorsProps) {
   const [lookups, setLookups] = React.useState(
     {} as { [eventId: string]: ReadyErrorEvent }
   );
@@ -287,7 +285,7 @@ export const Errors: React.FC<ErrorsProps> = function Errors({ errors }) {
       </Dialog>
     </Overlay>
   );
-};
+}
 
 export const styles = css`
   .nextjs-container-errors-header > h1 {

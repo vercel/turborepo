@@ -7,10 +7,7 @@ import { getFrameSource } from "../../helpers/stack-frame";
 
 export type CodeFrameProps = { stackFrame: StackFrame; codeFrame: string };
 
-export const CodeFrame: React.FC<CodeFrameProps> = function CodeFrame({
-  stackFrame,
-  codeFrame,
-}) {
+export function CodeFrame({ stackFrame, codeFrame }: CodeFrameProps) {
   // Strip leading spaces out of the code frame:
   const formattedFrame = React.useMemo<string>(() => {
     const lines = codeFrame.split(/\r?\n/g);
@@ -112,4 +109,4 @@ export const CodeFrame: React.FC<CodeFrameProps> = function CodeFrame({
       </pre>
     </div>
   );
-};
+}
