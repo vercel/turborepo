@@ -202,6 +202,11 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		parentDir := selector.parentDir
 		for pkgName := range changedPkgs {
 			if parentDir != "" {
+				// Type assert/coerce to string here because we want to use
+				// this value in a map that has string keys.
+				// TODO(mehulkar) `changedPkgs` is a util.Set, we could make a `util.PackageNamesSet``
+				// or something similar that is all strings.
+				pkgNameStr := pkgName.(string)
 				if pkgName == util.RootPkgName {
 					// The root package changed, only add it if
 					// the parentDir is equivalent to the root
@@ -210,7 +215,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 					} else if matches {
 						entryPackages.Add(pkgName)
 					}
-				} else if pkg, ok := r.WorkspaceInfos[pkgName.(string)]; !ok {
+				} else if pkg, ok := r.WorkspaceInfos[pkgNameStr]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
 				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
