@@ -1,7 +1,7 @@
 use std::{
     any::Any,
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::{Debug, Display},
     future::Future,
     pin::Pin,
@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoMap;
 use serde::{Deserialize, Serialize};
 
 pub use crate::id::BackendJobId;
@@ -107,8 +108,8 @@ impl PersistentTaskType {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct CellMappings {
     // TODO use [SerializableMagicAny]
-    pub by_key: HashMap<(ValueTypeId, SharedValue), usize>,
-    pub by_type: HashMap<ValueTypeId, (usize, Vec<usize>)>,
+    pub by_key: AutoMap<(ValueTypeId, SharedValue), usize>,
+    pub by_type: AutoMap<ValueTypeId, (usize, Vec<usize>)>,
 }
 
 impl CellMappings {

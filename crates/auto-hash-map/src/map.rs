@@ -1,7 +1,14 @@
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
-    fmt::Debug,
+    fmt::{Debug, Formatter},
     hash::{BuildHasher, BuildHasherDefault, Hash},
+    marker::PhantomData,
+};
+
+use serde::{
+    de::{MapAccess, Visitor},
+    ser::SerializeMap,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 
 use crate::{MAX_LIST_SIZE, MIN_HASH_SIZE};
@@ -26,6 +33,12 @@ impl<K: Debug, V: Debug, H> Debug for AutoMap<K, V, H> {
 
 impl<K, V> AutoMap<K, V, BuildHasherDefault<DefaultHasher>> {
     pub fn new() -> Self {
+        AutoMap::List(Vec::new())
+    }
+}
+
+impl<K, V, H> AutoMap<K, V, H> {
+    pub fn with_hasher() -> Self {
         AutoMap::List(Vec::new())
     }
 }
@@ -167,11 +180,34 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            AutoMap::List(list) => list.is_empty(),
+            AutoMap::Map(map) => map.is_empty(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             AutoMap::List(list) => list.len(),
             AutoMap::Map(map) => map.len(),
         }
+    }
+
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+        match self {
+            AutoMap::List(list) => ValuesMut::List(list.iter_mut()),
+            AutoMap::Map(map) => ValuesMut::Map(map.values_mut()),
+        }
+    }
+}
+
+impl<K, V, H> IntoIterator for AutoMap<K, V, H> {
+    type Item = (K, V);
+    type IntoIter = IntoIter<K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_iter()
     }
 }
 
@@ -207,9 +243,43 @@ impl<K, V> Iterator for IntoIter<K, V> {
     }
 }
 
+pub enum ValuesMut<'a, K, V> {
+    List(std::slice::IterMut<'a, (K, V)>),
+    Map(std::collections::hash_map::ValuesMut<'a, K, V>),
+}
+
+impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
+    type Item = &'a mut V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ValuesMut::List(iter) => iter.next().map(|(_, v)| v),
+            ValuesMut::Map(iter) => iter.next(),
+        }
+    }
+}
+
 pub enum Entry<'a, K, V> {
     Occupied(OccupiedEntry<'a, K, V>),
     Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K, V> Entry<'a, K, V> {
+    pub fn or_insert_with(self, default: impl FnOnce() -> V) -> &'a mut V {
+        match self {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(default()),
+        }
+    }
+}
+
+impl<'a, K, V: Default> Entry<'a, K, V> {
+    pub fn or_default(self) -> &'a mut V {
+        match self {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(Default::default()),
+        }
+    }
 }
 
 pub enum OccupiedEntry<'a, K, V> {
@@ -225,6 +295,13 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
         match self {
             OccupiedEntry::List { list, index } => &mut list[*index].1,
             OccupiedEntry::Map(e) => e.get_mut(),
+        }
+    }
+
+    pub fn into_mut(self) -> &'a mut V {
+        match self {
+            OccupiedEntry::List { list, index } => &mut list[index].1,
+            OccupiedEntry::Map(e) => e.into_mut(),
         }
     }
 
@@ -250,6 +327,89 @@ impl<'a, K, V> VacantEntry<'a, K, V> {
             }
             VacantEntry::Map(entry) => entry.insert(value),
         }
+    }
+}
+
+impl<K, V, H> Serialize for AutoMap<K, V, H>
+where
+    K: Eq + Hash + Serialize,
+    V: Serialize,
+    H: BuildHasher,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            AutoMap::List(list) => {
+                let mut map = serializer.serialize_map(Some(list.len()))?;
+                for (k, v) in list {
+                    map.serialize_entry(k, v)?;
+                }
+                map.end()
+            }
+            AutoMap::Map(map) => (**map).serialize(serializer),
+        }
+    }
+}
+
+impl<'de, K, V, H> Deserialize<'de> for AutoMap<K, V, H>
+where
+    K: Eq + Hash + Deserialize<'de>,
+    V: Deserialize<'de>,
+    H: BuildHasher + Default,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct AutoMapVisitor<K, V, H> {
+            phantom: PhantomData<AutoMap<K, V, H>>,
+        }
+
+        impl<'de, K, V, H> Visitor<'de> for AutoMapVisitor<K, V, H>
+        where
+            K: Eq + Hash + Deserialize<'de>,
+            V: Deserialize<'de>,
+            H: BuildHasher + Default,
+        {
+            type Value = AutoMap<K, V, H>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("a map")
+            }
+
+            fn visit_map<M>(self, mut m: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                if let Some(size) = m.size_hint() {
+                    if size < MAX_LIST_SIZE {
+                        let mut list = Vec::with_capacity(size);
+                        while let Some((k, v)) = m.next_entry()? {
+                            list.push((k, v));
+                        }
+                        return Ok(AutoMap::List(list));
+                    } else {
+                        let mut map =
+                            Box::new(HashMap::with_capacity_and_hasher(size, H::default()));
+                        while let Some((k, v)) = m.next_entry()? {
+                            map.insert(k, v);
+                        }
+                        return Ok(AutoMap::Map(map));
+                    }
+                }
+                let mut map = AutoMap::with_hasher();
+                while let Some((k, v)) = m.next_entry()? {
+                    map.insert(k, v);
+                }
+                Ok(map)
+            }
+        }
+
+        deserializer.deserialize_map(AutoMapVisitor {
+            phantom: PhantomData::<AutoMap<K, V, H>>,
+        })
     }
 }
 

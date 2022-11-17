@@ -204,6 +204,9 @@ dependencies = [
 [[package]]
 name = "auto-hash-map"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "auto_impl"
@@ -5244,6 +5247,7 @@ version = "0.1.0"
 dependencies = [
  "any_key",
  "anyhow",
+ "auto-hash-map",
  "bitflags",
  "erased-serde",
  "event-listener",

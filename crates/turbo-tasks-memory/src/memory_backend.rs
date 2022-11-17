@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
+use auto_hash_map::AutoSet;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
@@ -203,7 +204,7 @@ impl Backend for MemoryBackend {
     }
 
     type ExecutionScopeFuture<T: Future<Output = Result<()>> + Send + 'static> =
-        TaskLocalFuture<RefCell<HashSet<TaskDependency>>, T>;
+        TaskLocalFuture<RefCell<AutoSet<TaskDependency>>, T>;
     fn execution_scope<T: Future<Output = Result<()>> + Send + 'static>(
         &self,
         _task: TaskId,
@@ -493,8 +494,8 @@ impl Backend for MemoryBackend {
 }
 
 pub(crate) enum Job {
-    RemoveFromScopes(HashSet<TaskId>, Vec<TaskScopeId>),
-    RemoveFromScope(HashSet<TaskId>, TaskScopeId),
+    RemoveFromScopes(AutoSet<TaskId>, Vec<TaskScopeId>),
+    RemoveFromScope(AutoSet<TaskId>, TaskScopeId),
     ScheduleWhenDirty(Vec<TaskId>),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.

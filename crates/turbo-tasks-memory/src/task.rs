@@ -13,6 +13,7 @@ use std::{
 };
 
 use anyhow::Result;
+use auto_hash_map::AutoSet;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use tokio::task_local;
 use turbo_tasks::{
@@ -42,7 +43,7 @@ pub enum TaskDependency {
 task_local! {
     /// Vc/Scopes that are read during task execution
     /// These will be stored as dependencies when the execution has finished
-    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<HashSet<TaskDependency>>;
+    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<AutoSet<TaskDependency>>;
 }
 
 type OnceTaskFn = Mutex<Option<Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'static>>>>;
@@ -128,7 +129,7 @@ struct TaskExecutionData {
     /// might affect this task.
     ///
     /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-    dependencies: HashSet<TaskDependency>,
+    dependencies: AutoSet<TaskDependency>,
 
     /// Mappings from key or data type to cell index, to store the data in the
     /// same cell again.
@@ -157,7 +158,7 @@ struct TaskState {
     state_type: TaskStateType,
 
     /// Children are only modified from execution
-    children: HashSet<TaskId>,
+    children: AutoSet<TaskId>,
 
     /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,

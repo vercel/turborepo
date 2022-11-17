@@ -6,20 +6,37 @@ use std::{
 
 use crate::AutoMap;
 
-pub struct AutoSet<K: Hash, H: BuildHasher = BuildHasherDefault<DefaultHasher>> {
+#[derive(Clone)]
+pub struct AutoSet<K, H = BuildHasherDefault<DefaultHasher>> {
     map: AutoMap<K, (), H>,
 }
 
-impl<K: Hash + Eq + Debug, H: BuildHasher + Default> Debug for AutoSet<K, H> {
+impl<K, H> Default for AutoSet<K, H> {
+    fn default() -> Self {
+        Self {
+            map: Default::default(),
+        }
+    }
+}
+
+impl<K: Debug, H> Debug for AutoSet<K, H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_set().entries(self.iter()).finish()
     }
 }
 
-impl<K: Hash + Eq> AutoSet<K, BuildHasherDefault<DefaultHasher>> {
+impl<K> AutoSet<K, BuildHasherDefault<DefaultHasher>> {
     pub fn new() -> Self {
         Self {
             map: AutoMap::new(),
+        }
+    }
+}
+
+impl<K, H> AutoSet<K, H> {
+    pub fn with_hasher() -> Self {
+        Self {
+            map: AutoMap::with_hasher(),
         }
     }
 }
@@ -36,6 +53,16 @@ impl<K: Hash + Eq, H: BuildHasher + Default> AutoSet<K, H> {
     pub fn contains(&self, key: &K) -> bool {
         self.map.contains_key(key)
     }
+}
+
+impl<K, H> AutoSet<K, H> {
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 
     pub fn iter(&self) -> Iter<'_, K> {
         Iter(self.map.iter())
@@ -43,6 +70,15 @@ impl<K: Hash + Eq, H: BuildHasher + Default> AutoSet<K, H> {
 
     pub fn into_iter(self) -> IntoIter<K> {
         IntoIter(self.map.into_iter())
+    }
+}
+
+impl<K, H> IntoIterator for AutoSet<K, H> {
+    type Item = K;
+    type IntoIter = IntoIter<K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_iter()
     }
 }
 
