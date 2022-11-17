@@ -45,7 +45,7 @@ type NpmPackage struct {
 	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
 	PeerDependenciesMeta map[string]struct {
-		Optional bool `json:"optional"`
+		Optional bool `json:"optional,omitempty"`
 	} `json:"peerDependenciesMeta,omitempty"`
 	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
 
