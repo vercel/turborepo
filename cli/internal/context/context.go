@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -48,8 +49,8 @@ func (w *Warnings) append(err error) {
 
 // Context of the CLI
 type Context struct {
-	// TODO(gsoltis): should the RootPackageJSON be included in PackageInfos?
-	PackageInfos     map[interface{}]*fs.PackageJSON
+	// TODO(gsoltis): should the RootPackageJSON be included in WorkspaceInfos?
+	WorkspaceInfos   graph.WorkspaceInfos
 	PackageNames     []string
 	TopologicalGraph dag.AcyclicGraph
 	RootNode         string
@@ -129,11 +130,11 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // SinglePackageGraph constructs a Context instance from a single package.
 func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
-	packageInfos := make(map[interface{}]*fs.PackageJSON)
-	packageInfos[util.RootPkgName] = rootPackageJSON
+	workspaceInfos := make(graph.WorkspaceInfos)
+	workspaceInfos[util.RootPkgName] = rootPackageJSON
 	c := &Context{
-		PackageInfos: packageInfos,
-		RootNode:     core.ROOT_NODE_NAME,
+		WorkspaceInfos: workspaceInfos,
+		RootNode:       core.ROOT_NODE_NAME,
 	}
 	c.TopologicalGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
 	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
@@ -148,7 +149,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
-	c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
+	c.WorkspaceInfos = make(graph.WorkspaceInfos)
 	c.RootNode = core.ROOT_NODE_NAME
 
 	var warnings Warnings
@@ -193,7 +194,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 		return nil, err
 	}
 	populateGraphWaitGroup := &errgroup.Group{}
-	for _, pkg := range c.PackageInfos {
+	for _, pkg := range c.WorkspaceInfos {
 		pkg := pkg
 		populateGraphWaitGroup.Go(func() error {
 			return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings)
@@ -210,7 +211,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 	}
-	c.PackageInfos[util.RootPkgName] = rootPackageJSON
+	c.WorkspaceInfos[util.RootPkgName] = rootPackageJSON
 
 	return c, warnings.errorOrNil()
 }
@@ -283,7 +284,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
+		if item, ok := c.WorkspaceInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
 			c.TopologicalGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
@@ -355,11 +356,11 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 		c.TopologicalGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
-		if c.PackageInfos[pkg.Name] != nil {
-			existing := c.PackageInfos[pkg.Name]
+		if c.WorkspaceInfos[pkg.Name] != nil {
+			existing := c.WorkspaceInfos[pkg.Name]
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
-		c.PackageInfos[pkg.Name] = pkg
+		c.WorkspaceInfos[pkg.Name] = pkg
 		c.PackageNames = append(c.PackageNames, pkg.Name)
 	}
 	return nil

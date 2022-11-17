@@ -335,7 +335,7 @@ func Test_dontSquashTasks(t *testing.T) {
 	completeGraph := &graph.CompleteGraph{
 		TopologicalGraph: *topoGraph,
 		Pipeline:         pipeline,
-		PackageInfos:     workspaceInfos,
+		WorkspaceInfos:   workspaceInfos,
 	}
 
 	engine, err := buildTaskGraphEngine(completeGraph, rs)

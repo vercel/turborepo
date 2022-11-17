@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/doublestar"
-	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -23,7 +23,7 @@ type PackagesChangedInRange = func(fromRef string, toRef string) (util.Set, erro
 
 type Resolver struct {
 	Graph                  *dag.AcyclicGraph
-	PackageInfos           map[interface{}]*fs.PackageJSON
+	WorkspaceInfos         graph.WorkspaceInfos
 	Cwd                    string
 	PackagesChangedInRange PackagesChangedInRange
 }
@@ -210,7 +210,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 					} else if matches {
 						entryPackages.Add(pkgName)
 					}
-				} else if pkg, ok := r.PackageInfos[pkgName]; !ok {
+				} else if pkg, ok := r.WorkspaceInfos[pkgName.(string)]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
 				} else if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
@@ -228,7 +228,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		if parentDir == r.Cwd {
 			entryPackages.Add(util.RootPkgName)
 		} else {
-			for name, pkg := range r.PackageInfos {
+			for name, pkg := range r.WorkspaceInfos {
 				if matches, err := doublestar.PathMatch(parentDir, filepath.Join(r.Cwd, pkg.Dir.ToStringDuringMigration())); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
@@ -276,7 +276,7 @@ func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Se
 		parentDir = filepath.Join(r.Cwd, selector.parentDir)
 	}
 	entryPackages := make(util.Set)
-	for name, pkg := range r.PackageInfos {
+	for name, pkg := range r.WorkspaceInfos {
 		if parentDir == "" {
 			entryPackages.Add(name)
 		} else if matches, err := doublestar.PathMatch(parentDir, pkg.Dir.ToStringDuringMigration()); err != nil {

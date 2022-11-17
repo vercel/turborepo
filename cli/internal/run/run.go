@@ -232,7 +232,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	g := &graph.CompleteGraph{
 		TopologicalGraph: pkgDepGraph.TopologicalGraph,
 		Pipeline:         pipeline,
-		PackageInfos:     pkgDepGraph.PackageInfos,
+		WorkspaceInfos:   pkgDepGraph.WorkspaceInfos,
 		GlobalHash:       globalHash,
 		RootNode:         pkgDepGraph.RootNode,
 	}
@@ -253,7 +253,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
-	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.WorkspaceInfos)
 	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.base.RepoRoot)
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")

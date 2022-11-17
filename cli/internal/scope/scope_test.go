@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/context"
-	"github.com/vercel/turbo/cli/internal/fs"
+	internalGraph "github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
@@ -56,7 +56,7 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
-	packagesInfos := map[interface{}]*fs.PackageJSON{
+	workspaceInfos := internalGraph.WorkspaceInfos{
 		"app0": {
 			Dir: turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
 		},
@@ -83,7 +83,7 @@ func TestResolvePackages(t *testing.T) {
 		},
 	}
 	packageNames := []string{}
-	for name := range packagesInfos {
+	for name := range workspaceInfos {
 		packageNames = append(packageNames, name.(string))
 	}
 
@@ -275,7 +275,7 @@ func TestResolvePackages(t *testing.T) {
 				IgnorePatterns:    []string{tc.ignore},
 				GlobalDepPatterns: tc.globalDeps,
 			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
-				PackageInfos:     packagesInfos,
+				WorkspaceInfos:   workspaceInfos,
 				PackageNames:     packageNames,
 				PackageManager:   &packagemanager.PackageManager{Lockfile: tc.lockfile},
 				TopologicalGraph: graph,

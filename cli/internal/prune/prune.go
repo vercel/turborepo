@@ -3,6 +3,7 @@ package prune
 import (
 	"bufio"
 	"fmt"
+
 	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/spf13/cobra"
@@ -93,7 +94,7 @@ func (p *prune) prune(opts *opts) error {
 		return errors.Wrap(err, "could not construct graph")
 	}
 	p.base.Logger.Trace("scope", "value", opts.scope)
-	target, scopeIsValid := ctx.PackageInfos[opts.scope]
+	target, scopeIsValid := ctx.WorkspaceInfos[opts.scope]
 	if !scopeIsValid {
 		return errors.Errorf("invalid scope: package %v not found", opts.scope)
 	}
@@ -142,12 +143,18 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	targets := []interface{}{opts.scope}
+	targets := []string{opts.scope}
 	internalDeps, err := ctx.TopologicalGraph.Ancestors(opts.scope)
 	if err != nil {
 		return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
 	}
-	targets = append(targets, internalDeps.List()...)
+
+	// Use for loop so we can coerce to string
+	// .List() returns a list of interface{} types, but
+	// we know they are strings.
+	for _, dep := range internalDeps.List() {
+		targets = append(targets, dep.(string))
+	}
 
 	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
 	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
@@ -156,33 +163,34 @@ func (p *prune) prune(opts *opts) error {
 		if internalDep == ctx.RootNode {
 			continue
 		}
-		workspaces = append(workspaces, ctx.PackageInfos[internalDep].Dir)
-		originalDir := ctx.PackageInfos[internalDep].Dir.RestoreAnchor(p.base.RepoRoot)
+
+		workspaces = append(workspaces, ctx.WorkspaceInfos[internalDep].Dir)
+		originalDir := ctx.WorkspaceInfos[internalDep].Dir.RestoreAnchor(p.base.RepoRoot)
 		info, err := originalDir.Lstat()
 		if err != nil {
 			return errors.Wrapf(err, "failed to lstat %s", originalDir)
 		}
-		targetDir := ctx.PackageInfos[internalDep].Dir.RestoreAnchor(fullDir)
+		targetDir := ctx.WorkspaceInfos[internalDep].Dir.RestoreAnchor(fullDir)
 		if err := targetDir.MkdirAllMode(info.Mode()); err != nil {
 			return errors.Wrapf(err, "failed to create folder %s for %v", targetDir, internalDep)
 		}
 
-		if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
+		if err := fs.RecursiveCopy(ctx.WorkspaceInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
 		if opts.docker {
-			jsonDir := outDir.UntypedJoin("json", ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
+			jsonDir := outDir.UntypedJoin("json", ctx.WorkspaceInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.PackageInfos[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
+			if err := fs.RecursiveCopy(ctx.WorkspaceInfos[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		}
 
-		lockfileKeys = append(lockfileKeys, ctx.PackageInfos[internalDep].TransitiveDeps...)
+		lockfileKeys = append(lockfileKeys, ctx.WorkspaceInfos[internalDep].TransitiveDeps...)
 
-		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.PackageInfos[internalDep].Name))
+		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.WorkspaceInfos[internalDep].Name))
 	}
 	p.base.Logger.Trace("new workspaces", "value", workspaces)
 
