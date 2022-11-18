@@ -39,6 +39,17 @@ fn write_file<P: AsRef<Path>>(name: &str, path: P, content: &[u8]) -> Result<()>
         .with_context(|| format!("writing {name}"))
 }
 
+/// How to run effects in components.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectMode {
+    /// As a direct `useEffect` hook in the component's body.
+    Hook,
+    /// Rendering an <Effect /> client-side component that has the `useEffect`
+    /// hook instead. Good for testing React Server Components, as they can't
+    /// use `useEffect` hooks directly.
+    Component,
+}
+
 #[derive(Debug)]
 pub struct TestAppBuilder {
     pub target: Option<PathBuf>,
@@ -47,6 +58,7 @@ pub struct TestAppBuilder {
     pub dynamic_import_count: usize,
     pub flatness: usize,
     pub package_json: Option<PackageJsonConfig>,
+    pub effect_mode: EffectMode,
 }
 
 impl Default for TestAppBuilder {
@@ -58,6 +70,7 @@ impl Default for TestAppBuilder {
             dynamic_import_count: 0,
             flatness: 5,
             package_json: Some(Default::default()),
+            effect_mode: EffectMode::Hook,
         }
     }
 }
@@ -65,15 +78,25 @@ impl Default for TestAppBuilder {
 const SETUP_IMPORTS: &str = indoc! {r#"
 import React from "react";
 "#};
-const SETUP_DETECTOR: &str = indoc! {r#"
-let DETECTOR_PROPS = {};
+const SETUP_EFFECT_PROPS: &str = indoc! {r#"
+let EFFECT_PROPS = {};
 "#};
 const SETUP_EVAL: &str = indoc! {r#"
 /* @turbopack-bench:eval-start */ 
 /* @turbopack-bench:eval-end */
 "#};
-const DETECTOR_ELEMENT: &str = indoc! {r#"
-<Detector {...DETECTOR_PROPS} />
+const USE_EFFECT: &str = indoc! {r#"
+React.useEffect(() => {
+    if (EFFECT_PROPS.hydration) {
+        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
+    }
+    if (EFFECT_PROPS.message) {
+        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(EFFECT_PROPS.message);
+    }
+}, [EFFECT_PROPS]);
+"#};
+const EFFECT_ELEMENT: &str = indoc! {r#"
+<Effect {...EFFECT_PROPS} />
 "#};
 
 impl TestAppBuilder {
@@ -97,22 +120,31 @@ impl TestAppBuilder {
         remaining_modules -= 1;
         let mut is_root = true;
 
-        let detector_path = src.join("detector.jsx");
+        let (additional_body, additional_elements) = match self.effect_mode {
+            EffectMode::Component => ("", EFFECT_ELEMENT),
+            EffectMode::Hook => (USE_EFFECT, ""),
+        };
 
         while let Some((file, depth)) = queue.pop_front() {
             modules.push((file.clone(), depth));
 
-            let relative_detector = if detector_path.parent() == file.parent() {
-                "./detector.jsx".to_string()
-            } else {
-                pathdiff::diff_paths(&detector_path, file.parent().unwrap())
-                    .unwrap()
-                    .display()
-                    .to_string()
+            let setup_imports = match self.effect_mode {
+                EffectMode::Hook => SETUP_IMPORTS.to_string(),
+                EffectMode::Component => {
+                    let relative_effect = if src == file.parent().unwrap() {
+                        "./effect.jsx".to_string()
+                    } else {
+                        pathdiff::diff_paths(&src.join("effect.jsx"), file.parent().unwrap())
+                            .unwrap()
+                            .display()
+                            .to_string()
+                    };
+                    formatdoc! {r#"
+                        {SETUP_IMPORTS}
+                        import Effect from "{relative_effect}";
+                    "#}
+                }
             };
-            let import_detector = formatdoc! {r#"
-                import Detector from "{relative_detector}";
-            "#};
 
             let leaf = remaining_modules == 0
                 || (!queue.is_empty()
@@ -122,16 +154,16 @@ impl TestAppBuilder {
                     &format!("leaf file {}", file.display()),
                     &file,
                     formatdoc! {r#"
-                        {SETUP_IMPORTS}
-                        {import_detector}
+                        {setup_imports}
 
-                        {SETUP_DETECTOR}
+                        {SETUP_EFFECT_PROPS}
                         {SETUP_EVAL}
 
                         function Triangle({{ style }}) {{
+                            {additional_body}
                             return <>
                                 <polygon points="-5,4.33 0,-4.33 5,4.33" style={{style}} />
-                                {DETECTOR_ELEMENT}
+                                {additional_elements}
                             </>;
                         }}
 
@@ -196,7 +228,7 @@ impl TestAppBuilder {
                 {
                     let setup_hydration = if is_root {
                         is_root = false;
-                        "\nDETECTOR_PROPS.hydration = true;"
+                        "\nEFFECT_PROPS.hydration = true;"
                     } else {
                         ""
                     };
@@ -204,16 +236,16 @@ impl TestAppBuilder {
                         &format!("file with children {}", file.display()),
                         &file,
                         formatdoc! {r#"
-                            {SETUP_IMPORTS}
-                            {import_detector}
+                            {setup_imports}
                             {a}
                             {b}
                             {c}
 
-                            {SETUP_DETECTOR}{setup_hydration}
+                            {SETUP_EFFECT_PROPS}{setup_hydration}
                             {SETUP_EVAL}
 
                             function Container({{ style }}) {{
+                                {additional_body}
                                 return <>
                                     <g transform="translate(0 -2.16)   scale(0.5 0.5)">
                                         {a_}
@@ -224,7 +256,7 @@ impl TestAppBuilder {
                                     <g transform="translate(2.5 2.16)  scale(0.5 0.5)">
                                         {c_}
                                     </g>
-                                    {DETECTOR_ELEMENT}
+                                    {additional_elements}
                                 </>;
                             }}
 
@@ -324,29 +356,24 @@ impl TestAppBuilder {
             bootstrap_app_page.as_bytes(),
         )?;
 
-        // The component is used to measure hydration and commit time for app/page.jsx
-        let detector_component = indoc! {r#"
-            "use client";
+        if matches!(self.effect_mode, EffectMode::Component) {
+            // The component is used to measure hydration and commit time for app/page.jsx
+            let effect_component = formatdoc! {r#"
+                "use client";
 
-            import React from "react";
+                import React from "react";
 
-            export default function Detector({ message, hydration }) {
-                React.useEffect(() => {
-                    if (hydration) {
-                        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
-                    }
-                    if (message) {
-                        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(message);
-                    }
-                }, [message, hydration]);
-                return null;
-            }
-        "#};
-        write_file(
-            "detector component",
-            src.join("detector.jsx"),
-            detector_component.as_bytes(),
-        )?;
+                export default function Effect(EFFECT_PROPS) {{
+                    {USE_EFFECT}
+                    return null;
+                }}
+            "#};
+            write_file(
+                "effect component",
+                src.join("effect.jsx"),
+                effect_component.as_bytes(),
+            )?;
+        }
 
         // The page is e. g. used by Next.js
         let bootstrap_app_client_page = indoc! {r#"
