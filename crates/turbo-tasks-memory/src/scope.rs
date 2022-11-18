@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
     mem::take,
@@ -7,7 +7,7 @@ use std::{
     sync::atomic::{AtomicIsize, AtomicUsize, Ordering},
 };
 
-use auto_hash_map::AutoSet;
+use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::Mutex;
 use turbo_tasks::{
@@ -152,7 +152,7 @@ pub struct TaskScopeState {
     /// When they change these tasks are invalidated
     dependent_tasks: AutoSet<TaskId>,
     /// Emitted collectibles with count and dependent_tasks by trait type
-    collectibles: HashMap<TraitTypeId, (CountHashSet<RawVc>, AutoSet<TaskId>)>,
+    collectibles: AutoMap<TraitTypeId, (CountHashSet<RawVc>, AutoSet<TaskId>)>,
 }
 
 impl TaskScope {
@@ -169,7 +169,7 @@ impl TaskScope {
                 active: 0,
                 dirty_tasks: AutoSet::new(),
                 children: CountHashSet::new(),
-                collectibles: HashMap::new(),
+                collectibles: AutoMap::new(),
                 dependent_tasks: AutoSet::new(),
                 event: Event::new(|| {
                     #[cfg(feature = "print_scope_updates")]
@@ -196,7 +196,7 @@ impl TaskScope {
                 active: 1,
                 dirty_tasks: AutoSet::new(),
                 children: CountHashSet::new(),
-                collectibles: HashMap::new(),
+                collectibles: AutoMap::new(),
                 dependent_tasks: AutoSet::new(),
                 event: Event::new(|| {
                     #[cfg(feature = "print_scope_updates")]
@@ -325,7 +325,7 @@ impl TaskScope {
         trait_id: TraitTypeId,
         reader: TaskId,
         backend: &MemoryBackend,
-    ) -> HashSet<RawVc> {
+    ) -> AutoSet<RawVc> {
         let collectibles = self.read_collectibles_recursive(
             self_id,
             trait_id,
@@ -333,7 +333,7 @@ impl TaskScope {
             backend,
             &mut HashMap::with_hasher(BuildNoHashHasher::default()),
         );
-        HashSet::from_iter(collectibles.iter().copied())
+        AutoSet::from_iter(collectibles.iter().copied())
     }
 
     fn read_collectibles_recursive(

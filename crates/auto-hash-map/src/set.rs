@@ -2,7 +2,10 @@ use std::{
     collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{BuildHasher, BuildHasherDefault, Hash},
+    marker::PhantomData,
 };
+
+use serde::{Deserialize, Serialize};
 
 use crate::AutoMap;
 
@@ -127,6 +130,55 @@ impl<K> Iterator for IntoIter<K> {
     }
 }
 
+impl<K, H> Serialize for AutoSet<K, H>
+where
+    K: Serialize,
+    H: BuildHasher,
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter())
+    }
+}
+
+impl<'de, K, H> Deserialize<'de> for AutoSet<K, H>
+where
+    K: Deserialize<'de> + Hash + Eq,
+    H: BuildHasher + Default,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct AutoSetVisitor<K, H>(PhantomData<AutoSet<K, H>>);
+
+        impl<'de, K, H> serde::de::Visitor<'de> for AutoSetVisitor<K, H>
+        where
+            K: Deserialize<'de> + Hash + Eq,
+            H: BuildHasher + Default,
+        {
+            type Value = AutoSet<K, H>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a set")
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut set = if let Some(size) = seq.size_hint() {
+                    AutoSet::with_capacity_and_hasher(size, H::default())
+                } else {
+                    AutoSet::with_hasher()
+                };
+                while let Some(item) = seq.next_element()? {
+                    set.insert(item);
+                }
+                Ok(set)
+            }
+        }
+
+        deserializer.deserialize_seq(AutoSetVisitor(std::marker::PhantomData))
+    }
+}
+
 impl<K: Eq + Hash, H: BuildHasher> PartialEq for AutoSet<K, H> {
     fn eq(&self, other: &Self) -> bool {
         self.map == other.map
@@ -141,11 +193,9 @@ where
     H: BuildHasher + Default,
 {
     fn from_iter<T: IntoIterator<Item = K>>(iter: T) -> Self {
-        let mut set = AutoSet::with_hasher();
-        for k in iter {
-            set.insert(k);
+        Self {
+            map: AutoMap::from_iter(iter.into_iter().map(|item| (item, ()))),
         }
-        set
     }
 }
 

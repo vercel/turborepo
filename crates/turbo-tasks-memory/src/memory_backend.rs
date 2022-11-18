@@ -1,11 +1,6 @@
 use std::{
-    borrow::Cow,
-    cell::RefCell,
-    collections::{HashSet, VecDeque},
-    future::Future,
-    hash::BuildHasherDefault,
-    pin::Pin,
-    time::Duration,
+    borrow::Cow, cell::RefCell, collections::VecDeque, future::Future, hash::BuildHasherDefault,
+    pin::Pin, time::Duration,
 };
 
 use anyhow::{bail, Result};
@@ -348,7 +343,7 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         self.with_task(id, |task| {
             task.try_read_task_collectibles(reader, trait_id, self, turbo_tasks)
         })

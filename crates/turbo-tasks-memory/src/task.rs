@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     cmp::Ordering,
-    collections::{HashSet, VecDeque},
+    collections::VecDeque,
     fmt::{self, Debug, Display, Formatter, Write},
     future::Future,
     hash::Hash,
@@ -1440,7 +1440,7 @@ impl Task {
         trait_id: TraitTypeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         let mut state = self.state.write();
         state = self.ensure_root_scoped(state, backend, turbo_tasks);
         // We need to wait for all foreground jobs to be finished as there could be

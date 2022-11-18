@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BinaryHeap, HashSet},
+    collections::BinaryHeap,
     fmt::Debug,
     future::Future,
     mem::{replace, take},
@@ -1451,7 +1451,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         _trait_id: TraitTypeId,
         _reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         todo!()
     }
 

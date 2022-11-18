@@ -529,6 +529,16 @@ where
     H: BuildHasher + Default,
 {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let (lower, _) = iter.size_hint();
+        if lower > MAX_LIST_SIZE {
+            let map = iter.collect::<HashMap<K, V, H>>();
+            // The hint is not enforced
+            if map.len() < MIN_HASH_SIZE {
+                return AutoMap::List(map.into_iter().collect());
+            }
+            return AutoMap::Map(Box::new(map));
+        }
         let mut map = AutoMap::with_hasher();
         for (k, v) in iter {
             map.insert(k, v);
