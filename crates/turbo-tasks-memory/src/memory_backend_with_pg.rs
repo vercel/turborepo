@@ -13,6 +13,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use concurrent_queue::ConcurrentQueue;
 use turbo_tasks::{
     backend::{
@@ -67,12 +68,12 @@ struct MemoryTaskState {
     need_persist: bool,
     has_changes: bool,
     freshness: TaskFreshness,
-    cells: Vec<(TaskCell, HashSet<TaskId>)>,
+    cells: Vec<(TaskCell, AutoSet<TaskId>)>,
     cell_mappings: Option<CellMappings>,
     output: Option<Result<RawVc, SharedError>>,
-    output_dependent: HashSet<TaskId>,
-    dependencies: HashSet<RawVc>,
-    children: HashSet<TaskId>,
+    output_dependent: AutoSet<TaskId>,
+    dependencies: AutoSet<RawVc>,
+    children: AutoSet<TaskId>,
     event: Event,
     event_cells: Event,
 }
@@ -271,11 +272,11 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
                     cells: data
                         .cells
                         .into_iter()
-                        .map(|s| (s, HashSet::new()))
+                        .map(|s| (s, AutoSet::new()))
                         .collect(),
                     cell_mappings: data.cell_mappings,
                     output: Some(Ok(data.output)),
-                    output_dependent: HashSet::new(),
+                    output_dependent: AutoSet::new(),
                     dependencies: data.dependencies.into_iter().collect(),
                     children: data.children.into_iter().collect(),
                     need_persist: Default::default(),
@@ -1105,7 +1106,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             mem_state.output = Some(result.map_err(SharedError::new));
             take(&mut mem_state.output_dependent)
         } else {
-            HashSet::new()
+            AutoSet::new()
         };
 
         drop(state);
@@ -1481,7 +1482,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             let index = mem_state.cells.len();
             mem_state
                 .cells
-                .push((TaskCell::Content(CellContent(None)), HashSet::new()));
+                .push((TaskCell::Content(CellContent(None)), AutoSet::new()));
             index
         } else {
             panic!("Only Persistent Tasks can store data")

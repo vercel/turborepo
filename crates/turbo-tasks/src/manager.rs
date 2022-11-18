@@ -17,6 +17,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use futures::FutureExt;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
@@ -145,7 +146,7 @@ pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &HashSet<TaskId>);
+    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>);
 }
 
 impl TaskIdProvider for &dyn TurboTasksBackendApi {
@@ -810,7 +811,7 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &HashSet<TaskId>) {
+    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>) {
         let result = TASKS_TO_NOTIFY.try_with(|tasks_list| {
             let mut list = tasks_list.borrow_mut();
             list.extend(tasks.iter());

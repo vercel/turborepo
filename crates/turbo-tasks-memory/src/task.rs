@@ -219,8 +219,8 @@ struct MaybeCollectibles {
 /// The collectibles of a task.
 #[derive(Default)]
 struct Collectibles {
-    emitted: HashSet<(TraitTypeId, RawVc)>,
-    unemitted: HashSet<(TraitTypeId, RawVc)>,
+    emitted: AutoSet<(TraitTypeId, RawVc)>,
+    unemitted: AutoSet<(TraitTypeId, RawVc)>,
 }
 
 impl MaybeCollectibles {
@@ -505,7 +505,7 @@ impl Task {
                     let unemitted = collectibles.unemitted;
                     state.scopes.iter().for_each(|id| {
                         backend.with_scope(id, |scope| {
-                            let mut tasks = HashSet::new();
+                            let mut tasks = AutoSet::new();
                             {
                                 let mut state = scope.state.lock();
                                 emitted
@@ -808,7 +808,7 @@ impl Task {
             }
 
             if let Some(collectibles) = state.collectibles.as_ref() {
-                let mut tasks = HashSet::new();
+                let mut tasks = AutoSet::new();
                 {
                     let mut scope_state = scope.state.lock();
                     collectibles
@@ -850,7 +850,7 @@ impl Task {
             scope.decrement_tasks();
 
             if let Some(collectibles) = state.collectibles.as_ref() {
-                let mut tasks = HashSet::new();
+                let mut tasks = AutoSet::new();
                 {
                     let mut scope_state = scope.state.lock();
                     collectibles
@@ -996,7 +996,7 @@ impl Task {
                 self.ty
             );
             let mut active_counter = 0isize;
-            let mut tasks = HashSet::new();
+            let mut tasks = AutoSet::new();
             let mut scopes_to_add_as_parent = Vec::new();
             let mut scopes_to_remove_as_parent = Vec::new();
             for (scope_id, count) in scopes.iter() {
@@ -1471,7 +1471,7 @@ impl Task {
     ) {
         let mut state = self.state.write();
         if state.collectibles.emit(trait_type, collectible) {
-            let mut tasks = HashSet::new();
+            let mut tasks = AutoSet::new();
             state
                 .scopes
                 .iter()
@@ -1496,7 +1496,7 @@ impl Task {
     ) {
         let mut state = self.state.write();
         if state.collectibles.unemit(trait_type, collectible) {
-            let mut tasks = HashSet::new();
+            let mut tasks = AutoSet::new();
             state
                 .scopes
                 .iter()

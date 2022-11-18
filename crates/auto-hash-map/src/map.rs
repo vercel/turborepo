@@ -136,6 +136,30 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
         }
     }
 
+    pub fn extend(&mut self, iter: impl IntoIterator<Item = (K, V)>) {
+        let iter = iter.into_iter();
+        match self {
+            AutoMap::List(list) => {
+                let (lower, _) = iter.size_hint();
+                if list.len() + lower > MAX_LIST_SIZE {
+                    let map = self.convert_to_map();
+                    map.extend(iter);
+                    // The hint is not enforced
+                    if map.len() < MIN_HASH_SIZE {
+                        self.convert_to_list();
+                    }
+                    return;
+                }
+                for (k, v) in iter {
+                    self.insert(k, v);
+                }
+            }
+            AutoMap::Map(map) => {
+                map.extend(iter);
+            }
+        }
+    }
+
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         if self.len() >= MAX_LIST_SIZE {
             self.convert_to_map();

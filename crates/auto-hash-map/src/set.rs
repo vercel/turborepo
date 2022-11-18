@@ -62,6 +62,10 @@ impl<K: Hash + Eq, H: BuildHasher + Default> AutoSet<K, H> {
         self.map.remove(key).is_some()
     }
 
+    pub fn extend(&mut self, iter: impl IntoIterator<Item = K>) {
+        self.map.extend(iter.into_iter().map(|item| (item, ())))
+    }
+
     pub fn contains(&self, key: &K) -> bool {
         self.map.contains_key(key)
     }

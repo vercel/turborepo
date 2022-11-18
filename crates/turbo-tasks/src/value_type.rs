@@ -1,12 +1,11 @@
 use std::{
     any::{type_name, Any},
-    collections::HashSet,
     fmt::{self, Debug, Display, Formatter},
     hash::Hash,
     sync::Arc,
 };
 
-use auto_hash_map::AutoMap;
+use auto_hash_map::{AutoMap, AutoSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -73,7 +72,7 @@ pub struct ValueType {
     /// A readable name of the type
     pub name: String,
     /// List of traits available
-    pub traits: HashSet<TraitTypeId>,
+    pub traits: AutoSet<TraitTypeId>,
     /// List of trait methods available
     pub trait_methods: AutoMap<(TraitTypeId, String), FunctionId>,
 
@@ -135,7 +134,7 @@ impl ValueType {
     pub fn new<T>() -> Self {
         Self {
             name: std::any::type_name::<T>().to_string(),
-            traits: HashSet::new(),
+            traits: AutoSet::new(),
             trait_methods: AutoMap::new(),
             magic_serialization: None,
             any_serialization: None,
@@ -148,7 +147,7 @@ impl ValueType {
     >() -> Self {
         Self {
             name: std::any::type_name::<T>().to_string(),
-            traits: HashSet::new(),
+            traits: AutoSet::new(),
             trait_methods: AutoMap::new(),
             magic_serialization: Some((
                 <dyn MagicAny>::as_serialize::<T>,
@@ -164,7 +163,7 @@ impl ValueType {
     >() -> Self {
         Self {
             name: std::any::type_name::<T>().to_string(),
-            traits: HashSet::new(),
+            traits: AutoSet::new(),
             trait_methods: AutoMap::new(),
             magic_serialization: None,
             any_serialization: Some((any_as_serialize::<T>, AnyDeserializeSeed::new::<T>())),
