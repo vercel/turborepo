@@ -163,9 +163,7 @@ struct TaskState {
     event: Event,
 
     // Stats:
-    executions: u32,
-    total_duration: Duration,
-    last_duration: Duration,
+    stats: TaskStats,
 }
 
 impl TaskState {
@@ -178,9 +176,7 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
-            executions: Default::default(),
-            total_duration: Default::default(),
-            last_duration: Default::default(),
+            stats: TaskStats::new(),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
         }
@@ -195,9 +191,7 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
-            executions: Default::default(),
-            total_duration: Default::default(),
-            last_duration: Default::default(),
+            stats: TaskStats::new(),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
         }
@@ -296,6 +290,7 @@ use crate::{
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
     stats::{self, StatsReferences},
+    task_stats::TaskStats,
     MemoryBackend,
 };
 
@@ -471,7 +466,7 @@ impl Task {
             }
             Scheduled => {
                 state.state_type = InProgress;
-                state.executions += 1;
+                state.stats.increment_executions();
                 // TODO we need to reconsider the approach of doing scope changes in background
                 // since they affect collectibles and need to be computed eagerly to allow
                 // strongly_consistent to work properly.
@@ -576,8 +571,7 @@ impl Task {
         let mut clear_dependencies = false;
         {
             let mut state = self.state.write();
-            state.total_duration += duration;
-            state.last_duration = duration;
+            state.stats.register_duration(duration);
             match state.state_type {
                 InProgress => {
                     state.state_type = Done;
@@ -1190,9 +1184,7 @@ impl Task {
     /// For testing purposes
     pub fn reset_executions(&self) {
         let mut state = self.state.write();
-        if state.executions > 1 {
-            state.executions = 1;
-        }
+        state.stats.reset_executions()
     }
 
     pub fn is_pending(&self) -> bool {
@@ -1202,17 +1194,25 @@ impl Task {
 
     pub fn reset_stats(&self) {
         let mut state = self.state.write();
-        state.executions = 0;
-        state.total_duration = Duration::ZERO;
-        state.last_duration = Duration::ZERO;
+        state.stats.reset();
     }
 
     pub fn get_stats_info(&self, backend: &MemoryBackend) -> TaskStatsInfo {
         let state = self.state.read();
+
+        let (total_duration, last_duration, executions) = match &state.stats {
+            TaskStats::Small(stats) => (None, stats.last_duration(), None),
+            TaskStats::Full(stats) => (
+                Some(stats.total_duration()),
+                stats.last_duration(),
+                Some(stats.executions()),
+            ),
+        };
+
         TaskStatsInfo {
-            total_duration: state.total_duration,
-            last_duration: state.last_duration,
-            executions: state.executions,
+            total_duration,
+            last_duration,
+            executions,
             root_scoped: matches!(state.scopes, TaskScopes::Root(_)),
             child_scopes: match state.scopes {
                 TaskScopes::Root(_) => 1,
@@ -1580,9 +1580,9 @@ impl PartialEq for Task {
 impl Eq for Task {}
 
 pub struct TaskStatsInfo {
-    pub total_duration: Duration,
+    pub total_duration: Option<Duration>,
     pub last_duration: Duration,
-    pub executions: u32,
+    pub executions: Option<u64>,
     pub root_scoped: bool,
     pub child_scopes: usize,
     pub active: bool,

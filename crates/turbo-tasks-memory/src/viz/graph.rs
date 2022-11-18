@@ -182,19 +182,46 @@ fn visualize_stats_references_internal<'a>(
 }
 
 fn get_task_label(ty: &TaskType, stats: &TaskStats, max_values: &MaxValues) -> String {
-    let total = as_frac(
-        stats.total_duration.as_millis(),
-        max_values.total_duration.as_millis(),
-    );
-    let avg = as_frac(
-        stats.total_duration.as_micros() / (stats.executions as u128),
-        max_values.avg_duration.as_micros(),
-    );
+    let (total_millis, total_color) = if let Some((total_duration, max_total_duration)) =
+        stats.total_duration.zip(max_values.total_duration)
+    {
+        let total_color = as_color(as_frac(
+            total_duration.as_millis(),
+            max_total_duration.as_millis(),
+        ));
+        let total_millis = format!("{}ms", total_duration.as_millis());
+        (total_millis, total_color)
+    } else {
+        ("N/A".to_string(), "#ffffff".to_string())
+    };
+
+    let (avg_label, avg_color) = if let Some(((executions, total_duration), max_avg_duration)) =
+        stats
+            .executions
+            .zip(stats.total_duration)
+            .zip(max_values.avg_duration)
+    {
+        let avg_color = as_color(as_frac(
+            total_duration.as_micros() / (executions as u128),
+            max_avg_duration.as_micros(),
+        ));
+        let avg = (total_duration.as_micros() as u64 / executions) as f32 / 1000.0;
+        (format!("avg {}ms", avg), avg_color)
+    } else {
+        ("avg N/A".to_string(), "#ffffff".to_string())
+    };
     let count = as_frac(stats.count, max_values.count);
-    let updates = as_frac(
-        stats.executions.saturating_sub(stats.count),
-        max_values.updates,
-    );
+    let (updates_label, updates_color) =
+        if let Some((executions, max_updates)) = stats.executions.zip(max_values.updates) {
+            let updates_color = as_color(as_frac(
+                executions.saturating_sub(stats.count as u64),
+                max_updates as u64,
+            ));
+            let updates = executions - stats.count as u64;
+            (format!("{}", updates), updates_color)
+        } else {
+            ("N/A".to_string(), "#ffffff".to_string())
+        };
     let roots = as_frac(stats.roots, max_values.roots);
     let max_scopes = max_values.scopes.saturating_sub(100);
     let scopes = as_frac(
@@ -222,16 +249,16 @@ fn get_task_label(ty: &TaskType, stats: &TaskStats, max_values: &MaxValues) -> S
         <td bgcolor=\"{}\">avg {}</td>
     </tr>
 </table>>",
-        as_color(total),
+        total_color,
         escape_html(&ty.to_string()),
         as_color(count),
         stats.count,
-        as_color(updates),
-        stats.executions - stats.count,
-        as_color(total),
-        stats.total_duration.as_millis(),
-        as_color(avg),
-        (stats.total_duration.as_micros() as usize / stats.executions) as f32 / 1000.0,
+        updates_color,
+        updates_label,
+        total_color,
+        total_millis,
+        avg_color,
+        avg_label,
         as_color(roots),
         stats.roots,
         as_color(scopes),

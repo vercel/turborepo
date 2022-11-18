@@ -357,6 +357,10 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     console_subscriber::init();
     register();
 
+    if options.full_stats {
+        turbo_tasks_memory::enable_full_stats();
+    }
+
     let dir = options
         .dir
         .as_ref()

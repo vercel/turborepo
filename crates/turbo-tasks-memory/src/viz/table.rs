@@ -72,24 +72,39 @@ pub fn create_table(root: GroupTree) -> String {
             as_frac_color(stats.active_count, max_values.active_count),
             stats.active_count
         )?;
+        let (executions_label, executions_color) =
+            if let Some((executions, max_updates)) = stats.executions.zip(max_values.updates) {
+                (
+                    executions.saturating_sub(stats.count as u64).to_string(),
+                    as_frac_color(
+                        executions.saturating_sub(stats.count as u64),
+                        max_updates as u64,
+                    ),
+                )
+            } else {
+                ("N/A".to_string(), "white".to_string())
+            };
         write!(
             out,
             "<td bgcolor=\"{}\">{}</td>",
-            as_frac_color(
-                stats.executions.saturating_sub(stats.count),
-                max_values.updates
-            ),
-            stats.executions.saturating_sub(stats.count)
+            executions_color, executions_label
         )?;
+        let (total_duration_micros, total_duration_label, total_duration_color) =
+            if let Some((total_duration, max_total_duration)) =
+                stats.total_duration.zip(max_values.total_duration)
+            {
+                (
+                    format!("{}", total_duration.as_micros()),
+                    FormatDuration(total_duration).to_string(),
+                    as_frac_color(total_duration.as_millis(), max_total_duration.as_millis()),
+                )
+            } else {
+                (String::new(), "N/A".to_string(), "white".to_string())
+            };
         write!(
             out,
             "<td bgcolor=\"{}\" data-sort=\"{}\">{}</td>",
-            as_frac_color(
-                stats.total_duration.as_millis(),
-                max_values.total_duration.as_millis(),
-            ),
-            stats.total_duration.as_micros(),
-            FormatDuration(stats.total_duration)
+            total_duration_color, total_duration_micros, total_duration_label
         )?;
         write!(
             out,
@@ -111,15 +126,27 @@ pub fn create_table(root: GroupTree) -> String {
             stats.total_update_duration.as_micros(),
             FormatDuration(stats.total_update_duration)
         )?;
+        let (avg_duration_micros, avg_duration_label, avg_duration_color) =
+            if let Some(((total_duration, executions), max_avg_duration)) = stats
+                .total_duration
+                .zip(stats.executions)
+                .zip(max_values.avg_duration)
+            {
+                (
+                    format!("{}", (total_duration / (executions as u32)).as_micros()),
+                    FormatDuration(total_duration / (executions as u32)).to_string(),
+                    as_frac_color(
+                        total_duration.as_micros() / (executions as u128),
+                        max_avg_duration.as_micros(),
+                    ),
+                )
+            } else {
+                (String::new(), "N/A".to_string(), "white".to_string())
+            };
         write!(
             out,
             "<td bgcolor=\"{}\" data-sort=\"{}\">{}</td>",
-            as_frac_color(
-                stats.total_duration.as_micros() / (stats.executions as u128),
-                max_values.avg_duration.as_micros()
-            ),
-            (stats.total_duration / (stats.executions as u32)).as_micros(),
-            FormatDuration(stats.total_duration / (stats.executions as u32))
+            avg_duration_color, avg_duration_micros, avg_duration_label
         )?;
         write!(
             out,

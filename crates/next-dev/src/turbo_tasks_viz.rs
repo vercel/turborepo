@@ -73,7 +73,10 @@ impl ContentSource for TurboTasksSource {
                     let active_only = query.contains_key("active");
                     b.with_all_cached_tasks(|task| {
                         stats.add_id_conditional(b, task, |_, info| {
-                            info.executions > 0 && (!active_only || info.active)
+                            info.executions
+                                .map(|executions| executions > 0)
+                                .unwrap_or(true)
+                                && (!active_only || info.active)
                         });
                     });
                     let tree = stats.treeify(ReferenceType::Dependency);

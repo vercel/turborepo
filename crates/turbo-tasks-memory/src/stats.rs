@@ -60,10 +60,10 @@ pub enum ReferenceType {
 pub struct TaskStats {
     pub count: usize,
     pub active_count: usize,
-    pub executions: usize,
+    pub executions: Option<u64>,
     pub roots: usize,
     pub scopes: usize,
-    pub total_duration: Duration,
+    pub total_duration: Option<Duration>,
     pub total_current_duration: Duration,
     pub total_update_duration: Duration,
     pub max_duration: Duration,
@@ -75,10 +75,10 @@ impl Default for TaskStats {
         Self {
             count: 0,
             active_count: 0,
-            executions: 0,
+            executions: None,
             roots: 0,
             scopes: 0,
-            total_duration: Duration::ZERO,
+            total_duration: None,
             total_current_duration: Duration::ZERO,
             total_update_duration: Duration::ZERO,
             max_duration: Duration::ZERO,
@@ -105,7 +105,11 @@ impl Stats {
     }
 
     pub fn add(&mut self, backend: &MemoryBackend, task: &Task) {
-        self.add_conditional(backend, task, |_, info| info.executions > 0)
+        self.add_conditional(backend, task, |_, info| {
+            info.executions
+                .map(|executions| executions > 0)
+                .unwrap_or(true)
+        })
     }
 
     pub fn add_conditional(
@@ -132,13 +136,17 @@ impl Stats {
         if active {
             stats.active_count += 1
         }
-        stats.total_duration += total_duration;
+        if let Some(total_duration) = total_duration {
+            *stats.total_duration.get_or_insert(Duration::ZERO) += total_duration;
+        }
         stats.total_current_duration += last_duration;
-        if executions > 1 {
+        if executions.map(|executions| executions > 1).unwrap_or(true) {
             stats.total_update_duration += last_duration;
         }
         stats.max_duration = max(stats.max_duration, last_duration);
-        stats.executions += executions as usize;
+        if let Some(executions) = executions {
+            *stats.executions.get_or_insert(0) += executions;
+        }
         if root_scoped {
             stats.roots += 1;
         }
