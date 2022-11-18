@@ -242,7 +242,7 @@ func (pc Pipeline) HasTask(task string) bool {
 func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// Store the raw struct data json, so we can log it later.
 	c.Raw = make(map[string]interface{})
-	_ = json.Unmarshal([]byte(data), &c.Raw)
+	_ = json.Unmarshal(data, &c.Raw)
 
 	// unmarshal the rawJSON into a struct, so we can do some
 	// custom stuff to the json fields to the TaskDefinition we
