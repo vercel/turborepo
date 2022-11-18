@@ -231,3 +231,59 @@ jobs:
           fetch-depth: 2
     # ...
 ```
+
+## Caching with github actions/cache action
+
+The following steps exemplify how you could use [actions/cache](https://github.com/actions/cache) to cache your monorepo builds on github.
+
+1. Supply the desired cache output location with the `--cache-dir` flag to your `turbo build` command
+  - Example `package.json` with `.turbo` as desired output directory:
+  ```json
+  {
+    "name": "my-turborepo",
+    "scripts": {
+      "build": "turbo run build --cache-dir=".turbo",
+    },
+    "devDependencies": {
+      "turbo": "1.2.5"
+    }
+  }
+  ```
+2. In your github ci file, make sure the `path` attribute within the `actions/cache` action has the same value
+  - State the desired cache key for your future runs to check against
+    - In the example below, we used the `${{ runner.os }}-turbo-` prefix to hit against. This allows us to hit the cache even though the current `${{ github.sha }}` env value is different in the current ci run.
+
+  - Example `ci` yaml with `.turbo` as chosen cache folder
+    ```yaml highlight="13-19"
+    name: Build with local github cache
+    on:
+      push:
+        branches: [master]
+
+      jobs:
+        build:
+          runs-on: ubuntu-latest
+          steps:
+            - name: Check out code
+              uses: actions/checkout@v3
+
+            - name: Cache turbo build setup
+              uses: actions/cache@v3
+              with:
+                path: .turbo
+                key: ${{ runner.os }}-turbo-${{ github.sha }}
+                restore-keys: |
+                  ${{ runner.os }}-turbo-
+
+            - name: Setup Node.js environment
+              uses: actions/setup-node@v3
+              with:
+                node-version: 16
+                cache: 'npm'
+
+            - name: Install dependencies
+              run: npm install
+
+            - name: Build
+              run: npm run build
+      ```
