@@ -86,17 +86,13 @@ jobs:
             !*.md
 
       - name: Go related changes
+        ## Warning: When we add Integration tests to this workflow
+        # we need to add shim/ directory to this as well
         id: go
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            pnpm-lock.yaml
-            package.json
             cli/**
-            packages/**
-            shim/**
-            !**.md
-            !**.mdx
 
       - name: Examples related changes
         id: examples
@@ -162,28 +158,10 @@ jobs:
       - name: golangci Linting
         uses: golangci/golangci-lint-action@v3
         with:
-          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          # More config options documented here: https://github.com/golangci/golangci-lint-action
           version: latest
-
-          # Optional: working directory, useful for monorepos
           working-directory: cli
-
-          # Optional: golangci-lint command line arguments.
-          # args: --issues-exit-code=0
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
-
-          # Optional: show only new issues if it's a pull request. The default value is `false`.
-          # only-new-issues: true
-
-          # Optional: if set to true then the all caching functionality will be complete disabled,
-          #           takes precedence over all other caching options.
-          # skip-cache: true
-
-          # Optional: if set to true then the action don't cache or restore ~/go/pkg.
-          # skip-pkg-cache: true
-
-          # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
-          # skip-build-cache: true
 
   go_unit:
     name: Go Unit Tests
