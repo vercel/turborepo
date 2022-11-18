@@ -1,11 +1,12 @@
 use std::{
     any::{type_name, Any},
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::{self, Debug, Display, Formatter},
     hash::Hash,
     sync::Arc,
 };
 
+use auto_hash_map::AutoMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -74,7 +75,7 @@ pub struct ValueType {
     /// List of traits available
     pub traits: HashSet<TraitTypeId>,
     /// List of trait methods available
-    pub trait_methods: HashMap<(TraitTypeId, String), FunctionId>,
+    pub trait_methods: AutoMap<(TraitTypeId, String), FunctionId>,
 
     /// Functors for serialization
     magic_serialization: Option<(MagicSerializationFn, MagicAnyDeserializeSeed)>,
@@ -135,7 +136,7 @@ impl ValueType {
         Self {
             name: std::any::type_name::<T>().to_string(),
             traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: None,
             any_serialization: None,
         }
@@ -148,7 +149,7 @@ impl ValueType {
         Self {
             name: std::any::type_name::<T>().to_string(),
             traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: Some((
                 <dyn MagicAny>::as_serialize::<T>,
                 MagicAnyDeserializeSeed::new::<T>(),
@@ -164,7 +165,7 @@ impl ValueType {
         Self {
             name: std::any::type_name::<T>().to_string(),
             traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: None,
             any_serialization: Some((any_as_serialize::<T>, AnyDeserializeSeed::new::<T>())),
         }
@@ -239,7 +240,7 @@ impl ValueType {
 #[derive(Debug)]
 pub struct TraitType {
     pub name: String,
-    pub(crate) default_trait_methods: HashMap<String, FunctionId>,
+    pub(crate) default_trait_methods: AutoMap<String, FunctionId>,
 }
 
 impl Hash for TraitType {
@@ -278,7 +279,7 @@ impl TraitType {
     pub fn new(name: String) -> Self {
         Self {
             name,
-            default_trait_methods: HashMap::new(),
+            default_trait_methods: AutoMap::new(),
         }
     }
 

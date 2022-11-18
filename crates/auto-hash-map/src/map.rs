@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::{hash_map::DefaultHasher, HashMap},
     fmt::{Debug, Formatter},
     hash::{BuildHasher, BuildHasherDefault, Hash},
@@ -35,11 +36,32 @@ impl<K, V> AutoMap<K, V, BuildHasherDefault<DefaultHasher>> {
     pub fn new() -> Self {
         AutoMap::List(Vec::new())
     }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        if capacity < MAX_LIST_SIZE {
+            AutoMap::List(Vec::with_capacity(capacity))
+        } else {
+            AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
+                capacity,
+                Default::default(),
+            )))
+        }
+    }
 }
 
-impl<K, V, H> AutoMap<K, V, H> {
+impl<K, V, H: BuildHasher> AutoMap<K, V, H> {
     pub fn with_hasher() -> Self {
         AutoMap::List(Vec::new())
+    }
+
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: H) -> Self {
+        if capacity < MAX_LIST_SIZE {
+            AutoMap::List(Vec::with_capacity(capacity))
+        } else {
+            AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
+                capacity, hasher,
+            )))
+        }
     }
 }
 
@@ -138,11 +160,16 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
 }
 
 impl<K: Eq + Hash, V, H: BuildHasher> AutoMap<K, V, H> {
-    pub fn get(&self, key: &K) -> Option<&V> {
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         match self {
-            AutoMap::List(list) => list
-                .iter()
-                .find_map(|(k, v)| if *k == *key { Some(v) } else { None }),
+            AutoMap::List(list) => {
+                list.iter()
+                    .find_map(|(k, v)| if *k.borrow() == *key { Some(v) } else { None })
+            }
             AutoMap::Map(map) => map.get(key),
         }
     }
@@ -200,6 +227,13 @@ impl<K, V, H> AutoMap<K, V, H> {
             AutoMap::Map(map) => ValuesMut::Map(map.values_mut()),
         }
     }
+
+    pub fn values(&self) -> Values<'_, K, V> {
+        match self {
+            AutoMap::List(list) => Values::List(list.iter()),
+            AutoMap::Map(map) => Values::Map(map.values()),
+        }
+    }
 }
 
 impl<K, V, H> IntoIterator for AutoMap<K, V, H> {
@@ -208,6 +242,15 @@ impl<K, V, H> IntoIterator for AutoMap<K, V, H> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.into_iter()
+    }
+}
+
+impl<'a, K, V, H> IntoIterator for &'a AutoMap<K, V, H> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -239,6 +282,22 @@ impl<K, V> Iterator for IntoIter<K, V> {
         match self {
             IntoIter::List(iter) => iter.next(),
             IntoIter::Map(iter) => iter.next(),
+        }
+    }
+}
+
+pub enum Values<'a, K, V> {
+    List(std::slice::Iter<'a, (K, V)>),
+    Map(std::collections::hash_map::Values<'a, K, V>),
+}
+
+impl<'a, K, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Values::List(iter) => iter.next().map(|(_, v)| v),
+            Values::Map(iter) => iter.next(),
         }
     }
 }
@@ -410,6 +469,47 @@ where
         deserializer.deserialize_map(AutoMapVisitor {
             phantom: PhantomData::<AutoMap<K, V, H>>,
         })
+    }
+}
+
+impl<K: Eq + Hash, V: Eq, H: BuildHasher> PartialEq for AutoMap<K, V, H> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AutoMap::Map(a), AutoMap::Map(b)) => a == b,
+            (AutoMap::List(a), b) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter().all(|(k, v)| b.get(k) == Some(v))
+            }
+            (a, AutoMap::List(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                b.iter().all(|(k, v)| a.get(k) == Some(v))
+            }
+        }
+    }
+}
+
+impl<K: Eq + Hash, V: Eq, H: BuildHasher> Eq for AutoMap<K, V, H>
+where
+    K: Eq,
+    V: Eq,
+{
+}
+
+impl<K, V, H> FromIterator<(K, V)> for AutoMap<K, V, H>
+where
+    K: Eq + Hash,
+    H: BuildHasher + Default,
+{
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        let mut map = AutoMap::with_hasher();
+        for (k, v) in iter {
+            map.insert(k, v);
+        }
+        map
     }
 }
 

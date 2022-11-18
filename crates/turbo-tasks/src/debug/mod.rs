@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
 
+use auto_hash_map::AutoMap;
 pub use turbo_tasks_macros::ValueDebugFormat;
 
 use crate::{self as turbo_tasks};
@@ -139,6 +140,34 @@ where
 
         ValueDebugFormatString::Async(Box::pin(async move {
             let mut values_string = std::collections::HashMap::new();
+            for (key, value) in values {
+                match value {
+                    ValueDebugFormatString::Sync(string) => {
+                        values_string.insert(key, PassthroughDebug::new_string(string));
+                    }
+                    ValueDebugFormatString::Async(future) => {
+                        values_string.insert(key, PassthroughDebug::new_string(future.await?));
+                    }
+                }
+            }
+            Ok(format!("{:#?}", values_string))
+        }))
+    }
+}
+
+impl<K, V> ValueDebugFormat for AutoMap<K, V>
+where
+    K: Debug,
+    V: ValueDebugFormat,
+{
+    fn value_debug_format(&self) -> ValueDebugFormatString {
+        let values = self
+            .iter()
+            .map(|(key, value)| (format!("{:#?}", key), value.value_debug_format()))
+            .collect::<Vec<_>>();
+
+        ValueDebugFormatString::Async(Box::pin(async move {
+            let mut values_string = AutoMap::new();
             for (key, value) in values {
                 match value {
                     ValueDebugFormatString::Sync(string) => {

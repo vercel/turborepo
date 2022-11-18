@@ -31,12 +31,24 @@ impl<K> AutoSet<K, BuildHasherDefault<DefaultHasher>> {
             map: AutoMap::new(),
         }
     }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            map: AutoMap::with_capacity(capacity),
+        }
+    }
 }
 
-impl<K, H> AutoSet<K, H> {
+impl<K, H: BuildHasher> AutoSet<K, H> {
     pub fn with_hasher() -> Self {
         Self {
             map: AutoMap::with_hasher(),
+        }
+    }
+
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: H) -> Self {
+        Self {
+            map: AutoMap::with_capacity_and_hasher(capacity, hasher),
         }
     }
 }
@@ -82,6 +94,15 @@ impl<K, H> IntoIterator for AutoSet<K, H> {
     }
 }
 
+impl<'a, K, H> IntoIterator for &'a AutoSet<K, H> {
+    type Item = &'a K;
+    type IntoIter = Iter<'a, K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 pub struct Iter<'a, K>(super::map::Iter<'a, K, ()>);
 
 impl<'a, K> Iterator for Iter<'a, K> {
@@ -99,6 +120,28 @@ impl<K> Iterator for IntoIter<K> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(|(k, _)| k)
+    }
+}
+
+impl<K: Eq + Hash, H: BuildHasher> PartialEq for AutoSet<K, H> {
+    fn eq(&self, other: &Self) -> bool {
+        self.map == other.map
+    }
+}
+
+impl<K: Eq + Hash, H: BuildHasher> Eq for AutoSet<K, H> {}
+
+impl<K, H> FromIterator<K> for AutoSet<K, H>
+where
+    K: Hash + Eq,
+    H: BuildHasher + Default,
+{
+    fn from_iter<T: IntoIterator<Item = K>>(iter: T) -> Self {
+        let mut set = AutoSet::with_hasher();
+        for k in iter {
+            set.insert(k);
+        }
+        set
     }
 }
 
