@@ -242,7 +242,7 @@ The following steps exemplify how you could use [actions/cache](https://github.c
   {
     "name": "my-turborepo",
     "scripts": {
-      "build": "turbo run build --cache-dir=".turbo",
+      "build": "turbo run build --cache-dir=.turbo",
     },
     "devDependencies": {
       "turbo": "1.2.5"
@@ -255,35 +255,30 @@ The following steps exemplify how you could use [actions/cache](https://github.c
 
   - Example `ci` yaml with `.turbo` as chosen cache folder
     ```yaml highlight="13-19"
-    name: Build with local github cache
-    on:
-      push:
-        branches: [master]
+    jobs:
+      build:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v3
 
-      jobs:
-        build:
-          runs-on: ubuntu-latest
-          steps:
-            - name: Check out code
-              uses: actions/checkout@v3
+          - name: Cache turbo build setup
+            uses: actions/cache@v3
+            with:
+              path: .turbo
+              key: ${{ runner.os }}-turbo-${{ github.sha }}
+              restore-keys: |
+                ${{ runner.os }}-turbo-
 
-            - name: Cache turbo build setup
-              uses: actions/cache@v3
-              with:
-                path: .turbo
-                key: ${{ runner.os }}-turbo-${{ github.sha }}
-                restore-keys: |
-                  ${{ runner.os }}-turbo-
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v3
+            with:
+              node-version: 16
+              cache: 'npm'
 
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v3
-              with:
-                node-version: 16
-                cache: 'npm'
+          - name: Install dependencies
+            run: npm install
 
-            - name: Install dependencies
-              run: npm install
-
-            - name: Build
-              run: npm run build
+          - name: Build
+            run: npm run build
       ```
