@@ -1,5 +1,5 @@
 pub fn stringify_str(str: &str) -> String {
-    let mut escaped = String::new();
+    let mut escaped = String::with_capacity(str.len());
     for char in str.chars() {
         match char {
             // Escape the following characters required for strings by the CSS scanner:
