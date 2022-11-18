@@ -316,7 +316,7 @@ fn insert_code(
         (CodeLocation::Effect, _) => {
             contents.replace_range(
                 eval_start + PRAGMA_EVAL_START.len()..eval_end,
-                &format!("\nDETECTOR_PROPS.message = \"{message}\";\n"),
+                &format!("\nEFFECT_PROPS.message = \"{message}\";\n"),
             );
         }
         (

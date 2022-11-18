@@ -19,10 +19,12 @@ use regex::Regex;
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::util::FormatDuration;
 use turbo_tasks_testing::retry::{retry, retry_async};
-use turbopack_create_test_app::test_app_builder::{PackageJsonConfig, TestApp, TestAppBuilder};
+use turbopack_create_test_app::test_app_builder::{
+    EffectMode, PackageJsonConfig, TestApp, TestAppBuilder,
+};
 
 use self::env::read_env_bool;
-use crate::bundlers::Bundler;
+use crate::bundlers::{Bundler, RenderType};
 
 pub mod env;
 pub mod module_picker;
@@ -56,6 +58,10 @@ pub fn build_test(module_count: usize, bundler: &dyn Bundler) -> TestApp {
         package_json: Some(PackageJsonConfig {
             react_version: bundler.react_version().to_string(),
         }),
+        effect_mode: match bundler.render_type() {
+            RenderType::ServerSideRenderedWithEvents => EffectMode::Component,
+            _ => EffectMode::Hook,
+        },
         ..Default::default()
     }
     .build()
