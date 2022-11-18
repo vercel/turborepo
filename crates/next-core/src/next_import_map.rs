@@ -1,8 +1,14 @@
 use anyhow::Result;
 use turbo_tasks::{primitives::StringsVc, Value};
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-use turbopack_core::resolve::options::{
-    ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc,
+use turbopack_core::resolve::{
+    options::{
+        ImportMap, ImportMapResult, ImportMapResultVc, ImportMapVc, ImportMapping,
+        ImportMappingReplacement, ImportMappingReplacementVc, ImportMappingVc, ResolvedMap,
+        ResolvedMapVc,
+    },
+    parse::{Request, RequestVc},
+    AliasPattern,
 };
 
 use crate::{
@@ -21,6 +27,11 @@ pub fn get_next_client_import_map(
     let package_root = attached_next_js_package_path(project_path);
 
     insert_next_shared_aliases(&mut import_map, package_root);
+
+    import_map.insert_alias(
+        AliasPattern::exact("@next/font/google/target.css"),
+        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new().into()).into(),
+    );
 
     match ty.into_value() {
         ContextType::Pages { pages_dir } => {
@@ -258,4 +269,28 @@ fn request_to_import_mapping(context_path: FileSystemPathVc, request: &str) -> I
 /// request.
 fn external_request_to_import_mapping(request: &str) -> ImportMappingVc {
     ImportMapping::External(Some(request.to_string())).into()
+}
+
+#[turbo_tasks::value(shared)]
+struct NextFontGoogleReplacer {}
+
+#[turbo_tasks::value_impl]
+impl NextFontGoogleReplacerVc {
+    #[turbo_tasks::function]
+    fn new() -> Self {
+        Self::cell(NextFontGoogleReplacer {})
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ImportMappingReplacement for NextFontGoogleReplacer {
+    #[turbo_tasks::function]
+    fn replace(&self, _capture: &str) -> ImportMappingVc {
+        ImportMapping::Ignore.into()
+    }
+
+    #[turbo_tasks::function]
+    async fn result(&self, _request: RequestVc) -> Result<ImportMapResultVc> {
+        Ok(ImportMapResult::NoEntry.into())
+    }
 }
