@@ -304,6 +304,16 @@ impl TurboState {
                     minimum_supported_turbo_version
                 ));
             }
+
+            let current_turbo_version: Version = get_version().parse()?;
+            if local_turbo_version > current_turbo_version {
+                return Err(anyhow!(
+                    "Your local turbo installation ({}) is newer than your global turbo \
+                     installation ({}). Please update your global turbo installation.",
+                    local_turbo_version,
+                    current_turbo_version
+                ));
+            }
         }
 
         let local_turbo_path = repo_state.root.join("node_modules").join(".bin").join({
@@ -320,7 +330,6 @@ impl TurboState {
         if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
             self.raw_args.push("--single-package".to_string());
         }
-
         let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
         // If the local turbo path doesn't exist or if we are local turbo, then we go
         // ahead and run the Go code linked in the current binary.
