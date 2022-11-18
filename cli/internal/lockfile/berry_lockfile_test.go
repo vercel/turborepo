@@ -85,7 +85,7 @@ func Test_AllDependencies(t *testing.T) {
 	assert.Assert(t, pkg.Found, "expected to find react-dom")
 	deps, found := lockfile.AllDependencies(pkg.Key)
 	assert.Assert(t, found, "expected lockfile key for react-dom to be present")
-	assert.Equal(t, len(deps), 3, "expected to find all react-dom direct dependencies")
+	assert.Equal(t, len(deps), 2, "expected to find all react-dom direct dependencies")
 	for pkgName, version := range deps {
 		pkg, err := lockfile.ResolvePackage("some-pkg", pkgName, version)
 		assert.NilError(t, err, "error finding %s@%s", pkgName, version)

@@ -1,7 +1,9 @@
 package lockfile
 
 import (
+	"bytes"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -202,4 +204,44 @@ func Test_NpmAllDependencies(t *testing.T) {
 		assert.DeepEqual(t, depKeys, tc.expected)
 	}
 
+}
+
+func Test_NpmPeerDependenciesMeta(t *testing.T) {
+	var buf bytes.Buffer
+
+	lockfile := getNpmLockfile(t)
+	if err := lockfile.Encode(&buf); err != nil {
+		t.Error(err)
+	}
+	s := buf.String()
+
+	expected := `"node_modules/eslint-config-next": {
+      "version": "12.3.1",
+      "resolved": "https://registry.npmjs.org/eslint-config-next/-/eslint-config-next-12.3.1.tgz",
+      "integrity": "sha512-EN/xwKPU6jz1G0Qi6Bd/BqMnHLyRAL0VsaQaWA7F3KkjAgZHi4f1uL1JKGWNxdQpHTW/sdGONBd0bzxUka/DJg==",
+      "dependencies": {
+        "@next/eslint-plugin-next": "12.3.1",
+        "@rushstack/eslint-patch": "^1.1.3",
+        "@typescript-eslint/parser": "^5.21.0",
+        "eslint-import-resolver-node": "^0.3.6",
+        "eslint-import-resolver-typescript": "^2.7.1",
+        "eslint-plugin-import": "^2.26.0",
+        "eslint-plugin-jsx-a11y": "^6.5.1",
+        "eslint-plugin-react": "^7.31.7",
+        "eslint-plugin-react-hooks": "^4.5.0"
+      },
+      "peerDependencies": {
+        "eslint": "^7.23.0 || ^8.0.0",
+        "typescript": ">=3.3.1"
+      },
+      "peerDependenciesMeta": {
+        "typescript": {
+          "optional": true
+        }
+      }
+    },`
+
+	if !strings.Contains(s, expected) {
+		t.Error("failed to persist \"peerDependenciesMeta\" in npm lockfile")
+	}
 }
