@@ -91,6 +91,21 @@ const nextConfig = withNextra({
         permanent: true,
       })),
       {
+        source: "/repo/docs/getting-started",
+        destination: "/repo/docs",
+        permanent: true,
+      },
+      {
+        source: "/docs/getting-started",
+        destination: "/repo/docs",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/guides/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
         source: "/usage",
         destination: "/repo/docs/reference/command-line-reference",
         permanent: true,
@@ -101,8 +116,18 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
+        source: "/repo/docs/core-concepts/why-turborepo",
+        destination: "/repo/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
         source: "/docs/core-concepts/why-turborepo",
         destination: "/repo/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/core-concepts/filtering",
+        destination: "/repo/docs/core-concepts/monorepos/filtering",
         permanent: true,
       },
       {
@@ -112,29 +137,30 @@ const nextConfig = withNextra({
       },
       {
         source: "/docs/guides/workspaces",
-        destination: "/docs/handbook/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
         permanent: true,
       },
       {
         source: "/docs/core-concepts/workspaces",
-        destination: "/docs/handbook/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/core-concepts/pipelines",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
         permanent: true,
       },
       {
         source: "/docs/core-concepts/pipelines",
-        destination: "/docs/core-concepts/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
         permanent: true,
       },
       {
         source: "/docs/guides/migrate-from-lerna",
-        destination: "/docs/handbook/migrating-to-a-monorepo",
+        destination: "/repo/docs/handbook/migrating-to-a-monorepo",
         permanent: true,
       },
-      {
-        source: "/docs/getting-started",
-        destination: "/docs",
-        permanent: true,
-      },
+
       {
         source: "/discord{/}?",
         permanent: true,
@@ -148,27 +174,27 @@ const nextConfig = withNextra({
       {
         source: "/docs/guides/complimentary-tools",
         permanent: true,
-        destination: "/docs/handbook",
+        destination: "/repo/docs/handbook",
       },
       {
         source: "/docs/guides/monorepo-tools",
         permanent: true,
-        destination: "/docs/handbook",
+        destination: "/repo/docs/handbook",
       },
       {
         source: "/docs/glossary",
         permanent: true,
-        destination: "/docs/handbook",
+        destination: "/repo/docs/handbook",
       },
       {
         source: "/docs/guides/continuous-integration",
         permanent: true,
-        destination: "/docs/ci",
+        destination: "/repo/docs/ci",
       },
       {
         source: "/docs/features/:path*",
         permanent: true,
-        destination: "/docs/core-concepts/:path*",
+        destination: "/repo/docs/core-concepts/:path*",
       },
       {
         source: "/docs/:path*",

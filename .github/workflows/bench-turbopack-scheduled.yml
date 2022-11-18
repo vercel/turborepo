@@ -4,9 +4,6 @@ on:
   schedule:
     # Run every week on Sunday 12:42
     - cron: "42 12 * * 0"
-  pull_request:
-    # Runs on PRs from bench/ prefixed branches
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,13 +12,19 @@ env:
 
 jobs:
   bench:
-    if: github.event_name == 'schedule' || startsWith(github.head_ref, 'bench/')
     strategy:
       fail-fast: false
       matrix:
         bench:
           # One of Turbopack CSR or SSR with 1000 modules is benchmarked in every run
           # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This measures Next.js 13
+          - name: next 13
+            cache_key: next-dev
+            args: -p next-dev -- "(Turbopack SSR/1000|Next.js 13)"
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
 
           # This measures Next.js 12
           - name: next 12
@@ -112,7 +115,6 @@ jobs:
   commit_results:
     name: Commit benchmark-data
     needs: bench
-    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Get current date

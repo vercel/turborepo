@@ -314,7 +314,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 
 			// Get information about the package
-			pkg, pkgExists := graph.PackageInfos[packageName]
+			pkg, pkgExists := graph.WorkspaceInfos[packageName]
 			if !pkgExists {
 				return fmt.Errorf("Cannot find package %v", packageName)
 			}
