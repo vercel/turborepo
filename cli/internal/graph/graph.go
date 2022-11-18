@@ -45,7 +45,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 		}
 
 		// first check for package-tasks
-		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
+		rootTaskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
 
 		if !ok {
 			// then check for regular tasks
@@ -55,7 +55,22 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 				return nil
 			}
 			// override if we need to...
-			taskDefinition = fallbackTaskDefinition
+			rootTaskDefinition = fallbackTaskDefinition
+		}
+
+		// Copy all the values over
+		// NOTE(mehulkar): Right now this seems pointless, but when we do composable turbo.json
+		// We'll overwrite values in this struct from the root, based on configs in other places
+		mergedTaskDefinition := fs.TaskDefinition{
+			Outputs:                 rootTaskDefinition.Outputs,
+			ShouldCache:             rootTaskDefinition.ShouldCache,
+			EnvVarDependencies:      rootTaskDefinition.EnvVarDependencies,
+			TopologicalDependencies: rootTaskDefinition.TopologicalDependencies,
+			TaskDependencies:        rootTaskDefinition.TaskDependencies,
+			Inputs:                  rootTaskDefinition.Inputs,
+			OutputMode:              rootTaskDefinition.OutputMode,
+			Persistent:              rootTaskDefinition.Persistent,
+			Raw:                     rootTaskDefinition.Raw,
 		}
 
 		packageTask := &nodes.PackageTask{
@@ -63,7 +78,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			Task:           taskName,
 			PackageName:    packageName,
 			Pkg:            pkg,
-			TaskDefinition: &taskDefinition,
+			TaskDefinition: &mergedTaskDefinition,
 		}
 
 		return visitor(ctx, packageTask)
