@@ -6,8 +6,12 @@ function getTurboRoot(cwd?: string): string | null {
   let root = searchUp({ target: "turbo.json", cwd: cwd || process.cwd() });
 
   if (!root) {
-    root = findRootSync(process.cwd());
-    if (!root) {
+    try {
+      root = findRootSync(cwd || process.cwd());
+      if (!root) {
+        return null;
+      }
+    } catch (err) {
       return null;
     }
   }

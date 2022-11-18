@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -32,19 +33,19 @@ type Tracker struct {
 	rootNode            string
 	globalHash          string
 	pipeline            fs.Pipeline
-	packageInfos        map[interface{}]*fs.PackageJSON
+	workspaceInfos      graph.WorkspaceInfos
 	mu                  sync.RWMutex
 	packageInputsHashes packageFileHashes
 	packageTaskHashes   map[string]string // taskID -> hash
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, packageInfos map[interface{}]*fs.PackageJSON) *Tracker {
+func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
 		rootNode:          rootNode,
 		globalHash:        globalHash,
 		pipeline:          pipeline,
-		packageInfos:      packageInfos,
+		workspaceInfos:    workspaceInfos,
 		packageTaskHashes: make(map[string]string),
 	}
 }
@@ -193,7 +194,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
 			for packageFileSpec := range hashQueue {
-				pkg, ok := th.packageInfos[packageFileSpec.pkg]
+				pkg, ok := th.workspaceInfos[packageFileSpec.pkg]
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
