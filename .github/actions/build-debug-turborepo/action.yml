@@ -1,0 +1,19 @@
+name: "Turborepo Build Debug"
+description: "Builds debug version of turborepo"
+inputs:
+  target:
+    description: "Compilation target"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-node
+    - uses: ./.github/actions/setup-go
+    - uses: actions-rs/toolchain@v1
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: debug-${{ inputs.target }}
+    - name: Build Turborepo
+      run: cargo build --bin shim

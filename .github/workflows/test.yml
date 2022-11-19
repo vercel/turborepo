@@ -91,8 +91,16 @@ jobs:
             cli/**
             packages/**
             shim/**
+            Cargo.*
+            .cargo/**
             !**.md
             !**.mdx
+      - name: Test changes
+        id: tests
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            cli/integration_tests/**/*.t
       - name: Examples related changes
         id: examples
         uses: technote-space/get-diff-action@v6
@@ -130,6 +138,7 @@ jobs:
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       node: ${{ steps.ci.outputs.diff != '' || steps.node.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
+      tests: ${{ steps.ci.outputs.diff != '' || steps.tests.outputs.diff != '' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/head/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
@@ -270,6 +279,47 @@ jobs:
         with:
           command: check
           args: --workspace --all-targets
+
+  build_turborepo:
+    name: Build Turborepo
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.tests == 'true' || needs.determine_jobs.outputs.node == 'true'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Build Turborepo
+        uses: ./.github/actions/build-debug-turborepo
+        with:
+          target: ${{ matrix.os }}
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: turborepo-${{ matrix.os }}
+          path: |
+            target/debug/turbo
+            target/debug/turbo.exe
+
+  turborepo_integration_tests:
+    name: Cram integration tests
+    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.tests == 'true'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Download turborepo build
+        uses: actions/download-artifact@v3
+        with:
+          name: turborepo-${{ matrix.os }}
+          path: target/
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: ${{ runner.os }}-prysk
+      - name: Run cram tests
+        run: cd cli && make integration-tests
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
@@ -460,6 +510,7 @@ jobs:
     if: needs.determine_jobs.outputs.rust == 'true'
     strategy:
       fail-fast: false
+      runs-on: ${{ matrix.os }}
       matrix:
         os:
           - name: ubuntu
