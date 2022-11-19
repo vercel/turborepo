@@ -14,7 +14,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
-	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -149,24 +148,11 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	targetSet := make(util.Set)
-	for _, pkg := range opts.scope {
-		internalDeps, err := ctx.WorkspaceGraph.Ancestors(pkg)
-		if err != nil {
-			return errors.Wrap(err, "could not find traverse the dependency graph to find topological dependencies")
-		}
-		for _, internalDep := range internalDeps {
-			targetSet.Add(internalDep)
-		}
+	targets, err := ctx.TopologicalGraphAncestors(opts.scope)
+	if err != nil {
+		return errors.Wrap(err, "could not traverse the dependency graph to find topological dependencies")
 	}
-
-	// Use for loop so we can coerce to string
-	// .List() returns a list of interface{} types, but
-	// we know they are strings.
-	targets := opts.scope
-	for _, dep := range targetSet.List() {
-		targets = append(targets, dep.(string))
-	}
+	p.base.Logger.Trace("targets", "value", targets)
 
 	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
 	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)

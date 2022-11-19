@@ -419,3 +419,30 @@ func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON,
 		})
 	}
 }
+
+// TopologicalGraphAncestors returns the ancestors of a set of nodes in the workspace graph.
+func (c *Context) TopologicalGraphAncestors(start []string) ([]string, error) {
+	vertices := make(dag.Set)
+	for _, v := range start {
+		vertices.Add(v)
+	}
+	s := make(dag.Set)
+	memoFunc := func(v dag.Vertex, d int) error {
+		s.Add(v)
+		return nil
+	}
+
+	if err := c.WorkspaceGraph.DepthFirstWalk(vertices, memoFunc); err != nil {
+		return nil, err
+	}
+
+	// Use for loop so we can coerce to string
+	// .List() returns a list of interface{} types, but
+	// we know they are strings.
+	targets := make([]string, 0, s.Len())
+	for _, dep := range s.List() {
+		targets = append(targets, dep.(string))
+	}
+
+	return targets, nil
+}
