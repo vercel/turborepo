@@ -95,6 +95,12 @@
 <span id="95">95</span>
 <span id="96">96</span>
 <span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::IpAddr, path::PathBuf};
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;cli&quot;</span>)]
@@ -121,9 +127,12 @@
     </span><span class="kw">pub </span>root: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="doccomment">/// The port number on which to start the application
+    /// Note: setting env PORT allows to configure port without explicit cli
+    /// args. However, this is temporary measure to conform with existing
+    /// next.js devserver and can be removed in the future.
     </span><span class="attr">#[cfg_attr(
         feature = <span class="string">&quot;cli&quot;</span>,
-        clap(short, long, value_parser, default_value_t = <span class="number">3000</span>)
+        clap(short, long, value_parser, default_value_t = <span class="number">3000</span>, env = <span class="string">&quot;PORT&quot;</span>)
     )]
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default = <span class="string">&quot;default_port&quot;</span>))]
     </span><span class="kw">pub </span>port: u16,
@@ -185,8 +194,11 @@
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;serializable&quot;</span>)]
 </span><span class="kw">fn </span>default_port() -&gt; u16 {
-    <span class="number">3000
-</span>}
+    std::env::var(<span class="string">&quot;PORT&quot;</span>)
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(<span class="number">3000</span>)
+}
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;serializable&quot;</span>)]
 </span><span class="kw">fn </span>default_host() -&gt; IpAddr {
